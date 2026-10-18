@@ -1,10 +1,17 @@
 /**
  * @packageDocumentation
- * `@kosh/modules-sdk`: defineModule, defineView, defineMenu, defineAction, defineReport, defineNotification. Designed in RFC 0001 (docs/rfcs); implementation follows its approval.
+ * `@kosh/modules-sdk`: module manifests (`defineModule`) and the module loader (RFC 0001).
  */
-
-/** Package identity, until the RFC 0001 implementation lands. */
-export const PACKAGE: { readonly name: string; readonly rfc: string } = Object.freeze({
-  name: '@kosh/modules-sdk',
-  rfc: 'RFC 0001',
-});
+export { ModuleDefinitionError, ModuleLoadError } from './errors.js';
+export { type LoadedModules, type LoadOptions, loadModules } from './loader.js';
+export {
+  type AccessLevel,
+  type AppSpec,
+  defineModule,
+  type KoshModule,
+  type MenuSpec,
+  type ModuleHooks,
+  type ModuleInput,
+  type ShutroModuleShape,
+} from './manifest.js';
+export { satisfies } from './semver.js';
