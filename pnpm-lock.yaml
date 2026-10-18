@@ -137,7 +137,21 @@ importers:
 
   packages/realtime: {}
 
-  packages/reporting: {}
+  packages/reporting:
+    dependencies:
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../modules-sdk
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../server
+      fastify:
+        specifier: ^5.12.7
+        version: 5.12.7
+    devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
 
   packages/search:
     dependencies:

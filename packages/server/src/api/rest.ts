@@ -44,6 +44,9 @@ const ref = (env: Env, model: string): Ref => env.model(model as never) as unkno
 
 const PERMS = ['read', 'write', 'create', 'unlink', 'export', 'import'] as const;
 const EXPORT_LIMIT = 100_000;
+/** CSV exports stream up to this many rows, EXPORT_PAGE at a time. */
+const STREAM_LIMIT = 10_000_000;
+const EXPORT_PAGE = 5_000;
 const IMPORT_LIMIT = 10_000;
 
 /** A CSV cell (RFC 4180), with formula-like text neutralized (spreadsheet injection). */
@@ -412,47 +415,96 @@ export function registerRestApi(
     const q = body(request);
     const format = q['format'] ?? 'csv';
     if (format !== 'csv' && format !== 'json')
-      throw problem(400, 'invalid-format', 'Invalid format', 'format is csv or json.');
-    const limit = q['limit'] === undefined ? EXPORT_LIMIT : Number(q['limit']);
-    if (!Number.isInteger(limit) || limit < 1 || limit > EXPORT_LIMIT)
-      throw problem(400, 'invalid-limit', 'Invalid limit', `limit must be 1–${EXPORT_LIMIT}.`);
+      throw problem(
+        400,
+        'invalid-format',
+        'Invalid format',
+        'format is csv or json (xlsx: @kosh/reporting).',
+      );
+    const max = format === 'csv' ? STREAM_LIMIT : EXPORT_LIMIT;
+    const limit = q['limit'] === undefined ? max : Number(q['limit']);
+    if (!Number.isInteger(limit) || limit < 1 || limit > max)
+      throw problem(400, 'invalid-limit', 'Invalid limit', `limit must be 1–${max}.`);
     const where = q['filter'] === undefined ? undefined : parseFilter(JSON.stringify(q['filter']));
     const order = parseOrder(model, Array.isArray(q['order']) ? q['order'].join(',') : q['order']);
-    const result = await request.env(async (env) => {
-      env.access.check(model.name as never, 'export'); // 403 without the export permission
-      const fields = fieldsOf(
-        model,
-        env,
-        Array.isArray(q['fields']) ? q['fields'].join(',') : q['fields'],
-      );
-      const found = await ref(env, model.name).search({
-        ...(where === undefined ? {} : { where }),
-        ...(order.length > 0 ? { order } : {}),
-        limit,
-      });
-      const items = await rows(found, fields);
-      await audit(env, {
+    const fieldsParam = Array.isArray(q['fields']) ? q['fields'].join(',') : q['fields'];
+    const record = (env: Env, fields: readonly ApiField[], count: number) =>
+      audit(env, {
         kind: 'data.export',
-        summary: `Exported ${items.length} ${model.name} record(s) as ${format}.`,
+        summary: `Exported ${count} ${model.name} record(s) as ${format}.`,
         targetModel: model.name,
-        details: { fields: fields.map((f) => f.key), count: items.length, filter: where ?? null },
+        details: { fields: fields.map((f) => f.key), count, filter: where ?? null },
         ip: request.ip,
       });
-      return { fields, items };
-    });
     if (format === 'json') {
-      await reply.send({ items: result.items });
+      const result = await request.env(async (env) => {
+        env.access.check(model.name as never, 'export'); // 403 without the export permission
+        const fields = fieldsOf(model, env, fieldsParam);
+        const found = await ref(env, model.name).search({
+          ...(where === undefined ? {} : { where }),
+          ...(order.length > 0 ? { order } : {}),
+          limit,
+        });
+        const items = await rows(found, fields);
+        await record(env, fields, items.length);
+        return items;
+      });
+      await reply.send({ items: result });
       return;
     }
-    const keys = ['id', ...result.fields.map((f) => f.key).filter((k) => k !== 'id')];
-    const lines = [
-      keys.map(csvCell).join(','),
-      ...result.items.map((r) => keys.map((k) => csvCell(r[k])).join(',')),
-    ];
-    await reply
-      .type('text/csv; charset=utf-8')
-      .header('content-disposition', `attachment; filename="${model.name}.csv"`)
-      .send(`${lines.join('\r\n')}\r\n`);
+    // CSV is streamed: the header row at once, then pages of EXPORT_PAGE rows (keyset by id, or offset with a custom
+    // order), all in one transaction (a consistent snapshot), the cache released after each page (bounded memory).
+    let streaming = false;
+    try {
+      await request.env(async (env) => {
+        env.access.check(model.name as never, 'export');
+        const fields = fieldsOf(model, env, fieldsParam);
+        const keys = ['id', ...fields.map((f) => f.key).filter((k) => k !== 'id')];
+        reply.hijack();
+        streaming = true;
+        reply.raw.writeHead(200, {
+          ...(reply.getHeaders() as Record<string, string>),
+          'content-type': 'text/csv; charset=utf-8',
+          'content-disposition': `attachment; filename="${model.name}.csv"`,
+        });
+        const write = (text: string) =>
+          reply.raw.write(text)
+            ? Promise.resolve()
+            : new Promise<void>((resolve) => reply.raw.once('drain', () => resolve()));
+        await write(`${keys.map(csvCell).join(',')}\r\n`);
+        let count = 0;
+        let last = 0;
+        while (count < limit && !reply.raw.destroyed) {
+          const size = Math.min(EXPORT_PAGE, limit - count);
+          const keyset = order.length === 0;
+          const pageWhere = keyset
+            ? where === undefined
+              ? { id: { gt: last } }
+              : { and: [where, { id: { gt: last } }] }
+            : where;
+          const found = await ref(env, model.name).search({
+            ...(pageWhere === undefined ? {} : { where: pageWhere }),
+            order: keyset ? ['id asc'] : [...order, 'id asc'],
+            limit: size,
+            ...(keyset ? {} : { offset: count }),
+          });
+          if (found.length === 0) break;
+          const page = await rows(found, fields);
+          await write(page.map((r) => `${keys.map((k) => csvCell(r[k])).join(',')}\r\n`).join(''));
+          count += page.length;
+          last = page[page.length - 1]?.['id'] as number;
+          env.releaseCache(model.name);
+          if (page.length < size) break;
+        }
+        await record(env, fields, count);
+      });
+    } catch (error) {
+      if (!streaming) throw error; // before the first byte: a normal problem response
+      request.log.error({ err: error }, 'export failed while streaming');
+      reply.raw.destroy(); // the client sees an aborted download, not a short but valid file
+      return;
+    }
+    reply.raw.end(); // after the commit: the export and its audit event exist together
   });
 
   app.post('/api/v1/models/:model/import', async (request, reply) => {
