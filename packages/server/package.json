@@ -28,6 +28,17 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@fastify/rate-limit": "^11.2.1",
+    "@kosh/modules-sdk": "workspace:*",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.223.0",
+    "@opentelemetry/sdk-node": "^0.223.0",
+    "fastify": "^5.12.7",
+    "iovalkey": "^0.4.0",
     "shutro": "link:../../../shutro/dist-npm/shutro"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^12.2.1",
+    "testcontainers": "^12.2.1"
   }
 }

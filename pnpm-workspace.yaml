@@ -5,3 +5,6 @@ packages:
 # Dependency install scripts are denied unless listed as true here (pnpm 11).
 allowBuilds:
   esbuild: true # Vite's bundler: installs its platform binary
+  protobufjs: false # (OpenTelemetry) postinstall only prints a version notice
+  cpu-features: false # (testcontainers > ssh2) optional native CPU detection
+  ssh2: false # (testcontainers) native crypto bindings are optional; only for docker-over-ssh

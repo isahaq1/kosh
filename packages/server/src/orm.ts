@@ -3,9 +3,13 @@
  * ORM from here (`@kosh/server/orm`), so the dependency can be renamed or swapped in one file; `pnpm lint` fails if
  * another file imports `shutro` directly.
  */
-import * as shutro from 'shutro';
+import * as core from 'shutro';
+import * as driverPg from 'shutro/driver-pg';
 
-/** The Shutro ORM API, as Kosh uses it. */
-export const orm: typeof shutro = shutro;
+/** The Shutro ORM API as Kosh uses it. */
+export const orm: typeof core = core;
+/** Shutro's PostgreSQL driver (pools, transactions); separate because some error names overlap the core's. */
+export const pg: typeof driverPg = driverPg;
 
 export type * from 'shutro';
+export type { Driver, DriverOptions } from 'shutro/driver-pg';
