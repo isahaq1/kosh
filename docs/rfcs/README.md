@@ -9,5 +9,5 @@ Design documents written before implementation. An RFC is implemented only after
 | 0003 | [Permission system](0003-permission-system.md) | Accepted, implemented |
 | 0004 | [View definitions & shared search layer](0004-views-and-search.md) | Accepted, implemented |
 | 0005 | [Reporting engine](0005-reporting-engine.md) | Accepted, implemented |
-| 0006 | [Communication & notification architecture](0006-communication-and-notifications.md) | Draft |
+| 0006 | [Communication & notification architecture](0006-communication-and-notifications.md) | Accepted (jobs backend open); chatter implemented |
 | 0007 | [Frontend architecture & design system](0007-frontend-architecture.md) | Accepted, implemented |

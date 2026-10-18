@@ -6,9 +6,14 @@
  * - `rahim`: contacts user, purchase requester
  * - `dina`: contacts manager, purchase approver
  * - `maria`: purchase manager (finance director level)
+ * - `rahim`, `dina`, `maria` also have Messaging (the chatter)
  * - `bob`: an internal user without any app role
  * - `admin`: administrator with 2FA (secret {@link ADMIN_TOTP_SECRET})
  */
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { installActivityTypes } from '@kosh/messaging';
 import { installApprovalPolicies } from '@kosh/permissions';
 import { installTemplates } from '@kosh/reporting';
 import { createServer, installBase, startServer } from '@kosh/server';
@@ -20,6 +25,8 @@ export const ADMIN_TOTP_SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
 const PASSWORD = 'correct horse battery';
 const PORT = Number(process.env['KOSH_E2E_PORT'] ?? 3100);
 
+// Attachments in a temporary directory (production: S3-compatible storage).
+process.env['KOSH_STORAGE_DIR'] ??= mkdtempSync(join(tmpdir(), 'kosh-e2e-files-'));
 const container = await new PostgreSqlContainer('postgres:18').start();
 const server = await createServer({
   databaseUrl: container.getConnectionUri(),
@@ -44,6 +51,7 @@ await server.shutro.bootstrap({ reason: 'e2e seed', company }, async (env) => {
   const model = (name: string) => env.model(name as never) as unknown as Model;
   await installApprovalPolicies(env, server.registry.loaded.modules);
   await installTemplates(env, server.registry.loaded.modules);
+  await installActivityTypes(env);
   await (await model('auth.credential').search({ where: { user: admin } })).write({
     totpSecret: ADMIN_TOTP_SECRET,
     totpEnabled: true,
@@ -124,9 +132,13 @@ await server.shutro.bootstrap({ reason: 'e2e seed', company }, async (env) => {
   ]);
 });
 for (const [login, name, groups] of [
-  ['rahim', 'Rahim Uddin', ['contacts.user', 'purchase.user', 'reporting.user']],
-  ['dina', 'Dina Rahman', ['contacts.manager', 'purchase.approver', 'reporting.designer']],
-  ['maria', 'Maria Das', ['contacts.user', 'purchase.manager', 'reporting.user']],
+  ['rahim', 'Rahim Uddin', ['contacts.user', 'purchase.user', 'reporting.user', 'messaging.user']],
+  [
+    'dina',
+    'Dina Rahman',
+    ['contacts.manager', 'purchase.approver', 'reporting.designer', 'messaging.user'],
+  ],
+  ['maria', 'Maria Das', ['contacts.user', 'purchase.manager', 'reporting.user', 'messaging.user']],
   ['bob', 'Bob Smith', ['base.user']],
 ] as const)
   await auth.createUser({

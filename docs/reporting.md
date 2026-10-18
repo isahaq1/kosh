@@ -1,6 +1,6 @@
 # Reporting
 
-Every analytical view runs on one server-side **report query** built on Shutro's `aggregate()` with grouping sets,
+Every analytical view runs on one server-side **report query** built on Shutro's `aggregate()`,
 under the caller's record rules and field security (RFC 0005). Documents are layouts printed to PDF by Playwright;
 exports and scheduled reports run on the server. Nothing here bypasses permissions: a report is a read like any
 other.

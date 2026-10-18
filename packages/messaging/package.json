@@ -10,6 +10,11 @@
       "@kosh/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./web": {
+      "@kosh/source": "./src/web/index.ts",
+      "types": "./dist/web/index.d.ts",
+      "default": "./dist/web/index.js"
     }
   },
   "files": [
@@ -21,5 +26,21 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@kosh/modules-sdk": "workspace:*",
+    "@kosh/server": "workspace:*",
+    "@kosh/storage": "workspace:*",
+    "fastify": "^5.12.7",
+    "@kosh/ui": "workspace:*",
+    "@tanstack/react-query": "^5.104.3",
+    "i18next": "^26.4.7",
+    "lucide-react": "^1.59.0",
+    "react": "^19.3.1",
+    "react-i18next": "^17.0.21"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^12.2.1",
+    "@types/react": "^19.3.0"
   }
 }

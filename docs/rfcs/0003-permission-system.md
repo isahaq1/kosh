@@ -133,7 +133,7 @@ record is out of rule scope) at the server. The suite is generated from the meta
 - **Assignments** live in `base` (`auth.user_group`, per company or all companies), next to the users; roles are
   Shutro runtime roles (`shutro_role`), so no `kosh_user_role` table was needed. Special grants are
   `auth.user_grant` (with company and expiry), loaded by the identity loader.
-- **Field security** per role without code needed Shutro runtime field groups (`setFieldGroups`, Shutro `588f2b2`).
+- **Field security** per role without code needed Shutro runtime field groups (`setFieldGroups`, Shutro `2293238`).
 - **Mandatory 2FA**: administrator groups count only in sessions that entered a second factor (sign-in or
   enrolment) while 2FA is on; other groups are kept.
 - **Keep one administrator**: a `res.users` constraint (archiving), `restrict` on assignments (users holding roles
@@ -143,4 +143,4 @@ record is out of rule scope) at the server. The suite is generated from the meta
 - **Enforcement tests** cover the endpoint types that exist today (list, read, create, update, delete, aggregate,
   onchange, transitions, export, import, metadata, navigation, approvals); reports, attachments and websocket
   subscriptions join the generated matrix when RFC 0005 / 0006 land. The matrix found an onchange gap, fixed in
-  Shutro `a84a31e`.
+  Shutro `164e747`.

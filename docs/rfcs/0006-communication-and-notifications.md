@@ -1,6 +1,6 @@
 # RFC 0006: Communication & notification architecture
 
-- **Status:** Draft (for review)
+- **Status:** Accepted; part 1 (chatter, attachments) implemented. The jobs backend decision (below) is still open.
 - **Depends on:** 0001, 0002, 0003; Shutro RFC 0013 (audit), 0018 (outbox events, jobs)
 
 ## 1. Summary
@@ -79,3 +79,19 @@ Replying to the approval email posts the reply on the order's chatter.
 - Packages: chatter, followers, activities and chat in `packages/messaging`; email (outbound, inbound, templates with
   React Email) in `packages/mail`; channels and adapters (in-app, web push, mobile push, email, SMS, WhatsApp,
   Telegram) in `packages/notify`; the gateway in `packages/realtime`; attachments in `packages/storage`.
+
+## Implementation notes (2026-10-19, part 1: chatter)
+
+- `@kosh/messaging` and `@kosh/storage` as described in §5.1; guide in `docs/messaging.md`. The chatter's models are
+  private (no generated API); its routes read the record as the caller first, so the chatter needs no superuser
+  scope to read: ordinary rules on the private models (authors edit their messages, creators and assignees their
+  activities) plus the record check.
+- Bodies are rendered on the server from text with a small markdown subset and mention tokens; everything typed is
+  escaped, so no HTML sanitizer is needed yet. Inbound email (part 5) brings HTML from outside and will need one.
+- The change log is `records.trail()` as the user. Shutro gained what that needed: field security on trails, a
+  `before` cursor, `limit` counting visible rows, and `env.access.checkRecords` for "may write" checks
+  (`docs/shutro-requests.md` #15, #16).
+- Attachments: S3-compatible storage signed with SigV4 on `node:crypto` (four calls: put, get, delete, create
+  bucket; tested against the AWS documentation's example and a SeaweedFS container), or a directory. Downloads never
+  render active content in the application's origin.
+- Outbox events `mail.message.posted` and `mail.activity.assigned` are emitted for part 3.

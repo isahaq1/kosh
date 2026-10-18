@@ -124,4 +124,4 @@ serious or critical violations) in both themes. Run `pnpm build && pnpm test:e2e
 ## Not yet
 
 Code splitting per app (ECharts and MapLibre load on demand; the rest is one bundle), `kosh inspect view` on the
-CLI, the chatter (RFC 0006; forms render a registered `chatter` component). Performance budgets: docs/benchmarks.md.
+CLI. The chatter is `@kosh/messaging/web` (docs/messaging.md). Performance budgets: docs/benchmarks.md.

@@ -12,9 +12,10 @@ ahead. "Today" means code on `main` with tests; planned work is in the last sect
 | Administrator | `base.group_system` bypasses ACL; no 2FA requirement; the last admin can be locked out | One explicit bypass (Shutro administrator mode), rights withheld until a second factor, the last active 2FA administrator cannot be archived, stripped or lose 2FA; integrity rules still apply |
 | Roles | Groups are global; configuration is XML / CSV in modules | Roles built from access levels in the admin API, assigned **per company** (manager in one company, user in another), field security per role without code, special grants with expiry, every change audited twice (Kosh and Shutro) |
 | Approvals | Per-module (purchase double validation, Approvals app), different models | One engine: ordered levels with domain conditions, approver role per company, separation of duties (administrators included), policies shipped by modules and edited as data, every decision audited |
-| Pivots | `read_group` per header level; totals recomputed client-side; cross-currency sums | One `GROUPING SETS` statement for every level and total (expand / collapse without a query); amounts stay per currency at every level; drill-down domains on every header; period comparisons aligned on buckets; `asOf` for models with history |
+| Pivots | `read_group` per header level; totals recomputed client-side; cross-currency sums | One statement for every level and total (the leaf grouping, rolled up exactly on the server; expand / collapse without a query; 1M rows in ~0.5 s); amounts stay per currency at every level; drill-down domains on every header; period comparisons aligned on buckets; `asOf` for models with history |
 | Exports | Load into memory; some field restrictions bypassed | Streamed CSV of millions of rows in one consistent transaction with bounded memory; XLSX with real types and formats; the `export` permission and an audit event on every export; formula-safe CSV |
 | Documents | QWeb XML templates, wkhtmltopdf (unmaintained) | JSON layouts bound to fields, printed by Chromium via Playwright (modern CSS, paged media); a drag-and-drop designer with a live preview; bindings validated on save; renders audited; rules apply to the printed data |
+| Chatter | `mail.thread` mixin per model; tracking values copied into messages (editable, only tracked fields); followers may receive content of records they can no longer read; message HTML sanitized after the fact | Every served model, no mixin; the change log *is* the audit trail read as the user (cannot be edited; field security hides restricted fields); every chatter route re-checks the record under the caller's rules; bodies rendered from escaped text; attachments never render active content in the app's origin |
 | Concurrency | Last write wins | Compare-and-set end to end: ETags on the API, `If-Match` from the UI, a stale record asks for a reload instead of overwriting |
 | Jobs and events | Cron on `ir.cron`; side effects in the request | Transactional outbox and jobs in PostgreSQL: an event or job exists iff the transaction committed; handlers run as the user who caused them, under their rules |
 | Front end | OWL (proprietary), XML views, patches on prototypes | React 19, TanStack, Radix, Tailwind; views as typed data extended by anchors with recorded origins; light / dark, RTL by construction, i18n with ICU; axe-checked |
@@ -31,8 +32,8 @@ ahead. "Today" means code on `main` with tests; planned work is in the last sect
 
 - **Breadth of business apps**: Kosh has the framework and demo modules; Odoo has accounting, inventory, HR, CRM,
   manufacturing, e-commerce, point of sale, localizations, and thousands of community modules.
-- **Chatter, messaging, email, notifications** (RFC 0006): not built yet.
-- **Attachments and documents on records**, a file store, OCR, digital signatures.
+- **Notifications, realtime, chat, email** (RFC 0006 parts 2–5): not built yet (the chatter and attachments are).
+- **Documents on records**: a document management app, OCR, digital signatures.
 - **Spreadsheet** depth (Odoo Enterprise: pivot insertion, charts, collaborative editing). Kosh's is formulas and
   live report totals.
 - **Reporting** extras: Odoo's accounting reports, cash flow, aged balances are app-level work.

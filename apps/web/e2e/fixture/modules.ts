@@ -3,6 +3,7 @@
  * approvals), plus `purchase_approvals`, which adds the approval panel to the purchase form by a view extension.
  * Server-side code, run by Node (type stripping) against the built packages.
  */
+import { messaging, messagingShutro } from '@kosh/messaging';
 import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
 import { approvalGuard, permissions, permissionsShutro, requestApprovals } from '@kosh/permissions';
 import { reporting, reportingShutro } from '@kosh/reporting';
@@ -171,6 +172,7 @@ const Order = defineModel('purchase.order', {
     },
     all: { groups: ['purchase.approver'], perms: ['read', 'write'], domain: {} },
   },
+  tracking: ['vendor', 'amountTotal'], // the chatter's change log (the state is tracked by default)
   fields: {
     name: f.char({ required: true }),
     vendor: f.many2one('res.partner'),
@@ -208,7 +210,7 @@ const Order = defineModel('purchase.order', {
 const purchaseShutro = defineModule({
   name: 'purchase',
   version: '0.1.0',
-  depends: [contactsShutro, permissionsShutro],
+  depends: [contactsShutro, permissionsShutro, messagingShutro],
   groups: [
     defineGroup({ code: 'purchase.user', label: 'Requester', implies: ['base.user'] }),
     defineGroup({ code: 'purchase.approver', label: 'Approver', implies: ['purchase.user'] }),
@@ -220,7 +222,7 @@ const purchaseShutro = defineModule({
 export const purchase = defineKoshModule({
   shutro: purchaseShutro,
   kosh: '^0.1.0',
-  depends: [contacts, permissions],
+  depends: [contacts, permissions, messaging],
   app: { code: 'purchase', label: 'Purchase', icon: 'cart', sequence: 2 },
   accessLevels: {
     user: { label: 'Requester', groups: ['purchase.user'] },
@@ -307,6 +309,7 @@ export const purchase = defineKoshModule({
         k.group('more', ['notes'], { columns: 1 }),
       ],
       readonlyWhen: { state: { notIn: ['draft', 'rejected'] } },
+      chatter: true,
     })),
   },
   documents: [

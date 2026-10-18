@@ -79,8 +79,8 @@ receives the monthly spend pivot as XLSX every 1st at 08:00.
 
 ## Implementation notes (2026-10-19)
 
-- Shutro gained `aggregate({ groupingSets | rollup | cube })` with `$groups` per row (`8a79c43`), `env.releaseCache()`
-  for streamed exports (`06f63c7`), and a fix for binary values in batch writes (`0b8e5ba`).
+- Shutro gained `aggregate({ groupingSets | rollup | cube })` with `$groups` per row (`34d90de`), `env.releaseCache()`
+  for streamed exports (`d4b4d96`), and a fix for binary values in batch writes (`346da07`).
 - The report query issues one statement per pivot (two with a comparison): the leaf grouping in SQL, subtotals and
   totals rolled up on the server with exact arithmetic. Shutro's `groupingSets` gives the same result in one
   statement, but PostgreSQL keeps one hash table per set and cannot parallelize them: on 1M rows the eight sets of a

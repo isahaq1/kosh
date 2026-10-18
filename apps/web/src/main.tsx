@@ -3,6 +3,7 @@
  * distribution's modules, composed at build time. What a user sees is decided per request by the server.
  */
 import './index.css';
+import { messagingMessages, registerMessagingWeb } from '@kosh/messaging/web';
 import { registerPermissionsWeb } from '@kosh/permissions/web';
 import { registerReportingWeb, reportingMessages } from '@kosh/reporting/web';
 import { createDefaultRegistry, createKoshApi, KoshApp } from '@kosh/ui';
@@ -12,7 +13,8 @@ import { createRoot } from 'react-dom/client';
 const registry = createDefaultRegistry();
 registerPermissionsWeb(registry);
 registerReportingWeb(registry);
-const messages = { reporting: reportingMessages };
+registerMessagingWeb(registry);
+const messages = { reporting: reportingMessages, messaging: messagingMessages };
 
 const root = document.getElementById('root');
 if (root === null) throw new Error('index.html has no #root element.');
