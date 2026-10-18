@@ -13,6 +13,27 @@ export {
 } from './api/metadata.js';
 export { fieldSchema, openApiDocument } from './api/openapi.js';
 export { registerRestApi } from './api/rest.js';
+export { base, baseShutro } from './auth/base.js';
+export {
+  digest,
+  hashPassword,
+  newTotpSecret,
+  otpauthUri,
+  randomToken,
+  totp,
+  verifyPassword,
+  verifyTotp,
+} from './auth/crypto.js';
+export { type InstallBaseOptions, installBase } from './auth/install.js';
+export { registerAuthRoutes } from './auth/routes.js';
+export {
+  type AuthOptions,
+  AuthService,
+  cookieOf,
+  SESSION_COOKIE,
+  type SessionInfo,
+  type UserInfo,
+} from './auth/service.js';
 export { HttpProblem, type Problem, problemOf, ServerConfigError } from './errors.js';
 export {
   type Authenticator,

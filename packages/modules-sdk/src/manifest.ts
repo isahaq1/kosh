@@ -70,6 +70,11 @@ export interface ModuleInput {
   readonly actions?: Readonly<Record<string, unknown>>;
   /** Views by id (RFC 0004). */
   readonly views?: Readonly<Record<string, unknown>>;
+  /**
+   * Models of this module the generated API never serves, not even to administrators (credentials, sessions,
+   * internal queues). The module's own routes use them in system scopes.
+   */
+  readonly privateModels?: readonly string[];
   readonly hooks?: ModuleHooks;
   /** Translations per locale, loaded lazily. */
   readonly i18n?: Readonly<Record<string, () => Promise<unknown>>>;

@@ -12,6 +12,8 @@ import { idempotencyTableStatements } from './api/idempotency.js';
 import { apiModels } from './api/metadata.js';
 import { openApiDocument } from './api/openapi.js';
 import { registerRestApi } from './api/rest.js';
+import { registerAuthRoutes } from './auth/routes.js';
+import { type AuthOptions, AuthService } from './auth/service.js';
 import { HttpProblem, problemOf } from './errors.js';
 import { type Authenticator, denyAll, type RequestIdentity, runOptionsOf } from './identity.js';
 import { type Driver, type Env, orm, pg, type Shutro } from './orm.js';
@@ -30,6 +32,8 @@ declare module 'fastify' {
   interface FastifyContextConfig {
     /** No authentication, no rate limit (health checks). */
     public?: boolean;
+    /** `false`: the route checks the session itself (sign-in, 2FA); still rate limited. */
+    auth?: boolean;
   }
 }
 
@@ -39,7 +43,21 @@ export interface ServerOptions {
   readonly modules: readonly KoshModule[];
   /** Valkey for rate limiting (and later caches, pub/sub); without it, limits are per process. */
   readonly valkeyUrl?: string;
+  /**
+   * Who is calling. Default: Kosh sessions (cookie or Bearer, 2FA) when the `base` module is installed, otherwise
+   * nobody is authenticated.
+   */
   readonly authenticate?: Authenticator;
+  /** Session settings of the built-in authentication. */
+  readonly auth?: AuthOptions & {
+    /** Sign-in attempts per 15 minutes per IP and login (default 10; 0 turns the limit off). */
+    readonly loginLimit?: number;
+  };
+  /**
+   * Shutro's identity loader checks every request's user (active, companies, groups) against `base`'s data. Default:
+   * on with the built-in authentication; custom authenticators opt in.
+   */
+  readonly verifyIdentities?: boolean;
   /** Requests per window per user (or IP when anonymous). Default 600 per minute. */
   readonly rateLimit?: { readonly max: number; readonly timeWindow: string | number };
   readonly logger?: FastifyServerOptions['logger'];
@@ -55,6 +73,8 @@ export interface KoshServer {
   readonly shutro: Shutro;
   readonly driver: Driver;
   readonly registry: KoshRegistry;
+  /** The built-in authentication (when `base` is installed). */
+  readonly auth: AuthService | undefined;
   /** Stops accepting requests, lets in-flight ones finish, then closes the pool and Valkey. Safe to call twice. */
   close(): Promise<void>;
 }
@@ -77,8 +97,19 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
     parseNumeric: orm.toDecimal,
     applicationName: 'kosh',
   });
-  const shutro = orm.createShutro({ driver, registry: registry.registry });
-  const authenticate = options.authenticate ?? denyAll;
+  const hasBase = registry.registry.models.has('auth.session' as never);
+  let shutro: Shutro | undefined;
+  const auth = hasBase ? new AuthService(() => shutro as Shutro, options.auth) : undefined;
+  const verify =
+    auth !== undefined && (options.verifyIdentities ?? options.authenticate === undefined);
+  shutro = orm.createShutro({
+    driver,
+    registry: registry.registry,
+    ...(verify ? { identity: (uid: number) => auth.verify(uid) } : {}),
+  });
+  const authenticate: Authenticator =
+    options.authenticate ??
+    (auth === undefined ? denyAll : (request) => auth.authenticate(request));
   const valkey =
     options.valkeyUrl === undefined
       ? undefined
@@ -136,7 +167,8 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
   });
   // Authentication runs before rate limiting, so limits are per user when there is one.
   app.addHook('onRequest', async (request) => {
-    if (request.routeOptions.config.public === true) return;
+    const config = request.routeOptions.config;
+    if (config.public === true || config.auth === false) return;
     request.identity = await authenticate(request);
   });
   if (options.rateLimit?.max !== 0)
@@ -189,9 +221,15 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
       });
   });
 
+  if (auth !== undefined)
+    registerAuthRoutes(app, auth, { loginLimit: options.auth?.loginLimit ?? 10 });
+
   // The generated REST API and its OpenAPI document (RFC 0002 §6.3–6.4).
   for (const statement of idempotencyTableStatements()) await driver.query(statement);
-  const models = apiModels(registry.registry);
+  const privateModels = new Set(registry.loaded.modules.flatMap((m) => m.privateModels ?? []));
+  const models = new Map(
+    [...apiModels(registry.registry)].filter(([name]) => !privateModels.has(name)),
+  );
   let openapi: unknown;
   registerRestApi(app, {
     models,
@@ -224,6 +262,7 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
     shutro,
     driver,
     registry,
+    auth,
     close() {
       closing ??= (async () => {
         shuttingDown = true;

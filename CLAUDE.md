@@ -29,7 +29,8 @@ better than Odoo?"** If not, leave it out.
 - TypeScript strict, ESM, Node.js LTS, no `any`
 - HTTP: Fastify (plugin per Kosh module)
 - API: REST + auto-generated OpenAPI + generated typed client (GraphQL later, optional)
-- Auth: Better Auth (sessions, 2FA, OAuth/SSO, passkeys) or a justified alternative
+- Auth: Kosh-native on Shutro (decided 2026-10-18 instead of Better Auth: one user store, audited, record rules apply):
+  sessions, TOTP 2FA and recovery codes now; OAuth/SSO and passkeys built on the same models later
 - Jobs & scheduler: pg-boss (PostgreSQL) — BullMQ only if an RFC justifies Redis queues
 - Cache, rate limiting, pub/sub: Valkey/Redis
 - Real-time: WebSocket gateway + PostgreSQL LISTEN/NOTIFY + Redis pub/sub for multi-node

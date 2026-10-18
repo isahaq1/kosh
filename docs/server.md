@@ -9,7 +9,7 @@ const server = await createServer({
   databaseUrl: process.env.DATABASE_URL!,
   valkeyUrl: process.env.VALKEY_URL,       // shared rate limits (and later caches, pub/sub)
   modules: [contacts],                      // dependencies are loaded and checked (docs/modules.md)
-  authenticate,                             // request → identity; the default denies everyone
+  // authenticate: defaults to Kosh sessions (below) when `base` is installed; without base, nobody
 });
 server.app.get('/api/v1/hello', async (request) => request.env(async (env) => ({ uid: env.uid })));
 await startServer(server, { port: 3000, onShutdown: () => telemetry.shutdown() });
@@ -20,6 +20,40 @@ await startServer(server, { port: 3000, onShutdown: () => telemetry.shutdown() }
 `request.env(fn)` runs `fn` in one Shutro transaction as the request's identity: user, company, allowed companies
 and groups from the authenticator, narrowed by headers (`X-Company`, `X-Companies` within the allowed ones,
 `Accept-Language` → `bn_BD`, `X-Timezone`). GET and HEAD run read-only. Without an identity it is a 401.
+
+## Authentication
+
+Kosh-native, on Shutro (no external auth service): the framework module `base` (`import { base } from
+'@kosh/server'`, a dependency of every app) holds users, companies and currencies, and three **private** models
+(`auth.credential`, `auth.session`, `auth.user_group`) that the generated API never serves. Every auth read and write
+runs in an audited Shutro system scope.
+
+| Route | |
+|---|---|
+| `POST /api/v1/auth/login` `{ login, password }` | `{ token, csrfToken, twoFactorRequired }` and the `kosh_session` cookie |
+| `POST /api/v1/auth/logout` | revokes the session |
+| `GET /api/v1/auth/me` | the signed-in user |
+| `POST /api/v1/auth/2fa/setup` → `enable { code }` | TOTP enrolment; `enable` returns 10 recovery codes, shown once |
+| `POST /api/v1/auth/2fa/verify { code }` | completes a sign-in pending the second factor (TOTP or a recovery code, once) |
+| `POST /api/v1/auth/2fa/disable { password, code }` | turns 2FA off |
+| `POST /api/v1/auth/password { current, next }` | at least 12 characters; revokes the user's other sessions |
+
+- **Passwords**: scrypt (N=2^15, r=8, p=1), parameters stored with the hash. Unknown logins cost the same time as
+  wrong passwords and get the same answer.
+- **Sessions**: random 256-bit tokens, stored as SHA-256 digests; 12 h idle timeout, 7-day lifetime (`auth` option).
+  Browsers use the httpOnly `SameSite=Lax` cookie and send `X-CSRF-Token` (the `csrfToken`) on unsafe methods; API
+  clients send `Authorization: Bearer <token>` (no CSRF). Lookups are cached for `cacheMs` (5 s), which bounds how
+  long a revoked session keeps working on another instance.
+- **2FA**: once enabled, a new session reaches only `2fa/verify` and `logout` until verified.
+- **Who runs as whom**: the user's companies and per-company groups come from the database (`X-Company` picks the
+  company); Shutro's identity loader re-checks each request: archived users and companies or groups the user does
+  not have are refused.
+- **Sign-in rate limit**: 10 attempts per 15 minutes per IP and login (`auth.loginLimit`).
+- **Installation**: `installBase(server.shutro, server.auth, { company: { name, currency }, admin: { login, name,
+  password } })` creates the first company and administrator (`base.admin`); `server.auth.createUser(...)` adds users
+  with group assignments (all companies, or `{ group, company }`).
+
+OAuth/SSO and passkeys come later, on the same models. Roles and the admin UI for them are `@kosh/permissions`.
 
 ## Errors
 
