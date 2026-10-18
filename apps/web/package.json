@@ -15,14 +15,23 @@
   },
   "dependencies": {
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "@kosh/ui": "workspace:*",
+    "@kosh/permissions": "workspace:*"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@kosh/cli": "workspace:*",
     "@playwright/test": "^1.55.0",
+    "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "tailwindcss": "^4.3.3",
     "vite": "^7.1.0",
-    "@kosh/cli": "workspace:*"
+    "@testcontainers/postgresql": "^12.2.1",
+    "@kosh/server": "workspace:*",
+    "@kosh/modules-sdk": "workspace:*",
+    "@kosh/views": "workspace:*"
   }
 }

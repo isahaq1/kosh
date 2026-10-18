@@ -5,6 +5,7 @@
  * The Shutro module is described structurally here (`@kosh/modules-sdk` does not import Shutro: only
  * `packages/server/src/orm.ts` does); the server's loader verifies it is a real Shutro module.
  */
+import type { SearchSpec, ViewDefinition, ViewExtension, WindowAction } from '@kosh/views';
 import { ModuleDefinitionError } from './errors.js';
 import { satisfies } from './semver.js';
 
@@ -86,10 +87,14 @@ export interface ModuleInput {
   /** Required and non-empty: a module without access levels fails to load (CLAUDE.md). */
   readonly accessLevels: Readonly<Record<string, AccessLevel>>;
   readonly menus?: readonly MenuSpec[];
-  /** Window actions by id (shape defined with RFC 0004). */
-  readonly actions?: Readonly<Record<string, unknown>>;
-  /** Views by id (RFC 0004). */
-  readonly views?: Readonly<Record<string, unknown>>;
+  /** Window actions by id (RFC 0004): what menus open. */
+  readonly actions?: Readonly<Record<string, WindowAction>>;
+  /** Views by id (RFC 0004), built with `list` / `form` / `kanban` from `@kosh/views`. */
+  readonly views?: Readonly<Record<string, ViewDefinition>>;
+  /** Changes to other modules' views by anchor, applied in dependency order. */
+  readonly viewExtensions?: readonly ViewExtension[];
+  /** Search definitions by model (filters, search fields, group-by options). */
+  readonly search?: Readonly<Record<string, SearchSpec>>;
   /**
    * Models of this module the generated API never serves, not even to administrators (credentials, sessions,
    * internal queues). The module's own routes use them in system scopes.

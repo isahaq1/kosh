@@ -1,0 +1,101 @@
+/*
+ * Kosh design tokens (RFC 0007): colors, radius and typography as CSS variables, light and dark themes, Tailwind v4
+ * utilities mapped onto them. Components use logical properties only (ms/me, ps/pe, start/end), so RTL needs no
+ * overrides. Import once from the app: `@import '@kosh/ui/styles.css';` after `@import 'tailwindcss';`.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-foreground: var(--surface-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+  --font-sans: var(--font-family);
+}
+
+:root {
+  --radius: 0.5rem;
+  --font-family: "Inter", "Noto Sans Bengali", "Noto Sans Arabic", system-ui, sans-serif;
+  /* Light: contrast ratios ≥ 4.5:1 for text on background and surface (WCAG AA). */
+  --background: oklch(0.985 0.002 250);
+  --foreground: oklch(0.21 0.02 260);
+  --surface: oklch(1 0 0);
+  --surface-foreground: oklch(0.21 0.02 260);
+  --muted: oklch(0.955 0.005 250);
+  --muted-foreground: oklch(0.45 0.02 260);
+  --border: oklch(0.9 0.008 250);
+  --input: oklch(0.86 0.01 250);
+  --ring: oklch(0.55 0.17 255);
+  --primary: oklch(0.5 0.17 255);
+  --primary-foreground: oklch(0.99 0 0);
+  --accent: oklch(0.94 0.03 255);
+  --accent-foreground: oklch(0.3 0.1 255);
+  --danger: oklch(0.52 0.2 25);
+  --danger-foreground: oklch(0.99 0 0);
+  --success: oklch(0.5 0.13 150);
+  --warning: oklch(0.6 0.14 75);
+  color-scheme: light;
+}
+
+.dark {
+  --background: oklch(0.17 0.015 260);
+  --foreground: oklch(0.94 0.01 250);
+  --surface: oklch(0.21 0.017 260);
+  --surface-foreground: oklch(0.94 0.01 250);
+  --muted: oklch(0.25 0.017 260);
+  --muted-foreground: oklch(0.72 0.02 255);
+  --border: oklch(0.3 0.02 260);
+  --input: oklch(0.36 0.02 260);
+  --ring: oklch(0.7 0.14 255);
+  --primary: oklch(0.68 0.15 255);
+  --primary-foreground: oklch(0.16 0.02 260);
+  --accent: oklch(0.3 0.05 255);
+  --accent-foreground: oklch(0.92 0.04 255);
+  --danger: oklch(0.65 0.19 25);
+  --danger-foreground: oklch(0.16 0.02 260);
+  --success: oklch(0.7 0.14 150);
+  --warning: oklch(0.78 0.14 75);
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html,
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-family);
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      /* biome-ignore lint/complexity/noImportantStyles: reduced motion must win over every component transition */
+      animation-duration: 0.01ms !important;
+      /* biome-ignore lint/complexity/noImportantStyles: as above */
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

@@ -23,6 +23,16 @@ export interface ApiField {
   readonly translate: boolean;
 }
 
+/** A state transition. */
+export interface TransitionSpec {
+  readonly name: string;
+  readonly field: string;
+  readonly from: readonly string[];
+  readonly to: string;
+  /** A feature permission the user needs (`definePermission`), or `null`. */
+  readonly requires: string | null;
+}
+
 /** One model as the API exposes it. */
 export interface ApiModel {
   readonly name: string;
@@ -33,8 +43,12 @@ export interface ApiModel {
   readonly byKey: ReadonlyMap<string, ApiField>;
   /** Transition names (state fields). */
   readonly transitions: readonly string[];
+  /** The transitions in detail: their state field, source and target states, and required permission. */
+  readonly transitionSpecs: readonly TransitionSpec[];
   /** Fields with onchange handlers. */
   readonly onchange: readonly string[];
+  /** The stored field names are searched by (`name` by default), or `null`. */
+  readonly recName: string | null;
 }
 
 const IMPLICIT_READONLY = new Set([
@@ -64,13 +78,23 @@ export function apiModels(registry: Registry): ReadonlyMap<string, ApiModel> {
     >;
     const fields: ApiField[] = [];
     const transitions: string[] = [];
+    const transitionSpecs: TransitionSpec[] = [];
     for (const [key, d] of Object.entries(description.fields)) {
       const raw = descriptors[key] ?? {};
       const selection = raw['selection'];
       if (d.kind === 'state')
-        transitions.push(
-          ...Object.keys((raw['transitions'] as Record<string, unknown> | undefined) ?? {}),
-        );
+        for (const [t, spec] of Object.entries(
+          (raw['transitions'] as Record<string, Record<string, unknown>> | undefined) ?? {},
+        )) {
+          transitions.push(t);
+          transitionSpecs.push({
+            name: t,
+            field: key,
+            from: Array.isArray(spec['from']) ? (spec['from'] as string[]) : [],
+            to: String(spec['to'] ?? ''),
+            requires: typeof spec['requires'] === 'string' ? spec['requires'] : null,
+          });
+        }
       const computedReadonly = d.computed && raw['inverse'] === undefined;
       fields.push({
         key,
@@ -100,10 +124,19 @@ export function apiModels(registry: Registry): ReadonlyMap<string, ApiModel> {
       fields,
       byKey: new Map(fields.map((f) => [f.key, f])),
       transitions,
+      transitionSpecs,
       onchange: [...description.onchange],
+      recName: recNameOf(registry, name, fields),
     });
   }
   return out;
+}
+
+function recNameOf(registry: Registry, name: string, fields: readonly ApiField[]): string | null {
+  const declared = (registry.get(name).model as unknown as { recName?: unknown }).recName;
+  const key = typeof declared === 'string' ? declared : 'name';
+  const field = fields.find((f) => f.key === key);
+  return field?.stored === true && (field.kind === 'char' || field.kind === 'text') ? key : null;
 }
 
 /** Fields listed by default: stored, not binary, not x2many. */

@@ -10,6 +10,64 @@ export interface AggregateQuery {
   limit?: number;
 }
 
+/** Kosh Saved View */
+export interface KoshSavedView {
+  /** ID */
+  id: number;
+  /** Created At */
+  createdAt: string;
+  /** Updated At */
+  updatedAt: string;
+  /** Created By: Id of a res.users record. */
+  createdBy?: number | null;
+  /** Updated By: Id of a res.users record. */
+  updatedBy?: number | null;
+  /** Display Name */
+  displayName?: string;
+  /** Name */
+  name: string;
+  /** Target Model */
+  targetModel: string;
+  /** View Type */
+  viewType: string;
+  /** State */
+  state: unknown;
+  /** Shared */
+  shared: boolean;
+  /** Is Default */
+  isDefault: boolean;
+}
+
+export interface KoshSavedViewCreate {
+  /** Name */
+  name: string;
+  /** Target Model */
+  targetModel: string;
+  /** View Type */
+  viewType?: string;
+  /** State */
+  state: unknown;
+  /** Shared */
+  shared?: boolean;
+  /** Is Default */
+  isDefault?: boolean;
+}
+
+export interface KoshSavedViewUpdate {
+  /** Name */
+  name?: string;
+  /** Target Model */
+  targetModel?: string;
+  /** View Type */
+  viewType?: string;
+  /** State */
+  state?: unknown;
+  /** Shared */
+  shared?: boolean;
+  /** Is Default */
+  isDefault?: boolean;
+}
+
 export interface Money {
   amount: string;
   currency: string;
@@ -160,9 +218,15 @@ export interface ResUsersCreate {
   /** Companies: Commands on res.company records. */
   companies: {
     create?: (Record<string, unknown>)[];
+    update?: ({
+      id: number;
+      values: Record<string, unknown>;
+    })[];
+    delete?: number[];
     link?: number[];
     unlink?: number[];
     set?: number[];
+    clear?: boolean;
   };
   /** Lang */
   lang?: string | null;
@@ -184,9 +248,15 @@ export interface ResUsersUpdate {
   /** Companies: Commands on res.company records. */
   companies?: {
     create?: (Record<string, unknown>)[];
+    update?: ({
+      id: number;
+      values: Record<string, unknown>;
+    })[];
+    delete?: number[];
     link?: number[];
     unlink?: number[];
     set?: number[];
+    clear?: boolean;
   };
   /** Lang */
   lang?: string | null;
@@ -198,6 +268,12 @@ export interface ResUsersUpdate {
 
 /** Every model this API serves: its read, create and update shapes, and its state transitions. */
 export interface Models {
+  "kosh.saved_view": {
+    record: KoshSavedView;
+    create: KoshSavedViewCreate;
+    update: KoshSavedViewUpdate;
+    transitions: never;
+  };
   "res.company": {
     record: ResCompany;
     create: ResCompanyCreate;
@@ -219,7 +295,7 @@ export interface Models {
 }
 
 /** The model names, at runtime. */
-export const MODEL_NAMES: readonly ModelName[] = ["res.company","res.currency","res.users"];
+export const MODEL_NAMES: readonly ModelName[] = ["kosh.saved_view","res.company","res.currency","res.users"];
 
 // ------------------------------------------------------------------------------------------------- runtime
 

@@ -96,8 +96,12 @@ export const purchase = defineKoshModule({
     manager: { label: 'Manager', groups: ['purchase.manager'], implies: ['approver'] },
   },
   actions: {
-    'purchase.action_orders': { model: 'purchase.order' },
-    'purchase.action_settings': { model: 'purchase.order', visibleTo: ['purchase.manager'] },
+    'purchase.action_orders': { model: 'purchase.order', views: ['list', 'form'] },
+    'purchase.action_settings': {
+      model: 'purchase.order',
+      views: ['list'],
+      visibleTo: ['purchase.manager'],
+    },
   },
   menus: [
     { id: 'purchase.root', label: 'Purchase', app: 'purchase' },

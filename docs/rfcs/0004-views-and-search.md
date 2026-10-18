@@ -1,6 +1,6 @@
 # RFC 0004: View definitions & shared search layer
 
-- **Status:** Draft (for review)
+- **Status:** Accepted (2026-10-18), implemented in `@kosh/views`, `@kosh/search`, `@kosh/server`, `@kosh/ui` (docs/ui.md)
 - **Depends on:** 0001, 0002, 0003
 
 ## 1. Summary
@@ -96,3 +96,18 @@ domain `{ 'approvalRequests.any': { approver: { $env: 'uid' }, state: 'pending' 
 
 - View schemas and builders live in `packages/views`, the search layer in `packages/search`, renderers in
   `packages/ui`; `defineView` / `defineMenu` / `defineAction` are exported by `packages/modules-sdk`.
+
+## Implementation notes (2026-10-18)
+
+- Builders take the Shutro model handle (`list(PurchaseOrder, ...)`): field keys are compile-time checked; transitions,
+  relation paths, line columns and group-by fields are checked when the server starts. A model given by name is
+  checked at startup only.
+- `defineView` / `defineAction` are the `list` / `form` / `kanban` / `action` / `search` builders of `@kosh/views`
+  (the package with the view schemas); manifests take them in `views`, `actions`, `search` and `viewExtensions`.
+- Extension operations: `insertAfter`, `insertBefore`, `append`, `replace`, `remove`, `setAttrs`; origins and the
+  chain are recorded by `resolveView()` (the `kosh inspect view` command comes with the CLI work).
+- Client-side conditions decide only what needs the record's own values (open question 7): relation paths are
+  undecided, so `readonlyWhen` does not lock and `visibleWhen` does not hide on them; the server re-checks writes.
+- Saved views are `kosh.saved_view` (in `base`), private or shared with everyone who can read the model; sharing
+  with specific roles needs a `$env` groups placeholder in Shutro record rules (later).
+- A name-search endpoint (`/models/:model/names`) serves many2one pickers and display names.

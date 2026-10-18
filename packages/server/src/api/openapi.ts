@@ -77,9 +77,19 @@ function writeSchema(field: ApiField): Schema {
       description: `Commands on ${field.target} records.`,
       properties: {
         create: { type: 'array', items: { type: 'object' } },
+        update: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { id: { type: 'integer' }, values: { type: 'object' } },
+            required: ['id', 'values'],
+          },
+        },
+        delete: { type: 'array', items: { type: 'integer' } },
         link: { type: 'array', items: { type: 'integer' } },
         unlink: { type: 'array', items: { type: 'integer' } },
         set: { type: 'array', items: { type: 'integer' } },
+        clear: { type: 'boolean', const: true },
       },
       additionalProperties: false,
     };

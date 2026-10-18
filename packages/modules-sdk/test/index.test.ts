@@ -48,7 +48,7 @@ const contacts = defineModule({
     user: { label: 'User', groups: ['contacts.user'] },
     manager: { label: 'Manager', groups: ['contacts.manager'], implies: ['user'] },
   },
-  actions: { 'contacts.action_partners': {} },
+  actions: { 'contacts.action_partners': { model: 'res.partner', views: ['list'] } },
   menus: [
     { id: 'contacts.root', label: 'Contacts', app: 'contacts' },
     {
@@ -75,7 +75,10 @@ const purchaseInput: ModuleInput = {
     approver: { label: 'Approver', groups: ['purchase.approver'], implies: ['user'] },
     manager: { label: 'Manager', groups: ['purchase.manager'], implies: ['approver'] },
   },
-  actions: { 'purchase.action_orders': {}, 'purchase.action_to_approve': {} },
+  actions: {
+    'purchase.action_orders': { model: 'purchase.order', views: ['list'] },
+    'purchase.action_to_approve': { model: 'purchase.order', views: ['list'] },
+  },
   menus: [
     { id: 'purchase.root', label: 'Purchase', app: 'purchase' },
     {

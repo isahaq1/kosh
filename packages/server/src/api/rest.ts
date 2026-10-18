@@ -374,6 +374,39 @@ export function registerRestApi(
     await send(reply, outcome);
   });
 
+  // Name search (many2one pickers, display names of ids): the model's record name, within ACL and rules.
+  app.get('/api/v1/models/:model/names', async (request) => {
+    const model = modelOf(request.params);
+    const q = query(request);
+    const ids = list(q['ids']).map(Number);
+    if (ids.some((id) => !Number.isSafeInteger(id) || id <= 0))
+      throw problem(
+        400,
+        'invalid-ids',
+        'Invalid ids',
+        'ids is a comma-separated list of record ids.',
+      );
+    const limit = q['limit'] === undefined ? 8 : Number(q['limit']);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100)
+      throw problem(400, 'invalid-limit', 'Invalid limit', 'limit must be 1–100.');
+    const recName = model.recName;
+    const text = typeof q['q'] === 'string' ? q['q'].trim() : '';
+    return request.env(async (env) => {
+      const where =
+        ids.length > 0
+          ? { id: { in: ids } }
+          : text === '' || recName === null
+            ? undefined
+            : { [recName]: { ilike: `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%` } };
+      const found = await ref(env, model.name).search({
+        ...(where === undefined ? {} : { where }),
+        ...(ids.length > 0 ? {} : { limit }),
+      });
+      const loaded = found.length === 0 ? found : await found.load(['displayName']);
+      return { items: loaded.length === 0 ? [] : loaded.read(['displayName']) };
+    });
+  });
+
   app.post('/api/v1/models/:model/export', async (request, reply) => {
     const model = modelOf(request.params);
     const q = body(request);

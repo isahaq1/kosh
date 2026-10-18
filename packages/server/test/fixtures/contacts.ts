@@ -3,12 +3,13 @@
  * module wrapped by a Kosh manifest.
  */
 import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
+import { form, kanban, list, search } from '@kosh/views';
 import { base, baseShutro } from '../../src/auth/base.js';
 import { orm } from '../../src/orm.js';
 
 export { base };
 
-const { defineGroup, defineModel, defineModule, f } = orm;
+const { defineGroup, defineModel, defineModule, definePermission, f } = orm;
 
 const ResPartner = defineModel('res.partner', {
   archivable: true,
@@ -29,7 +30,7 @@ const ResPartner = defineModel('res.partner', {
       initial: 'lead',
       transitions: {
         qualify: { from: ['lead'], to: 'customer' },
-        lose: { from: ['lead', 'customer'], to: 'lost' },
+        lose: { from: ['lead', 'customer'], to: 'lost', requires: 'contacts.mark_lost' },
       },
     }),
   },
@@ -55,6 +56,13 @@ const contactsShutro = defineModule({
       implies: ['contacts.user'],
     }),
   ],
+  permissions: [
+    definePermission({
+      code: 'contacts.mark_lost',
+      label: 'Mark contacts as lost',
+      groups: ['contacts.manager'],
+    }),
+  ],
   models: [ResPartner],
 });
 
@@ -67,7 +75,52 @@ export const contacts = defineKoshModule({
     user: { label: 'User', groups: ['contacts.user'] },
     manager: { label: 'Manager', groups: ['contacts.manager'], implies: ['user'] },
   },
-  actions: { 'contacts.action_partners': {} },
+  actions: {
+    'contacts.action_partners': {
+      model: 'res.partner',
+      label: 'Contacts',
+      views: ['list', 'kanban', 'form'],
+    },
+  },
+  views: {
+    'res.partner.list': list(ResPartner, {
+      columns: [
+        'name',
+        'email',
+        'phone',
+        { field: 'creditLimit', sum: true },
+        { field: 'stage', widget: 'badge' },
+      ],
+      defaultOrder: ['name asc'],
+    }),
+    'res.partner.kanban': kanban(ResPartner, {
+      groupBy: 'stage',
+      card: { title: 'name', subtitle: 'email', footer: ['phone'] },
+    }),
+    'res.partner.form': form(ResPartner, (f) => ({
+      header: {
+        statusbar: 'stage',
+        buttons: [f.button('qualify', { primary: true }), f.button('lose')],
+      },
+      sheet: [
+        f.group('main', ['name', 'email', 'phone', 'isCompany']),
+        f.group('finance', [{ field: 'creditLimit', widget: 'money' }], { label: 'Finance' }),
+      ],
+      readonlyWhen: { stage: 'lost' },
+    })),
+  },
+  search: {
+    'res.partner': search(ResPartner, {
+      fields: ['name', 'email', 'company.name'],
+      filters: {
+        companies: { label: 'Companies', domain: { isCompany: true } },
+        leads: { label: 'Leads', domain: { stage: 'lead' }, group: 'stage' },
+        customers: { label: 'Customers', domain: { stage: 'customer' }, group: 'stage' },
+        bigCredit: { label: 'Large credit', domain: { creditLimit: { gt: '100000' } } },
+      },
+      groupBy: ['stage', 'isCompany'],
+    }),
+  },
   menus: [
     { id: 'contacts.root', label: 'Contacts', app: 'contacts' },
     {

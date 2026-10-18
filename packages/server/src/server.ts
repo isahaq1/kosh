@@ -13,6 +13,7 @@ import { publicApiModels } from './api/metadata.js';
 import { Navigation } from './api/navigation.js';
 import { openApiDocument } from './api/openapi.js';
 import { registerRestApi } from './api/rest.js';
+import { ViewRegistry } from './api/views.js';
 import { registerAuthRoutes } from './auth/routes.js';
 import { type AuthOptions, AuthService } from './auth/service.js';
 import { HttpProblem, problemOf } from './errors.js';
@@ -245,6 +246,7 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
   // The generated REST API and its OpenAPI document (RFC 0002 §6.3–6.4).
   for (const statement of idempotencyTableStatements()) await driver.query(statement);
   const models = publicApiModels(registry);
+  const views = new ViewRegistry(registry.loaded.modules, models); // validated at startup
   let openapi: unknown;
   registerRestApi(app, {
     models,
@@ -255,6 +257,7 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
     },
   });
   new Navigation(registry.loaded).register(app);
+  views.register(app);
 
   // Module routes (admin APIs, custom endpoints), in dependency order.
   const context: ModuleContext = { app, shutro, driver, registry, auth };

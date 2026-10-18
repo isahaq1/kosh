@@ -52,6 +52,7 @@ jobs:
       - run: cd ../shutro && pnpm install --frozen-lockfile && pnpm pack:npm && cd dist-npm/shutro && npm install --omit=dev
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @kosh/web exec playwright install --with-deps chromium
+      - run: pnpm build # the e2e API server (Node, PostgreSQL via Testcontainers) runs the built packages
       - run: pnpm test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()

@@ -232,10 +232,10 @@ export default defineModule({
 - [x] RFC 0001 Module system & manifest
 - [x] RFC 0002 Shutro integration & metadata → API generation
 - [x] RFC 0003 Permission system
-- [ ] RFC 0004 View definitions & shared search layer
+- [x] RFC 0004 View definitions & shared search layer
 - [ ] RFC 0005 Reporting engine
 - [ ] RFC 0006 Communication & notification architecture
-- [ ] RFC 0007 Frontend architecture & design system
+- [x] RFC 0007 Frontend architecture & design system
 
 ### Phase 1 — Server foundation
 
@@ -250,8 +250,8 @@ export default defineModule({
 
 ### Phase 3 — UI foundation
 
-- [ ] App shell, design system, menus, i18n, themes
-- [ ] Shared search layer; list, form, kanban views
+- [x] App shell, design system, menus, i18n, themes (docs/ui.md)
+- [x] Shared search layer; list, form, kanban views (Playwright E2E)
 
 ### Phase 4 — Reporting
 

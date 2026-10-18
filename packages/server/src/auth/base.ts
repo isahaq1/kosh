@@ -149,6 +149,36 @@ const AuditEvent = defineModel('audit.event', {
   },
 });
 
+/**
+ * Saved searches and favorites (RFC 0004 §5): a search state for a model and view type, private to its owner or
+ * shared with every user who can read the model. Governed by record rules, served by the generated API.
+ */
+const SavedView = defineModel('kosh.saved_view', {
+  access: { 'base.user': ['read', 'write', 'create', 'unlink'] },
+  rules: {
+    visible: {
+      groups: ['base.user'],
+      perms: ['read'],
+      domain: { or: [{ createdBy: { $env: 'uid' } }, { shared: true }] },
+    },
+    own: {
+      groups: ['base.user'],
+      perms: ['write', 'unlink'],
+      domain: { createdBy: { $env: 'uid' } },
+    },
+  },
+  order: ['name asc'],
+  fields: {
+    name: f.char({ required: true }),
+    targetModel: f.char({ required: true, index: true }),
+    viewType: f.char({ required: true, default: 'list' }),
+    /** The `@kosh/search` state (facets, filters, group-by, order). */
+    state: f.json({ required: true }),
+    shared: f.boolean({ default: false }),
+    isDefault: f.boolean({ default: false }),
+  },
+});
+
 /** The Shutro module behind {@link base}. */
 export const baseShutro: ReturnType<typeof orm.defineModule> = defineModule({
   name: 'base',
@@ -171,6 +201,7 @@ export const baseShutro: ReturnType<typeof orm.defineModule> = defineModule({
     AuthUserGroup,
     AuthUserGrant,
     AuditEvent,
+    SavedView,
   ],
 });
 

@@ -16,6 +16,7 @@ export {
 export { type MenuNode, moduleVisible, Navigation } from './api/navigation.js';
 export { fieldSchema, openApiDocument, openApiOf } from './api/openapi.js';
 export { registerRestApi } from './api/rest.js';
+export { type ServedView, type ViewField, ViewRegistry } from './api/views.js';
 export { type AuditInput, audit } from './audit.js';
 export {
   administrators,

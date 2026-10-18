@@ -1,6 +1,6 @@
 # RFC 0007: Frontend architecture & design system
 
-- **Status:** Draft (for review)
+- **Status:** Accepted (2026-10-18), implemented in `@kosh/ui` and `apps/web` (docs/ui.md)
 - **Depends on:** 0001, 0002, 0004, 0005, 0006
 
 ## 1. Summary
@@ -69,3 +69,17 @@ unchanged (Bangla is left-to-right; RTL support is verified with Arabic for futu
 
 - The app shell, design system and view renderers live in `packages/ui`; `apps/web` composes them with the modules.
 - Stack additions from CLAUDE.md: TanStack Table + Virtual + Form, dnd-kit for drag and drop, PWA first.
+
+## Implementation notes (2026-10-18)
+
+- Built: the shell (launcher, menus, company, language, theme), TanStack Router routes from apps / menus / actions
+  with the search state in the URL, TanStack Query over the API, the design system (Tailwind v4 tokens, light /
+  dark, logical properties for RTL, Radix primitives), i18next (English, Bangla, Arabic), and the list (TanStack
+  Table + Virtual), form and kanban (dnd-kit) renderers with a registry for views, widgets and components.
+- The renderers use a dynamic API client (`createKoshApi`), since their models are known only at runtime; business
+  code uses the generated typed client. Both speak the same REST API and sessions.
+- TanStack Form is not used: the metadata-driven form keeps its own small state (changes, onchange, compare-and-set,
+  x2many commands); TanStack Form fits hand-written screens and can be added with them.
+- Module web contributions are package entries (`@kosh/permissions/web`) registered by the app at build time.
+- Not yet: code splitting per app, the 10k-row scrolling budget in CI (with the RFC 0005 benchmarks), PWA, visual
+  regression for the design system.
