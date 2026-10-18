@@ -1,0 +1,7 @@
+packages:
+  - packages/*
+  - apps/*
+
+# Dependency install scripts are denied unless listed as true here (pnpm 11).
+allowBuilds:
+  esbuild: true # Vite's bundler: installs its platform binary

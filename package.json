@@ -1,12 +1,30 @@
 {
-  "name": "kosh",
+  "name": "kosh-monorepo",
   "private": true,
   "type": "module",
   "description": "Kosh: the ERP framework built on the Shutro ORM",
+  "packageManager": "pnpm@11.18.0",
   "engines": {
     "node": ">=24"
   },
-  "dependencies": {
-    "shutro": "link:..\\shutro\\dist-npm\\shutro"
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "tsc -p tsconfig.json && turbo run typecheck",
+    "lint": "biome check . && node scripts/check-boundaries.ts",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "pnpm --filter @kosh/web test:e2e",
+    "dev:services": "docker compose up -d --wait",
+    "changeset": "changeset"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
+    "@changesets/cli": "^3.0.3",
+    "@types/node": "^24.19.2",
+    "turbo": "^2.11.7",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.4"
   }
 }

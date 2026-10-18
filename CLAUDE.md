@@ -238,7 +238,7 @@ export default defineModule({
 
 ### Phase 1 — Server foundation
 
-- [ ] Monorepo, CI, Docker dev environment (PostgreSQL, Valkey, MinIO, Mailpit)
+- [x] Monorepo, CI, Docker dev environment (PostgreSQL, Valkey, MinIO, Mailpit) (S3 storage via SeaweedFS: MinIO's free images are no longer published)
 - [ ] Fastify server, module loader, request environment for Shutro
 - [ ] Auth (sessions, 2FA), users, companies
 - [ ] Auto-generated REST + OpenAPI + typed client

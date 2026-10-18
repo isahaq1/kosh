@@ -1,0 +1,10 @@
+{
+  "name": "@kosh/demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Demo ERP: base, contacts, product, purchase, inventory, sales (CLAUDE.md, Phase 6)",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

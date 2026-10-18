@@ -1,6 +1,9 @@
 node_modules/
-.turbo/
 dist/
+.turbo/
 coverage/
 *.log
 .env
+playwright-report/
+test-results/
+shutro-src/

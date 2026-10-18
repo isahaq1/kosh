@@ -1,0 +1,75 @@
+# Development services (CLAUDE.md): PostgreSQL, Valkey, S3-compatible storage, Mailpit.
+#   pnpm dev:services        # start and wait until healthy
+#   docker compose down -v   # stop and delete the data
+name: kosh
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kosh}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kosh}
+      POSTGRES_DB: ${POSTGRES_DB:-kosh}
+    ports: ["${POSTGRES_PORT:-5432}:5432"]
+    volumes: [postgres:/var/lib/postgresql]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  valkey:
+    image: valkey/valkey:8
+    ports: ["${VALKEY_PORT:-6379}:6379"]
+    volumes: [valkey:/data]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # S3-compatible storage for attachments. MinIO's free images are no longer published (pulls fail), so development
+  # uses SeaweedFS's S3 API; Kosh talks plain S3, so AWS S3 or MinIO work the same through S3_ENDPOINT.
+  s3:
+    image: chrislusf/seaweedfs:latest
+    command: server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
+    ports: ["${S3_PORT:-8333}:8333"]
+    volumes:
+      - s3:/data
+      - ./docker/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      # The S3 API answers 403 to anonymous requests once it is up.
+      test: ["CMD-SHELL", "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8333/ | grep -qE '^(200|403)$$'"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  # Creates the attachments bucket once storage is up.
+  s3-init:
+    image: chrislusf/seaweedfs:latest
+    depends_on:
+      s3: { condition: service_healthy }
+    # Idempotent: creates the bucket only when it is not listed yet.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >
+        echo 's3.bucket.list' | weed shell -master=s3:9333 | grep -qw "$${S3_BUCKET}"
+        || echo "s3.bucket.create -name $${S3_BUCKET}" | weed shell -master=s3:9333
+    environment:
+      S3_BUCKET: ${S3_BUCKET:-kosh-attachments}
+    restart: "no"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ["${MAILPIT_SMTP_PORT:-1025}:1025", "${MAILPIT_UI_PORT:-8025}:8025"]
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  postgres:
+  valkey:
+  s3:

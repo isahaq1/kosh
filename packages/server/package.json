@@ -1,0 +1,33 @@
+{
+  "name": "@kosh/server",
+  "version": "0.0.0",
+  "description": "Fastify app, module loader, REST/OpenAPI generator, auth, Shutro environment per request (RFC 0002)",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "@kosh/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./orm": {
+      "@kosh/source": "./src/orm.ts",
+      "types": "./dist/orm.d.ts",
+      "default": "./dist/orm.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "shutro": "link:../../../shutro/dist-npm/shutro"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "kosh",
+      "credentials": [{ "accessKey": "kosh", "secretKey": "kosh-secret" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

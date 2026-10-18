@@ -1,0 +1,28 @@
+{
+  "name": "@kosh/cli",
+  "version": "0.0.0",
+  "description": "kosh new | dev | module:create | migrate | build (RFC 0001)",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "@kosh/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "bin": {
+    "kosh": "./dist/bin.js"
+  }
+}

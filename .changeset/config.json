@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@4.0.1/schema.json",
+  "baseBranch": "main",
+  "access": "restricted",
+  "commit": false,
+  "fixed": [["@kosh/*"]],
+  "linked": [],
+  "ignore": ["@kosh/web", "@kosh/demo"],
+  "updateInternalDependencies": "patch",
+  "changelog": "@changesets/cli/changelog"
+}
