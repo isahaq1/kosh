@@ -1,0 +1,13 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      shutro:
+        specifier: link:..\shutro\dist-npm\shutro
+        version: link:../shutro/dist-npm/shutro

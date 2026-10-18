@@ -1,0 +1,12 @@
+{
+  "name": "kosh",
+  "private": true,
+  "type": "module",
+  "description": "Kosh: the ERP framework built on the Shutro ORM",
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "shutro": "link:..\\shutro\\dist-npm\\shutro"
+  }
+}
