@@ -1,6 +1,6 @@
 # RFC 0001: Module system & manifest
 
-- **Status:** Draft (for review)
+- **Status:** Accepted
 - **Depends on:** Shutro RFC 0002 (modules & extension), 0014 (security), 0017 (module data)
 
 ## 1. Summary

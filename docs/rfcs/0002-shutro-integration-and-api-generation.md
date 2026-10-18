@@ -1,6 +1,6 @@
 # RFC 0002: Shutro integration & metadata-driven API generation
 
-- **Status:** Draft (for review)
+- **Status:** Accepted
 - **Depends on:** 0001; Shutro RFCs 0003 (environment), 0014 (security), 0016 (aggregates), 0017 (data),
   0018 (compare-and-set, events, jobs)
 
