@@ -10,6 +10,7 @@ import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastif
 import { Valkey } from 'iovalkey';
 import { idempotencyTableStatements } from './api/idempotency.js';
 import { publicApiModels } from './api/metadata.js';
+import { Navigation } from './api/navigation.js';
 import { openApiDocument } from './api/openapi.js';
 import { registerRestApi } from './api/rest.js';
 import { registerAuthRoutes } from './auth/routes.js';
@@ -24,8 +25,11 @@ declare module 'fastify' {
   interface FastifyRequest {
     /** The verified identity, or `null` on public routes. */
     identity: RequestIdentity | null;
-    /** Runs `fn` in this request's Shutro transaction (read-only for GET / HEAD). @throws {HttpProblem} 401 without identity */
-    env<T>(fn: (env: Env) => Promise<T>): Promise<T>;
+    /**
+     * Runs `fn` in this request's Shutro transaction (read-only for GET / HEAD, unless `write`: for reads that open
+     * audited system scopes). @throws {HttpProblem} 401 without identity
+     */
+    env<T>(fn: (env: Env) => Promise<T>, options?: { readonly write?: boolean }): Promise<T>;
     /** @internal */
     span: Span | undefined;
   }
@@ -67,6 +71,15 @@ export interface ServerOptions {
   readonly security?: { readonly enforce?: boolean | 'warn' };
 }
 
+/** What a module's `routes` hook receives (`defineModule({ routes })`). */
+export interface ModuleContext {
+  readonly app: FastifyInstance;
+  readonly shutro: Shutro;
+  readonly driver: Driver;
+  readonly registry: KoshRegistry;
+  readonly auth: AuthService | undefined;
+}
+
 /** A created server. */
 export interface KoshServer {
   readonly app: FastifyInstance;
@@ -105,6 +118,7 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
   shutro = orm.createShutro({
     driver,
     registry: registry.registry,
+    runtimeSecurity: true, // roles, access, rules and field security edited by administrators (RFC 0003)
     ...(verify ? { identity: (uid: number) => auth.verify(uid) } : {}),
   });
   const authenticate: Authenticator =
@@ -133,6 +147,7 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
   app.decorateRequest('env', function env<T>(
     this: { identity: RequestIdentity | null; span?: Span },
     fn: (env: Env) => Promise<T>,
+    options: { readonly write?: boolean } = {},
   ) {
     const request = this as unknown as Parameters<typeof runOptionsOf>[0] & {
       identity: RequestIdentity | null;
@@ -145,7 +160,10 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
         'This route needs an authenticated user.',
         'Sign in first.',
       );
-    const runOptions = runOptionsOf(request, request.identity);
+    const runOptions = {
+      ...runOptionsOf(request, request.identity),
+      ...(options.write === true ? { readOnly: false } : {}),
+    };
     return tracer.startActiveSpan('shutro.run', async (span) => {
       try {
         return await shutro.run(runOptions, fn);
@@ -236,6 +254,13 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
       return openapi;
     },
   });
+  new Navigation(registry.loaded).register(app);
+
+  // Module routes (admin APIs, custom endpoints), in dependency order.
+  const context: ModuleContext = { app, shutro, driver, registry, auth };
+  for (const m of registry.loaded.modules)
+    if (m.routes !== undefined)
+      await (m.routes as (c: ModuleContext) => void | Promise<void>)(context);
 
   // Health checks: public, not rate limited. Liveness: the process answers. Readiness: dependencies answer.
   app.get('/health/live', { config: { public: true } }, async () => ({ status: 'ok' }));

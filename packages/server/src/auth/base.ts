@@ -4,7 +4,9 @@
  * depends on it. Administrators (`base.admin`) need no grants (RFC 0003 §5.2).
  */
 import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
+import type { Env } from '../orm.js';
 import { orm } from '../orm.js';
+import { LAST_ADMINISTRATOR, lastAdministratorRemoved } from './admins.js';
 
 const { defineGroup, defineModel, defineModule, f } = orm;
 
@@ -25,9 +27,44 @@ const ResCompany = defineModel('res.company', {
   },
 });
 
+type Row = Record<string, unknown>;
+const readRows = async (
+  env: Env,
+  model: string,
+  ids: readonly number[],
+  keys: string[],
+): Promise<Row[]> =>
+  env.asSuperuser({ reason: 'check administrators' }, async (su) => {
+    const set = (
+      su.model(model as never) as unknown as {
+        browse(ids: readonly number[]): {
+          load(k: string[]): Promise<{ read(k: string[]): Row[] }>;
+        };
+      }
+    ).browse(ids);
+    return (await set.load(keys)).read(keys);
+  });
+
 const ResUsers = defineModel('res.users', {
   archivable: true, // `active`: deactivated users cannot sign in
   access: { 'base.user': ['read'] },
+  constraints: {
+    // Archiving the last administrator is refused (users are archived, not deleted: see auth.user_group.user).
+    keepAdministrator: {
+      depends: ['active'],
+      check: (records: never) =>
+        lastAdministratorRemoved(
+          records as { env: Env; ids: readonly number[] },
+          async (env, ids) =>
+            (await readRows(env, 'res.users', ids, ['active'])).map((r) => ({
+              id: r['id'] as number,
+              user: r['id'] as number,
+              removed: r['active'] === false,
+            })),
+        ),
+      message: LAST_ADMINISTRATOR,
+    },
+  },
   fields: {
     login: f.char({ required: true, index: 'unique' }),
     name: f.char({ required: true }),
@@ -57,6 +94,8 @@ const AuthSession = defineModel('auth.session', {
     csrfHash: f.char({ required: true }),
     user: f.many2one('res.users', { required: true, ondelete: 'cascade' }),
     twoFactorVerified: f.boolean({ default: false }),
+    /** A second factor was entered in this session (sign-in or enrolment): administrator groups need it. */
+    secondFactor: f.boolean({ default: false }),
     expiresAt: f.datetime({ required: true }),
     lastSeenAt: f.datetime({ required: true }),
     revoked: f.boolean({ default: false }),
@@ -65,12 +104,48 @@ const AuthSession = defineModel('auth.session', {
   },
 });
 
-/** A group a user holds in one company (or every company when `company` is empty). Private. */
+/**
+ * A group or role a user holds in one company (or every company when `company` is empty). Private. Users holding
+ * any cannot be deleted (`restrict`): they are archived, which the "keep one administrator" guard checks.
+ */
 const AuthUserGroup = defineModel('auth.user_group', {
+  fields: {
+    user: f.many2one('res.users', { required: true, ondelete: 'restrict' }),
+    company: f.many2one('res.company', { ondelete: 'cascade' }),
+    group: f.char({ required: true }),
+  },
+});
+
+/**
+ * A special permission of one user (Shutro `grants`: a feature permission such as `account.backdate`, or
+ * `model:perm`), in one company or all, optionally until a date. Private: managed by the admin API.
+ */
+const AuthUserGrant = defineModel('auth.user_grant', {
   fields: {
     user: f.many2one('res.users', { required: true, ondelete: 'cascade' }),
     company: f.many2one('res.company', { ondelete: 'cascade' }),
-    group: f.char({ required: true }),
+    grant: f.char({ required: true }),
+    expiresAt: f.datetime(),
+    reason: f.char({ required: true }),
+  },
+});
+
+/**
+ * The security audit log (CLAUDE.md: logins, permission changes, exports, sensitive actions). Append-only: no one
+ * may change or delete events (administrators included: the REST API never serves it, and the admin API only reads).
+ */
+const AuditEvent = defineModel('audit.event', {
+  access: { 'base.user': ['create'] },
+  order: ['id desc'],
+  fields: {
+    kind: f.char({ required: true, index: true }),
+    actor: f.many2one('res.users', { ondelete: 'set null' }),
+    company: f.many2one('res.company', { ondelete: 'set null' }),
+    targetModel: f.char(),
+    targetId: f.integer(),
+    summary: f.char({ required: true }),
+    details: f.json(),
+    ip: f.char(),
   },
 });
 
@@ -87,7 +162,16 @@ export const baseShutro: ReturnType<typeof orm.defineModule> = defineModule({
       administrator: true,
     }),
   ],
-  models: [ResCurrency, ResCompany, ResUsers, AuthCredential, AuthSession, AuthUserGroup],
+  models: [
+    ResCurrency,
+    ResCompany,
+    ResUsers,
+    AuthCredential,
+    AuthSession,
+    AuthUserGroup,
+    AuthUserGrant,
+    AuditEvent,
+  ],
 });
 
 /** The framework's base module: depend on it from every application module. */
@@ -98,5 +182,11 @@ export const base: ReturnType<typeof defineKoshModule> = defineKoshModule({
     user: { label: 'Internal user', groups: ['base.user'] },
     admin: { label: 'Administrator', groups: ['base.admin'], implies: ['user'] },
   },
-  privateModels: ['auth.credential', 'auth.session', 'auth.user_group'],
+  privateModels: [
+    'auth.credential',
+    'auth.session',
+    'auth.user_group',
+    'auth.user_grant',
+    'audit.event',
+  ],
 });

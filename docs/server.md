@@ -84,6 +84,21 @@ Unknown models (and private ones), fields, transitions and value types are compi
 `KoshApiError` with the RFC 9457 `problem`. The web app's client (`apps/web/src/api/kosh.gen.ts`) is regenerated
 with `pnpm --filter @kosh/web api:generate`; CI runs `api:check`. Generated files (`*.gen.ts`) are not linted.
 
+## Navigation, exports and audit
+
+- `GET /api/v1/apps`, `/api/v1/menus[?app=]`, `/api/v1/actions/:id`: filtered per user from the manifests
+  (docs/permissions.md); actions the user may not open are `403`.
+- `POST /api/v1/models/:model/export { fields?, filter?, order?, format: csv|json, limit? }` needs the `export`
+  permission; CSV cells that look like formulas are neutralized. `POST /api/v1/models/:model/import { rows }` needs
+  `import` (and `create`), all-or-nothing, with `Idempotency-Key`. Both are audited.
+- `audit(env, { kind, summary, ... })` appends to `audit.event` in the caller's transaction: sign-ins (also
+  failed), 2FA changes, administrator sessions, permission changes, exports, imports, approvals.
+- `GET /api/v1/meta/:model` needs read access.
+- `request.env(fn, { write: true })` runs a GET in a read-write transaction, for reads that open audited system
+  scopes (`asSuperuser` writes an audit row).
+- Modules add routes with `defineModule({ routes: (context: ModuleContext) => ... })` (`app`, `shutro`, `driver`,
+  `registry`, `auth`), called at startup in dependency order.
+
 ## Errors
 
 Every refusal is an RFC 9457 problem document (`application/problem+json`) with a stable `type`:

@@ -48,6 +48,26 @@ export interface MenuSpec {
   readonly visibleTo?: readonly string[];
 }
 
+/** One level of an approval policy. */
+export interface ApprovalLevelSpec {
+  readonly name: string;
+  /** A Shutro domain on the record (e.g. `{ amountTotal: { gt: '500000' } }`); empty or omitted: always. */
+  readonly condition?: Readonly<Record<string, unknown>>;
+  /** The group or role whose holders (in the record's company) decide. */
+  readonly approverRole: string;
+}
+
+/** A default approval policy of a model. */
+export interface ApprovalSpec {
+  readonly name: string;
+  readonly model: string;
+  readonly levels: readonly ApprovalLevelSpec[];
+  /** A transition of the record run when every level approved. */
+  readonly onApproved?: string;
+  /** A transition run when a level rejects. */
+  readonly onRejected?: string;
+}
+
 /** Lifecycle hooks (RFC 0001 §5.7); run by the server in a system scope inside the install transaction. */
 export interface ModuleHooks {
   readonly postInstall?: (env: unknown) => Promise<void>;
@@ -75,6 +95,16 @@ export interface ModuleInput {
    * internal queues). The module's own routes use them in system scopes.
    */
   readonly privateModels?: readonly string[];
+  /**
+   * Default approval policies (RFC 0003 §5.3), installed as data and editable afterwards by administrators. Levels
+   * apply in order; a level applies when its condition (a Shutro domain on the record) matches.
+   */
+  readonly approvals?: readonly ApprovalSpec[];
+  /**
+   * Server routes of this module (admin APIs, custom endpoints). Called once at startup with the server context
+   * (`ModuleContext` of `@kosh/server`); typed by the server, so modules declare the parameter type they use.
+   */
+  readonly routes?: (context: never) => void | Promise<void>;
   readonly hooks?: ModuleHooks;
   /** Translations per locale, loaded lazily. */
   readonly i18n?: Readonly<Record<string, () => Promise<unknown>>>;
@@ -134,6 +164,24 @@ export function defineModule(input: ModuleInput): KoshModule {
       `app code '${input.app.code}' is not snake_case.`,
       "Use e.g. app: { code: 'contacts', label: 'Contacts' }.",
     );
+  for (const policy of input.approvals ?? []) {
+    if (!ID.test(policy.model))
+      fail(
+        `approval policy '${policy.name}' names the model '${policy.model}'.`,
+        "Use a model name like 'purchase.order'.",
+      );
+    if (policy.levels.length === 0)
+      fail(
+        `approval policy '${policy.name}' has no levels.`,
+        'Give at least one level with an approverRole.',
+      );
+    for (const level of policy.levels)
+      if (!ID.test(level.approverRole))
+        fail(
+          `approval level '${level.name}' of '${policy.name}' has no approverRole group code.`,
+          "Use a group or role code, e.g. 'purchase.approver'.",
+        );
+  }
   const menuIds = new Set<string>();
   for (const menu of input.menus ?? []) {
     if (!ID.test(menu.id))

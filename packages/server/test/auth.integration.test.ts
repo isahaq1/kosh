@@ -349,17 +349,78 @@ describe('accounts', () => {
     expect(outside.statusCode).toBe(403);
   });
 
-  test('the first administrator was installed with base.admin', async () => {
+  test('the first administrator has administrator rights only after a second factor', async () => {
     const { body } = await login('admin');
+    const me = await call({ url: '/api/v1/auth/me', token: body.token });
+    expect(me.json()).toMatchObject({ administrator: true, administratorNeedsSecondFactor: true });
+    expect((await call({ url: '/api/v1/meta/res.partner', token: body.token })).statusCode).toBe(
+      403,
+    );
+
+    // Enrolling 2FA in this session is its second factor: administrator rights now apply.
+    const setup = await call({ method: 'POST', url: '/api/v1/auth/2fa/setup', token: body.token });
+    const { secret } = setup.json() as { secret: string };
+    await call({
+      method: 'POST',
+      url: '/api/v1/auth/2fa/enable',
+      token: body.token,
+      body: { code: totp(secret) },
+    });
+    expect((await call({ url: '/api/v1/auth/me', token: body.token })).json()).toMatchObject({
+      administratorNeedsSecondFactor: false,
+    });
     const meta = await call({ url: '/api/v1/meta/res.partner', token: body.token });
     expect(meta.json()).toMatchObject({ operations: { read: true, unlink: true, export: true } });
+
+    // The last administrator cannot turn 2FA off, nor be archived.
+    const off = await call({
+      method: 'POST',
+      url: '/api/v1/auth/2fa/disable',
+      token: body.token,
+      body: { password: PASSWORD, code: totp(secret) },
+    });
+    expect(off.statusCode).toBe(409);
+    expect(off.json()).toMatchObject({ type: 'https://kosh.dev/problems/last-administrator' });
+    const me2 = (await call({ url: '/api/v1/auth/me', token: body.token })).json() as {
+      id: number;
+    };
+    const archive = await call({
+      method: 'PATCH',
+      url: `/api/v1/models/res.users/${me2.id}`,
+      token: body.token,
+      body: { active: false },
+    });
+    expect(archive.statusCode).toBe(422);
+    expect(archive.json().detail).toContain('no active administrator');
+    // Deleting a user who holds roles is refused (users are archived).
+    const removed = await call({
+      method: 'DELETE',
+      url: `/api/v1/models/res.users/${me2.id}`,
+      token: body.token,
+    });
+    expect(removed.statusCode).toBeGreaterThanOrEqual(400);
+
+    // Sign-in and administrator sessions are in the audit log.
+    const kinds = await server.driver.query<{ kind: string }>({
+      text: 'SELECT kind FROM audit_event WHERE actor_id = $1 ORDER BY id',
+      params: [me2.id],
+    });
+    expect(kinds.map((k) => k.kind)).toEqual(
+      expect.arrayContaining(['auth.login', 'auth.2fa_enabled', 'admin.session']),
+    );
   });
 });
 
 describe('private models', () => {
-  test('credentials, sessions and group assignments are not served', async () => {
-    const { body } = await login('admin');
-    for (const model of ['auth.credential', 'auth.session', 'auth.user_group']) {
+  test('credentials, sessions, assignments, grants and audit events are not served', async () => {
+    const { body } = await login('carlos'); // alice is at the sign-in rate limit by now
+    for (const model of [
+      'auth.credential',
+      'auth.session',
+      'auth.user_group',
+      'auth.user_grant',
+      'audit.event',
+    ]) {
       const res = await call({ url: `/api/v1/models/${model}`, token: body.token });
       expect(res.statusCode).toBe(404);
       expect((await call({ url: `/api/v1/meta/${model}`, token: body.token })).statusCode).toBe(

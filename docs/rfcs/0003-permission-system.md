@@ -1,6 +1,6 @@
 # RFC 0003: Permission system
 
-- **Status:** Draft (for review)
+- **Status:** Accepted (2026-10-18), implemented in `@kosh/permissions` and `@kosh/server` (see `docs/permissions.md`)
 - **Depends on:** 0001, 0002; Shutro RFC 0014 (security: ACL, rules, field groups, RLS, administrators, permissions,
   grants, back-dating, elevation, runtime security)
 
@@ -125,3 +125,22 @@ record is out of rule scope) at the server. The suite is generated from the meta
   editable from the UI.
 - "Company Administrator" (full access within their companies) is left for later, as CLAUDE.md says; it maps to a
   Shutro rule set rather than the bypass.
+
+## Implementation notes (2026-10-18)
+
+- **`env.isSuperuser`** is the function `isSuperuser(env)` from `@kosh/server` (`env.administrator || env.su`):
+  Shutro environments are frozen objects, so the alias cannot be a property.
+- **Assignments** live in `base` (`auth.user_group`, per company or all companies), next to the users; roles are
+  Shutro runtime roles (`shutro_role`), so no `kosh_user_role` table was needed. Special grants are
+  `auth.user_grant` (with company and expiry), loaded by the identity loader.
+- **Field security** per role without code needed Shutro runtime field groups (`setFieldGroups`, Shutro `588f2b2`).
+- **Mandatory 2FA**: administrator groups count only in sessions that entered a second factor (sign-in or
+  enrolment) while 2FA is on; other groups are kept.
+- **Keep one administrator**: a `res.users` constraint (archiving), `restrict` on assignments (users holding roles
+  are archived, not deleted), the 2FA-disable path, and every admin API change (`keepingAdministrator`).
+- **Approvals** are in `@kosh/permissions` as planned; requests are private (decided only through the approvals
+  API); the policy's `onApproved` / `onRejected` transitions run as the system, attributed in the audit log.
+- **Enforcement tests** cover the endpoint types that exist today (list, read, create, update, delete, aggregate,
+  onchange, transitions, export, import, metadata, navigation, approvals); reports, attachments and websocket
+  subscriptions join the generated matrix when RFC 0005 / 0006 land. The matrix found an onchange gap, fixed in
+  Shutro `a84a31e`.

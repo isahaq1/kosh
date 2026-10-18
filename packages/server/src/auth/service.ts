@@ -8,9 +8,11 @@
  * methods. A session of a user with 2FA enabled is limited to `/auth/2fa/verify` and `/auth/logout` until verified.
  */
 import type { FastifyRequest } from 'fastify';
+import { audit } from '../audit.js';
 import { HttpProblem } from '../errors.js';
 import type { RequestIdentity } from '../identity.js';
 import type { Env, Shutro, VerifiedIdentity } from '../orm.js';
+import { keepingAdministrator } from './admins.js';
 import {
   digest,
   hashPassword,
@@ -38,6 +40,8 @@ export interface SessionInfo {
   readonly id: number;
   readonly user: number;
   readonly twoFactorRequired: boolean;
+  /** A second factor was entered in this session: administrator groups need it (and 2FA still on). */
+  readonly secondFactor: boolean;
   readonly via: 'cookie' | 'bearer';
 }
 
@@ -49,6 +53,10 @@ export interface UserInfo {
   readonly company: number | null;
   readonly companies: readonly number[];
   readonly twoFactorEnabled: boolean;
+  /** Holds an administrator role (in some company). */
+  readonly administrator: boolean;
+  /** Administrator rights are withheld until this session has a second factor (enable or verify 2FA). */
+  readonly administratorNeedsSecondFactor: boolean;
 }
 
 export const SESSION_COOKIE = 'kosh_session';
@@ -68,6 +76,12 @@ interface Ref {
   create(rows: readonly unknown[]): Promise<Records>;
 }
 const model = (env: Env, name: string): Ref => env.model(name as never) as unknown as Ref;
+/** Milliseconds of a datetime value as Shutro returns it (`Date`, or an ISO text), or `null`. */
+export function timeOf(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const ms = value instanceof Date ? value.getTime() : Date.parse(String(value));
+  return Number.isNaN(ms) ? null : ms;
+}
 const one = (rows: Record<string, unknown>[]): Record<string, unknown> | undefined => rows[0];
 /** Loads `keys` (scalar fields) and returns plain rows. */
 async function fetch(
@@ -214,11 +228,25 @@ export class AuthService {
           userAgent: String(request.headers['user-agent'] ?? '').slice(0, 300),
         },
       ]);
+      await audit(env, {
+        kind: 'auth.login',
+        summary: `${login} signed in${twoFactorRequired ? ' (second factor pending)' : ''}.`,
+        actor: user['id'] as number,
+        company: null,
+        ip: request.ip,
+      });
       return { token, csrfToken, twoFactorRequired };
     });
     if (outcome === null) {
       // The failed attempt is audited in its own scope (the login scope stored nothing).
-      await this.#system(`failed login ${login}`, async () => undefined);
+      await this.#system(`failed login ${login}`, (env) =>
+        audit(env, {
+          kind: 'auth.login_failed',
+          summary: `Failed sign-in for ${login.slice(0, 100)}.`,
+          details: { login: login.slice(0, 100) },
+          ip: request.ip,
+        }),
+      );
       throw unauthenticated(
         'invalid-credentials',
         'The login or password is wrong.',
@@ -245,7 +273,7 @@ export class AuthService {
       const found = await this.#system('session', async (env) => {
         const rows = await fetch(
           model(env, 'auth.session').search({ where: { tokenHash, revoked: false } }),
-          ['user', 'twoFactorVerified', 'expiresAt', 'lastSeenAt', 'csrfHash'],
+          ['user', 'twoFactorVerified', 'secondFactor', 'expiresAt', 'lastSeenAt', 'csrfHash'],
         );
         const row = one(rows);
         if (row === undefined) return null;
@@ -272,6 +300,7 @@ export class AuthService {
         id: found['id'] as number,
         user: found['user'] as number,
         twoFactorRequired: found['twoFactorVerified'] !== true,
+        secondFactor: found['secondFactor'] === true,
         via,
         csrfHash: String(found['csrfHash']),
       };
@@ -292,6 +321,7 @@ export class AuthService {
       id: session.id,
       user: session.user,
       twoFactorRequired: session.twoFactorRequired,
+      secondFactor: session.secondFactor,
       via: session.via,
     };
   }
@@ -342,14 +372,27 @@ export class AuthService {
         'This user is not allowed in any company.',
         'An administrator assigns the companies of the user.',
       );
+    // Mandatory 2FA for administrators (RFC 0003 §5.2): their administrator groups count only in sessions that
+    // entered a second factor, while 2FA is on. The user keeps every other group.
+    const elevated = session.secondFactor && info.twoFactorEnabled;
     const groups = info.assignments
       .filter((a) => a.company === null || a.company === company)
-      .map((a) => a.group);
+      .map((a) => a.group)
+      .filter((g) => elevated || !info.administratorGroups.has(g));
+    const now = Date.now();
+    const grants = info.grants
+      .filter(
+        (g) =>
+          (g.company === null || g.company === company) &&
+          (g.expiresAt === null || g.expiresAt > now),
+      )
+      .map((g) => g.grant);
     return {
       user: session.user,
       company,
       companies: info.companies,
       groups: [...new Set(groups)],
+      grants: [...new Set(grants)],
       lang: info.lang,
       tz: info.tz,
     };
@@ -358,9 +401,17 @@ export class AuthService {
   /** Identity loader for Shutro (`createShutro({ identity })`): the user is active; companies and groups from the database. */
   async verify(uid: number): Promise<VerifiedIdentity | null> {
     const info = await this.#identityOf(uid);
-    return info === null
-      ? null
-      : { companies: info.companies, groups: [...new Set(info.assignments.map((a) => a.group))] };
+    if (info === null) return null;
+    const now = Date.now();
+    return {
+      companies: info.companies,
+      groups: [...new Set(info.assignments.map((a) => a.group))],
+      grants: [
+        ...new Set(
+          info.grants.filter((g) => g.expiresAt === null || g.expiresAt > now).map((g) => g.grant),
+        ),
+      ],
+    };
   }
 
   async #identityOf(uid: number): Promise<{
@@ -369,6 +420,9 @@ export class AuthService {
     lang: string;
     tz: string;
     assignments: { group: string; company: number | null }[];
+    grants: { grant: string; company: number | null; expiresAt: number | null }[];
+    administratorGroups: ReadonlySet<string>;
+    twoFactorEnabled: boolean;
   } | null> {
     return this.#system('identity', async (env) => {
       const users = await model(env, 'res.users').search({ where: { id: uid } });
@@ -392,12 +446,30 @@ export class AuthService {
         group: String(a['group']),
         company: typeof a['company'] === 'number' ? (a['company'] as number) : null,
       }));
+      const grants = (
+        await fetch(model(env, 'auth.user_grant').search({ where: { user: uid } }), [
+          'grant',
+          'company',
+          'expiresAt',
+        ])
+      ).map((g) => ({
+        grant: String(g['grant']),
+        company: typeof g['company'] === 'number' ? (g['company'] as number) : null,
+        expiresAt: timeOf(g['expiresAt']),
+      }));
+      const [credential] = await fetch(
+        model(env, 'auth.credential').search({ where: { user: uid } }),
+        ['totpEnabled'],
+      );
       return {
         company,
         companies,
         lang: String(row?.['lang'] ?? 'en_US'),
         tz: String(row?.['tz'] ?? 'UTC'),
         assignments,
+        grants,
+        administratorGroups: env.access.administratorGroups(),
+        twoFactorEnabled: credential?.['totpEnabled'] === true,
       };
     });
   }
@@ -414,22 +486,28 @@ export class AuthService {
         model(env, 'auth.credential').search({ where: { user: session.user } }),
         ['totpEnabled'],
       );
+      const administrator = await this.#holdsAdministrator(env, session.user);
+      const twoFactorEnabled = credential?.['totpEnabled'] === true;
       return {
         id: session.user,
         login: String(user?.['login']),
         name: String(user?.['name']),
         company: typeof user?.['company'] === 'number' ? (user['company'] as number) : null,
         companies: (user?.['companies'] as number[] | undefined) ?? [],
-        twoFactorEnabled: credential?.['totpEnabled'] === true,
+        twoFactorEnabled,
+        administrator,
+        administratorNeedsSecondFactor:
+          administrator && !(session.secondFactor && twoFactorEnabled),
       };
     });
   }
 
   /** Revokes a session. */
   async logout(session: SessionInfo): Promise<void> {
-    await this.#system('logout', async (env) =>
-      model(env, 'auth.session').browse([session.id]).write({ revoked: true }),
-    );
+    await this.#system('logout', async (env) => {
+      await model(env, 'auth.session').browse([session.id]).write({ revoked: true });
+      await audit(env, { kind: 'auth.logout', summary: 'Signed out.', actor: session.user });
+    });
     this.#forgetUser(session.user, session.id);
   }
 
@@ -492,6 +570,14 @@ export class AuthService {
         );
       const recoveryCodes = Array.from({ length: 10 }, () => randomToken(9));
       await credentials.write({ totpEnabled: true, recoveryCodes: recoveryCodes.map(digest) });
+      // The code just entered is this session's second factor.
+      await model(env, 'auth.session').browse([session.id]).write({ secondFactor: true });
+      await audit(env, {
+        kind: 'auth.2fa_enabled',
+        summary: 'Two-factor authentication enabled.',
+        actor: session.user,
+      });
+      await this.#auditAdministratorSession(env, session.user);
       return { recoveryCodes };
     });
   }
@@ -523,9 +609,39 @@ export class AuthService {
         );
       if (used >= 0)
         await credentials.write({ recoveryCodes: recovery.filter((_, i) => i !== used) });
-      await model(env, 'auth.session').browse([session.id]).write({ twoFactorVerified: true });
+      await model(env, 'auth.session')
+        .browse([session.id])
+        .write({ twoFactorVerified: true, secondFactor: true });
+      await audit(env, {
+        kind: 'auth.2fa_verified',
+        summary:
+          used >= 0
+            ? 'Second factor: a recovery code (now used up).'
+            : 'Second factor: authenticator code.',
+        actor: session.user,
+      });
+      await this.#auditAdministratorSession(env, session.user);
     });
     this.#forgetUser(session.user, session.id);
+  }
+
+  async #holdsAdministrator(env: Env, user: number): Promise<boolean> {
+    const codes = [...env.access.administratorGroups()];
+    return (
+      codes.length > 0 &&
+      (await model(env, 'auth.user_group').search({ where: { user, group: { in: codes } } }))
+        .length > 0
+    );
+  }
+
+  /** Administrator sessions are audited when they start (when the second factor makes the user an administrator). */
+  async #auditAdministratorSession(env: Env, user: number): Promise<void> {
+    if (await this.#holdsAdministrator(env, user))
+      await audit(env, {
+        kind: 'admin.session',
+        summary: 'Administrator session started.',
+        actor: user,
+      });
   }
 
   /** Turns 2FA off (password and a current code required). */
@@ -547,8 +663,17 @@ export class AuthService {
           'Invalid credentials',
           'The password or code is wrong.',
         );
-      await credentials.write({ totpEnabled: false, totpSecret: null, recoveryCodes: null });
+      // Administrators need 2FA: turning it off for the last one is refused (credentials change only here).
+      await keepingAdministrator(env, () =>
+        credentials.write({ totpEnabled: false, totpSecret: null, recoveryCodes: null }),
+      );
+      await audit(env, {
+        kind: 'auth.2fa_disabled',
+        summary: 'Two-factor authentication disabled.',
+        actor: session.user,
+      });
     });
+    this.#forgetUser(session.user);
   }
 
   /** Changes the password; every other session of the user is revoked. */
@@ -574,6 +699,11 @@ export class AuthService {
       ).ids.filter((id) => id !== session.id);
       if (others.length > 0)
         await model(env, 'auth.session').browse(others).write({ revoked: true });
+      await audit(env, {
+        kind: 'auth.password_changed',
+        summary: `Password changed; ${others.length} other session(s) revoked.`,
+        actor: session.user,
+      });
     });
     this.#forgetUser(session.user);
     this.#cache.clear(); // other sessions of this user, cached by token

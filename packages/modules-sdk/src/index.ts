@@ -6,6 +6,8 @@ export { ModuleDefinitionError, ModuleLoadError } from './errors.js';
 export { type LoadedModules, type LoadOptions, loadModules } from './loader.js';
 export {
   type AccessLevel,
+  type ApprovalLevelSpec,
+  type ApprovalSpec,
   type AppSpec,
   defineModule,
   type KoshModule,

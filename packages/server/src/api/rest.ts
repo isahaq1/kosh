@@ -11,10 +11,13 @@
  * - `POST   /api/v1/models/:model/aggregate`                grouped totals
  * - `POST   /api/v1/models/:model/onchange`                 form assistance
  * - `POST   /api/v1/models/:model/:id/transitions/:name`    state transition (Idempotency-Key)
- * - `GET    /api/v1/meta/:model`                            the caller's view of the model
+ * - `POST   /api/v1/models/:model/export`                   export (needs `export`; audited)
+ * - `POST   /api/v1/models/:model/import`                   import rows (needs `import` and `create`; audited)
+ * - `GET    /api/v1/meta/:model`                            the caller's view of the model (needs `read`)
  * - `GET    /api/v1/openapi.json`                           the OpenAPI 3.1 document
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { audit } from '../audit.js';
 import { HttpProblem } from '../errors.js';
 import type { Driver, Env } from '../orm.js';
 import { idempotent, type Outcome } from './idempotency.js';
@@ -40,6 +43,23 @@ interface Ref {
 const ref = (env: Env, model: string): Ref => env.model(model as never) as unknown as Ref;
 
 const PERMS = ['read', 'write', 'create', 'unlink', 'export', 'import'] as const;
+const EXPORT_LIMIT = 100_000;
+const IMPORT_LIMIT = 10_000;
+
+/** A CSV cell (RFC 4180), with formula-like text neutralized (spreadsheet injection). */
+function csvCell(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  let text =
+    value instanceof Date
+      ? value.toISOString()
+      : Array.isArray(value)
+        ? value.join(';')
+        : typeof value === 'object'
+          ? JSON.stringify(value)
+          : String(value);
+  if (/^[=+\-@\t\r]/.test(text) && !/^-?\d+(\.\d+)?$/.test(text)) text = `'${text}`;
+  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
 
 function problem(
   status: number,
@@ -354,28 +374,117 @@ export function registerRestApi(
     await send(reply, outcome);
   });
 
+  app.post('/api/v1/models/:model/export', async (request, reply) => {
+    const model = modelOf(request.params);
+    const q = body(request);
+    const format = q['format'] ?? 'csv';
+    if (format !== 'csv' && format !== 'json')
+      throw problem(400, 'invalid-format', 'Invalid format', 'format is csv or json.');
+    const limit = q['limit'] === undefined ? EXPORT_LIMIT : Number(q['limit']);
+    if (!Number.isInteger(limit) || limit < 1 || limit > EXPORT_LIMIT)
+      throw problem(400, 'invalid-limit', 'Invalid limit', `limit must be 1–${EXPORT_LIMIT}.`);
+    const where = q['filter'] === undefined ? undefined : parseFilter(JSON.stringify(q['filter']));
+    const order = parseOrder(model, Array.isArray(q['order']) ? q['order'].join(',') : q['order']);
+    const result = await request.env(async (env) => {
+      env.access.check(model.name as never, 'export'); // 403 without the export permission
+      const fields = fieldsOf(
+        model,
+        env,
+        Array.isArray(q['fields']) ? q['fields'].join(',') : q['fields'],
+      );
+      const found = await ref(env, model.name).search({
+        ...(where === undefined ? {} : { where }),
+        ...(order.length > 0 ? { order } : {}),
+        limit,
+      });
+      const items = await rows(found, fields);
+      await audit(env, {
+        kind: 'data.export',
+        summary: `Exported ${items.length} ${model.name} record(s) as ${format}.`,
+        targetModel: model.name,
+        details: { fields: fields.map((f) => f.key), count: items.length, filter: where ?? null },
+        ip: request.ip,
+      });
+      return { fields, items };
+    });
+    if (format === 'json') {
+      await reply.send({ items: result.items });
+      return;
+    }
+    const keys = ['id', ...result.fields.map((f) => f.key).filter((k) => k !== 'id')];
+    const lines = [
+      keys.map(csvCell).join(','),
+      ...result.items.map((r) => keys.map((k) => csvCell(r[k])).join(',')),
+    ];
+    await reply
+      .type('text/csv; charset=utf-8')
+      .header('content-disposition', `attachment; filename="${model.name}.csv"`)
+      .send(`${lines.join('\r\n')}\r\n`);
+  });
+
+  app.post('/api/v1/models/:model/import', async (request, reply) => {
+    const model = modelOf(request.params);
+    const input = body(request)['rows'];
+    if (!Array.isArray(input) || input.length === 0 || input.length > IMPORT_LIMIT)
+      throw problem(
+        400,
+        'invalid-rows',
+        'Invalid rows',
+        `rows must be a non-empty array of at most ${IMPORT_LIMIT} objects.`,
+      );
+    for (const row of input)
+      if (typeof row !== 'object' || row === null || Array.isArray(row))
+        throw problem(
+          400,
+          'invalid-rows',
+          'Invalid rows',
+          'Each row is an object of field values.',
+        );
+    const outcome = await request.env((env) =>
+      idempotent(request, env, driver, async () => {
+        env.access.check(model.name as never, 'import'); // and `create`, checked by Shutro
+        const created = await ref(env, model.name).create(input);
+        await env.flush(); // all-or-nothing: constraints run before the response
+        await audit(env, {
+          kind: 'data.import',
+          summary: `Imported ${created.ids.length} ${model.name} record(s).`,
+          targetModel: model.name,
+          details: { count: created.ids.length },
+          ip: request.ip,
+        });
+        return { status: 201, body: { created: created.ids } };
+      }),
+    );
+    await send(reply, outcome);
+  });
+
   app.get('/api/v1/meta/:model', async (request) => {
     const model = modelOf(request.params);
-    return request.env(async (env) => ({
-      name: model.name,
-      label: model.label,
-      operations: Object.fromEntries(PERMS.map((p) => [p, env.access.can(model.name as never, p)])),
-      transitions: model.transitions,
-      onchange: model.onchange,
-      fields: model.fields
-        .filter((f) => env.access.canField(model.name as never, f.key, 'read'))
-        .map((f) => ({
-          key: f.key,
-          kind: f.kind,
-          label: f.label,
-          required: f.required,
-          readonly: f.readonly || !env.access.canField(model.name as never, f.key, 'write'),
-          ...(f.target === null ? {} : { target: f.target }),
-          ...(f.options === null
-            ? {}
-            : { options: f.options.map(([value, label]) => ({ value, label })) }),
-        })),
-    }));
+    return request.env(async (env) => {
+      env.access.check(model.name as never, 'read');
+      return {
+        name: model.name,
+        label: model.label,
+        operations: Object.fromEntries(
+          PERMS.map((p) => [p, env.access.can(model.name as never, p)]),
+        ),
+        transitions: model.transitions,
+        onchange: model.onchange,
+        fields: model.fields
+          .filter((f) => env.access.canField(model.name as never, f.key, 'read'))
+          .map((f) => ({
+            key: f.key,
+            kind: f.kind,
+            label: f.label,
+            required: f.required,
+            readonly: f.readonly || !env.access.canField(model.name as never, f.key, 'write'),
+            ...(f.target === null ? {} : { target: f.target }),
+            ...(f.options === null
+              ? {}
+              : { options: f.options.map(([value, label]) => ({ value, label })) }),
+          })),
+      };
+    });
   });
 
   app.get('/api/v1/openapi.json', async (request) => {

@@ -15,8 +15,22 @@ export interface RequestIdentity {
   readonly companies: readonly number[];
   /** Shutro group codes for these companies. */
   readonly groups: readonly string[];
+  /** Special permissions of the user (Shutro `grants`), e.g. `account.backdate`. */
+  readonly grants?: readonly string[];
   readonly lang?: string;
   readonly tz?: string;
+}
+
+/**
+ * The single explicit bypass (CLAUDE.md "superuser mode", RFC 0003 §5.2): the user holds an administrator role
+ * (Shutro `env.administrator`, acting as themselves) or the code runs in an audited superuser scope (`env.su`).
+ * Permission checks pass; integrity (constraints, company consistency, state guards) still applies.
+ */
+export function isSuperuser(env: {
+  readonly administrator: boolean;
+  readonly su: boolean;
+}): boolean {
+  return env.administrator || env.su;
 }
 
 /** Resolves a request's identity, or `null` when it is not authenticated. */
@@ -61,6 +75,7 @@ export interface RequestRunOptions {
   readonly company: number;
   readonly companies: readonly number[];
   readonly groups: readonly string[];
+  readonly grants?: readonly string[];
   readonly lang?: string;
   readonly tz?: string;
   readonly readOnly: boolean;
@@ -99,6 +114,7 @@ export function runOptionsOf(
     company,
     companies,
     groups: [...identity.groups],
+    ...(identity.grants === undefined ? {} : { grants: [...identity.grants] }),
     ...(lang === undefined ? {} : { lang }),
     ...(tz === undefined ? {} : { tz }),
     readOnly: request.method === 'GET' || request.method === 'HEAD',

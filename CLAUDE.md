@@ -231,7 +231,7 @@ export default defineModule({
 
 - [x] RFC 0001 Module system & manifest
 - [x] RFC 0002 Shutro integration & metadata → API generation
-- [ ] RFC 0003 Permission system
+- [x] RFC 0003 Permission system
 - [ ] RFC 0004 View definitions & shared search layer
 - [ ] RFC 0005 Reporting engine
 - [ ] RFC 0006 Communication & notification architecture
@@ -246,7 +246,7 @@ export default defineModule({
 
 ### Phase 2 — Permissions
 
-- [ ] Roles, ACL, field security, action permissions, approvals, admin UI APIs
+- [x] Roles, ACL, field security, action permissions, approvals, admin UI APIs (`@kosh/permissions`, docs/permissions.md)
 
 ### Phase 3 — UI foundation
 

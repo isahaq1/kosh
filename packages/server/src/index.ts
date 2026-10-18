@@ -13,8 +13,16 @@ export {
   publicApiModels,
   schemaName,
 } from './api/metadata.js';
+export { type MenuNode, moduleVisible, Navigation } from './api/navigation.js';
 export { fieldSchema, openApiDocument, openApiOf } from './api/openapi.js';
 export { registerRestApi } from './api/rest.js';
+export { type AuditInput, audit } from './audit.js';
+export {
+  administrators,
+  isAdministratorUser,
+  keepingAdministrator,
+  LAST_ADMINISTRATOR,
+} from './auth/admins.js';
 export { base, baseShutro } from './auth/base.js';
 export {
   digest,
@@ -34,12 +42,14 @@ export {
   cookieOf,
   SESSION_COOKIE,
   type SessionInfo,
+  timeOf,
   type UserInfo,
 } from './auth/service.js';
 export { HttpProblem, type Problem, problemOf, ServerConfigError } from './errors.js';
 export {
   type Authenticator,
   denyAll,
+  isSuperuser,
   languageOf,
   type RequestIdentity,
   type RequestRunOptions,
@@ -47,5 +57,11 @@ export {
 } from './identity.js';
 export { orm, pg } from './orm.js';
 export { buildKoshRegistry, KOSH_VERSION, type KoshRegistry } from './registry.js';
-export { createServer, type KoshServer, type ServerOptions, startServer } from './server.js';
+export {
+  createServer,
+  type KoshServer,
+  type ModuleContext,
+  type ServerOptions,
+  startServer,
+} from './server.js';
 export { startTelemetry, type Telemetry, tracer } from './telemetry.js';
