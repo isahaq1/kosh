@@ -3,7 +3,9 @@
  * schema, one create schema and one update schema per model, the generated paths, and RFC 9457 problems. Per-user
  * restrictions (ACL, field groups, rules) are enforced at request time and visible in `/api/v1/meta/{model}`.
  */
-import { type ApiField, type ApiModel, defaultFields } from './metadata.js';
+import type { KoshModule } from '@kosh/modules-sdk';
+import { buildKoshRegistry, KOSH_VERSION } from '../registry.js';
+import { type ApiField, type ApiModel, defaultFields, publicApiModels } from './metadata.js';
 
 type Schema = Record<string, unknown>;
 
@@ -350,4 +352,13 @@ export function openApiDocument(
       },
     },
   };
+}
+
+/**
+ * The OpenAPI document of a module set, without a database or a running server (what `kosh generate client` uses).
+ * @throws {ServerConfigError} for modules that cannot load together
+ */
+export function openApiOf(modules: readonly KoshModule[]): Schema {
+  const models = publicApiModels(buildKoshRegistry(modules));
+  return openApiDocument(models.values(), { title: 'Kosh API', version: KOSH_VERSION });
 }

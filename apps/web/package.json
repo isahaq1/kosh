@@ -9,7 +9,9 @@
     "build": "vite build",
     "preview": "vite preview --port 4173 --strictPort",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "api:generate": "kosh generate client --modules @kosh/server --out src/api/kosh.gen.ts",
+    "api:check": "kosh generate client --modules @kosh/server --out src/api/kosh.gen.ts --check"
   },
   "dependencies": {
     "react": "^19.1.0",
@@ -20,6 +22,7 @@
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^5.0.0",
-    "vite": "^7.1.0"
+    "vite": "^7.1.0",
+    "@kosh/cli": "workspace:*"
   }
 }

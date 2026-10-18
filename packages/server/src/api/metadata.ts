@@ -112,3 +112,12 @@ export function defaultFields(model: ApiModel): readonly ApiField[] {
     (f) => f.stored && f.kind !== 'binary' && f.kind !== 'one2many' && f.kind !== 'many2many',
   );
 }
+
+/** The models the generated API serves: every installed model except the modules' `privateModels`. */
+export function publicApiModels(registry: {
+  readonly loaded: { readonly modules: readonly { readonly privateModels?: readonly string[] }[] };
+  readonly registry: Registry;
+}): ReadonlyMap<string, ApiModel> {
+  const hidden = new Set(registry.loaded.modules.flatMap((m) => m.privateModels ?? []));
+  return new Map([...apiModels(registry.registry)].filter(([name]) => !hidden.has(name)));
+}

@@ -9,7 +9,7 @@ import type { Span } from '@opentelemetry/api';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import { Valkey } from 'iovalkey';
 import { idempotencyTableStatements } from './api/idempotency.js';
-import { apiModels } from './api/metadata.js';
+import { publicApiModels } from './api/metadata.js';
 import { openApiDocument } from './api/openapi.js';
 import { registerRestApi } from './api/rest.js';
 import { registerAuthRoutes } from './auth/routes.js';
@@ -226,10 +226,7 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
 
   // The generated REST API and its OpenAPI document (RFC 0002 §6.3–6.4).
   for (const statement of idempotencyTableStatements()) await driver.query(statement);
-  const privateModels = new Set(registry.loaded.modules.flatMap((m) => m.privateModels ?? []));
-  const models = new Map(
-    [...apiModels(registry.registry)].filter(([name]) => !privateModels.has(name)),
-  );
+  const models = publicApiModels(registry);
   let openapi: unknown;
   registerRestApi(app, {
     models,

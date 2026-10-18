@@ -24,5 +24,9 @@
   },
   "bin": {
     "kosh": "./dist/bin.js"
+  },
+  "dependencies": {
+    "@kosh/modules-sdk": "workspace:*",
+    "@kosh/server": "workspace:*"
   }
 }

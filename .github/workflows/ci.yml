@@ -31,6 +31,7 @@ jobs:
       - run: pnpm exec biome ci .
       - run: node scripts/check-boundaries.ts
       - run: pnpm build
+      - run: pnpm --filter @kosh/web api:check # the committed typed client matches the modules
       - run: pnpm test # integration tests use Testcontainers (Docker is available on ubuntu-latest)
 
   e2e:

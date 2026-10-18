@@ -55,6 +55,35 @@ runs in an audited Shutro system scope.
 
 OAuth/SSO and passkeys come later, on the same models. Roles and the admin UI for them are `@kosh/permissions`.
 
+## Typed client
+
+`kosh generate client` writes one self-contained TypeScript module (no imports; runs in browsers and Node) from the
+module set, without a database or a running server:
+
+```sh
+kosh generate client --modules ./src/modules.ts --out src/api/kosh.gen.ts   # or --from openapi.json | URL --token T
+kosh generate client --modules ./src/modules.ts --out src/api/kosh.gen.ts --check   # CI: fails when out of date
+```
+
+It contains an interface per model (`ResPartner`, `ResPartnerCreate`, `ResPartnerUpdate`), the `Models` map, and
+`createClient()`:
+
+```ts
+import { createClient, KoshApiError } from './api/kosh.gen.ts';
+
+const api = createClient();                        // browsers: cookie session + CSRF header; { session: 'bearer' } for scripts
+await api.auth.login('alice', password);
+const partners = api.model('res.partner');
+const { items } = await partners.list({ fields: ['name', 'email'], filter: { isCompany: true } }); // { id, name, email }[]
+const { record, etag } = await partners.create({ name: 'Acme' });          // name is required at compile time
+await partners.update(record.id, { phone: '+880' }, etag === null ? {} : { ifMatch: etag }); // 412 if changed since
+await partners.transition(record.id, 'qualify');                          // only declared transitions compile
+```
+
+Unknown models (and private ones), fields, transitions and value types are compile errors. Refused requests throw
+`KoshApiError` with the RFC 9457 `problem`. The web app's client (`apps/web/src/api/kosh.gen.ts`) is regenerated
+with `pnpm --filter @kosh/web api:generate`; CI runs `api:check`. Generated files (`*.gen.ts`) are not linted.
+
 ## Errors
 
 Every refusal is an RFC 9457 problem document (`application/problem+json`) with a stable `type`:
