@@ -156,6 +156,8 @@ export interface KoshApi {
     body?: unknown,
     method?: 'GET' | 'POST',
   ): Promise<{ readonly blob: Blob; readonly filename: string }>;
+  /** Sends a file as the raw body (`Content-Type` from the file, `X-Filename` URI-encoded); the JSON answer. */
+  upload<T>(path: string, file: Blob, filename: string): Promise<T>;
 }
 
 export interface ApiOptions {
@@ -315,6 +317,38 @@ export function createKoshApi(options: ApiOptions = {}): KoshApi {
       language = next;
     },
     call: (method, path, body) => json(method, path, body),
+    async upload<T>(path: string, file: Blob, filename: string): Promise<T> {
+      const headers: Record<string, string> = {
+        'content-type': file.type === '' ? 'application/octet-stream' : file.type,
+        'x-filename': encodeURIComponent(filename),
+      };
+      if (csrf !== undefined) headers['x-csrf-token'] = csrf;
+      if (company !== undefined) headers['x-company'] = String(company);
+      if (language !== undefined) headers['accept-language'] = language.replace('_', '-');
+      const response = await doFetch(`${base}${path}`, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: file,
+      });
+      const text = await response.text();
+      let parsed: unknown = null;
+      try {
+        parsed = text === '' ? null : JSON.parse(text);
+      } catch {
+        parsed = null;
+      }
+      if (!response.ok)
+        throw new ApiError(
+          (parsed as Problem | null) ?? {
+            type: 'about:blank',
+            title: response.statusText,
+            status: response.status,
+            detail: text.slice(0, 300),
+          },
+        );
+      return parsed as T;
+    },
     async download(path, body, method = 'POST') {
       const headers: Record<string, string> =
         method === 'POST' ? { 'content-type': 'application/json' } : {};
@@ -343,7 +377,15 @@ export function createKoshApi(options: ApiOptions = {}): KoshApi {
         throw new ApiError(problem);
       }
       const disposition = response.headers.get('content-disposition') ?? '';
-      const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'download';
+      // RFC 6266: the UTF-8 name when given, else the ASCII fallback.
+      const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1];
+      let filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'download';
+      if (encoded !== undefined)
+        try {
+          filename = decodeURIComponent(encoded);
+        } catch {
+          // keep the fallback
+        }
       return { blob: await response.blob(), filename };
     },
   };
