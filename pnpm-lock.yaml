@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  shutro: link:../shutro/dist-npm/shutro
+
 importers:
 
   .:
@@ -117,31 +120,31 @@ importers:
       '@kosh/ui':
         specifier: workspace:*
         version: link:../ui
-      '@tanstack/react-query':
-        specifier: ^5.104.3
-        version: 5.104.3(react@19.3.1)
       fastify:
         specifier: ^5.12.7
         version: 5.12.7
-      i18next:
-        specifier: ^26.4.7
-        version: 26.4.7(typescript@7.0.2)
       lucide-react:
         specifier: ^1.59.0
         version: 1.59.0(@types/react@19.3.0)(react@19.3.1)
-      react:
-        specifier: ^19.3.1
-        version: 19.3.1
-      react-i18next:
-        specifier: ^17.0.21
-        version: 17.0.21(i18next@26.4.7(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
     devDependencies:
+      '@tanstack/react-query':
+        specifier: ^5.104.3
+        version: 5.104.3(react@19.3.1)
       '@testcontainers/postgresql':
         specifier: ^12.2.1
         version: 12.2.1
       '@types/react':
         specifier: ^19.3.0
         version: 19.3.0
+      i18next:
+        specifier: ^26.4.7
+        version: 26.4.7(typescript@7.0.2)
+      react:
+        specifier: ^19.3.1
+        version: 19.3.1
+      react-i18next:
+        specifier: ^17.0.21
+        version: 17.0.21(i18next@26.4.7(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
 
   packages/modules-sdk:
     dependencies:
@@ -162,22 +165,22 @@ importers:
       '@kosh/ui':
         specifier: workspace:*
         version: link:../ui
-      '@tanstack/react-query':
-        specifier: ^5.104.3
-        version: 5.104.3(react@19.3.1)
       fastify:
         specifier: ^5.12.7
         version: 5.12.7
-      react:
-        specifier: ^19.3.1
-        version: 19.3.1
     devDependencies:
+      '@tanstack/react-query':
+        specifier: ^5.104.3
+        version: 5.104.3(react@19.3.1)
       '@testcontainers/postgresql':
         specifier: ^12.2.1
         version: 12.2.1
       '@types/react':
         specifier: ^19.3.0
         version: 19.3.0
+      react:
+        specifier: ^19.3.1
+        version: 19.3.1
 
   packages/realtime: {}
 
@@ -201,18 +204,12 @@ importers:
       '@kosh/views':
         specifier: workspace:*
         version: link:../views
-      '@tanstack/react-query':
-        specifier: ^5.104.3
-        version: 5.104.3(react@19.3.1)
       echarts:
         specifier: ^6.1.0
         version: 6.1.0
       fastify:
         specifier: ^5.12.7
         version: 5.12.7
-      i18next:
-        specifier: ^26.4.7
-        version: 26.4.7(typescript@7.0.2)
       lucide-react:
         specifier: ^1.59.0
         version: 1.59.0(@types/react@19.3.0)(react@19.3.1)
@@ -222,19 +219,25 @@ importers:
       playwright-core:
         specifier: 1.64.1
         version: 1.64.1
-      react:
-        specifier: ^19.3.1
-        version: 19.3.1
-      react-i18next:
-        specifier: ^17.0.21
-        version: 17.0.21(i18next@26.4.7(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
     devDependencies:
+      '@tanstack/react-query':
+        specifier: ^5.104.3
+        version: 5.104.3(react@19.3.1)
       '@testcontainers/postgresql':
         specifier: ^12.2.1
         version: 12.2.1
       '@types/react':
         specifier: ^19.3.0
         version: 19.3.0
+      i18next:
+        specifier: ^26.4.7
+        version: 26.4.7(typescript@7.0.2)
+      react:
+        specifier: ^19.3.1
+        version: 19.3.1
+      react-i18next:
+        specifier: ^17.0.21
+        version: 17.0.21(i18next@26.4.7(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
 
   packages/search:
     dependencies:
@@ -312,9 +315,6 @@ importers:
       '@kosh/views':
         specifier: workspace:*
         version: link:../views
-      '@tanstack/react-query':
-        specifier: ^5.104.3
-        version: 5.104.3(react@19.3.1)
       '@tanstack/react-router':
         specifier: ^1.170.45
         version: 1.170.45(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -330,15 +330,28 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
-      i18next:
-        specifier: ^26.4.7
-        version: 26.4.7(typescript@7.0.2)
       lucide-react:
         specifier: ^1.59.0
         version: 1.59.0(@types/react@19.3.0)(react@19.3.1)
       radix-ui:
         specifier: ^1.8.1
         version: 1.8.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      tailwind-merge:
+        specifier: ^3.7.0
+        version: 3.7.0
+    devDependencies:
+      '@tanstack/react-query':
+        specifier: ^5.104.3
+        version: 5.104.3(react@19.3.1)
+      '@types/react':
+        specifier: ^19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.3.0
+        version: 19.3.0(@types/react@19.3.0)
+      i18next:
+        specifier: ^26.4.7
+        version: 26.4.7(typescript@7.0.2)
       react:
         specifier: ^19.3.1
         version: 19.3.1
@@ -348,16 +361,6 @@ importers:
       react-i18next:
         specifier: ^17.0.21
         version: 17.0.21(i18next@26.4.7(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
-      tailwind-merge:
-        specifier: ^3.7.0
-        version: 3.7.0
-    devDependencies:
-      '@types/react':
-        specifier: ^19.3.0
-        version: 19.3.0
-      '@types/react-dom':
-        specifier: ^19.3.0
-        version: 19.3.0(@types/react@19.3.0)
 
   packages/views: {}
 

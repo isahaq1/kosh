@@ -1,8 +1,25 @@
 {
   "name": "@kosh/views",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "View schemas: list, kanban, form, pivot, chart, calendar, gantt, map, hierarchy, cohort, spreadsheet, dashboard (RFC 0004)",
+  "keywords": [
+    "kosh",
+    "erp",
+    "typescript",
+    "postgresql",
+    "shutro"
+  ],
+  "author": "Isahaq <hmisahaq01@gmail.com>",
   "license": "MIT",
+  "homepage": "https://github.com/isahaq1/kosh/tree/main/packages/views#readme",
+  "bugs": {
+    "url": "https://github.com/isahaq1/kosh/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isahaq1/kosh.git",
+    "directory": "packages/views"
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -17,6 +34,9 @@
   ],
   "engines": {
     "node": ">=24"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

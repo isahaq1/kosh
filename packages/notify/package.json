@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "description": "Omnichannel notifications and provider adapters (RFC 0006)",
   "license": "MIT",
+  "private": true,
   "type": "module",
   "sideEffects": false,
   "exports": {

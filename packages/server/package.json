@@ -1,8 +1,25 @@
 {
   "name": "@kosh/server",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Fastify app, module loader, REST/OpenAPI generator, auth, Shutro environment per request (RFC 0002)",
+  "keywords": [
+    "kosh",
+    "erp",
+    "typescript",
+    "postgresql",
+    "shutro"
+  ],
+  "author": "Isahaq <hmisahaq01@gmail.com>",
   "license": "MIT",
+  "homepage": "https://github.com/isahaq1/kosh/tree/main/packages/server#readme",
+  "bugs": {
+    "url": "https://github.com/isahaq1/kosh/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isahaq1/kosh.git",
+    "directory": "packages/server"
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -23,6 +40,9 @@
   "engines": {
     "node": ">=24"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -35,7 +55,7 @@
     "@opentelemetry/sdk-node": "^0.223.0",
     "fastify": "^5.12.7",
     "iovalkey": "^0.4.0",
-    "shutro": "link:../../../shutro/dist-npm/shutro",
+    "shutro": "^0.2.0",
     "@kosh/views": "workspace:*"
   },
   "devDependencies": {

@@ -1,8 +1,25 @@
 {
   "name": "@kosh/permissions",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Roles, groups, ACL, field security, action permissions and approval rules on Shutro security (RFC 0003)",
+  "keywords": [
+    "kosh",
+    "erp",
+    "typescript",
+    "postgresql",
+    "shutro"
+  ],
+  "author": "Isahaq <hmisahaq01@gmail.com>",
   "license": "MIT",
+  "homepage": "https://github.com/isahaq1/kosh/tree/main/packages/permissions#readme",
+  "bugs": {
+    "url": "https://github.com/isahaq1/kosh/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isahaq1/kosh.git",
+    "directory": "packages/permissions"
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -23,6 +40,9 @@
   "engines": {
     "node": ">=24"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -31,12 +51,16 @@
     "@kosh/modules-sdk": "workspace:*",
     "@kosh/server": "workspace:*",
     "fastify": "^5.12.7",
-    "@kosh/ui": "workspace:*",
-    "@tanstack/react-query": "^5.104.3",
-    "react": "^19.3.1"
+    "@kosh/ui": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19.3.1",
+    "@tanstack/react-query": "^5.104.3"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1",
-    "@types/react": "^19.3.0"
+    "@types/react": "^19.3.0",
+    "react": "^19.3.1",
+    "@tanstack/react-query": "^5.104.3"
   }
 }

@@ -1,8 +1,25 @@
 {
   "name": "@kosh/messaging",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Chatter, followers, activities, internal chat and channels (RFC 0006)",
+  "keywords": [
+    "kosh",
+    "erp",
+    "typescript",
+    "postgresql",
+    "shutro"
+  ],
+  "author": "Isahaq <hmisahaq01@gmail.com>",
   "license": "MIT",
+  "homepage": "https://github.com/isahaq1/kosh/tree/main/packages/messaging#readme",
+  "bugs": {
+    "url": "https://github.com/isahaq1/kosh/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isahaq1/kosh.git",
+    "directory": "packages/messaging"
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -23,6 +40,9 @@
   "engines": {
     "node": ">=24"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -33,14 +53,20 @@
     "@kosh/storage": "workspace:*",
     "fastify": "^5.12.7",
     "@kosh/ui": "workspace:*",
+    "lucide-react": "^1.59.0"
+  },
+  "peerDependencies": {
+    "react": "^19.3.1",
     "@tanstack/react-query": "^5.104.3",
     "i18next": "^26.4.7",
-    "lucide-react": "^1.59.0",
-    "react": "^19.3.1",
     "react-i18next": "^17.0.21"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1",
-    "@types/react": "^19.3.0"
+    "@types/react": "^19.3.0",
+    "react": "^19.3.1",
+    "@tanstack/react-query": "^5.104.3",
+    "i18next": "^26.4.7",
+    "react-i18next": "^17.0.21"
   }
 }

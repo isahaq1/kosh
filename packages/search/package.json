@@ -1,8 +1,25 @@
 {
   "name": "@kosh/search",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Shared search, filter, group-by, favorites and saved-views layer (RFC 0004)",
+  "keywords": [
+    "kosh",
+    "erp",
+    "typescript",
+    "postgresql",
+    "shutro"
+  ],
+  "author": "Isahaq <hmisahaq01@gmail.com>",
   "license": "MIT",
+  "homepage": "https://github.com/isahaq1/kosh/tree/main/packages/search#readme",
+  "bugs": {
+    "url": "https://github.com/isahaq1/kosh/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isahaq1/kosh.git",
+    "directory": "packages/search"
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -17,6 +34,9 @@
   ],
   "engines": {
     "node": ">=24"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

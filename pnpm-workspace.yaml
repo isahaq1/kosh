@@ -8,3 +8,7 @@ allowBuilds:
   protobufjs: false # (OpenTelemetry) postinstall only prints a version notice
   cpu-features: false # (testcontainers > ssh2) optional native CPU detection
   ssh2: false # (testcontainers) native crypto bindings are optional; only for docker-over-ssh
+
+# Development and CI link Shutro from the sibling checkout; published manifests depend on `shutro@^0.2.0`.
+overrides:
+  shutro: link:../shutro/dist-npm/shutro

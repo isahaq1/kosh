@@ -1,10 +1,30 @@
 {
   "name": "@kosh/cli",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "kosh new | dev | module:create | migrate | build (RFC 0001)",
+  "keywords": [
+    "kosh",
+    "erp",
+    "typescript",
+    "postgresql",
+    "shutro"
+  ],
+  "author": "Isahaq <hmisahaq01@gmail.com>",
   "license": "MIT",
+  "homepage": "https://github.com/isahaq1/kosh/tree/main/packages/cli#readme",
+  "bugs": {
+    "url": "https://github.com/isahaq1/kosh/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isahaq1/kosh.git",
+    "directory": "packages/cli"
+  },
   "type": "module",
   "sideEffects": false,
+  "bin": {
+    "kosh": "./dist/bin.js"
+  },
   "exports": {
     ".": {
       "@kosh/source": "./src/index.ts",
@@ -18,12 +38,12 @@
   "engines": {
     "node": ">=24"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
-  },
-  "bin": {
-    "kosh": "./dist/bin.js"
   },
   "dependencies": {
     "@kosh/modules-sdk": "workspace:*",
