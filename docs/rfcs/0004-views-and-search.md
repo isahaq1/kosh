@@ -91,3 +91,8 @@ domain `{ 'approvalRequests.any': { approver: { $env: 'uid' }, state: 'pending' 
 
 - Client-side evaluation of domains with relation paths needs the related values loaded; proposed: such conditions
   are server-evaluated and shipped as booleans with the record.
+
+## Alignment with CLAUDE.md
+
+- View schemas and builders live in `packages/views`, the search layer in `packages/search`, renderers in
+  `packages/ui`; `defineView` / `defineMenu` / `defineAction` are exported by `packages/modules-sdk`.

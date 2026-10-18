@@ -70,3 +70,9 @@ receives the monthly spend pivot as XLSX every 1st at 08:00.
 
 - Materialized aggregates for dashboards (refreshed by jobs) vs always-live queries: proposed live first, opt-in
   materialization per dashboard.
+
+## Alignment with CLAUDE.md
+
+- Budgets: CLAUDE.md sets "10k-row list view < 300 ms API time" as the example; the reporting budgets above are
+  proposed additions to the CLAUDE.md budget list, for approval.
+- The `GROUPING SETS` support needed from Shutro's `aggregate()` is recorded in `docs/shutro-requests.md`.

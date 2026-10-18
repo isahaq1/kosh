@@ -64,3 +64,8 @@ unchanged (Bangla is left-to-right; RTL support is verified with Arabic for futu
 ## 7. Open questions
 
 - Offline/mobile: a PWA with background sync over the batch endpoint (RFC 0002 §8), or native apps later.
+
+## Alignment with CLAUDE.md
+
+- The app shell, design system and view renderers live in `packages/ui`; `apps/web` composes them with the modules.
+- Stack additions from CLAUDE.md: TanStack Table + Virtual + Form, dnd-kit for drag and drop, PWA first.

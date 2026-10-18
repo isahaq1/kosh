@@ -144,3 +144,12 @@ data: [
 - Do we allow runtime-installed modules without a process restart (hot registry rebuild per database)? Proposed:
   yes per database, behind a feature flag, since registries are already per installed set.
 - Marketplace signing of module packages (out of scope for 1.0).
+
+## Alignment with CLAUDE.md
+
+- CLAUDE.md's manifest example (`depends: ['base', ...]` as strings, `models` / `extends` in the manifest) is marked
+  illustrative. This RFC refines it: `depends` takes module objects (typed, renames are compile errors), and models,
+  extensions, groups and data stay in the wrapped Shutro module (Kosh never duplicates ORM features). `name` comes from
+  the Shutro module. A string form `depends: ['contacts']` can be accepted for installers, resolved at build time.
+- "A module without permission declarations fails to load": `accessLevels` is required; `kosh check` and the loader
+  refuse a module without it.

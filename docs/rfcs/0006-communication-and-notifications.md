@@ -67,3 +67,15 @@ Replying to the approval email posts the reply on the order's chatter.
 ## 7. Open questions
 
 - Retention of delivered notifications and chat (per company policy, GDPR erasure).
+
+## Alignment with CLAUDE.md
+
+- **Jobs (decision needed).** CLAUDE.md names pg-boss for jobs. Shutro now ships PostgreSQL jobs (`env.enqueue`,
+  `shutro.work`, RFC 0018 there) whose completion commits **in the job's own transaction**, so a job's database work
+  happens exactly once, and which run as the enqueuing user under their record rules; pg-boss runs jobs outside the
+  ORM's transactions. Since CLAUDE.md also says Kosh never reimplements ORM features, this RFC proposes `packages/jobs`
+  on Shutro's jobs (scheduler and cron on top) instead of pg-boss. This changes the stated stack, so it needs your
+  explicit approval; if declined, `packages/jobs` wraps pg-boss and the outbox still comes from Shutro.
+- Packages: chatter, followers, activities and chat in `packages/messaging`; email (outbound, inbound, templates with
+  React Email) in `packages/mail`; channels and adapters (in-app, web push, mobile push, email, SMS, WhatsApp,
+  Telegram) in `packages/notify`; the gateway in `packages/realtime`; attachments in `packages/storage`.

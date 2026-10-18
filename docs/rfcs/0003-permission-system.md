@@ -110,3 +110,18 @@ record is out of rule scope) at the server. The suite is generated from the meta
   special grant with expiry, audited.
 - Separation of duties (the requester cannot approve their own order): a rule on `approval.request`
   (`record.createdBy != uid`); built in to the approvals module.
+
+## Alignment with CLAUDE.md
+
+- **Superuser mode.** CLAUDE.md names "Shutro's superuser mode (`env.isSuperuser`)". Shutro has two mechanisms:
+  `env.administrator` (users in an administrator group bypass every permission check; their actions stay attributed
+  to them) and `env.su` / `asSuperuser({ reason })` (an audited per-call superuser scope for system code). This RFC
+  uses `env.administrator` as the single explicit bypass for the Administrator role, and exposes it in Kosh as
+  `env.isSuperuser` (an alias, so the documented name holds). Nothing grants administrators individual permissions.
+- **Approvals live in `packages/permissions`** (CLAUDE.md layout), not a separate `@kosh/approvals` module.
+- **Conditions are Shutro domains**, not functions (CLAUDE.md's `when: (o) => …` is illustrative): domains are
+  editable from the admin UI without code, evaluated in SQL (finding "orders needing my approval" is a query), and
+  audited as data. A module may still pass a function for conditions no domain can express; such levels are not
+  editable from the UI.
+- "Company Administrator" (full access within their companies) is left for later, as CLAUDE.md says; it maps to a
+  Shutro rule set rather than the bypass.
