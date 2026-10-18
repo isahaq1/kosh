@@ -24,7 +24,7 @@ test('apps follow the roles: a user without roles sees none', async ({ page }) =
 test('requesters see their apps and menus', async ({ page }) => {
   await signIn(page, 'rahim');
   const apps = page.getByRole('main').getByRole('link');
-  await expect(apps).toHaveText(['Contacts', 'Purchase']);
+  await expect(apps).toHaveText(['Contacts', 'Purchase', 'Reports']);
   await page.getByRole('link', { name: 'Purchase' }).click();
   await expect(page).toHaveURL(/\/purchase\/a\/purchase\.action_orders/);
   await expect(
@@ -35,7 +35,11 @@ test('requesters see their apps and menus', async ({ page }) => {
 test('administrators sign in with a second factor', async ({ page }) => {
   await signIn(page, 'admin');
   await expect(page.getByText('Administrator rights apply after')).toHaveCount(0);
-  await expect(page.getByRole('main').getByRole('link')).toHaveText(['Contacts', 'Purchase']);
+  await expect(page.getByRole('main').getByRole('link')).toHaveText([
+    'Contacts',
+    'Purchase',
+    'Reports',
+  ]);
 });
 
 test('Bangla labels; Arabic switches to right-to-left; dark theme', async ({ page }) => {

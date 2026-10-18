@@ -150,6 +150,11 @@ export interface KoshApi {
   setLanguage(lang: string): void;
   /** Raw call for module code (custom routes). */
   call<T>(method: string, path: string, body?: unknown): Promise<T>;
+  /** A file from the API (exports, documents): the response body and its file name. */
+  download(
+    path: string,
+    body: unknown,
+  ): Promise<{ readonly blob: Blob; readonly filename: string }>;
 }
 
 export interface ApiOptions {
@@ -309,5 +314,35 @@ export function createKoshApi(options: ApiOptions = {}): KoshApi {
       language = next;
     },
     call: (method, path, body) => json(method, path, body),
+    async download(path, body) {
+      const headers: Record<string, string> = { 'content-type': 'application/json' };
+      if (csrf !== undefined) headers['x-csrf-token'] = csrf;
+      if (company !== undefined) headers['x-company'] = String(company);
+      if (language !== undefined) headers['accept-language'] = language.replace('_', '-');
+      const response = await doFetch(`${base}${path}`, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        let problem: Problem;
+        try {
+          problem = JSON.parse(text) as Problem;
+        } catch {
+          problem = {
+            type: 'about:blank',
+            title: response.statusText,
+            status: response.status,
+            detail: text.slice(0, 300),
+          };
+        }
+        throw new ApiError(problem);
+      }
+      const disposition = response.headers.get('content-disposition') ?? '';
+      const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'download';
+      return { blob: await response.blob(), filename };
+    },
   };
 }

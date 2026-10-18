@@ -56,7 +56,5 @@ test('a 750 000 order: two approval levels, then approved', async ({ page }) => 
   // The list shows it approved, with the total.
   await page.goto(ORDERS);
   await expect(page.getByRole('row', { name: /PO-2026-0042/ })).toContainText('Approved');
-  await expect(
-    page.getByRole('term').filter({ hasText: 'Total Amount Total' }).locator('..'),
-  ).toContainText('750,000');
+  await expect(page.getByRole('row', { name: /PO-2026-0042/ })).toContainText('750,000');
 });

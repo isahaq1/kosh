@@ -5,9 +5,23 @@
  */
 import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
 import { approvalGuard, permissions, permissionsShutro, requestApprovals } from '@kosh/permissions';
+import { reporting, reportingShutro } from '@kosh/reporting';
 import { base, baseShutro } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
-import { action, form, kanban, list, search } from '@kosh/views';
+import {
+  action,
+  calendar,
+  cohort,
+  form,
+  gantt,
+  graph,
+  hierarchy,
+  kanban,
+  list,
+  map,
+  pivot,
+  search,
+} from '@kosh/views';
 
 const { defineGroup, defineModel, defineModule, definePermission, f } = orm;
 
@@ -24,6 +38,9 @@ const Partner = defineModel('res.partner', {
     email: f.char(),
     phone: f.char(),
     city: f.char(),
+    latitude: f.decimal({ scale: 6 }),
+    longitude: f.decimal({ scale: 6 }),
+    parent: f.many2one('res.partner', { label: 'Parent company' }),
     isCompany: f.boolean({ default: false }),
     creditLimit: f.decimal({ scale: 2, groups: ['contacts.manager'] }),
     stage: f.state({
@@ -41,7 +58,7 @@ const Partner = defineModel('res.partner', {
 const contactsShutro = defineModule({
   name: 'contacts',
   version: '0.1.0',
-  depends: [baseShutro],
+  depends: [baseShutro, reportingShutro],
   groups: [
     defineGroup({ code: 'contacts.user', label: 'Contacts user', implies: ['base.user'] }),
     defineGroup({
@@ -63,7 +80,7 @@ const contactsShutro = defineModule({
 export const contacts = defineKoshModule({
   shutro: contactsShutro,
   kosh: '^0.1.0',
-  depends: [base],
+  depends: [base, reporting],
   app: { code: 'contacts', label: 'Contacts', icon: 'users', sequence: 1 },
   accessLevels: {
     user: { label: 'User', groups: ['contacts.user'] },
@@ -72,7 +89,7 @@ export const contacts = defineKoshModule({
   actions: {
     'contacts.action_partners': action(Partner, {
       label: 'Contacts',
-      views: ['list', 'kanban', 'form'],
+      views: ['list', 'kanban', 'map', 'hierarchy', 'form'],
     }),
   },
   menus: [
@@ -95,6 +112,17 @@ export const contacts = defineKoshModule({
       ],
       defaultOrder: ['name asc'],
       inlineEdit: ['city'],
+    }),
+    'res.partner.map': map(Partner, {
+      latitude: 'latitude',
+      longitude: 'longitude',
+      title: 'name',
+      subtitle: 'city',
+    }),
+    'res.partner.hierarchy': hierarchy(Partner, {
+      parent: 'parent',
+      title: 'name',
+      subtitle: 'city',
     }),
     'res.partner.kanban': kanban(Partner, {
       groupBy: 'stage',
@@ -147,6 +175,9 @@ const Order = defineModel('purchase.order', {
     name: f.char({ required: true }),
     vendor: f.many2one('res.partner'),
     amountTotal: f.decimal({ scale: 2, required: true, default: '0' }),
+    dateOrder: f.date({ label: 'Order date' }),
+    dateDue: f.date({ label: 'Due date' }),
+    received: f.integer({ default: 0, label: 'Received %' }),
     notes: f.text(),
     state: f.state({
       states: {
@@ -199,7 +230,7 @@ export const purchase = defineKoshModule({
   actions: {
     'purchase.action_orders': action(Order, {
       label: 'Purchase orders',
-      views: ['list', 'kanban', 'form'],
+      views: ['list', 'kanban', 'pivot', 'graph', 'calendar', 'gantt', 'cohort', 'form'],
     }),
   },
   menus: [
@@ -219,6 +250,37 @@ export const purchase = defineKoshModule({
         { field: 'amountTotal', sum: true },
         { field: 'state', widget: 'badge' },
       ],
+    }),
+    'purchase.order.pivot': pivot(Order, {
+      rows: ['vendor'],
+      cols: ['dateOrder:month'],
+      measures: ['count', { sum: 'amountTotal', label: 'Amount' }],
+      heatmap: true,
+      comparison: { field: 'dateOrder', mode: 'yoy' },
+    }),
+    'purchase.order.graph': graph(Order, {
+      chart: 'bar',
+      groupBy: ['dateOrder:month'],
+      measure: { sum: 'amountTotal', label: 'Spend' },
+    }),
+    'purchase.order.calendar': calendar(Order, {
+      dateStart: 'dateOrder',
+      dateStop: 'dateDue',
+      title: 'name',
+      color: 'state',
+    }),
+    'purchase.order.gantt': gantt(Order, {
+      dateStart: 'dateOrder',
+      dateStop: 'dateDue',
+      title: 'name',
+      groupBy: 'vendor',
+      progress: 'received',
+    }),
+    'purchase.order.cohort': cohort(Order, {
+      dateStart: 'dateOrder',
+      dateStop: 'dateDue',
+      interval: 'week',
+      mode: 'churn',
     }),
     'purchase.order.kanban': kanban(Order, {
       groupBy: 'state',

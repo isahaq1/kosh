@@ -28,7 +28,7 @@ test('list: rows, order, search facet, filters, group-by; state in the URL', asy
   const search = page.getByRole('combobox', { name: 'Search…' });
   await search.fill('dhaka');
   await page.getByRole('option', { name: 'Search City for: dhaka' }).click();
-  await expect(rows).toHaveCount(3); // header + 2
+  await expect(rows).toHaveCount(5); // header + Acme, Rafiq and Acme's two contacts
   await expect(page).toHaveURL(/q=/);
 
   await page.getByRole('button', { name: 'Filters' }).click();
@@ -45,7 +45,7 @@ test('list: rows, order, search facet, filters, group-by; state in the URL', asy
   await page.getByRole('button', { name: 'Group by' }).click();
   await page.getByRole('menuitemcheckbox', { name: 'City' }).click();
   await page.keyboard.press('Escape');
-  const dhaka = page.getByRole('button', { name: /Dhaka \(2\)/ });
+  const dhaka = page.getByRole('button', { name: /Dhaka \(4\)/ });
   await expect(dhaka).toBeVisible();
   await dhaka.click();
   await expect(dhaka).toHaveAttribute('aria-expanded', 'true');

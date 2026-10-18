@@ -53,6 +53,8 @@ await server.shutro.bootstrap({ reason: 'e2e seed', company }, async (env) => {
       city: 'Dhaka',
       isCompany: true,
       creditLimit: '500000',
+      latitude: '23.8103',
+      longitude: '90.4125',
       company,
     },
     {
@@ -61,16 +63,68 @@ await server.shutro.bootstrap({ reason: 'e2e seed', company }, async (env) => {
       city: 'Chattogram',
       isCompany: true,
       creditLimit: '250000',
+      latitude: '22.3569',
+      longitude: '91.7832',
       company,
     },
     { name: 'Rafiq Ahmed', email: 'rafiq@example.test', city: 'Dhaka', company },
     { name: 'Sumaiya Khan', email: 'sumaiya@example.test', city: 'Sylhet', company },
   ]);
+  // Contacts of the companies (hierarchy), and purchase orders this month and last year (reports).
+  await model('res.partner').create([
+    { name: 'Karim (Acme buyer)', parent: 1, city: 'Dhaka', company },
+    { name: 'Nadia (Acme accounts)', parent: 1, city: 'Dhaka', company },
+  ]);
+  const today = new Date();
+  const day = (offset: number) =>
+    new Date(
+      Date.UTC(today.getFullYear(), today.getMonth(), Math.min(today.getDate(), 20) + offset),
+    )
+      .toISOString()
+      .slice(0, 10);
+  const lastYear = (d: string) => `${Number(d.slice(0, 4)) - 1}${d.slice(4)}`;
+  await model('purchase.order').create([
+    {
+      name: 'PO-R-001',
+      vendor: 1,
+      amountTotal: '12000',
+      dateOrder: day(-3),
+      dateDue: day(4),
+      received: 50,
+      company,
+    },
+    {
+      name: 'PO-R-002',
+      vendor: 1,
+      amountTotal: '8000',
+      dateOrder: day(-1),
+      dateDue: day(2),
+      received: 100,
+      company,
+    },
+    {
+      name: 'PO-R-003',
+      vendor: 2,
+      amountTotal: '30000',
+      dateOrder: day(0),
+      dateDue: day(9),
+      received: 0,
+      company,
+    },
+    {
+      name: 'PO-R-OLD',
+      vendor: 1,
+      amountTotal: '10000',
+      dateOrder: lastYear(day(-2)),
+      dateDue: lastYear(day(5)),
+      company,
+    },
+  ]);
 });
 for (const [login, name, groups] of [
-  ['rahim', 'Rahim Uddin', ['contacts.user', 'purchase.user']],
-  ['dina', 'Dina Rahman', ['contacts.manager', 'purchase.approver']],
-  ['maria', 'Maria Das', ['contacts.user', 'purchase.manager']],
+  ['rahim', 'Rahim Uddin', ['contacts.user', 'purchase.user', 'reporting.user']],
+  ['dina', 'Dina Rahman', ['contacts.manager', 'purchase.approver', 'reporting.user']],
+  ['maria', 'Maria Das', ['contacts.user', 'purchase.manager', 'reporting.user']],
   ['bob', 'Bob Smith', ['base.user']],
 ] as const)
   await auth.createUser({

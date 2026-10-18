@@ -50,6 +50,8 @@ export function nodesOf(view: ViewDefinition): AnyNode[] {
     case 'kanban':
       walk([...(view.card.footer ?? []), ...(view.card.badges ?? [])]);
       break;
+    default:
+      break; // report views have no node tree: they are changed with setAttrs on the view
   }
   return out;
 }
@@ -176,6 +178,20 @@ function apply(view: ViewDefinition, op: ViewOperation): ViewDefinition {
       }
       break;
     }
+    default:
+      // Report views: `setAttrs` on the view id changes the view itself (e.g. add a measure, change the chart).
+      if ('setAttrs' in op && op.setAttrs === view.id)
+        [next, done] = [
+          {
+            ...view,
+            ...op.attrs,
+            type: view.type,
+            id: view.id,
+            model: view.model,
+          } as ViewDefinition,
+          true,
+        ];
+      break;
   }
   if (!done)
     throw new ViewDefinitionError(

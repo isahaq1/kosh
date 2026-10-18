@@ -8,7 +8,7 @@
  * `/:app/a/:action/:id` (form; `new` for a new record).
  */
 import { compileSearch, decodeSearch, encodeSearch, type SearchState } from '@kosh/search';
-import type { ViewType, WindowAction } from '@kosh/views';
+import type { Condition, ViewType, WindowAction } from '@kosh/views';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createRootRoute,
@@ -24,15 +24,24 @@ import {
 } from '@tanstack/react-router';
 import type { i18n } from 'i18next';
 import {
+  CalendarDays,
+  ChartColumn,
+  ChartGantt,
   Columns3,
+  Grid2x2,
   Grid3x3,
   Languages,
+  LayoutDashboard,
   List,
   LogOut,
+  Map as MapIcon,
   Monitor,
   Moon,
+  Network,
   Plus,
+  Sheet,
   Sun,
+  Table2,
   UserRound,
 } from 'lucide-react';
 import { Direction } from 'radix-ui';
@@ -62,7 +71,7 @@ import {
   Spinner,
 } from './components/primitives.js';
 import { KoshProvider, type ThemeChoice, useKosh } from './context.js';
-import { createI18n, directionOf } from './i18n/index.js';
+import { addMessages, createI18n, directionOf } from './i18n/index.js';
 import { LANGUAGES } from './i18n/messages.js';
 import type { Registry } from './registry.js';
 import { SearchBar } from './search/SearchBar.js';
@@ -464,7 +473,31 @@ function ActionPage(): ReactElement {
   const open = (id: number | 'new') =>
     void navigate({ to: '/$app/a/$action/$id', params: { app, action: actionId, id: String(id) } });
   const Renderer = registry.view(served.data.view.component ?? type);
-  const icons = { list: List, kanban: Columns3 } as const;
+  const icons = {
+    list: List,
+    kanban: Columns3,
+    pivot: Table2,
+    graph: ChartColumn,
+    calendar: CalendarDays,
+    gantt: ChartGantt,
+    map: MapIcon,
+    hierarchy: Network,
+    cohort: Grid2x2,
+    spreadsheet: Sheet,
+    dashboard: LayoutDashboard,
+  } as const;
+  const drill = (domain: Condition) => {
+    // The records behind a cell: the list with the search plus the cell's domain (group-bys dropped).
+    const custom = state.custom === undefined ? domain : { and: [state.custom, domain] };
+    void navigate({
+      to: '/$app/a/$action',
+      params: { app, action: actionId },
+      search: {
+        view: types.includes('list') ? 'list' : types[0],
+        q: encodeSearch({ ...state, groupBy: [], custom }) || undefined,
+      } as never,
+    });
+  };
   return (
     <section className="grid gap-3" aria-labelledby="action-title">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -524,6 +557,7 @@ function ActionPage(): ReactElement {
           order={compiled.order}
           onOrder={(order) => setState({ ...state, order })}
           onOpen={open}
+          onDrill={drill}
         />
       )}
     </section>
@@ -623,12 +657,14 @@ function initialLanguage(): string {
 export interface KoshAppProps {
   readonly api: KoshApi;
   readonly registry: Registry;
+  /** Module messages by namespace and language (`{ reporting: { en: {...}, bn: {...} } }`). */
+  readonly messages?: Readonly<Record<string, Readonly<Record<string, object>>>>;
   /** Loading screen while translations initialize. */
   readonly fallback?: ReactNode;
 }
 
 /** The whole app: providers, translations, router. */
-export function KoshApp({ api, registry, fallback = null }: KoshAppProps): ReactElement {
+export function KoshApp({ api, registry, messages, fallback = null }: KoshAppProps): ReactElement {
   const queryClient = useMemo(
     () =>
       new QueryClient({
@@ -648,12 +684,14 @@ export function KoshApp({ api, registry, fallback = null }: KoshAppProps): React
   useEffect(() => {
     let alive = true;
     void createI18n(startLang).then((created) => {
+      for (const [namespace, bundles] of Object.entries(messages ?? {}))
+        addMessages(created, namespace, bundles);
       if (alive) setInstance(created);
     });
     return () => {
       alive = false;
     };
-  }, [startLang]);
+  }, [startLang, messages]);
   const router = useMemo(() => createRouter({ routeTree, defaultPreload: 'intent' }), []);
   api.setLanguage(lang);
   if (instance === null) return <>{fallback}</>;

@@ -6,16 +6,27 @@
  */
 export {
   action,
+  calendar,
+  cohort,
+  dashboard,
   type FieldInput,
   type FieldKey,
   type FormKit,
   field,
   form,
+  type GroupKey,
+  gantt,
+  graph,
+  hierarchy,
   type ImplicitKey,
   kanban,
   list,
+  type MeasureInput,
   type ModelHandle,
+  map,
+  pivot,
   search,
+  spreadsheet,
 } from './builders.js';
 export { type ConditionEnv, evaluate, holds } from './condition.js';
 export { nodesOf, resolveView, ViewDefinitionError } from './extend.js';

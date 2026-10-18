@@ -4,17 +4,20 @@
  */
 import './index.css';
 import { registerPermissionsWeb } from '@kosh/permissions/web';
+import { registerReportingWeb, reportingMessages } from '@kosh/reporting/web';
 import { createDefaultRegistry, createKoshApi, KoshApp } from '@kosh/ui';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 const registry = createDefaultRegistry();
 registerPermissionsWeb(registry);
+registerReportingWeb(registry);
+const messages = { reporting: reportingMessages };
 
 const root = document.getElementById('root');
 if (root === null) throw new Error('index.html has no #root element.');
 createRoot(root).render(
   <StrictMode>
-    <KoshApp api={createKoshApi()} registry={registry} />
+    <KoshApp api={createKoshApi()} registry={registry} messages={messages} />
   </StrictMode>,
 );

@@ -8,18 +8,28 @@
  */
 import type {
   ButtonNode,
+  CalendarView,
+  CohortView,
   ComponentNode,
   Condition,
+  DashboardView,
   FieldNode,
   FormNode,
   FormView,
+  GanttView,
+  GraphView,
   GroupNode,
+  HierarchyView,
   KanbanView,
   LinesNode,
   ListView,
+  MapView,
+  MeasureNode,
   NotebookNode,
   PageNode,
+  PivotView,
   SearchSpec,
+  SpreadsheetView,
   WindowAction,
 } from './types.js';
 
@@ -215,4 +225,166 @@ export function search<M extends ModelRef>(
   },
 ): SearchSpec {
   return spec;
+}
+
+// ------------------------------------------------------------------------------------------------- report views
+
+type Granularity = 'day' | 'week' | 'month' | 'quarter' | 'year';
+/** A group of a report view: a field, or a date field with a granularity (`dateOrder:month`). */
+export type GroupKey<M> = FieldKey<M> | `${FieldKey<M>}:${Granularity}`;
+
+/** A measure: `'count'`, `{ sum | avg | min | max: field }`, optionally with a label and id. */
+export type MeasureInput<K extends string> =
+  | 'count'
+  | { readonly sum: K; readonly label?: string; readonly id?: string }
+  | { readonly avg: K; readonly label?: string; readonly id?: string }
+  | { readonly min: K; readonly label?: string; readonly id?: string }
+  | { readonly max: K; readonly label?: string; readonly id?: string }
+  | { readonly count: true; readonly label?: string; readonly id?: string };
+
+function measureNode<K extends string>(input: MeasureInput<K>): MeasureNode {
+  if (input === 'count') return { id: 'count', measure: 'count' };
+  if ('count' in input)
+    return {
+      id: input.id ?? 'count',
+      measure: 'count',
+      ...(input.label === undefined ? {} : { label: input.label }),
+    };
+  const op = (['sum', 'avg', 'min', 'max'] as const).find((o) => o in input) as
+    | 'sum'
+    | 'avg'
+    | 'min'
+    | 'max';
+  const field = (input as Record<string, unknown>)[op] as string;
+  return {
+    id: input.id ?? `${op}_${field}`,
+    measure: { [op]: field } as MeasureNode['measure'],
+    ...(input.label === undefined ? {} : { label: input.label }),
+  };
+}
+
+/** A pivot view. */
+export function pivot<M extends ModelRef>(
+  model: M,
+  spec: Omit<ViewInput<PivotView>, 'rows' | 'cols' | 'measures' | 'comparison'> & {
+    readonly rows: readonly GroupKey<M>[];
+    readonly cols?: readonly GroupKey<M>[];
+    readonly measures: readonly MeasureInput<FieldKey<M>>[];
+    readonly comparison?: { readonly field: FieldKey<M>; readonly mode: 'previous' | 'yoy' };
+  },
+): PivotView {
+  return {
+    ...spec,
+    type: 'pivot',
+    id: '',
+    model: nameOf(model),
+    cols: spec.cols ?? [],
+    measures: spec.measures.map(measureNode),
+  };
+}
+
+/** A chart view. */
+export function graph<M extends ModelRef>(
+  model: M,
+  spec: Omit<ViewInput<GraphView>, 'groupBy' | 'measure' | 'comparison'> & {
+    readonly groupBy: readonly [GroupKey<M>] | readonly [GroupKey<M>, GroupKey<M>];
+    readonly measure: MeasureInput<FieldKey<M>>;
+    readonly comparison?: { readonly field: FieldKey<M>; readonly mode: 'previous' | 'yoy' };
+  },
+): GraphView {
+  return {
+    ...spec,
+    type: 'graph',
+    id: '',
+    model: nameOf(model),
+    measure: measureNode(spec.measure),
+  };
+}
+
+type Keys<M, V> = {
+  readonly [K in keyof V]: V[K] extends string
+    ? FieldKey<M>
+    : V[K] extends string | undefined
+      ? FieldKey<M> | undefined
+      : V[K];
+};
+
+/** A calendar view. */
+export function calendar<M extends ModelRef>(
+  model: M,
+  spec: Keys<M, Omit<ViewInput<CalendarView>, 'mode' | 'label' | 'component'>> &
+    Pick<CalendarView, 'mode' | 'label' | 'component'>,
+): CalendarView {
+  return {
+    ...(spec as Omit<CalendarView, 'type' | 'id' | 'model'>),
+    type: 'calendar',
+    id: '',
+    model: nameOf(model),
+  };
+}
+
+/** A gantt (timeline) view. */
+export function gantt<M extends ModelRef>(
+  model: M,
+  spec: Keys<M, Omit<ViewInput<GanttView>, 'scale' | 'label' | 'component'>> &
+    Pick<GanttView, 'scale' | 'label' | 'component'>,
+): GanttView {
+  return {
+    ...(spec as Omit<GanttView, 'type' | 'id' | 'model'>),
+    type: 'gantt',
+    id: '',
+    model: nameOf(model),
+  };
+}
+
+/** A map view. */
+export function map<M extends ModelRef>(
+  model: M,
+  spec: Keys<M, Omit<ViewInput<MapView>, 'style' | 'label' | 'component'>> &
+    Pick<MapView, 'style' | 'label' | 'component'>,
+): MapView {
+  return {
+    ...(spec as Omit<MapView, 'type' | 'id' | 'model'>),
+    type: 'map',
+    id: '',
+    model: nameOf(model),
+  };
+}
+
+/** A hierarchy (tree) view. */
+export function hierarchy<M extends ModelRef>(
+  model: M,
+  spec: Keys<M, Omit<ViewInput<HierarchyView>, 'label' | 'component'>> &
+    Pick<HierarchyView, 'label' | 'component'>,
+): HierarchyView {
+  return {
+    ...(spec as Omit<HierarchyView, 'type' | 'id' | 'model'>),
+    type: 'hierarchy',
+    id: '',
+    model: nameOf(model),
+  };
+}
+
+/** A cohort view. */
+export function cohort<M extends ModelRef>(
+  model: M,
+  spec: { readonly dateStart: FieldKey<M>; readonly dateStop: FieldKey<M> } & Pick<
+    CohortView,
+    'interval' | 'mode' | 'label' | 'component'
+  >,
+): CohortView {
+  return { ...spec, type: 'cohort', id: '', model: nameOf(model) };
+}
+
+/** The dashboards view (on `report.dashboard`). */
+export function dashboard(spec: Pick<DashboardView, 'label' | 'component'> = {}): DashboardView {
+  return { ...spec, type: 'dashboard', id: '', model: 'report.dashboard' };
+}
+
+/** A spreadsheet view (sheets are records; the view is the entry point for a model's sheets). */
+export function spreadsheet<M extends ModelRef>(
+  model: M,
+  spec: Pick<SpreadsheetView, 'label' | 'component'> = {},
+): SpreadsheetView {
+  return { ...spec, type: 'spreadsheet', id: '', model: nameOf(model) };
 }

@@ -43,6 +43,8 @@ export interface ViewProps {
   readonly onOrder?: (order: readonly string[]) => void;
   /** Opens a record (`'new'` for a new one) in the form. */
   readonly onOpen: (id: number | 'new', defaults?: Record<string, unknown>) => void;
+  /** Drill-down (report views): shows the records of `domain` in the list. */
+  readonly onDrill?: (domain: Condition, label?: string) => void;
 }
 
 /** Props of the form renderer. */

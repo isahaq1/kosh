@@ -17,7 +17,8 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "@kosh/ui": "workspace:*",
-    "@kosh/permissions": "workspace:*"
+    "@kosh/permissions": "workspace:*",
+    "@kosh/reporting": "workspace:*"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

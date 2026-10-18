@@ -6,6 +6,7 @@
  */
 import { defineModule } from '@kosh/modules-sdk';
 import { base, type ModuleContext } from '@kosh/server';
+import { dashboard, spreadsheet } from '@kosh/views';
 import { reportingShutro } from './models.js';
 import { registerReportRoutes } from './routes.js';
 
@@ -41,6 +42,40 @@ export const reporting: ReturnType<typeof defineModule> = defineModule({
   accessLevels: {
     user: { label: 'Reports user', groups: ['reporting.user'] },
     designer: { label: 'Report designer', groups: ['reporting.designer'], implies: ['user'] },
+  },
+  app: { code: 'reports', label: 'Reports', icon: 'chart', sequence: 90 },
+  actions: {
+    'reporting.action_dashboards': {
+      model: 'report.dashboard',
+      label: 'Dashboards',
+      views: ['dashboard'],
+    },
+    'reporting.action_spreadsheets': {
+      model: 'report.spreadsheet',
+      label: 'Spreadsheets',
+      views: ['spreadsheet'],
+    },
+  },
+  menus: [
+    { id: 'reporting.root', label: 'Reports', app: 'reports' },
+    {
+      id: 'reporting.dashboards',
+      parent: 'reporting.root',
+      label: 'Dashboards',
+      action: 'reporting.action_dashboards',
+      sequence: 1,
+    },
+    {
+      id: 'reporting.spreadsheets',
+      parent: 'reporting.root',
+      label: 'Spreadsheets',
+      action: 'reporting.action_spreadsheets',
+      sequence: 2,
+    },
+  ],
+  views: {
+    'report.dashboard.dashboard': dashboard({ label: 'Dashboards' }),
+    'report.spreadsheet.spreadsheet': spreadsheet('report.spreadsheet', { label: 'Spreadsheets' }),
   },
   routes: (context: ModuleContext) => {
     registerReportRoutes(context);

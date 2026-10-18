@@ -122,7 +122,123 @@ export interface KanbanView extends ViewBase {
   readonly quickCreate?: boolean;
 }
 
-export type ViewDefinition = ListView | FormView | KanbanView;
+/** A measure of a report view: `'count'` or `{ sum | avg | min | max: field }`, with a label. */
+export type MeasureSpec =
+  | 'count'
+  | { readonly sum: string }
+  | { readonly avg: string }
+  | { readonly min: string }
+  | { readonly max: string };
+
+export interface MeasureNode {
+  readonly id: string;
+  readonly measure: MeasureSpec;
+  readonly label?: string;
+}
+
+/** A period comparison of a report view: the date field and what to compare with. */
+export interface ComparisonSpec {
+  readonly field: string;
+  readonly mode: 'previous' | 'yoy';
+}
+
+/** Rows × columns × measures over the report query (RFC 0005). */
+export interface PivotView extends ViewBase {
+  readonly type: 'pivot';
+  readonly rows: readonly string[];
+  readonly cols: readonly string[];
+  readonly measures: readonly MeasureNode[];
+  /** Colour cells by value. */
+  readonly heatmap?: boolean;
+  readonly comparison?: ComparisonSpec;
+}
+
+/** A chart (ECharts) over the report query. */
+export interface GraphView extends ViewBase {
+  readonly type: 'graph';
+  readonly chart: 'bar' | 'line' | 'area' | 'pie' | 'stacked';
+  /** The category, and optionally a series split (`['dateOrder:month', 'partner']`). */
+  readonly groupBy: readonly string[];
+  readonly measure: MeasureNode;
+  readonly comparison?: ComparisonSpec;
+}
+
+/** Records on a calendar by date. */
+export interface CalendarView extends ViewBase {
+  readonly type: 'calendar';
+  readonly dateStart: string;
+  readonly dateStop?: string;
+  readonly title: string;
+  /** A field whose value colours the events. */
+  readonly color?: string;
+  readonly mode?: 'month' | 'week';
+}
+
+/** Records as bars on a timeline. */
+export interface GanttView extends ViewBase {
+  readonly type: 'gantt';
+  readonly dateStart: string;
+  readonly dateStop: string;
+  readonly title: string;
+  /** Rows of the timeline (e.g. the responsible user). */
+  readonly groupBy?: string;
+  /** A 0–100 number shown inside the bar. */
+  readonly progress?: string;
+  readonly scale?: 'day' | 'week' | 'month';
+}
+
+/** Records as markers on a map (MapLibre). */
+export interface MapView extends ViewBase {
+  readonly type: 'map';
+  readonly latitude: string;
+  readonly longitude: string;
+  readonly title: string;
+  readonly subtitle?: string;
+  /** The map style (a MapLibre style URL); default: the distribution's setting. */
+  readonly style?: string;
+}
+
+/** A tree of records through a parent field (org charts, category trees). */
+export interface HierarchyView extends ViewBase {
+  readonly type: 'hierarchy';
+  readonly parent: string;
+  readonly title: string;
+  readonly subtitle?: string;
+}
+
+/** Cohorts: records grouped by when they started, counted by how long until they stopped (RFC 0005 §6). */
+export interface CohortView extends ViewBase {
+  readonly type: 'cohort';
+  readonly dateStart: string;
+  readonly dateStop: string;
+  readonly interval: 'day' | 'week' | 'month';
+  /** `retention`: share still open after n periods; `churn`: share closed by then. */
+  readonly mode?: 'retention' | 'churn';
+}
+
+/** Spreadsheets (records of `report.spreadsheet`): cells with values and formulas over cells and report totals. */
+export interface SpreadsheetView extends ViewBase {
+  readonly type: 'spreadsheet';
+}
+
+/** Dashboards (records of `report.dashboard`): a grid of cards, each a report query (KPI, chart, pivot, list). */
+export interface DashboardView extends ViewBase {
+  readonly type: 'dashboard';
+}
+
+export type ViewDefinition =
+  | ListView
+  | FormView
+  | KanbanView
+  | PivotView
+  | GraphView
+  | CalendarView
+  | GanttView
+  | MapView
+  | HierarchyView
+  | CohortView
+  | SpreadsheetView
+  | DashboardView;
 export type ViewType = ViewDefinition['type'];
 
 /** A window action: what a menu opens. */

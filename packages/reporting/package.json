@@ -10,6 +10,11 @@
       "@kosh/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./web": {
+      "@kosh/source": "./src/web/index.ts",
+      "types": "./dist/web/index.d.ts",
+      "default": "./dist/web/index.js"
     }
   },
   "files": [
@@ -23,11 +28,23 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
     "@kosh/modules-sdk": "workspace:*",
+    "@kosh/search": "workspace:*",
     "@kosh/server": "workspace:*",
-    "fastify": "^5.12.7"
+    "@kosh/ui": "workspace:*",
+    "@kosh/views": "workspace:*",
+    "@tanstack/react-query": "^5.104.3",
+    "echarts": "^6.1.0",
+    "fastify": "^5.12.7",
+    "i18next": "^26.4.7",
+    "lucide-react": "^1.59.0",
+    "maplibre-gl": "^6.14.0",
+    "react": "^19.3.1",
+    "react-i18next": "^17.0.21"
   },
   "devDependencies": {
-    "@testcontainers/postgresql": "^12.2.1"
+    "@testcontainers/postgresql": "^12.2.1",
+    "@types/react": "^19.3.0"
   }
 }

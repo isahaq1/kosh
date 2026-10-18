@@ -13,6 +13,7 @@ import {
   type ButtonNode,
   type FieldNode,
   type FormNode,
+  type MeasureNode,
   type ResolvedView,
   resolveView,
   type SearchSpec,
@@ -60,6 +61,21 @@ export interface ServedView {
   /** Fields whose changes run the model's onchange (form assistance). */
   readonly onchange: readonly string[];
 }
+
+const VIEW_TYPES: readonly string[] = [
+  'list',
+  'form',
+  'kanban',
+  'pivot',
+  'graph',
+  'calendar',
+  'gantt',
+  'map',
+  'hierarchy',
+  'cohort',
+  'spreadsheet',
+  'dashboard',
+];
 
 function config(problem: string): ServerConfigError {
   return new ServerConfigError(problem, 'Fix the module manifest (views, actions, search).');
@@ -256,6 +272,39 @@ export class ViewRegistry {
         };
         break;
       }
+      default: {
+        // Report views: groups and measures on fields the user may not read are left out (the report query
+        // would refuse them); the metadata of every referenced field goes along.
+        const readable = (key: string) => meta(model, key.split(':')[0] as string) !== null;
+        const measureField = (m: MeasureNode) =>
+          m.measure === 'count' ? undefined : (Object.values(m.measure)[0] as string);
+        const readableMeasure = (m: MeasureNode) => {
+          const key = measureField(m);
+          return key === undefined || readable(key);
+        };
+        if (view.type === 'pivot')
+          served = {
+            ...view,
+            rows: view.rows.filter(readable),
+            cols: view.cols.filter(readable),
+            measures: view.measures.filter(readableMeasure),
+          };
+        else if (view.type === 'graph') {
+          if (!readableMeasure(view.measure) || !view.groupBy.every(readable))
+            throw new HttpProblem(
+              403,
+              'access',
+              'Forbidden',
+              'This chart uses fields you may not read.',
+            );
+          served = view;
+        } else {
+          for (const value of Object.values(view))
+            if (typeof value === 'string' && model.byKey.has(value.split('.')[0] as string))
+              meta(model, value);
+          served = view;
+        }
+      }
     }
     for (const key of ['id', 'displayName']) meta(model, key);
     return {
@@ -307,12 +356,12 @@ export class ViewRegistry {
       const q = (request.query ?? {}) as { model?: unknown; type?: unknown };
       const model = String(q.model ?? '');
       const type = String(q.type ?? '') as ViewType;
-      if (!['list', 'form', 'kanban'].includes(type))
+      if (!VIEW_TYPES.includes(type))
         throw new HttpProblem(
           400,
           'invalid-type',
           'Invalid view type',
-          'type is list, form or kanban.',
+          `type is one of ${VIEW_TYPES.join(', ')}.`,
         );
       const id = this.defaultView(model, type);
       if (id === undefined)
