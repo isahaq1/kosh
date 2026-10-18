@@ -5,7 +5,7 @@
  * The Shutro module is described structurally here (`@kosh/modules-sdk` does not import Shutro: only
  * `packages/server/src/orm.ts` does); the server's loader verifies it is a real Shutro module.
  */
-import type { SearchSpec, ViewDefinition, ViewExtension, WindowAction } from '@kosh/views';
+import type { Layout, SearchSpec, ViewDefinition, ViewExtension, WindowAction } from '@kosh/views';
 import { ModuleDefinitionError } from './errors.js';
 import { satisfies } from './semver.js';
 
@@ -69,6 +69,17 @@ export interface ApprovalSpec {
   readonly onRejected?: string;
 }
 
+/** A default document template of a module. */
+export interface DocumentSpec {
+  /** Unique within the module (`purchase_order`); stored as `module.key`. */
+  readonly key: string;
+  readonly name: string;
+  readonly model: string;
+  readonly layout: Layout;
+  /** One record (default) or a list of records. */
+  readonly scope?: 'record' | 'list';
+}
+
 /** Lifecycle hooks (RFC 0001 §5.7); run by the server in a system scope inside the install transaction. */
 export interface ModuleHooks {
   readonly postInstall?: (env: unknown) => Promise<void>;
@@ -105,6 +116,8 @@ export interface ModuleInput {
    * apply in order; a level applies when its condition (a Shutro domain on the record) matches.
    */
   readonly approvals?: readonly ApprovalSpec[];
+  /** Default document templates (RFC 0005), installed as data (`key` = `module.name`) and editable by designers. */
+  readonly documents?: readonly DocumentSpec[];
   /**
    * Server routes of this module (admin APIs, custom endpoints). Called once at startup with the server context
    * (`ModuleContext` of `@kosh/server`); typed by the server, so modules declare the parameter type they use.

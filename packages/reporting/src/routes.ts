@@ -99,23 +99,23 @@ function fieldsOf(model: ApiModel): ReadonlyMap<string, FieldInfo> {
   );
 }
 
-/** Display names of ids, as the caller may read them (unreadable targets: no names). */
-async function displayNames(
+/**
+ * Display names of ids, as the caller may read them (no access to the target model: no names). Never swallows a
+ * failed query: inside a transaction that would leave it aborted for the next statement.
+ */
+export async function displayNames(
   env: Env,
   target: string,
   ids: readonly number[],
 ): Promise<ReadonlyMap<number, string>> {
-  try {
-    const found = await search(env, target, { where: { id: { in: [...ids] } } });
-    if (found.length === 0) return new Map();
-    return new Map(
-      (await found.load(['displayName']))
-        .read(['displayName'])
-        .map((r) => [r['id'] as number, String(r['displayName'])]),
-    );
-  } catch {
-    return new Map();
-  }
+  if (ids.length === 0 || !env.access.can(target as never, 'read')) return new Map();
+  const found = await search(env, target, { where: { id: { in: [...ids] } } });
+  if (found.length === 0) return new Map();
+  return new Map(
+    (await found.load(['displayName']))
+      .read(['displayName'])
+      .map((r) => [r['id'] as number, String(r['displayName'])]),
+  );
 }
 
 /** A measure value as text (CSV) or a typed cell (XLSX). */

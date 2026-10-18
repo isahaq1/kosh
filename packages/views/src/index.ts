@@ -29,6 +29,7 @@ export {
   spreadsheet,
 } from './builders.js';
 export { type ConditionEnv, evaluate, holds } from './condition.js';
+export type { Block, Layout } from './documents.js';
 export { nodesOf, resolveView, ViewDefinitionError } from './extend.js';
 export type * from './types.js';
 export {

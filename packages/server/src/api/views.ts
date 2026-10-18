@@ -75,6 +75,7 @@ const VIEW_TYPES: readonly string[] = [
   'cohort',
   'spreadsheet',
   'dashboard',
+  'designer',
 ];
 
 function config(problem: string): ServerConfigError {

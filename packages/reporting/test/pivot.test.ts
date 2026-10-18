@@ -3,37 +3,65 @@ import { nextBucket, runReport, zonedStart } from '../src/index.js';
 import { addDecimal } from '../src/pivot.js';
 
 describe('runReport', () => {
-  test('one aggregate call with every row level × column level as grouping sets', async () => {
+  test('one aggregate over the leaf grouping; levels and totals rolled up exactly', async () => {
     const calls: unknown[] = [];
     const env = {
       tz: 'UTC',
       model: () => ({
         aggregate: async (q: unknown) => {
           calls.push(q);
-          return [{ $groups: [], n: 3 }];
+          return [
+            {
+              partner: 1,
+              state: 'sale',
+              'dateOrder:month': '2026-09-01',
+              n: 2,
+              total: '0.1',
+              avg: '10.00',
+              $n: 2,
+            },
+            {
+              partner: 1,
+              state: 'draft',
+              'dateOrder:month': '2026-09-01',
+              n: 1,
+              total: '0.2',
+              avg: '40.00',
+              $n: 1,
+            },
+            {
+              partner: 2,
+              state: 'sale',
+              'dateOrder:month': '2026-10-01',
+              n: 3,
+              total: '5',
+              avg: '1.00',
+              $n: 3,
+            },
+          ];
         },
       }),
     };
     const result = await runReport(
       env as never,
       'sale.order',
-      { rows: ['partner', 'state'], cols: ['dateOrder:month'], measures: { n: 'count' } },
+      {
+        rows: ['partner', 'state'],
+        cols: ['dateOrder:month'],
+        measures: { n: 'count', total: { sum: 'amount' }, avg: { avg: 'amount' } },
+      },
       new Map(),
       async () => new Map(),
     );
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({
-      groupBy: ['partner', 'state', 'dateOrder:month'],
-      groupingSets: [
-        ['partner', 'state', 'dateOrder:month'],
-        ['partner', 'state'],
-        ['partner', 'dateOrder:month'],
-        ['partner'],
-        ['dateOrder:month'],
-        [],
-      ],
-    });
-    expect(result.cells['[]']?.['[]']).toEqual({ n: 3 });
+    expect(calls[0]).toMatchObject({ groupBy: ['partner', 'state', 'dateOrder:month'] });
+    expect(calls[0]).not.toHaveProperty('groupingSets');
+    // Partner 1 across states and months: 3 rows, 0.1 + 0.2 exactly, weighted average (2×10 + 1×40) / 3.
+    expect(result.cells['[1]']?.['[]']).toEqual({ n: 3, total: '0.3', avg: '20.0000' });
+    expect(result.cells['[]']?.['[]']).toEqual({ n: 6, total: '5.3', avg: '10.5000' });
+    expect(result.cells['[]']?.['["2026-09-01"]']?.['n']).toBe(3);
+    expect(result.rows.children.map((h) => h.value)).toEqual([1, 2]);
+    expect(result.rows.children[0]?.children.map((h) => h.value)).toEqual(['draft', 'sale']);
   });
 });
 

@@ -9,6 +9,7 @@ export {
   type ApprovalLevelSpec,
   type ApprovalSpec,
   type AppSpec,
+  type DocumentSpec,
   defineModule,
   type KoshModule,
   type MenuSpec,

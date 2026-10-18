@@ -10,6 +10,7 @@
  * - `admin`: administrator with 2FA (secret {@link ADMIN_TOTP_SECRET})
  */
 import { installApprovalPolicies } from '@kosh/permissions';
+import { installTemplates } from '@kosh/reporting';
 import { createServer, installBase, startServer } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
@@ -42,6 +43,7 @@ type Model = {
 await server.shutro.bootstrap({ reason: 'e2e seed', company }, async (env) => {
   const model = (name: string) => env.model(name as never) as unknown as Model;
   await installApprovalPolicies(env, server.registry.loaded.modules);
+  await installTemplates(env, server.registry.loaded.modules);
   await (await model('auth.credential').search({ where: { user: admin } })).write({
     totpSecret: ADMIN_TOTP_SECRET,
     totpEnabled: true,
@@ -123,7 +125,7 @@ await server.shutro.bootstrap({ reason: 'e2e seed', company }, async (env) => {
 });
 for (const [login, name, groups] of [
   ['rahim', 'Rahim Uddin', ['contacts.user', 'purchase.user', 'reporting.user']],
-  ['dina', 'Dina Rahman', ['contacts.manager', 'purchase.approver', 'reporting.user']],
+  ['dina', 'Dina Rahman', ['contacts.manager', 'purchase.approver', 'reporting.designer']],
   ['maria', 'Maria Das', ['contacts.user', 'purchase.manager', 'reporting.user']],
   ['bob', 'Bob Smith', ['base.user']],
 ] as const)

@@ -8,7 +8,9 @@ import { addMessages, type Registry } from '@kosh/ui';
 import type { i18n } from 'i18next';
 import { CalendarView } from './CalendarView.js';
 import { CohortView } from './CohortView.js';
+import { Documents, ScheduleOutputs } from './components.js';
 import { DashboardView } from './DashboardView.js';
+import { DesignerView } from './DesignerView.js';
 import { GanttView } from './GanttView.js';
 import { GraphView } from './GraphView.js';
 import { HierarchyView } from './HierarchyView.js';
@@ -19,7 +21,9 @@ import { SpreadsheetView } from './SpreadsheetView.js';
 
 export { CalendarView, gridDays } from './CalendarView.js';
 export { CohortView, cohortTable, periodsBetween } from './CohortView.js';
+export { Documents, ScheduleOutputs } from './components.js';
 export { type Card, DashboardView } from './DashboardView.js';
+export { DesignerView } from './DesignerView.js';
 export { evaluateSheet, reportCalls } from './formula.js';
 export { GanttView, windowOf } from './GanttView.js';
 export { chartData, GraphView, ReportChart, type ReportChartProps } from './GraphView.js';
@@ -39,7 +43,10 @@ export function registerReportingWeb(registry: Registry, i18n?: i18n): Registry 
     .registerView('hierarchy', HierarchyView)
     .registerView('cohort', CohortView)
     .registerView('spreadsheet', SpreadsheetView)
-    .registerView('dashboard', DashboardView);
+    .registerView('dashboard', DashboardView)
+    .registerView('designer', DesignerView)
+    .registerComponent('reporting.Documents', Documents)
+    .registerComponent('reporting.ScheduleOutputs', ScheduleOutputs);
   if (i18n !== undefined) addMessages(i18n, 'reporting', messages);
   return registry;
 }

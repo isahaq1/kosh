@@ -233,7 +233,7 @@ export default defineModule({
 - [x] RFC 0002 Shutro integration & metadata → API generation
 - [x] RFC 0003 Permission system
 - [x] RFC 0004 View definitions & shared search layer
-- [ ] RFC 0005 Reporting engine
+- [x] RFC 0005 Reporting engine
 - [ ] RFC 0006 Communication & notification architecture
 - [x] RFC 0007 Frontend architecture & design system
 
@@ -255,8 +255,8 @@ export default defineModule({
 
 ### Phase 4 — Reporting
 
-- [ ] Pivot, chart, calendar, gantt, map, hierarchy, cohort, dashboard
-- [ ] Exports, scheduled reports, PDF designer
+- [x] Pivot, chart, calendar, gantt, map, hierarchy, cohort, dashboard (+ spreadsheet; docs/reporting.md)
+- [x] Exports, scheduled reports, PDF designer
 
 ### Phase 5 — Communication
 

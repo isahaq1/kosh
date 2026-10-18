@@ -81,8 +81,13 @@ export function change(
 }
 
 /** Saves a downloaded file in the browser. */
-export async function saveDownload(api: KoshApi, path: string, body: unknown): Promise<void> {
-  const { blob, filename } = await api.download(path, body);
+export async function saveDownload(
+  api: KoshApi,
+  path: string,
+  body?: unknown,
+  method: 'GET' | 'POST' = 'POST',
+): Promise<void> {
+  const { blob, filename } = await api.download(path, body, method);
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

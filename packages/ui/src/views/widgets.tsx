@@ -398,6 +398,45 @@ function One2manyWidget({ value }: WidgetProps): ReactElement {
   return <span className="text-muted-foreground">{count}</span>;
 }
 
+/** JSON values (settings, queries, layouts): pretty-printed; edited as text, applied once it parses. */
+function JsonWidget({ id, value, readonly, onChange, invalid }: WidgetProps): ReactElement {
+  const pretty = value === null || value === undefined ? '' : JSON.stringify(value, null, 2);
+  const [text, setText] = useState(pretty);
+  const [broken, setBroken] = useState(false);
+  // A new record or a reload replaces the draft; the user's own edits do not.
+  const [seen, setSeen] = useState(pretty);
+  if (pretty !== seen) {
+    setSeen(pretty);
+    setText(pretty);
+    setBroken(false);
+  }
+  if (onChange === undefined || readonly)
+    return <pre className="whitespace-pre-wrap font-mono text-xs">{pretty}</pre>;
+  return (
+    <Textarea
+      id={id}
+      className="font-mono text-xs"
+      value={text}
+      aria-invalid={broken || invalid === true ? true : undefined}
+      onChange={(e) => {
+        const next = e.target.value;
+        setText(next);
+        if (next.trim() === '') {
+          setBroken(false);
+          onChange(null);
+          return;
+        }
+        try {
+          onChange(JSON.parse(next));
+          setBroken(false);
+        } catch {
+          setBroken(true);
+        }
+      }}
+    />
+  );
+}
+
 /** Registers the default widgets. */
 export function registerDefaultWidgets(registry: Registry): Registry {
   for (const [name, widget] of [
@@ -417,6 +456,7 @@ export function registerDefaultWidgets(registry: Registry): Registry {
     ['selection', SelectionWidget],
     ['state', SelectionWidget],
     ['badge', BadgeWidget],
+    ['json', JsonWidget],
     ['many2one', Many2oneWidget],
     ['many2many', Many2manyWidget],
     ['one2many', One2manyWidget],

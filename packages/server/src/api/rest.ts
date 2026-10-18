@@ -203,6 +203,20 @@ async function send(reply: FastifyReply, outcome: Outcome): Promise<void> {
   await reply.status(outcome.status).send(outcome.body);
 }
 
+/**
+ * JSON has no dates: datetime fields arrive as ISO strings and become `Date`s (Shutro stores them in UTC); other
+ * kinds are left to Shutro's own validation. Applied to create, update and import values.
+ */
+function coerceValues(model: ApiModel, values: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...values };
+  for (const [key, value] of Object.entries(values)) {
+    if (model.byKey.get(key)?.kind !== 'datetime' || typeof value !== 'string') continue;
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) out[key] = date;
+  }
+  return out;
+}
+
 function idOf(params: unknown): number {
   const id = Number((params as { id?: unknown }).id);
   if (!Number.isSafeInteger(id) || id <= 0)
@@ -275,7 +289,7 @@ export function registerRestApi(
     const values = body(request);
     const outcome = await request.env((env) =>
       idempotent(request, env, driver, async () => {
-        const created = await ref(env, model.name).create([values]);
+        const created = await ref(env, model.name).create([coerceValues(model, values)]);
         await env.flush(); // computes and constraints run now: the response shows the stored record
         const result = await record(env, model, created.ids[0] as number);
         return {
@@ -316,7 +330,10 @@ export function registerRestApi(
       idempotent(request, env, driver, async () => {
         await ref(env, model.name)
           .browse([id])
-          .write(values, expected === undefined ? {} : { expect: { updatedAt: expected } });
+          .write(
+            coerceValues(model, values),
+            expected === undefined ? {} : { expect: { updatedAt: expected } },
+          );
         await env.flush();
         return record(env, model, id);
       }),
@@ -528,7 +545,9 @@ export function registerRestApi(
     const outcome = await request.env((env) =>
       idempotent(request, env, driver, async () => {
         env.access.check(model.name as never, 'import'); // and `create`, checked by Shutro
-        const created = await ref(env, model.name).create(input);
+        const created = await ref(env, model.name).create(
+          input.map((row) => coerceValues(model, row as Record<string, unknown>)),
+        );
         await env.flush(); // all-or-nothing: constraints run before the response
         await audit(env, {
           kind: 'data.import',

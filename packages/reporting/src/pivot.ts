@@ -1,6 +1,8 @@
 /**
- * The report query (RFC 0005 §5): rows × columns × measures over a model, every level and total in **one**
- * `GROUPING SETS` statement (Shutro `aggregate`), under the caller's rules and field security. The result is two
+ * The report query (RFC 0005 §5): rows × columns × measures over a model in **one** statement (Shutro `aggregate`
+ * over the leaf grouping), under the caller's rules and field security; subtotals and totals are rolled up from the
+ * leaves on the server with exact arithmetic (identical to `GROUPING SETS`, but one hash table and parallel
+ * aggregation in PostgreSQL instead of one table per level). The result is two
  * header trees (with labels and the drill-down domain of every header) and the cells per (row path, column path).
  * Monetary measures stay per currency at every level. Optional: a comparison period (previous period or year over
  * year) and `asOf` (models with history, as they were at an instant).
@@ -80,7 +82,7 @@ export class ReportError extends Error {
   }
 }
 
-type Row = Record<string, unknown> & { readonly $groups?: readonly string[] };
+type Row = Record<string, unknown>;
 interface Aggregatable {
   aggregate(query: unknown): Promise<Row[]>;
 }
@@ -217,60 +219,122 @@ function plain(value: unknown): Value {
 /** Exact sum of two decimal strings. */
 export function addDecimal(a: string, b: string): string {
   const scale = Math.max((a.split('.')[1] ?? '').length, (b.split('.')[1] ?? '').length);
-  const units = (x: string) => {
-    const [whole = '0', frac = ''] = x.replace('-', '').split('.');
-    const n = BigInt(whole + frac.padEnd(scale, '0'));
-    return x.startsWith('-') ? -n : n;
-  };
-  const total = units(a) + units(b);
+  const total = units(a, scale) + units(b, scale);
+  return fromUnits(total, scale);
+}
+
+function units(x: string, scale: number): bigint {
+  const [whole = '0', frac = ''] = x.replace('-', '').split('.');
+  const n = BigInt(whole + frac.padEnd(scale, '0').slice(0, scale));
+  return x.startsWith('-') ? -n : n;
+}
+
+function fromUnits(total: bigint, scale: number): string {
   const negative = total < 0n;
   const digits = (negative ? -total : total).toString().padStart(scale + 1, '0');
   const text = scale === 0 ? digits : `${digits.slice(0, -scale)}.${digits.slice(-scale)}`;
   return negative ? `-${text}` : text;
 }
 
-const COUNT = '$n'; // hidden count, to weight averages across currency rows
+const COUNT = '$n'; // hidden count per leaf: weights averages when rolling up
+
+/** Running state of one cell's measure while leaves are rolled up. */
+interface Partial {
+  value: Value;
+  /** For averages: the exact weighted sum (as units at `scale`) and the count. */
+  avgUnits?: bigint;
+  avgScale?: number;
+  avgCount?: number;
+}
 
 /**
- * Adds a row's measures to a cell. Monetary amounts stay per currency; other measures combine across the
- * per-currency rows of the same cell: counts and sums add, min / max compare, averages are weighted by the count.
+ * Adds a leaf row to a cell. Counts and sums add exactly (decimals as strings, amounts per currency), min / max
+ * compare, averages are weighted by the leaf's count.
  */
 function accumulate(
-  cell: Record<string, Value>,
+  cell: Record<string, Partial>,
   row: Row,
   measures: Readonly<Record<string, Measure>>,
-  weights: Map<Record<string, Value>, Map<string, number>>,
 ): void {
   const n = Number(row[COUNT] ?? 0);
   for (const [name, spec] of Object.entries(measures)) {
     const value = plain(row[name]);
-    const before = cell[name];
-    if (Array.isArray(value)) {
-      cell[name] = [...((Array.isArray(before) ? before : []) as Amount[]), ...(value as Amount[])];
-      continue;
-    }
-    if (before === undefined || before === null) {
-      cell[name] = value;
-      if (typeof spec === 'object' && 'avg' in spec)
-        (weights.get(cell) ?? weights.set(cell, new Map()).get(cell))?.set(name, n);
-      continue;
-    }
-    if (value === null || Array.isArray(before)) continue;
     const op = spec === 'count' ? 'count' : (Object.keys(spec)[0] as string);
+    const slot = cell[name] ?? { value: null };
+    cell[name] = slot;
+    if (value === null) continue;
+    if (Array.isArray(value)) {
+      // Amounts: one entry per currency, summed exactly.
+      const current = Array.isArray(slot.value) ? [...(slot.value as Amount[])] : [];
+      for (const a of value as Amount[]) {
+        const i = current.findIndex((c) => c.currency === a.currency);
+        if (i < 0) current.push(a);
+        else {
+          const before = current[i] as Amount;
+          current[i] =
+            op === 'sum' || op === 'count'
+              ? { currency: a.currency, amount: addDecimal(before.amount, a.amount) }
+              : op === 'min'
+                ? Number(a.amount) < Number(before.amount)
+                  ? a
+                  : before
+                : op === 'max'
+                  ? Number(a.amount) > Number(before.amount)
+                    ? a
+                    : before
+                  : before;
+        }
+      }
+      slot.value = current;
+      continue;
+    }
+    if (slot.value === null) {
+      slot.value = value;
+      if (op === 'avg') {
+        const scale = (String(value).split('.')[1] ?? '').length;
+        slot.avgScale = scale;
+        slot.avgUnits = units(String(value), scale) * BigInt(n);
+        slot.avgCount = n;
+      }
+      continue;
+    }
+    if (Array.isArray(slot.value)) continue;
+    const before = slot.value;
     if (op === 'count' || op === 'sum')
-      cell[name] =
+      slot.value =
         typeof before === 'number' && typeof value === 'number'
           ? before + value
           : addDecimal(String(before), String(value));
-    else if (op === 'min') cell[name] = Number(value) < Number(before) ? value : before;
-    else if (op === 'max') cell[name] = Number(value) > Number(before) ? value : before;
+    else if (op === 'min') slot.value = Number(value) < Number(before) ? value : before;
+    else if (op === 'max') slot.value = Number(value) > Number(before) ? value : before;
     else {
-      const w = weights.get(cell)?.get(name) ?? 0;
-      const total = w + n;
-      cell[name] = total === 0 ? before : String((Number(before) * w + Number(value) * n) / total);
-      weights.get(cell)?.set(name, total);
+      const scale = Math.max(slot.avgScale ?? 0, (String(value).split('.')[1] ?? '').length);
+      const rescale = (u: bigint, from: number) => u * 10n ** BigInt(scale - from);
+      slot.avgUnits =
+        rescale(slot.avgUnits ?? 0n, slot.avgScale ?? 0) + units(String(value), scale) * BigInt(n);
+      slot.avgScale = scale;
+      slot.avgCount = (slot.avgCount ?? 0) + n;
+      // The weighted mean, to `scale` + 2 places, rounded half up.
+      const extra = 2;
+      const scaled = slot.avgUnits * 10n ** BigInt(extra);
+      const count = BigInt(Math.max(1, slot.avgCount));
+      const q = (scaled + count / 2n) / count;
+      slot.value = fromUnits(q, scale + extra);
     }
   }
+}
+
+function finish(
+  cells: Record<string, Record<string, Record<string, Partial>>>,
+): Record<string, Record<string, Record<string, Value>>> {
+  const out: Record<string, Record<string, Record<string, Value>>> = {};
+  for (const [rk, byCol] of Object.entries(cells)) {
+    const row: Record<string, Record<string, Value>> = {};
+    for (const [ck, measures] of Object.entries(byCol))
+      row[ck] = Object.fromEntries(Object.entries(measures).map(([m, p]) => [m, p.value]));
+    out[rk] = row;
+  }
+  return out;
 }
 
 /**
@@ -306,7 +370,6 @@ export async function runReport(
       (e.model(model as never) as unknown as Aggregatable).aggregate({
         ...(where === undefined ? {} : { where }),
         groupBy: all,
-        groupingSets: sets,
         measures: { ...query.measures, [COUNT]: 'count' },
       });
     if (query.asOf === undefined) return exec(env);
@@ -374,9 +437,7 @@ export async function runReport(
     };
     const index = new Map<string, Header>([[root.key, root]]);
     for (const row of source) {
-      const present = new Set(row.$groups ?? []);
-      let depth = 0;
-      while (depth < groups.length && present.has(groups[depth] as string)) depth++;
+      const depth = groups.length;
       const path: unknown[] = [];
       let parent = root;
       for (let i = 0; i < depth; i++) {
@@ -429,30 +490,25 @@ export async function runReport(
   };
 
   const cellsOf = (source: readonly Row[], remap?: (group: string, value: unknown) => unknown) => {
-    const cells: Record<string, Record<string, Record<string, Value>>> = {};
-    const weights = new Map<Record<string, Value>, Map<string, number>>();
+    const cells: Record<string, Record<string, Record<string, Partial>>> = {};
     for (const row of source) {
-      const present = new Set(row.$groups ?? []);
-      const take = (groups: readonly string[]) => {
-        const out: unknown[] = [];
-        for (const g of groups) {
-          if (!present.has(g)) break;
-          out.push(remap === undefined ? (row[g] ?? null) : remap(g, row[g] ?? null));
+      const values = (groups: readonly string[]) =>
+        groups.map((g) => (remap === undefined ? (row[g] ?? null) : remap(g, row[g] ?? null)));
+      const rowValues = values(rows);
+      const colValues = values(cols);
+      for (let r = rowValues.length; r >= 0; r--) {
+        const rk = pathKey(rowValues.slice(0, r));
+        const byRow = cells[rk] ?? {};
+        cells[rk] = byRow;
+        for (let c = colValues.length; c >= 0; c--) {
+          const ck = pathKey(colValues.slice(0, c));
+          const cell = byRow[ck] ?? {};
+          byRow[ck] = cell;
+          accumulate(cell, row, query.measures);
         }
-        return out;
-      };
-      const rowPath = take(rows);
-      const colPath = take(cols);
-      // Only rows whose grouping is a prefix of rows + a prefix of cols (all sets are).
-      const rk = pathKey(rowPath);
-      const ck = pathKey(colPath);
-      const byRow = cells[rk] ?? {};
-      cells[rk] = byRow;
-      const cell = byRow[ck] ?? {};
-      byRow[ck] = cell;
-      accumulate(cell, row, query.measures, weights);
+      }
     }
-    return cells;
+    return finish(cells);
   };
 
   const result: ReportResult = {

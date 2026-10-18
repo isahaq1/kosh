@@ -1,6 +1,6 @@
 # RFC 0005: Reporting engine
 
-- **Status:** Draft (for review)
+- **Status:** Accepted (2026-10-18), implemented in `@kosh/reporting` (docs/reporting.md, docs/benchmarks.md)
 - **Depends on:** 0002, 0003, 0004; Shutro RFC 0016 (aggregate), 0018 (jobs, history)
 
 ## 1. Summary
@@ -76,3 +76,23 @@ receives the monthly spend pivot as XLSX every 1st at 08:00.
 - Budgets: CLAUDE.md sets "10k-row list view < 300 ms API time" as the example; the reporting budgets above are
   proposed additions to the CLAUDE.md budget list, for approval.
 - The `GROUPING SETS` support needed from Shutro's `aggregate()` is recorded in `docs/shutro-requests.md`.
+
+## Implementation notes (2026-10-19)
+
+- Shutro gained `aggregate({ groupingSets | rollup | cube })` with `$groups` per row (`8a79c43`), `env.releaseCache()`
+  for streamed exports (`06f63c7`), and a fix for binary values in batch writes (`0b8e5ba`).
+- The report query issues one statement per pivot (two with a comparison): the leaf grouping in SQL, subtotals and
+  totals rolled up on the server with exact arithmetic. Shutro's `groupingSets` gives the same result in one
+  statement, but PostgreSQL keeps one hash table per set and cannot parallelize them: on 1M rows the eight sets of a
+  3 × 1 pivot cost ~1.2 s against 0.49 s end to end for the leaf grouping plus a 36 000-cell rollup (`pnpm bench`). Headers
+  carry drill-down domains, so "open the records" is a search, in list views, charts, cohorts and dashboard cards
+  alike.
+- XLSX is written by Kosh (`node:zlib`), not a library: typed cells, money and date formats, frozen headers.
+- Documents: layouts (JSON blocks) compiled to HTML with CSS paged media and printed by Playwright's Chromium; the
+  designer edits the same JSON with a live preview; manifests ship default templates. Attachments (storing the PDF
+  on the record's chatter) come with RFC 0006.
+- Scheduled reports run on Shutro jobs behind a one-method `JobQueue` interface (the pg-boss decision of RFC 0006
+  stays open); outputs are `report.output` records; delivery adapters are the hook for RFC 0006's channels.
+- Materialized aggregates for dashboards (open question 7) are not built: dashboards are live queries, cached per
+  query by the client for 15 s.
+- Budgets measured by `pnpm bench` (1M rows, CI on `main`): see docs/benchmarks.md.

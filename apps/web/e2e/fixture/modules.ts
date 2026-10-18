@@ -296,12 +296,44 @@ export const purchase = defineKoshModule({
         buttons: [k.button('submit', { primary: true, label: 'Submit' })],
       },
       sheet: [
-        k.group('main', ['name', 'vendor', { field: 'amountTotal', widget: 'money' }]),
+        k.component('documents', 'reporting.Documents'),
+        k.group('main', [
+          'name',
+          'vendor',
+          { field: 'amountTotal', widget: 'money' },
+          'dateOrder',
+          'dateDue',
+        ]),
         k.group('more', ['notes'], { columns: 1 }),
       ],
       readonlyWhen: { state: { notIn: ['draft', 'rejected'] } },
     })),
   },
+  documents: [
+    {
+      key: 'order',
+      name: 'Purchase order',
+      model: 'purchase.order',
+      layout: {
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Purchase order {{name}}' },
+          {
+            kind: 'fields',
+            id: 'main',
+            items: [
+              { bind: 'vendor.name', label: 'Vendor' },
+              { bind: 'dateOrder' },
+              { bind: 'amountTotal' },
+              { bind: 'state' },
+            ],
+          },
+          { kind: 'signature', id: 'sign', labels: ['Requested by', 'Approved by'] },
+        ],
+      },
+    },
+  ],
   search: {
     'purchase.order': search(Order, {
       fields: ['name', 'vendor.name'],

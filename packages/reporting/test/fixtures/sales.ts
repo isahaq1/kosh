@@ -56,4 +56,53 @@ export const sale = defineKoshModule({
     user: { label: 'User', groups: ['sale.user'] },
     manager: { label: 'Manager', groups: ['sale.manager'], implies: ['user'] },
   },
+  documents: [
+    {
+      key: 'order',
+      name: 'Sales order',
+      model: 'sale.order',
+      layout: {
+        header: '{{company.name}}',
+        footer: 'Printed {{now}} · page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Order {{name}}' },
+          {
+            kind: 'fields',
+            id: 'main',
+            items: [
+              { bind: 'partner.name', label: 'Customer' },
+              { bind: 'partner.city' },
+              { bind: 'dateOrder' },
+              { bind: 'amount' },
+              { bind: 'state' },
+            ],
+          },
+          { kind: 'signature', id: 'sign', labels: ['Prepared by', 'Approved by'] },
+        ],
+      },
+    },
+    {
+      key: 'orders',
+      name: 'Order list',
+      model: 'sale.order',
+      scope: 'list',
+      layout: {
+        orientation: 'landscape',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Orders' },
+          {
+            kind: 'table',
+            id: 'orders',
+            bind: '$records',
+            columns: [
+              { bind: 'name' },
+              { bind: 'partner.name', label: 'Customer' },
+              { bind: 'dateOrder' },
+              { bind: 'amount', sum: true },
+            ],
+          },
+        ],
+      },
+    },
+  ],
 });
