@@ -3,6 +3,16 @@
  * `@kosh/server`: the Fastify server, module loading, the per-request Shutro environment, health checks, rate
  * limiting, logging and telemetry (RFC 0002). Shutro is reached only through `./orm.ts` (`@kosh/server/orm`).
  */
+export { IDEMPOTENCY_TABLE, idempotencyTableStatements, type Outcome } from './api/idempotency.js';
+export {
+  type ApiField,
+  type ApiModel,
+  apiModels,
+  defaultFields,
+  schemaName,
+} from './api/metadata.js';
+export { fieldSchema, openApiDocument } from './api/openapi.js';
+export { registerRestApi } from './api/rest.js';
 export { HttpProblem, type Problem, problemOf, ServerConfigError } from './errors.js';
 export {
   type Authenticator,

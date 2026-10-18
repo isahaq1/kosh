@@ -8,10 +8,14 @@ import type { KoshModule } from '@kosh/modules-sdk';
 import type { Span } from '@opentelemetry/api';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import { Valkey } from 'iovalkey';
+import { idempotencyTableStatements } from './api/idempotency.js';
+import { apiModels } from './api/metadata.js';
+import { openApiDocument } from './api/openapi.js';
+import { registerRestApi } from './api/rest.js';
 import { HttpProblem, problemOf } from './errors.js';
 import { type Authenticator, denyAll, type RequestIdentity, runOptionsOf } from './identity.js';
 import { type Driver, type Env, orm, pg, type Shutro } from './orm.js';
-import { buildKoshRegistry, type KoshRegistry } from './registry.js';
+import { buildKoshRegistry, KOSH_VERSION, type KoshRegistry } from './registry.js';
 import { endSpan, tracer } from './telemetry.js';
 
 declare module 'fastify' {
@@ -183,6 +187,19 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
         status: 404,
         detail: `No route ${request.method} ${request.url.split('?')[0] ?? ''}.`,
       });
+  });
+
+  // The generated REST API and its OpenAPI document (RFC 0002 §6.3–6.4).
+  for (const statement of idempotencyTableStatements()) await driver.query(statement);
+  const models = apiModels(registry.registry);
+  let openapi: unknown;
+  registerRestApi(app, {
+    models,
+    driver,
+    openapi: () => {
+      openapi ??= openApiDocument(models.values(), { title: 'Kosh API', version: KOSH_VERSION });
+      return openapi;
+    },
   });
 
   // Health checks: public, not rate limited. Liveness: the process answers. Readiness: dependencies answer.

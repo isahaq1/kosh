@@ -28,6 +28,31 @@ Every refusal is an RFC 9457 problem document (`application/problem+json`) with 
 `validation` / `constraint-violation` 422, `invalid-identity` 400, `rate-limited` 429; unexpected errors are 500
 without internals, logged with the request id.
 
+## Generated REST API
+
+Every installed model is served from Shutro's metadata; each request is one Shutro transaction as the caller, so ACL,
+record rules, field groups, company scope and constraints apply as in the ORM.
+
+| Request | Does |
+| ------- | ---- |
+| `GET /api/v1/models/{model}?filter=&order=&fields=&limit=&offset=&count=` | search; `filter` is a Shutro domain as JSON |
+| `POST /api/v1/models/{model}` | create → `201`, `Location`, `ETag` |
+| `GET /api/v1/models/{model}/{id}?fields=` | read, `ETag` |
+| `PATCH /api/v1/models/{model}/{id}` + `If-Match` | update; `412` when someone saved since the ETag was read |
+| `DELETE /api/v1/models/{model}/{id}` (+ `If-Match`) | delete |
+| `POST /api/v1/models/{model}/aggregate` | grouped totals (Shutro `aggregate`) |
+| `POST /api/v1/models/{model}/onchange` | form assistance |
+| `POST /api/v1/models/{model}/{id}/transitions/{name}` | a state transition (guards, permissions) |
+| `GET /api/v1/meta/{model}` | the caller's view: readable fields, writability, operations, transitions, options |
+| `GET /api/v1/openapi.json` | the OpenAPI 3.1 document of the installed modules |
+
+- Default fields are the stored fields the caller may read; asking for a restricted field is a `403`.
+- Values: decimals are exact strings in canonical form (`"50000"`, `"12.5"`), money is `{ amount, currency }`,
+  dates ISO, many2one an id, x2many id arrays; writes take x2many commands (`create`, `link`, `unlink`, `set`).
+- `Idempotency-Key` on POST / PATCH / DELETE / transitions: a retry replays the first response
+  (`Idempotent-Replayed: true`); the same key for another request is a `422`; a failed request stores nothing.
+  The key and the response are stored in the request's own transaction.
+
 ## Operations
 
 - `GET /health/live` (the process answers) and `GET /health/ready` (database and Valkey), public and never rate

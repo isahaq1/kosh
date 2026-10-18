@@ -52,6 +52,25 @@ const ResPartner = defineModel('res.partner', {
     email: f.char(),
     phone: f.char(),
     isCompany: f.boolean({ default: false }),
+    /** Managers only (field security). */
+    creditLimit: f.decimal({ scale: 2, groups: ['contacts.manager'] }),
+    stage: f.state({
+      states: { lead: 'Lead', customer: 'Customer', lost: 'Lost' },
+      initial: 'lead',
+      transitions: {
+        qualify: { from: ['lead'], to: 'customer' },
+        lose: { from: ['lead', 'customer'], to: 'lost' },
+      },
+    }),
+  },
+  onchange: {
+    // Suggests an email address from the name (form assistance through the API).
+    name(draft: unknown): void {
+      const d = draft as { get(k: string): unknown; set(k: string, v: unknown): void };
+      const name = d.get('name');
+      if (typeof name === 'string' && d.get('email') === null)
+        d.set('email', `${name.toLowerCase().replaceAll(/\W+/g, '.')}@example.com`);
+    },
   },
 });
 const contactsShutro = defineModule({
