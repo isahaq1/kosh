@@ -14,7 +14,15 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import type { KoshModule } from '@kosh/modules-sdk';
-import { createServer, IDEMPOTENCY_TABLE, type KoshServer, migrate, orm } from '@kosh/server';
+import {
+  createServer,
+  FRAMEWORK_TABLES,
+  installedModules,
+  type KoshServer,
+  migrate,
+  orm,
+  readInstalledApps,
+} from '@kosh/server';
 
 function isModule(value: unknown): value is KoshModule {
   return (
@@ -36,7 +44,7 @@ export async function modulesOf(specifier: string, cwd: string): Promise<KoshMod
       ? pathToFileURL(resolve(cwd, specifier)).href
       : specifier;
   const exported = (await import(target)) as Record<string, unknown>;
-  for (const key of ['modules', 'default']) {
+  for (const key of ['catalogue', 'modules', 'default']) {
     const value = exported[key];
     if (Array.isArray(value) && value.every(isModule)) return value;
     if (isModule(value)) return [value];
@@ -50,7 +58,14 @@ export async function modulesOf(specifier: string, cwd: string): Promise<KoshMod
 }
 
 /** Opens the installation in `cwd`: `.env`, the modules, a server (not listening). */
-export async function openProject(cwd: string, modulesFile: string): Promise<KoshServer> {
+export async function openProject(
+  cwd: string,
+  modulesFile: string,
+  options: {
+    /** `schema`: installed and disabled modules (what migrations keep); default: the installed ones (what is served). */
+    readonly set?: 'served' | 'schema';
+  } = {},
+): Promise<KoshServer> {
   const envFile = join(cwd, '.env');
   if (existsSync(envFile)) process.loadEnvFile(envFile);
   const databaseUrl = process.env['DATABASE_URL'];
@@ -59,7 +74,20 @@ export async function openProject(cwd: string, modulesFile: string): Promise<Kos
   if (!existsSync(resolve(cwd, modulesFile)))
     throw new Error(`${modulesFile} does not exist: run kosh init, or pass --modules <file>.`);
   process.env['KOSH_SCHEDULES'] = 'off';
-  return createServer({ databaseUrl, modules: await modulesOf(modulesFile, cwd), logger: false });
+  // The module list is the catalogue; the database says which of them are installed (RFC 0008).
+  const modules = await installedModules(
+    databaseUrl,
+    await modulesOf(modulesFile, cwd),
+    options.set === 'schema' ? ['installed', 'disabled'] : ['installed'],
+  );
+  return createServer({ databaseUrl, modules, logger: false });
+}
+
+/** What seed data is loaded with: a server's, or an app change's transaction (`kosh apps`). */
+export interface SeedContext {
+  readonly shutro: KoshServer['shutro'];
+  readonly driver: Pick<KoshServer['driver'], 'query'>;
+  readonly modules: readonly KoshModule[];
 }
 
 /** Loads the modules' seed data and the apps' defaults (idempotent). */
@@ -68,43 +96,68 @@ export async function seed(
   write: (text: string) => void,
   only?: readonly string[],
 ): Promise<void> {
-  const installed = server.registry.loaded.modules.map((m) => m.name);
+  await seedWith(
+    { shutro: server.shutro, driver: server.driver, modules: server.registry.loaded.modules },
+    write,
+    only,
+  );
+}
+
+/** {@link seed} on any Shutro instance (inside an app change's transaction, too). */
+export async function seedWith(
+  context: SeedContext,
+  write: (text: string) => void,
+  only?: readonly string[],
+): Promise<void> {
+  const installed = context.modules.map((m) => m.name);
   const unknown = (only ?? []).filter((m) => !installed.includes(m));
   if (unknown.length > 0)
     throw new Error(`Not installed: ${unknown.join(', ')} (installed: ${installed.join(', ')}).`);
-  const [company] = await server.driver.query<{ id: string }>({
-    text: 'SELECT id::text AS id FROM res_company ORDER BY id LIMIT 1',
+  // Looked up first: a failing query would abort an app change's transaction.
+  const [table] = await context.driver.query<{ found: string | null }>({
+    text: "SELECT to_regclass('public.res_company')::text AS found",
     params: [],
   });
+  const [company] =
+    table?.found === null || table?.found === undefined
+      ? []
+      : await context.driver.query<{ id: string }>({
+          text: 'SELECT id::text AS id FROM res_company ORDER BY id LIMIT 1',
+          params: [],
+        });
   const companyId = company === undefined ? undefined : Number(company.id);
-  const results = await orm.loadData(server.shutro, {
+  const results = await orm.loadData(context.shutro, {
     ...(companyId === undefined ? {} : { company: companyId }),
     ...(only === undefined || only.length === 0 ? {} : { modules: only }),
   });
   for (const r of results)
     write(
-      `  ${r.module.padEnd(16)} ${r.created.length} created, ${r.updated.length} updated, ${r.unchanged} unchanged, ${r.kept.length} kept, ${r.deleted.length} deleted\n`,
+      `  ${r.module.padEnd(16)} ${r.created.length} created, ${r.updated.length} updated, ${r.unchanged} unchanged, ${r.kept.length} kept, ${r.deleted.length} deleted
+`,
     );
   // The apps' own defaults (data the users may edit afterwards).
   const want = (name: string) =>
     installed.includes(name) && (only === undefined || only.length === 0 || only.includes(name));
-  const modules = server.registry.loaded.modules;
-  await server.shutro.bootstrap(
+  const modules = context.modules;
+  await context.shutro.bootstrap(
     { reason: 'kosh seed', ...(companyId === undefined ? {} : { company: companyId }) },
     async (env) => {
       if (want('permissions')) {
         const n = await (await import('@kosh/permissions')).installApprovalPolicies(env, modules);
         write(
-          `  ${'permissions'.padEnd(16)} ${n} approval polic${n === 1 ? 'y' : 'ies'} installed\n`,
+          `  ${'permissions'.padEnd(16)} ${n} approval polic${n === 1 ? 'y' : 'ies'} installed
+`,
         );
       }
       if (want('reporting')) {
         const n = await (await import('@kosh/reporting')).installTemplates(env, modules);
-        write(`  ${'reporting'.padEnd(16)} ${n} document template(s) installed\n`);
+        write(`  ${'reporting'.padEnd(16)} ${n} document template(s) installed
+`);
       }
       if (want('messaging')) {
         const n = await (await import('@kosh/messaging')).installActivityTypes(env);
-        write(`  ${'messaging'.padEnd(16)} ${n} activity type(s) installed\n`);
+        write(`  ${'messaging'.padEnd(16)} ${n} activity type(s) installed
+`);
       }
     },
   );
@@ -155,11 +208,11 @@ export async function migrateProject(
     const done = await apply(server, dir, write, options.allowDestructive === true);
     if (done !== 0) return done;
   }
-  // The idempotency-key table belongs to the framework, not to a model: never altered or dropped.
+  // The framework's own tables (idempotency keys, the installed apps) are not a model's: never altered or dropped.
   const plan = await migrate.planMigration({
     driver: server.driver,
     registry,
-    ignore: [IDEMPOTENCY_TABLE],
+    ignore: FRAMEWORK_TABLES,
   });
   if (plan.statements.length > 0) {
     const file = await migrate.writeMigrationFile({ dir, name: options.name ?? 'update', plan });
@@ -184,7 +237,10 @@ export async function migrateProject(
     });
     if (Number(users?.n ?? 0) > 0) {
       write('Seed data:\n');
-      await seed(server, write);
+      // The server holds the schema set: disabled modules keep their tables but get no seed data.
+      const rows = await readInstalledApps(server.driver);
+      const served = rows?.filter((r) => r.state === 'installed').map((r) => r.name);
+      await seed(server, write, served !== undefined && served.length > 0 ? served : undefined);
     } else write('No company yet: seed data waits for kosh init.\n');
   }
   return 0;
@@ -208,7 +264,7 @@ export async function runMigrate(
       'no-seed': { type: 'boolean' },
     },
   });
-  const server = await openProject(cwd, values.modules);
+  const server = await openProject(cwd, values.modules, { set: 'schema' });
   try {
     const dir = resolve(cwd, values.dir);
     if (positionals[0] === 'status') {
@@ -413,7 +469,9 @@ export async function runModule(
       write(`  updated src/modules.ts (${id} added)\n`);
     } else write(`  add ${id} to the modules list in src/modules.ts\n`);
   }
-  write(`\nNext: kosh migrate   (creates its tables, records the module, loads its seed data)\n`);
+  write(
+    `\nNext: kosh apps install ${name}   (creates its tables and loads its seed data, in one transaction)\n`,
+  );
   return 0;
 }
 

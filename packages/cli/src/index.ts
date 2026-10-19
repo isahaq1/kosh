@@ -7,10 +7,12 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { generateClient, openApiOf } from '@kosh/server';
+import { runApps } from './apps.js';
 import { runInit } from './init.js';
 import { modulesOf, runMigrate, runModule, runSeed, runUser } from './project.js';
 import type { Terminal } from './ui.js';
 
+export { APPS_USAGE, type AppsIo, runApps } from './apps.js';
 export { INIT_USAGE, type InitIo, runInit } from './init.js';
 export {
   migrateProject,
@@ -21,7 +23,9 @@ export {
   runModule,
   runSeed,
   runUser,
+  type SeedContext,
   seed,
+  seedWith,
 } from './project.js';
 export {
   defaultsPrompter,
@@ -51,6 +55,9 @@ const USAGE = `Usage: kosh <command>
 
 Commands (run in the installation's folder; they read .env and src/modules.ts):
   init [folder]          Set up an installation: database, company, administrator, apps (kosh init --help)
+  apps                   The apps: installed, disabled, available (kosh apps --help)
+  apps install <app …>   Install apps and what they need, in one transaction
+  apps disable <app …>   Switch apps off (their data stays); apps enable <app …> brings them back
   migrate                Plan schema changes into migrations/NNNN_*.sql, apply pending files, run the modules'
                          data migrations, load seed data
       --plan                 only write the plan (review it before applying)
@@ -157,6 +164,12 @@ export async function runCli(
   const cwd = options.cwd ?? process.cwd();
   if (argv[0] === 'init')
     return runInit(argv.slice(1), {
+      write,
+      cwd,
+      ...(options.terminal === undefined ? {} : { terminal: options.terminal }),
+    });
+  if (argv[0] === 'apps')
+    return runApps(argv.slice(1), {
       write,
       cwd,
       ...(options.terminal === undefined ? {} : { terminal: options.terminal }),

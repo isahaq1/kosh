@@ -17,12 +17,13 @@ import type { KoshModule } from '@kosh/modules-sdk';
 import {
   base,
   createServer,
-  IDEMPOTENCY_TABLE,
+  FRAMEWORK_TABLES,
   installBase,
   KOSH_VERSION,
   type KoshServer,
   migrate,
   pg,
+  recordInstalledApps,
 } from '@kosh/server';
 import { seed } from './project.js';
 import { defaultsPrompter, type Prompter, terminalPrompter } from './prompt.js';
@@ -625,7 +626,7 @@ async function setUp(server: KoshServer, a: Answers, ui: Ui): Promise<number | n
       const plan = await migrate.planMigration({
         driver: server.driver,
         registry: server.registry.registry,
-        ignore: [IDEMPOTENCY_TABLE], // the framework's own table, not a model's: never dropped
+        ignore: FRAMEWORK_TABLES, // the framework's own tables, not a model's: never dropped
       });
       const file = await migrate.writeMigrationFile({ dir, name: 'init', plan });
       ui.detail(
@@ -638,6 +639,13 @@ async function setUp(server: KoshServer, a: Answers, ui: Ui): Promise<number | n
       dir,
       registry: server.registry.registry,
     });
+    // The installed set (RFC 0008): what `kosh apps` changes later.
+    await recordInstalledApps(
+      server.driver,
+      server.registry.loaded.modules,
+      ['base', ...a.apps],
+      `kosh init (${a.admin.login})`,
+    );
     task.finish(
       `Database tables ready ${ui.style('gray', `(applied ${result.applied.length} migration(s))`)}`,
     );

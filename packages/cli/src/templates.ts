@@ -96,8 +96,9 @@ export function packageJson(
 export function modulesTs(options: StarterOptions): string {
   const imports = options.apps.map((a) => `import { ${APPS[a].server} } from 'kosh-erp/${a}';`);
   return `/**
- * The modules of this installation. \`base\` (users, companies, sign-in) comes with every module; add your own
- * modules here (\`defineModule\` from \`kosh-erp/modules-sdk\`), then run \`npx kosh migrate\`.
+ * The apps this installation can install (the catalogue). \`npx kosh apps\` lists them and installs, disables or
+ * enables them in the database. \`base\` (users, companies, sign-in) comes with every module; add your own modules
+ * here (\`defineModule\` from \`kosh-erp/modules-sdk\`), then \`npx kosh apps install <name>\`.
  */
 import { base } from 'kosh-erp';
 ${imports.join('\n')}
@@ -108,13 +109,15 @@ export const modules = [base${options.apps.map((a) => `, ${APPS[a].server}`).joi
 
 export function serverTs(): string {
   return `/** The Kosh API server: \`npm start\` (reads .env). */
-import { createServer, startServer } from 'kosh-erp';
+import { createServer, installedModules, startServer } from 'kosh-erp';
 import { modules } from './modules.ts';
 
 const env = process.env;
+const databaseUrl = String(env['DATABASE_URL']);
 const server = await createServer({
-  databaseUrl: String(env['DATABASE_URL']),
-  modules,
+  databaseUrl,
+  // src/modules.ts lists what can be installed; the database says what is (npx kosh apps).
+  modules: await installedModules(databaseUrl, modules),
   ...(env['VALKEY_URL'] ? { valkeyUrl: env['VALKEY_URL'] } : {}),
   // Secure cookies need HTTPS: on by default in production (KOSH_SECURE_COOKIES=false for plain HTTP).
   auth: { secureCookies: (env['KOSH_SECURE_COOKIES'] ?? String(env['NODE_ENV'] === 'production')) === 'true' },
@@ -365,6 +368,9 @@ npm start          # the API on http://localhost:${options.port}
 npm run web        # the back-office on http://localhost:5173 (sign in as the administrator)
 npx kosh migrate   # after changing modules: plan and apply database migrations, load seed data
 npx kosh seed      # load seed data again
+npx kosh apps                   # the apps: installed, disabled, available
+npx kosh apps install <name>    # install an app (and what it needs) in one transaction
+npx kosh apps disable <name>    # switch an app off; its data stays (npx kosh apps enable <name>)
 npx kosh module create <name>   # a new module in src/modules/<name>/
 docker compose up -d --build    # everything in Docker: http://localhost:8080
 \`\`\`
