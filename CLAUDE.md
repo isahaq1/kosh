@@ -80,6 +80,9 @@ packages/
   storage/       # attachments on S3-compatible storage
   ui/            # React app shell, design system, view renderers
   cli/           # kosh new | dev | module:create | migrate | build
+  settings/      # the Settings app: App manager (install / disable / enable apps)
+modules/         # the business apps, all Kosh code (never in Shutro): contacts, product, sales, purchase;
+                 # accounting and projects next. Typed model views in src/.kosh/ (pnpm generate:models)
 apps/
   web/           # back-office SPA
   demo/          # demo ERP: base, contacts, product, purchase, inventory, sales
@@ -269,6 +272,7 @@ export default defineModule({
 
 - [x] App manager step 1: installed set, `kosh apps` install / disable / enable in one transaction (RFC 0008, docs/modules.md)
 - [x] App manager step 2: apps API, hot reload across nodes (app host), Settings app with the Apps page
-- [ ] Default business apps: Settings, Accounting (RFC 0009), Sales, Purchase, Projects (RFC 0008 §8)
+- [x] Business apps, part 1 (modules/): Contacts, Products (units, VAT), Sales, Purchase with approvals (RFC 0008 §8 steps 3–4)
+- [ ] Business apps, part 2: Accounting (RFC 0009 first), Projects, and the bridges (sale_account, purchase_account, sale_project)
 - [ ] Demo modules: base, contacts, product, purchase (with approvals), inventory, sales
 - [ ] Performance benchmarks vs Odoo-like workloads

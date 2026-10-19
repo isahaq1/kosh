@@ -1,7 +1,7 @@
 # RFC 0008: Default business apps & the App manager (install, disable, uninstall)
 
-- **Status:** Accepted (2026-10-19); steps 1 and 2 implemented (`kosh apps`; the app host, the Settings app and the
-  Apps page; see Implementation notes)
+- **Status:** Accepted (2026-10-19); steps 1–4 implemented (`kosh apps`; the app host, the Settings app and the
+  Apps page; Contacts, Products, Sales and Purchase; see Implementation notes)
 - **Depends on:** 0001 (modules, per-database installation), 0002 (generated API), 0003 (permissions), 0004/0005
   (views, reporting), 0006 (chatter), 0007 (frontend)
 - **Followed by:** RFC 0009 Accounting (ledger design), written before Accounting is built
@@ -303,3 +303,31 @@ App management is framework code: it lives in Kosh (`@kosh/modules-sdk`, `@kosh/
   - `apps/web/e2e/apps.spec.ts`: install from the page, use the app, disable it; axe in light and dark; Bangla;
     users without access.
   - The e2e server now installs its modules through the App manager.
+
+## Implementation notes (2026-10-19): steps 3 and 4
+
+- **Where apps live:** `modules/<app>/` in Kosh, one package each (`@kosh/contacts`, `@kosh/product`,
+  `@kosh/sales`, `@kosh/purchase`), bundled into `kosh-erp`. Shutro is the ORM only. Its former apps, app
+  installer and web client were removed from the Shutro repository on 2026-10-19 at the owner's request (Shutro
+  commits `5286564`…`f5440fc`; Shutro RFCs 0019 and 0020 withdrawn).
+- **Typed model views:** `scripts/generate-models.ts` runs Shutro's generator through `@kosh/server/orm`
+  (`loadCodegen`). It writes `src/.kosh/{schema.d.ts,bindings.ts}` with imports pointing at `@kosh/server/orm`, and
+  refers to other modules by package name. `pnpm lint` checks the views are current.
+- **Design source:** the model designs follow the earlier Shutro sample apps, reworked for Kosh. Each app has its
+  own groups and access levels (default deny), rather than `base.user` access. Kosh adds:
+  - discount on sales lines;
+  - units on lines;
+  - Bangladesh VAT presets;
+  - currency from the partner, else the company;
+  - Purchase approvals (RFC 0003) with a "To approve" menu for managers.
+- **Engine fixes found by these apps:**
+  - The install transaction's pinned driver no longer reports a pool size, so standard sequences number records
+    inside the install.
+  - A malformed onchange body now gets 400 instead of 500.
+- **`kosh init`:** offers Contacts, Products, Sales and Purchase, all selected by default with the framework apps.
+- **Tests:** `modules/sales/test` and `modules/purchase/test` run on real PostgreSQL through the HTTP API. They
+  cover install with dependencies and seed data, totals, guards, numbering, onchanges, approvals end to end,
+  record rules, and refusals for users without access.
+- **Not yet:** end-to-end browser tests for Sales and Purchase. The e2e fixture defines its own `res.partner` and
+  `purchase.order`, so these apps need their own e2e catalogue first. Accounting (RFC 0009 first) and Projects
+  come next.

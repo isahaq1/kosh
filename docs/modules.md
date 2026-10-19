@@ -100,3 +100,52 @@ and never proposes dropping them. Removing an app together with its data comes i
 Projects from before the App manager have no `kosh_module` yet. Until their first `kosh apps` change, servers and
 `kosh migrate` keep treating `src/modules.ts` as the installed set. That first change records the modules that have
 been migrated, and anything added to the list since then is shown as available.
+
+## Business apps (`modules/`)
+
+The business apps are Kosh code in `modules/`, one package each: `@kosh/contacts`, `@kosh/product`,
+`@kosh/sales` and `@kosh/purchase`, with Accounting and Projects next. They ship in `kosh-erp` as
+`kosh-erp/sales` and so on. Shutro is only the ORM: no app, module or generated app code lives in it. The framework
+(`packages/`) never imports an app (`pnpm lint` checks this); only the CLI, which assembles installations, does.
+
+An app has three parts:
+
+- `src/module.ts` holds the data layer: Shutro models, groups, sequences and seed data, in one `defineModule`.
+- `src/.kosh/` holds its **typed view**, generated and committed. `schema.d.ts` describes the models the app can
+  see, and `bindings.ts` provides `defineModel`, `compute`, `check`, `onchange`, `records` and `record` typed against
+  them, so computes and checks need no casts. Regenerate the view after changing models with `pnpm generate:models`.
+  `pnpm lint` fails when a view is stale.
+- `src/index.ts` is the Kosh manifest: the app (icon, category, summary), access levels, actions, menus, views,
+  search, and approval policies.
+
+```ts
+// src/module.ts
+import { contactsShutro } from '@kosh/contacts';
+import { compute, defineModel, defineModule, f } from './.kosh/bindings.js';
+
+export const SaleOrder = defineModel('sale.order', {
+  fields: {
+    amountTotal: f.monetary({
+      currency: 'currency',
+      store: true,
+      ...compute('sale.order', 'amountTotal', ['lines.subtotal'], (orders) => {
+        for (const o of orders) o.amountTotal = o.lines.sum('subtotal', o.currency); // Money, typed
+      }),
+    }),
+  },
+});
+```
+
+The views come from Shutro's own type generator, run through Kosh's single Shutro gateway (`loadCodegen` in
+`@kosh/server/orm`). Their imports point at `@kosh/server/orm`, and other modules are referenced by package name.
+
+**Default access is none.** Each app declares its own groups and access levels. A salesperson (`sales.user`) gets
+read access to contacts and products through the groups it implies, and sees only their own orders (a record
+rule). Managers see every order of their companies.
+
+| App | Models | Workflow and rules |
+| --- | --- | --- |
+| Contacts | `res.partner` (companies and people, customers and vendors, addresses, tax ID) | email format check |
+| Products | `product.product` (numbered P00001…), `product.category`, `uom.uom`, `account.tax` | Bangladesh VAT rates and units as editable seed data |
+| Sales | `sale.order` (SO/2026/00001…), `sale.order.line` | quotation → sent → order → locked; lines required to confirm; discount and VAT per line; totals in the order's currency |
+| Purchase | `purchase.order` (PO/2026/00001…), `purchase.order.line` | RFQ → submit → approvals (manager > 100,000, director > 1,000,000, editable) → order; the last approval confirms |
