@@ -6,7 +6,9 @@
  */
 import { defineModule } from '@kosh/modules-sdk';
 import { base, type ModuleContext } from '@kosh/server';
+import type { Env } from '@kosh/server/orm';
 import { storage } from '@kosh/storage';
+import { installActivityTypes } from './chatter.js';
 import { messagingShutro } from './models.js';
 import { registerChatterRoutes } from './routes.js';
 
@@ -55,4 +57,7 @@ export const messaging: ReturnType<typeof defineModule> = defineModule({
   accessLevels: { user: { label: 'Messaging', groups: ['messaging.user'] } },
   privateModels: ['mail.message', 'mail.follower', 'mail.activity', 'mail.activity.type'],
   routes: (context: ModuleContext) => registerChatterRoutes(context),
+  hooks: {
+    defaults: async (env) => `${await installActivityTypes(env as Env)} activity type(s) installed`,
+  },
 });

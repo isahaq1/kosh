@@ -84,6 +84,13 @@ export interface DocumentSpec {
 export interface ModuleHooks {
   readonly postInstall?: (env: unknown) => Promise<void>;
   readonly preUninstall?: (env: unknown) => Promise<void>;
+  /**
+   * Installs this module's defaults derived from the served modules (approval policies from their `approvals`,
+   * document templates from their `documents`, activity types, ...). Idempotent: runs after every seed and app
+   * install (RFC 0008), so a newly installed module's declarations get their defaults. Returns a summary line for
+   * the log (`3 approval policies installed`), or nothing.
+   */
+  readonly defaults?: (env: unknown, modules: readonly KoshModule[]) => Promise<string | undefined>;
 }
 
 /** The input of {@link defineModule}. */

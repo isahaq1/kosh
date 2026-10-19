@@ -372,10 +372,42 @@ function pinnedDriver(conn: DriverConnection): Driver {
   };
 }
 
+/**
+ * Runs every served module's `hooks.defaults` (idempotent: approval policies, document templates, activity types,
+ * ... derived from the served modules) in one system scope. Returns each module's summary line.
+ */
+export async function installDefaults(
+  shutro: Shutro,
+  modules: readonly KoshModule[],
+  options: { readonly company?: number | undefined; readonly reason?: string } = {},
+): Promise<{ readonly module: string; readonly summary: string }[]> {
+  const out: { module: string; summary: string }[] = [];
+  const hooked = modules.filter((m) => m.hooks?.defaults !== undefined);
+  if (hooked.length === 0) return out;
+  await shutro.bootstrap(
+    {
+      reason: options.reason ?? 'module defaults',
+      ...(options.company === undefined ? {} : { company: options.company }),
+    },
+    async (env) => {
+      for (const m of hooked) {
+        const summary = await m.hooks?.defaults?.(env, modules);
+        if (summary !== undefined) out.push({ module: m.name, summary });
+      }
+    },
+  );
+  return out;
+}
+
+/** The new modules' data, then every served module's defaults (they may derive from the new modules). */
 const defaultLoad = async (context: AppLoadContext, modules: readonly string[]) => {
   await orm.loadData(context.shutro, {
     modules,
     ...(context.company === undefined ? {} : { company: context.company }),
+  });
+  await installDefaults(context.shutro, context.registry.loaded.modules, {
+    company: context.company,
+    reason: `install ${modules.join(', ')}`,
   });
 };
 

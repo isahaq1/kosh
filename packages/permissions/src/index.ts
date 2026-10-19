@@ -6,7 +6,9 @@
  */
 import { defineModule } from '@kosh/modules-sdk';
 import { base, type ModuleContext } from '@kosh/server';
+import type { Env } from '@kosh/server/orm';
 import { registerAdminApi } from './admin.js';
+import { installApprovalPolicies } from './approvals.js';
 import { permissionsShutro } from './models.js';
 import { registerApprovalRoutes } from './routes.js';
 
@@ -39,6 +41,12 @@ export const permissions: ReturnType<typeof defineModule> = defineModule({
     auditor: { label: 'Security auditor', groups: ['permissions.auditor'] },
   },
   privateModels: ['approval.request'],
+  hooks: {
+    defaults: async (env, modules) => {
+      const n = await installApprovalPolicies(env as Env, modules);
+      return `${n} approval polic${n === 1 ? 'y' : 'ies'} installed`;
+    },
+  },
   routes: (context: ModuleContext) => {
     registerAdminApi(context);
     registerApprovalRoutes(context);

@@ -17,6 +17,7 @@ import type { KoshModule } from '@kosh/modules-sdk';
 import {
   createServer,
   FRAMEWORK_TABLES,
+  installDefaults,
   installedModules,
   type KoshServer,
   migrate,
@@ -136,32 +137,19 @@ export async function seedWith(
       `  ${r.module.padEnd(16)} ${r.created.length} created, ${r.updated.length} updated, ${r.unchanged} unchanged, ${r.kept.length} kept, ${r.deleted.length} deleted
 `,
     );
-  // The apps' own defaults (data the users may edit afterwards).
-  const want = (name: string) =>
-    installed.includes(name) && (only === undefined || only.length === 0 || only.includes(name));
-  const modules = context.modules;
-  await context.shutro.bootstrap(
-    { reason: 'kosh seed', ...(companyId === undefined ? {} : { company: companyId }) },
-    async (env) => {
-      if (want('permissions')) {
-        const n = await (await import('@kosh/permissions')).installApprovalPolicies(env, modules);
-        write(
-          `  ${'permissions'.padEnd(16)} ${n} approval polic${n === 1 ? 'y' : 'ies'} installed
-`,
-        );
-      }
-      if (want('reporting')) {
-        const n = await (await import('@kosh/reporting')).installTemplates(env, modules);
-        write(`  ${'reporting'.padEnd(16)} ${n} document template(s) installed
+  // The modules' defaults (data the users may edit afterwards): every served module's hooks.defaults, which may
+  // derive from the modules being seeded.
+  const wanted =
+    only === undefined || only.length === 0
+      ? context.modules
+      : context.modules.filter((m) => only.includes(m.name));
+  for (const d of await installDefaults(context.shutro, context.modules, {
+    company: companyId,
+    reason: 'kosh seed',
+  }))
+    if (wanted.some((m) => m.name === d.module))
+      write(`  ${d.module.padEnd(16)} ${d.summary}
 `);
-      }
-      if (want('messaging')) {
-        const n = await (await import('@kosh/messaging')).installActivityTypes(env);
-        write(`  ${'messaging'.padEnd(16)} ${n} activity type(s) installed
-`);
-      }
-    },
-  );
 }
 
 /** Applies the pending files; a destructive one without `allowDestructive` is reported (exit code 1). */

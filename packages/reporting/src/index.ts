@@ -7,11 +7,12 @@
  */
 import { defineModule } from '@kosh/modules-sdk';
 import { base, type ModuleContext } from '@kosh/server';
+import type { Env } from '@kosh/server/orm';
 import { dashboard, form, list, spreadsheet } from '@kosh/views';
 import { closeDocuments } from './documents.js';
 import { reportingShutro } from './models.js';
 import { registerReportRoutes } from './routes.js';
-import { registerDocumentRoutes } from './routes-documents.js';
+import { installTemplates, registerDocumentRoutes } from './routes-documents.js';
 import type { ScheduleEngine } from './schedules.js';
 
 export {
@@ -168,6 +169,10 @@ export const reporting: ReturnType<typeof defineModule> = defineModule({
       model: 'report.template',
       label: 'Documents',
     } as never,
+  },
+  hooks: {
+    defaults: async (env, modules) =>
+      `${await installTemplates(env as Env, modules)} document template(s) installed`,
   },
   routes: (context: ModuleContext) => {
     registerReportRoutes(context);

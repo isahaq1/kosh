@@ -28,6 +28,7 @@ export {
   appsDigest,
   appTableStatements,
   FRAMEWORK_TABLES,
+  installDefaults,
   installedApps,
   installedModules,
   type PrepareAppsOptions,
