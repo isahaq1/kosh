@@ -532,6 +532,11 @@ async function modulesFor(apps: readonly AppName[]): Promise<KoshModule[]> {
     if (app === 'permissions') modules.push((await import('@kosh/permissions')).permissions);
     if (app === 'reporting') modules.push((await import('@kosh/reporting')).reporting);
     if (app === 'messaging') modules.push((await import('@kosh/messaging')).messaging);
+    // The business apps (modules/): dependencies come along with them.
+    if (app === 'contacts') modules.push((await import('@kosh/contacts')).contacts);
+    if (app === 'product') modules.push((await import('@kosh/product')).product);
+    if (app === 'sales') modules.push((await import('@kosh/sales')).sales);
+    if (app === 'purchase') modules.push((await import('@kosh/purchase')).purchase);
   }
   return modules;
 }

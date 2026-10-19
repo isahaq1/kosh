@@ -50,7 +50,11 @@
     "@kosh/reporting": "workspace:*",
     "@kosh/messaging": "workspace:*",
     "@kosh/storage": "workspace:*",
-    "@kosh/settings": "workspace:*"
+    "@kosh/settings": "workspace:*",
+    "@kosh/contacts": "workspace:*",
+    "@kosh/product": "workspace:*",
+    "@kosh/sales": "workspace:*",
+    "@kosh/purchase": "workspace:*"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1"

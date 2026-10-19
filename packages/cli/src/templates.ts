@@ -3,18 +3,25 @@
  * Server files run on Node.js directly (type stripping); the back-office is a Vite app proxying `/api` to the server.
  */
 
-export type AppName = 'permissions' | 'reporting' | 'messaging';
+export type AppName =
+  | 'permissions'
+  | 'reporting'
+  | 'messaging'
+  | 'contacts'
+  | 'product'
+  | 'sales'
+  | 'purchase';
 export interface AppSpec {
   readonly label: string;
   /** Shown next to the app in the installer (where the terminal shows pictographs). */
   readonly icon: string;
   /** The module's export in `kosh-erp/<app>`. */
   readonly server: string;
-  /** The web registration in `kosh-erp/<app>/web`. */
-  readonly web: string;
+  /** The web registration in `kosh-erp/<app>/web` (apps built only from views and actions have none). */
+  readonly web?: string;
 }
 
-/** The framework apps `kosh init` can install (base is always there). */
+/** The apps `kosh init` can install (base and Settings are always there), in the order the installer lists them. */
 export const APPS: Readonly<Record<AppName, AppSpec>> = {
   permissions: {
     label: 'Roles, field security and approvals',
@@ -33,6 +40,22 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '💬',
     server: 'messaging',
     web: 'registerMessagingWeb',
+  },
+  contacts: {
+    label: 'Contacts: customers, vendors and their people',
+    icon: '👥',
+    server: 'contacts',
+  },
+  product: {
+    label: 'Products: prices, units of measure and taxes (VAT)',
+    icon: '📦',
+    server: 'product',
+  },
+  sales: { label: 'Sales: quotations and sales orders', icon: '🛒', server: 'sales' },
+  purchase: {
+    label: 'Purchase: RFQs, purchase orders and approvals',
+    icon: '🧾',
+    server: 'purchase',
   },
 };
 
@@ -168,7 +191,10 @@ export function indexHtml(options: StarterOptions): string {
 export function mainTsx(_options: StarterOptions): string {
   // Every catalogue app's web contribution: pages of apps installed later are already there.
   const web = [
-    ...(Object.keys(APPS) as AppName[]).map((a) => ({ name: a as string, fn: APPS[a].web })),
+    ...(Object.keys(APPS) as AppName[]).flatMap((a) => {
+      const fn = APPS[a].web;
+      return fn === undefined ? [] : [{ name: a as string, fn }];
+    }),
     { name: 'settings', fn: 'registerSettingsWeb' },
   ].map(({ name, fn }) => {
     const messages = name === 'permissions' ? null : `${name}Messages`;
