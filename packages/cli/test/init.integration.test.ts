@@ -202,7 +202,7 @@ test('the database asked part by part: host, port, user, hidden password, databa
     'PostgreSQL: (1)': '1',
     '  Host': uri.hostname,
     '  Port': uri.port,
-    '  User': decodeURIComponent(uri.username),
+    '  Username': decodeURIComponent(uri.username),
     '  Password of': decodeURIComponent(uri.password),
     '  Database name': 'kosh_parts',
     'Password (12+ characters)': PASSWORD,

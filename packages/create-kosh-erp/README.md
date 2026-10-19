@@ -3,12 +3,14 @@
 Install [Kosh](https://www.npmjs.com/package/kosh-erp) and set it up in one command:
 
 ```sh
-npm create kosh-erp@latest my-erp
+npm create kosh-erp@latest my-erp   # the project my-erp
+npm create kosh-erp@latest          # asks for the project name first
 ```
 
-It creates the folder, installs `kosh-erp` (Shutro comes with it), then asks for:
+It creates the project folder, installs `kosh-erp` (Shutro comes with it), then asks for:
 
-- the PostgreSQL database (your server, or one started in Docker for you; a missing database is created)
+- the PostgreSQL database: your server (username, password, port, host, database name; a missing database is
+  created), or one started in Docker for you
 - the company (name, currency, language, time zone)
 - the administrator (login, name, email, password) and its authenticator app
 - the apps (roles and approvals, reports and documents, chatter and attachments)

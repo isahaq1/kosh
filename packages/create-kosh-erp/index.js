@@ -63,13 +63,30 @@ const add = (cwd, what) =>
 const installAll = (cwd) =>
   run(pm, pm === 'npm' ? ['install', '--no-audit', '--no-fund'] : ['install'], cwd);
 
+/** A project name: a folder name and a valid package name (lower-case letters, digits, - and _). */
+const validName = (name) => /^[a-z0-9][a-z0-9._-]{0,213}$/.test(name);
+
+/** The project name: `npm create kosh-erp my-erp`, else asked (Enter: my-erp). */
 async function folder() {
-  if (positional !== undefined) return positional;
+  if (positional !== undefined) {
+    if (!validName(basename(resolve(positional)))) {
+      process.stderr.write(
+        `"${positional}" is not a project name: lower-case letters, digits, - and _ (e.g. my-erp).\n`,
+      );
+      process.exit(2);
+    }
+    return positional;
+  }
   if (!process.stdin.isTTY) return 'my-erp';
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const answer = (await rl.question('Project folder [my-erp]: ')).trim();
-  rl.close();
-  return answer === '' ? 'my-erp' : answer;
+  for (;;) {
+    const answer = (await rl.question('Project name [my-erp]: ')).trim() || 'my-erp';
+    if (validName(answer)) {
+      rl.close();
+      return answer;
+    }
+    process.stdout.write('  Lower-case letters, digits, - and _ (e.g. my-erp, padma-traders).\n');
+  }
 }
 
 const target = resolve(await folder());

@@ -1,6 +1,6 @@
 {
   "name": "create-kosh-erp",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "npm create kosh-erp: install Kosh and set it up in one command (database, company, administrator, apps, port)",
   "keywords": [
     "kosh",

@@ -302,16 +302,16 @@ async function ask(
   for (; !dockerDb; ) {
     if (interactive) {
       write('  Your PostgreSQL server (Enter keeps the value in [brackets]):\n');
-      server.host = await q(null, '  Host', server.host, { validate: required('A host') });
-      server.port = await q(null, '  Port', server.port, {
-        validate: (v) => (/^\d{1,5}$/.test(v) ? null : 'A port number, e.g. 5432'),
-      });
-      server.user = await q(null, '  User', server.user, { validate: required('A user') });
+      server.user = await q(null, '  Username', server.user, { validate: required('A user name') });
       server.password = await prompter.ask({
         message: `  Password of "${server.user}"${server.password === '' ? '' : ' (Enter keeps the last one)'}`,
         secret: true,
         ...(server.password === '' ? {} : { default: server.password }),
       });
+      server.port = await q(null, '  Port', server.port, {
+        validate: (v) => (/^\d{1,5}$/.test(v) ? null : 'A port number, e.g. 5432'),
+      });
+      server.host = await q(null, '  Host', server.host, { validate: required('A host') });
       server.database = await q(null, '  Database name (created if missing)', server.database, {
         validate: (v) =>
           /^[A-Za-z_][A-Za-z0-9_-]{0,62}$/.test(v) ? null : 'Letters, digits, _ and -',

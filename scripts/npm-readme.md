@@ -26,10 +26,11 @@ chatter on every record. Permissions are checked on the server on every route.
 
 ## Install with the terminal
 
-One command creates the folder, installs Kosh and asks for everything it needs:
+One command creates the project, installs Kosh and asks for everything it needs:
 
 ```sh
-npm create kosh-erp@latest my-erp
+npm create kosh-erp@latest my-erp   # the project my-erp
+npm create kosh-erp@latest          # asks for the project name first
 ```
 
 (`pnpm create kosh-erp my-erp` and `yarn create kosh-erp my-erp` work too.) In an existing folder:
@@ -44,7 +45,7 @@ The setup asks for what the installation needs. Press **Enter** to keep the valu
 | Question | Example | Notes |
 |---|---|---|
 | PostgreSQL | `1` your server, `2` start one in Docker | `2` needs Docker Desktop running; it writes `compose.yaml` and starts the `db` service |
-| Host, port, user, password, database name | `localhost`, `5432`, `postgres`, (hidden), `my_erp` | for `1`; a missing database is created after you confirm; if nothing answers, it offers Docker instead |
+| Username, password, port, host, database name | `postgres`, (hidden), `5432`, `localhost`, `my_erp` | for `1`; a missing database is created after you confirm; if nothing answers, it offers Docker instead |
 | Company name, currency | `Padma Traders`, `BDT` | the first company; more companies later |
 | Language, time zone | `bn`, `Asia/Dhaka` | the administrator's |
 | Administrator login, name, email, password | `admin`, …, 12+ characters | the password is typed hidden and stored only as a hash |
