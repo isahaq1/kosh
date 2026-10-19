@@ -16,7 +16,7 @@ const iso = (d: Date) => d.toISOString().slice(0, 10);
 const COLORS = [
   'bg-primary/15 text-primary',
   'bg-success/15 text-success',
-  'bg-warning/20 text-warning',
+  'bg-warning/20 text-warning-text',
   'bg-danger/15 text-danger',
   'bg-accent text-accent-foreground',
 ];

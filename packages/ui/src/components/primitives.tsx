@@ -88,7 +88,7 @@ const badge = cva('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-
       neutral: 'bg-muted text-foreground',
       info: 'bg-accent text-accent-foreground',
       success: 'bg-success/15 text-success',
-      warning: 'bg-warning/15 text-warning',
+      warning: 'bg-warning/15 text-warning-text',
       danger: 'bg-danger/15 text-danger',
     },
   },
@@ -345,7 +345,7 @@ export function Alert({
 }): ReactElement {
   const tones = {
     danger: 'border-danger/40 bg-danger/10 text-danger',
-    warning: 'border-warning/40 bg-warning/10 text-warning',
+    warning: 'border-warning/40 bg-warning/10 text-warning-text',
     info: 'border-primary/30 bg-accent text-accent-foreground',
   } as const;
   return (

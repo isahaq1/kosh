@@ -27,6 +27,7 @@ export {
   type ViewField,
 } from './api.js';
 export { KoshApp, type KoshAppProps } from './app.js';
+export { AppIcon } from './components/AppIcon.js';
 export * from './components/primitives.js';
 export { type KoshContextValue, KoshProvider, type ThemeChoice, useKosh } from './context.js';
 export { addMessages, createI18n, directionOf, NAMESPACE } from './i18n/index.js';

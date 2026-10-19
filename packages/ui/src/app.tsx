@@ -56,6 +56,7 @@ import {
 } from 'react';
 import { I18nextProvider, useTranslation } from 'react-i18next';
 import { ApiError, type CurrentUser, type KoshApi, type MenuNode } from './api.js';
+import { AppIcon } from './components/AppIcon.js';
 import {
   Alert,
   Button,
@@ -374,7 +375,10 @@ function Launcher(): ReactElement {
         {(apps.data ?? []).map((a) => (
           <li key={a.code}>
             <Link to="/$app" params={{ app: a.code }} className="block">
-              <Card className="p-4 text-center font-medium hover:bg-muted">{a.label}</Card>
+              <Card className="flex flex-col items-center gap-2 p-4 text-center font-medium hover:bg-muted">
+                <AppIcon name={a.icon ?? a.code} />
+                {a.label}
+              </Card>
             </Link>
           </li>
         ))}

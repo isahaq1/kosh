@@ -23,6 +23,7 @@
   --color-danger-foreground: var(--danger-foreground);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-warning-text: var(--warning-text);
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) + 4px);
@@ -50,6 +51,8 @@
   --danger-foreground: oklch(0.99 0 0);
   --success: oklch(0.5 0.13 150);
   --warning: oklch(0.6 0.14 75);
+  /* Warning text on light or warning-tinted backgrounds (WCAG AA for small text). */
+  --warning-text: oklch(0.47 0.11 65);
   color-scheme: light;
 }
 
@@ -71,6 +74,7 @@
   --danger-foreground: oklch(0.16 0.02 260);
   --success: oklch(0.7 0.14 150);
   --warning: oklch(0.78 0.14 75);
+  --warning-text: oklch(0.8 0.14 75);
   color-scheme: dark;
 }
 
