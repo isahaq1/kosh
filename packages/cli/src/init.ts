@@ -213,7 +213,7 @@ async function checkDatabase(
       return {
         ok: false,
         problem:
-          'PostgreSQL did not answer at that address. Is it running? (Docker: docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:18)',
+          'PostgreSQL did not answer at that address (is it running, on that host and port?).',
       };
     if (/28P01|password authentication/i.test(text))
       return { ok: false, problem: 'PostgreSQL refused the user name or password.' };
@@ -290,15 +290,45 @@ async function ask(
       write(`  connected (PostgreSQL in Docker, database "${postgres.db}")\n`);
     }
   }
+  // Asked part by part (a URL is for flags and scripts); a failed attempt keeps the answers as defaults.
+  const server = {
+    host: 'localhost',
+    port: '5432',
+    user: 'postgres',
+    password: '',
+    database: postgres.db,
+  };
+  const interactive = flag('database-url') === undefined && flags['yes'] !== true;
   for (; !dockerDb; ) {
-    databaseUrl = await q(
-      'database-url',
-      'PostgreSQL URL',
-      `postgres://postgres:postgres@localhost:5432/${name.replace(/-/g, '_')}`,
-      {
-        validate: (v) => (/^postgres(ql)?:\/\//.test(v) ? null : 'A URL starting with postgres://'),
-      },
-    );
+    if (interactive) {
+      write('  Your PostgreSQL server (Enter keeps the value in [brackets]):\n');
+      server.host = await q(null, '  Host', server.host, { validate: required('A host') });
+      server.port = await q(null, '  Port', server.port, {
+        validate: (v) => (/^\d{1,5}$/.test(v) ? null : 'A port number, e.g. 5432'),
+      });
+      server.user = await q(null, '  User', server.user, { validate: required('A user') });
+      server.password = await prompter.ask({
+        message: `  Password of "${server.user}"${server.password === '' ? '' : ' (Enter keeps the last one)'}`,
+        secret: true,
+        ...(server.password === '' ? {} : { default: server.password }),
+      });
+      server.database = await q(null, '  Database name (created if missing)', server.database, {
+        validate: (v) =>
+          /^[A-Za-z_][A-Za-z0-9_-]{0,62}$/.test(v) ? null : 'Letters, digits, _ and -',
+      });
+      const auth = `${encodeURIComponent(server.user)}${server.password === '' ? '' : `:${encodeURIComponent(server.password)}`}`;
+      const host = server.host.includes(':') ? `[${server.host}]` : server.host; // IPv6
+      databaseUrl = `postgres://${auth}@${host}:${server.port}/${server.database}`;
+    } else
+      databaseUrl = await q(
+        'database-url',
+        'PostgreSQL URL',
+        `postgres://postgres:postgres@localhost:5432/${name.replace(/-/g, '_')}`,
+        {
+          validate: (v) =>
+            /^postgres(ql)?:\/\//.test(v) ? null : 'A URL starting with postgres://',
+        },
+      );
     const checked = await checkDatabase(databaseUrl, async () =>
       flags['create-database'] === true
         ? true
@@ -309,8 +339,20 @@ async function ask(
       break;
     }
     write(`  ${checked.problem}\n`);
-    if (flag('database-url') !== undefined || flags['yes'] === true)
-      throw new Error(checked.problem);
+    if (!interactive) throw new Error(checked.problem);
+    // Nothing listening: offer the Docker database instead of asking again.
+    if (/did not answer/.test(checked.problem) && dockerAvailable()) {
+      if (await prompter.confirm('  Start PostgreSQL in Docker instead?', true)) {
+        postgres.port = await freePort(5432);
+        databaseUrl = await startDockerDb(dir, name, postgres, write);
+        dockerDb = true;
+        write(`  connected (PostgreSQL in Docker, database "${postgres.db}")\n`);
+        break;
+      }
+    } else if (/did not answer/.test(checked.problem))
+      write(
+        '  Start the PostgreSQL service (or Docker Desktop, then answer 2 to the first question), or check host and port.\n',
+      );
   }
 
   write('\nYour company\n');

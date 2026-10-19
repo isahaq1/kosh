@@ -194,3 +194,32 @@ test('--yes needs the administrator password; a weak one is refused', async () =
   expect(code).toBe(1);
   expect(output.join('')).toContain('At least 12 characters.');
 }, 120_000);
+
+test('the database asked part by part: host, port, user, hidden password, database (created)', async () => {
+  const uri = new URL(pg.getConnectionUri());
+  const output: string[] = [];
+  const prompter = scripted(output, {
+    'PostgreSQL: (1)': '1',
+    '  Host': uri.hostname,
+    '  Port': uri.port,
+    '  User': decodeURIComponent(uri.username),
+    '  Password of': decodeURIComponent(uri.password),
+    '  Database name': 'kosh_parts',
+    'Password (12+ characters)': PASSWORD,
+    'Repeat the password': PASSWORD,
+  });
+  const code = await runInit(['parts', '--no-2fa'], {
+    write: (t) => output.push(t),
+    prompter,
+    cwd: dir,
+  });
+  const text = output.join('');
+  expect(code, text).toBe(0);
+  expect(text).toContain('connected (PostgreSQL 18');
+  expect(prompter.asked).toContain('  Database name (created if missing)');
+  const env = await readFile(join(dir, 'parts', '.env'), 'utf8');
+  expect(env).toContain(
+    `DATABASE_URL=postgres://${uri.username}:${uri.password}@${uri.hostname}:${uri.port}/kosh_parts`,
+  );
+  expect(text).not.toContain(decodeURIComponent(uri.password)); // the database password is not echoed either
+}, 240_000);

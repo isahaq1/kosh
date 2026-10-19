@@ -190,7 +190,7 @@ test('migrate, seed, upgrade with a data migration, status, and the destructive 
     ).toBe(0);
     const app = await createServer({
       databaseUrl: pg.getConnectionUri(),
-      modules: [(await import(`./${join('.work-' + process.pid, 'src', 'v2.ts')}`)).library],
+      modules: [(await import(`./${join(`.work-${process.pid}`, 'src', 'v2.ts')}`)).library],
       logger: false,
     });
     try {

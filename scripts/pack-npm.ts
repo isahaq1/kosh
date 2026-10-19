@@ -12,7 +12,7 @@
  *   kosh-erp/<package>/web   permissions, reporting, messaging (their React contributions)
  *   kosh-erp/ui/styles.css   the design tokens
  *
- * Usage: node scripts/pack-npm.ts [version] (default: the version being released, 0.1.1)
+ * Usage: node scripts/pack-npm.ts [version] (default: the version being released, 0.1.2)
  */
 import {
   cpSync,
@@ -87,7 +87,7 @@ function publicName(pkg: string, sub: string): string {
   return `${NAME}/${pkg}${sub}`;
 }
 
-const version = process.argv[2] ?? '0.1.1';
+const version = process.argv[2] ?? '0.1.2';
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });
 

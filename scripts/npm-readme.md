@@ -43,8 +43,8 @@ The setup asks for what the installation needs. Press **Enter** to keep the valu
 
 | Question | Example | Notes |
 |---|---|---|
-| PostgreSQL | `1` your server, `2` start one in Docker | `2` needs Docker; it writes `compose.yaml` and starts the `db` service |
-| PostgreSQL URL | `postgres://postgres:postgres@localhost:5432/my_erp` | a missing database is created after you confirm |
+| PostgreSQL | `1` your server, `2` start one in Docker | `2` needs Docker Desktop running; it writes `compose.yaml` and starts the `db` service |
+| Host, port, user, password, database name | `localhost`, `5432`, `postgres`, (hidden), `my_erp` | for `1`; a missing database is created after you confirm; if nothing answers, it offers Docker instead |
 | Company name, currency | `Padma Traders`, `BDT` | the first company; more companies later |
 | Language, time zone | `bn`, `Asia/Dhaka` | the administrator's |
 | Administrator login, name, email, password | `admin`, …, 12+ characters | the password is typed hidden and stored only as a hash |
@@ -389,8 +389,8 @@ Run them in the project folder (`npx kosh …`, or `npm run migrate` / `npm run 
 
 ## Troubleshooting
 
-- **"PostgreSQL did not answer"**: start it (`docker compose up -d db`, or your service), check host and port in
-  `DATABASE_URL`.
+- **"PostgreSQL did not answer"**: nothing listens at that host and port. Start your PostgreSQL service, or
+  answer `2` (Docker) to the first question; Docker Desktop must be running.
 - **"password authentication failed"**: the user or password in `DATABASE_URL` is wrong.
 - **Signed in but no apps**: the user has no role granting them (`kosh user create … --roles`); administrators need
   their authenticator enrolled (`npx kosh init` again).

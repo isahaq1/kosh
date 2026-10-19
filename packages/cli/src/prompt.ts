@@ -44,9 +44,13 @@ export function terminalPrompter(
     terminal,
   });
   const echo = rl._writeToOutput?.bind(rl);
-  // Readline echoes what is typed through this hook: while a secret is asked, each keystroke shows as *.
+  let current = '';
+  // Readline echoes what is typed through this hook, and redraws the whole line (prompt + text) on edits such as
+  // backspace: while a secret is asked, the text shows as one * per character, the question stays readable.
   rl._writeToOutput = (text: string) => {
     if (!muted) echo?.(text);
+    else if (current !== '' && text.startsWith(current))
+      echo?.(current + '*'.repeat((rl as unknown as { line: string }).line.length));
     else if (text.includes('\n') || text.includes('\r')) echo?.('\n');
     else if (text.length > 0) echo?.('*');
   };
@@ -71,7 +75,12 @@ export function terminalPrompter(
   const ask = async (q: Question): Promise<string> => {
     for (;;) {
       const prompt = `${q.message}${q.default === undefined || q.secret === true ? '' : ` [${q.default}]`}: `;
-      output.write(prompt); // before masking: the question itself is always readable
+      // Readline's own prompt, so redraws show this question (not its default "> "); written before masking.
+      current = prompt;
+      if (terminal) {
+        rl.setPrompt(prompt);
+        rl.prompt();
+      } else output.write(prompt);
       muted = q.secret === true && terminal;
       const received = await nextLine();
       muted = false;
