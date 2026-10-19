@@ -15,7 +15,8 @@
       "!**/playwright-report",
       "!**/test-results",
       "!pnpm-lock.yaml",
-      "!**/*.gen.ts"
+      "!**/*.gen.ts",
+      "!**/.kosh"
     ]
   },
   "formatter": {

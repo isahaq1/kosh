@@ -10,7 +10,7 @@
   "scripts": {
     "build": "turbo run build",
     "typecheck": "tsc -p tsconfig.json && turbo run typecheck",
-    "lint": "biome check . && node scripts/check-boundaries.ts",
+    "lint": "biome check . && node scripts/check-boundaries.ts && node --conditions=@kosh/source scripts/generate-models.ts --check",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "test": "vitest run",
@@ -19,7 +19,8 @@
     "dev:services": "docker compose up -d --wait",
     "changeset": "changeset",
     "bench": "vitest run --config vitest.bench.config.ts",
-    "pack:npm": "pnpm build && node scripts/pack-npm.ts"
+    "pack:npm": "pnpm build && node scripts/pack-npm.ts",
+    "generate:models": "node --conditions=@kosh/source scripts/generate-models.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

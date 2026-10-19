@@ -39,6 +39,10 @@ const PACKAGES = [
   'storage',
   'messaging',
   'settings',
+  'contacts',
+  'product',
+  'sales',
+  'purchase',
   'ui',
   'reporting',
   'cli',
@@ -56,6 +60,12 @@ interface Manifest {
   readonly bin?: Readonly<Record<string, string>>;
 }
 
+/** Where a bundled package lives: the framework in packages/, the business apps in modules/ (RFC 0008). */
+const dirOf = (name: string): string =>
+  existsSync(join(ROOT, 'packages', name))
+    ? join(ROOT, 'packages', name)
+    : join(ROOT, 'modules', name);
+
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
@@ -66,7 +76,7 @@ function walk(dir: string): string[] {
 const manifests = new Map<string, Manifest>(
   PACKAGES.map((name) => [
     name,
-    JSON.parse(readFileSync(join(ROOT, 'packages', name, 'package.json'), 'utf8')) as Manifest,
+    JSON.parse(readFileSync(join(dirOf(name), 'package.json'), 'utf8')) as Manifest,
   ]),
 );
 
@@ -95,9 +105,9 @@ mkdirSync(OUT, { recursive: true });
 const dependencies: Record<string, string> = {};
 const peerDependencies: Record<string, string> = {};
 for (const [name, manifest] of manifests) {
-  const built = join(ROOT, 'packages', name, 'dist');
+  const built = join(dirOf(name), 'dist');
   if (!existsSync(join(built, 'index.js')))
-    throw new Error(`packages/${name}/dist is missing: run pnpm build first.`);
+    throw new Error(`${relative(ROOT, built)} is missing: run pnpm build first.`);
   cpSync(built, join(OUT, 'dist', name), { recursive: true });
   for (const [dep, range] of Object.entries(manifest.dependencies ?? {}))
     if (!dep.startsWith('@kosh/')) dependencies[dep] = range;

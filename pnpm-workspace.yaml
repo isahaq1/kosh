@@ -1,5 +1,6 @@
 packages:
   - packages/*
+  - modules/*
   - apps/*
 
 # Dependency install scripts are denied unless listed as true here (pnpm 11).
