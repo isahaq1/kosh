@@ -2,8 +2,8 @@
  * What the reporting views share: the report query hook, header labels (date buckets per granularity, localized),
  * value formatting (counts, exact decimals, amounts per currency), and file downloads.
  */
-import type { Formatter, KoshApi } from '@isahaq/kosh-ui';
-import type { Condition } from '@isahaq/kosh-views';
+import type { Formatter, KoshApi } from '@kosh/ui';
+import type { Condition } from '@kosh/views';
 import { type UseQueryResult, useQuery } from '@tanstack/react-query';
 import type { Amount, Header, ReportQuery, ReportResult, Value } from '../pivot.js';
 

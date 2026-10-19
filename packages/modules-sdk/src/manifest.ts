@@ -2,16 +2,10 @@
  * Module manifests (RFC 0001 §5): one typed object per module, wrapping its Shutro module. Shutro owns the data layer
  * (models, extensions, groups, permissions, sequences, data); the manifest adds what an application needs on top.
  *
- * The Shutro module is described structurally here (`@isahaq/kosh-modules-sdk` does not import Shutro: only
+ * The Shutro module is described structurally here (`@kosh/modules-sdk` does not import Shutro: only
  * `packages/server/src/orm.ts` does); the server's loader verifies it is a real Shutro module.
  */
-import type {
-  Layout,
-  SearchSpec,
-  ViewDefinition,
-  ViewExtension,
-  WindowAction,
-} from '@isahaq/kosh-views';
+import type { Layout, SearchSpec, ViewDefinition, ViewExtension, WindowAction } from '@kosh/views';
 import { ModuleDefinitionError } from './errors.js';
 import { satisfies } from './semver.js';
 
@@ -106,7 +100,7 @@ export interface ModuleInput {
   readonly menus?: readonly MenuSpec[];
   /** Window actions by id (RFC 0004): what menus open. */
   readonly actions?: Readonly<Record<string, WindowAction>>;
-  /** Views by id (RFC 0004), built with `list` / `form` / `kanban` from `@isahaq/kosh-views`. */
+  /** Views by id (RFC 0004), built with `list` / `form` / `kanban` from `@kosh/views`. */
   readonly views?: Readonly<Record<string, ViewDefinition>>;
   /** Changes to other modules' views by anchor, applied in dependency order. */
   readonly viewExtensions?: readonly ViewExtension[];
@@ -126,7 +120,7 @@ export interface ModuleInput {
   readonly documents?: readonly DocumentSpec[];
   /**
    * Server routes of this module (admin APIs, custom endpoints). Called once at startup with the server context
-   * (`ModuleContext` of `@isahaq/kosh-server`); typed by the server, so modules declare the parameter type they use.
+   * (`ModuleContext` of `@kosh/server`); typed by the server, so modules declare the parameter type they use.
    */
   readonly routes?: (context: never) => void | Promise<void>;
   readonly hooks?: ModuleHooks;

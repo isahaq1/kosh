@@ -2,8 +2,8 @@
  * A small real "contacts" app for server tests, on the framework's `base` module: contacts (partners), a Shutro
  * module wrapped by a Kosh manifest.
  */
-import { defineModule as defineKoshModule } from '@isahaq/kosh-modules-sdk';
-import { form, kanban, list, search } from '@isahaq/kosh-views';
+import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
+import { form, kanban, list, search } from '@kosh/views';
 import { base, baseShutro } from '../../src/auth/base.js';
 import { orm } from '../../src/orm.js';
 

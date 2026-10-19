@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "@isahaq/kosh-ui/styles.css";
+@import "@kosh/ui/styles.css";
 
 /* Tailwind scans the renderers and the modules' web code for class names. */
 @source "../../../packages/ui/src";

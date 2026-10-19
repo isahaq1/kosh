@@ -1,6 +1,6 @@
 /**
  * The ONE place Kosh imports Shutro (CLAUDE.md, Shutro integration; RFC 0002 §6.1). Every other package imports the
- * ORM from here (`@isahaq/kosh-server/orm`), so the dependency can be renamed or swapped in one file; `pnpm lint` fails if
+ * ORM from here (`@kosh/server/orm`), so the dependency can be renamed or swapped in one file; `pnpm lint` fails if
  * another file imports `shutro` directly.
  */
 import * as core from 'shutro';

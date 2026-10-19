@@ -1,4 +1,4 @@
-# @isahaq/kosh-search
+# @kosh/search
 
 Shared search, filter, group-by, favorites and saved-views layer (RFC 0004)
 
@@ -6,7 +6,7 @@ Part of [Kosh](https://github.com/isahaq1/kosh), a modern ERP framework on TypeS
 [Shutro](https://github.com/isahaq1/shutro) ORM.
 
 ```sh
-pnpm add @isahaq/kosh-search
+pnpm add @kosh/search
 ```
 
 Documentation: [docs/ui.md](https://github.com/isahaq1/kosh/blob/main/docs/ui.md) · design: [RFCs](https://github.com/isahaq1/kosh/tree/main/docs/rfcs)

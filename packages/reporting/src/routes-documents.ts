@@ -9,16 +9,16 @@
  *
  * Templates come from manifests (`installTemplates`) and the designer; renders are audited as `document.rendered`.
  */
-import type { KoshModule } from '@isahaq/kosh-modules-sdk';
+import type { KoshModule } from '@kosh/modules-sdk';
 import {
   type ApiModel,
   audit,
   HttpProblem,
   type ModuleContext,
   publicApiModels,
-} from '@isahaq/kosh-server';
-import type { Env } from '@isahaq/kosh-server/orm';
-import type { Layout } from '@isahaq/kosh-views';
+} from '@kosh/server';
+import type { Env } from '@kosh/server/orm';
+import type { Layout } from '@kosh/views';
 import type { FastifyRequest } from 'fastify';
 import { type DocumentFields, loadDocumentData, renderHtml, renderPdf } from './documents.js';
 import { type Header, ReportError, runReport } from './pivot.js';

@@ -5,7 +5,7 @@
   "commit": false,
   "fixed": [["@kosh/*"]],
   "linked": [],
-  "ignore": ["@isahaq/kosh-web", "@isahaq/kosh-demo"],
+  "ignore": ["@kosh/web", "@kosh/demo"],
   "updateInternalDependencies": "patch",
   "changelog": "@changesets/cli/changelog"
 }

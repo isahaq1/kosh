@@ -15,8 +15,8 @@ import {
   Spinner,
   useKosh,
   type ViewProps,
-} from '@isahaq/kosh-ui';
-import type { MeasureNode, PivotView as PivotDefinition } from '@isahaq/kosh-views';
+} from '@kosh/ui';
+import type { MeasureNode, PivotView as PivotDefinition } from '@kosh/views';
 import { ArrowLeftRight, ChevronDown, ChevronRight, Download } from 'lucide-react';
 import { type ReactElement, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,10 +1,10 @@
 /**
  * @packageDocumentation
- * The web contribution of `@isahaq/kosh-reporting` (RFC 0005, RFC 0007): renderers for the report views — pivot, graph,
+ * The web contribution of `@kosh/reporting` (RFC 0005, RFC 0007): renderers for the report views — pivot, graph,
  * calendar, gantt, map, hierarchy, cohort, spreadsheet, dashboard — registered by view type, and their messages.
  * ECharts and MapLibre load on demand, when a chart or map is shown.
  */
-import { addMessages, type Registry } from '@isahaq/kosh-ui';
+import { addMessages, type Registry } from '@kosh/ui';
 import type { i18n } from 'i18next';
 import { CalendarView } from './CalendarView.js';
 import { CohortView } from './CohortView.js';

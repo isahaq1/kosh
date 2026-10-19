@@ -3,7 +3,7 @@
  * and formulas (see `formula.ts`); `REPORT(model, measure, domain?)` cells are live report totals fetched within the
  * user's rules, so a sheet updates with the data. Keyboard: arrows move, Enter edits / commits, Escape cancels.
  */
-import { Alert, Button, Input, Spinner, useKosh, type ViewProps } from '@isahaq/kosh-ui';
+import { Alert, Button, Input, Spinner, useKosh, type ViewProps } from '@kosh/ui';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { type KeyboardEvent, type ReactElement, useMemo, useState } from 'react';

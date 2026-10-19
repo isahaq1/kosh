@@ -3,8 +3,8 @@
  * the generated API, without code); requests are private and change only through the approvals API, which checks
  * the approver, the order of levels and separation of duties.
  */
-import { baseShutro } from '@isahaq/kosh-server';
-import { type Env, orm } from '@isahaq/kosh-server/orm';
+import { baseShutro } from '@kosh/server';
+import { type Env, orm } from '@kosh/server/orm';
 
 const { defineGroup, defineModel, defineModule, definePermission, f } = orm;
 
@@ -140,7 +140,7 @@ const ApprovalRequest = defineModel('approval.request', {
   },
 });
 
-/** The Shutro module of `@isahaq/kosh-permissions`. */
+/** The Shutro module of `@kosh/permissions`. */
 export const permissionsShutro: ReturnType<typeof orm.defineModule> = defineModule({
   name: 'permissions',
   version: '0.1.0',

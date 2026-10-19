@@ -3,8 +3,8 @@
  * Dashboards, spreadsheets and schedules are private to their owner or shared with every user of the module
  * (record rules). Templates are edited by report designers. Outputs are private: each user sees their own.
  */
-import { baseShutro } from '@isahaq/kosh-server';
-import { orm } from '@isahaq/kosh-server/orm';
+import { baseShutro } from '@kosh/server';
+import { orm } from '@kosh/server/orm';
 
 const { defineGroup, defineModel, defineModule, f } = orm;
 

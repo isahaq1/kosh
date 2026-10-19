@@ -1,4 +1,4 @@
-# @isahaq/kosh-views
+# @kosh/views
 
 View schemas: list, kanban, form, pivot, chart, calendar, gantt, map, hierarchy, cohort, spreadsheet, dashboard (RFC 0004)
 
@@ -6,7 +6,7 @@ Part of [Kosh](https://github.com/isahaq1/kosh), a modern ERP framework on TypeS
 [Shutro](https://github.com/isahaq1/shutro) ORM.
 
 ```sh
-pnpm add @isahaq/kosh-views
+pnpm add @kosh/views
 ```
 
 Documentation: [docs/ui.md](https://github.com/isahaq1/kosh/blob/main/docs/ui.md) · design: [RFCs](https://github.com/isahaq1/kosh/tree/main/docs/rfcs)

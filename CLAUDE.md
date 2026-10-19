@@ -246,7 +246,7 @@ export default defineModule({
 
 ### Phase 2 — Permissions
 
-- [x] Roles, ACL, field security, action permissions, approvals, admin UI APIs (`@isahaq/kosh-permissions`, docs/permissions.md)
+- [x] Roles, ACL, field security, action permissions, approvals, admin UI APIs (`@kosh/permissions`, docs/permissions.md)
 
 ### Phase 3 — UI foundation
 

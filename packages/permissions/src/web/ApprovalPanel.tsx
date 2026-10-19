@@ -1,10 +1,10 @@
 /**
- * The approval panel (RFC 0004 §6, RFC 0007): the web contribution of `@isahaq/kosh-permissions`, registered as the node
+ * The approval panel (RFC 0004 §6, RFC 0007): the web contribution of `@kosh/permissions`, registered as the node
  * component `approvals.Panel` and placed in a form by a view extension. Shows the record's approval levels and lets
  * the current user decide the requests they may decide now (the server checks order, role, company and separation
  * of duties).
  */
-import { ApiError, Badge, Button, type NodeComponentProps, Textarea } from '@isahaq/kosh-ui';
+import { ApiError, Badge, Button, type NodeComponentProps, Textarea } from '@kosh/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactElement, useId, useState } from 'react';
 

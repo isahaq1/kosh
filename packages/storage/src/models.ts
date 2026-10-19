@@ -3,8 +3,8 @@
  * reached only through the attachment routes, which check the attached record as the caller first, so an
  * attachment is exactly as visible as its record.
  */
-import { baseShutro } from '@isahaq/kosh-server';
-import { orm } from '@isahaq/kosh-server/orm';
+import { baseShutro } from '@kosh/server';
+import { orm } from '@kosh/server/orm';
 
 const { defineGroup, defineModel, defineModule, f } = orm;
 

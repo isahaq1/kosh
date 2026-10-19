@@ -1,7 +1,7 @@
 /** A small sales app for report tests: orders with partner, state, date, a monetary amount and a restricted margin. */
-import { defineModule as defineKoshModule } from '@isahaq/kosh-modules-sdk';
-import { baseShutro } from '@isahaq/kosh-server';
-import { orm } from '@isahaq/kosh-server/orm';
+import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
+import { baseShutro } from '@kosh/server';
+import { orm } from '@kosh/server/orm';
 import { reporting, reportingShutro } from '../../src/index.js';
 
 const { defineGroup, defineModel, defineModule, f } = orm;

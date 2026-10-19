@@ -3,8 +3,8 @@
  * per marker that opens the record. The same records are listed for keyboard and screen-reader users. The map
  * style comes from the view (`style`) or the distribution's default.
  */
-import { Alert, Button, Spinner, useKosh, type ViewProps } from '@isahaq/kosh-ui';
-import type { MapView as MapDefinition } from '@isahaq/kosh-views';
+import { Alert, Button, Spinner, useKosh, type ViewProps } from '@kosh/ui';
+import type { MapView as MapDefinition } from '@kosh/views';
 import { useQuery } from '@tanstack/react-query';
 import { type ReactElement, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

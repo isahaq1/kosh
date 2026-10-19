@@ -3,8 +3,8 @@
  * stopped (columns), as a share of the cohort still open (`retention`) or closed (`churn`). One report query:
  * start buckets × stop buckets; the periods are computed from the two buckets.
  */
-import { Alert, Spinner, useKosh, type ViewProps } from '@isahaq/kosh-ui';
-import type { CohortView as CohortDefinition } from '@isahaq/kosh-views';
+import { Alert, Spinner, useKosh, type ViewProps } from '@kosh/ui';
+import type { CohortView as CohortDefinition } from '@kosh/views';
 import { type ReactElement, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {

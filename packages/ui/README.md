@@ -1,4 +1,4 @@
-# @isahaq/kosh-ui
+# @kosh/ui
 
 React app shell, design system and view renderers (RFC 0007)
 
@@ -6,7 +6,7 @@ Part of [Kosh](https://github.com/isahaq1/kosh), a modern ERP framework on TypeS
 [Shutro](https://github.com/isahaq1/shutro) ORM.
 
 ```sh
-pnpm add @isahaq/kosh-ui
+pnpm add @kosh/ui
 ```
 
 Documentation: [docs/ui.md](https://github.com/isahaq1/kosh/blob/main/docs/ui.md) · design: [RFCs](https://github.com/isahaq1/kosh/tree/main/docs/rfcs)

@@ -1,4 +1,4 @@
-# @isahaq/kosh-storage
+# @kosh/storage
 
 Attachments on S3-compatible storage (RFC 0006)
 
@@ -6,7 +6,7 @@ Part of [Kosh](https://github.com/isahaq1/kosh), a modern ERP framework on TypeS
 [Shutro](https://github.com/isahaq1/shutro) ORM.
 
 ```sh
-pnpm add @isahaq/kosh-storage
+pnpm add @kosh/storage
 ```
 
 Documentation: [docs/messaging.md](https://github.com/isahaq1/kosh/blob/main/docs/messaging.md) · design: [RFCs](https://github.com/isahaq1/kosh/tree/main/docs/rfcs)

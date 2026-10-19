@@ -6,7 +6,7 @@
  * - `GET    /api/v1/attachments/:id/download` the bytes (`?inline=true` shows images and PDFs in the browser)
  * - `DELETE /api/v1/attachments/:id`          by the uploader
  */
-import { HttpProblem, type ModuleContext, publicApiModels } from '@isahaq/kosh-server';
+import { HttpProblem, type ModuleContext, publicApiModels } from '@kosh/server';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import {
   attachmentsOf,

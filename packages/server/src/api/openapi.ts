@@ -3,7 +3,7 @@
  * schema, one create schema and one update schema per model, the generated paths, and RFC 9457 problems. Per-user
  * restrictions (ACL, field groups, rules) are enforced at request time and visible in `/api/v1/meta/{model}`.
  */
-import type { KoshModule } from '@isahaq/kosh-modules-sdk';
+import type { KoshModule } from '@kosh/modules-sdk';
 import { buildKoshRegistry, KOSH_VERSION } from '../registry.js';
 import { type ApiField, type ApiModel, defaultFields, publicApiModels } from './metadata.js';
 

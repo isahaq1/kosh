@@ -5,8 +5,8 @@
  */
 import { createHash, randomUUID } from 'node:crypto';
 import type { Readable } from 'node:stream';
-import { HttpProblem } from '@isahaq/kosh-server';
-import type { Env } from '@isahaq/kosh-server/orm';
+import { HttpProblem } from '@kosh/server';
+import type { Env } from '@kosh/server/orm';
 import type { Storage } from './backends.js';
 
 type Row = Record<string, unknown>;

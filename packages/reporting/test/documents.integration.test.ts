@@ -4,8 +4,8 @@
  * schedules planned in the owner's time zone, enqueued once per due time, run as the owner, stored as outputs the
  * recipients can download, delivered to adapters.
  */
-import { type Authenticator, createServer, type KoshServer } from '@isahaq/kosh-server';
-import { orm } from '@isahaq/kosh-server/orm';
+import { type Authenticator, createServer, type KoshServer } from '@kosh/server';
+import { orm } from '@kosh/server/orm';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { engineOf, installTemplates, layoutProblems, nextRun } from '../src/index.js';

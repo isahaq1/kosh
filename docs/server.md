@@ -1,7 +1,7 @@
 # Server
 
 ```ts
-import { createServer, startServer, startTelemetry } from '@isahaq/kosh-server';
+import { createServer, startServer, startTelemetry } from '@kosh/server';
 import { contacts } from './modules/contacts/manifest.ts';
 
 const telemetry = startTelemetry({ serviceName: 'kosh' }); // OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set
@@ -24,7 +24,7 @@ and groups from the authenticator, narrowed by headers (`X-Company`, `X-Companie
 ## Authentication
 
 Kosh-native, on Shutro (no external auth service): the framework module `base` (`import { base } from
-'@isahaq/kosh-server'`, a dependency of every app) holds users, companies and currencies, and three **private** models
+'@kosh/server'`, a dependency of every app) holds users, companies and currencies, and three **private** models
 (`auth.credential`, `auth.session`, `auth.user_group`) that the generated API never serves. Every auth read and write
 runs in an audited Shutro system scope.
 
@@ -53,7 +53,7 @@ runs in an audited Shutro system scope.
   password } })` creates the first company and administrator (`base.admin`); `server.auth.createUser(...)` adds users
   with group assignments (all companies, or `{ group, company }`).
 
-OAuth/SSO and passkeys come later, on the same models. Roles and the admin UI for them are `@isahaq/kosh-permissions`.
+OAuth/SSO and passkeys come later, on the same models. Roles and the admin UI for them are `@kosh/permissions`.
 
 ## Typed client
 
@@ -82,7 +82,7 @@ await partners.transition(record.id, 'qualify');                          // onl
 
 Unknown models (and private ones), fields, transitions and value types are compile errors. Refused requests throw
 `KoshApiError` with the RFC 9457 `problem`. The web app's client (`apps/web/src/api/kosh.gen.ts`) is regenerated
-with `pnpm --filter @isahaq/kosh-web api:generate`; CI runs `api:check`. Generated files (`*.gen.ts`) are not linted.
+with `pnpm --filter @kosh/web api:generate`; CI runs `api:check`. Generated files (`*.gen.ts`) are not linted.
 
 ## Navigation, exports and audit
 

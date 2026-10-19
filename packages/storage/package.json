@@ -1,5 +1,5 @@
 {
-  "name": "@isahaq/kosh-storage",
+  "name": "@kosh/storage",
   "version": "0.1.0",
   "description": "Attachments on S3-compatible storage (RFC 0006)",
   "keywords": [
@@ -43,8 +43,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@isahaq/kosh-modules-sdk": "workspace:*",
-    "@isahaq/kosh-server": "workspace:*",
+    "@kosh/modules-sdk": "workspace:*",
+    "@kosh/server": "workspace:*",
     "fastify": "^5.12.7"
   },
   "devDependencies": {

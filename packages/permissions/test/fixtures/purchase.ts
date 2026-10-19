@@ -3,9 +3,9 @@
  * action permission (cancel), record rules (requesters see their own orders, approvers all), and default approval
  * policies in the manifest (department head above 50 000, finance director above 500 000).
  */
-import { defineModule as defineKoshModule } from '@isahaq/kosh-modules-sdk';
-import { baseShutro } from '@isahaq/kosh-server';
-import { orm } from '@isahaq/kosh-server/orm';
+import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
+import { baseShutro } from '@kosh/server';
+import { orm } from '@kosh/server/orm';
 import {
   approvalGuard,
   permissions,

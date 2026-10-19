@@ -2,8 +2,8 @@
  * A purchase installation for permission tests: two companies, an administrator with 2FA, and users whose roles
  * differ per company. Requests go through the real HTTP layer (`app.inject`) with real sessions.
  */
-import { createServer, installBase, type KoshServer, totp } from '@isahaq/kosh-server';
-import { orm } from '@isahaq/kosh-server/orm';
+import { createServer, installBase, type KoshServer, totp } from '@kosh/server';
+import { orm } from '@kosh/server/orm';
 import { installApprovalPolicies } from '../../src/index.js';
 import { purchase } from '../fixtures/purchase.js';
 import { startPostgres } from './postgres.js';

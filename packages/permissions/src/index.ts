@@ -1,11 +1,11 @@
 /**
  * @packageDocumentation
- * `@isahaq/kosh-permissions` (RFC 0003): administration of roles, access, rules, field security, permissions, per-company
+ * `@kosh/permissions` (RFC 0003): administration of roles, access, rules, field security, permissions, per-company
  * assignments and special grants on Shutro's security engine, multi-level approvals, and the security audit log.
  * Enforcement stays in Shutro (every query) and the server (sessions, 2FA, navigation, exports).
  */
-import { defineModule } from '@isahaq/kosh-modules-sdk';
-import { base, type ModuleContext } from '@isahaq/kosh-server';
+import { defineModule } from '@kosh/modules-sdk';
+import { base, type ModuleContext } from '@kosh/server';
 import { registerAdminApi } from './admin.js';
 import { permissionsShutro } from './models.js';
 import { registerApprovalRoutes } from './routes.js';
@@ -26,7 +26,7 @@ export { registerApprovalRoutes } from './routes.js';
 
 /** Package identity. */
 export const PACKAGE: { readonly name: string; readonly rfc: string } = Object.freeze({
-  name: '@isahaq/kosh-permissions',
+  name: '@kosh/permissions',
   rfc: 'RFC 0003',
 });
 

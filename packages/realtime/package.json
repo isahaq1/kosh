@@ -1,5 +1,5 @@
 {
-  "name": "@isahaq/kosh-realtime",
+  "name": "@kosh/realtime",
   "version": "0.0.0",
   "description": "WebSocket gateway (LISTEN/NOTIFY + Valkey pub/sub) (RFC 0006)",
   "license": "MIT",

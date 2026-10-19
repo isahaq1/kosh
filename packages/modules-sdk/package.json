@@ -1,5 +1,5 @@
 {
-  "name": "@isahaq/kosh-modules-sdk",
+  "name": "@kosh/modules-sdk",
   "version": "0.1.0",
   "description": "defineModule, defineView, defineMenu, defineAction, defineReport, defineNotification (RFC 0001)",
   "keywords": [
@@ -43,6 +43,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@isahaq/kosh-views": "workspace:*"
+    "@kosh/views": "workspace:*"
   }
 }

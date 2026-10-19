@@ -4,8 +4,8 @@
  * activities by their creator or assignee.
  */
 
-import { orm } from '@isahaq/kosh-server/orm';
-import { storageShutro } from '@isahaq/kosh-storage';
+import { orm } from '@kosh/server/orm';
+import { storageShutro } from '@kosh/storage';
 
 const { defineGroup, defineModel, defineModule, f } = orm;
 

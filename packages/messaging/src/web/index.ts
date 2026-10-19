@@ -1,9 +1,9 @@
 /**
  * @packageDocumentation
- * The web contribution of `@isahaq/kosh-messaging` (RFC 0006, RFC 0007): the `chatter` component that forms with
+ * The web contribution of `@kosh/messaging` (RFC 0006, RFC 0007): the `chatter` component that forms with
  * `chatter: true` show below the sheet, and its messages.
  */
-import { addMessages, type Registry } from '@isahaq/kosh-ui';
+import { addMessages, type Registry } from '@kosh/ui';
 import type { i18n } from 'i18next';
 import { Chatter } from './Chatter.js';
 import { messages } from './messages.js';

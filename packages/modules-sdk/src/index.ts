@@ -1,6 +1,6 @@
 /**
  * @packageDocumentation
- * `@isahaq/kosh-modules-sdk`: module manifests (`defineModule`) and the module loader (RFC 0001).
+ * `@kosh/modules-sdk`: module manifests (`defineModule`) and the module loader (RFC 0001).
  */
 export { ModuleDefinitionError, ModuleLoadError } from './errors.js';
 export { type LoadedModules, type LoadOptions, loadModules } from './loader.js';

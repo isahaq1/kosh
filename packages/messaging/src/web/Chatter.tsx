@@ -24,7 +24,7 @@ import {
   Spinner,
   Textarea,
   useKosh,
-} from '@isahaq/kosh-ui';
+} from '@kosh/ui';
 import {
   type InfiniteData,
   useInfiniteQuery,

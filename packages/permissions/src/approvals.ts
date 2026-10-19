@@ -15,9 +15,9 @@
  * last approval runs the policy's `onApproved` transition, a rejection its `onRejected` one, as the system
  * (attributed to the approver in the audit log). Every step is audited and emitted as an event for notifications.
  */
-import type { KoshModule } from '@isahaq/kosh-modules-sdk';
-import { audit, HttpProblem } from '@isahaq/kosh-server';
-import type { Env } from '@isahaq/kosh-server/orm';
+import type { KoshModule } from '@kosh/modules-sdk';
+import { audit, HttpProblem } from '@kosh/server';
+import type { Env } from '@kosh/server/orm';
 
 type Row = Record<string, unknown>;
 interface Rows {

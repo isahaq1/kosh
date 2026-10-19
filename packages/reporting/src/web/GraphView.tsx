@@ -4,8 +4,8 @@
  * point drills down to its records. A visually hidden table gives screen readers the same data. `ReportChart` is
  * shared by the graph view and dashboard cards.
  */
-import { Alert, Spinner, useKosh, type ViewProps } from '@isahaq/kosh-ui';
-import type { Condition, GraphView as GraphDefinition, MeasureNode } from '@isahaq/kosh-views';
+import { Alert, Spinner, useKosh, type ViewProps } from '@kosh/ui';
+import type { Condition, GraphView as GraphDefinition, MeasureNode } from '@kosh/views';
 import { type ReactElement, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {

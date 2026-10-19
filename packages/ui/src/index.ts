@@ -1,8 +1,8 @@
 /**
  * @packageDocumentation
- * `@isahaq/kosh-ui` (RFC 0007): the design system (tokens, light/dark themes, RTL, Radix-based primitives), the app shell
+ * `@kosh/ui` (RFC 0007): the design system (tokens, light/dark themes, RTL, Radix-based primitives), the app shell
  * and router, i18n (English, Bangla, Arabic for RTL), and the view renderers (list, form, kanban) driven by
- * `@isahaq/kosh-views` definitions and the `@isahaq/kosh-search` layer. Renderers, widgets and components are registered by name:
+ * `@kosh/views` definitions and the `@kosh/search` layer. Renderers, widgets and components are registered by name:
  * modules add their own and replace defaults explicitly.
  */
 import { Registry } from './registry.js';
@@ -65,6 +65,6 @@ export function createDefaultRegistry(): Registry {
 
 /** Package identity. */
 export const PACKAGE: { readonly name: string; readonly rfc: string } = Object.freeze({
-  name: '@isahaq/kosh-ui',
+  name: '@kosh/ui',
   rfc: 'RFC 0007',
 });

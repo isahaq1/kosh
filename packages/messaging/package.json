@@ -1,5 +1,5 @@
 {
-  "name": "@isahaq/kosh-messaging",
+  "name": "@kosh/messaging",
   "version": "0.1.0",
   "description": "Chatter, followers, activities, internal chat and channels (RFC 0006)",
   "keywords": [
@@ -48,11 +48,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@isahaq/kosh-modules-sdk": "workspace:*",
-    "@isahaq/kosh-server": "workspace:*",
-    "@isahaq/kosh-storage": "workspace:*",
+    "@kosh/modules-sdk": "workspace:*",
+    "@kosh/server": "workspace:*",
+    "@kosh/storage": "workspace:*",
     "fastify": "^5.12.7",
-    "@isahaq/kosh-ui": "workspace:*",
+    "@kosh/ui": "workspace:*",
     "lucide-react": "^1.59.0"
   },
   "peerDependencies": {

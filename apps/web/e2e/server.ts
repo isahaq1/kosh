@@ -13,11 +13,11 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { installActivityTypes } from '@isahaq/kosh-messaging';
-import { installApprovalPolicies } from '@isahaq/kosh-permissions';
-import { installTemplates } from '@isahaq/kosh-reporting';
-import { createServer, installBase, startServer } from '@isahaq/kosh-server';
-import { orm } from '@isahaq/kosh-server/orm';
+import { installActivityTypes } from '@kosh/messaging';
+import { installApprovalPolicies } from '@kosh/permissions';
+import { installTemplates } from '@kosh/reporting';
+import { createServer, installBase, startServer } from '@kosh/server';
+import { orm } from '@kosh/server/orm';
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
 import { MODULES } from './fixture/modules.ts';
 

@@ -1,11 +1,11 @@
 /**
  * Views, actions and searches (RFC 0004) on real PostgreSQL: validated at startup, extended by another module,
  * served per user (unreadable fields removed, buttons the user cannot run dropped), searches compiled by
- * `@isahaq/kosh-search` accepted by the generated API (relation paths included), and saved views private or shared.
+ * `@kosh/search` accepted by the generated API (relation paths included), and saved views private or shared.
  */
-import { defineModule as defineKoshModule } from '@isahaq/kosh-modules-sdk';
-import { compileSearch } from '@isahaq/kosh-search';
-import { list } from '@isahaq/kosh-views';
+import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
+import { compileSearch } from '@kosh/search';
+import { list } from '@kosh/views';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import {
   type Authenticator,

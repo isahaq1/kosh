@@ -436,7 +436,7 @@ export function registerRestApi(
         400,
         'invalid-format',
         'Invalid format',
-        'format is csv or json (xlsx: @isahaq/kosh-reporting).',
+        'format is csv or json (xlsx: @kosh/reporting).',
       );
     const max = format === 'csv' ? STREAM_LIMIT : EXPORT_LIMIT;
     const limit = q['limit'] === undefined ? max : Number(q['limit']);

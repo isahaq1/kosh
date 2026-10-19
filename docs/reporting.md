@@ -35,9 +35,9 @@ other.
 - Field security applies to every group and measure (a restricted field is `403`); the selection labels and display
   names of many2one headers are resolved within the caller's access.
 
-Views (RFC 0004 builders in `@isahaq/kosh-views`): `pivot`, `graph`, `calendar`, `gantt`, `map`, `hierarchy`, `cohort`,
+Views (RFC 0004 builders in `@kosh/views`): `pivot`, `graph`, `calendar`, `gantt`, `map`, `hierarchy`, `cohort`,
 `spreadsheet`, `dashboard`. They are validated against the models when the server starts and served per user; the
-renderers are in `@isahaq/kosh-reporting/web` (`registerReportingWeb(registry)`), with ECharts and MapLibre loaded on demand.
+renderers are in `@kosh/reporting/web` (`registerReportingWeb(registry)`), with ECharts and MapLibre loaded on demand.
 
 ## Exports
 

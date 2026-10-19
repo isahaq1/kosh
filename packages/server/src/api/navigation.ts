@@ -8,7 +8,7 @@
  * - `GET /api/v1/menus`         the menu tree (optionally `?app=`)
  * - `GET /api/v1/actions/:id`   one action, 403 when not visible
  */
-import type { KoshModule, LoadedModules, MenuSpec } from '@isahaq/kosh-modules-sdk';
+import type { KoshModule, LoadedModules, MenuSpec } from '@kosh/modules-sdk';
 import type { FastifyInstance } from 'fastify';
 import { HttpProblem } from '../errors.js';
 import type { Env } from '../orm.js';

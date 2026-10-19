@@ -3,17 +3,12 @@
  * approvals), plus `purchase_approvals`, which adds the approval panel to the purchase form by a view extension.
  * Server-side code, run by Node (type stripping) against the built packages.
  */
-import { messaging, messagingShutro } from '@isahaq/kosh-messaging';
-import { defineModule as defineKoshModule } from '@isahaq/kosh-modules-sdk';
-import {
-  approvalGuard,
-  permissions,
-  permissionsShutro,
-  requestApprovals,
-} from '@isahaq/kosh-permissions';
-import { reporting, reportingShutro } from '@isahaq/kosh-reporting';
-import { base, baseShutro } from '@isahaq/kosh-server';
-import { orm } from '@isahaq/kosh-server/orm';
+import { messaging, messagingShutro } from '@kosh/messaging';
+import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
+import { approvalGuard, permissions, permissionsShutro, requestApprovals } from '@kosh/permissions';
+import { reporting, reportingShutro } from '@kosh/reporting';
+import { base, baseShutro } from '@kosh/server';
+import { orm } from '@kosh/server/orm';
 import {
   action,
   calendar,
@@ -27,7 +22,7 @@ import {
   map,
   pivot,
   search,
-} from '@isahaq/kosh-views';
+} from '@kosh/views';
 
 const { defineGroup, defineModel, defineModule, definePermission, f } = orm;
 
