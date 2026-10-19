@@ -21,3 +21,7 @@ Things Kosh needs from Shutro, recorded instead of being worked around (CLAUDE.m
 | 15 | `records.trail()` should apply field security and page through long histories | The chatter's change log (RFC 0006): users must not see changes of fields they may not read | **Added in Shutro** `7a41838` (`before` cursor, unreadable fields left out) and `d1a5f65` (`limit` counts visible rows) |
 | 16 | Check record rules of a permission without writing ("may this user write these records?") | Followers managed by the record's writers (RFC 0006) | **Added in Shutro** `8e9105f` (`env.access.checkRecords(model, ids, perm)`) |
 | 17 | Migration planning must leave tables the application owns outside the models alone | `kosh migrate` (Kosh's idempotency-key table) | **Added in Shutro** `4057962` (`planMigration({ ignore })`) |
+| 18 | Plan a migration for a module **removal**: drop only what the removed modules own (tables, and columns their `extendModel`s added) | RFC 0008 (uninstall with Remove data) | Open (RFC 0008 draft) |
+| 19 | Ownership metadata: which module created each table and column | RFC 0008 (uninstall plan, impact counts) | Open (RFC 0008 draft) |
+| 20 | Unload a module's data records by external id (the reverse of `loadData`) | RFC 0008 (uninstall) | Open (RFC 0008 draft) |
+| 21 | Build a registry for a subset of the loaded modules quickly (cached per installed set) | RFC 0008 (hot reload after install / disable) | Open (RFC 0008 draft) |

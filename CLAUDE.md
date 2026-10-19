@@ -236,6 +236,7 @@ export default defineModule({
 - [x] RFC 0005 Reporting engine
 - [ ] RFC 0006 Communication & notification architecture
 - [x] RFC 0007 Frontend architecture & design system
+- [ ] RFC 0008 Default business apps (Settings, Accounting, Sales, Purchase, Projects) & App manager (install / disable / uninstall)
 
 ### Phase 1 — Server foundation
 
