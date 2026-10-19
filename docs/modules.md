@@ -38,11 +38,22 @@ Version ranges: `1.2.3`, `^1.2.0`, `~1.2.0`, `>=1.2.0 <2.0.0`, `*`.
 ## Installing, disabling and enabling apps (RFC 0008)
 
 `src/modules.ts` lists the **catalogue**: the modules this installation can install. The database records which of
-them are **installed**, **disabled** or still **available** (`kosh_module`). Servers serve the installed ones:
+them are **installed**, **disabled** or still **available** (`kosh_module`). The app host serves the installed
+ones, and switches to the new set without a restart whenever apps change, on this server or another:
 
 ```ts
-const server = await createServer({ databaseUrl, modules: await installedModules(databaseUrl, modules) });
+const host = await createAppHost({ databaseUrl, catalogue: modules, migrationsDir: 'migrations' });
+await startAppHost(host, { port: 3000 });
 ```
+
+**Settings → Apps** in the back-office is the App manager. It shows each app as a card with its icon, state and
+what it needs, with search and filters. Install, Enable and Disable show the server's plan first: what comes along,
+what goes with it, and the database changes and their SQL. Only Administrators and holders of the
+**Settings / App manager** access level can use it, and the server checks this on every request
+(`/api/v1/settings/apps`, `/plan`, `/apply`). An apply re-plans and refuses a plan that is no longer current, so a
+stale or repeated request changes nothing. `base` and Settings are always installed.
+
+The same from the terminal:
 
 ```sh
 npx kosh apps                       # ● installed  ◌ disabled  ○ available
@@ -53,23 +64,38 @@ npx kosh apps install sales --plan  # only show the plan
 ```
 
 Every change is planned against the live database first: the modules (dependencies, cascades) and the schema
-statements. It is then applied in **one PostgreSQL transaction**, which covers the migration file (written to
-`migrations/`), the new modules' seed data and app defaults, their `hooks.postInstall`, and the installed set. If
-anything fails, nothing changes, not even the migration file. Each applied change is logged in `kosh_app_log` with
-who made it and its SQL.
+statements. It is then applied in **one PostgreSQL transaction**, which covers:
+
+- the migration file, written to `migrations/`;
+- the new modules' seed data, and every app's defaults (`hooks.defaults`);
+- the new modules' `hooks.postInstall`;
+- the installed set;
+- an `apps.change` audit event.
+
+If anything fails, nothing changes, not even the migration file. Each applied change is logged in `kosh_app_log`
+with who made it, its SQL and the migration file itself. When a server did not keep the file (a recreated
+container, for example), `kosh migrate` and the next app change write it back from the log, byte for byte. When the
+change commits, `NOTIFY kosh_apps` tells every server to switch to the new set; requests already running finish on
+the old one.
+
+A module adds its defaults (data derived from the served modules, such as approval policies from their `approvals`)
+with an idempotent hook. It runs after every seed and every app install:
+
+```ts
+hooks: { defaults: async (env, modules) => `${await installTemplates(env, modules)} document template(s) installed` },
+```
 
 The engine refuses a change in these cases:
 
 - the database has pending migration files, or does not match its modules yet (run `kosh migrate` first);
 - the change would drop or alter data;
-- `base` would be disabled;
+- `base` or Settings would be disabled;
 - disabling would leave behind a `NOT NULL` column without a database default that a served model still has (a
   required field with a function default or a compute, added by the disabled module's `extendModel`);
 - another app change happened after this one was planned.
 
 A disabled module's tables stay part of the schema, so `kosh migrate` plans with the installed and disabled modules
-and never proposes dropping them. Restart the API after a change; hot reload comes with the Apps page (RFC 0008 step
-2). Removing an app together with its data comes in a later step.
+and never proposes dropping them. Removing an app together with its data comes in a later step.
 
 Projects from before the App manager have no `kosh_module` yet. Until their first `kosh apps` change, servers and
 `kosh migrate` keep treating `src/modules.ts` as the installed set. That first change records the modules that have

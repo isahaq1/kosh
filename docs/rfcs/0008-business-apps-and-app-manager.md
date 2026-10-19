@@ -1,6 +1,7 @@
 # RFC 0008: Default business apps & the App manager (install, disable, uninstall)
 
-- **Status:** Accepted (2026-10-19); step 1 implemented (`kosh apps`, see Implementation notes)
+- **Status:** Accepted (2026-10-19); steps 1 and 2 implemented (`kosh apps`; the app host, the Settings app and the
+  Apps page; see Implementation notes)
 - **Depends on:** 0001 (modules, per-database installation), 0002 (generated API), 0003 (permissions), 0004/0005
   (views, reporting), 0006 (chatter), 0007 (frontend)
 - **Followed by:** RFC 0009 Accounting (ledger design), written before Accounting is built
@@ -269,3 +270,36 @@ App management is framework code: it lives in Kosh (`@kosh/modules-sdk`, `@kosh/
     full rollback; disable and enable keeping data; the required-column refusal; and a stale plan.
   - `packages/cli/test/apps.integration.test.ts` covers adoption, plan, install, disable with migrate, enable,
     "no", unknown apps and protected apps.
+
+## Implementation notes (2026-10-19): step 2
+
+- **Progress:** `apply` runs inside the request (installs take seconds), and the page shows it as busy. Progress
+  over WebSocket waits for the realtime gateway (RFC 0006).
+- **Idempotency:** `apply` re-plans and compares the `planId` from `/plan`. A changed set, schema or replay gets
+  409 and changes nothing, so no separate idempotency key is needed. The plan's digest covers the current set, the
+  change and the SQL.
+- **Hot reload (decision 5):** on by default, measured in tests. The app host (`createAppHost`, `@kosh/server`) owns
+  the listener. On `NOTIFY kosh_apps` or a local change, it builds a server for the new set (Fastify via
+  `serverFactory`), sends new requests to it, and closes the old one when its requests finish (30 s at most). A failed
+  rebuild keeps serving the current set and logs the error. The starter's `server.ts` and the e2e server use it.
+- **Audit:** `applyApps` writes `apps.change` in the change's own transaction (actor: the user, or none for the CLI).
+- **Migration files on servers:** `kosh_app_log` keeps each file byte for byte. `restoreAppMigrations` (run by
+  `prepareApps` and `kosh migrate`) writes back files a server did not keep, so numbering and checksums hold.
+- **Defaults:** approval policies, document templates and activity types are now each app's `hooks.defaults`. They
+  are idempotent and run after every seed and install, so web installs get them as CLI installs do.
+- **Client actions** (`{ type: 'client', page }` and `registry.registerPage`) carry the Apps page. They are a general
+  framework feature for screens that are not one model's views.
+- **`@kosh/settings`:**
+  - the Settings app, with the access level `settings.apps` ("App manager");
+  - the API `/api/v1/settings/apps`, `/plan` and `/apply`, under `settings` because `/api/v1/apps` is the launcher;
+  - the Apps page, in English and Bangla.
+- **`kosh init`:** writes the full catalogue (every framework app plus Settings) to `src/modules.ts`, and installs
+  base, Settings and the chosen apps.
+- **Tests:**
+  - `packages/server/test/host.integration.test.ts`: a change on another server is served without a restart, and a
+    request running during the switch finishes.
+  - `packages/settings/test/apps-api.integration.test.ts`: forbidden users get 401/403 on every route; plan, stale
+    plan, apply, audit, replay; protected apps; the client action in the menu.
+  - `apps/web/e2e/apps.spec.ts`: install from the page, use the app, disable it; axe in light and dark; Bangla;
+    users without access.
+  - The e2e server now installs its modules through the App manager.

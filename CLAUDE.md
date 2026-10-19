@@ -268,7 +268,7 @@ export default defineModule({
 ### Phase 6 — Proof
 
 - [x] App manager step 1: installed set, `kosh apps` install / disable / enable in one transaction (RFC 0008, docs/modules.md)
-- [ ] App manager step 2: apps API, hot reload across nodes, Settings app with the Apps page
+- [x] App manager step 2: apps API, hot reload across nodes (app host), Settings app with the Apps page
 - [ ] Default business apps: Settings, Accounting (RFC 0009), Sales, Purchase, Projects (RFC 0008 §8)
 - [ ] Demo modules: base, contacts, product, purchase (with approvals), inventory, sales
 - [ ] Performance benchmarks vs Odoo-like workloads

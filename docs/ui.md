@@ -97,6 +97,12 @@ createRoot(root).render(<KoshApp api={createKoshApi()} registry={registry} />);
   existing name throws unless `{ replace: true }`; a view with `component: 'x'` uses the renderer registered as `x`.
 - Node components receive the record, the model, the served view, the API, the record `version` (refetch with it)
   and `reload()`.
+- **Client actions** open a page instead of a model's views, for screens such as Settings → Apps. The action is
+  `{ type: 'client', page: 'settings.Apps', label: 'Apps' }`, and the page is registered with
+  `registry.registerPage('settings.Apps', Component)`. Pages receive the API and the action's label, and call their
+  module's routes, which check access again. Menus show client actions like any other action.
+- App icons: `AppIcon` maps a manifest's `app.icon` (Lucide names: `book`, `wallet`, `shopping-cart`, ...) to an
+  icon, in the launcher and the App manager.
 - The list virtualizes rows (TanStack Virtual), orders and pages on the server, shows totals for `sum` columns,
   groups one level (expandable), and edits `inlineEdit` columns with compare-and-set. The form runs onchange,
   saves with `If-Match` (a record changed by someone else asks for a reload instead of overwriting), edits lines
