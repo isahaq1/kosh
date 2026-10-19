@@ -31,7 +31,7 @@ jobs:
       - run: pnpm exec biome ci .
       - run: node scripts/check-boundaries.ts
       - run: pnpm build
-      - run: pnpm --filter @kosh/web api:check # the committed typed client matches the modules
+      - run: pnpm --filter @isahaq/kosh-web api:check # the committed typed client matches the modules
       - run: pnpm test # integration tests use Testcontainers (Docker is available on ubuntu-latest)
 
   e2e:
@@ -51,7 +51,7 @@ jobs:
       - run: ln -s "$GITHUB_WORKSPACE/shutro-src" "$GITHUB_WORKSPACE/../shutro"
       - run: cd ../shutro && pnpm install --frozen-lockfile && pnpm pack:npm && cd dist-npm/shutro && npm install --omit=dev
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @kosh/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @isahaq/kosh-web exec playwright install --with-deps chromium
       - run: pnpm build # the e2e API server (Node, PostgreSQL via Testcontainers) runs the built packages
       - run: pnpm test:e2e
       - uses: actions/upload-artifact@v4

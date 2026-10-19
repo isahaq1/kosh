@@ -25,7 +25,7 @@ code its `visibleTo` names), and an action on a model only with read access to i
 ## The administrator bypass
 
 `base.admin` (and any runtime role marked `administrator` or implying it) is the single explicit bypass:
-Shutro `env.administrator`, exposed as `isSuperuser(env)` from `@kosh/server`. Administrators pass every ACL,
+Shutro `env.administrator`, exposed as `isSuperuser(env)` from `@isahaq/kosh-server`. Administrators pass every ACL,
 rule, field and permission check, acting as themselves (their changes are attributed to them). Safeguards:
 
 - **2FA is mandatory**: administrator groups count only in a session that entered a second factor (verify at
@@ -61,7 +61,7 @@ saved (unknown roles, models, fields and permissions, and broken rule domains ar
 ## Approvals
 
 ```ts
-import { approvalGuard, requestApprovals } from '@kosh/permissions';
+import { approvalGuard, requestApprovals } from '@isahaq/kosh-permissions';
 
 state: f.state({
   states: { draft: 'Draft', submitted: 'Submitted', approved: 'Approved', rejected: 'Rejected' },

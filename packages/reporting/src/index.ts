@@ -1,13 +1,13 @@
 /**
  * @packageDocumentation
- * `@kosh/reporting` (RFC 0005): the report query (pivots with every level in one GROUPING SETS statement, drill-down
+ * `@isahaq/kosh-reporting` (RFC 0005): the report query (pivots with every level in one GROUPING SETS statement, drill-down
  * domains, period comparisons, `asOf`), formatted XLSX / CSV exports, documents (layouts rendered to PDF with
  * Playwright), scheduled reports (Shutro jobs, delivery adapters), dashboards and spreadsheets. Views are in
- * `@kosh/reporting/web`.
+ * `@isahaq/kosh-reporting/web`.
  */
-import { defineModule } from '@kosh/modules-sdk';
-import { base, type ModuleContext } from '@kosh/server';
-import { dashboard, form, list, spreadsheet } from '@kosh/views';
+import { defineModule } from '@isahaq/kosh-modules-sdk';
+import { base, type ModuleContext } from '@isahaq/kosh-server';
+import { dashboard, form, list, spreadsheet } from '@isahaq/kosh-views';
 import { closeDocuments } from './documents.js';
 import { reportingShutro } from './models.js';
 import { registerReportRoutes } from './routes.js';
@@ -63,7 +63,7 @@ export { reportingShutro };
 
 /** Package identity. */
 export const PACKAGE: { readonly name: string; readonly rfc: string } = Object.freeze({
-  name: '@kosh/reporting',
+  name: '@isahaq/kosh-reporting',
   rfc: 'RFC 0005',
 });
 

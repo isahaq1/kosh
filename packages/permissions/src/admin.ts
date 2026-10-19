@@ -8,8 +8,14 @@
  *
  * Approval policies are data: administrators edit `approval.policy` / `approval.level` through the generated API.
  */
-import { audit, HttpProblem, keepingAdministrator, type ModuleContext, timeOf } from '@kosh/server';
-import type { Env } from '@kosh/server/orm';
+import {
+  audit,
+  HttpProblem,
+  keepingAdministrator,
+  type ModuleContext,
+  timeOf,
+} from '@isahaq/kosh-server';
+import type { Env } from '@isahaq/kosh-server/orm';
 import type { FastifyRequest } from 'fastify';
 
 type Row = Record<string, unknown>;

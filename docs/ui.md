@@ -1,13 +1,13 @@
 # Views and UI
 
 Screens are data (RFC 0004): modules declare views, actions and searches in their manifests; the server checks them
-against the models when it starts and serves them per user; `@kosh/ui` renders them (RFC 0007). Custom React code
+against the models when it starts and serves them per user; `@isahaq/kosh-ui` renders them (RFC 0007). Custom React code
 plugs in by name where metadata is not enough.
 
 ## Declaring views
 
 ```ts
-import { action, form, kanban, list, search } from '@kosh/views';
+import { action, form, kanban, list, search } from '@isahaq/kosh-views';
 
 export const purchase = defineModule({
   // ...
@@ -42,7 +42,7 @@ export const purchase = defineModule({
   type error). Transitions, relation paths, line columns, group-by fields and view ids are checked **when the server
   starts**: a broken view stops the server, it never breaks a screen.
 - `readonlyWhen` / `visibleWhen` are Shutro domains. The browser evaluates the ones it can (the record's own values;
-  `holds()` / `evaluate()` in `@kosh/views`); the server re-checks every write anyway.
+  `holds()` / `evaluate()` in `@isahaq/kosh-views`); the server re-checks every write anyway.
 - Every node has an id (fields: their key; groups, pages, buttons: the id given), the anchor for extensions.
 
 ## Extending another module's view
@@ -73,7 +73,7 @@ targets), the transitions with their source and target states, the allowed opera
 
 ## Search
 
-`@kosh/search` compiles a search state (text facets, filters, group-by, order, a custom domain) to one Shutro domain
+`@isahaq/kosh-search` compiles a search state (text facets, filters, group-by, order, a custom domain) to one Shutro domain
 and grouping, used by every view: values of one field OR, filters of the same `group` OR, everything else AND; the
 action's `domain` always applies; LIKE wildcards typed by users are literal. The state round-trips through the URL
 (`?q=`), so deep links, the back button and saved searches work. Favorites are `kosh.saved_view` records, private
@@ -82,8 +82,8 @@ or shared, governed by record rules.
 ## The app
 
 ```tsx
-import { registerPermissionsWeb } from '@kosh/permissions/web';
-import { createDefaultRegistry, createKoshApi, KoshApp } from '@kosh/ui';
+import { registerPermissionsWeb } from '@isahaq/kosh-permissions/web';
+import { createDefaultRegistry, createKoshApi, KoshApp } from '@isahaq/kosh-ui';
 
 const registry = createDefaultRegistry();
 registerPermissionsWeb(registry); // each module's web contribution
@@ -105,7 +105,7 @@ createRoot(root).render(<KoshApp api={createKoshApi()} registry={registry} />);
 
 ## Design system, themes, languages
 
-- Tokens in `@kosh/ui/styles.css` (CSS variables mapped to Tailwind v4 utilities), light and dark themes (system
+- Tokens in `@isahaq/kosh-ui/styles.css` (CSS variables mapped to Tailwind v4 utilities), light and dark themes (system
   default, remembered per browser), logical properties only (`ms`/`me`, `start`/`end`), so right-to-left needs no
   overrides. Components are owned code on Radix primitives (focus, keyboard, ARIA).
 - i18next with the `kosh` namespace in English, Bangla and Arabic (Arabic verifies RTL); modules add namespaces
@@ -124,4 +124,4 @@ serious or critical violations) in both themes. Run `pnpm build && pnpm test:e2e
 ## Not yet
 
 Code splitting per app (ECharts and MapLibre load on demand; the rest is one bundle), `kosh inspect view` on the
-CLI. The chatter is `@kosh/messaging/web` (docs/messaging.md). Performance budgets: docs/benchmarks.md.
+CLI. The chatter is `@isahaq/kosh-messaging/web` (docs/messaging.md). Performance budgets: docs/benchmarks.md.

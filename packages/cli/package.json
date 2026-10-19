@@ -1,5 +1,5 @@
 {
-  "name": "@kosh/cli",
+  "name": "@isahaq/kosh-cli",
   "version": "0.1.0",
   "description": "kosh new | dev | module:create | migrate | build (RFC 0001)",
   "keywords": [
@@ -23,7 +23,7 @@
   "type": "module",
   "sideEffects": false,
   "bin": {
-    "kosh": "./dist/bin.js"
+    "kosh": "./bin/kosh.js"
   },
   "exports": {
     ".": {
@@ -33,6 +33,7 @@
     }
   },
   "files": [
+    "bin",
     "dist"
   ],
   "engines": {
@@ -46,7 +47,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@kosh/modules-sdk": "workspace:*",
-    "@kosh/server": "workspace:*"
+    "@isahaq/kosh-modules-sdk": "workspace:*",
+    "@isahaq/kosh-server": "workspace:*"
   }
 }

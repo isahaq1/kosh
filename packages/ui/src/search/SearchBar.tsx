@@ -1,6 +1,6 @@
 /**
  * The search bar (RFC 0004 §5): text facets with suggestions per search field, filters, group-by, and favorites
- * (saved searches, private or shared, stored as `kosh.saved_view` records). It edits a `@kosh/search` state; the
+ * (saved searches, private or shared, stored as `kosh.saved_view` records). It edits a `@isahaq/kosh-search` state; the
  * views compile it, so a search means the same in every view.
  */
 import {
@@ -10,8 +10,8 @@ import {
   type SearchState,
   suggestions,
   toggle,
-} from '@kosh/search';
-import type { SearchSpec } from '@kosh/views';
+} from '@isahaq/kosh-search';
+import type { SearchSpec } from '@isahaq/kosh-views';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Filter, Layers, Search, Star, X } from 'lucide-react';
 import { type KeyboardEvent, type ReactElement, useId, useState } from 'react';

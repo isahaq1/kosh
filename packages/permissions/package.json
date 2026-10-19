@@ -1,5 +1,5 @@
 {
-  "name": "@kosh/permissions",
+  "name": "@isahaq/kosh-permissions",
   "version": "0.1.0",
   "description": "Roles, groups, ACL, field security, action permissions and approval rules on Shutro security (RFC 0003)",
   "keywords": [
@@ -48,10 +48,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@kosh/modules-sdk": "workspace:*",
-    "@kosh/server": "workspace:*",
+    "@isahaq/kosh-modules-sdk": "workspace:*",
+    "@isahaq/kosh-server": "workspace:*",
     "fastify": "^5.12.7",
-    "@kosh/ui": "workspace:*"
+    "@isahaq/kosh-ui": "workspace:*"
   },
   "peerDependencies": {
     "react": "^19.3.1",

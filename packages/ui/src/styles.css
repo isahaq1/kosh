@@ -1,7 +1,7 @@
 /*
  * Kosh design tokens (RFC 0007): colors, radius and typography as CSS variables, light and dark themes, Tailwind v4
  * utilities mapped onto them. Components use logical properties only (ms/me, ps/pe, start/end), so RTL needs no
- * overrides. Import once from the app: `@import '@kosh/ui/styles.css';` after `@import 'tailwindcss';`.
+ * overrides. Import once from the app: `@import '@isahaq/kosh-ui/styles.css';` after `@import 'tailwindcss';`.
  */
 @custom-variant dark (&:where(.dark, .dark *));
 

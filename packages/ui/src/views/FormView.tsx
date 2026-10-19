@@ -12,7 +12,7 @@ import {
   type FormNode,
   holds,
   type LinesNode,
-} from '@kosh/views';
+} from '@isahaq/kosh-views';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 import { type ReactElement, useEffect, useId, useMemo, useState } from 'react';

@@ -6,7 +6,7 @@
  * - `POST /api/v1/approvals/requests/:id/approve`        `{ comment? }`
  * - `POST /api/v1/approvals/requests/:id/reject`         `{ comment? }`
  */
-import { HttpProblem, type ModuleContext } from '@kosh/server';
+import { HttpProblem, type ModuleContext } from '@isahaq/kosh-server';
 import type { FastifyRequest } from 'fastify';
 import { decide, inbox, requestsOf } from './approvals.js';
 

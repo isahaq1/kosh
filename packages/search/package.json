@@ -1,5 +1,5 @@
 {
-  "name": "@kosh/search",
+  "name": "@isahaq/kosh-search",
   "version": "0.1.0",
   "description": "Shared search, filter, group-by, favorites and saved-views layer (RFC 0004)",
   "keywords": [
@@ -43,6 +43,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@kosh/views": "workspace:*"
+    "@isahaq/kosh-views": "workspace:*"
   }
 }

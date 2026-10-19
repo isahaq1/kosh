@@ -3,7 +3,7 @@
  * edit of `inlineEdit` columns with compare-and-set, and row virtualization (TanStack Virtual) so large pages scroll
  * smoothly. Rows are a semantic table: keyboard users move with Tab and open with Enter.
  */
-import { type Condition, type FieldNode, holds } from '@kosh/views';
+import { type Condition, type FieldNode, holds } from '@isahaq/kosh-views';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';

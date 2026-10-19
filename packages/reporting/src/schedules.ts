@@ -8,7 +8,7 @@
  * The job queue is Shutro's (`env.enqueue` / `shutro.work`), behind {@link JobQueue}: swapping it for another
  * backend is this file only.
  */
-import type { Env, Shutro } from '@kosh/server/orm';
+import type { Env, Shutro } from '@isahaq/kosh-server/orm';
 
 type Row = Record<string, unknown>;
 interface Rows {

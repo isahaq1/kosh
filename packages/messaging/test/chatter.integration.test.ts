@@ -6,8 +6,8 @@
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { type Authenticator, createServer, type KoshServer } from '@kosh/server';
-import { orm } from '@kosh/server/orm';
+import { type Authenticator, createServer, type KoshServer } from '@isahaq/kosh-server';
+import { orm } from '@isahaq/kosh-server/orm';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import type { Chatter, MessageItem } from '../src/index.js';

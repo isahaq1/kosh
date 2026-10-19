@@ -1,11 +1,11 @@
 /**
  * @packageDocumentation
- * `@kosh/storage` (RFC 0006 §5.1): attachments on records. Bytes in S3-compatible object storage (S3, SeaweedFS,
+ * `@isahaq/kosh-storage` (RFC 0006 §5.1): attachments on records. Bytes in S3-compatible object storage (S3, SeaweedFS,
  * MinIO; SigV4 on `node:crypto`) or a directory; metadata in `storage.attachment`, a private model reached only
  * through routes that check the attached record as the caller.
  */
-import { defineModule } from '@kosh/modules-sdk';
-import { base, type ModuleContext } from '@kosh/server';
+import { defineModule } from '@isahaq/kosh-modules-sdk';
+import { base, type ModuleContext } from '@isahaq/kosh-server';
 import { storageShutro } from './models.js';
 import { registerAttachmentRoutes } from './routes.js';
 
@@ -44,7 +44,7 @@ export { storageShutro };
 
 /** Package identity. */
 export const PACKAGE: { readonly name: string; readonly rfc: string } = Object.freeze({
-  name: '@kosh/storage',
+  name: '@isahaq/kosh-storage',
   rfc: 'RFC 0006',
 });
 

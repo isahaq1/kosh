@@ -1,7 +1,7 @@
 /** A small CRM for chatter tests: deals with a tracked state, partner and amount, and a restricted margin. */
-import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
-import { baseShutro } from '@kosh/server';
-import { orm } from '@kosh/server/orm';
+import { defineModule as defineKoshModule } from '@isahaq/kosh-modules-sdk';
+import { baseShutro } from '@isahaq/kosh-server';
+import { orm } from '@isahaq/kosh-server/orm';
 import { messaging, messagingShutro } from '../../src/index.js';
 
 const { defineGroup, defineModel, defineModule, f } = orm;

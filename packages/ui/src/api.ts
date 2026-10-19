@@ -3,7 +3,13 @@
  * code uses the generated typed client (`kosh generate client`); both speak the same REST API, sessions (cookie +
  * CSRF header) and RFC 9457 problems. The server decides everything; this only transports.
  */
-import type { Condition, SearchSpec, ViewDefinition, ViewType, WindowAction } from '@kosh/views';
+import type {
+  Condition,
+  SearchSpec,
+  ViewDefinition,
+  ViewType,
+  WindowAction,
+} from '@isahaq/kosh-views';
 
 export type Row = Record<string, unknown> & { readonly id: number };
 

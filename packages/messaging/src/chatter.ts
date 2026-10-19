@@ -7,14 +7,14 @@
  * Events for notifications (RFC 0006 part 3) are Shutro outbox events, emitted in the same transaction:
  * `mail.message.posted` and `mail.activity.assigned`.
  */
-import { HttpProblem } from '@kosh/server';
-import type { Env } from '@kosh/server/orm';
+import { HttpProblem } from '@isahaq/kosh-server';
+import type { Env } from '@isahaq/kosh-server/orm';
 import {
   type AttachmentInfo,
   attachmentsById,
   checkRecord,
   removeAttachments,
-} from '@kosh/storage';
+} from '@isahaq/kosh-storage';
 import { MAX_TEXT, mentionIds, plainText, renderBody } from './body.js';
 import { DEFAULT_ACTIVITY_TYPES } from './models.js';
 

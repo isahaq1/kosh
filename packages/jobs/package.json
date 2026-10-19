@@ -1,5 +1,5 @@
 {
-  "name": "@kosh/jobs",
+  "name": "@isahaq/kosh-jobs",
   "version": "0.0.0",
   "description": "Job queue, scheduler and retries (RFC 0006)",
   "license": "MIT",

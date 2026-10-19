@@ -6,9 +6,15 @@
  * - CSV export of 1M rows: first bytes in < 500 ms
  * - list page of 1 000 rows with the total count in < 300 ms (10 000 rows: 10 pages, each < 300 ms)
  */
-import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
-import { type Authenticator, base, baseShutro, createServer, type KoshServer } from '@kosh/server';
-import { orm } from '@kosh/server/orm';
+import { defineModule as defineKoshModule } from '@isahaq/kosh-modules-sdk';
+import {
+  type Authenticator,
+  base,
+  baseShutro,
+  createServer,
+  type KoshServer,
+} from '@isahaq/kosh-server';
+import { orm } from '@isahaq/kosh-server/orm';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { reporting, reportingShutro } from '../src/index.js';

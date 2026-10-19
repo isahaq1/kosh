@@ -4,8 +4,8 @@
  * comparisons, `asOf`, and formatted XLSX / CSV exports gated by the export permission and audited.
  */
 import { inflateRawSync } from 'node:zlib';
-import { type Authenticator, createServer, type KoshServer } from '@kosh/server';
-import { orm } from '@kosh/server/orm';
+import { type Authenticator, createServer, type KoshServer } from '@isahaq/kosh-server';
+import { orm } from '@isahaq/kosh-server/orm';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import type { Header, ReportResult } from '../src/index.js';

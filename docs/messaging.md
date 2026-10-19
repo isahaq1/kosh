@@ -5,7 +5,7 @@ followers, planned activities, and the change log read from Shutro's audit trail
 visible as the record: every route reads the record as the caller first, so record rules and field security decide.
 
 ```ts
-import { messaging } from '@kosh/messaging';
+import { messaging } from '@isahaq/kosh-messaging';
 
 export const purchase = defineModule({
   // ...
@@ -20,7 +20,7 @@ export const purchase = defineModule({
 ```
 
 ```tsx
-import { messagingMessages, registerMessagingWeb } from '@kosh/messaging/web';
+import { messagingMessages, registerMessagingWeb } from '@isahaq/kosh-messaging/web';
 
 registerMessagingWeb(registry); // the `chatter` component
 <KoshApp api={api} registry={registry} messages={{ messaging: messagingMessages }} />;
@@ -77,7 +77,7 @@ runs in the application's origin.
 Bytes live in an object store, metadata in `storage.attachment` (name, type, size, SHA-256, object key):
 
 - `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` (and `S3_REGION`): any S3-compatible store (AWS S3,
-  SeaweedFS as in `docker-compose.yml`, MinIO), path-style, signed with SigV4 (`@kosh/storage` signs on
+  SeaweedFS as in `docker-compose.yml`, MinIO), path-style, signed with SigV4 (`@isahaq/kosh-storage` signs on
   `node:crypto`; no SDK).
 - `KOSH_STORAGE_DIR`: a directory (development, tests, single-node installs with a backed-up volume).
 - `useStorage(app, storage)` sets any `Storage` implementation (`put`, `read`, `delete`).

@@ -34,16 +34,16 @@ importers:
 
   apps/web:
     dependencies:
-      '@kosh/messaging':
+      '@isahaq/kosh-messaging':
         specifier: workspace:*
         version: link:../../packages/messaging
-      '@kosh/permissions':
+      '@isahaq/kosh-permissions':
         specifier: workspace:*
         version: link:../../packages/permissions
-      '@kosh/reporting':
+      '@isahaq/kosh-reporting':
         specifier: workspace:*
         version: link:../../packages/reporting
-      '@kosh/ui':
+      '@isahaq/kosh-ui':
         specifier: workspace:*
         version: link:../../packages/ui
       react:
@@ -56,16 +56,16 @@ importers:
       '@axe-core/playwright':
         specifier: ^4.14.0
         version: 4.14.0(playwright-core@1.64.1)
-      '@kosh/cli':
+      '@isahaq/kosh-cli':
         specifier: workspace:*
         version: link:../../packages/cli
-      '@kosh/modules-sdk':
+      '@isahaq/kosh-modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
-      '@kosh/server':
+      '@isahaq/kosh-server':
         specifier: workspace:*
         version: link:../../packages/server
-      '@kosh/views':
+      '@isahaq/kosh-views':
         specifier: workspace:*
         version: link:../../packages/views
       '@playwright/test':
@@ -95,10 +95,10 @@ importers:
 
   packages/cli:
     dependencies:
-      '@kosh/modules-sdk':
+      '@isahaq/kosh-modules-sdk':
         specifier: workspace:*
         version: link:../modules-sdk
-      '@kosh/server':
+      '@isahaq/kosh-server':
         specifier: workspace:*
         version: link:../server
 
@@ -108,16 +108,16 @@ importers:
 
   packages/messaging:
     dependencies:
-      '@kosh/modules-sdk':
+      '@isahaq/kosh-modules-sdk':
         specifier: workspace:*
         version: link:../modules-sdk
-      '@kosh/server':
+      '@isahaq/kosh-server':
         specifier: workspace:*
         version: link:../server
-      '@kosh/storage':
+      '@isahaq/kosh-storage':
         specifier: workspace:*
         version: link:../storage
-      '@kosh/ui':
+      '@isahaq/kosh-ui':
         specifier: workspace:*
         version: link:../ui
       fastify:
@@ -148,7 +148,7 @@ importers:
 
   packages/modules-sdk:
     dependencies:
-      '@kosh/views':
+      '@isahaq/kosh-views':
         specifier: workspace:*
         version: link:../views
 
@@ -156,13 +156,13 @@ importers:
 
   packages/permissions:
     dependencies:
-      '@kosh/modules-sdk':
+      '@isahaq/kosh-modules-sdk':
         specifier: workspace:*
         version: link:../modules-sdk
-      '@kosh/server':
+      '@isahaq/kosh-server':
         specifier: workspace:*
         version: link:../server
-      '@kosh/ui':
+      '@isahaq/kosh-ui':
         specifier: workspace:*
         version: link:../ui
       fastify:
@@ -189,19 +189,19 @@ importers:
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
-      '@kosh/modules-sdk':
+      '@isahaq/kosh-modules-sdk':
         specifier: workspace:*
         version: link:../modules-sdk
-      '@kosh/search':
+      '@isahaq/kosh-search':
         specifier: workspace:*
         version: link:../search
-      '@kosh/server':
+      '@isahaq/kosh-server':
         specifier: workspace:*
         version: link:../server
-      '@kosh/ui':
+      '@isahaq/kosh-ui':
         specifier: workspace:*
         version: link:../ui
-      '@kosh/views':
+      '@isahaq/kosh-views':
         specifier: workspace:*
         version: link:../views
       echarts:
@@ -241,7 +241,7 @@ importers:
 
   packages/search:
     dependencies:
-      '@kosh/views':
+      '@isahaq/kosh-views':
         specifier: workspace:*
         version: link:../views
 
@@ -250,10 +250,10 @@ importers:
       '@fastify/rate-limit':
         specifier: ^11.2.1
         version: 11.2.1
-      '@kosh/modules-sdk':
+      '@isahaq/kosh-modules-sdk':
         specifier: workspace:*
         version: link:../modules-sdk
-      '@kosh/views':
+      '@isahaq/kosh-views':
         specifier: workspace:*
         version: link:../views
       '@opentelemetry/api':
@@ -275,7 +275,7 @@ importers:
         specifier: link:../../../shutro/dist-npm/shutro
         version: link:../../../shutro/dist-npm/shutro
     devDependencies:
-      '@kosh/search':
+      '@isahaq/kosh-search':
         specifier: workspace:*
         version: link:../search
       '@testcontainers/postgresql':
@@ -287,10 +287,10 @@ importers:
 
   packages/storage:
     dependencies:
-      '@kosh/modules-sdk':
+      '@isahaq/kosh-modules-sdk':
         specifier: workspace:*
         version: link:../modules-sdk
-      '@kosh/server':
+      '@isahaq/kosh-server':
         specifier: workspace:*
         version: link:../server
       fastify:
@@ -309,10 +309,10 @@ importers:
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
-      '@kosh/search':
+      '@isahaq/kosh-search':
         specifier: workspace:*
         version: link:../search
-      '@kosh/views':
+      '@isahaq/kosh-views':
         specifier: workspace:*
         version: link:../views
       '@tanstack/react-router':

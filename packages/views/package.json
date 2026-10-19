@@ -1,5 +1,5 @@
 {
-  "name": "@kosh/views",
+  "name": "@isahaq/kosh-views",
   "version": "0.1.0",
   "description": "View schemas: list, kanban, form, pivot, chart, calendar, gantt, map, hierarchy, cohort, spreadsheet, dashboard (RFC 0004)",
   "keywords": [

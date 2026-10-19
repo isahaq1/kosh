@@ -1,4 +1,4 @@
-import type { SearchSpec } from '@kosh/views';
+import type { SearchSpec } from '@isahaq/kosh-views';
 import { describe, expect, test } from 'vitest';
 import {
   addFacet,

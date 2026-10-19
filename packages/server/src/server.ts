@@ -4,7 +4,7 @@
  * errors, rate limiting on Valkey, OpenTelemetry spans, health checks, and graceful shutdown.
  */
 import rateLimit from '@fastify/rate-limit';
-import type { KoshModule } from '@kosh/modules-sdk';
+import type { KoshModule } from '@isahaq/kosh-modules-sdk';
 import type { Span } from '@opentelemetry/api';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import { Valkey } from 'iovalkey';

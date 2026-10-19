@@ -4,7 +4,7 @@ A Kosh module is one typed manifest wrapping a Shutro module (RFC 0001). Shutro 
 adds the app, access levels, menus, actions, views, hooks and translations.
 
 ```ts
-import { defineModule } from '@kosh/modules-sdk';
+import { defineModule } from '@isahaq/kosh-modules-sdk';
 import { contactsShutro } from './models/module.ts'; // Shutro defineModule: models, groups, permissions, data
 
 export const contacts = defineModule({

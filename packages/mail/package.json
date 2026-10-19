@@ -1,5 +1,5 @@
 {
-  "name": "@kosh/mail",
+  "name": "@isahaq/kosh-mail",
   "version": "0.0.0",
   "description": "Outbound and inbound email, templates (RFC 0006)",
   "license": "MIT",

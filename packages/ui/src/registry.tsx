@@ -3,7 +3,7 @@
  * (or field kind), and node components by name. Modules add entries; replacing an existing one must be asked for
  * (`{ replace: true }`), so two modules cannot silently fight over a widget.
  */
-import type { ComponentNode, Condition, FieldNode, ViewType } from '@kosh/views';
+import type { ComponentNode, Condition, FieldNode, ViewType } from '@isahaq/kosh-views';
 import type { ComponentType } from 'react';
 import type { KoshApi, Row, ServedView, ViewField } from './api.js';
 
@@ -36,7 +36,7 @@ export interface NodeComponentProps {
 /** Props of a view renderer. */
 export interface ViewProps {
   readonly served: ServedView;
-  /** The compiled search (`@kosh/search`). */
+  /** The compiled search (`@isahaq/kosh-search`). */
   readonly where: Condition | undefined;
   readonly groupBy: readonly string[];
   readonly order: readonly string[];

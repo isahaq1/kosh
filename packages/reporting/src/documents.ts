@@ -4,8 +4,8 @@
  * as the caller (rules and field security), values are formatted for the document's language, and every render is
  * audited. Modules ship default templates in their manifests; administrators edit copies as data.
  */
-import type { Env } from '@kosh/server/orm';
-import type { Block, Layout } from '@kosh/views';
+import type { Env } from '@isahaq/kosh-server/orm';
+import type { Block, Layout } from '@isahaq/kosh-views';
 
 export type { Block, Layout };
 

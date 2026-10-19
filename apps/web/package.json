@@ -1,5 +1,5 @@
 {
-  "name": "@kosh/web",
+  "name": "@isahaq/kosh-web",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -10,20 +10,20 @@
     "preview": "vite preview --port 4173 --strictPort",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:e2e": "playwright test",
-    "api:generate": "kosh generate client --modules @kosh/server --out src/api/kosh.gen.ts",
-    "api:check": "kosh generate client --modules @kosh/server --out src/api/kosh.gen.ts --check"
+    "api:generate": "kosh generate client --modules @isahaq/kosh-server --out src/api/kosh.gen.ts",
+    "api:check": "kosh generate client --modules @isahaq/kosh-server --out src/api/kosh.gen.ts --check"
   },
   "dependencies": {
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "@kosh/ui": "workspace:*",
-    "@kosh/permissions": "workspace:*",
-    "@kosh/reporting": "workspace:*",
-    "@kosh/messaging": "workspace:*"
+    "@isahaq/kosh-ui": "workspace:*",
+    "@isahaq/kosh-permissions": "workspace:*",
+    "@isahaq/kosh-reporting": "workspace:*",
+    "@isahaq/kosh-messaging": "workspace:*"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
-    "@kosh/cli": "workspace:*",
+    "@isahaq/kosh-cli": "workspace:*",
     "@playwright/test": "^1.55.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.1.0",
@@ -32,8 +32,8 @@
     "tailwindcss": "^4.3.3",
     "vite": "^7.1.0",
     "@testcontainers/postgresql": "^12.2.1",
-    "@kosh/server": "workspace:*",
-    "@kosh/modules-sdk": "workspace:*",
-    "@kosh/views": "workspace:*"
+    "@isahaq/kosh-server": "workspace:*",
+    "@isahaq/kosh-modules-sdk": "workspace:*",
+    "@isahaq/kosh-views": "workspace:*"
   }
 }

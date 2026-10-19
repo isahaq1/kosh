@@ -13,8 +13,8 @@
  * - `DELETE /api/v1/activities/:id`
  * - `GET    /api/v1/activities/types`, `GET /api/v1/activities/mine`
  */
-import { type ModuleContext, publicApiModels } from '@kosh/server';
-import { deleteObjects, positive } from '@kosh/storage';
+import { type ModuleContext, publicApiModels } from '@isahaq/kosh-server';
+import { deleteObjects, positive } from '@isahaq/kosh-storage';
 import type { FastifyRequest } from 'fastify';
 import {
   activityTypes,

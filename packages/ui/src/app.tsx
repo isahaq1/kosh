@@ -7,8 +7,8 @@
  * Routes: `/login`, `/` (launcher), `/:app` (first menu entry), `/:app/a/:action` (list / kanban),
  * `/:app/a/:action/:id` (form; `new` for a new record).
  */
-import { compileSearch, decodeSearch, encodeSearch, type SearchState } from '@kosh/search';
-import type { Condition, ViewType, WindowAction } from '@kosh/views';
+import { compileSearch, decodeSearch, encodeSearch, type SearchState } from '@isahaq/kosh-search';
+import type { Condition, ViewType, WindowAction } from '@isahaq/kosh-views';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createRootRoute,

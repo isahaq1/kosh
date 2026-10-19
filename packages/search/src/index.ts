@@ -1,11 +1,11 @@
 /**
  * @packageDocumentation
- * `@kosh/search` (RFC 0004 §5): the shared search layer. A search state (text facets, filters, group-by, order,
+ * `@isahaq/kosh-search` (RFC 0004 §5): the shared search layer. A search state (text facets, filters, group-by, order,
  * a custom domain) compiles to one Shutro domain + grouping that every view uses, so a filter means the same in a
  * list, a kanban and a pivot. The server validates the result (paths, operators, field security); the state
  * round-trips through the URL for deep links and saved views.
  */
-import type { Condition, SearchSpec } from '@kosh/views';
+import type { Condition, SearchSpec } from '@isahaq/kosh-views';
 
 /** What the user selected. */
 export interface SearchState {
@@ -169,6 +169,6 @@ export function decodeSearch(text: string | null | undefined): SearchState {
 
 /** Package identity. */
 export const PACKAGE: { readonly name: string; readonly rfc: string } = Object.freeze({
-  name: '@kosh/search',
+  name: '@isahaq/kosh-search',
   rfc: 'RFC 0004',
 });

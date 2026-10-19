@@ -25,8 +25,8 @@ import {
   Textarea,
   useKosh,
   type ViewProps,
-} from '@kosh/ui';
-import type { Block, Layout } from '@kosh/views';
+} from '@isahaq/kosh-ui';
+import type { Block, Layout } from '@isahaq/kosh-views';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GripVertical, Plus, Trash2 } from 'lucide-react';
 import { type ReactElement, useEffect, useId, useState } from 'react';

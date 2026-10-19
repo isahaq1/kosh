@@ -2,8 +2,8 @@
  * The gantt (timeline) view: records as bars from their start to their stop date over a day / week / month scale,
  * in rows by a group field (e.g. the responsible), with progress inside the bar. Opening a bar opens the record.
  */
-import { Alert, Button, Spinner, useKosh, useRowNames, type ViewProps } from '@kosh/ui';
-import type { GanttView as GanttDefinition } from '@kosh/views';
+import { Alert, Button, Spinner, useKosh, useRowNames, type ViewProps } from '@isahaq/kosh-ui';
+import type { GanttView as GanttDefinition } from '@isahaq/kosh-views';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { type ReactElement, useState } from 'react';

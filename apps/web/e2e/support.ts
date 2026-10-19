@@ -1,4 +1,4 @@
-import { totp } from '@kosh/server';
+import { totp } from '@isahaq/kosh-server';
 import { expect, type Page } from '@playwright/test';
 
 export const PASSWORD = 'correct horse battery';

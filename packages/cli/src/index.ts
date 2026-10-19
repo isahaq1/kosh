@@ -1,18 +1,18 @@
 /**
  * @packageDocumentation
- * `@kosh/cli`: kosh new | dev | module:create | migrate | build (RFC 0001), and `kosh generate client` (RFC 0002
+ * `@isahaq/kosh-cli`: kosh new | dev | module:create | migrate | build (RFC 0001), and `kosh generate client` (RFC 0002
  * §6.4). Commands follow their RFC approvals.
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
-import type { KoshModule } from '@kosh/modules-sdk';
-import { generateClient, openApiOf } from '@kosh/server';
+import type { KoshModule } from '@isahaq/kosh-modules-sdk';
+import { generateClient, openApiOf } from '@isahaq/kosh-server';
 
 /** Package identity. */
 export const PACKAGE: { readonly name: string; readonly rfc: string } = Object.freeze({
-  name: '@kosh/cli',
+  name: '@isahaq/kosh-cli',
   rfc: 'RFC 0001',
 });
 
@@ -60,7 +60,9 @@ export async function modulesOf(specifier: string, cwd: string): Promise<KoshMod
   }
   const all = Object.values(exported).filter(isModule);
   if (all.length === 0)
-    throw new Error(`${specifier} exports no Kosh modules (defineModule from @kosh/modules-sdk).`);
+    throw new Error(
+      `${specifier} exports no Kosh modules (defineModule from @isahaq/kosh-modules-sdk).`,
+    );
   return all;
 }
 

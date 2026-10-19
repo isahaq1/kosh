@@ -7,7 +7,7 @@
  * Monetary measures stay per currency at every level. Optional: a comparison period (previous period or year over
  * year) and `asOf` (models with history, as they were at an instant).
  */
-import type { Env } from '@kosh/server/orm';
+import type { Env } from '@isahaq/kosh-server/orm';
 
 export type Condition = Readonly<Record<string, unknown>>;
 export type Measure =

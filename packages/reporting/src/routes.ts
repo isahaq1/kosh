@@ -11,8 +11,8 @@ import {
   HttpProblem,
   type ModuleContext,
   publicApiModels,
-} from '@kosh/server';
-import type { Env } from '@kosh/server/orm';
+} from '@isahaq/kosh-server';
+import type { Env } from '@isahaq/kosh-server/orm';
 import type { FastifyRequest } from 'fastify';
 import {
   type FieldInfo,

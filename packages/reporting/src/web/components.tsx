@@ -13,7 +13,7 @@ import {
   MenuTrigger,
   type NodeComponentProps,
   useKosh,
-} from '@kosh/ui';
+} from '@isahaq/kosh-ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, Play, Printer } from 'lucide-react';
 import { type ReactElement, useState } from 'react';

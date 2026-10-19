@@ -3,8 +3,8 @@
  * next / today navigation; multi-day records on every day they span; colours by a field's value. Opening an event
  * opens the record.
  */
-import { Alert, Button, Spinner, useKosh, useRowNames, type ViewProps } from '@kosh/ui';
-import type { CalendarView as CalendarDefinition } from '@kosh/views';
+import { Alert, Button, Spinner, useKosh, useRowNames, type ViewProps } from '@isahaq/kosh-ui';
+import type { CalendarView as CalendarDefinition } from '@isahaq/kosh-views';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { type ReactElement, useState } from 'react';

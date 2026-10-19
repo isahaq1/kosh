@@ -3,7 +3,7 @@
  * private authentication models (credentials, sessions, per-company group assignments). Every Kosh application
  * depends on it. Administrators (`base.admin`) need no grants (RFC 0003 §5.2).
  */
-import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
+import { defineModule as defineKoshModule } from '@isahaq/kosh-modules-sdk';
 import type { Env } from '../orm.js';
 import { orm } from '../orm.js';
 import { LAST_ADMINISTRATOR, lastAdministratorRemoved } from './admins.js';
@@ -172,7 +172,7 @@ const SavedView = defineModel('kosh.saved_view', {
     name: f.char({ required: true }),
     targetModel: f.char({ required: true, index: true }),
     viewType: f.char({ required: true, default: 'list' }),
-    /** The `@kosh/search` state (facets, filters, group-by, order). */
+    /** The `@isahaq/kosh-search` state (facets, filters, group-by, order). */
     state: f.json({ required: true }),
     shared: f.boolean({ default: false }),
     isDefault: f.boolean({ default: false }),

@@ -1,6 +1,6 @@
 /**
  * Document layouts (RFC 0005 §5): the JSON a template is made of, edited by the designer and compiled to print HTML
- * by `@kosh/reporting`. Shared here so module manifests can ship default templates.
+ * by `@isahaq/kosh-reporting`. Shared here so module manifests can ship default templates.
  */
 /** One block of a layout. `bind` is a field path on the record (`partner.name`), with Money / dates formatted. */
 export type Block =

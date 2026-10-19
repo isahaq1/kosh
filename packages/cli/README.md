@@ -1,4 +1,4 @@
-# @kosh/cli
+# @isahaq/kosh-cli
 
 kosh new | dev | module:create | migrate | build (RFC 0001)
 
@@ -6,7 +6,7 @@ Part of [Kosh](https://github.com/isahaq1/kosh), a modern ERP framework on TypeS
 [Shutro](https://github.com/isahaq1/shutro) ORM.
 
 ```sh
-pnpm add @kosh/cli
+pnpm add @isahaq/kosh-cli
 ```
 
 Documentation: [docs/development.md](https://github.com/isahaq1/kosh/blob/main/docs/development.md) · design: [RFCs](https://github.com/isahaq1/kosh/tree/main/docs/rfcs)

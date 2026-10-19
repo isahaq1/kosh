@@ -14,8 +14,17 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { Alert, Button, Dialog, Input, Label, Spinner, useKosh, type ViewProps } from '@kosh/ui';
-import type { Condition, MeasureNode, MeasureSpec } from '@kosh/views';
+import {
+  Alert,
+  Button,
+  Dialog,
+  Input,
+  Label,
+  Spinner,
+  useKosh,
+  type ViewProps,
+} from '@isahaq/kosh-ui';
+import type { Condition, MeasureNode, MeasureSpec } from '@isahaq/kosh-views';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GripVertical, Plus, Trash2 } from 'lucide-react';
 import { type ReactElement, useId, useState } from 'react';

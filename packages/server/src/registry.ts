@@ -3,7 +3,7 @@
  * registry of the wrapped Shutro modules, then the checks that need both: every manifest wraps a real Shutro module,
  * and every Shutro module in the registry has a Kosh manifest (so none escapes declaring access levels).
  */
-import { type KoshModule, type LoadedModules, loadModules } from '@kosh/modules-sdk';
+import { type KoshModule, type LoadedModules, loadModules } from '@isahaq/kosh-modules-sdk';
 import { ServerConfigError } from './errors.js';
 import { orm, type Registry, type RegistryOptions } from './orm.js';
 
@@ -26,7 +26,7 @@ export function buildKoshRegistry(
     if (!orm.isModule(m.shutro))
       throw new ServerConfigError(
         `Module '${m.name}' does not wrap a Shutro module.`,
-        'Pass the value returned by defineModule() from @kosh/server/orm as `shutro`.',
+        'Pass the value returned by defineModule() from @isahaq/kosh-server/orm as `shutro`.',
       );
   const registry = orm.buildRegistry({
     modules: loaded.modules.map((m) => m.shutro as never),
@@ -36,7 +36,7 @@ export function buildKoshRegistry(
     if (!loaded.byName.has(name))
       throw new ServerConfigError(
         `The Shutro module '${name}' has no Kosh manifest.`,
-        'Wrap it with defineModule() from @kosh/modules-sdk (its access levels are required) and depend on it.',
+        'Wrap it with defineModule() from @isahaq/kosh-modules-sdk (its access levels are required) and depend on it.',
       );
   return { loaded, registry };
 }

@@ -1,12 +1,12 @@
 /**
  * @packageDocumentation
- * `@kosh/messaging` (RFC 0006): the chatter of every record — messages and internal notes with @mentions and
+ * `@isahaq/kosh-messaging` (RFC 0006): the chatter of every record — messages and internal notes with @mentions and
  * attachments, followers, scheduled activities, and the change log read from Shutro's audit trail — exactly as
- * visible as the record itself. The chatter component is in `@kosh/messaging/web`.
+ * visible as the record itself. The chatter component is in `@isahaq/kosh-messaging/web`.
  */
-import { defineModule } from '@kosh/modules-sdk';
-import { base, type ModuleContext } from '@kosh/server';
-import { storage } from '@kosh/storage';
+import { defineModule } from '@isahaq/kosh-modules-sdk';
+import { base, type ModuleContext } from '@isahaq/kosh-server';
+import { storage } from '@isahaq/kosh-storage';
 import { messagingShutro } from './models.js';
 import { registerChatterRoutes } from './routes.js';
 
@@ -43,7 +43,7 @@ export { messagingShutro };
 
 /** Package identity. */
 export const PACKAGE: { readonly name: string; readonly rfc: string } = Object.freeze({
-  name: '@kosh/messaging',
+  name: '@isahaq/kosh-messaging',
   rfc: 'RFC 0006',
 });
 

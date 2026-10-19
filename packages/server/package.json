@@ -1,5 +1,5 @@
 {
-  "name": "@kosh/server",
+  "name": "@isahaq/kosh-server",
   "version": "0.1.0",
   "description": "Fastify app, module loader, REST/OpenAPI generator, auth, Shutro environment per request (RFC 0002)",
   "keywords": [
@@ -49,18 +49,18 @@
   },
   "dependencies": {
     "@fastify/rate-limit": "^11.2.1",
-    "@kosh/modules-sdk": "workspace:*",
+    "@isahaq/kosh-modules-sdk": "workspace:*",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/exporter-trace-otlp-http": "^0.223.0",
     "@opentelemetry/sdk-node": "^0.223.0",
     "fastify": "^5.12.7",
     "iovalkey": "^0.4.0",
     "shutro": "^0.2.0",
-    "@kosh/views": "workspace:*"
+    "@isahaq/kosh-views": "workspace:*"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1",
     "testcontainers": "^12.2.1",
-    "@kosh/search": "workspace:*"
+    "@isahaq/kosh-search": "workspace:*"
   }
 }

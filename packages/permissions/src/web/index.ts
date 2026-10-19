@@ -1,8 +1,8 @@
 /**
  * @packageDocumentation
- * The web contribution of `@kosh/permissions` (RFC 0007 §5): register it in the app's registry.
+ * The web contribution of `@isahaq/kosh-permissions` (RFC 0007 §5): register it in the app's registry.
  */
-import type { Registry } from '@kosh/ui';
+import type { Registry } from '@isahaq/kosh-ui';
 import { ApprovalPanel } from './ApprovalPanel.js';
 
 export { ApprovalPanel };

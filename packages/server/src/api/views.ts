@@ -8,7 +8,7 @@
  * - `GET /api/v1/views?model=&type=`              the model's view of that type
  * - `GET /api/v1/search/:model`                   the search definition, for the user
  */
-import type { KoshModule } from '@kosh/modules-sdk';
+import type { KoshModule } from '@isahaq/kosh-modules-sdk';
 import {
   type ButtonNode,
   type FieldNode,
@@ -23,7 +23,7 @@ import {
   validateSearch,
   validateView,
   type WindowAction,
-} from '@kosh/views';
+} from '@isahaq/kosh-views';
 import type { FastifyInstance } from 'fastify';
 import { HttpProblem, ServerConfigError } from '../errors.js';
 import type { Env } from '../orm.js';

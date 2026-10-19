@@ -15,7 +15,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import type { Condition, FieldNode } from '@kosh/views';
+import type { Condition, FieldNode } from '@isahaq/kosh-views';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactElement, useState } from 'react';
 import { useTranslation } from 'react-i18next';

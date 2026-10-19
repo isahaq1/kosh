@@ -1,4 +1,4 @@
-# @kosh/permissions
+# @isahaq/kosh-permissions
 
 Roles, groups, ACL, field security, action permissions and approval rules on Shutro security (RFC 0003)
 
@@ -6,7 +6,7 @@ Part of [Kosh](https://github.com/isahaq1/kosh), a modern ERP framework on TypeS
 [Shutro](https://github.com/isahaq1/shutro) ORM.
 
 ```sh
-pnpm add @kosh/permissions
+pnpm add @isahaq/kosh-permissions
 ```
 
 Documentation: [docs/permissions.md](https://github.com/isahaq1/kosh/blob/main/docs/permissions.md) · design: [RFCs](https://github.com/isahaq1/kosh/tree/main/docs/rfcs)

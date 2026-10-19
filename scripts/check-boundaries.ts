@@ -37,7 +37,7 @@ const offenders = ['packages', 'apps']
 
 if (offenders.length > 0) {
   process.stderr.write(
-    `Shutro may only be imported in ${ORM} (CLAUDE.md). Import from '@kosh/server/orm' instead:\n${offenders.map((f) => `  ${f}`).join('\n')}\n`,
+    `Shutro may only be imported in ${ORM} (CLAUDE.md). Import from '@isahaq/kosh-server/orm' instead:\n${offenders.map((f) => `  ${f}`).join('\n')}\n`,
   );
   process.exitCode = 1;
 } else {

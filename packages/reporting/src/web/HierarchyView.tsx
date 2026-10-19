@@ -3,8 +3,8 @@
  * records of the search without a parent; children load when a node opens. ARIA tree pattern: arrow keys move and
  * open / close, Enter opens the record.
  */
-import { Alert, Spinner, useKosh, type ViewProps } from '@kosh/ui';
-import type { Condition, HierarchyView as HierarchyDefinition } from '@kosh/views';
+import { Alert, Spinner, useKosh, type ViewProps } from '@isahaq/kosh-ui';
+import type { Condition, HierarchyView as HierarchyDefinition } from '@isahaq/kosh-views';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight, Dot } from 'lucide-react';
 import { type KeyboardEvent, type ReactElement, useState } from 'react';
