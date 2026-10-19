@@ -124,7 +124,8 @@ test('a fresh installation: database created, project written, migrated, adminis
   };
   expect(pkg.scripts['start']).toBe('node --env-file=.env src/server.ts');
   expect(pkg.scripts).toMatchObject({ migrate: 'kosh migrate', seed: 'kosh seed' });
-  expect(pkg.dependencies).toMatchObject({ 'kosh-erp': '^0.1.0', shutro: '^0.2.1' });
+  expect(pkg.dependencies).toMatchObject({ 'kosh-erp': '^0.1.0' });
+  expect(pkg.dependencies).not.toHaveProperty('shutro'); // it comes with kosh-erp
   expect(await readdir(join(project, 'migrations'))).toEqual(['0001_init.sql']);
   expect(existsSync(join(project, 'var', 'attachments'))).toBe(true);
 

@@ -74,7 +74,6 @@ export function packageJson(
     engines: { node: '>=24', ...((base['engines'] as Record<string, string> | undefined) ?? {}) },
     dependencies: merge('dependencies', {
       'kosh-erp': `^${options.koshVersion}`,
-      shutro: '^0.2.1',
       ...REACT,
     }),
     devDependencies: merge('devDependencies', {

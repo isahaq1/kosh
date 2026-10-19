@@ -13,6 +13,6 @@ views, reporting and communication.
 **Getting started** (terminal and Docker, modules, migrations, seed data, users, every command):
 [scripts/npm-readme.md](scripts/npm-readme.md), also the [npm page](https://www.npmjs.com/package/kosh-erp).
 
-Install from npm as one package: `npm install kosh-erp shutro` ([kosh-erp](https://www.npmjs.com/package/kosh-erp);
+Install from npm as one package: `npm install kosh-erp` (Shutro comes with it) ([kosh-erp](https://www.npmjs.com/package/kosh-erp);
 entry points `kosh-erp`, `kosh-erp/views`, `kosh-erp/ui`, …). `pnpm pack:npm` assembles it from the workspace
 packages (`scripts/pack-npm.ts`); the workspace links a sibling Shutro checkout (`../shutro`) for development.

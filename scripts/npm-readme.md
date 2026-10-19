@@ -29,7 +29,7 @@ chatter on every record. Permissions are checked on the server on every route.
 ```sh
 mkdir my-erp && cd my-erp
 npm init -y
-npm install kosh-erp shutro
+npm install kosh-erp      # Shutro, the ORM, comes with it
 npx kosh init
 ```
 
