@@ -15,5 +15,11 @@ export const pg: typeof driverPg = driverPg;
 export const migrate: typeof migrations = migrations;
 
 export type * from 'shutro';
-export type { Driver, DriverOptions } from 'shutro/driver-pg';
+export type {
+  Driver,
+  DriverConnection,
+  DriverOptions,
+  DriverQuery,
+  TxOptions,
+} from 'shutro/driver-pg';
 export type { MigrationFile, MigrationPlan, MigrationResult } from 'shutro/migrate';

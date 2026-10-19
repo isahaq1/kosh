@@ -1,0 +1,451 @@
+/**
+ * The App manager's engine (RFC 0008 §5.2–5.4): the installed set of a database (`kosh_module`), and app changes
+ * planned against the live database and applied in ONE transaction.
+ *
+ * - {@link prepareApps} plans: the module changes (`planApps`), the runtime registry (installed modules) and the
+ *   schema registry (installed and disabled: a disabled module keeps its tables), and the schema statements. It
+ *   refuses changes that would drop data, a database that does not match its modules yet, and a disable that would
+ *   leave required columns no served module fills.
+ * - {@link applyApps} applies: the migration file, the new modules' data, their `postInstall` hooks and the
+ *   installed set, all in one PostgreSQL transaction (DDL is transactional): a failure leaves nothing behind, not
+ *   even the migration file. Shutro runs on a driver pinned to that transaction (nested transactions become
+ *   savepoints), so the ORM does the work and Kosh only decides where it happens.
+ * - {@link installedModules} is what a server serves: the catalogue modules installed in its database.
+ *
+ * Before the first app change there is no `kosh_module`: servers and `kosh migrate` treat the module list as the
+ * installed set (as before RFC 0008), and the first app change adopts the modules Shutro has migrated.
+ */
+import { createHash } from 'node:crypto';
+import { rm } from 'node:fs/promises';
+import {
+  type AppChange,
+  type AppPlan,
+  AppPlanError,
+  type InstalledApp,
+  type KoshModule,
+  planApps,
+  servedModules,
+} from '@kosh/modules-sdk';
+import { IDEMPOTENCY_TABLE } from './api/idempotency.js';
+import {
+  type Driver,
+  type DriverConnection,
+  type DriverQuery,
+  type MigrationFile,
+  type MigrationPlan,
+  migrate,
+  orm,
+  pg,
+  type Shutro,
+} from './orm.js';
+import { buildKoshRegistry, type KoshRegistry } from './registry.js';
+
+/** The installed set: one row per module. */
+export const APPS_TABLE = 'kosh_module';
+/** Every applied app change: who, what, and the SQL that ran. */
+export const APPS_LOG_TABLE = 'kosh_app_log';
+/** Tables the framework owns (not a model's): migrations never alter or drop them. */
+export const FRAMEWORK_TABLES: readonly string[] = [IDEMPOTENCY_TABLE, APPS_TABLE, APPS_LOG_TABLE];
+
+/** Creates the App manager's tables (idempotent). */
+export function appTableStatements(): DriverQuery[] {
+  return [
+    {
+      text: `CREATE TABLE IF NOT EXISTS ${APPS_TABLE} (
+  name text PRIMARY KEY,
+  version text NOT NULL,
+  state text NOT NULL CHECK (state IN ('installed', 'disabled')),
+  reason text NOT NULL CHECK (reason IN ('selected', 'dependency', 'bridge')),
+  added_at timestamptz NOT NULL DEFAULT now(),
+  added_by text NOT NULL,
+  changed_at timestamptz NOT NULL DEFAULT now()
+)`,
+      params: [],
+    },
+    {
+      text: `CREATE TABLE IF NOT EXISTS ${APPS_LOG_TABLE} (
+  id bigserial PRIMARY KEY,
+  at timestamptz NOT NULL DEFAULT now(),
+  actor text NOT NULL,
+  change jsonb NOT NULL,
+  statements text NOT NULL,
+  digest text NOT NULL
+)`,
+      params: [],
+    },
+  ];
+}
+
+type Queryable = Pick<Driver, 'query'>;
+
+/** The installed set, dependencies first; `null` before the first app change (no `kosh_module` yet). */
+export async function readInstalledApps(db: Queryable): Promise<InstalledApp[] | null> {
+  const [exists] = await db.query<{ found: string | null }>({
+    text: `SELECT to_regclass('public.${APPS_TABLE}')::text AS found`,
+    params: [],
+  });
+  if (exists?.found === null || exists?.found === undefined) return null;
+  const rows = await db.query<{ name: string; version: string; state: string; reason: string }>({
+    text: `SELECT name, version, state, reason FROM ${APPS_TABLE} ORDER BY added_at, name`,
+    params: [],
+  });
+  return rows.map((r) => ({
+    name: r.name,
+    version: r.version,
+    state: r.state as InstalledApp['state'],
+    reason: r.reason as InstalledApp['reason'],
+  }));
+}
+
+/**
+ * The installed set. Before the first app change there is no `kosh_module`: the modules Shutro has migrated
+ * (`shutro_module`) are adopted, so modules added to the catalogue since then count as available, not installed.
+ */
+export async function installedApps(
+  db: Queryable,
+  catalogue: readonly KoshModule[],
+): Promise<InstalledApp[]> {
+  const rows = await readInstalledApps(db);
+  if (rows !== null) return rows;
+  const [ledger] = await db.query<{ found: string | null }>({
+    text: "SELECT to_regclass('public.shutro_module')::text AS found",
+    params: [],
+  });
+  if (ledger?.found === null || ledger?.found === undefined) return [];
+  const migrated = new Set(
+    (await db.query<{ name: string }>({ text: 'SELECT name FROM shutro_module', params: [] })).map(
+      (r) => r.name,
+    ),
+  );
+  const all = new Map<string, KoshModule>();
+  const visit = (m: KoshModule) => {
+    if (all.has(m.name)) return;
+    for (const d of m.depends) visit(d);
+    all.set(m.name, m);
+  };
+  for (const m of catalogue) visit(m);
+  return [...all.values()]
+    .filter((m) => migrated.has(m.name))
+    .map((m) => ({ name: m.name, version: m.version, state: 'installed', reason: 'selected' }));
+}
+
+const digestOf = (rows: readonly InstalledApp[]) =>
+  createHash('sha256')
+    .update(JSON.stringify([...rows].sort((a, b) => a.name.localeCompare(b.name))))
+    .digest('hex');
+
+/**
+ * The catalogue modules a database serves (state `installed`): what `createServer({ modules })` takes.
+ * @param source a driver, or a database URL (a short-lived connection is opened).
+ */
+export async function installedModules(
+  source: Driver | string,
+  catalogue: readonly KoshModule[],
+  states: readonly InstalledApp['state'][] = ['installed'],
+): Promise<KoshModule[]> {
+  const driver =
+    typeof source === 'string'
+      ? pg.createDriver({ url: source, max: 1, applicationName: 'kosh apps' })
+      : source;
+  try {
+    const rows = await readInstalledApps(driver);
+    return rows === null ? [...catalogue] : servedModules(catalogue, rows, states);
+  } finally {
+    if (typeof source === 'string') await driver.end();
+  }
+}
+
+/** Records `modules` as installed (`kosh init`, after its first migration). Existing rows are left as they are. */
+export async function recordInstalledApps(
+  db: Queryable,
+  modules: readonly KoshModule[],
+  selected: readonly string[],
+  actor: string,
+): Promise<void> {
+  for (const q of appTableStatements()) await db.query(q);
+  for (const m of modules)
+    await db.query({
+      text: `INSERT INTO ${APPS_TABLE} (name, version, state, reason, added_by)
+VALUES ($1, $2, 'installed', $3, $4) ON CONFLICT (name) DO NOTHING`,
+      params: [m.name, m.version, selected.includes(m.name) ? 'selected' : 'dependency', actor],
+    });
+}
+
+/** A planned app change, ready for {@link applyApps}. */
+export interface PreparedApps {
+  readonly plan: AppPlan;
+  /** The installed set the plan was made from (checked again when applying). */
+  readonly current: readonly InstalledApp[];
+  /** The installed modules afterwards: what the server serves. */
+  readonly runtime: KoshRegistry;
+  /** Installed and disabled modules afterwards: what the schema keeps. */
+  readonly schema: KoshRegistry;
+  /** The schema statements (none for disable / enable). */
+  readonly migration: MigrationPlan;
+  /** True when the plan changes nothing. */
+  readonly empty: boolean;
+}
+
+/** Options of {@link prepareApps}. */
+export interface PrepareAppsOptions {
+  readonly driver: Driver;
+  /** The modules this installation can install. */
+  readonly catalogue: readonly KoshModule[];
+  readonly change: AppChange;
+  /** The migration files' folder (pending files must be applied first). */
+  readonly dir: string;
+  /** Modules that can never be disabled. Default: `base`. */
+  readonly protect?: readonly string[];
+}
+
+/** Plans an app change against the live database. Changes nothing. @throws {AppPlanError} */
+export async function prepareApps(options: PrepareAppsOptions): Promise<PreparedApps> {
+  const { driver, catalogue } = options;
+  const pending = (await migrate.migrationStatus({ driver, dir: options.dir })).pending;
+  if (pending.length > 0)
+    throw new AppPlanError(
+      `${pending.length} migration file(s) are not applied yet (${pending.map((f) => `${f.version}_${f.name}`).join(', ')}).`,
+      'Run kosh migrate first.',
+    );
+  const current = await installedApps(driver, catalogue);
+  const plan = planApps(catalogue, current, options.change, options.protect ?? ['base']);
+  const registryOf = (rows: readonly InstalledApp[], states: readonly InstalledApp['state'][]) =>
+    buildKoshRegistry(servedModules(catalogue, rows, states));
+
+  // The database must match its modules before apps change: otherwise the plan would carry unrelated changes.
+  const before = registryOf(current, ['installed', 'disabled']);
+  const drift = await migrate.planMigration({
+    driver,
+    registry: before.registry,
+    ignore: FRAMEWORK_TABLES,
+  });
+  if (drift.statements.length > 0)
+    throw new AppPlanError(
+      `The database does not match the installed modules (${drift.statements.length} change(s) not migrated).`,
+      'Run kosh migrate first.',
+    );
+
+  const runtime = registryOf(plan.after, ['installed']);
+  const schema = registryOf(plan.after, ['installed', 'disabled']);
+  const migration = await migrate.planMigration({
+    driver,
+    registry: schema.registry,
+    ignore: FRAMEWORK_TABLES,
+  });
+  if (migration.destructive.length > 0)
+    throw new AppPlanError(
+      `The change would drop or alter data: ${migration.destructive.map((op) => migrate.renderOperation(op)).join('; ')}.`,
+      'App changes never destroy data; review the modules, or use kosh migrate --plan.',
+    );
+  // A disabled module's columns stay in other modules' tables: a NOT NULL one without a database default (a function
+  // default or a compute lives in the ORM) would make every insert there fail.
+  const orphaned: string[] = [];
+  for (const model of runtime.registry.models.keys()) {
+    const kept = schema.registry.describe(model);
+    const served = runtime.registry.describe(model).fields;
+    for (const [field, d] of Object.entries(kept.fields)) {
+      if (!d.store || d.column === null || served[field] !== undefined) continue;
+      const [column] = await driver.query<{ is_nullable: string; column_default: string | null }>({
+        text: `SELECT is_nullable, column_default FROM information_schema.columns
+WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2`,
+        params: [kept.table, d.column],
+      });
+      if (column?.is_nullable === 'NO' && column.column_default === null)
+        orphaned.push(`${model}.${field}`);
+    }
+  }
+  if (orphaned.length > 0)
+    throw new AppPlanError(
+      `Disabling would leave required fields that no enabled module fills: ${orphaned.join(', ')}.`,
+      'Disable the modules that extend these models too, or make the fields optional.',
+    );
+  return {
+    plan,
+    current,
+    runtime,
+    schema,
+    migration,
+    empty:
+      plan.install.length === 0 &&
+      plan.enable.length === 0 &&
+      plan.disable.length === 0 &&
+      migration.statements.length === 0,
+  };
+}
+
+/** What the new modules' data loading receives (inside the transaction). */
+export interface AppLoadContext {
+  readonly shutro: Shutro;
+  readonly driver: Driver;
+  readonly registry: KoshRegistry;
+  /** The first company, once one exists. */
+  readonly company: number | undefined;
+}
+
+/** Options of {@link applyApps}. */
+export interface ApplyAppsOptions {
+  readonly driver: Driver;
+  /** The migration files' folder: the change's statements are written there as the next file. */
+  readonly dir: string;
+  /** Who applies it (a login, or `cli`): recorded in the installed set and the log. */
+  readonly actor: string;
+  /** The migration file's name. Default: `apps`. */
+  readonly name?: string;
+  /** Progress: `schema`, `data`, `hooks`, `state`. */
+  readonly onStep?: (step: 'schema' | 'data' | 'hooks' | 'state', detail: string) => void;
+  /**
+   * Loads the new modules' data. Default: Shutro `loadData` for those modules. The CLI also installs the apps'
+   * defaults (approval policies, document templates, activity types).
+   */
+  readonly load?: (context: AppLoadContext, modules: readonly string[]) => Promise<void>;
+}
+
+/** What {@link applyApps} did. */
+export interface AppsResult {
+  readonly migration: MigrationFile | null;
+  readonly installed: readonly string[];
+  readonly enabled: readonly string[];
+  readonly disabled: readonly string[];
+}
+
+/**
+ * A driver on one connection of an open transaction: Shutro's transactions become savepoints of it, and session
+ * settings stay transaction-local. Nothing commits until the outer transaction does.
+ */
+function pinnedDriver(conn: DriverConnection): Driver {
+  return {
+    max: 1,
+    query: (q) => conn.query(q),
+    transaction: (options, fn) =>
+      conn.savepoint(async (inner) => {
+        for (const [name, value] of Object.entries(options.settings ?? {}))
+          await inner.query({ text: 'SELECT set_config($1, $2, true)', params: [name, value] });
+        if (options.statementTimeoutMs !== undefined)
+          await inner.query({
+            text: "SELECT set_config('statement_timeout', $1, true)",
+            params: [String(options.statementTimeoutMs)],
+          });
+        return fn(inner);
+      }),
+    listen: async () => async () => {},
+    end: async () => {},
+  };
+}
+
+const defaultLoad = async (context: AppLoadContext, modules: readonly string[]) => {
+  await orm.loadData(context.shutro, {
+    modules,
+    ...(context.company === undefined ? {} : { company: context.company }),
+  });
+};
+
+/**
+ * Applies a prepared change in one transaction (one app change per database at a time). @throws {AppPlanError}
+ * when the installed set changed since it was prepared.
+ */
+export async function applyApps(
+  prepared: PreparedApps,
+  options: ApplyAppsOptions,
+): Promise<AppsResult> {
+  const { plan } = prepared;
+  const step = options.onStep ?? (() => {});
+  const file =
+    prepared.migration.statements.length > 0
+      ? await migrate.writeMigrationFile({
+          dir: options.dir,
+          name: options.name ?? 'apps',
+          plan: prepared.migration,
+        })
+      : null;
+  try {
+    await options.driver.transaction({}, async (conn) => {
+      for (const q of appTableStatements()) await conn.query(q);
+      await conn.query({ text: "SELECT pg_advisory_xact_lock(hashtext('kosh_apps'))", params: [] });
+      const tx = pinnedDriver(conn);
+      const now = await readInstalledApps(tx);
+      // Before the first change the table was just created empty: compare with what was planned from.
+      if (now !== null && now.length > 0 && digestOf(now) !== digestOf(prepared.current))
+        throw new AppPlanError(
+          'The installed apps changed since this change was planned.',
+          'Plan it again.',
+        );
+
+      if (file !== null) {
+        step('schema', `${prepared.migration.statements.length} statement(s)`);
+        await migrate.applyMigrations({
+          driver: tx,
+          dir: options.dir,
+          registry: prepared.schema.registry,
+        });
+      }
+      const shutro = orm.createShutro({ driver: tx, registry: prepared.runtime.registry });
+      // A failed query would abort the transaction: look the table up before reading it.
+      const [companies] = await tx.query<{ found: string | null }>({
+        text: "SELECT to_regclass('public.res_company')::text AS found",
+        params: [],
+      });
+      let companyId: number | undefined;
+      if (companies?.found !== null && companies?.found !== undefined) {
+        const [first] = await tx.query<{ id: string }>({
+          text: 'SELECT id::text AS id FROM res_company ORDER BY id LIMIT 1',
+          params: [],
+        });
+        companyId = first === undefined ? undefined : Number(first.id);
+      }
+      const added = plan.install.map((m) => m.name);
+      if (added.length > 0) {
+        step('data', added.join(', '));
+        await (options.load ?? defaultLoad)(
+          { shutro, driver: tx, registry: prepared.runtime, company: companyId },
+          added,
+        );
+        for (const name of added) {
+          const hook = prepared.runtime.loaded.byName.get(name)?.hooks?.postInstall;
+          if (hook === undefined) continue;
+          step('hooks', name);
+          await shutro.bootstrap(
+            {
+              reason: `install ${name}`,
+              ...(companyId === undefined ? {} : { company: companyId }),
+            },
+            (env) => hook(env),
+          );
+        }
+      }
+
+      step('state', `${plan.after.length} module(s)`);
+      for (const row of plan.after)
+        await tx.query({
+          text: `INSERT INTO ${APPS_TABLE} (name, version, state, reason, added_by)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (name) DO UPDATE SET version = EXCLUDED.version, state = EXCLUDED.state,
+  changed_at = CASE WHEN ${APPS_TABLE}.state IS DISTINCT FROM EXCLUDED.state THEN now() ELSE ${APPS_TABLE}.changed_at END`,
+          params: [row.name, row.version, row.state, row.reason, options.actor],
+        });
+      const sql = prepared.migration.statements.map((s) => `${s.sql};`).join('\n');
+      await tx.query({
+        text: `INSERT INTO ${APPS_LOG_TABLE} (actor, change, statements, digest) VALUES ($1, $2::jsonb, $3, $4)`,
+        params: [
+          options.actor,
+          JSON.stringify({
+            install: plan.install,
+            enable: plan.enable,
+            disable: plan.disable,
+            migration: file === null ? null : `${file.version}_${file.name}.sql`,
+          }),
+          sql,
+          createHash('sha256').update(sql).digest('hex'),
+        ],
+      });
+    });
+  } catch (error) {
+    if (file !== null) await rm(file.path, { force: true });
+    throw error;
+  }
+  return {
+    migration: file,
+    installed: plan.install.map((m) => m.name),
+    enabled: plan.enable,
+    disabled: plan.disable.map((m) => m.name),
+  };
+}
