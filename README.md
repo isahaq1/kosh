@@ -10,6 +10,9 @@ views, reporting and communication.
   [Views and UI](docs/ui.md) · [Reporting](docs/reporting.md) · [Chatter and attachments](docs/messaging.md)
 - [Design RFCs](docs/rfcs/README.md) · [Benchmarks](docs/benchmarks.md) · [Kosh against Odoo](docs/comparison.md)
 
+**Getting started** (terminal and Docker, modules, migrations, seed data, users, every command):
+[scripts/npm-readme.md](scripts/npm-readme.md), also the [npm page](https://www.npmjs.com/package/kosh-erp).
+
 Install from npm as one package: `npm install kosh-erp shutro` ([kosh-erp](https://www.npmjs.com/package/kosh-erp);
 entry points `kosh-erp`, `kosh-erp/views`, `kosh-erp/ui`, …). `pnpm pack:npm` assembles it from the workspace
 packages (`scripts/pack-npm.ts`); the workspace links a sibling Shutro checkout (`../shutro`) for development.

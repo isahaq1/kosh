@@ -95,12 +95,28 @@ importers:
 
   packages/cli:
     dependencies:
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../messaging
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../modules-sdk
+      '@kosh/permissions':
+        specifier: workspace:*
+        version: link:../permissions
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../reporting
       '@kosh/server':
         specifier: workspace:*
         version: link:../server
+      '@kosh/storage':
+        specifier: workspace:*
+        version: link:../storage
+    devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
 
   packages/jobs: {}
 

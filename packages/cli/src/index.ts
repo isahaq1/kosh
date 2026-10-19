@@ -1,14 +1,28 @@
 /**
  * @packageDocumentation
- * `@kosh/cli`: kosh new | dev | module:create | migrate | build (RFC 0001), and `kosh generate client` (RFC 0002
- * §6.4). Commands follow their RFC approvals.
+ * `@kosh/cli`, the `kosh` command: `init` (a new installation), `migrate` and `seed` (schema and data),
+ * `module create` (a new module), and `generate client` (RFC 0002 §6.4).
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
-import type { KoshModule } from '@kosh/modules-sdk';
 import { generateClient, openApiOf } from '@kosh/server';
+import { runInit } from './init.js';
+import { modulesOf, runMigrate, runModule, runSeed, runUser } from './project.js';
+
+export { INIT_USAGE, type InitIo, runInit } from './init.js';
+export {
+  migrateProject,
+  moduleFiles,
+  modulesOf,
+  openProject,
+  runMigrate,
+  runModule,
+  runSeed,
+  runUser,
+  seed,
+} from './project.js';
+export { defaultsPrompter, type Prompter, type Question, terminalPrompter } from './prompt.js';
 
 /** Package identity. */
 export const PACKAGE: { readonly name: string; readonly rfc: string } = Object.freeze({
@@ -18,7 +32,19 @@ export const PACKAGE: { readonly name: string; readonly rfc: string } = Object.f
 
 const USAGE = `Usage: kosh <command>
 
-Commands:
+Commands (run in the installation's folder; they read .env and src/modules.ts):
+  init [folder]          Set up an installation: database, company, administrator, apps (kosh init --help)
+  migrate                Plan schema changes into migrations/NNNN_*.sql, apply pending files, run the modules'
+                         data migrations, load seed data
+      --plan                 only write the plan (review it before applying)
+      --name <name>          name of the new file (default: update)
+      --allow-destructive    apply changes that drop columns or tables
+      --no-seed              skip the seed data
+  migrate status         Applied and pending migration files
+  seed [module ...]      Load the modules' seed data and the apps' defaults (all modules, or those named)
+  module create <name>   Scaffold src/modules/<name>/ (models, views, menus, access, seed data, data migrations)
+  user create <login>    Create a user: --name, --email, --roles reporting.user,messaging.user, --password
+  user password <login>  Set a new password
   generate client   Typed API client from the module set or an OpenAPI document
       --modules <file|package>   a module (or file) exporting Kosh modules (\`modules\`, default, or each export)
       --from <file|url>          an OpenAPI document instead (a URL needs --token)
@@ -26,7 +52,7 @@ Commands:
       --out <file>               where to write (default: src/api/kosh.gen.ts)
       --check                    fail if the file is out of date (CI)
 
-Coming with RFC 0001: new, dev, module:create, migrate, build
+Every command takes --modules <file> (default src/modules.ts).
 `;
 
 /** Options of {@link runCli}. */
@@ -34,34 +60,6 @@ export interface CliOptions {
   /** Base for relative paths. Default: `process.cwd()`. */
   readonly cwd?: string;
   readonly fetch?: typeof fetch;
-}
-
-function isModule(value: unknown): value is KoshModule {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'shutro' in value &&
-    'accessLevels' in value &&
-    'name' in value
-  );
-}
-
-/** The Kosh modules a file or package exports: `modules`, the default export, or every module export. */
-export async function modulesOf(specifier: string, cwd: string): Promise<KoshModule[]> {
-  const target =
-    specifier.startsWith('.') || specifier.startsWith('/') || /^[A-Za-z]:[\\/]/.test(specifier)
-      ? pathToFileURL(resolve(cwd, specifier)).href
-      : specifier;
-  const exported = (await import(target)) as Record<string, unknown>;
-  for (const key of ['modules', 'default']) {
-    const value = exported[key];
-    if (Array.isArray(value) && value.every(isModule)) return value;
-    if (isModule(value)) return [value];
-  }
-  const all = Object.values(exported).filter(isModule);
-  if (all.length === 0)
-    throw new Error(`${specifier} exports no Kosh modules (defineModule from @kosh/modules-sdk).`);
-  return all;
 }
 
 async function documentFrom(
@@ -137,6 +135,22 @@ export async function runCli(
     write(USAGE);
     return argv.length === 0 ? 2 : 0;
   }
+  const cwd = options.cwd ?? process.cwd();
+  if (argv[0] === 'init') return runInit(argv.slice(1), { write, cwd });
+  const commands: Record<string, typeof runMigrate> = {
+    migrate: runMigrate,
+    seed: runSeed,
+    module: runModule,
+    user: (args, out, dir) => runUser(args, out, dir),
+  };
+  const command = commands[argv[0] ?? ''];
+  if (command !== undefined)
+    try {
+      return await command(argv.slice(1), write, cwd);
+    } catch (error) {
+      write(`kosh ${argv[0]}: ${error instanceof Error ? error.message : String(error)}\n`);
+      return 1;
+    }
   if (argv[0] === 'generate' && argv[1] === 'client') {
     try {
       return await generate(argv.slice(2), write, options);

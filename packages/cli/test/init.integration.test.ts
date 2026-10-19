@@ -1,0 +1,195 @@
+/**
+ * `kosh init` on PostgreSQL: a database that does not exist yet is created, the project and `.env` are written, the
+ * first migration is planned and applied, the company and administrator are installed, the authenticator is enrolled
+ * through the real sign-in routes, and a second run keeps everything (files, data) and reports the enrolment.
+ */
+import { existsSync } from 'node:fs';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { base, createServer, totp } from '@kosh/server';
+import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { afterAll, beforeAll, expect, test } from 'vitest';
+import type { Prompter, Question } from '../src/index.js';
+import { runInit } from '../src/index.js';
+
+let pg: StartedPostgreSqlContainer;
+let dir: string;
+let url: string;
+const PASSWORD = 'a long enough password';
+
+beforeAll(async () => {
+  pg = await new PostgreSqlContainer('postgres:18').start();
+  dir = await mkdtemp(join(tmpdir(), 'kosh-init-'));
+  const admin = new URL(pg.getConnectionUri());
+  admin.pathname = '/kosh_fresh'; // does not exist yet: init creates it
+  url = admin.toString();
+}, 180_000);
+
+afterAll(async () => {
+  await pg?.stop();
+  await rm(dir, { recursive: true, force: true });
+});
+
+/** Answers by question; the authenticator code is computed from the secret init printed. */
+function scripted(
+  output: string[],
+  answers: Record<string, string>,
+): Prompter & { asked: string[] } {
+  const asked: string[] = [];
+  return {
+    asked,
+    async ask(q: Question) {
+      asked.push(q.message);
+      if (q.message.startsWith('The 6-digit code')) {
+        const secret = /secret: ([A-Z2-7]+)/.exec(output.join(''))?.[1];
+        if (secret === undefined) throw new Error('no secret printed');
+        return totp(secret);
+      }
+      const answer = Object.entries(answers).find(([k]) => q.message.startsWith(k))?.[1];
+      const value = answer ?? q.default;
+      if (value === undefined) throw new Error(`unexpected question: ${q.message}`);
+      const problem = q.validate?.(value) ?? null;
+      if (problem !== null) throw new Error(`${q.message}: ${problem}`);
+      return value;
+    },
+    async confirm(_m: string, fallback: boolean) {
+      return fallback;
+    },
+    close() {},
+  };
+}
+
+test('a fresh installation: database created, project written, migrated, administrator enrolled', async () => {
+  const output: string[] = [];
+  const prompter = scripted(output, {
+    'Company name': 'Padma Traders',
+    Currency: 'bdt',
+    Language: 'bn',
+    'Time zone': 'Asia/Dhaka',
+    Login: 'owner',
+    'Full name': 'Nusrat Owner',
+    Email: 'owner@padma.test',
+    'Password (12+ characters)': PASSWORD,
+    'Repeat the password': PASSWORD,
+    'Apps to install': 'reporting,messaging',
+  });
+  const code = await runInit(['shop', '--database-url', url], {
+    write: (t) => output.push(t),
+    prompter,
+    cwd: dir,
+  });
+  const text = output.join('');
+  expect(code, text).toBe(0);
+  expect(text).toContain('connected (PostgreSQL 18');
+  expect(text).toContain('created company "Padma Traders" (BDT) and administrator "owner"');
+  expect(text).toMatch(/Recovery codes[^\n]*\n(\s+\S+\n){10}/);
+  expect(text).not.toContain(PASSWORD); // never echoed
+  expect(text).toContain('messaging        5 activity type(s) installed');
+
+  const project = join(dir, 'shop');
+  for (const file of [
+    'package.json',
+    'src/modules.ts',
+    'src/server.ts',
+    'src/web/main.tsx',
+    'src/web/index.css',
+    'index.html',
+    'vite.config.ts',
+    '.gitignore',
+    '.env',
+    'README.md',
+    'Dockerfile',
+    'compose.yaml',
+    'nginx.conf',
+    '.dockerignore',
+  ])
+    expect(existsSync(join(project, file)), file).toBe(true);
+  const env = await readFile(join(project, '.env'), 'utf8');
+  expect(env).toContain(`DATABASE_URL=${url}`);
+  expect(env).toContain('KOSH_STORAGE_DIR=./var/attachments');
+  expect(env).not.toContain(PASSWORD);
+  expect(env).toMatch(/^POSTGRES_PASSWORD=[A-Za-z0-9]{20,}$/m); // for compose.yaml
+  const modules = await readFile(join(project, 'src/modules.ts'), 'utf8');
+  expect(modules).toContain("import { reporting } from 'kosh-erp/reporting';");
+  expect(modules).toContain('export const modules = [base, reporting, messaging];');
+  const main = await readFile(join(project, 'src/web/main.tsx'), 'utf8');
+  expect(main).toContain(
+    "import { messagingMessages, registerMessagingWeb } from 'kosh-erp/messaging/web';",
+  );
+  expect(main).not.toContain('permissions');
+  const pkg = JSON.parse(await readFile(join(project, 'package.json'), 'utf8')) as {
+    scripts: Record<string, string>;
+    dependencies: Record<string, string>;
+  };
+  expect(pkg.scripts['start']).toBe('node --env-file=.env src/server.ts');
+  expect(pkg.scripts).toMatchObject({ migrate: 'kosh migrate', seed: 'kosh seed' });
+  expect(pkg.dependencies).toMatchObject({ 'kosh-erp': '^0.1.0', shutro: '^0.2.1' });
+  expect(await readdir(join(project, 'migrations'))).toEqual(['0001_init.sql']);
+  expect(existsSync(join(project, 'var', 'attachments'))).toBe(true);
+
+  // The installation works: the administrator signs in with the password and a second factor.
+  process.env['KOSH_SCHEDULES'] = 'off';
+  const server = await createServer({ databaseUrl: url, modules: [base], logger: false });
+  try {
+    const login = await server.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { login: 'owner', password: PASSWORD },
+    });
+    expect(login.statusCode).toBe(200);
+    expect(login.json()).toMatchObject({ twoFactorRequired: true });
+    const [user] = await server.driver.query<{
+      name: string;
+      lang: string;
+      tz: string;
+      email: string;
+    }>({
+      text: "SELECT name, lang, tz, email FROM res_users WHERE login = 'owner'",
+      params: [],
+    });
+    expect(user).toEqual({
+      name: 'Nusrat Owner',
+      lang: 'bn_BD',
+      tz: 'Asia/Dhaka',
+      email: 'owner@padma.test',
+    });
+    const types = await server.driver.query({
+      text: 'SELECT id FROM mail_activity_type',
+      params: [],
+    });
+    expect(types.length).toBe(5);
+  } finally {
+    await server.close();
+  }
+
+  // A second run keeps the files and the data, and sees the enrolment.
+  const again: string[] = [];
+  const second = await runInit(['shop', '--database-url', url], {
+    write: (t) => again.push(t),
+    prompter: scripted(again, {
+      Login: 'owner',
+      'Password (12+ characters)': PASSWORD,
+      'Repeat the password': PASSWORD,
+      'Apps to install': 'reporting,messaging',
+    }),
+    cwd: dir,
+  });
+  const text2 = again.join('');
+  expect(second, text2).toBe(0);
+  expect(text2).toContain('kept    src/modules.ts (exists)');
+  expect(text2).toContain('kept    .env');
+  expect(text2).toContain('applied 0 migration(s)');
+  expect(text2).toContain('already has users');
+  expect(text2).toContain('"owner" already signs in with an authenticator app.');
+}, 240_000);
+
+test('--yes needs the administrator password; a weak one is refused', async () => {
+  const output: string[] = [];
+  const code = await runInit(
+    [join(dir, 'other'), '--yes', '--database-url', url, '--admin-password', 'short'],
+    { write: (t) => output.push(t), cwd: dir },
+  );
+  expect(code).toBe(1);
+  expect(output.join('')).toContain('At least 12 characters.');
+}, 120_000);

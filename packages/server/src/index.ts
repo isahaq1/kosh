@@ -56,7 +56,7 @@ export {
   type RequestRunOptions,
   runOptionsOf,
 } from './identity.js';
-export { orm, pg } from './orm.js';
+export { migrate, orm, pg } from './orm.js';
 export { buildKoshRegistry, KOSH_VERSION, type KoshRegistry } from './registry.js';
 export {
   createServer,
