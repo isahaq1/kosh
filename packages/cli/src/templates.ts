@@ -6,6 +6,8 @@
 export type AppName = 'permissions' | 'reporting' | 'messaging';
 export interface AppSpec {
   readonly label: string;
+  /** Shown next to the app in the installer (where the terminal shows pictographs). */
+  readonly icon: string;
   /** The module's export in `kosh-erp/<app>`. */
   readonly server: string;
   /** The web registration in `kosh-erp/<app>/web`. */
@@ -16,16 +18,19 @@ export interface AppSpec {
 export const APPS: Readonly<Record<AppName, AppSpec>> = {
   permissions: {
     label: 'Roles, field security and approvals',
+    icon: '🛡️',
     server: 'permissions',
     web: 'registerPermissionsWeb',
   },
   reporting: {
     label: 'Reports: pivots, charts, dashboards, documents, scheduled reports',
+    icon: '📊',
     server: 'reporting',
     web: 'registerReportingWeb',
   },
   messaging: {
     label: 'Chatter, activities and attachments on every record',
+    icon: '💬',
     server: 'messaging',
     web: 'registerMessagingWeb',
   },

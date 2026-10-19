@@ -28,6 +28,17 @@ export class InputEndedError extends Error {
   }
 }
 
+/** How questions look: a marker before each one and a style for the default in brackets. */
+export interface PromptLook {
+  /** E.g. a cyan "? ", after the question's own indentation. */
+  readonly marker: string;
+  readonly fallback: (text: string) => string;
+  /** The style of a validation message. */
+  readonly problem: (text: string) => string;
+}
+
+const PLAIN_LOOK: PromptLook = { marker: '', fallback: (t) => t, problem: (t) => t };
+
 /**
  * The terminal: secret answers masked with `*`. Lines are queued as they arrive, so answers piped in (or typed
  * ahead) are never lost between questions.
@@ -35,6 +46,7 @@ export class InputEndedError extends Error {
 export function terminalPrompter(
   input: NodeJS.ReadStream = process.stdin,
   output: NodeJS.WriteStream = process.stdout,
+  look: PromptLook = PLAIN_LOOK,
 ): Prompter {
   let muted = false;
   const terminal = input.isTTY === true;
@@ -74,7 +86,10 @@ export function terminalPrompter(
   };
   const ask = async (q: Question): Promise<string> => {
     for (;;) {
-      const prompt = `${q.message}${q.default === undefined || q.secret === true ? '' : ` [${q.default}]`}: `;
+      const indent = /^\s*/.exec(q.message)?.[0] ?? '';
+      const fallback =
+        q.default === undefined || q.secret === true ? '' : ` ${look.fallback(`[${q.default}]`)}`;
+      const prompt = `${indent}${look.marker}${q.message.slice(indent.length)}${fallback}: `;
       // Readline's own prompt, so redraws show this question (not its default "> "); written before masking.
       current = prompt;
       if (terminal) {
@@ -90,7 +105,7 @@ export function terminalPrompter(
       const value = answer === '' ? (q.default ?? '') : answer;
       const problem = q.validate?.(value) ?? null;
       if (problem === null) return value;
-      output.write(`  ${problem}\n`);
+      output.write(`  ${look.problem(problem)}\n`);
     }
   };
   return {

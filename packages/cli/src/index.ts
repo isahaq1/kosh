@@ -9,6 +9,7 @@ import { parseArgs } from 'node:util';
 import { generateClient, openApiOf } from '@kosh/server';
 import { runInit } from './init.js';
 import { modulesOf, runMigrate, runModule, runSeed, runUser } from './project.js';
+import type { Terminal } from './ui.js';
 
 export { INIT_USAGE, type InitIo, runInit } from './init.js';
 export {
@@ -26,9 +27,19 @@ export {
   defaultsPrompter,
   InputEndedError,
   type Prompter,
+  type PromptLook,
   type Question,
   terminalPrompter,
 } from './prompt.js';
+export {
+  type CardRow,
+  createUi,
+  detectTerminal,
+  PLAIN_TERMINAL,
+  type TaskHandle,
+  type Terminal,
+  type Ui,
+} from './ui.js';
 
 /** Package identity. */
 export const PACKAGE: { readonly name: string; readonly rfc: string } = Object.freeze({
@@ -66,6 +77,8 @@ export interface CliOptions {
   /** Base for relative paths. Default: `process.cwd()`. */
   readonly cwd?: string;
   readonly fetch?: typeof fetch;
+  /** What the output can show (colour, icons, spinners). Default: plain lines. */
+  readonly terminal?: Terminal;
 }
 
 async function documentFrom(
@@ -142,7 +155,12 @@ export async function runCli(
     return argv.length === 0 ? 2 : 0;
   }
   const cwd = options.cwd ?? process.cwd();
-  if (argv[0] === 'init') return runInit(argv.slice(1), { write, cwd });
+  if (argv[0] === 'init')
+    return runInit(argv.slice(1), {
+      write,
+      cwd,
+      ...(options.terminal === undefined ? {} : { terminal: options.terminal }),
+    });
   const commands: Record<string, typeof runMigrate> = {
     migrate: runMigrate,
     seed: runSeed,
