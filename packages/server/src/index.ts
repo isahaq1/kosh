@@ -18,12 +18,14 @@ export { fieldSchema, openApiDocument, openApiOf } from './api/openapi.js';
 export { registerRestApi } from './api/rest.js';
 export { type ServedView, type ViewField, ViewRegistry } from './api/views.js';
 export {
+  APPS_CHANNEL,
   APPS_LOG_TABLE,
   APPS_TABLE,
   type AppLoadContext,
   type ApplyAppsOptions,
   type AppsResult,
   applyApps,
+  appsDigest,
   appTableStatements,
   FRAMEWORK_TABLES,
   installedApps,
@@ -33,6 +35,7 @@ export {
   prepareApps,
   readInstalledApps,
   recordInstalledApps,
+  restoreAppMigrations,
 } from './apps.js';
 export { type AuditInput, audit } from './audit.js';
 export {

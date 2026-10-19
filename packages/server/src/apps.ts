@@ -16,7 +16,9 @@
  * installed set (as before RFC 0008), and the first app change adopts the modules Shutro has migrated.
  */
 import { createHash } from 'node:crypto';
-import { rm } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import {
   type AppChange,
   type AppPlan,
@@ -44,6 +46,11 @@ import { buildKoshRegistry, type KoshRegistry } from './registry.js';
 export const APPS_TABLE = 'kosh_module';
 /** Every applied app change: who, what, and the SQL that ran. */
 export const APPS_LOG_TABLE = 'kosh_app_log';
+/**
+ * Notified (with the new set's digest) when an app change commits: every server of the database rebuilds for the new
+ * installed set (`createAppHost`).
+ */
+export const APPS_CHANNEL = 'kosh_apps';
 /** Tables the framework owns (not a model's): migrations never alter or drop them. */
 export const FRAMEWORK_TABLES: readonly string[] = [IDEMPOTENCY_TABLE, APPS_TABLE, APPS_LOG_TABLE];
 
@@ -69,7 +76,9 @@ export function appTableStatements(): DriverQuery[] {
   actor text NOT NULL,
   change jsonb NOT NULL,
   statements text NOT NULL,
-  digest text NOT NULL
+  digest text NOT NULL,
+  migration_file text,
+  migration_content text
 )`,
       params: [],
     },
@@ -129,6 +138,9 @@ export async function installedApps(
     .map((m) => ({ name: m.name, version: m.version, state: 'installed', reason: 'selected' }));
 }
 
+/** A digest of an installed set: equal sets, equal digests (what `NOTIFY` carries and hosts compare). */
+export const appsDigest = (rows: readonly InstalledApp[]): string => digestOf(rows);
+
 const digestOf = (rows: readonly InstalledApp[]) =>
   createHash('sha256')
     .update(JSON.stringify([...rows].sort((a, b) => a.name.localeCompare(b.name))))
@@ -171,6 +183,33 @@ VALUES ($1, $2, 'installed', $3, $4) ON CONFLICT (name) DO NOTHING`,
     });
 }
 
+/**
+ * Writes back the migration files of app changes that are applied but missing from `dir` (a server whose files were
+ * not kept, e.g. a recreated container), exactly as they were, so the next file gets the next number and every
+ * applied file keeps its checksum. Returns the restored file names.
+ */
+export async function restoreAppMigrations(db: Queryable, dir: string): Promise<string[]> {
+  const [log] = await db.query<{ found: string | null }>({
+    text: `SELECT to_regclass('public.${APPS_LOG_TABLE}')::text AS found`,
+    params: [],
+  });
+  if (log?.found === null || log?.found === undefined) return [];
+  const rows = await db.query<{ migration_file: string; migration_content: string }>({
+    text: `SELECT migration_file, migration_content FROM ${APPS_LOG_TABLE}
+WHERE migration_file IS NOT NULL ORDER BY id`,
+    params: [],
+  });
+  const restored: string[] = [];
+  for (const row of rows) {
+    const path = join(dir, row.migration_file);
+    if (existsSync(path)) continue;
+    await mkdir(dir, { recursive: true });
+    await writeFile(path, row.migration_content);
+    restored.push(row.migration_file);
+  }
+  return restored;
+}
+
 /** A planned app change, ready for {@link applyApps}. */
 export interface PreparedApps {
   readonly plan: AppPlan;
@@ -201,6 +240,7 @@ export interface PrepareAppsOptions {
 /** Plans an app change against the live database. Changes nothing. @throws {AppPlanError} */
 export async function prepareApps(options: PrepareAppsOptions): Promise<PreparedApps> {
   const { driver, catalogue } = options;
+  await restoreAppMigrations(driver, options.dir);
   const pending = (await migrate.migrationStatus({ driver, dir: options.dir })).pending;
   if (pending.length > 0)
     throw new AppPlanError(
@@ -423,8 +463,11 @@ ON CONFLICT (name) DO UPDATE SET version = EXCLUDED.version, state = EXCLUDED.st
           params: [row.name, row.version, row.state, row.reason, options.actor],
         });
       const sql = prepared.migration.statements.map((s) => `${s.sql};`).join('\n');
+      // The file itself, byte for byte: restoreAppMigrations writes it back where it went missing.
+      const content = file === null ? null : await readFile(file.path, 'utf8');
       await tx.query({
-        text: `INSERT INTO ${APPS_LOG_TABLE} (actor, change, statements, digest) VALUES ($1, $2::jsonb, $3, $4)`,
+        text: `INSERT INTO ${APPS_LOG_TABLE} (actor, change, statements, digest, migration_file, migration_content)
+VALUES ($1, $2::jsonb, $3, $4, $5, $6)`,
         params: [
           options.actor,
           JSON.stringify({
@@ -435,7 +478,14 @@ ON CONFLICT (name) DO UPDATE SET version = EXCLUDED.version, state = EXCLUDED.st
           }),
           sql,
           createHash('sha256').update(sql).digest('hex'),
+          file === null ? null : `${file.version}_${file.name}.sql`,
+          content,
         ],
+      });
+      // Delivered when the transaction commits, to every server listening on this database.
+      await tx.query({
+        text: 'SELECT pg_notify($1, $2)',
+        params: [APPS_CHANNEL, digestOf(plan.after)],
       });
     });
   } catch (error) {

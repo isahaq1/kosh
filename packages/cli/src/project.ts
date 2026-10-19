@@ -22,6 +22,7 @@ import {
   migrate,
   orm,
   readInstalledApps,
+  restoreAppMigrations,
 } from '@kosh/server';
 
 function isModule(value: unknown): value is KoshModule {
@@ -267,6 +268,10 @@ export async function runMigrate(
   const server = await openProject(cwd, values.modules, { set: 'schema' });
   try {
     const dir = resolve(cwd, values.dir);
+    // App changes made on another server (the Apps page) wrote their files there: they come back from the log.
+    for (const file of await restoreAppMigrations(server.driver, dir))
+      write(`Restored migrations/${file} (an applied app change)
+`);
     if (positionals[0] === 'status') {
       const status = await migrate.migrationStatus({ driver: server.driver, dir });
       write(

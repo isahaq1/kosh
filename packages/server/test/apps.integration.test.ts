@@ -4,19 +4,22 @@
  * and takes dependents along; enable brings dependencies back; disabling an extension with required columns and
  * applying a stale plan are refused.
  */
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { defineModule as defineKoshModule, type KoshModule } from '@kosh/modules-sdk';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import {
+  APPS_CHANNEL,
   APPS_LOG_TABLE,
   applyApps,
+  appsDigest,
   installedModules,
   prepareApps,
   readInstalledApps,
   recordInstalledApps,
+  restoreAppMigrations,
 } from '../src/apps.js';
 import { base, baseShutro } from '../src/auth/base.js';
 import { type Driver, orm, pg } from '../src/orm.js';
@@ -242,4 +245,28 @@ test('a plan made before another change is refused', async () => {
   await expect(applyApps(second, { driver, dir, actor: 'test' })).rejects.toThrow(
     /changed since this change was planned/,
   );
+});
+
+test('a committed change notifies every listener with the new digest', async () => {
+  const heard: string[] = [];
+  const stop = await driver.listen(APPS_CHANNEL, (payload) => heard.push(payload));
+  try {
+    await change({ enable: ['shelf'] });
+    for (let i = 0; i < 50 && heard.length === 0; i++) await new Promise((r) => setTimeout(r, 50));
+    expect(heard).toEqual([appsDigest((await readInstalledApps(driver)) ?? [])]);
+  } finally {
+    await stop();
+  }
+});
+
+test('applied app migrations missing from the folder are restored byte for byte', async () => {
+  const files = (await readdir(dir)).sort();
+  expect(files.length).toBeGreaterThan(0);
+  const before = await Promise.all(files.map((f) => readFile(join(dir, f), 'utf8')));
+  for (const f of files) await rm(join(dir, f));
+  expect((await restoreAppMigrations(driver, dir)).sort()).toEqual(files);
+  expect(await Promise.all(files.map((f) => readFile(join(dir, f), 'utf8')))).toEqual(before);
+  expect(await restoreAppMigrations(driver, dir)).toEqual([]); // nothing missing any more
+  // Planning works on the restored folder (checksums match, no pending file).
+  expect((await prepareApps({ driver, catalogue, change: {}, dir })).empty).toBe(true);
 });
