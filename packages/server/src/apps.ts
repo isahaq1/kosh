@@ -357,10 +357,12 @@ export interface AppsResult {
 /**
  * A driver on one connection of an open transaction: Shutro's transactions become savepoints of it, and session
  * settings stay transaction-local. Nothing commits until the outer transaction does.
+ *
+ * No pool size is reported (`max`): what Shutro would run on a second connection (standard sequences' counters)
+ * runs in this transaction too, which is what an install wants: a rolled-back install takes its numbers back.
  */
 function pinnedDriver(conn: DriverConnection): Driver {
   return {
-    max: 1,
     query: (q) => conn.query(q),
     transaction: (options, fn) =>
       conn.savepoint(async (inner) => {

@@ -365,6 +365,18 @@ export function registerRestApi(
   app.post('/api/v1/models/:model/onchange', async (request) => {
     const model = modelOf(request.params);
     const input = body(request);
+    const changed = (input as { changed?: unknown }).changed;
+    if (
+      typeof (input as { values?: unknown }).values !== 'object' ||
+      !Array.isArray(changed) ||
+      changed.some((c) => typeof c !== 'string')
+    )
+      throw problem(
+        400,
+        'invalid-body',
+        'Invalid onchange request',
+        'The body is { values: { ...the record }, changed: ["field", ...] }.',
+      );
     return request.env((env) => ref(env, model.name).onchange(input));
   });
 

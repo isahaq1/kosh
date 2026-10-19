@@ -226,6 +226,13 @@ describe('transitions, onchange, aggregates', () => {
       body: { values: { name: 'Wayne Enterprises' }, changed: ['name'] },
     });
     expect(changed.json().values).toMatchObject({ email: 'wayne.enterprises@example.com' });
+    const malformed = await call({
+      method: 'POST',
+      url: `${P}/onchange`,
+      as: 'alice',
+      body: { values: { name: 'x' }, field: 'name' },
+    });
+    expect(malformed.statusCode).toBe(400); // a bad body is the caller's problem, not a 500
     const totals = await call({
       method: 'POST',
       url: `${P}/aggregate`,
