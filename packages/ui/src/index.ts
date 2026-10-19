@@ -36,6 +36,7 @@ export { bcp47, createFormatter, type Formatter } from './lib/format.js';
 export {
   type FormProps,
   type NodeComponentProps,
+  type PageProps,
   Registry,
   RegistryError,
   type ViewProps,

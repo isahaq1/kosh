@@ -3,7 +3,7 @@
  * code uses the generated typed client (`kosh generate client`); both speak the same REST API, sessions (cookie +
  * CSRF header) and RFC 9457 problems. The server decides everything; this only transports.
  */
-import type { Condition, SearchSpec, ViewDefinition, ViewType, WindowAction } from '@kosh/views';
+import type { Action, Condition, SearchSpec, ViewDefinition, ViewType } from '@kosh/views';
 
 export type Row = Record<string, unknown> & { readonly id: number };
 
@@ -108,7 +108,7 @@ export interface KoshApi {
   logout(): Promise<void>;
   apps(): Promise<readonly AppEntry[]>;
   menus(app?: string): Promise<readonly MenuNode[]>;
-  action(id: string): Promise<WindowAction>;
+  action(id: string): Promise<Action>;
   view(id: string): Promise<ServedView>;
   viewFor(model: string, type: ViewType): Promise<ServedView>;
   search(model: string): Promise<SearchSpec>;
@@ -258,7 +258,7 @@ export function createKoshApi(options: ApiOptions = {}): KoshApi {
     menus: async (app) =>
       (await request<{ menus: MenuNode[] }>('GET', '/api/v1/menus', { query: { app } })).body.menus,
     action: async (id) =>
-      (await json<{ spec: WindowAction }>('GET', `/api/v1/actions/${encodeURIComponent(id)}`)).spec,
+      (await json<{ spec: Action }>('GET', `/api/v1/actions/${encodeURIComponent(id)}`)).spec,
     view: (id) => json('GET', `/api/v1/views/${encodeURIComponent(id)}`),
     viewFor: async (name, type) =>
       (await request<ServedView>('GET', '/api/v1/views', { query: { model: name, type } })).body,

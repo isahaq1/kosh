@@ -8,6 +8,7 @@ import {
   type ModelInfo,
   resolveView,
   ViewDefinitionError,
+  validateAction,
   validateSearch,
   validateView,
 } from '../src/index.js';
@@ -251,4 +252,12 @@ describe('validation against the models', () => {
       "group-by 'name:month': a granularity needs a date field",
     ]);
   });
+});
+
+test('client actions open a registered page, named <module>.<Name>', () => {
+  const none = () => undefined;
+  expect(validateAction({ type: 'client', page: 'settings.Apps' }, none, new Map())).toEqual([]);
+  expect(validateAction({ type: 'client', page: 'Apps' }, none, new Map())).toEqual([
+    "the page 'Apps' is not '<module>.<Name>'",
+  ]);
 });

@@ -1,6 +1,6 @@
 /**
  * The renderer registry (RFC 0004 §5 escape hatches, RFC 0007 §5): view renderers by type, field widgets by name
- * (or field kind), and node components by name. Modules add entries; replacing an existing one must be asked for
+ * (or field kind), node components by name, and pages (what client actions open, RFC 0008) by name. Modules add entries; replacing an existing one must be asked for
  * (`{ replace: true }`), so two modules cannot silently fight over a widget.
  */
 import type { ComponentNode, Condition, FieldNode, ViewType } from '@kosh/views';
@@ -56,6 +56,13 @@ export interface FormProps {
   readonly onBack: () => void;
 }
 
+/** Props of a page: what a client action opens (`{ type: 'client', page: 'settings.Apps' }`). */
+export interface PageProps {
+  readonly api: KoshApi;
+  /** The action's label. */
+  readonly label?: string;
+}
+
 export class RegistryError extends Error {
   constructor(problem: string) {
     super(problem);
@@ -63,7 +70,7 @@ export class RegistryError extends Error {
   }
 }
 
-type Kind = 'view' | 'widget' | 'component';
+type Kind = 'view' | 'widget' | 'component' | 'page';
 
 /** Renderers, widgets and components by name. */
 export class Registry {
@@ -71,6 +78,7 @@ export class Registry {
     view: new Map(),
     widget: new Map(),
     component: new Map(),
+    page: new Map(),
   };
 
   #add(kind: Kind, name: string, component: ComponentType<never>, replace: boolean): this {
@@ -114,6 +122,15 @@ export class Registry {
     );
   }
 
+  /** A page client actions open (`settings.Apps`). */
+  registerPage(
+    name: string,
+    component: ComponentType<PageProps>,
+    options: { readonly replace?: boolean } = {},
+  ): this {
+    return this.#add('page', name, component as ComponentType<never>, options.replace === true);
+  }
+
   view(name: string): ComponentType<ViewProps> | undefined {
     return this.#entries.view.get(name) as ComponentType<ViewProps> | undefined;
   }
@@ -134,10 +151,14 @@ export class Registry {
     return this.#entries.component.get(name) as ComponentType<NodeComponentProps> | undefined;
   }
 
+  page(name: string): ComponentType<PageProps> | undefined {
+    return this.#entries.page.get(name) as ComponentType<PageProps> | undefined;
+  }
+
   /** A copy, for an app that changes entries without touching the defaults. */
   clone(): Registry {
     const copy = new Registry();
-    for (const kind of ['view', 'widget', 'component'] as const)
+    for (const kind of ['view', 'widget', 'component', 'page'] as const)
       for (const [name, c] of this.#entries[kind]) copy.#entries[kind].set(name, c);
     return copy;
   }

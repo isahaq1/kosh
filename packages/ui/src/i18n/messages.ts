@@ -9,6 +9,8 @@ export const en = {
     error: 'Something went wrong.',
     retry: 'Retry',
     notFound: 'Nothing here.',
+    unknownPage:
+      'The page "{{page}}" is not part of this app. Register it with registry.registerPage.',
   },
   auth: {
     signIn: 'Sign in',
@@ -100,6 +102,7 @@ export const bn: DeepPartial<Messages> = {
     error: 'কিছু একটা ভুল হয়েছে।',
     retry: 'আবার চেষ্টা করুন',
     notFound: 'এখানে কিছু নেই।',
+    unknownPage: '"{{page}}" পৃষ্ঠাটি এই অ্যাপে নেই। registry.registerPage দিয়ে নিবন্ধন করুন।',
   },
   auth: {
     signIn: 'সাইন ইন',

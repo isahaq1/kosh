@@ -243,6 +243,7 @@ export type ViewType = ViewDefinition['type'];
 
 /** A window action: what a menu opens. */
 export interface WindowAction {
+  readonly type?: 'window';
   readonly model: string;
   readonly label?: string;
   /** View types in switcher order; the first is the default. */
@@ -256,6 +257,23 @@ export interface WindowAction {
   /** Group or permission codes; otherwise any access level of the module. */
   readonly visibleTo?: readonly string[];
 }
+
+/**
+ * A client action (RFC 0008): a page registered by a module's web contribution (`registry.registerPage`), for screens
+ * that are not one model's views, such as the App manager. Visibility is the module's access levels or `visibleTo`,
+ * as for window actions; the page calls its module's routes, which check access again.
+ */
+export interface ClientAction {
+  readonly type: 'client';
+  /** The page's name in the web registry, `<module>.<Name>` (e.g. `settings.Apps`). */
+  readonly page: string;
+  readonly label?: string;
+  /** Group or permission codes; otherwise any access level of the module. */
+  readonly visibleTo?: readonly string[];
+}
+
+/** What a menu opens. */
+export type Action = WindowAction | ClientAction;
 
 /** A search filter. Filters of the same `group` combine with OR, groups with AND. */
 export interface SearchFilter {

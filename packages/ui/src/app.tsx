@@ -8,7 +8,7 @@
  * `/:app/a/:action/:id` (form; `new` for a new record).
  */
 import { compileSearch, decodeSearch, encodeSearch, type SearchState } from '@kosh/search';
-import type { Condition, ViewType, WindowAction } from '@kosh/views';
+import type { ClientAction, Condition, ViewType, WindowAction } from '@kosh/views';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createRootRoute,
@@ -402,6 +402,14 @@ function useAction(id: string) {
   return useQuery({ queryKey: ['action', id], queryFn: () => api.action(id) });
 }
 
+/** The action when it is a window action (the record pages only open those). */
+function useWindowAction(id: string) {
+  const query = useAction(id);
+  const data: WindowAction | undefined =
+    query.data === undefined || query.data.type === 'client' ? undefined : query.data;
+  return { isError: query.isError, error: query.error, data };
+}
+
 function useServedView(action: WindowAction | undefined, type: ViewType) {
   const { api } = useServices();
   const viewId = action?.viewIds?.[type];
@@ -418,13 +426,29 @@ interface ActionSearch {
   readonly q?: string;
 }
 
+/** A client action: the page a module registered (RFC 0008). */
+function ClientPage({ action }: { readonly action: ClientAction }): ReactElement {
+  const { registry, api } = useServices();
+  const { t } = useTranslation();
+  const Page = registry.page(action.page);
+  if (Page === undefined) return <Alert>{t('app.unknownPage', { page: action.page })}</Alert>;
+  return <Page api={api} {...(action.label === undefined ? {} : { label: action.label })} />;
+}
+
 function ActionPage(): ReactElement {
+  const { action: actionId } = useParams({ strict: false }) as { action: string };
+  const action = useAction(actionId);
+  if (action.data?.type === 'client') return <ClientPage action={action.data} />;
+  return <WindowActionPage />;
+}
+
+function WindowActionPage(): ReactElement {
   const { registry, api } = useServices();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { app, action: actionId } = useParams({ strict: false }) as { app: string; action: string };
   const search = useSearch({ strict: false }) as ActionSearch;
-  const action = useAction(actionId);
+  const action = useWindowAction(actionId);
   const types: ViewType[] = (action.data?.views ?? []).filter((v) => v !== 'form');
   const type = (types.includes(search.view as ViewType) ? search.view : types[0]) as
     | ViewType
@@ -435,7 +459,7 @@ function ActionPage(): ReactElement {
     queryFn: () => api.search(action.data?.model as string),
     enabled: action.data !== undefined,
   });
-  if (action.isError) return <Alert>{action.error.message}</Alert>;
+  if (action.error !== null) return <Alert>{action.error.message}</Alert>;
   if (served.isError) return <Alert>{served.error.message}</Alert>;
   if (
     action.data === undefined ||
@@ -573,9 +597,9 @@ function RecordPage(): ReactElement {
     action: actionId,
     id,
   } = useParams({ strict: false }) as { app: string; action: string; id: string };
-  const action = useAction(actionId);
+  const action = useWindowAction(actionId);
   const served = useServedView(action.data, 'form');
-  if (action.isError) return <Alert>{action.error.message}</Alert>;
+  if (action.error !== null) return <Alert>{action.error.message}</Alert>;
   if (served.isError) return <Alert>{served.error.message}</Alert>;
   if (served.data === undefined) return <Spinner label={t('app.loading')} />;
   const Form = registry.form(served.data.view.component ?? 'form');

@@ -38,6 +38,15 @@ describe('registry', () => {
     copy.registerComponent('approvals.Panel', Custom);
     expect(registry.component('approvals.Panel')).toBeUndefined();
   });
+
+  test('pages (what client actions open) are registered by name', () => {
+    const registry = createDefaultRegistry();
+    const Page = () => null;
+    registry.registerPage('settings.Apps', Page);
+    expect(registry.page('settings.Apps')).toBe(Page);
+    expect(() => registry.registerPage('settings.Apps', Page)).toThrow(RegistryError);
+    expect(registry.clone().page('settings.Apps')).toBe(Page);
+  });
 });
 
 describe('formatting', () => {

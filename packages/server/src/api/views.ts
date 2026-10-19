@@ -10,6 +10,7 @@
  */
 import type { KoshModule } from '@kosh/modules-sdk';
 import {
+  type Action,
   type ButtonNode,
   type FieldNode,
   type FormNode,
@@ -22,7 +23,6 @@ import {
   validateAction,
   validateSearch,
   validateView,
-  type WindowAction,
 } from '@kosh/views';
 import type { FastifyInstance } from 'fastify';
 import { HttpProblem, ServerConfigError } from '../errors.js';
@@ -85,7 +85,7 @@ function config(problem: string): ServerConfigError {
 /** The views, actions and searches of a loaded module set. */
 export class ViewRegistry {
   readonly views: ReadonlyMap<string, ResolvedView>;
-  readonly actions: ReadonlyMap<string, WindowAction>;
+  readonly actions: ReadonlyMap<string, Action>;
   readonly searches: ReadonlyMap<string, SearchSpec>;
   readonly #models: ReadonlyMap<string, ApiModel>;
 
@@ -134,7 +134,7 @@ export class ViewRegistry {
     }
     this.views = views;
     const plain = new Map([...views].map(([id, r]) => [id, r.view]));
-    const actions = new Map<string, WindowAction>();
+    const actions = new Map<string, Action>();
     for (const m of modules)
       for (const [id, action] of Object.entries(m.actions ?? {})) {
         const problems = validateAction(action, lookup, plain);

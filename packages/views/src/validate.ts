@@ -3,7 +3,7 @@
  * transitions, relation targets and group-by fields fail when the server starts, never when a user opens a screen.
  */
 import { nodesOf } from './extend.js';
-import type { FieldNode, MeasureNode, SearchSpec, ViewDefinition, WindowAction } from './types.js';
+import type { Action, FieldNode, MeasureNode, SearchSpec, ViewDefinition } from './types.js';
 
 /** What validation needs to know about a model. */
 export interface ModelInfo {
@@ -100,10 +100,14 @@ function isLineColumn(view: ViewDefinition, node: FieldNode): boolean {
 
 /** The problems of an action. */
 export function validateAction(
-  action: WindowAction,
+  action: Action,
   models: ModelLookup,
   views: ReadonlyMap<string, ViewDefinition>,
 ): string[] {
+  if (action.type === 'client')
+    return /^[a-z][a-z0-9_]*\.[A-Za-z][A-Za-z0-9]*$/.test(action.page)
+      ? []
+      : [`the page '${action.page}' is not '<module>.<Name>'`];
   if (models(action.model) === undefined) return [`the model '${action.model}' is not installed`];
   const problems: string[] = [];
   if (action.views.length === 0) problems.push('no view types');
