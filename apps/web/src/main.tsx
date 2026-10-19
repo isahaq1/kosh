@@ -6,6 +6,7 @@ import './index.css';
 import { messagingMessages, registerMessagingWeb } from '@kosh/messaging/web';
 import { registerPermissionsWeb } from '@kosh/permissions/web';
 import { registerReportingWeb, reportingMessages } from '@kosh/reporting/web';
+import { registerSettingsWeb, settingsMessages } from '@kosh/settings/web';
 import { createDefaultRegistry, createKoshApi, KoshApp } from '@kosh/ui';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -14,7 +15,12 @@ const registry = createDefaultRegistry();
 registerPermissionsWeb(registry);
 registerReportingWeb(registry);
 registerMessagingWeb(registry);
-const messages = { reporting: reportingMessages, messaging: messagingMessages };
+registerSettingsWeb(registry);
+const messages = {
+  reporting: reportingMessages,
+  messaging: messagingMessages,
+  settings: settingsMessages,
+};
 
 const root = document.getElementById('root');
 if (root === null) throw new Error('index.html has no #root element.');

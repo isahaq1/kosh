@@ -398,3 +398,49 @@ export const purchaseApprovals = defineKoshModule({
 });
 
 export const MODULES = [purchaseApprovals];
+
+// ---------------------------------------------------------------------------------------------------- library
+// In the catalogue but not installed: the App manager's end-to-end test installs and disables it (RFC 0008).
+
+const Book = defineModel('library.book', {
+  access: { 'library.user': ['read', 'write', 'create', 'unlink'] },
+  order: ['title asc'],
+  fields: { title: f.char({ required: true }), author: f.char() },
+});
+
+export const libraryShutro = defineModule({
+  name: 'library',
+  version: '1.0.0',
+  depends: [baseShutro],
+  groups: [defineGroup({ code: 'library.user', label: 'Library user', implies: ['base.user'] })],
+  models: [Book],
+  data: [
+    orm.record('library.book', 'book_welcome', { title: 'Welcome to the library', author: 'Kosh' }),
+  ],
+});
+
+export const library = defineKoshModule({
+  shutro: libraryShutro,
+  kosh: '^0.1.0',
+  depends: [base],
+  app: {
+    code: 'library',
+    label: 'Library',
+    icon: 'book',
+    sequence: 5,
+    category: 'Services',
+    summary: 'Books and their authors',
+  },
+  accessLevels: { user: { label: 'User', groups: ['library.user'] } },
+  actions: {
+    'library.action_books': action(Book, { label: 'Books', views: ['list', 'form'] }),
+  },
+  menus: [
+    { id: 'library.root', label: 'Library', app: 'library' },
+    { id: 'library.books', parent: 'library.root', label: 'Books', action: 'library.action_books' },
+  ],
+  views: {
+    'library.book.list': list(Book, { columns: ['title', 'author'] }),
+    'library.book.form': form(Book, (k) => ({ sheet: [k.group('main', ['title', 'author'])] })),
+  },
+});

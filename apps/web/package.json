@@ -19,7 +19,8 @@
     "@kosh/ui": "workspace:*",
     "@kosh/permissions": "workspace:*",
     "@kosh/reporting": "workspace:*",
-    "@kosh/messaging": "workspace:*"
+    "@kosh/messaging": "workspace:*",
+    "@kosh/settings": "workspace:*"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

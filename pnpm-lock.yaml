@@ -43,6 +43,9 @@ importers:
       '@kosh/reporting':
         specifier: workspace:*
         version: link:../../packages/reporting
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
       '@kosh/ui':
         specifier: workspace:*
         version: link:../../packages/ui

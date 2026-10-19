@@ -190,12 +190,22 @@ export async function createAppHost(options: AppHostOptions): Promise<AppHost> {
 /** Listens and shuts down gracefully on SIGTERM / SIGINT (in-flight requests finish first). */
 export async function startAppHost(
   host: AppHost,
-  options: { readonly port?: number; readonly host?: string } = {},
+  options: {
+    readonly port?: number;
+    readonly host?: string;
+    readonly onShutdown?: () => Promise<void>;
+  } = {},
 ): Promise<string> {
-  const address = await host.listen(options);
+  const address = await host.listen({
+    ...(options.port === undefined ? {} : { port: options.port }),
+    ...(options.host === undefined ? {} : { host: options.host }),
+  });
   const stop = (signal: string): void => {
     host.server.app.log.info({ signal }, 'shutting down');
-    void host.close().finally(() => process.exit(0));
+    void host
+      .close()
+      .then(() => options.onShutdown?.())
+      .finally(() => process.exit(0));
   };
   process.once('SIGTERM', () => stop('SIGTERM'));
   process.once('SIGINT', () => stop('SIGINT'));
