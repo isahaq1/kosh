@@ -6,7 +6,11 @@
 import rateLimit from '@fastify/rate-limit';
 import type { KoshModule } from '@kosh/modules-sdk';
 import type { Span } from '@opentelemetry/api';
-import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
+import Fastify, {
+  type FastifyInstance,
+  type FastifyServerFactory,
+  type FastifyServerOptions,
+} from 'fastify';
 import { Valkey } from 'iovalkey';
 import { idempotencyTableStatements } from './api/idempotency.js';
 import { publicApiModels } from './api/metadata.js';
@@ -70,6 +74,23 @@ export interface ServerOptions {
   readonly poolSize?: number;
   /** Passed to the registry: `{ enforce: false }` only for tests of non-security features. */
   readonly security?: { readonly enforce?: boolean | 'warn' };
+  /**
+   * Takes Fastify's request handler instead of an HTTP server of its own (`createAppHost` dispatches one listener to
+   * the server of the current installed set).
+   */
+  readonly serverFactory?: FastifyServerFactory;
+  /** The App manager's context for module routes (the Settings app), given by `createAppHost`. */
+  readonly apps?: AppsContext;
+}
+
+/** What module routes need to change the installed apps (RFC 0008). */
+export interface AppsContext {
+  /** Every module this installation can install. */
+  readonly catalogue: readonly KoshModule[];
+  /** Where app changes write their migration files. */
+  readonly migrationsDir: string;
+  /** Rebuilds the server for the installed set (after a change); true when it changed. */
+  reload(): Promise<boolean>;
 }
 
 /** What a module's `routes` hook receives (`defineModule({ routes })`). */
@@ -79,6 +100,8 @@ export interface ModuleContext {
   readonly driver: Driver;
   readonly registry: KoshRegistry;
   readonly auth: AuthService | undefined;
+  /** Present when the server runs in an app host: module routes can change the installed apps. */
+  readonly apps?: AppsContext;
 }
 
 /** A created server. */
@@ -141,6 +164,7 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
     },
     requestIdHeader: false,
     return503OnClosing: true,
+    ...(options.serverFactory === undefined ? {} : { serverFactory: options.serverFactory }),
   });
   app.decorateRequest('identity', null);
   app.decorateRequest('span', undefined);
@@ -260,7 +284,14 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
   views.register(app);
 
   // Module routes (admin APIs, custom endpoints), in dependency order.
-  const context: ModuleContext = { app, shutro, driver, registry, auth };
+  const context: ModuleContext = {
+    app,
+    shutro,
+    driver,
+    registry,
+    auth,
+    ...(options.apps === undefined ? {} : { apps: options.apps }),
+  };
   for (const m of registry.loaded.modules)
     if (m.routes !== undefined)
       await (m.routes as (c: ModuleContext) => void | Promise<void>)(context);
