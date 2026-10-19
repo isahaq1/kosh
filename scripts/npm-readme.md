@@ -26,14 +26,20 @@ chatter on every record. Permissions are checked on the server on every route.
 
 ## Install with the terminal
 
+One command creates the folder, installs Kosh and asks for everything it needs:
+
 ```sh
-mkdir my-erp && cd my-erp
-npm init -y
+npm create kosh-erp@latest my-erp
+```
+
+(`pnpm create kosh-erp my-erp` and `yarn create kosh-erp my-erp` work too.) In an existing folder:
+
+```sh
 npm install kosh-erp      # Shutro, the ORM, comes with it
 npx kosh init
 ```
 
-`kosh init` asks for what the installation needs. Press **Enter** to keep the value in `[brackets]`:
+The setup asks for what the installation needs. Press **Enter** to keep the value in `[brackets]`:
 
 | Question | Example | Notes |
 |---|---|---|
@@ -49,19 +55,21 @@ npx kosh init
 | Authenticator code | `123456` | scan the printed secret, type a code; **keep the recovery codes** it prints |
 
 Then it writes the project, creates the database tables (`migrations/0001_init.sql`), the company and the
-administrator, and loads the apps' default data. Start it:
+administrator, and loads the apps' default data (`npm create kosh-erp` also installs the back-office's build tools;
+after `npx kosh init`, run `npm install` once). Start it:
 
 ```sh
-npm install          # the back-office's build tools (Vite, Tailwind)
 npm start            # the API on http://localhost:3000
 npm run web          # the back-office on http://localhost:5173, in a second terminal
 ```
 
 Sign in with the administrator's login, password and a code from the authenticator app.
 
-**Without questions** (scripts, CI): pass the answers as flags.
+**Without questions** (scripts, CI): pass the answers as flags (after `--` with `npm create kosh-erp`).
 
 ```sh
+npm create kosh-erp@latest my-erp -- --yes --docker-db --admin-password "a long passphrase here"
+
 npx kosh init --yes \
   --database-url postgres://postgres:postgres@localhost:5432/my_erp --create-database \
   --company "Padma Traders" --currency BDT --lang bn --tz Asia/Dhaka \
@@ -79,8 +87,8 @@ enrol it (administrator rights wait for it). `npx kosh init --help` lists every 
 **PostgreSQL in Docker, the app on your machine** (development):
 
 ```sh
-npx kosh init                # answer 2 to "PostgreSQL": it starts the db service for you
-npm install && npm start     # the API; npm run web for the back-office
+npm create kosh-erp@latest my-erp   # answer 2 to "PostgreSQL": it starts the db service for you
+cd my-erp && npm start              # the API; npm run web for the back-office
 ```
 
 or start the database yourself first:
@@ -92,9 +100,9 @@ docker compose up -d db      # uses POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES
 **Everything in Docker** (a server, a demo):
 
 ```sh
-npx kosh init                # once: writes the project and .env, creates the tables and the administrator
-npm install                  # creates package-lock.json for the image build
-docker compose up -d --build # db + api + web; the back-office on http://localhost:8080
+npm create kosh-erp@latest my-erp   # once: the project, .env, tables, administrator (answer 2 for PostgreSQL)
+cd my-erp
+docker compose up -d --build        # db + api + web; the back-office on http://localhost:8080
 ```
 
 | Service | What | Port |

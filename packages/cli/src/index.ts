@@ -22,7 +22,13 @@ export {
   runUser,
   seed,
 } from './project.js';
-export { defaultsPrompter, type Prompter, type Question, terminalPrompter } from './prompt.js';
+export {
+  defaultsPrompter,
+  InputEndedError,
+  type Prompter,
+  type Question,
+  terminalPrompter,
+} from './prompt.js';
 
 /** Package identity. */
 export const PACKAGE: { readonly name: string; readonly rfc: string } = Object.freeze({

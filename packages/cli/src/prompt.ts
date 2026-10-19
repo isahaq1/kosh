@@ -20,33 +20,64 @@ export interface Prompter {
   close(): void;
 }
 
-/** The terminal: one readline interface, secret answers masked. */
+/** Thrown when the input ends before every question is answered (piped answers ran out, Ctrl+D). */
+export class InputEndedError extends Error {
+  constructor(question: string) {
+    super(`The input ended before "${question}" was answered.`);
+    this.name = 'InputEndedError';
+  }
+}
+
+/**
+ * The terminal: secret answers masked with `*`. Lines are queued as they arrive, so answers piped in (or typed
+ * ahead) are never lost between questions.
+ */
 export function terminalPrompter(
   input: NodeJS.ReadStream = process.stdin,
   output: NodeJS.WriteStream = process.stdout,
 ): Prompter {
   let muted = false;
+  const terminal = input.isTTY === true;
   const rl: Interface & { _writeToOutput?: (text: string) => void } = createInterface({
     input,
     output,
-    terminal: input.isTTY === true,
+    terminal,
   });
-  const write = rl._writeToOutput?.bind(rl);
-  // Masks what is typed while a secret is asked (readline echoes through this hook).
+  const echo = rl._writeToOutput?.bind(rl);
+  // Readline echoes what is typed through this hook: while a secret is asked, each keystroke shows as *.
   rl._writeToOutput = (text: string) => {
-    if (!muted || text.includes('\n') || text.includes('\r')) write?.(muted ? '\n' : text);
-    else write?.('*'.repeat(text.length === 0 ? 0 : 1));
+    if (!muted) echo?.(text);
+    else if (text.includes('\n') || text.includes('\r')) echo?.('\n');
+    else if (text.length > 0) echo?.('*');
   };
-  const line = (prompt: string) =>
-    new Promise<string>((resolve) => {
-      rl.question(prompt, (answer) => resolve(answer));
-    });
+  const lines: string[] = [];
+  const waiting: ((line: string | null) => void)[] = [];
+  let ended = false;
+  rl.on('line', (line) => {
+    const next = waiting.shift();
+    if (next === undefined) lines.push(line);
+    else next(line);
+  });
+  rl.on('close', () => {
+    ended = true;
+    for (const next of waiting.splice(0)) next(null);
+  });
+  const nextLine = (): Promise<string | null> => {
+    const queued = lines.shift();
+    if (queued !== undefined) return Promise.resolve(queued);
+    if (ended) return Promise.resolve(null);
+    return new Promise((resolve) => waiting.push(resolve));
+  };
   const ask = async (q: Question): Promise<string> => {
     for (;;) {
       const prompt = `${q.message}${q.default === undefined || q.secret === true ? '' : ` [${q.default}]`}: `;
-      muted = q.secret === true;
-      const answer = (await line(prompt)).trim();
+      output.write(prompt); // before masking: the question itself is always readable
+      muted = q.secret === true && terminal;
+      const received = await nextLine();
       muted = false;
+      if (received === null) throw new InputEndedError(q.message);
+      if (!terminal) output.write(q.secret === true ? '\n' : `${received}\n`);
+      const answer = received.trim();
       const value = answer === '' ? (q.default ?? '') : answer;
       const problem = q.validate?.(value) ?? null;
       if (problem === null) return value;

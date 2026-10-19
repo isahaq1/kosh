@@ -735,8 +735,16 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
 
     const relative =
       answers.dir === resolve(io.cwd) ? '' : `cd ${positionals[0] ?? answers.dir}\n  `;
+    // npm create kosh-erp installs the dependencies and prints the next steps itself.
+    if (process.env['KOSH_CREATE'] === '1') {
+      if (!enrolled)
+        write(
+          '\nAdministrator rights need a second factor: run `npx kosh init` again to enrol the authenticator app.\n',
+        );
+      return 0;
+    }
     write(
-      `\nDone. Next:\n  ${relative}npm install\n  npm start          # the API on http://localhost:${answers.port}\n` +
+      `\nDone. Next:\n  ${relative}npm install\n  npm start         # the API on http://localhost:${answers.port}\n` +
         '  npm run web        # the back-office on http://localhost:5173\n' +
         `Sign in as "${answers.admin.login}"${enrolled ? ' with your password and a code from the authenticator app' : ''}.\n` +
         (enrolled
