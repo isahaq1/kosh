@@ -13,7 +13,7 @@ export {
   publicApiModels,
   schemaName,
 } from './api/metadata.js';
-export { type MenuNode, moduleVisible, Navigation } from './api/navigation.js';
+export { type FoundRecord, type MenuNode, moduleVisible, Navigation } from './api/navigation.js';
 export { fieldSchema, openApiDocument, openApiOf } from './api/openapi.js';
 export { registerRestApi } from './api/rest.js';
 export { type ServedView, type ViewField, ViewRegistry } from './api/views.js';

@@ -280,7 +280,7 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
       return openapi;
     },
   });
-  new Navigation(registry.loaded).register(app);
+  new Navigation(registry.loaded, models).register(app);
   views.register(app);
 
   // Module routes (admin APIs, custom endpoints), in dependency order.

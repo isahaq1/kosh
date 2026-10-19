@@ -7,11 +7,26 @@
  * - `GET /api/v1/apps`          the launcher
  * - `GET /api/v1/menus`         the menu tree (optionally `?app=`)
  * - `GET /api/v1/actions/:id`   one action, 403 when not visible
+ * - `GET /api/v1/find?q=`        records whose name matches, across the models the user can open from a visible
+ *                                menu (the command palette): each with the action and app that open it
  */
 import type { KoshModule, LoadedModules, MenuSpec } from '@kosh/modules-sdk';
 import type { FastifyInstance } from 'fastify';
 import { HttpProblem } from '../errors.js';
 import type { Env } from '../orm.js';
+import type { ApiModel } from './metadata.js';
+
+/** One record the global search found. */
+export interface FoundRecord {
+  readonly model: string;
+  /** The model's label (`Sales order`). */
+  readonly modelLabel: string;
+  readonly id: number;
+  readonly displayName: string;
+  /** The action and app that open it. */
+  readonly action: string;
+  readonly app: string | undefined;
+}
 
 /** A visible menu entry with its visible children. */
 export interface MenuNode {
@@ -55,9 +70,55 @@ function visibleTo(spec: unknown): readonly string[] | undefined {
 /** Navigation for a loaded module set. */
 export class Navigation {
   readonly #loaded: LoadedModules;
+  readonly #models: ReadonlyMap<string, ApiModel>;
 
-  constructor(loaded: LoadedModules) {
+  constructor(loaded: LoadedModules, models: ReadonlyMap<string, ApiModel> = new Map()) {
     this.#loaded = loaded;
+    this.#models = models;
+  }
+
+  /**
+   * Records named like `text` in every model the user can open from a visible menu (one action per model: the
+   * first menu's), at most `limit` per model, within ACL and record rules (the user's own search).
+   */
+  async find(env: Env, text: string, limit: number): Promise<FoundRecord[]> {
+    const targets = new Map<string, { action: string; app: string | undefined }>();
+    for (const menu of this.#loaded.menus) {
+      if (menu.action === undefined || !this.menuVisible(env, menu)) continue;
+      const owner = this.#loaded.actions.get(menu.action);
+      const model = actionModel(
+        owner === undefined ? undefined : this.#module(owner).actions?.[menu.action],
+      );
+      if (model === undefined || targets.has(model) || !this.#models.has(model)) continue;
+      targets.set(model, { action: menu.action, app: this.#appOf(menu) });
+    }
+    const like = `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    const out: FoundRecord[] = [];
+    for (const [model, target] of targets) {
+      const meta = this.#models.get(model);
+      if (meta?.recName === null || meta === undefined) continue;
+      const set = await (
+        env.model(model as never) as unknown as {
+          search(q: unknown): Promise<{
+            length: number;
+            load(
+              k: string[],
+            ): Promise<{ read(k: string[]): { id: number; displayName: string }[] }>;
+          }>;
+        }
+      ).search({ where: { [meta.recName]: { ilike: like } }, limit });
+      if (set.length === 0) continue;
+      for (const row of (await set.load(['displayName'])).read(['id', 'displayName']))
+        out.push({
+          model,
+          modelLabel: meta.label,
+          id: row.id,
+          displayName: row.displayName,
+          action: target.action,
+          app: target.app,
+        });
+    }
+    return out;
   }
 
   #module(name: string): KoshModule {
@@ -148,6 +209,16 @@ export class Navigation {
       const q = (request.query ?? {}) as { app?: unknown };
       const only = typeof q.app === 'string' && q.app !== '' ? q.app : undefined;
       return request.env(async (env) => ({ menus: this.menus(env, only) }));
+    });
+    app.get('/api/v1/find', async (request) => {
+      const q = (request.query ?? {}) as { q?: unknown; limit?: unknown };
+      const text = typeof q.q === 'string' ? q.q.trim() : '';
+      if (text === '' || text.length > 200)
+        throw new HttpProblem(400, 'invalid-query', 'Invalid search', 'q is 1–200 characters.');
+      const limit = q.limit === undefined ? 5 : Number(q.limit);
+      if (!Number.isInteger(limit) || limit < 1 || limit > 20)
+        throw new HttpProblem(400, 'invalid-limit', 'Invalid limit', 'limit must be 1–20.');
+      return request.env(async (env) => ({ results: await this.find(env, text, limit) }));
     });
     app.get('/api/v1/actions/:id', async (request) => {
       const id = String((request.params as { id?: unknown }).id ?? '');

@@ -244,3 +244,26 @@ describe('validation at startup', () => {
     ).rejects.toThrow(/no node has the id 'nowhere'/);
   });
 });
+
+describe('global search (the command palette)', () => {
+  test('finds records by name in the models of visible menus, with the action that opens them', async () => {
+    const res = await call('/api/v1/find?q=acm', 'alice');
+    expect(res.statusCode).toBe(200);
+    expect(res.json().results).toEqual([
+      expect.objectContaining({
+        model: 'res.partner',
+        displayName: 'Acme',
+        action: 'contacts.action_partners',
+        app: 'contacts',
+      }),
+    ]);
+    // Wildcards are literal: "%" matches nothing here.
+    expect((await call('/api/v1/find?q=%25', 'alice')).json().results).toEqual([]);
+  });
+
+  test('users who cannot open the app find nothing; bad queries are refused', async () => {
+    expect((await call('/api/v1/find?q=acm', 'bob')).json().results).toEqual([]);
+    expect((await call('/api/v1/find?q=', 'alice')).statusCode).toBe(400);
+    expect((await call('/api/v1/find?q=a&limit=99', 'alice')).statusCode).toBe(400);
+  });
+});
