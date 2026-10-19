@@ -526,7 +526,8 @@ async function ask(
 
 /** The modules of the chosen apps (imported here, so a server-only install never loads the others). */
 async function modulesFor(apps: readonly AppName[]): Promise<KoshModule[]> {
-  const modules: KoshModule[] = [base];
+  // Settings (the App manager) comes with every installation.
+  const modules: KoshModule[] = [base, (await import('@kosh/settings')).settings];
   for (const app of apps) {
     if (app === 'permissions') modules.push((await import('@kosh/permissions')).permissions);
     if (app === 'reporting') modules.push((await import('@kosh/reporting')).reporting);
@@ -643,7 +644,7 @@ async function setUp(server: KoshServer, a: Answers, ui: Ui): Promise<number | n
     await recordInstalledApps(
       server.driver,
       server.registry.loaded.modules,
-      ['base', ...a.apps],
+      ['base', 'settings', ...a.apps],
       `kosh init (${a.admin.login})`,
     );
     task.finish(
@@ -885,7 +886,7 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
         'Administrator',
         `${answers.admin.login} ${ui.style(enrolled ? 'green' : 'yellow', enrolled ? '· 2FA on' : '· 2FA pending')}`,
       ],
-      ['Apps', ['base', ...answers.apps].join(', ')],
+      ['Apps', ['base', 'settings', ...answers.apps].join(', ')],
       ['Database', answers.dockerDb ? `Docker (port ${answers.postgres.port})` : 'your server'],
       ['API', `http://localhost:${answers.port}`],
       ['Took', `${((Date.now() - started) / 1000).toFixed(1)}s`],

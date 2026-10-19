@@ -111,13 +111,19 @@ test('a fresh installation: database created, project written, migrated, adminis
   expect(env).not.toContain(PASSWORD);
   expect(env).toMatch(/^POSTGRES_PASSWORD=[A-Za-z0-9]{20,}$/m); // for compose.yaml
   const modules = await readFile(join(project, 'src/modules.ts'), 'utf8');
+  // The catalogue lists every app; the database says which are installed (RFC 0008).
   expect(modules).toContain("import { reporting } from 'kosh-erp/reporting';");
-  expect(modules).toContain('export const modules = [base, reporting, messaging];');
+  expect(modules).toContain(
+    'export const modules = [base, settings, permissions, reporting, messaging];',
+  );
   const main = await readFile(join(project, 'src/web/main.tsx'), 'utf8');
   expect(main).toContain(
     "import { messagingMessages, registerMessagingWeb } from 'kosh-erp/messaging/web';",
   );
-  expect(main).not.toContain('permissions');
+  expect(main).toContain(
+    "import { settingsMessages, registerSettingsWeb } from 'kosh-erp/settings/web';",
+  );
+  expect(await readFile(join(project, 'src/server.ts'), 'utf8')).toContain('createAppHost');
   const pkg = JSON.parse(await readFile(join(project, 'package.json'), 'utf8')) as {
     scripts: Record<string, string>;
     dependencies: Record<string, string>;
@@ -160,6 +166,18 @@ test('a fresh installation: database created, project written, migrated, adminis
       params: [],
     });
     expect(types.length).toBe(5);
+    // Installed: base, Settings and the chosen apps (not permissions).
+    const installed = await server.driver.query<{ name: string; reason: string }>({
+      text: 'SELECT name, reason FROM kosh_module ORDER BY name',
+      params: [],
+    });
+    expect(installed.map((r) => r.name)).toEqual([
+      'base',
+      'messaging',
+      'reporting',
+      'settings',
+      'storage',
+    ]);
   } finally {
     await server.close();
   }

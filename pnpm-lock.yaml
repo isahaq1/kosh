@@ -113,6 +113,9 @@ importers:
       '@kosh/server':
         specifier: workspace:*
         version: link:../server
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../settings
       '@kosh/storage':
         specifier: workspace:*
         version: link:../storage

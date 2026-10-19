@@ -93,36 +93,41 @@ export function packageJson(
   return `${JSON.stringify(pkg, null, 2)}\n`;
 }
 
-export function modulesTs(options: StarterOptions): string {
-  const imports = options.apps.map((a) => `import { ${APPS[a].server} } from 'kosh-erp/${a}';`);
+export function modulesTs(_options: StarterOptions): string {
+  const apps = Object.keys(APPS) as AppName[];
+  const imports = apps.map((a) => `import { ${APPS[a].server} } from 'kosh-erp/${a}';`);
   return `/**
- * The apps this installation can install (the catalogue). \`npx kosh apps\` lists them and installs, disables or
- * enables them in the database. \`base\` (users, companies, sign-in) comes with every module; add your own modules
- * here (\`defineModule\` from \`kosh-erp/modules-sdk\`), then \`npx kosh apps install <name>\`.
+ * The apps this installation can install (the catalogue). The database records which are installed: Settings → Apps
+ * in the back-office, or \`npx kosh apps\`, installs, disables and enables them. \`base\` (users, companies, sign-in)
+ * and Settings are always installed. Add your own modules here (\`defineModule\` from \`kosh-erp/modules-sdk\`),
+ * then install them from Settings → Apps.
  */
 import { base } from 'kosh-erp';
+import { settings } from 'kosh-erp/settings';
 ${imports.join('\n')}
 
-export const modules = [base${options.apps.map((a) => `, ${APPS[a].server}`).join('')}];
+export const modules = [base, settings${apps.map((a) => `, ${APPS[a].server}`).join('')}];
 `;
 }
 
 export function serverTs(): string {
-  return `/** The Kosh API server: \`npm start\` (reads .env). */
-import { createServer, installedModules, startServer } from 'kosh-erp';
+  return `/**
+ * The Kosh API server: \`npm start\` (reads .env). It serves the installed apps of src/modules.ts, and switches to
+ * the new set without a restart when apps are installed or disabled (here or on another server).
+ */
+import { createAppHost, startAppHost } from 'kosh-erp';
 import { modules } from './modules.ts';
 
 const env = process.env;
-const databaseUrl = String(env['DATABASE_URL']);
-const server = await createServer({
-  databaseUrl,
-  // src/modules.ts lists what can be installed; the database says what is (npx kosh apps).
-  modules: await installedModules(databaseUrl, modules),
+const host = await createAppHost({
+  databaseUrl: String(env['DATABASE_URL']),
+  catalogue: modules,
+  migrationsDir: 'migrations',
   ...(env['VALKEY_URL'] ? { valkeyUrl: env['VALKEY_URL'] } : {}),
   // Secure cookies need HTTPS: on by default in production (KOSH_SECURE_COOKIES=false for plain HTTP).
   auth: { secureCookies: (env['KOSH_SECURE_COOKIES'] ?? String(env['NODE_ENV'] === 'production')) === 'true' },
 });
-const address = await startServer(server, { port: Number(env['PORT'] ?? 3000), host: env['HOST'] ?? '127.0.0.1' });
+const address = await startAppHost(host, { port: Number(env['PORT'] ?? 3000), host: env['HOST'] ?? '127.0.0.1' });
 process.stdout.write(\`Kosh API on \${address}\\n\`);
 `;
 }
@@ -160,18 +165,21 @@ export function indexHtml(options: StarterOptions): string {
 `;
 }
 
-export function mainTsx(options: StarterOptions): string {
-  const web = options.apps.map((a) => {
-    const fn = APPS[a].web;
-    const messages = a === 'permissions' ? null : `${a}Messages`;
+export function mainTsx(_options: StarterOptions): string {
+  // Every catalogue app's web contribution: pages of apps installed later are already there.
+  const web = [
+    ...(Object.keys(APPS) as AppName[]).map((a) => ({ name: a as string, fn: APPS[a].web })),
+    { name: 'settings', fn: 'registerSettingsWeb' },
+  ].map(({ name, fn }) => {
+    const messages = name === 'permissions' ? null : `${name}Messages`;
     return {
-      line: `import { ${[messages, fn].filter((x) => x !== null).join(', ')} } from 'kosh-erp/${a}/web';`,
+      line: `import { ${[messages, fn].filter((x) => x !== null).join(', ')} } from 'kosh-erp/${name}/web';`,
       call: `${fn}(registry);`,
-      messages: messages === null ? null : `${a}: ${messages}`,
+      messages: messages === null ? null : `${name}: ${messages}`,
     };
   });
   const messages = web.map((w) => w.messages).filter((m) => m !== null);
-  return `/** The back-office: the renderers of kosh-erp/ui plus each installed app's web contribution. */
+  return `/** The back-office: the renderers of kosh-erp/ui plus every catalogue app's web contribution. */
 import './index.css';
 import { createDefaultRegistry, createKoshApi, KoshApp } from 'kosh-erp/ui';
 ${web.map((w) => w.line).join('\n')}
@@ -368,6 +376,7 @@ npm start          # the API on http://localhost:${options.port}
 npm run web        # the back-office on http://localhost:5173 (sign in as the administrator)
 npx kosh migrate   # after changing modules: plan and apply database migrations, load seed data
 npx kosh seed      # load seed data again
+# Settings → Apps in the back-office installs, enables and disables apps (or, in the terminal:)
 npx kosh apps                   # the apps: installed, disabled, available
 npx kosh apps install <name>    # install an app (and what it needs) in one transaction
 npx kosh apps disable <name>    # switch an app off; its data stays (npx kosh apps enable <name>)

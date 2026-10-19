@@ -17,6 +17,7 @@ import {
   prepareApps,
   readInstalledApps,
 } from '@kosh/server';
+import { PROTECTED_APPS } from '@kosh/settings';
 import { modulesOf, seedWith } from './project.js';
 import { defaultsPrompter, type Prompter, terminalPrompter } from './prompt.js';
 import { createUi, PLAIN_TERMINAL, type Terminal, type Ui } from './ui.js';
@@ -195,7 +196,7 @@ export async function runApps(argv: readonly string[], io: AppsIo): Promise<numb
     const change: AppChange = { [command]: names };
     const dir = resolve(io.cwd, values.dir);
     const prepared = await ui.task('Planning against the database', async (task) => {
-      const p = await prepareApps({ driver, catalogue, change, dir });
+      const p = await prepareApps({ driver, catalogue, change, dir, protect: PROTECTED_APPS });
       task.finish('Planned');
       return p;
     });
