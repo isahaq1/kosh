@@ -1,0 +1,55 @@
+{
+  "name": "@kosh/purchase",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Purchase: requests for quotation, purchase orders and approvals (RFC 0008)",
+  "keywords": [
+    "kosh",
+    "erp",
+    "typescript",
+    "postgresql",
+    "shutro"
+  ],
+  "author": "Isahaq <hmisahaq01@gmail.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/isahaq1/kosh/tree/main/modules/purchase#readme",
+  "bugs": {
+    "url": "https://github.com/isahaq1/kosh/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isahaq1/kosh.git",
+    "directory": "modules/purchase"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "@kosh/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node ../../scripts/copy-views.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@kosh/modules-sdk": "workspace:*",
+    "@kosh/server": "workspace:*",
+    "@kosh/views": "workspace:*",
+    "@kosh/contacts": "workspace:*",
+    "@kosh/product": "workspace:*",
+    "@kosh/permissions": "workspace:*",
+    "@kosh/messaging": "workspace:*"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^12.2.1"
+  }
+}
