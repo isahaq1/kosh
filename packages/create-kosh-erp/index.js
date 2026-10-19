@@ -18,15 +18,16 @@ import { createInterface } from 'node:readline/promises';
 
 const own = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
 /** What to install: kosh-erp of the same minor version (KOSH_ERP_SPEC overrides it, e.g. a local tarball). */
-const spec = process.env.KOSH_ERP_SPEC ?? `kosh-erp@^${own.version}`;
+const [major, minor] = own.version.split('.');
+const spec = process.env.KOSH_ERP_SPEC ?? `kosh-erp@^${major}.${minor}.0`;
 
-const argv = process.argv.slice(2);
-const dashes = argv.indexOf('--');
-const ours = dashes === -1 ? argv : argv.slice(0, dashes);
-const forInit = dashes === -1 ? argv.filter((a) => a.startsWith('-')) : argv.slice(dashes + 1);
-const positional = ours.find((a) => !a.startsWith('-'));
+// `npm create kosh-erp my-erp -- --yes …` reaches us without the `--` (npm consumes it); `npx create-kosh-erp`
+// keeps it. Either way: an optional folder first, everything else is for kosh init.
+const argv = process.argv.slice(2).filter((a, i, all) => !(a === '--' && all.indexOf('--') === i));
+const positional = argv[0] !== undefined && !argv[0].startsWith('-') ? argv[0] : undefined;
+const forInit = positional === undefined ? argv : argv.slice(1);
 
-if (ours.includes('--help') || ours.includes('-h')) {
+if (forInit.length === argv.length && (argv[0] === '--help' || argv[0] === '-h')) {
   process.stdout.write(`Usage: npm create kosh-erp@latest [folder] [-- kosh init options]
 
 Creates a Kosh installation in [folder]: installs kosh-erp, then asks for the database, the company, the
