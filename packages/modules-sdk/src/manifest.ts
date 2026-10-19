@@ -25,6 +25,10 @@ export interface AppSpec {
   readonly icon?: string;
   /** Launcher order (lower first). */
   readonly sequence?: number;
+  /** Where the App manager files it: `Finance`, `Sales`, `Services`, `Administration`, ... */
+  readonly category?: string;
+  /** One line for the App manager's card. */
+  readonly summary?: string;
 }
 
 /**

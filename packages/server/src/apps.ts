@@ -29,6 +29,7 @@ import {
   servedModules,
 } from '@kosh/modules-sdk';
 import { IDEMPOTENCY_TABLE } from './api/idempotency.js';
+import { audit } from './audit.js';
 import {
   type Driver,
   type DriverConnection,
@@ -334,8 +335,13 @@ export interface ApplyAppsOptions {
   /** Progress: `schema`, `data`, `hooks`, `state`. */
   readonly onStep?: (step: 'schema' | 'data' | 'hooks' | 'state', detail: string) => void;
   /**
-   * Loads the new modules' data. Default: Shutro `loadData` for those modules. The CLI also installs the apps'
-   * defaults (approval policies, document templates, activity types).
+   * The audit event's actor (a user id; `null` for the CLI) and request address. The event (`apps.change`) is
+   * written in the change's transaction whenever the audit log is installed.
+   */
+  readonly audit?: { readonly actor: number | null; readonly ip?: string };
+  /**
+   * Loads the new modules' data. Default: Shutro `loadData` for those modules, then every served module's
+   * `hooks.defaults`.
    */
   readonly load?: (context: AppLoadContext, modules: readonly string[]) => Promise<void>;
 }
@@ -514,6 +520,26 @@ VALUES ($1, $2::jsonb, $3, $4, $5, $6)`,
           content,
         ],
       });
+      if (prepared.runtime.registry.models.has('audit.event' as never)) {
+        const parts = [
+          ...plan.install.map((m) => `installed ${m.name}`),
+          ...plan.enable.map((n) => `enabled ${n}`),
+          ...plan.disable.map((m) => `disabled ${m.name}`),
+        ];
+        await shutro.bootstrap({ reason: 'apps change audit' }, (env) =>
+          audit(env, {
+            kind: 'apps.change',
+            summary: parts.length === 0 ? 'migrated the installed apps' : parts.join(', '),
+            actor: options.audit?.actor ?? null,
+            company: null,
+            details: {
+              by: options.actor,
+              migration: file === null ? null : `${file.version}_${file.name}.sql`,
+            },
+            ...(options.audit?.ip === undefined ? {} : { ip: options.audit.ip }),
+          }),
+        );
+      }
       // Delivered when the transaction commits, to every server listening on this database.
       await tx.query({
         text: 'SELECT pg_notify($1, $2)',

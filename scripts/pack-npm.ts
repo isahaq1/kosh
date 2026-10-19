@@ -38,6 +38,7 @@ const PACKAGES = [
   'permissions',
   'storage',
   'messaging',
+  'settings',
   'ui',
   'reporting',
   'cli',
