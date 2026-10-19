@@ -1,6 +1,6 @@
 # RFC 0008: Default business apps & the App manager (install, disable, uninstall)
 
-- **Status:** Draft (2026-10-19)
+- **Status:** Accepted (2026-10-19); step 1 implemented (`kosh apps`, see Implementation notes)
 - **Depends on:** 0001 (modules, per-database installation), 0002 (generated API), 0003 (permissions), 0004/0005
   (views, reporting), 0006 (chatter), 0007 (frontend)
 - **Followed by:** RFC 0009 Accounting (ledger design), written before Accounting is built
@@ -192,15 +192,19 @@ From a fresh installation, an administrator opens Settings → Apps; Purchase is
 §5.3) is already in place with editable thresholds. Later they disable Projects. Its menus disappear for everyone
 within a second, its tasks stay in the database, and enabling it again restores everything.
 
-## 7. Shutro requests
+## 7. Built in Kosh, on Shutro's public APIs
 
-These are recorded in `docs/shutro-requests.md`; Kosh will not work around them without asking.
+App management is framework code: it lives in Kosh (`@kosh/modules-sdk`, `@kosh/server`), not in Shutro (decided
+2026-10-19). Kosh builds what uninstall needs from what Shutro already offers:
 
-- Plan a migration for a **removal**: drop only what the removed modules own, including columns their
+- **Removal plan:** Shutro's `planMigration` against the registry of the set *without* the removed modules (disabled
+  ones kept); its destructive operations are exactly what those modules own, including the columns their
   `extendModel`s added.
-- Report **ownership metadata**: which module created each table and column.
-- **Unload** a module's data records by external id (the reverse of `loadData`).
-- Build a registry for a subset of loaded modules quickly, for a cached rebuild per installed set.
+- **Ownership:** read from each module's `models` and `extensions` and from `registry.describe()` (field origins).
+- **Unloading data:** the module's records found through Shutro's external-id table and deleted through the ORM.
+- **Registries per set:** `buildKoshRegistry` for each installed set, cached by the set's hash (step 2).
+- **One transaction:** Shutro runs on a `Driver` pinned to the app change's transaction; its own transactions become
+  savepoints.
 
 ## 8. Delivery plan (each step reviewed before the next)
 
@@ -214,20 +218,54 @@ These are recorded in `docs/shutro-requests.md`; Kosh will not work around them 
 6. Add **Projects** and `sale_project`.
 7. Switch `kosh init` to the default set in §5.1 and update the docs and benchmarks.
 
-## 9. Open questions
+## 9. Decisions (2026-10-19)
 
-1. Should Inventory be part of the default set now (deliveries and receipts with Sales and Purchase), or stay a
-   later app as proposed?
-2. Which charts of accounts should ship first: a generic one plus Bangladesh, as proposed?
-3. Is Disable the right default for uninstall, with Remove data as the explicit second choice?
-4. How long should uninstall snapshots be kept (proposed: 30 days)?
-5. Should hot reload be on by default, or behind `KOSH_HOT_APPS=1` until it has proven itself?
+1. Inventory stays out of the default set; it comes later as its own app with the `sale_stock` / `purchase_stock`
+   bridges.
+2. Charts of accounts: a generic one plus Bangladesh first.
+3. Uninstall defaults to Disable; Remove data is the explicit second choice.
+4. Uninstall snapshots are kept 30 days (configurable).
+5. Hot reload is decided with step 2, after measuring it.
 
 ## Alignment with CLAUDE.md
 
 - **Default deny:** installing grants nothing, and access is chosen per role in the plan.
 - **Server authority:** every app operation is checked and audited on the server.
-- **Shutro owns the data layer:** migrations, data loading and unloading, and registries all come from Shutro, and
-  the gaps are listed in §7.
+- **Shutro stays the data layer:** migrations, data loading and registries come from Shutro's public APIs. App
+  management itself is Kosh code (§7), so nothing ORM-level is reimplemented.
 - **Explicit over magic:** bridges are proposed and shown, never silent.
 - **Modular monolith:** apps are modules in one process, and the registry is per database.
+
+## Implementation notes (2026-10-19): step 1
+
+- `@kosh/modules-sdk` `planApps` is the pure planner. It takes the catalogue, the installed set and a change
+  (install, enable or disable), and resolves dependencies (dependencies first) and disable cascades (dependents
+  first). It refuses unknown apps, protected apps (`base`), enabling apps that are not installed, and contradictory
+  changes.
+- `@kosh/server` `apps.ts` is the engine:
+  - The `kosh_module` table holds the installed set and `kosh_app_log` holds the applied changes with their SQL and
+    digest. Both are listed in `FRAMEWORK_TABLES`, so migrations ignore them.
+  - `prepareApps` refuses pending migration files, a database that does not match its modules yet, destructive
+    statements, and disabling a module whose `NOT NULL` columns without a database default would stay behind.
+  - `applyApps` runs the migration file, the data, the `postInstall` hooks, the installed set and the log in one
+    transaction under an advisory lock. It refuses a plan made before another change. If anything fails, it rolls
+    back and deletes the migration file.
+- **The schema set and the served set:** a disabled module's tables and columns stay in the schema, so `kosh migrate`
+  plans with installed and disabled modules, while servers serve only installed ones (`installedModules`). The
+  starter's `server.ts` uses `installedModules`.
+- **Projects from before the App manager:** without `kosh_module`, servers and `kosh migrate` treat the module list as
+  the installed set, as before. The first `kosh apps` change adopts the modules Shutro has migrated
+  (`shutro_module`), so modules added to the list since then are available, not installed. `kosh init` now records
+  the installed set itself.
+- **CLI:**
+  - `kosh apps` lists the catalogue with state marks (● installed, ◌ disabled, ○ available).
+  - `kosh apps install`, `enable` and `disable` show the plan, ask, then apply it with spinners.
+  - `--plan` only shows the plan, and `--yes` applies without asking.
+  - `kosh apps uninstall` (Remove data) comes in a later step.
+  - After a change, the API is restarted; hot reload comes in step 2.
+- **Tests:**
+  - `packages/modules-sdk/test/apps.test.ts` covers the planner.
+  - `packages/server/test/apps.integration.test.ts` runs on real PostgreSQL. It covers dependencies, data and hooks;
+    full rollback; disable and enable keeping data; the required-column refusal; and a stale plan.
+  - `packages/cli/test/apps.integration.test.ts` covers adoption, plan, install, disable with migrate, enable,
+    "no", unknown apps and protected apps.
