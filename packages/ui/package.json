@@ -1,6 +1,7 @@
 {
   "name": "@kosh/ui",
   "version": "0.1.0",
+  "private": true,
   "description": "React app shell, design system and view renderers (RFC 0007)",
   "keywords": [
     "kosh",
@@ -38,9 +39,6 @@
   ],
   "engines": {
     "node": ">=24"
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

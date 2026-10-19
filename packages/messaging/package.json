@@ -1,6 +1,7 @@
 {
   "name": "@kosh/messaging",
   "version": "0.1.0",
+  "private": true,
   "description": "Chatter, followers, activities, internal chat and channels (RFC 0006)",
   "keywords": [
     "kosh",
@@ -39,9 +40,6 @@
   ],
   "engines": {
     "node": ">=24"
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

@@ -1,9 +1,9 @@
 {
   "name": "@kosh/jobs",
   "version": "0.0.0",
+  "private": true,
   "description": "Job queue, scheduler and retries (RFC 0006)",
   "license": "MIT",
-  "private": true,
   "type": "module",
   "sideEffects": false,
   "exports": {

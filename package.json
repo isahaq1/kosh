@@ -18,7 +18,8 @@
     "test:e2e": "pnpm --filter @kosh/web test:e2e",
     "dev:services": "docker compose up -d --wait",
     "changeset": "changeset",
-    "bench": "vitest run --config vitest.bench.config.ts"
+    "bench": "vitest run --config vitest.bench.config.ts",
+    "pack:npm": "pnpm build && node scripts/pack-npm.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

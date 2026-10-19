@@ -1,9 +1,9 @@
 {
   "name": "@kosh/realtime",
   "version": "0.0.0",
+  "private": true,
   "description": "WebSocket gateway (LISTEN/NOTIFY + Valkey pub/sub) (RFC 0006)",
   "license": "MIT",
-  "private": true,
   "type": "module",
   "sideEffects": false,
   "exports": {

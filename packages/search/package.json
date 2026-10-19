@@ -1,6 +1,7 @@
 {
   "name": "@kosh/search",
   "version": "0.1.0",
+  "private": true,
   "description": "Shared search, filter, group-by, favorites and saved-views layer (RFC 0004)",
   "keywords": [
     "kosh",
@@ -34,9 +35,6 @@
   ],
   "engines": {
     "node": ">=24"
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

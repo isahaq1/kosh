@@ -1,6 +1,7 @@
 {
   "name": "@kosh/reporting",
   "version": "0.1.0",
+  "private": true,
   "description": "Pivot engine (GROUPING SETS / ROLLUP / CUBE), comparisons, scheduled reports, PDF designer, Excel export (RFC 0005)",
   "keywords": [
     "kosh",
@@ -39,9 +40,6 @@
   ],
   "engines": {
     "node": ">=24"
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

@@ -1,6 +1,7 @@
 {
   "name": "@kosh/storage",
   "version": "0.1.0",
+  "private": true,
   "description": "Attachments on S3-compatible storage (RFC 0006)",
   "keywords": [
     "kosh",
@@ -34,9 +35,6 @@
   ],
   "engines": {
     "node": ">=24"
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

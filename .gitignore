@@ -10,3 +10,4 @@ shutro-src/
 **/.generated/*
 # the server test types its runtime calls against this generated client, so typecheck needs it before the tests run
 !/packages/server/test/.generated/kosh.gen.ts
+dist-npm/

@@ -4,3 +4,5 @@
 /* Tailwind scans the renderers and the modules' web code for class names. */
 @source "../../../packages/ui/src";
 @source "../../../packages/permissions/src/web";
+@source "../../../packages/reporting/src/web";
+@source "../../../packages/messaging/src/web";

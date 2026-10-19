@@ -1,6 +1,7 @@
 {
   "name": "@kosh/server",
   "version": "0.1.0",
+  "private": true,
   "description": "Fastify app, module loader, REST/OpenAPI generator, auth, Shutro environment per request (RFC 0002)",
   "keywords": [
     "kosh",
@@ -39,9 +40,6 @@
   ],
   "engines": {
     "node": ">=24"
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
