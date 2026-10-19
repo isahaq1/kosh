@@ -8,7 +8,7 @@ Things Kosh needs from Shutro, recorded instead of being worked around (CLAUDE.m
 | 2 | A per-environment description (`describeFor(env, model)`): fields the user may read / write, operations allowed | RFC 0002 (`/meta`), 0003 (UI hints), 0004 | Open — interim: `/api/v1/meta` composes it from `env.access.can` / `canField` (approved) |
 | 3 | `aggregate({ groupingSets / rollup / cube })` returning the grouping level per row, keeping per-currency Money | RFC 0005 (one-query pivots) | **Added in Shutro** `34d90de` (`$groups` per row) |
 | 4 | Method signatures in metadata (or a declared-exposure API) for remotely callable methods | RFC 0002 (exposed methods) | Open (Kosh declares exposure in manifests meanwhile) |
-| 5 | Publish `shutro@0.2.0` to npm (Kosh links the local build until then) | Installation | Open |
+| 5 | Publish `shutro@0.2.0` to npm (Kosh links the local build until then) | Installation | **Done** (2026-10-19, `shutro@0.2.0` is `latest`; the workspace still links the sibling checkout for development) |
 | 6 | `records.read(['id', …])` raised "id is not loaded" | Generated REST rows | **Fixed in Shutro** `b3a19a0` (regression test) |
 | 7 | `onchange()` raised an AccessError for users without a restricted field's group | Generated onchange endpoint | **Fixed in Shutro** `b3a19a0` (only readable fields are returned) |
 | 8 | Runtime field security: hide / make read-only a field per role without code | RFC 0003 (field permissions from the admin UI) | **Added in Shutro** `2293238` (`securityAdmin.setFieldGroups`) |

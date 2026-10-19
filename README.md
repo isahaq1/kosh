@@ -10,4 +10,5 @@ views, reporting and communication.
   [Views and UI](docs/ui.md) · [Reporting](docs/reporting.md) · [Chatter and attachments](docs/messaging.md)
 - [Design RFCs](docs/rfcs/README.md) · [Benchmarks](docs/benchmarks.md) · [Kosh against Odoo](docs/comparison.md)
 
-Shutro is linked from a sibling checkout (`../shutro`) until `shutro@0.2.0` is published to npm.
+Published packages depend on [`shutro@^0.2.0`](https://www.npmjs.com/package/shutro); the workspace links a sibling
+checkout (`../shutro`) for development.
