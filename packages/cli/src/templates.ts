@@ -176,8 +176,11 @@ export function indexHtml(options: StarterOptions): string {
 <html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#1d4ed8" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <title>${options.name.replace(/[<>&"]/g, '')}</title>
   </head>
   <body>
@@ -222,6 +225,34 @@ createRoot(root).render(
     <KoshApp api={createKoshApi()} registry={registry} messages={{ ${messages.join(', ')} }} />
   </StrictMode>,
 );
+`;
+}
+
+/** The web app manifest: the back-office installs as an app on phones and desktops (RFC 0010 §3.10). */
+export function manifest(options: StarterOptions): string {
+  const name = options.name.replace(/[<>&"]/g, '');
+  return `${JSON.stringify(
+    {
+      name,
+      short_name: name.slice(0, 12),
+      start_url: '/',
+      scope: '/',
+      display: 'standalone',
+      background_color: '#f8f9fb',
+      theme_color: '#1d4ed8',
+      icons: [{ src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }],
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+/** The app icon (replace it with the company's). */
+export function icon(): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Kosh">
+  <rect width="512" height="512" rx="112" fill="#1d4ed8"/>
+  <path d="M156 128h56v112l108-112h72L270 258l128 126h-74L220 282v102h-64z" fill="#fff"/>
+</svg>
 `;
 }
 

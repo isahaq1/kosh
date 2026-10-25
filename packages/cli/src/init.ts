@@ -579,6 +579,7 @@ async function writeProject(a: Answers, ui: Ui): Promise<void> {
     fileStorage: a.storage.kind === 'dir',
   };
   await mkdir(join(a.dir, 'src', 'web'), { recursive: true });
+  await mkdir(join(a.dir, 'public'), { recursive: true });
   const pkgPath = join(a.dir, 'package.json');
   const existing = existsSync(pkgPath)
     ? (JSON.parse(await readFile(pkgPath, 'utf8')) as Record<string, unknown>)
@@ -590,6 +591,8 @@ async function writeProject(a: Answers, ui: Ui): Promise<void> {
     ['src/web/main.tsx', templates.mainTsx(options), false],
     ['src/web/index.css', templates.indexCss(), false],
     ['index.html', templates.indexHtml(options), false],
+    ['public/manifest.webmanifest', templates.manifest(options), false],
+    ['public/icon.svg', templates.icon(), false],
     ['vite.config.ts', templates.viteConfig(options), false],
     ['tsconfig.json', templates.tsconfig(), false],
     ['README.md', templates.readme(options), false],
