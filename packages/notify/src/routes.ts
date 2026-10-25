@@ -8,11 +8,15 @@
  * - `POST /api/v1/notifications/read-all`
  * - `GET  /api/v1/notifications/preferences`            per kind: whether the inbox gets it
  * - `PUT  /api/v1/notifications/preferences`            `{ kind, channel, enabled }`
+ * - `GET  /api/v1/notifications/push/key`               the public VAPID key (404 when push is not set up)
+ * - `POST /api/v1/notifications/push`                   `{ endpoint, keys: { p256dh, auth } }`: this device
+ * - `DELETE /api/v1/notifications/push`                 `{ endpoint }`
  */
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
 import type { FastifyRequest } from 'fastify';
 import { CHANNELS, KINDS } from './models.js';
+import { type Pusher, subscribePush, unsubscribePush } from './push.js';
 
 type Row = Record<string, unknown>;
 interface Set {
@@ -67,7 +71,60 @@ export async function unreadCount(env: Env): Promise<number> {
 }
 
 /** Registers the routes. */
-export function registerNotifyRoutes({ app }: ModuleContext): void {
+export function registerNotifyRoutes(
+  { app }: ModuleContext,
+  options: { readonly pusher?: Pusher | undefined } = {},
+): void {
+  app.get('/api/v1/notifications/push/key', async (request) => {
+    await request.env(async () => undefined); // signed in
+    if (options.pusher === undefined)
+      throw new HttpProblem(
+        404,
+        'push-not-configured',
+        'Push is not set up',
+        'This installation has no VAPID keys.',
+        'Set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT (kosh init writes them).',
+      );
+    return { publicKey: options.pusher.publicKey };
+  });
+
+  app.post('/api/v1/notifications/push', async (request) => {
+    const body = (request.body ?? {}) as {
+      endpoint?: unknown;
+      keys?: { p256dh?: unknown; auth?: unknown };
+    };
+    const endpoint = body.endpoint;
+    const p256dh = body.keys?.p256dh;
+    const auth = body.keys?.auth;
+    if (
+      typeof endpoint !== 'string' ||
+      !/^https:\/\/[^\s]{1,1990}$/.test(endpoint) ||
+      typeof p256dh !== 'string' ||
+      p256dh === '' ||
+      p256dh.length > 500 ||
+      typeof auth !== 'string' ||
+      auth === '' ||
+      auth.length > 200
+    )
+      throw new HttpProblem(
+        400,
+        'invalid-subscription',
+        'Invalid subscription',
+        'A push subscription is { endpoint: https URL, keys: { p256dh, auth } } as the browser serializes it.',
+      );
+    await request.env((env) =>
+      subscribePush(env, { endpoint, keys: { p256dh, auth } }, request.headers['user-agent']),
+    );
+    return { subscribed: true };
+  });
+
+  app.delete('/api/v1/notifications/push', async (request) => {
+    const endpoint = (request.body as { endpoint?: unknown } | null)?.endpoint;
+    if (typeof endpoint !== 'string')
+      throw new HttpProblem(400, 'invalid-body', 'Invalid request', 'endpoint is required.');
+    return request.env(async (env) => ({ removed: await unsubscribePush(env, endpoint) }));
+  });
+
   app.get('/api/v1/notifications', async (request) => {
     const q = (request.query ?? {}) as { unread?: unknown; limit?: unknown };
     const limit = q.limit === undefined ? 50 : Number(q.limit);

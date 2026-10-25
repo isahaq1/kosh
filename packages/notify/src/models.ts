@@ -84,9 +84,30 @@ const Delivery = defineModel('notify.delivery', {
   },
 });
 
+/** A browser's push subscription on one device (its owner creates, sees and removes it). */
+const PushSubscription = defineModel('notify.push_subscription', {
+  label: 'Push subscription',
+  access: { 'base.user': ['read', 'write', 'create', 'unlink'] },
+  rules: {
+    own: {
+      groups: ['base.user'],
+      perms: ['read', 'write', 'create', 'unlink'],
+      domain: { user: { $env: 'uid' } },
+    },
+  },
+  fields: {
+    user: f.many2one('res.users', { required: true, ondelete: 'cascade' }),
+    endpoint: f.char({ required: true, size: 2000, index: 'unique' }),
+    p256dh: f.char({ required: true, size: 500 }),
+    auth: f.char({ required: true, size: 200 }),
+    userAgent: f.char({ size: 200 }),
+    lastSeenAt: f.datetime(),
+  },
+});
+
 export const notifyShutro: ReturnType<typeof orm.defineModule> = defineModule({
   name: 'notify',
   version: '0.1.0',
   depends: [baseShutro],
-  models: [Notification, Preference, Delivery],
+  models: [Notification, Preference, Delivery, PushSubscription],
 });

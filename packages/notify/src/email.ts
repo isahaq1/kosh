@@ -7,6 +7,7 @@
 import { layout, type Mailer } from '@kosh/mail';
 import type { Driver, Env, Shutro, Worker } from '@kosh/server/orm';
 import { sentence, textsFor } from './messages.js';
+import { type Pusher, sendPush } from './push.js';
 
 type Row = Record<string, unknown>;
 interface Set {
@@ -31,6 +32,8 @@ export interface DeliveryContext {
   readonly driver: Driver;
   /** The email provider; without it, no email deliveries are created. */
   readonly mailer?: Mailer | undefined;
+  /** The web push provider; without it, no push deliveries are created. */
+  readonly pusher?: Pusher | undefined;
   /** Where the back-office is reached (`KOSH_BASE_URL`), for the links in messages. */
   readonly baseUrl: string;
 }
@@ -118,6 +121,23 @@ export async function deliver(context: DeliveryContext, env: Env, payload: unkno
         .load(uKeys)
     ).read(uKeys);
     const to = user?.['email'];
+    if (delivery['channel'] === 'webpush') {
+      await sendPush(
+        context,
+        su,
+        id,
+        {
+          id: delivery['notification'] as number,
+          user: n['user'] as number,
+          kind: String(n['kind']),
+          params: (n['params'] as Record<string, unknown> | null) ?? {},
+          model: String(n['resModel']),
+          resId: n['resId'] as number,
+        },
+        (user?.['lang'] as string | null) ?? null,
+      );
+      return;
+    }
     if (mailer === undefined || typeof to !== 'string' || to === '') {
       await ref(su, 'notify.delivery')
         .browse([id])

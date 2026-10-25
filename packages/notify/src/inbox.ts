@@ -8,8 +8,9 @@
 import { announceChange, type KoshRegistry, type ModuleContext } from '@kosh/server';
 import type { Env, Shutro, Worker } from '@kosh/server/orm';
 import { orm } from '@kosh/server/orm';
-import { type DeliveryContext, queueEmails } from './email.js';
+import { DELIVER_JOB, type DeliveryContext, queueEmails } from './email.js';
 import type { Kind } from './models.js';
+import { queuePush } from './push.js';
 
 type Row = Record<string, unknown>;
 interface Set {
@@ -251,6 +252,19 @@ export async function handleEvent(
     const ids = [...created.ids];
     // The other channels: one delivery and one job each, in this transaction (the job exists iff the rows do).
     await queueEmails(context, env, su, ids, (uid, kind) => wants(su, uid, kind, 'email'));
+    await queuePush(
+      context,
+      async (deliveryId) => {
+        await env.enqueue(
+          DELIVER_JOB,
+          { delivery: deliveryId },
+          { key: `${DELIVER_JOB}:${deliveryId}` },
+        );
+      },
+      su,
+      ids,
+      (uid, kind) => wants(su, uid, kind, 'webpush'),
+    );
     return ids;
   });
   if (ids.length > 0)
