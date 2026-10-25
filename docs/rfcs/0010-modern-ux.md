@@ -186,3 +186,10 @@ empty states (§3.9) and the manifest (§3.10). With part 1, Phase A is complete
   reload; two users on one form: presence both ways, a save followed live, unsaved changes protected).
 - **Next in Phase B:** the notifications centre (mentions, approvals, assigned activities; web push), then the
   offline-capable PWA and spreadsheet-grade list editing.
+
+## Implementation notes (2026-10-25): Phase B, part 2 — the notifications centre (in-app)
+
+The bell in the header shows unread notifications live: mentions, approvals waiting for the user, decisions on their
+requests, activities assigned to them. Details in RFC 0006's notes (part 3). Web push and email follow with the
+channel adapters. The shell gained **header items** (`registry.registerHeaderItem`), a general extension point for
+modules.

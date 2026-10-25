@@ -95,3 +95,27 @@ Replying to the approval email posts the reply on the order's chatter.
   bucket; tested against the AWS documentation's example and a SeaweedFS container), or a directory. Downloads never
   render active content in the application's origin.
 - Outbox events `mail.message.posted` and `mail.activity.assigned` are emitted for part 3.
+
+## Implementation notes (2026-10-25, part 2: the realtime gateway; part 3: in-app notifications)
+
+- **Gateway** (`@kosh/realtime`, §5.5): see RFC 0010's notes. PostgreSQL `NOTIFY` reaches every node of a database,
+  so Valkey pub/sub was not needed for the fan-out.
+- **Notifications, in-app channel** (`@kosh/notify`, §5.2–5.4):
+  - Subscribers on Shutro's outbox (`shutro.subscribe`, one per topic: `mail.message.posted` for mentions,
+    `approval.requested`, `approval.decided`, `mail.activity.assigned`) turn each event into
+    `notify.notification` rows in the handler's transaction (exactly once), as the RFC's routing step describes:
+    recipients are resolved (mentioned users; holders of the approver roles in the record's company; the requester;
+    the assignee), **each recipient's access to the record is re-checked as that user** (ACL and record rules, in a
+    read-only unit of work of their own), and their `notify.preference` for the kind is applied.
+  - A notification stores a `kind` and `params` (names, a preview, a state), never a rendered text: the client
+    translates it in the reader's language. Both models are private and rule-scoped to their owner.
+  - `/api/v1/notifications` (list, count, read one, read all, preferences). The bell (`@kosh/notify/web`) is a
+    header item of the shell, live through the gateway (`model:notify.notification`), and opens a record where the
+    user may open it (`GET /api/v1/routes`).
+  - Found on the way: Kosh's identity loader returned the user's raw role assignments, while Shutro replays an
+    event's stored group closure to its subscriber and checks it against the loader; the loader now returns the
+    closure (`AuthService.verify`).
+- **Jobs decision (Alignment section):** this part uses Shutro's outbox subscribers, which are the ORM's own, as
+  the RFC proposed. pg-boss has not been introduced; the decision stands open for the delivery jobs of the other
+  channels (email, web push, SMS), which come next with their adapters and digests.
+- **Not yet:** channel adapters, digests, quiet hours, delivery tracking, inbound email, chat.

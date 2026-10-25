@@ -157,6 +157,14 @@ serious or critical violations) in both themes. Run `pnpm build && pnpm test:e2e
 - **Installable**: `public/manifest.webmanifest` and `icon.svg` make the back-office an app on phones and
   desktops (the starter project gets both).
 
+## Notifications
+
+With the `notify` module installed (every installation has it), the header shows a bell with the unread count,
+live through the gateway. It lists mentions, approvals waiting for the user, decisions on their requests and
+activities assigned to them; opening one marks it read and goes to the record. Each kind can be switched off per
+user (`PUT /api/v1/notifications/preferences`). Modules add their own header items with
+`registry.registerHeaderItem('module.Name', Component)`; the component receives the API.
+
 ## Live screens (RFC 0006 §5, RFC 0010 Phase B)
 
 With the `realtime` module installed (every installation has it), the app keeps one WebSocket per tab to
