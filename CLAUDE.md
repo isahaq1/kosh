@@ -240,7 +240,7 @@ export default defineModule({
 - [ ] RFC 0006 Communication & notification architecture
 - [x] RFC 0007 Frontend architecture & design system
 - [x] RFC 0008 Default business apps (Settings, Accounting, Sales, Purchase, Projects) & App manager (install / disable / uninstall)
-- [x] RFC 0010 Modern back-office: Phase A built (palette, shortcuts, toasts with Undo, pager, bulk actions, export, home page, PWA); Phase B: live updates, notifications, offline done, spreadsheet-grade lists next; C awaits approval
+- [x] RFC 0010 Modern back-office: Phase A built (palette, shortcuts, toasts with Undo, pager, bulk actions, export, home page, PWA); Phase B done (live updates, notifications, offline, spreadsheet-grade lists; SMS/WhatsApp wait for a provider); C awaits approval
 
 ### Phase 1 — Server foundation
 

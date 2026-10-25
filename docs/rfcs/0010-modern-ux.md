@@ -222,3 +222,30 @@ The back-office works without the network, within what a browser can promise, an
   `apps/web/e2e/offline.spec.ts` (the app reloaded offline with its last screens; a save made offline sent when
   back, and a conflict settled by overwriting).
 - **Next in Phase B:** spreadsheet-grade list editing. SMS and WhatsApp (RFC 0006) wait for a provider account.
+
+## Implementation notes (2026-10-25): Phase B, part 4 — spreadsheet-grade list editing
+
+A list's `inlineEdit` columns already saved cell by cell with compare-and-set; the list is now a grid:
+
+- **Keyboard.** Cells are focusable (one tab stop, roving); arrows move the active cell, Shift extends a range,
+  Home/End and Ctrl+Home/End jump. Enter or F2 edits an editable cell (a typed character starts editing with it,
+  as in a spreadsheet); Enter on another cell opens the record. In the editor, Enter saves and moves down, Tab
+  saves and moves right, Escape cancels, leaving the cell saves. Each save is still one update with the row's
+  version. Delete clears the selected cells. The `?` sheet lists the keys.
+- **Paste from a spreadsheet.** Ctrl+V with an active cell takes the clipboard's tab-separated block (quoted
+  cells as Excel writes them) and lands it from that cell, rightwards and downwards over the visible columns and
+  the page's rows. Each text becomes the field's value: numbers in English or continental notation, dates, yes/no
+  (in the user's language too), a selection by its label or value, a related record by its name (the API's name
+  search; an exact match wins, none or several is refused). Cells that cannot take the text, and columns that are
+  not editable, are skipped and counted in a toast with the first reason. The rows are written a few at a time
+  through the ordinary update route (compare-and-set, record rules, field rights: the server decides), the list
+  refreshes, and the toast offers **Undo**, which writes the previous values back.
+- **Fill down (Ctrl+D)** copies the range's top cell down its column(s); **copy (Ctrl+C)** gives the range as
+  tab-separated text (raw numbers, display names, labels), so a spreadsheet gets usable cells.
+- **Not done:** creating rows from a paste below the last row (a paste edits existing records only), pasting
+  into one2many lines in a form, mouse drag to select (Shift+click extends), and a fill handle.
+- Tests: `packages/ui/test/grid.test.ts` (clipboard parsing and writing, value coercion per field kind, name
+  resolution) and `apps/web/e2e/grid.spec.ts` (keyboard editing, paste with skipped cells and undo, copy, fill
+  down).
+- **Phase B is complete** but for SMS and WhatsApp, which wait for a provider account. Phase C (Studio, the AI
+  assistant, the automation builder) needs approval.

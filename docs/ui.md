@@ -157,6 +157,16 @@ serious or critical violations) in both themes. Run `pnpm build && pnpm test:e2e
 - **Installable**: `public/manifest.webmanifest` and `icon.svg` make the back-office an app on phones and
   desktops (the starter project gets both).
 
+## Lists as grids (RFC 0010 Phase B)
+
+Columns named in a list's `inlineEdit` edit in place, and the list behaves like a spreadsheet: arrows move the
+active cell, Shift selects a range, Enter or F2 (or just typing) edits, Enter saves and moves down, Tab saves and
+moves right. Ctrl+V pastes a block copied from Excel or Sheets from the active cell, turning texts into the
+fields' values (numbers, dates, yes/no, choices by label, related records by name) and saying which cells it
+skipped; Ctrl+D fills the selection down from its top cell; Ctrl+C copies the selection as tab-separated text;
+Delete clears. Every write goes through the ordinary update route with the row's version, and the toast offers
+Undo. Press `?` for the keys.
+
 ## Offline (RFC 0010 Phase B)
 
 The Vite plugin `koshPwa()` (`@kosh/ui/vite`, in `vite.config.ts`) builds the service worker: the app opens
