@@ -117,3 +117,23 @@ exports only call existing, permission-checked routes.
   checked per request.
 - **Every screen:** works in English and Bangla, light and dark, with the keyboard and a screen reader, and in
   E2E tests.
+
+## Implementation notes (2026-10-25): Phase A, part 1
+
+Built: the command palette (§3.1), shortcuts and the cheat sheet (§3.2), toasts (§3.3, Undo wired for the next
+part), breadcrumbs and the record pager (§3.4), and the form's save state, Ctrl+S and leave guard (§3.6).
+
+- `GET /api/v1/find?q=` (server, `Navigation.find`): one request searches every model the user can open from a
+  visible menu whose action has a form, at most 5 per model, through the user's own environment (ACL and record
+  rules apply); wildcards in the query are literal. Tested in `packages/server/test/views.integration.test.ts`.
+- The shell listens for shortcuts once; screens mark their controls with `data-kosh-*` attributes, so no view
+  knows about keys and modules get the shortcuts for free.
+- The record pager uses the ids of the page the list last showed (in memory, per model); the form reads its
+  position and neighbours from there.
+- The leave guard is TanStack Router's `useBlocker` reading a ref, so a save that navigates to the new record is
+  never blocked by the state it just cleared.
+- `apps/web/e2e/productivity.spec.ts` covers the palette (records, menus, recent, axe), the shortcuts, the pager,
+  Ctrl+S, the leave guard and a toast.
+
+Next (part 2): list selection and bulk actions with Undo, export and the column chooser (§3.5); kanban totals and
+quick create (§3.7); the home page (§3.8); skeletons and empty states (§3.9); the PWA manifest (§3.10).

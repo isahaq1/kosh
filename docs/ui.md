@@ -127,6 +127,22 @@ list search / filters / group-by / sort / inline edit, form create / transitions
 kanban drag-and-drop, the approval flow through the extension-added panel, and axe accessibility checks (no
 serious or critical violations) in both themes. Run `pnpm build && pnpm test:e2e`.
 
+## Everyday speed (RFC 0010)
+
+- **Command palette** (`Ctrl+K` / `⌘K`, or the search button in the header): recent records, every menu by name
+  ("purchase ord" finds Purchase › Orders), records by name across the apps the user can open
+  (`GET /api/v1/find`, within ACL and record rules), and commands (new record here, home, theme, shortcuts).
+  Keyboard first: arrows, Enter, Esc; a combobox for screen readers.
+- **Shortcuts**: `/` focuses the search box, `N` creates, `Alt+1…9` switches views, `Ctrl+S` saves, `Esc` goes
+  back from a form, `Alt+←/→` moves through records, `?` shows the cheat sheet. Views opt in by marking their
+  controls (`data-kosh-new`, `data-kosh-save`, `data-kosh-view="1"`, …); the shell listens once.
+- **Forms**: a sticky header with breadcrumbs (app › list), the record's position in the list it was opened from
+  with ‹ › buttons (same search and order), and a live save state (unsaved changes, saving, all changes saved).
+  Leaving a form with unsaved changes asks first, also when closing the tab.
+- **Toasts** (`useToast()` from `@kosh/ui`): quiet confirmations after an action or a delete, errors, and an
+  optional action such as Undo; announced to screen readers, `F8` jumps to them.
+- Recent records are kept per user in the browser (`localStorage`), a convenience only.
+
 ## Not yet
 
 Code splitting per app (ECharts and MapLibre load on demand; the rest is one bundle), `kosh inspect view` on the
