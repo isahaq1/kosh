@@ -77,6 +77,15 @@ export interface AppEntry {
   readonly icon?: string;
   readonly sequence: number;
 }
+/** A record the global search found, with the action and app that open it. */
+export interface FoundRecord {
+  readonly model: string;
+  readonly modelLabel: string;
+  readonly id: number;
+  readonly displayName: string;
+  readonly action: string;
+  readonly app: string | undefined;
+}
 export interface MenuNode {
   readonly id: string;
   readonly label: string;
@@ -148,6 +157,8 @@ export interface KoshApi {
   setCompany(company: number | undefined): void;
   /** The language of later requests (`Accept-Language`: server-side labels and messages). */
   setLanguage(lang: string): void;
+  /** Records named like `q` across the user's visible apps (the command palette). */
+  find(q: string, limit?: number): Promise<FoundRecord[]>;
   /** Raw call for module code (custom routes). */
   call<T>(method: string, path: string, body?: unknown): Promise<T>;
   /** A file from the API (exports, documents): the response body and its file name. */
@@ -317,6 +328,12 @@ export function createKoshApi(options: ApiOptions = {}): KoshApi {
       language = next;
     },
     call: (method, path, body) => json(method, path, body),
+    find: async (q, limit) =>
+      (
+        await request<{ results: FoundRecord[] }>('GET', '/api/v1/find', {
+          query: { q, ...(limit === undefined ? {} : { limit: String(limit) }) },
+        })
+      ).body.results,
     async upload<T>(path: string, file: Blob, filename: string): Promise<T> {
       const headers: Record<string, string> = {
         'content-type': file.type === '' ? 'application/octet-stream' : file.type,

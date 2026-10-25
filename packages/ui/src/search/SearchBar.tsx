@@ -165,6 +165,7 @@ export function SearchBar({
           </span>
         ))}
         <input
+          data-kosh-search
           role="combobox"
           aria-label={t('search.placeholder')}
           aria-expanded={options.length > 0}
