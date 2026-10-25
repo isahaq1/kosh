@@ -6,10 +6,11 @@
 import { type HeaderItemProps, useKosh } from '@kosh/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { Bell, CheckCheck } from 'lucide-react';
+import { Bell, BellRing, CheckCheck } from 'lucide-react';
 import { Popover } from 'radix-ui';
 import { type ReactElement, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { usePush } from './push.js';
 
 interface Item {
   readonly id: number;
@@ -54,6 +55,7 @@ export function NotificationBell({ api }: HeaderItemProps): ReactElement {
     mutationFn: () => api.call('POST', '/api/v1/notifications/read-all', {}),
     onSuccess: refresh,
   });
+  const push = usePush(api);
   const unread = count.data?.unread ?? 0;
   const text = (n: Item) => {
     const params = { ...n.params };
@@ -137,6 +139,25 @@ export function NotificationBell({ api }: HeaderItemProps): ReactElement {
               ))
             )}
           </ul>
+          {push.state === 'unsupported' || push.state === 'unavailable' ? null : (
+            <div className="flex items-center justify-between gap-2 border-t px-3 py-2 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <BellRing className="size-3.5" aria-hidden />
+                {t(`push.${push.state}`)}
+              </span>
+              {push.state === 'denied' ? null : (
+                <button
+                  type="button"
+                  className="rounded px-2 py-1 font-medium text-primary hover:bg-muted disabled:opacity-60"
+                  disabled={push.state === 'busy'}
+                  aria-pressed={push.state === 'on'}
+                  onClick={() => void push.toggle()}
+                >
+                  {push.state === 'on' ? t('push.turnOff') : t('push.turnOn')}
+                </button>
+              )}
+            </div>
+          )}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
