@@ -31,9 +31,13 @@ test('select rows: archive with Undo, a delete undone before it runs', async ({ 
     .click();
   const dialog = page.getByRole('dialog', { name: 'Delete 1 record?' });
   await dialog.getByRole('button', { name: 'Delete' }).click();
-  await expect(page.getByRole('cell', { name: 'Nadia (Acme accounts)', exact: true })).toHaveCount(0); // hidden at once
+  await expect(page.getByRole('cell', { name: 'Nadia (Acme accounts)', exact: true })).toHaveCount(
+    0,
+  ); // hidden at once
   await page.getByRole('button', { name: 'Undo' }).click();
-  await expect(page.getByRole('cell', { name: 'Nadia (Acme accounts)', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('cell', { name: 'Nadia (Acme accounts)', exact: true }),
+  ).toBeVisible();
   await expect(page.getByText('6 records')).toBeVisible();
 });
 

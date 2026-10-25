@@ -657,17 +657,19 @@ function RecordPage(): ReactElement {
     });
   const near = recordId === 'new' || model === undefined ? undefined : neighbours(model, recordId);
   const appLabel = apps.find((a) => a.code === app)?.label;
+  const listLabel = action.data?.label ?? served.data.view.label ?? model ?? '';
   return (
     <Form
       key={id}
       served={served.data}
       recordId={recordId}
       crumbs={[
-        ...(appLabel === undefined
+        // The app, then the list; one crumb when they share a name (Contacts › Contacts says nothing more).
+        ...(appLabel === undefined || appLabel === listLabel
           ? []
           : [{ label: appLabel, onClick: () => void navigate({ to: '/$app', params: { app } }) }]),
         {
-          label: action.data?.label ?? served.data.view.label ?? model ?? '',
+          label: listLabel,
           onClick: () =>
             void navigate({ to: '/$app/a/$action', params: { app, action: actionId } }),
         },

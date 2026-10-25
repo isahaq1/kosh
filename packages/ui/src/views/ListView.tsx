@@ -827,7 +827,7 @@ export function ListView(props: ViewProps): ReactElement {
             busy={transition.isPending && transition.variables?.name === tr.name}
             onClick={() => transition.mutate({ name: tr.name, what: ids })}
           >
-            {tr.name}
+            {tr.name.charAt(0).toUpperCase() + tr.name.slice(1).replace(/_/g, ' ')}
           </Button>
         ))}
         {archivable ? (
