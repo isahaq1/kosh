@@ -1,8 +1,10 @@
 /**
- * The kanban renderer (RFC 0007 §5): one column per value of the group-by field (selection or state options, or
- * the groups the server returns for a many2one), cards from the view's card spec, drag-and-drop with dnd-kit
- * (keyboard too: Space to pick up, arrows, Space to drop). Moving a card between state columns runs the transition
- * that leads there; other fields are written. The server refuses moves the user may not make.
+ * The kanban renderer (RFC 0007 §5, RFC 0010 §3.7): one column per value of the group-by field (selection or state
+ * options, or the groups the server returns for a many2one), cards from the view's card spec, drag-and-drop with
+ * dnd-kit (keyboard too: Space to pick up, arrows, Space to drop). Moving a card between state columns runs the
+ * transition that leads there; other fields are written. The server refuses moves the user may not make. A move
+ * confirms with a toast that undoes it while the reverse is possible. Column headers show the count and the
+ * view's `total`; empty columns fold to a strip (click to open) so the board stays readable.
  */
 
 import {
@@ -20,10 +22,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactElement, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, type Row, type ServedView, type ViewField } from '../api.js';
-import { Alert, Input, Spinner } from '../components/primitives.js';
+import { Alert, Input, Skeleton } from '../components/primitives.js';
 import { useKosh } from '../context.js';
 import { cn } from '../lib/cn.js';
 import type { ViewProps } from '../registry.js';
+import { useToast } from '../shell/toast.js';
 import { PrefetchedNames, useRowNames } from './widgets.js';
 
 interface Column {
@@ -34,6 +37,13 @@ interface Column {
 
 const and = (a: Condition | undefined, b: Condition): Condition =>
   a === undefined ? b : { and: [a, b] };
+
+/** The plain amount of an aggregate (Money comes back as `{ amount, currency }`). */
+function amountOf(v: unknown): string {
+  if (typeof v === 'object' && v !== null && 'amount' in v)
+    return String((v as { amount: unknown }).amount);
+  return v === null || v === undefined ? '0' : String(v);
+}
 
 function Card({
   row,
@@ -82,7 +92,7 @@ function Card({
           : { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
       }
       className={cn(
-        'rounded-md border bg-surface p-3 text-sm shadow-sm',
+        'rounded-md border bg-surface p-3 text-sm shadow-sm transition-shadow hover:shadow-md',
         isDragging && 'opacity-70 shadow-lg',
       )}
     >
@@ -124,13 +134,20 @@ function ColumnView({
   props,
   keys,
   groupField,
+  stats,
+  folded,
+  onUnfold,
 }: {
   readonly column: Column;
   readonly props: ViewProps;
   readonly keys: readonly string[];
   readonly groupField: ViewField;
+  /** The server's count and total for the column (undefined while loading). */
+  readonly stats: { readonly count: number; readonly total: string | null } | undefined;
+  readonly folded: boolean;
+  readonly onUnfold: () => void;
 }): ReactElement {
-  const { api } = useKosh();
+  const { api, format } = useKosh();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const view = props.served.view;
@@ -140,6 +157,7 @@ function ColumnView({
   const rows = useQuery({
     queryKey: ['list', view.model, where, keys, 'kanban'],
     queryFn: () => api.list(view.model, { filter: where, fields: keys, limit: 100, count: true }),
+    enabled: !folded,
   });
   const items = rows.data?.items ?? [];
   const names = useRowNames(items, Object.values(props.served.fields[view.model] ?? {}));
@@ -152,6 +170,7 @@ function ColumnView({
     onSuccess: async () => {
       setQuick('');
       await queryClient.invalidateQueries({ queryKey: ['list', view.model] });
+      await queryClient.invalidateQueries({ queryKey: ['kanban-stats', view.model] });
     },
   });
   // New records start in the initial state, so quick create applies to columns of other fields only.
@@ -160,6 +179,28 @@ function ColumnView({
     view.quickCreate === true &&
     props.served.operations.create &&
     groupField.kind !== 'state';
+  const count = stats?.count ?? rows.data?.count ?? items.length;
+  if (folded)
+    return (
+      <section
+        ref={setNodeRef}
+        aria-label={column.label}
+        className={cn(
+          'flex w-10 shrink-0 flex-col items-center rounded-lg bg-muted/50 py-2',
+          isOver && 'ring-2 ring-ring',
+        )}
+      >
+        <button
+          type="button"
+          className="flex flex-1 flex-col items-center gap-2 rounded px-1 text-sm hover:bg-muted"
+          aria-label={t('views.unfold', { column: column.label, count })}
+          onClick={onUnfold}
+        >
+          <span className="text-xs text-muted-foreground">{count}</span>
+          <span className="font-semibold [writing-mode:vertical-rl]">{column.label}</span>
+        </button>
+      </section>
+    );
   return (
     <section
       ref={setNodeRef}
@@ -169,10 +210,15 @@ function ColumnView({
         isOver && 'ring-2 ring-ring',
       )}
     >
-      <h2 className="flex items-center justify-between px-1 pb-2 text-sm font-semibold">
-        <span>{column.label}</span>
-        <span className="text-xs font-normal text-muted-foreground">
-          {rows.data?.count ?? items.length}
+      <h2 className="flex items-baseline justify-between gap-2 px-1 pb-2 text-sm font-semibold">
+        <span className="truncate">{column.label}</span>
+        <span className="flex shrink-0 items-baseline gap-2 text-xs font-normal text-muted-foreground">
+          {stats?.total === null || stats?.total === undefined ? null : (
+            <span className="tabular-nums" title={t('views.columnTotal')}>
+              {format.decimal(stats.total)}
+            </span>
+          )}
+          <span className="rounded-full bg-muted px-1.5">{count}</span>
         </span>
       </h2>
       {quickCreate ? (
@@ -192,7 +238,11 @@ function ColumnView({
         </form>
       ) : null}
       {rows.isPending ? (
-        <Spinner label={t('app.loading')} />
+        <div className="grid gap-2">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-20" />
+          ))}
+        </div>
       ) : (
         <PrefetchedNames.Provider value={names}>
           <ul className="grid gap-2">
@@ -210,8 +260,10 @@ function ColumnView({
 export function KanbanView(props: ViewProps): ReactElement {
   const { api } = useKosh();
   const { t } = useTranslation();
+  const toast = useToast();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(new Set());
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor),
@@ -219,35 +271,68 @@ export function KanbanView(props: ViewProps): ReactElement {
   const view = props.served.view;
   const fields = view.type === 'kanban' ? (props.served.fields[view.model] ?? {}) : {};
   const groupField = view.type === 'kanban' ? fields[view.groupBy] : undefined;
-  const groups = useQuery({
-    queryKey: ['groups', view.model, props.where, groupField?.key],
+  const totalField =
+    view.type === 'kanban' && view.total !== undefined && fields[view.total] !== undefined
+      ? view.total
+      : undefined;
+  // One query for every column's count (and total): the columns of options, and the groups of a many2one.
+  const stats = useQuery({
+    queryKey: ['kanban-stats', view.model, props.where, groupField?.key, totalField],
     queryFn: () =>
       api.aggregate(view.model, {
         where: props.where,
         groupBy: [groupField?.key as string],
-        measures: { n: 'count' },
+        measures: {
+          n: 'count',
+          ...(totalField === undefined ? {} : { total: { sum: totalField } }),
+        },
       }),
-    enabled: groupField !== undefined && groupField.options === undefined,
+    enabled: groupField !== undefined,
   });
   const groupNames = useRowNames(
-    (groups.data ?? []).map((g) => ({ [groupField?.key ?? '']: g[groupField?.key ?? ''] })),
+    (stats.data ?? []).map((g) => ({ [groupField?.key ?? '']: g[groupField?.key ?? ''] })),
     groupField === undefined ? [] : [groupField],
   );
+  const refresh = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['list', view.model] });
+    await queryClient.invalidateQueries({ queryKey: ['kanban-stats', view.model] });
+  };
   const move = useMutation({
     mutationFn: async ({ row, to }: { row: Row; to: Column }) => {
-      if (groupField === undefined) return;
+      if (groupField === undefined) return null;
+      const from = row[groupField.key] ?? null;
       if (groupField.kind === 'state') {
-        const from = String(row[groupField.key]);
-        const transition = props.served.transitions.find(
-          (tr) => tr.field === groupField.key && tr.to === to.value && tr.from.includes(from),
+        const transitions = props.served.transitions.filter((tr) => tr.field === groupField.key);
+        const forward = transitions.find(
+          (tr) => tr.to === to.value && tr.from.includes(String(from)),
         );
-        if (transition === undefined) throw new Error(t('views.moveRefused'));
-        await api.transition(view.model, row.id, transition.name);
-      } else await api.update(view.model, row.id, { [groupField.key]: to.value });
+        if (forward === undefined) throw new Error(t('views.moveRefused'));
+        await api.transition(view.model, row.id, forward.name);
+        const back = transitions.find((tr) => tr.to === from && tr.from.includes(String(to.value)));
+        return back === undefined ? null : () => api.transition(view.model, row.id, back.name);
+      }
+      await api.update(view.model, row.id, { [groupField.key]: to.value });
+      return () => api.update(view.model, row.id, { [groupField.key]: from });
     },
-    onSuccess: async () => {
+    onSuccess: async (undo, { row, to }) => {
       setError(null);
-      await queryClient.invalidateQueries({ queryKey: ['list', view.model] });
+      await refresh();
+      const name = String(row['displayName'] ?? row.id);
+      toast({
+        title: t('views.moved', { name, column: to.label }),
+        ...(undo === null
+          ? {}
+          : {
+              action: {
+                label: t('views.undo'),
+                run: () =>
+                  void undo()
+                    .then(refresh)
+                    .then(() => toast({ title: t('views.undone'), tone: 'info' }))
+                    .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e))),
+              },
+            }),
+      });
     },
     onError: (e) =>
       setError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e)),
@@ -260,7 +345,7 @@ export function KanbanView(props: ViewProps): ReactElement {
   const columns: Column[] =
     groupField.options !== undefined
       ? groupField.options.map((o) => ({ key: o.value, value: o.value, label: o.label }))
-      : (groups.data ?? []).map((g) => {
+      : (stats.data ?? []).map((g) => {
           const value = g[groupField.key] ?? null;
           const label =
             value === null
@@ -271,6 +356,17 @@ export function KanbanView(props: ViewProps): ReactElement {
                 : String(value);
           return { key: JSON.stringify(value), value, label };
         });
+  const statsOf = (column: Column) => {
+    if (stats.data === undefined) return undefined;
+    const row = stats.data.find(
+      (g) => JSON.stringify(g[groupField.key] ?? null) === JSON.stringify(column.value),
+    );
+    return {
+      count: Number(row?.['n'] ?? 0),
+      total: totalField === undefined || row === undefined ? null : amountOf(row['total']),
+    };
+  };
+  const quickCreate = view.quickCreate === true && groupField.kind !== 'state';
   const keys = [
     ...new Set([
       'id',
@@ -299,16 +395,29 @@ export function KanbanView(props: ViewProps): ReactElement {
     <div className="grid gap-3">
       {error === null ? null : <Alert>{error}</Alert>}
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-        <div className="flex gap-3 overflow-x-auto pb-2">
-          {columns.map((column) => (
-            <ColumnView
-              key={column.key}
-              column={column}
-              props={props}
-              keys={keys}
-              groupField={groupField}
-            />
-          ))}
+        <div className="flex min-h-64 gap-3 overflow-x-auto pb-2">
+          {columns.map((column) => {
+            const s = statsOf(column);
+            // Empty columns fold (when there are enough columns for it to matter), unless opened or creatable.
+            const folded =
+              s !== undefined &&
+              s.count === 0 &&
+              columns.length > 3 &&
+              !quickCreate &&
+              !unfolded.has(column.key);
+            return (
+              <ColumnView
+                key={column.key}
+                column={column}
+                props={props}
+                keys={keys}
+                groupField={groupField}
+                stats={s}
+                folded={folded}
+                onUnfold={() => setUnfolded((u) => new Set(u).add(column.key))}
+              />
+            );
+          })}
         </div>
       </DndContext>
     </div>
