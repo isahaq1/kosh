@@ -86,9 +86,11 @@ export class Navigation {
     for (const menu of this.#loaded.menus) {
       if (menu.action === undefined || !this.menuVisible(env, menu)) continue;
       const owner = this.#loaded.actions.get(menu.action);
-      const model = actionModel(
-        owner === undefined ? undefined : this.#module(owner).actions?.[menu.action],
-      );
+      const spec = owner === undefined ? undefined : this.#module(owner).actions?.[menu.action];
+      const model = actionModel(spec);
+      // Only actions that open records in a form: a found record must open where it is found.
+      const views = (spec as { views?: unknown } | undefined)?.views;
+      if (!Array.isArray(views) || !views.includes('form')) continue;
       if (model === undefined || targets.has(model) || !this.#models.has(model)) continue;
       targets.set(model, { action: menu.action, app: this.#appOf(menu) });
     }
