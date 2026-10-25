@@ -564,6 +564,14 @@ function envFile(a: Answers): string {
   if (a.valkeyUrl !== '') lines.push(`VALKEY_URL=${a.valkeyUrl}`);
   lines.push(
     '',
+    '# Where users open the back-office (links in emails and notifications).',
+    'KOSH_BASE_URL=http://localhost:5173',
+    '# Email notifications: an SMTP server (Mailpit in development: smtp://localhost:1025, inbox on :8025).',
+    '# SMTP_URL=smtp://user:password@smtp.example.com:587',
+    '# MAIL_FROM=Kosh <no-reply@example.com>',
+  );
+  lines.push(
+    '',
     '# PostgreSQL in Docker (compose.yaml): docker compose up -d db, or everything with docker compose up -d --build',
     `POSTGRES_USER=${a.postgres.user}`,
     `POSTGRES_PASSWORD=${a.postgres.password}`,
