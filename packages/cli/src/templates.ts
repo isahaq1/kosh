@@ -126,11 +126,12 @@ export function modulesTs(_options: StarterOptions): string {
  * then install them from Settings → Apps.
  */
 import { base } from 'kosh-erp';
+import { notify } from 'kosh-erp/notify';
 import { realtime } from 'kosh-erp/realtime';
 import { settings } from 'kosh-erp/settings';
 ${imports.join('\n')}
 
-export const modules = [base, settings, realtime${apps.map((a) => `, ${APPS[a].server}`).join('')}];
+export const modules = [base, settings, realtime, notify${apps.map((a) => `, ${APPS[a].server}`).join('')}];
 `;
 }
 
@@ -200,6 +201,7 @@ export function mainTsx(_options: StarterOptions): string {
       return fn === undefined ? [] : [{ name: a as string, fn }];
     }),
     { name: 'settings', fn: 'registerSettingsWeb' },
+    { name: 'notify', fn: 'registerNotifyWeb' },
   ].map(({ name, fn }) => {
     const messages = name === 'permissions' ? null : `${name}Messages`;
     return {

@@ -114,7 +114,7 @@ test('a fresh installation: database created, project written, migrated, adminis
   // The catalogue lists every app; the database says which are installed (RFC 0008).
   expect(modules).toContain("import { reporting } from 'kosh-erp/reporting';");
   expect(modules).toContain(
-    'export const modules = [base, settings, realtime, permissions, reporting, messaging, contacts, product, sales, purchase];',
+    'export const modules = [base, settings, realtime, notify, permissions, reporting, messaging, contacts, product, sales, purchase];',
   );
   const main = await readFile(join(project, 'src/web/main.tsx'), 'utf8');
   expect(main).toContain(
@@ -174,6 +174,7 @@ test('a fresh installation: database created, project written, migrated, adminis
     expect(installed.map((r) => r.name)).toEqual([
       'base',
       'messaging',
+      'notify',
       'realtime',
       'reporting',
       'settings',

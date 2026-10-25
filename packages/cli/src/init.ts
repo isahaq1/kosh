@@ -531,6 +531,7 @@ async function modulesFor(apps: readonly AppName[]): Promise<KoshModule[]> {
     base,
     (await import('@kosh/settings')).settings,
     (await import('@kosh/realtime')).realtime,
+    (await import('@kosh/notify')).notify,
   ];
   for (const app of apps) {
     if (app === 'permissions') modules.push((await import('@kosh/permissions')).permissions);
@@ -656,7 +657,7 @@ async function setUp(server: KoshServer, a: Answers, ui: Ui): Promise<number | n
     await recordInstalledApps(
       server.driver,
       server.registry.loaded.modules,
-      ['base', 'settings', 'realtime', ...a.apps],
+      ['base', 'settings', 'realtime', 'notify', ...a.apps],
       `kosh init (${a.admin.login})`,
     );
     task.finish(
@@ -898,7 +899,7 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
         'Administrator',
         `${answers.admin.login} ${ui.style(enrolled ? 'green' : 'yellow', enrolled ? '· 2FA on' : '· 2FA pending')}`,
       ],
-      ['Apps', ['base', 'settings', 'realtime', ...answers.apps].join(', ')],
+      ['Apps', ['base', 'settings', 'realtime', 'notify', ...answers.apps].join(', ')],
       ['Database', answers.dockerDb ? `Docker (port ${answers.postgres.port})` : 'your server'],
       ['API', `http://localhost:${answers.port}`],
       ['Took', `${((Date.now() - started) / 1000).toFixed(1)}s`],
