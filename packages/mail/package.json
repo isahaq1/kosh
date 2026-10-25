@@ -1,8 +1,8 @@
 {
   "name": "@kosh/mail",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
-  "description": "Outbound and inbound email, templates (RFC 0006)",
+  "description": "Outbound email: the SMTP mailer and a plain email layout (RFC 0006)",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
@@ -22,5 +22,11 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "nodemailer": "^7.0.13"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^7.0.12"
   }
 }
