@@ -1,8 +1,8 @@
 {
   "name": "@kosh/realtime",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
-  "description": "WebSocket gateway (LISTEN/NOTIFY + Valkey pub/sub) (RFC 0006)",
+  "description": "The WebSocket gateway: live updates and presence over LISTEN/NOTIFY (RFC 0006)",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
@@ -22,5 +22,16 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@fastify/websocket": "^11.3.4",
+    "@kosh/modules-sdk": "workspace:*",
+    "@kosh/server": "workspace:*",
+    "fastify": "^5.12.7"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^12.2.1",
+    "@types/ws": "^8.18.2",
+    "ws": "^8.22.0"
   }
 }
