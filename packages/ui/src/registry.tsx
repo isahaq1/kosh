@@ -65,6 +65,11 @@ export interface FormProps {
   };
 }
 
+/** Props of a header item: what a module adds to the shell's header (`registry.registerHeaderItem`). */
+export interface HeaderItemProps {
+  readonly api: KoshApi;
+}
+
 /** Props of a page: what a client action opens (`{ type: 'client', page: 'settings.Apps' }`). */
 export interface PageProps {
   readonly api: KoshApi;
@@ -79,7 +84,7 @@ export class RegistryError extends Error {
   }
 }
 
-type Kind = 'view' | 'widget' | 'component' | 'page';
+type Kind = 'view' | 'widget' | 'component' | 'page' | 'header';
 
 /** Renderers, widgets and components by name. */
 export class Registry {
@@ -88,6 +93,7 @@ export class Registry {
     widget: new Map(),
     component: new Map(),
     page: new Map(),
+    header: new Map(),
   };
 
   #add(kind: Kind, name: string, component: ComponentType<never>, replace: boolean): this {
@@ -160,6 +166,26 @@ export class Registry {
     return this.#entries.component.get(name) as ComponentType<NodeComponentProps> | undefined;
   }
 
+  /** An item of the shell's header, before the language and theme menus (`notify.Bell`). */
+  registerHeaderItem(
+    name: string,
+    component: ComponentType<HeaderItemProps>,
+    options: { readonly replace?: boolean } = {},
+  ): this {
+    return this.#add('header', name, component as ComponentType<never>, options.replace === true);
+  }
+
+  /** The header items, in registration order. */
+  headerItems(): readonly {
+    readonly name: string;
+    readonly component: ComponentType<HeaderItemProps>;
+  }[] {
+    return [...this.#entries.header].map(([name, component]) => ({
+      name,
+      component: component as ComponentType<HeaderItemProps>,
+    }));
+  }
+
   page(name: string): ComponentType<PageProps> | undefined {
     return this.#entries.page.get(name) as ComponentType<PageProps> | undefined;
   }
@@ -167,7 +193,7 @@ export class Registry {
   /** A copy, for an app that changes entries without touching the defaults. */
   clone(): Registry {
     const copy = new Registry();
-    for (const kind of ['view', 'widget', 'component', 'page'] as const)
+    for (const kind of ['view', 'widget', 'component', 'page', 'header'] as const)
       for (const [name, c] of this.#entries[kind]) copy.#entries[kind].set(name, c);
     return copy;
   }

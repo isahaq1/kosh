@@ -356,6 +356,9 @@ function Shell(): ReactElement {
               >
                 <Search aria-hidden />
               </Button>
+              {registry.headerItems().map(({ name, component: Item }) => (
+                <Item key={name} api={api} />
+              ))}
               <CompanySwitcher
                 me={user}
                 company={current}

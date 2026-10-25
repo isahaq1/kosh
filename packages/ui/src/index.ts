@@ -44,6 +44,7 @@ export {
 } from './realtime.js';
 export {
   type FormProps,
+  type HeaderItemProps,
   type NodeComponentProps,
   type PageProps,
   Registry,
