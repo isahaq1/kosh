@@ -9,7 +9,14 @@
  */
 import { compileSearch, decodeSearch, encodeSearch, type SearchState } from '@kosh/search';
 import type { ClientAction, Condition, ViewType, WindowAction } from '@kosh/views';
-import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  onlineManager,
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import {
   createRootRoute,
   createRoute,
@@ -74,15 +81,25 @@ import {
 import { KoshProvider, type ThemeChoice, useKosh } from './context.js';
 import { addMessages, createI18n, directionOf } from './i18n/index.js';
 import { LANGUAGES } from './i18n/messages.js';
+import {
+  claimOfflineCache,
+  createOfflinePersister,
+  dropOfflineCache,
+  OFFLINE_MAX_AGE_MS,
+  offlinePersistOptions,
+} from './offline/persist.js';
+import { OfflineQueue } from './offline/queue.js';
+import { onAppUpdate, registerServiceWorker } from './pwa/register.js';
 import { createRealtimeClient, type RealtimeClient } from './realtime.js';
 import type { Registry } from './registry.js';
 import { SearchBar } from './search/SearchBar.js';
 import { CommandPalette, PaletteContext } from './shell/CommandPalette.js';
 import { Home } from './shell/Home.js';
 import { Login } from './shell/Login.js';
+import { OfflineMenu } from './shell/OfflineMenu.js';
 import { rememberRecord } from './shell/recent.js';
 import { ShortcutsHelp, useShortcuts } from './shell/shortcuts.js';
-import { ToastProvider } from './shell/toast.js';
+import { ToastProvider, useToast } from './shell/toast.js';
 import { neighbours } from './views/listMemory.js';
 
 interface Services {
@@ -90,9 +107,71 @@ interface Services {
   readonly registry: Registry;
   /** Live updates and presence (absent without a browser WebSocket, e.g. in tests). */
   readonly realtime?: RealtimeClient;
+  /** Changes saved offline (absent without IndexedDB). */
+  readonly offline?: OfflineQueue;
+  readonly persister?: ReturnType<typeof createOfflinePersister>;
   readonly i18n: i18n;
   readonly lang: string;
   setLang(lang: string): void;
+}
+
+/**
+ * Inside the shell, for the signed-in user: claims the device's cache for them, loads their queue of changes,
+ * sends it when the network is back, registers the service worker and offers the reload of a new version.
+ */
+function OfflineAgent({ uid }: { readonly uid: number }): null {
+  const { offline } = useServices();
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const { t } = useTranslation();
+  useEffect(() => {
+    void claimOfflineCache(queryClient, uid);
+  }, [queryClient, uid]);
+  useEffect(
+    () =>
+      onAppUpdate((reload) =>
+        toast({
+          title: t('offline.newVersion'),
+          tone: 'info',
+          duration: 60_000,
+          action: { label: t('offline.reload'), run: reload },
+        }),
+      ),
+    [toast, t],
+  );
+  useEffect(() => {
+    if (offline === undefined) return;
+    let alive = true;
+    const sync = async () => {
+      await offline.setUser(uid);
+      if (!alive || !onlineManager.isOnline() || offline.snapshot().length === 0) return;
+      const result = await offline.sync();
+      if (!alive || result.offline) return;
+      if (result.synced > 0) {
+        toast({ title: t('offline.synced', { count: result.synced }) });
+        await queryClient.invalidateQueries();
+      }
+      if (result.attention > 0)
+        toast({ title: t('offline.needsAttention', { count: result.attention }), tone: 'danger' });
+    };
+    void sync();
+    const unsubscribe = onlineManager.subscribe((online) => {
+      if (!alive) return;
+      if (online) void sync();
+      else
+        toast({
+          title: t('offline.nowOffline'),
+          description: t('offline.offlineHint'),
+          tone: 'info',
+        });
+    });
+    return () => {
+      alive = false;
+      unsubscribe();
+      void offline.setUser(null);
+    };
+  }, [offline, uid, queryClient, toast, t]);
+  return null;
 }
 
 const ServicesContext = createContext<Services | null>(null);
@@ -253,7 +332,7 @@ function CompanySwitcher({
 }
 
 function Shell(): ReactElement {
-  const { api, registry, lang, realtime } = useServices();
+  const { api, registry, lang, realtime, offline, persister } = useServices();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -279,10 +358,9 @@ function Shell(): ReactElement {
     queryFn: () => api.menus(params.app),
     enabled: me.isSuccess && params.app !== undefined,
   });
-  if (me.isError) {
-    if (me.error instanceof ApiError && me.error.status === 401) return <Navigate to="/login" />;
-    return <Alert>{me.error.message}</Alert>;
-  }
+  if (me.error instanceof ApiError && me.error.status === 401) return <Navigate to="/login" />;
+  // A failed refresh keeps the last answer (offline, the server down): the cached screens stay usable.
+  if (me.isError && me.data === undefined) return <Alert>{me.error.message}</Alert>;
   if (me.data === undefined) return <Spinner label={t('app.loading')} />;
   const user = me.data;
   const current = company ?? user.company ?? user.companies[0] ?? 0;
@@ -296,8 +374,10 @@ function Shell(): ReactElement {
       lang={lang}
       tz={Intl.DateTimeFormat().resolvedOptions().timeZone}
       {...(realtime === undefined ? {} : { realtime })}
+      {...(offline === undefined ? {} : { offline })}
     >
       <ToastProvider>
+        <OfflineAgent uid={user.id} />
         <PaletteContext.Provider value={openPalette}>
           <a
             href="#content"
@@ -356,6 +436,7 @@ function Shell(): ReactElement {
               >
                 <Search aria-hidden />
               </Button>
+              <OfflineMenu />
               {registry.headerItems().map(({ name, component: Item }) => (
                 <Item key={name} api={api} />
               ))}
@@ -382,6 +463,7 @@ function Shell(): ReactElement {
                     onSelect={async () => {
                       await api.logout();
                       queryClient.clear();
+                      await dropOfflineCache(persister);
                       await navigate({ to: '/login' });
                     }}
                   >
@@ -489,8 +571,10 @@ function WindowActionPage(): ReactElement {
     queryFn: () => api.search(action.data?.model as string),
     enabled: action.data !== undefined,
   });
-  if (action.error !== null) return <Alert>{action.error.message}</Alert>;
-  if (served.isError) return <Alert>{served.error.message}</Alert>;
+  // A failed refresh keeps what the device has (offline): only a screen with nothing to show says so.
+  if (action.error !== null && action.data === undefined)
+    return <Alert>{action.error.message}</Alert>;
+  if (served.isError && served.data === undefined) return <Alert>{served.error.message}</Alert>;
   if (
     action.data === undefined ||
     served.data === undefined ||
@@ -652,8 +736,10 @@ function RecordPage(): ReactElement {
     if (model !== undefined && recordId !== 'new' && title !== undefined)
       rememberRecord(uid, { app, action: actionId, model, id: recordId, title });
   }, [uid, app, actionId, model, recordId, title]);
-  if (action.error !== null) return <Alert>{action.error.message}</Alert>;
-  if (served.isError) return <Alert>{served.error.message}</Alert>;
+  // A failed refresh keeps what the device has (offline): only a screen with nothing to show says so.
+  if (action.error !== null && action.data === undefined)
+    return <Alert>{action.error.message}</Alert>;
+  if (served.isError && served.data === undefined) return <Alert>{served.error.message}</Alert>;
   if (served.data === undefined) return <Spinner label={t('app.loading')} />;
   const Form = registry.form(served.data.view.component ?? 'form');
   if (Form === undefined) return <Alert>No form renderer.</Alert>;
@@ -799,12 +885,27 @@ export function KoshApp({ api, registry, messages, fallback = null }: KoshAppPro
         defaultOptions: {
           queries: {
             staleTime: 15_000,
+            gcTime: OFFLINE_MAX_AGE_MS, // kept on the device that long (offline/persist.ts)
             retry: (count, error) =>
               !(error instanceof ApiError && error.status < 500) && count < 2,
           },
+          // A save while offline fails at once (NetworkError) and the form keeps it on the device, rather than
+          // hanging until the network is back.
+          mutations: { networkMode: 'always' },
         },
       }),
     [],
+  );
+  const persister = useMemo(() => createOfflinePersister(), []);
+  // TanStack Query starts "online" and follows the browser's events; a page opened while offline must know it.
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false)
+      onlineManager.setOnline(false);
+    registerServiceWorker(); // the shell offline and web push, from the first visit (the login page too)
+  }, []);
+  const offline = useMemo(
+    () => (persister === undefined ? undefined : new OfflineQueue(api)),
+    [persister, api],
   );
   const [lang, setLangState] = useState(initialLanguage);
   const [startLang] = useState(lang); // the instance is created once; later changes go through changeLanguage
@@ -833,6 +934,8 @@ export function KoshApp({ api, registry, messages, fallback = null }: KoshAppPro
     api,
     registry,
     ...(realtime === undefined ? {} : { realtime }),
+    ...(offline === undefined ? {} : { offline }),
+    ...(persister === undefined ? {} : { persister }),
     i18n: instance,
     lang,
     setLang(next) {
@@ -847,15 +950,25 @@ export function KoshApp({ api, registry, messages, fallback = null }: KoshAppPro
       void queryClient.invalidateQueries(); // labels and messages come translated from the server
     },
   };
-  return (
-    <QueryClientProvider client={queryClient}>
-      <I18nextProvider i18n={instance}>
-        <ServicesContext.Provider value={services}>
-          <Direction.Provider dir={directionOf(lang)}>
-            <RouterProvider router={router} />
-          </Direction.Provider>
-        </ServicesContext.Provider>
-      </I18nextProvider>
-    </QueryClientProvider>
+  const inner = (
+    <I18nextProvider i18n={instance}>
+      <ServicesContext.Provider value={services}>
+        <Direction.Provider dir={directionOf(lang)}>
+          <RouterProvider router={router} />
+        </Direction.Provider>
+      </ServicesContext.Provider>
+    </I18nextProvider>
+  );
+  // The query cache lives on the device (IndexedDB): recently opened screens show offline.
+  return persister === undefined ? (
+    <QueryClientProvider client={queryClient}>{inner}</QueryClientProvider>
+  ) : (
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={offlinePersistOptions(persister)}
+      onSuccess={() => void queryClient.invalidateQueries()} // restored data is a previous visit's: refresh
+    >
+      {inner}
+    </PersistQueryClientProvider>
   );
 }

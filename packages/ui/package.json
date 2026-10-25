@@ -31,7 +31,12 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./styles.css": "./src/styles.css"
+    "./styles.css": "./src/styles.css",
+    "./vite": {
+      "@kosh/source": "./src/pwa/vite.ts",
+      "types": "./dist/pwa/vite.d.ts",
+      "default": "./dist/pwa/vite.js"
+    }
   },
   "files": [
     "dist",
@@ -55,14 +60,16 @@
     "clsx": "^2.1.1",
     "lucide-react": "^1.59.0",
     "radix-ui": "^1.8.1",
-    "tailwind-merge": "^3.7.0"
+    "tailwind-merge": "^3.7.0",
+    "@tanstack/react-query-persist-client": "^5.104.5"
   },
   "peerDependencies": {
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "@tanstack/react-query": "^5.104.3",
     "i18next": "^26.4.7",
-    "react-i18next": "^17.0.21"
+    "react-i18next": "^17.0.21",
+    "vite": "^7.0.0"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",
@@ -71,6 +78,12 @@
     "react-dom": "^19.3.1",
     "@tanstack/react-query": "^5.104.3",
     "i18next": "^26.4.7",
-    "react-i18next": "^17.0.21"
+    "react-i18next": "^17.0.21",
+    "vite": "^7.1.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
   }
 }

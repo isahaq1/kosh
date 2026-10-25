@@ -13,6 +13,7 @@ import {
 } from 'react';
 import type { KoshApi } from './api.js';
 import { createFormatter, type Formatter } from './lib/format.js';
+import type { OfflineQueue } from './offline/queue.js';
 import type { RealtimeClient } from './realtime.js';
 import type { Registry } from './registry.js';
 
@@ -28,6 +29,8 @@ export interface KoshContextValue {
   setTheme(theme: ThemeChoice): void;
   /** The realtime gateway's client, when the app has one: live lists, records and presence. */
   readonly realtime?: RealtimeClient;
+  /** Changes saved offline, when the app keeps them: a form that cannot reach the server saves here. */
+  readonly offline?: OfflineQueue;
 }
 
 const Context = createContext<KoshContextValue | null>(null);
@@ -80,6 +83,7 @@ export function KoshProvider({
   lang,
   tz,
   realtime,
+  offline,
   children,
 }: {
   readonly api: KoshApi;
@@ -89,6 +93,7 @@ export function KoshProvider({
   readonly lang: string;
   readonly tz: string;
   readonly realtime?: RealtimeClient;
+  readonly offline?: OfflineQueue;
   readonly children: ReactNode;
 }): ReactElement {
   const [theme, setTheme] = useTheme();
@@ -103,8 +108,9 @@ export function KoshProvider({
       theme,
       setTheme,
       ...(realtime === undefined ? {} : { realtime }),
+      ...(offline === undefined ? {} : { offline }),
     }),
-    [api, registry, uid, companyId, format, theme, setTheme, realtime],
+    [api, registry, uid, companyId, format, theme, setTheme, realtime, offline],
   );
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }

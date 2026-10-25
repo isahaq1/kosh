@@ -32,6 +32,26 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The request never reached the server, or its answer never came back (offline, a dropped connection): nothing is
+ * known about its fate. Forms keep such a save on the device (`offline/queue.ts`).
+ */
+export class NetworkError extends Error {
+  constructor(cause: unknown) {
+    super('The server could not be reached.', { cause });
+    this.name = 'NetworkError';
+  }
+}
+
+/** `fetch` that throws {@link NetworkError} instead of a bare `TypeError` when the network fails. */
+async function reach(doFetch: typeof fetch, input: string, init: RequestInit): Promise<Response> {
+  try {
+    return await doFetch(input, init);
+  } catch (error) {
+    throw new NetworkError(error);
+  }
+}
+
 export interface ViewField {
   readonly key: string;
   readonly kind: string;
@@ -224,7 +244,7 @@ export function createKoshApi(options: ApiOptions = {}): KoshApi {
     if (company !== undefined) headers['x-company'] = String(company);
     if (language !== undefined) headers['accept-language'] = language.replace('_', '-');
     const search = params.size === 0 ? '' : `?${params.toString()}`;
-    const response = await doFetch(`${base}${path}${search}`, {
+    const response = await reach(doFetch, `${base}${path}${search}`, {
       method,
       headers,
       credentials: 'include',
@@ -366,7 +386,7 @@ export function createKoshApi(options: ApiOptions = {}): KoshApi {
       if (csrf !== undefined) headers['x-csrf-token'] = csrf;
       if (company !== undefined) headers['x-company'] = String(company);
       if (language !== undefined) headers['accept-language'] = language.replace('_', '-');
-      const response = await doFetch(`${base}${path}`, {
+      const response = await reach(doFetch, `${base}${path}`, {
         method: 'POST',
         headers,
         credentials: 'include',

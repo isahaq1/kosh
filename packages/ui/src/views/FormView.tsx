@@ -14,7 +14,7 @@ import {
   type LinesNode,
 } from '@kosh/views';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useBlocker } from '@tanstack/react-router';
+import { useBlocker, useParams } from '@tanstack/react-router';
 import {
   ArrowLeft,
   Check,
@@ -27,7 +27,14 @@ import {
 } from 'lucide-react';
 import { type ReactElement, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ApiError, type Row, type ServedView, type ViewField } from '../api.js';
+import {
+  ApiError,
+  NetworkError,
+  type Row,
+  type ServedView,
+  type Versioned,
+  type ViewField,
+} from '../api.js';
 import {
   Alert,
   Button,
@@ -243,11 +250,12 @@ export function FormView({
   crumbs,
   pager,
 }: FormProps): ReactElement {
-  const { api, registry, uid, companyId } = useKosh();
+  const { api, registry, uid, companyId, offline } = useKosh();
   const { t } = useTranslation();
   const toast = useToast();
   const queryClient = useQueryClient();
   const formId = useId();
+  const route = useParams({ strict: false }) as { app?: string; action?: string };
   const view = served.view;
   if (view.type !== 'form') throw new Error(`FormView renders form views, not ${view.type}.`);
   const model = view.model;
@@ -296,23 +304,66 @@ export function FormView({
   const canEdit = isNew ? served.operations.create : served.operations.write;
   const locked = !canEdit || (!isNew && holds(view.readonlyWhen, values, env));
 
+  // A failure: the server's refusal in the form; no server at all as a toast (the save was kept, or must wait).
+  const fail = (e: unknown) => {
+    setProblem(e instanceof ApiError ? e : null);
+    if (e instanceof NetworkError) toast({ title: t('offline.needsConnection'), tone: 'danger' });
+  };
   const save = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<Versioned & { readonly queued?: true }> => {
       const payload = payloadOf(changes, fields, lines);
-      return isNew
-        ? api.create(model, payload)
-        : api.update(model, recordId, payload, loaded.data?.etag ?? null);
+      const etag = loaded.data?.etag ?? null;
+      try {
+        return isNew
+          ? await api.create(model, payload)
+          : await api.update(model, recordId, payload, etag);
+      } catch (error) {
+        if (!(error instanceof NetworkError) || offline === undefined) throw error;
+        // Offline: the change is kept on the device and sent when the network is back (offline/queue.ts).
+        await offline.add({
+          kind: isNew ? 'create' : 'update',
+          model,
+          modelLabel: crumbs?.[crumbs.length - 1]?.label ?? model,
+          recordId: isNew ? null : recordId,
+          title: String(values['displayName'] ?? values['name'] ?? `#${recordId}`),
+          values: payload,
+          etag,
+          app: route.app,
+          action: route.action,
+        });
+        const scalars = Object.fromEntries(
+          Object.entries(payload).filter(
+            ([k]) => fields[k]?.kind !== 'one2many' && fields[k]?.kind !== 'many2many',
+          ),
+        );
+        return { record: { ...(record ?? { id: 0 }), ...scalars } as Row, etag, queued: true };
+      }
     },
     onSuccess: async (result) => {
       setChanges({});
       setLines(new Map());
       setProblem(null);
+      if (result.queued === true) {
+        unsaved.current = false;
+        toast({
+          title: t('offline.savedOnDevice'),
+          description: t('offline.willSync'),
+          tone: 'info',
+        });
+        if (isNew) onBack();
+        else
+          queryClient.setQueryData(['record', model, recordId], {
+            record: result.record,
+            etag: result.etag,
+          });
+        return;
+      }
       await queryClient.invalidateQueries({ queryKey: ['list', model] });
       unsaved.current = false;
       if (isNew) onSaved(result.record.id);
       else queryClient.setQueryData(['record', model, recordId], result);
     },
-    onError: (e) => setProblem(e instanceof ApiError ? e : null),
+    onError: fail,
   });
   const transition = useMutation({
     mutationFn: async (name: string) => {
@@ -327,7 +378,7 @@ export function FormView({
         view.type === 'form' ? view.header.buttons.find((b) => b.transition === name) : undefined;
       toast({ title: t('views.transitionDone', { action: button?.label ?? name }) });
     },
-    onError: (e) => setProblem(e instanceof ApiError ? e : null),
+    onError: fail,
   });
   const remove = useMutation({
     mutationFn: () => api.remove(model, recordId as number),
@@ -336,7 +387,7 @@ export function FormView({
       toast({ title: t('views.deleted') });
       onBack();
     },
-    onError: (e) => setProblem(e instanceof ApiError ? e : null),
+    onError: fail,
   });
 
   const change = (key: string, value: unknown) => {

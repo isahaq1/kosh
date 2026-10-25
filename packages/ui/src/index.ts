@@ -3,7 +3,8 @@
  * `@kosh/ui` (RFC 0007): the design system (tokens, light/dark themes, RTL, Radix-based primitives), the app shell
  * and router, i18n (English, Bangla, Arabic for RTL), and the view renderers (list, form, kanban) driven by
  * `@kosh/views` definitions and the `@kosh/search` layer. Renderers, widgets and components are registered by name:
- * modules add their own and replace defaults explicitly.
+ * modules add their own and replace defaults explicitly. Offline (RFC 0010 Phase B): the service worker from
+ * `@kosh/ui/vite`, the query cache on the device, and the queue of changes saved offline.
  */
 import { Registry } from './registry.js';
 import { FormView } from './views/FormView.js';
@@ -20,6 +21,7 @@ export {
   type KoshApi,
   type ListQuery,
   type MenuNode,
+  NetworkError,
   type Problem,
   type Row,
   type ServedView,
@@ -35,6 +37,16 @@ export { LANGUAGES } from './i18n/messages.js';
 export { cn } from './lib/cn.js';
 export { bcp47, createFormatter, type Formatter } from './lib/format.js';
 export { type LiveRecord, useLiveModel, useLiveRecord } from './live.js';
+export { useOnline } from './offline/persist.js';
+export {
+  type ChangeStatus,
+  type NewChange,
+  OfflineQueue,
+  type QueuedChange,
+  type SyncResult,
+} from './offline/queue.js';
+export { registerServiceWorker } from './pwa/register.js';
+export { serviceWorkerSource, type WorkerConfig } from './pwa/worker.js';
 export {
   type ChangeEvent,
   createRealtimeClient,
