@@ -193,3 +193,32 @@ The bell in the header shows unread notifications live: mentions, approvals wait
 requests, activities assigned to them. Details in RFC 0006's notes (part 3). Web push and email follow with the
 channel adapters. The shell gained **header items** (`registry.registerHeaderItem`), a general extension point for
 modules.
+
+## Implementation notes (2026-10-25): Phase B, part 3 — offline
+
+The back-office works without the network, within what a browser can promise, and never lies about it:
+
+- **The shell opens offline.** One service worker for every Kosh app, built by the Vite plugin `@kosh/ui/vite`
+  (`koshPwa()`, in `apps/web` and the starter's `vite.config.ts`): a build caches the hashed assets, the shell,
+  the manifest and the icon under a version that changes with them; a navigation goes to the network first and to
+  the cached shell when it fails. A new build is noticed by the running app, which offers a reload (never forced
+  mid-work). `/api/` is never cached by the worker. The same worker shows web push (RFC 0006 §5.4). No Workbox:
+  the worker is ~80 lines and the plugin lists the bundle, which is all a hashed-asset app needs.
+- **Recently opened screens show offline.** The TanStack Query cache is kept on the device (IndexedDB, through
+  `@tanstack/react-query-persist-client`, the one new dependency, from the stack's own family) for a day: apps,
+  menus, views, lists, records, names. Not notifications or searches. The cache is dropped on sign-out and when
+  another user signs in on the same browser. A failed refresh keeps the last answer on screen.
+- **Saves made offline are kept, then sent.** A save that cannot reach the server (`NetworkError`, which the API
+  client now throws instead of a bare `TypeError`) is kept on the device, per user, with the record's version
+  (ETag), and the form says "Saved on this device". Back online, the queue sends each change in order as the very
+  request the form would have made: an update with `If-Match`, so a record someone else changed meanwhile is a
+  **conflict** the user settles from the cloud in the header (open the record, overwrite with their version, or
+  discard), and a refusal (a right, a rule, a validation) shows its reason for a retry or a discard. Later saves
+  of one record merge into one pending update. Transitions and other actions need the server and say so.
+- **Not offline:** creating records with lines (the lines are sent with the create, but the list does not show
+  the new record before it is sent), file uploads, reports, the chatter. RFC 0002's batch endpoint was not
+  needed: sending the original requests keeps the server's per-record conflict semantics and needs no new route.
+- Tests: `packages/ui/test/offline.test.ts` (the queue: order, conflict, refusal, network loss, merging) and
+  `apps/web/e2e/offline.spec.ts` (the app reloaded offline with its last screens; a save made offline sent when
+  back, and a conflict settled by overwriting).
+- **Next in Phase B:** spreadsheet-grade list editing. SMS and WhatsApp (RFC 0006) wait for a provider account.

@@ -142,8 +142,8 @@ Replying to the approval email posts the reply on the order's chatter.
   push service (Mozilla's, Google's, Apple's) gets an encrypted payload the server signs with the installation's
   keys. `kosh init` generates `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` into `.env`; without
   them push is off (`GET /api/v1/notifications/push/key` answers 404 and the bell shows no switch).
-- A device opts in from the bell ("Turn on"): the app registers the service worker (`/sw.js`, in the starter's
-  `public/`), asks the browser's permission, subscribes with the public key and saves the subscription
+- A device opts in from the bell ("Turn on"): the app registers the service worker (`/sw.js`, built by the
+  Vite plugin `@kosh/ui/vite`, one copy for every Kosh app), asks the browser's permission, subscribes with the public key and saves the subscription
   (`notify.push_subscription`: endpoint and the keys the browser made, owned by the user, rule-scoped) through
   `POST /api/v1/notifications/push`; "Turn off" deletes it on both sides. The service worker shows the message
   (title, body, record link) and a click focuses an open Kosh tab, or opens one, on `/open/<model>/<id>`.

@@ -157,6 +157,19 @@ serious or critical violations) in both themes. Run `pnpm build && pnpm test:e2e
 - **Installable**: `public/manifest.webmanifest` and `icon.svg` make the back-office an app on phones and
   desktops (the starter project gets both).
 
+## Offline (RFC 0010 Phase B)
+
+The Vite plugin `koshPwa()` (`@kosh/ui/vite`, in `vite.config.ts`) builds the service worker: the app opens
+without the network, a new build offers a reload, and web push works. Screens opened in the last day (apps,
+menus, lists, records) show again offline from the device's cache; the cache goes on sign-out and when another
+user signs in on the same browser.
+
+A save that cannot reach the server is kept on the device and the form says so. The cloud in the header shows
+what waits; when the network is back the changes are sent in order, each with the version the user edited.
+A record someone else changed meanwhile is a conflict: the cloud offers to open it, overwrite with the user's
+version, or discard; a refused change shows the server's reason with "Retry" and "Discard". Transitions,
+uploads and reports need a connection and say so.
+
 ## Notifications
 
 With the `notify` module installed (every installation has it), the header shows a bell with the unread count,
@@ -171,7 +184,7 @@ resolved to where that user may open it). Each kind can be switched off per chan
 
 Push notifications reach a device even with Kosh closed: the bell's footer has "Turn on" when the installation
 has VAPID keys (`kosh init` writes them to `.env`) and the browser supports push; it asks the browser's
-permission, registers the service worker (`public/sw.js`) and saves the device's subscription for the user.
+permission, registers the service worker (`/sw.js`, built by `koshPwa()`) and saves the device's subscription for the user.
 Clicking a push notification opens the record. "Turn off" removes the subscription on both sides, and the
 server drops subscriptions the push service reports gone.
 
