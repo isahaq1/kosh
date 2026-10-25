@@ -19,13 +19,29 @@ import {
   Sun,
 } from 'lucide-react';
 import { Dialog as RDialog } from 'radix-ui';
-import { type ReactElement, useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  type Context,
+  createContext,
+  type ReactElement,
+  useContext,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AppEntry, KoshApi, MenuNode } from '../api.js';
 import { AppIcon } from '../components/AppIcon.js';
 import { useKosh } from '../context.js';
 import { cn } from '../lib/cn.js';
 import { recentRecords } from './recent.js';
+
+/** Opens the palette from anywhere in the shell (the home page's search box). */
+export const PaletteContext: Context<() => void> = createContext<() => void>(() => {});
+export function usePalette(): () => void {
+  return useContext(PaletteContext);
+}
 
 interface Item {
   readonly id: string;

@@ -58,11 +58,9 @@ import {
 } from 'react';
 import { I18nextProvider, useTranslation } from 'react-i18next';
 import { ApiError, type CurrentUser, type KoshApi, type MenuNode } from './api.js';
-import { AppIcon } from './components/AppIcon.js';
 import {
   Alert,
   Button,
-  Card,
   Menu,
   MenuCheckboxItem,
   MenuContent,
@@ -78,7 +76,8 @@ import { addMessages, createI18n, directionOf } from './i18n/index.js';
 import { LANGUAGES } from './i18n/messages.js';
 import type { Registry } from './registry.js';
 import { SearchBar } from './search/SearchBar.js';
-import { CommandPalette } from './shell/CommandPalette.js';
+import { CommandPalette, PaletteContext } from './shell/CommandPalette.js';
+import { Home } from './shell/Home.js';
 import { Login } from './shell/Login.js';
 import { rememberRecord } from './shell/recent.js';
 import { ShortcutsHelp, useShortcuts } from './shell/shortcuts.js';
@@ -266,6 +265,7 @@ function Shell(): ReactElement {
   );
   useShortcuts(shortcutHandlers);
   const openHelp = useCallback(() => setHelp(true), []);
+  const openPalette = useCallback(() => setPalette(true), []);
   const apps = useQuery({
     queryKey: ['apps', company],
     queryFn: () => api.apps(),
@@ -294,137 +294,115 @@ function Shell(): ReactElement {
       tz={Intl.DateTimeFormat().resolvedOptions().timeZone}
     >
       <ToastProvider>
-        <a
-          href="#content"
-          className="sr-only focus:not-sr-only focus:absolute focus:start-2 focus:top-2 focus:z-50 focus:rounded focus:bg-surface focus:px-3 focus:py-2"
-        >
-          {t('shell.skip')}
-        </a>
-        <header className="sticky top-0 z-30 border-b bg-surface">
-          <div className="flex h-12 items-center gap-2 px-3">
-            <Menu>
-              <MenuTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label={t('shell.apps')}>
-                  <Grid3x3 aria-hidden />
-                </Button>
-              </MenuTrigger>
-              <MenuContent align="start">
-                <MenuItem onSelect={() => void navigate({ to: '/' })}>{t('shell.apps')}</MenuItem>
-                <MenuSeparator />
-                {(apps.data ?? []).map((a) => (
+        <PaletteContext.Provider value={openPalette}>
+          <a
+            href="#content"
+            className="sr-only focus:not-sr-only focus:absolute focus:start-2 focus:top-2 focus:z-50 focus:rounded focus:bg-surface focus:px-3 focus:py-2"
+          >
+            {t('shell.skip')}
+          </a>
+          <header className="sticky top-0 z-30 border-b bg-surface">
+            <div className="flex h-12 items-center gap-2 px-3">
+              <Menu>
+                <MenuTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label={t('shell.apps')}>
+                    <Grid3x3 aria-hidden />
+                  </Button>
+                </MenuTrigger>
+                <MenuContent align="start">
+                  <MenuItem onSelect={() => void navigate({ to: '/' })}>{t('shell.apps')}</MenuItem>
+                  <MenuSeparator />
+                  {(apps.data ?? []).map((a) => (
+                    <MenuItem
+                      key={a.code}
+                      onSelect={() => void navigate({ to: '/$app', params: { app: a.code } })}
+                    >
+                      {a.label}
+                    </MenuItem>
+                  ))}
+                </MenuContent>
+              </Menu>
+              <Link to="/" className="font-semibold">
+                {app?.label ?? t('app.name')}
+              </Link>
+              <nav aria-label={t('shell.menu')} className="ms-2 flex-1">
+                {params.app === undefined ? null : (
+                  <MenuLinks app={params.app} menus={menus.data ?? []} />
+                )}
+              </nav>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="hidden h-8 w-56 justify-between text-muted-foreground sm:flex"
+                onClick={() => setPalette(true)}
+                aria-keyshortcuts="Control+K Meta+K"
+              >
+                <span className="flex items-center gap-2">
+                  <Search className="size-4" aria-hidden />
+                  {t('palette.button')}
+                </span>
+                <kbd className="rounded border bg-surface px-1.5 text-xs">Ctrl K</kbd>
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="sm:hidden"
+                aria-label={t('palette.button')}
+                onClick={() => setPalette(true)}
+              >
+                <Search aria-hidden />
+              </Button>
+              <CompanySwitcher
+                me={user}
+                company={current}
+                onChange={(id) => {
+                  api.setCompany(id);
+                  setCompany(id);
+                  void queryClient.invalidateQueries();
+                }}
+              />
+              <LanguageMenu />
+              <ThemeMenu />
+              <Menu>
+                <MenuTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label={user.name}>
+                    <UserRound aria-hidden />
+                  </Button>
+                </MenuTrigger>
+                <MenuContent>
+                  <MenuLabel>{user.name}</MenuLabel>
                   <MenuItem
-                    key={a.code}
-                    onSelect={() => void navigate({ to: '/$app', params: { app: a.code } })}
+                    onSelect={async () => {
+                      await api.logout();
+                      queryClient.clear();
+                      await navigate({ to: '/login' });
+                    }}
                   >
-                    {a.label}
+                    <LogOut className="size-4" aria-hidden />
+                    {t('auth.signOut')}
                   </MenuItem>
-                ))}
-              </MenuContent>
-            </Menu>
-            <Link to="/" className="font-semibold">
-              {app?.label ?? t('app.name')}
-            </Link>
-            <nav aria-label={t('shell.menu')} className="ms-2 flex-1">
-              {params.app === undefined ? null : (
-                <MenuLinks app={params.app} menus={menus.data ?? []} />
-              )}
-            </nav>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="hidden h-8 w-56 justify-between text-muted-foreground sm:flex"
-              onClick={() => setPalette(true)}
-              aria-keyshortcuts="Control+K Meta+K"
-            >
-              <span className="flex items-center gap-2">
-                <Search className="size-4" aria-hidden />
-                {t('palette.button')}
-              </span>
-              <kbd className="rounded border bg-surface px-1.5 text-xs">Ctrl K</kbd>
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="sm:hidden"
-              aria-label={t('palette.button')}
-              onClick={() => setPalette(true)}
-            >
-              <Search aria-hidden />
-            </Button>
-            <CompanySwitcher
-              me={user}
-              company={current}
-              onChange={(id) => {
-                api.setCompany(id);
-                setCompany(id);
-                void queryClient.invalidateQueries();
-              }}
-            />
-            <LanguageMenu />
-            <ThemeMenu />
-            <Menu>
-              <MenuTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label={user.name}>
-                  <UserRound aria-hidden />
-                </Button>
-              </MenuTrigger>
-              <MenuContent>
-                <MenuLabel>{user.name}</MenuLabel>
-                <MenuItem
-                  onSelect={async () => {
-                    await api.logout();
-                    queryClient.clear();
-                    await navigate({ to: '/login' });
-                  }}
-                >
-                  <LogOut className="size-4" aria-hidden />
-                  {t('auth.signOut')}
-                </MenuItem>
-              </MenuContent>
-            </Menu>
-          </div>
-        </header>
-        {user.administratorNeedsSecondFactor ? (
-          <div className="px-4 pt-3">
-            <Alert tone="info">{t('auth.adminNeeds2fa')}</Alert>
-          </div>
-        ) : null}
-        <main id="content" className="mx-auto w-full max-w-[100rem] p-4">
-          <Outlet />
-        </main>
-        <CommandPalette open={palette} onOpenChange={setPalette} api={api} onShortcuts={openHelp} />
-        <ShortcutsHelp open={help} onOpenChange={setHelp} />
+                </MenuContent>
+              </Menu>
+            </div>
+          </header>
+          {user.administratorNeedsSecondFactor ? (
+            <div className="px-4 pt-3">
+              <Alert tone="info">{t('auth.adminNeeds2fa')}</Alert>
+            </div>
+          ) : null}
+          <main id="content" className="mx-auto w-full max-w-[100rem] p-4">
+            <Outlet />
+          </main>
+          <CommandPalette
+            open={palette}
+            onOpenChange={setPalette}
+            api={api}
+            onShortcuts={openHelp}
+          />
+          <ShortcutsHelp open={help} onOpenChange={setHelp} />
+        </PaletteContext.Provider>
       </ToastProvider>
     </KoshProvider>
-  );
-}
-
-function Launcher(): ReactElement {
-  const { api } = useServices();
-  const { t } = useTranslation();
-  const apps = useQuery({ queryKey: ['apps', 'launcher'], queryFn: () => api.apps() });
-  if (apps.isPending) return <Spinner label={t('app.loading')} />;
-  return (
-    <section aria-labelledby="apps-title">
-      <h1 id="apps-title" className="mb-4 text-xl font-semibold">
-        {t('shell.apps')}
-      </h1>
-      {(apps.data ?? []).length === 0 ? (
-        <p className="text-muted-foreground">{t('shell.noApps')}</p>
-      ) : null}
-      <ul className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
-        {(apps.data ?? []).map((a) => (
-          <li key={a.code}>
-            <Link to="/$app" params={{ app: a.code }} className="block">
-              <Card className="flex flex-col items-center gap-2 p-4 text-center font-medium hover:bg-muted">
-                <AppIcon name={a.icon ?? a.code} />
-                {a.label}
-              </Card>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }
 
@@ -733,7 +711,7 @@ const shellRoute = createRoute({ getParentRoute: () => rootRoute, id: 'shell', c
 const indexRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: '/',
-  component: Launcher,
+  component: Home,
 });
 const appRoute = createRoute({
   getParentRoute: () => shellRoute,
