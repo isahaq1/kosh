@@ -142,6 +142,20 @@ serious or critical violations) in both themes. Run `pnpm build && pnpm test:e2e
 - **Toasts** (`useToast()` from `@kosh/ui`): quiet confirmations after an action or a delete, errors, and an
   optional action such as Undo; announced to screen readers, `F8` jumps to them.
 - Recent records are kept per user in the browser (`localStorage`), a convenience only.
+- **Lists**: select rows (click, Shift-click for a range, Space on a focused row, the header box for the page);
+  the bulk bar archives (with Undo), deletes (hidden at once, run after a few seconds unless undone), exports,
+  and runs any transition every selected record allows. Export to CSV or Excel of the current search (or the
+  selection) from the toolbar; a column chooser and a density switch, both remembered per user. Skeleton rows
+  while loading; an empty state that names the situation and offers "New" when allowed. Every bulk action is
+  one request per record to the existing, permission-checked routes.
+- **Kanban**: each column shows its count and, when the view names a `total` field, the sum; empty columns fold
+  to a strip (click to open) when there are more than three. A move confirms with a toast that undoes it while
+  the reverse is possible.
+- **Home**: a greeting, the palette's search box, what needs the user's attention (approvals they may decide,
+  activities due, with "Mark done"), recently opened records, and app tiles tinted by category with each app's
+  summary. `GET /api/v1/routes` tells the page where records of each model open for this user.
+- **Installable**: `public/manifest.webmanifest` and `icon.svg` make the back-office an app on phones and
+  desktops (the starter project gets both).
 
 ## Not yet
 

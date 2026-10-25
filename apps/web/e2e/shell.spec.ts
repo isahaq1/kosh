@@ -35,11 +35,12 @@ test('requesters see their apps and menus', async ({ page }) => {
 test('administrators sign in with a second factor', async ({ page }) => {
   await signIn(page, 'admin');
   await expect(page.getByText('Administrator rights apply after')).toHaveCount(0);
-  await expect(page.getByRole('main').getByRole('link')).toHaveText([
-    'Contacts',
-    'Purchase',
-    'Reports',
-    'Settings', // administrators see every installed app
+  // The home page's apps (each tile also carries the app's summary).
+  await expect(page.getByRole('region', { name: 'Apps' }).getByRole('link')).toHaveText([
+    /^Contacts/,
+    /^Purchase/,
+    /^Reports/,
+    /^Settings/, // administrators see every installed app
   ]);
 });
 

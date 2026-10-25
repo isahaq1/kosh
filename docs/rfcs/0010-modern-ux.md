@@ -1,7 +1,7 @@
 # RFC 0010: A modern, fast, friendly back-office (beyond Odoo 18)
 
-- **Status:** Phase A Accepted (2026-10-19; within RFC 0007, no new subsystem). Phases B and C: Draft, waiting for
-  approval.
+- **Status:** Phase A Accepted (2026-10-19; within RFC 0007, no new subsystem) and implemented (2026-10-25).
+  Phases B and C: Draft, waiting for approval.
 - **Depends on:** 0004 (views, search), 0005 (reporting), 0006 (chatter, realtime), 0007 (frontend), 0008 (apps)
 
 ## 1. Summary
@@ -137,3 +137,29 @@ part), breadcrumbs and the record pager (§3.4), and the form's save state, Ctrl
 
 Next (part 2): list selection and bulk actions with Undo, export and the column chooser (§3.5); kanban totals and
 quick create (§3.7); the home page (§3.8); skeletons and empty states (§3.9); the PWA manifest (§3.10).
+
+## Implementation notes (2026-10-25): Phase A, part 2
+
+Built: list power (§3.5), kanban totals, quick create and folding (§3.7), the home page (§3.8), skeletons and
+empty states (§3.9) and the manifest (§3.10). With part 1, Phase A is complete.
+
+- **Bulk actions** stay on the existing routes, one request per record, a few at a time (`PARALLEL`), reporting
+  how many succeeded and the first failure's reason in toasts. Archive writes `active: false` and its Undo
+  writes it back. Delete hides the rows at once and runs the deletes after 8 s unless Undo is pressed; leaving
+  the list runs a waiting delete at once (Undo is the toast's offer, never a way to lose the action).
+  Transitions are offered only when every selected record is on the page and allows them.
+- **Export** uses `POST …/export` (CSV, all readable columns) and Reporting's `…/export/xlsx` (the visible
+  columns); a selection narrows the filter to the selected ids.
+- **Column chooser and density** are per user and view in `localStorage` (`kosh.columns.<uid>.<view>`,
+  `kosh.density`): conveniences, never shared state.
+- **Kanban stats** come from one aggregate query per board (count, and the `total` field's sum per column), also
+  for option columns, so headers show counts before the cards load. Folding is derived (count 0, more than three
+  columns, not quick-creatable, not opened), no effects.
+- **Home** reads only per-user routes: the approval inbox and "my activities" are absent (404) when their apps are
+  not installed, which the page treats as empty. `GET /api/v1/routes` (new, on `Navigation.routes`, shared with
+  `find`) maps each model to the first visible menu's form action, so an approval or activity opens its record.
+- **Tests:** `apps/web/e2e/productivity2.spec.ts` covers selection, archive with Undo, a delete undone in time,
+  CSV export, columns and density remembered across a reload, kanban counts and folding, the home page and the
+  manifest. The whole suite: 42 E2E tests.
+- **Not in Phase A after all:** formatted number inputs while not focused (§3.6) and the "+" quick create for state
+  columns (new records start in the initial state, so the existing `quickCreate` applies to other fields only).
