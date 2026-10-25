@@ -178,6 +178,11 @@ export async function createAppHost(options: AppHostOptions): Promise<AppHost> {
   let reloading: Promise<boolean> = Promise.resolve(false);
   let closing: Promise<void> | undefined;
   const http = createHttpServer((req, res) => host.handle(req, res));
+  // WebSocket upgrades (the realtime gateway) go to the current server too: its plugin listens on the inner server
+  // the factory handed to Fastify. A replaced server closes its sockets; clients reconnect to the new one.
+  http.on('upgrade', (req, socket, head) => {
+    current.server.app.server.emit('upgrade', req, socket, head);
+  });
   const listener = listen
     ? pg.createDriver({ url: options.databaseUrl, max: 1, applicationName: 'kosh apps listener' })
     : undefined;
