@@ -405,7 +405,12 @@ export class AuthService {
     const now = Date.now();
     return {
       companies: info.companies,
-      groups: [...new Set(info.assignments.map((a) => a.group))],
+      // The closure (implied groups included): Shutro checks the groups a unit of work passes against these, and
+      // what it passes may be a closure, e.g. the groups stored with an outbox event, replayed for its subscriber.
+      groups: [
+        ...(this.#shutro().registry?.security.closure(info.assignments.map((a) => a.group)) ??
+          new Set(info.assignments.map((a) => a.group))),
+      ],
       grants: [
         ...new Set(
           info.grants.filter((g) => g.expiresAt === null || g.expiresAt > now).map((g) => g.grant),
