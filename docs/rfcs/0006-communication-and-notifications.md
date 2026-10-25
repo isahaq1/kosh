@@ -118,7 +118,7 @@ Replying to the approval email posts the reply on the order's chatter.
 - **Jobs decision (Alignment section): taken on 2026-10-25.** Kosh's jobs are Shutro's transactional jobs and
   outbox subscribers, as this RFC proposed; pg-boss is not introduced (CLAUDE.md updated). A scheduler on top of
   them comes with the scheduled reports' move off their own engine.
-- **Not yet:** web push, SMS and WhatsApp adapters, digests, quiet hours, inbound email, chat.
+- **Not yet:** SMS and WhatsApp adapters, digests, quiet hours, inbound email, chat (web push: part 5).
 
 ## Implementation notes (2026-10-25, part 4: the email channel)
 
@@ -135,4 +135,24 @@ Replying to the approval email posts the reply on the order's chatter.
 - Without `SMTP_URL`, no email deliveries are created (the inbox still is). In development, Mailpit from
   `pnpm dev:services` (`smtp://localhost:1025`, inbox on http://localhost:8025).
 - Tests: `packages/notify/test/email.integration.test.ts` sends through a Mailpit container and reads its API.
+
+## Implementation notes (2026-10-25, part 5: the web push channel)
+
+- Standard Web Push with VAPID (`web-push`, the one new dependency), no third-party push service: the browser's
+  push service (Mozilla's, Google's, Apple's) gets an encrypted payload the server signs with the installation's
+  keys. `kosh init` generates `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` into `.env`; without
+  them push is off (`GET /api/v1/notifications/push/key` answers 404 and the bell shows no switch).
+- A device opts in from the bell ("Turn on"): the app registers the service worker (`/sw.js`, in the starter's
+  `public/`), asks the browser's permission, subscribes with the public key and saves the subscription
+  (`notify.push_subscription`: endpoint and the keys the browser made, owned by the user, rule-scoped) through
+  `POST /api/v1/notifications/push`; "Turn off" deletes it on both sides. The service worker shows the message
+  (title, body, record link) and a click focuses an open Kosh tab, or opens one, on `/open/<model>/<id>`.
+- Delivery reuses the email pipeline: the `webpush` channel gets a `notify.delivery` and a `notify.deliver` job per
+  notification (same transaction; recipients without a subscription get none), and the job sends to every
+  subscription of the recipient. A subscription the push service reports gone (404, 410) is deleted; a delivery is
+  `sent` when one push service accepted, `skipped` when none is left, `failed` with a retry on other answers.
+- `notifyModule({ mailer, pusher, baseUrl, workers })` builds the module with explicit providers (tests, an
+  installation wiring its own); `notify` is the environment-configured one.
+- Tests: `packages/notify/test/push.integration.test.ts` (a memory pusher; subscriptions, ownership, a mention
+  pushed to each device, a gone endpoint deleted).
 

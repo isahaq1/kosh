@@ -266,7 +266,7 @@ export default defineModule({
 ### Phase 5 — Communication
 
 - [x] Chatter, activities, real-time gateway (`@kosh/realtime`: live lists, forms and presence; docs/ui.md)
-- [ ] Notifications + provider adapters (email, SMS, WhatsApp, push) — in-app inbox, bell and the email channel done (`@kosh/notify`, `@kosh/mail`); web push, SMS and WhatsApp next
+- [ ] Notifications + provider adapters (email, SMS, WhatsApp, push) — in-app inbox, bell, email and web push done (`@kosh/notify`, `@kosh/mail`); SMS and WhatsApp need a provider account
 - [ ] Internal chat; inbound email
 
 ### Phase 6 — Proof

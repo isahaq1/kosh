@@ -169,6 +169,12 @@ Users with an email address also get each notification by email when `SMTP_URL` 
 sender; Mailpit in development), in their language, with a link that opens the record (`/open/<model>/<id>`,
 resolved to where that user may open it). Each kind can be switched off per channel.
 
+Push notifications reach a device even with Kosh closed: the bell's footer has "Turn on" when the installation
+has VAPID keys (`kosh init` writes them to `.env`) and the browser supports push; it asks the browser's
+permission, registers the service worker (`public/sw.js`) and saves the device's subscription for the user.
+Clicking a push notification opens the record. "Turn off" removes the subscription on both sides, and the
+server drops subscriptions the push service reports gone.
+
 ## Live screens (RFC 0006 §5, RFC 0010 Phase B)
 
 With the `realtime` module installed (every installation has it), the app keeps one WebSocket per tab to
