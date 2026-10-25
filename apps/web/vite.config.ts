@@ -1,3 +1,4 @@
+import { koshPwa } from '@kosh/ui/vite';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
@@ -6,7 +7,7 @@ import { defineConfig } from 'vite';
 const api = process.env['KOSH_API'] ?? 'http://localhost:3000';
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), koshPwa()],
   resolve: { conditions: ['@kosh/source'] },
   server: { proxy: { '/api': { target: api, ws: true } } },
   preview: { proxy: { '/api': { target: api, ws: true } } },

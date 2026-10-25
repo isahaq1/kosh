@@ -614,7 +614,6 @@ async function writeProject(a: Answers, ui: Ui): Promise<void> {
     ['index.html', templates.indexHtml(options), false],
     ['public/manifest.webmanifest', templates.manifest(options), false],
     ['public/icon.svg', templates.icon(), false],
-    ['public/sw.js', templates.serviceWorker(), false],
     ['vite.config.ts', templates.viteConfig(options), false],
     ['tsconfig.json', templates.tsconfig(), false],
     ['README.md', templates.readme(options), false],
