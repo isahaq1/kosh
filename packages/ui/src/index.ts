@@ -67,6 +67,15 @@ export {
 export { SearchBar, type SearchBarProps } from './search/SearchBar.js';
 export { Login } from './shell/Login.js';
 export { FormView } from './views/FormView.js';
+export {
+  type CellRange,
+  type CellRef,
+  cellText,
+  coerce,
+  parseClipboard,
+  rangeOf,
+  toClipboard,
+} from './views/grid.js';
 export { KanbanView } from './views/KanbanView.js';
 export { ListView } from './views/ListView.js';
 export {

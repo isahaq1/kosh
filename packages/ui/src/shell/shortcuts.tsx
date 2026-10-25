@@ -12,6 +12,7 @@
  * | Ctrl/⌘ + S      | save the form                       | `data-kosh-save`        |
  * | Esc             | back from a form (when not editing) | `data-kosh-back`        |
  * | Alt + ← / →     | previous / next record              | `data-kosh-prev/next`   |
+ * | arrows, Enter, F2, Ctrl+C/V/D | the list's grid (ListView)  | (the table itself)      |
  *
  * Single keys never fire while typing in a field; Ctrl/⌘ combinations do (save while editing).
  */
@@ -105,6 +106,11 @@ export function ShortcutsHelp({
     ['save', [mod, 'S']],
     ['back', ['Esc']],
     ['records', ['Alt', '← →']],
+    ['cells', ['↑ ↓ ← →']],
+    ['edit', ['Enter', 'F2']],
+    ['copy', [mod, 'C']],
+    ['paste', [mod, 'V']],
+    ['fillDown', [mod, 'D']],
     ['help', ['?']],
   ];
   return (

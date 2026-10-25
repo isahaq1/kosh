@@ -23,7 +23,14 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { type ReactElement, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type ReactElement,
+  type KeyboardEvent as ReactKeyboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, type Row, type ServedView, type ViewField } from '../api.js';
 import {
@@ -45,6 +52,16 @@ import { cn } from '../lib/cn.js';
 import { useLiveModel } from '../live.js';
 import type { ViewProps } from '../registry.js';
 import { useToast } from '../shell/toast.js';
+import {
+  type CellRef,
+  cellText,
+  coerce,
+  inRange,
+  parseClipboard,
+  type Resolve,
+  rangeOf,
+  toClipboard,
+} from './grid.js';
 import { rememberList } from './listMemory.js';
 import { PrefetchedNames, useRowNames } from './widgets.js';
 
@@ -105,69 +122,145 @@ const stored = {
   },
 };
 
+/** Where the active cell goes after a save. */
+type Next = 'down' | 'right' | 'left' | 'stay' | 'cancel';
+
+/** The editor's first value when editing started with a typed character. */
+function seeded(field: ViewField, seed: string, current: unknown): unknown {
+  switch (field.kind) {
+    case 'char':
+    case 'text':
+    case 'html':
+      return seed;
+    case 'integer':
+      return /^\d$/.test(seed) ? Number(seed) : current;
+    case 'decimal':
+    case 'float':
+    case 'monetary':
+      return /^[\d.]$/.test(seed) ? seed : current;
+    default:
+      return current;
+  }
+}
+
+/**
+ * The editor of one cell, mounted when editing starts: its first value is the row's (or the typed character that
+ * started it), set before the first render so that no keystroke can race it. Saves with the row's version and
+ * tells the grid where to go next.
+ */
+function CellEditor({
+  node,
+  field,
+  row,
+  model,
+  seed,
+  onDone,
+}: {
+  readonly node: FieldNode;
+  readonly field: ViewField;
+  readonly row: Row;
+  readonly model: string;
+  readonly seed: string | undefined;
+  readonly onDone: (next: Next) => void;
+}): ReactElement {
+  const { registry, api } = useKosh();
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState<unknown>(() =>
+    seed === undefined ? row[node.field] : seeded(field, seed, row[node.field]),
+  );
+  const [error, setError] = useState<string | null>(null);
+  const next = useRef<Next>('stay');
+  const editor = useRef<HTMLDivElement>(null);
+  const Widget = registry.widget(node, field);
+  useEffect(() => {
+    editor.current?.querySelector<HTMLElement>('input, select, textarea, button')?.focus();
+  }, []);
+  const save = useMutation({
+    mutationFn: (value: unknown) => api.update(model, row.id, { [node.field]: value }, etagOf(row)),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['list', model] });
+      onDone(next.current);
+    },
+    onError: (e) => setError(e instanceof ApiError ? e.message : String(e)),
+  });
+  const commit = (direction: Next) => {
+    if (save.isPending) return;
+    if (draft === row[node.field] || (draft === null && row[node.field] === undefined)) {
+      onDone(direction === 'stay' ? 'cancel' : direction);
+      return;
+    }
+    next.current = direction;
+    save.mutate(draft);
+  };
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: commits the edit when focus leaves the cell
+    <div
+      ref={editor}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) commit('stay');
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commit(e.shiftKey ? 'stay' : 'down');
+        } else if (e.key === 'Tab') {
+          e.preventDefault();
+          commit(e.shiftKey ? 'left' : 'right');
+        } else if (e.key === 'Escape') onDone('cancel');
+        e.stopPropagation();
+      }}
+    >
+      <Widget
+        id={`${row.id}-${node.id}`}
+        node={node}
+        field={field}
+        value={draft}
+        record={row}
+        readonly={false}
+        onChange={setDraft}
+        invalid={error !== null}
+      />
+      {error === null ? null : <p className="mt-1 text-xs text-danger">{error}</p>}
+    </div>
+  );
+}
+
 function Cell({
   node,
   field,
   row,
   editable,
   model,
+  editing,
+  seed,
+  onStart,
+  onDone,
 }: {
   readonly node: FieldNode;
   readonly field: ViewField;
   readonly row: Row;
   readonly editable: boolean;
   readonly model: string;
+  /** The grid says this cell is being edited. */
+  readonly editing: boolean;
+  readonly seed: string | undefined;
+  readonly onStart: () => void;
+  readonly onDone: (next: Next) => void;
 }): ReactElement {
-  const { registry, api, uid, companyId } = useKosh();
-  const queryClient = useQueryClient();
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<unknown>(row[node.field]);
-  const [error, setError] = useState<string | null>(null);
+  const { registry } = useKosh();
   const Widget = registry.widget(node, field);
-  const save = useMutation({
-    mutationFn: (value: unknown) => api.update(model, row.id, { [node.field]: value }, etagOf(row)),
-    onSuccess: async () => {
-      setEditing(false);
-      await queryClient.invalidateQueries({ queryKey: ['list', model] });
-    },
-    onError: (e) => setError(e instanceof ApiError ? e.message : String(e)),
-  });
-  const readonly = field.readonly || holds(node.readonlyWhen, row, { uid, companyId });
-  if (editable && !readonly && editing)
+  if (editable && editing)
     return (
-      // biome-ignore lint/a11y/noStaticElementInteractions: commits the edit when focus leaves the cell
-      <div
-        onBlur={(e) => {
-          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) save.mutate(draft);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') save.mutate(draft);
-          if (e.key === 'Escape') setEditing(false);
-          e.stopPropagation();
-        }}
-      >
-        <Widget
-          id={`${row.id}-${node.id}`}
-          node={node}
-          field={field}
-          value={draft}
-          record={row}
-          readonly={false}
-          onChange={setDraft}
-          invalid={error !== null}
-        />
-        {error === null ? null : <p className="mt-1 text-xs text-danger">{error}</p>}
-      </div>
+      <CellEditor node={node} field={field} row={row} model={model} seed={seed} onDone={onDone} />
     );
   return (
     <div
-      className={cn(editable && !readonly && 'cursor-text rounded px-1 hover:bg-muted')}
-      {...(editable && !readonly
+      className={cn(editable && 'cursor-text rounded px-1 hover:bg-muted')}
+      {...(editable
         ? {
             onClick: (e: { stopPropagation(): void }) => {
               e.stopPropagation();
-              setDraft(row[node.field]);
-              setEditing(true);
+              onStart();
             },
           }
         : {})}
@@ -235,8 +328,10 @@ function Rows({
   /** The user has a search active (the empty state says so). */
   readonly filtered?: boolean;
 }): ReactElement {
-  const { api } = useKosh();
+  const { api, uid, companyId } = useKosh();
   const { t } = useTranslation();
+  const toast = useToast();
+  const queryClient = useQueryClient();
   const view = props.served.view;
   const model = view.model;
   const keys = useMemo(
@@ -283,29 +378,18 @@ function Rows({
     if (query.data !== undefined) onRows?.(query.data.items);
   }, [query.data, onRows]);
   const names = useRowNames(items, Object.values(fields));
-  const tableColumns = useMemo(() => {
-    const inline = new Set(view.type === 'list' ? (view.inlineEdit ?? []) : []);
-    return helper.columns(
-      columns.map((node) =>
-        helper.accessor((row: Row) => row[node.field], {
-          id: node.id,
-          header: () => node.label ?? fields[node.field]?.label ?? node.field,
-          cell: (info) => {
-            const field = fields[node.field];
-            return field === undefined ? null : (
-              <Cell
-                node={node}
-                field={field}
-                row={info.row.original}
-                editable={inline.has(node.field) && props.served.operations.write}
-                model={model}
-              />
-            );
-          },
-        }),
+  const tableColumns = useMemo(
+    () =>
+      helper.columns(
+        columns.map((node) =>
+          helper.accessor((row: Row) => row[node.field], {
+            id: node.id,
+            header: () => node.label ?? fields[node.field]?.label ?? node.field,
+          }),
+        ),
       ),
-    );
-  }, [columns, fields, model, view, props.served.operations.write]);
+    [columns, fields],
+  );
   const table = useTable({ features, columns: tableColumns, data: items });
   const scroller = useRef<HTMLDivElement>(null);
   const rows = table.getRowModel().rows;
@@ -315,6 +399,279 @@ function Rows({
     estimateSize: () => height,
     overscan: 12,
   });
+
+  // ---- the grid (RFC 0010 Phase B): an active cell, a range, keyboard editing, paste, fill down, copy
+  const inline = useMemo(
+    () => new Set(view.type === 'list' ? (view.inlineEdit ?? []) : []),
+    [view],
+  );
+  const [active, setActive] = useState<CellRef | null>(null);
+  const [anchor, setAnchor] = useState<CellRef | null>(null);
+  const [editing, setEditing] = useState<{ cell: CellRef; seed?: string } | null>(null);
+  const focusWanted = useRef(false);
+  const range = active === null ? null : rangeOf(anchor ?? active, active);
+  const editableAt = (row: Row, node: FieldNode): boolean =>
+    inline.has(node.field) &&
+    props.served.operations.write &&
+    fields[node.field]?.readonly !== true &&
+    !holds(node.readonlyWhen, row, { uid, companyId });
+  const move = (cell: CellRef, extend: boolean) => {
+    if (items.length === 0 || columns.length === 0) return;
+    const clamped = {
+      row: Math.max(0, Math.min(items.length - 1, cell.row)),
+      col: Math.max(0, Math.min(columns.length - 1, cell.col)),
+    };
+    setAnchor(extend ? (anchor ?? active) : null);
+    setActive(clamped);
+    focusWanted.current = true;
+    virtualizer.scrollToIndex(clamped.row, { align: 'auto' });
+  };
+  useEffect(() => {
+    if (!focusWanted.current || active === null) return;
+    let tries = 0;
+    const focus = () => {
+      const el = scroller.current?.querySelector<HTMLElement>(
+        `[data-row="${active.row}"][data-col="${active.col}"]`,
+      );
+      if (el !== null && el !== undefined) {
+        focusWanted.current = false;
+        el.focus({ preventScroll: true });
+      } else if (tries < 5) {
+        tries += 1;
+        requestAnimationFrame(focus); // the row is not rendered yet (virtualized): once more
+      }
+    };
+    focus();
+  }, [active]);
+  const plain = (value: unknown): unknown =>
+    typeof value === 'object' && value !== null && 'id' in value
+      ? (value as { id: unknown }).id
+      : value;
+  /** Writes several rows (a few at a time), refreshes, and offers to put the previous values back. */
+  const writeCells = async (
+    changes: ReadonlyMap<number, Record<string, unknown>>,
+    what: 'pasted' | 'filled' | 'cleared',
+  ) => {
+    const entries = [...changes].filter(([, v]) => Object.keys(v).length > 0);
+    if (entries.length === 0) return;
+    const previous = entries.map(([i, v]) => ({
+      id: (items[i] as Row).id,
+      values: Object.fromEntries(Object.keys(v).map((k) => [k, plain(items[i]?.[k]) ?? null])),
+    }));
+    const result = await each(
+      entries.map(([i]) => i),
+      (i) => api.update(model, (items[i] as Row).id, changes.get(i) ?? {}, etagOf(items[i] as Row)),
+    );
+    await queryClient.invalidateQueries({ queryKey: ['list', model] });
+    const cells = entries.reduce((n, [, v]) => n + Object.keys(v).length, 0);
+    if (result.done > 0)
+      toast({
+        title: t(`views.${what}`, { count: cells }),
+        action: {
+          label: t('views.undo'),
+          run: () => {
+            void each(
+              previous.map((_, k) => k),
+              (k) => {
+                const p = previous[k] as { id: number; values: Record<string, unknown> };
+                return api.update(model, p.id, p.values, null);
+              },
+            ).then(() => queryClient.invalidateQueries({ queryKey: ['list', model] }));
+          },
+        },
+      });
+    if (result.failed > 0)
+      toast({
+        title: t('views.bulkFailed', { count: result.failed, reason: result.reason ?? '' }),
+        tone: 'danger',
+      });
+  };
+  const pasteBlock = async (start: CellRef, block: readonly (readonly string[])[]) => {
+    const changes = new Map<number, Record<string, unknown>>();
+    let skipped = 0;
+    let reason: string | null = null;
+    const resolve: Resolve = (target, q) => api.names(target, { q, limit: 10 });
+    const messages = (key: string, params?: Record<string, unknown>) =>
+      t(`views.paste.${key}`, params ?? {});
+    for (let i = 0; i < block.length; i += 1) {
+      const row = items[start.row + i];
+      if (row === undefined) break;
+      const line = block[i] as readonly string[];
+      for (let j = 0; j < line.length; j += 1) {
+        const node = columns[start.col + j];
+        if (node === undefined) break;
+        const field = fields[node.field];
+        if (field === undefined || !editableAt(row, node)) {
+          skipped += 1;
+          reason ??= messages('readonly', { column: node.label ?? field?.label ?? node.field });
+          continue;
+        }
+        const coerced = await coerce(field, line[j] as string, resolve, messages);
+        if (!coerced.ok) {
+          skipped += 1;
+          reason ??= coerced.reason;
+          continue;
+        }
+        const values = changes.get(start.row + i) ?? {};
+        values[node.field] = coerced.value;
+        changes.set(start.row + i, values);
+      }
+    }
+    if (block.length > 0) {
+      setAnchor(start);
+      setActive({
+        row: Math.min(items.length - 1, start.row + block.length - 1),
+        col: Math.min(columns.length - 1, start.col + Math.max(...block.map((l) => l.length)) - 1),
+      });
+    }
+    await writeCells(changes, 'pasted');
+    if (skipped > 0)
+      toast({
+        title: t('views.pasteSkipped', { count: skipped, reason: reason ?? '' }),
+        tone: 'danger',
+      });
+  };
+  const fillDown = async () => {
+    if (range === null || range.bottom === range.top) {
+      toast({ title: t('views.fillNeedsRange'), tone: 'info' });
+      return;
+    }
+    const changes = new Map<number, Record<string, unknown>>();
+    for (let c = range.left; c <= range.right; c += 1) {
+      const node = columns[c] as FieldNode;
+      const source = plain(items[range.top]?.[node.field]) ?? null;
+      for (let r = range.top + 1; r <= range.bottom; r += 1) {
+        const row = items[r];
+        if (row === undefined || !editableAt(row, node)) continue;
+        const values = changes.get(r) ?? {};
+        values[node.field] = source;
+        changes.set(r, values);
+      }
+    }
+    await writeCells(changes, 'filled');
+  };
+  const clearRange = async () => {
+    if (range === null) return;
+    const changes = new Map<number, Record<string, unknown>>();
+    for (let r = range.top; r <= range.bottom; r += 1)
+      for (let c = range.left; c <= range.right; c += 1) {
+        const row = items[r];
+        const node = columns[c] as FieldNode;
+        if (row === undefined || !editableAt(row, node)) continue;
+        const values = changes.get(r) ?? {};
+        values[node.field] = fields[node.field]?.kind === 'boolean' ? false : null;
+        changes.set(r, values);
+      }
+    await writeCells(changes, 'cleared');
+  };
+  const onGridKey = (e: ReactKeyboardEvent<HTMLTableElement>) => {
+    if (editing !== null) return;
+    const target = e.target as HTMLElement;
+    // Keys inside a control (a checkbox, a button) are its own.
+    if (target.closest('input, select, textarea, button, [role="checkbox"]') !== null) return;
+    const rowOf = target.closest<HTMLElement>('[data-row]');
+    const cell: CellRef | null =
+      active ?? (rowOf === null ? null : { row: Number(rowOf.dataset['row']), col: 0 });
+    if (cell === null) return;
+    const mod = e.ctrlKey || e.metaKey;
+    const rtl = document.documentElement.dir === 'rtl';
+    const row = items[cell.row];
+    const node = columns[cell.col];
+    const editable = row !== undefined && node !== undefined && editableAt(row, node);
+    const onCell = target.matches('td[data-row]');
+    switch (e.key) {
+      case 'ArrowUp':
+        move({ row: cell.row - 1, col: cell.col }, e.shiftKey);
+        break;
+      case 'ArrowDown':
+        move({ row: cell.row + 1, col: cell.col }, e.shiftKey);
+        break;
+      case 'ArrowLeft':
+        move({ row: cell.row, col: cell.col + (rtl ? 1 : -1) }, e.shiftKey);
+        break;
+      case 'ArrowRight':
+        move({ row: cell.row, col: cell.col + (rtl ? -1 : 1) }, e.shiftKey);
+        break;
+      case 'Home':
+        move({ row: mod ? 0 : cell.row, col: 0 }, e.shiftKey);
+        break;
+      case 'End':
+        move({ row: mod ? items.length - 1 : cell.row, col: columns.length - 1 }, e.shiftKey);
+        break;
+      case 'Tab': {
+        if (!onCell) return;
+        const col = cell.col + (e.shiftKey ? -1 : 1);
+        if (col < 0 || col >= columns.length) return; // leaves the table
+        move({ row: cell.row, col }, false);
+        break;
+      }
+      case 'Enter':
+        if (!onCell) return; // the row opens itself
+        if (editable) setEditing({ cell });
+        else if (row !== undefined) props.onOpen(row.id);
+        break;
+      case 'F2':
+        if (!editable) return;
+        setEditing({ cell });
+        break;
+      case 'Escape':
+        if (anchor === null) return;
+        setAnchor(null);
+        break;
+      case 'Delete':
+      case 'Backspace':
+        if (!onCell) return;
+        void clearRange();
+        break;
+      default:
+        if (mod && e.key.toLowerCase() === 'd') {
+          void fillDown();
+          break;
+        }
+        if (onCell && editable && !mod && !e.altKey && e.key.length === 1) {
+          setEditing({ cell, seed: e.key });
+          break;
+        }
+        return;
+    }
+    e.preventDefault();
+  };
+  const onCopy = (e: {
+    clipboardData: DataTransfer;
+    preventDefault(): void;
+    target: EventTarget;
+  }) => {
+    if (editing !== null || range === null) return;
+    if ((e.target as HTMLElement).closest('input, textarea') !== null) return;
+    const yesNo: readonly [string, string] = [t('views.yes'), t('views.no')];
+    const lines: string[][] = [];
+    for (let r = range.top; r <= range.bottom; r += 1) {
+      const row = items[r];
+      if (row === undefined) continue;
+      lines.push(
+        columns.slice(range.left, range.right + 1).map((node) => {
+          const field = fields[node.field];
+          return field === undefined
+            ? ''
+            : cellText(field, row[node.field], (target, id) => names.get(target)?.get(id), yesNo);
+        }),
+      );
+    }
+    e.clipboardData.setData('text/plain', toClipboard(lines));
+    e.preventDefault();
+  };
+  const onPaste = (e: {
+    clipboardData: DataTransfer;
+    preventDefault(): void;
+    target: EventTarget;
+  }) => {
+    if (editing !== null || active === null) return;
+    if ((e.target as HTMLElement).closest('input, textarea') !== null) return;
+    const block = parseClipboard(e.clipboardData.getData('text/plain'));
+    if (block.length === 0) return;
+    e.preventDefault();
+    void pasteBlock(active, block);
+  };
   if (query.isPending) return <SkeletonRows columns={columns.length} height={height} />;
   if (query.isError)
     return (
@@ -362,7 +719,12 @@ function Rows({
   return (
     <PrefetchedNames.Provider value={names}>
       <div ref={scroller} className="max-h-[calc(100vh-16rem)] overflow-auto">
-        <table className="w-full border-collapse text-sm">
+        <table
+          className="w-full border-collapse text-sm"
+          onKeyDown={onGridKey}
+          onCopy={onCopy}
+          onPaste={onPaste}
+        >
           <thead className="sticky top-0 z-10 bg-muted">
             {table.getHeaderGroups().map((group) => (
               <tr key={group.id}>
@@ -463,11 +825,69 @@ function Rows({
                       />
                     </td>
                   )}
-                  {row.getAllCells().map((cell) => (
-                    <td key={cell.id} className={cellPad}>
-                      <table.FlexRender cell={cell} />
-                    </td>
-                  ))}
+                  {columns.map((node, colIndex) => {
+                    const field = fields[node.field];
+                    const ref = { row: v.index, col: colIndex };
+                    const isActive = active?.row === v.index && active.col === colIndex;
+                    const inSelection = range !== null && anchor !== null && inRange(range, ref);
+                    const isEditing =
+                      editing?.cell.row === v.index && editing.cell.col === colIndex;
+                    return (
+                      <td
+                        key={node.id}
+                        data-row={v.index}
+                        data-col={colIndex}
+                        tabIndex={isActive ? 0 : -1}
+                        className={cn(
+                          cellPad,
+                          'outline-none',
+                          isActive && 'outline-2 -outline-offset-2 outline-primary',
+                          inSelection && 'bg-accent/40',
+                        )}
+                        onFocus={() => {
+                          if (isActive) return;
+                          setAnchor(null); // a click or Tab starts a new selection
+                          setActive(ref);
+                        }}
+                        onMouseDown={(e) => {
+                          if (e.shiftKey && active !== null) {
+                            e.preventDefault();
+                            move(ref, true);
+                          }
+                        }}
+                      >
+                        {field === undefined ? null : (
+                          <Cell
+                            node={node}
+                            field={field}
+                            row={row.original}
+                            editable={editableAt(row.original, node)}
+                            model={model}
+                            editing={isEditing}
+                            seed={isEditing ? editing?.seed : undefined}
+                            onStart={() => {
+                              setAnchor(null);
+                              setActive(ref);
+                              setEditing({ cell: ref });
+                            }}
+                            onDone={(next) => {
+                              if (!isEditing) return; // another cell took over meanwhile
+                              setEditing(null);
+                              if (next === 'down') move({ row: v.index + 1, col: colIndex }, false);
+                              else if (next === 'right')
+                                move({ row: v.index, col: colIndex + 1 }, false);
+                              else if (next === 'left')
+                                move({ row: v.index, col: colIndex - 1 }, false);
+                              else {
+                                focusWanted.current = true;
+                                setActive(ref);
+                              }
+                            }}
+                          />
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
               );
             })}
