@@ -39,6 +39,7 @@ import {
   Moon,
   Network,
   Plus,
+  Search,
   Sheet,
   Sun,
   Table2,
@@ -49,6 +50,7 @@ import {
   createContext,
   type ReactElement,
   type ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -76,7 +78,12 @@ import { addMessages, createI18n, directionOf } from './i18n/index.js';
 import { LANGUAGES } from './i18n/messages.js';
 import type { Registry } from './registry.js';
 import { SearchBar } from './search/SearchBar.js';
+import { CommandPalette } from './shell/CommandPalette.js';
 import { Login } from './shell/Login.js';
+import { rememberRecord } from './shell/recent.js';
+import { ShortcutsHelp, useShortcuts } from './shell/shortcuts.js';
+import { ToastProvider } from './shell/toast.js';
+import { neighbours } from './views/listMemory.js';
 
 interface Services {
   readonly api: KoshApi;
@@ -251,6 +258,14 @@ function Shell(): ReactElement {
   const params = useParams({ strict: false }) as { app?: string };
   const me = useQuery({ queryKey: ['me'], queryFn: () => api.me(), retry: false });
   const [company, setCompany] = useState<number | undefined>(undefined);
+  const [palette, setPalette] = useState(false);
+  const [help, setHelp] = useState(false);
+  const shortcutHandlers = useMemo(
+    () => ({ palette: () => setPalette(true), help: () => setHelp(true) }),
+    [],
+  );
+  useShortcuts(shortcutHandlers);
+  const openHelp = useCallback(() => setHelp(true), []);
   const apps = useQuery({
     queryKey: ['apps', company],
     queryFn: () => api.apps(),
@@ -278,82 +293,108 @@ function Shell(): ReactElement {
       lang={lang}
       tz={Intl.DateTimeFormat().resolvedOptions().timeZone}
     >
-      <a
-        href="#content"
-        className="sr-only focus:not-sr-only focus:absolute focus:start-2 focus:top-2 focus:z-50 focus:rounded focus:bg-surface focus:px-3 focus:py-2"
-      >
-        {t('shell.skip')}
-      </a>
-      <header className="sticky top-0 z-30 border-b bg-surface">
-        <div className="flex h-12 items-center gap-2 px-3">
-          <Menu>
-            <MenuTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label={t('shell.apps')}>
-                <Grid3x3 aria-hidden />
-              </Button>
-            </MenuTrigger>
-            <MenuContent align="start">
-              <MenuItem onSelect={() => void navigate({ to: '/' })}>{t('shell.apps')}</MenuItem>
-              <MenuSeparator />
-              {(apps.data ?? []).map((a) => (
+      <ToastProvider>
+        <a
+          href="#content"
+          className="sr-only focus:not-sr-only focus:absolute focus:start-2 focus:top-2 focus:z-50 focus:rounded focus:bg-surface focus:px-3 focus:py-2"
+        >
+          {t('shell.skip')}
+        </a>
+        <header className="sticky top-0 z-30 border-b bg-surface">
+          <div className="flex h-12 items-center gap-2 px-3">
+            <Menu>
+              <MenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label={t('shell.apps')}>
+                  <Grid3x3 aria-hidden />
+                </Button>
+              </MenuTrigger>
+              <MenuContent align="start">
+                <MenuItem onSelect={() => void navigate({ to: '/' })}>{t('shell.apps')}</MenuItem>
+                <MenuSeparator />
+                {(apps.data ?? []).map((a) => (
+                  <MenuItem
+                    key={a.code}
+                    onSelect={() => void navigate({ to: '/$app', params: { app: a.code } })}
+                  >
+                    {a.label}
+                  </MenuItem>
+                ))}
+              </MenuContent>
+            </Menu>
+            <Link to="/" className="font-semibold">
+              {app?.label ?? t('app.name')}
+            </Link>
+            <nav aria-label={t('shell.menu')} className="ms-2 flex-1">
+              {params.app === undefined ? null : (
+                <MenuLinks app={params.app} menus={menus.data ?? []} />
+              )}
+            </nav>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="hidden h-8 w-56 justify-between text-muted-foreground sm:flex"
+              onClick={() => setPalette(true)}
+              aria-keyshortcuts="Control+K Meta+K"
+            >
+              <span className="flex items-center gap-2">
+                <Search className="size-4" aria-hidden />
+                {t('palette.button')}
+              </span>
+              <kbd className="rounded border bg-surface px-1.5 text-xs">Ctrl K</kbd>
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="sm:hidden"
+              aria-label={t('palette.button')}
+              onClick={() => setPalette(true)}
+            >
+              <Search aria-hidden />
+            </Button>
+            <CompanySwitcher
+              me={user}
+              company={current}
+              onChange={(id) => {
+                api.setCompany(id);
+                setCompany(id);
+                void queryClient.invalidateQueries();
+              }}
+            />
+            <LanguageMenu />
+            <ThemeMenu />
+            <Menu>
+              <MenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label={user.name}>
+                  <UserRound aria-hidden />
+                </Button>
+              </MenuTrigger>
+              <MenuContent>
+                <MenuLabel>{user.name}</MenuLabel>
                 <MenuItem
-                  key={a.code}
-                  onSelect={() => void navigate({ to: '/$app', params: { app: a.code } })}
+                  onSelect={async () => {
+                    await api.logout();
+                    queryClient.clear();
+                    await navigate({ to: '/login' });
+                  }}
                 >
-                  {a.label}
+                  <LogOut className="size-4" aria-hidden />
+                  {t('auth.signOut')}
                 </MenuItem>
-              ))}
-            </MenuContent>
-          </Menu>
-          <Link to="/" className="font-semibold">
-            {app?.label ?? t('app.name')}
-          </Link>
-          <nav aria-label={t('shell.menu')} className="ms-2 flex-1">
-            {params.app === undefined ? null : (
-              <MenuLinks app={params.app} menus={menus.data ?? []} />
-            )}
-          </nav>
-          <CompanySwitcher
-            me={user}
-            company={current}
-            onChange={(id) => {
-              api.setCompany(id);
-              setCompany(id);
-              void queryClient.invalidateQueries();
-            }}
-          />
-          <LanguageMenu />
-          <ThemeMenu />
-          <Menu>
-            <MenuTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label={user.name}>
-                <UserRound aria-hidden />
-              </Button>
-            </MenuTrigger>
-            <MenuContent>
-              <MenuLabel>{user.name}</MenuLabel>
-              <MenuItem
-                onSelect={async () => {
-                  await api.logout();
-                  queryClient.clear();
-                  await navigate({ to: '/login' });
-                }}
-              >
-                <LogOut className="size-4" aria-hidden />
-                {t('auth.signOut')}
-              </MenuItem>
-            </MenuContent>
-          </Menu>
-        </div>
-      </header>
-      {user.administratorNeedsSecondFactor ? (
-        <div className="px-4 pt-3">
-          <Alert tone="info">{t('auth.adminNeeds2fa')}</Alert>
-        </div>
-      ) : null}
-      <main id="content" className="mx-auto w-full max-w-[100rem] p-4">
-        <Outlet />
-      </main>
+              </MenuContent>
+            </Menu>
+          </div>
+        </header>
+        {user.administratorNeedsSecondFactor ? (
+          <div className="px-4 pt-3">
+            <Alert tone="info">{t('auth.adminNeeds2fa')}</Alert>
+          </div>
+        ) : null}
+        <main id="content" className="mx-auto w-full max-w-[100rem] p-4">
+          <Outlet />
+        </main>
+        <CommandPalette open={palette} onOpenChange={setPalette} api={api} onShortcuts={openHelp} />
+        <ShortcutsHelp open={help} onOpenChange={setHelp} />
+      </ToastProvider>
     </KoshProvider>
   );
 }
@@ -534,7 +575,7 @@ function WindowActionPage(): ReactElement {
             {action.data.label ?? served.data.view.label ?? model}
           </h1>
           {served.data.operations.create && action.data.views.includes('form') ? (
-            <Button variant="primary" size="sm" onClick={() => open('new')}>
+            <Button variant="primary" size="sm" data-kosh-new onClick={() => open('new')}>
               <Plus aria-hidden />
               {t('views.new')}
             </Button>
@@ -543,11 +584,13 @@ function WindowActionPage(): ReactElement {
         {types.length > 1 ? (
           <fieldset className="flex gap-1">
             <legend className="sr-only">Views</legend>
-            {types.map((v) => {
+            {types.map((v, index) => {
               const Icon = icons[v as keyof typeof icons] ?? List;
               return (
                 <Button
                   key={v}
+                  data-kosh-view={index < 9 ? String(index + 1) : undefined}
+                  title={index < 9 ? `${t(`views.${v}`)} (Alt+${index + 1})` : undefined}
                   size="icon"
                   variant={v === type ? 'primary' : 'secondary'}
                   aria-pressed={v === type}
@@ -592,6 +635,14 @@ function WindowActionPage(): ReactElement {
   );
 }
 
+/** What the record page needs from the shell: the API, the user, the apps (for breadcrumbs). */
+function useRecordContext() {
+  const { api } = useServices();
+  const { uid } = useKosh();
+  const apps = useQuery({ queryKey: ['palette', 'apps'], queryFn: () => api.apps() });
+  return { api, uid, apps: apps.data ?? [] };
+}
+
 function RecordPage(): ReactElement {
   const { registry } = useServices();
   const { t } = useTranslation();
@@ -603,17 +654,56 @@ function RecordPage(): ReactElement {
   } = useParams({ strict: false }) as { app: string; action: string; id: string };
   const action = useWindowAction(actionId);
   const served = useServedView(action.data, 'form');
+  const { api, uid, apps } = useRecordContext();
+  const model = action.data?.model;
+  const recordId = id === 'new' ? 'new' : Number(id);
+  const name = useQuery({
+    queryKey: ['names', model, recordId],
+    queryFn: () => api.names(model as string, { ids: [recordId as number] }),
+    enabled: model !== undefined && recordId !== 'new',
+  });
+  const title = name.data?.[0]?.displayName;
+  useEffect(() => {
+    if (model !== undefined && recordId !== 'new' && title !== undefined)
+      rememberRecord(uid, { app, action: actionId, model, id: recordId, title });
+  }, [uid, app, actionId, model, recordId, title]);
   if (action.error !== null) return <Alert>{action.error.message}</Alert>;
   if (served.isError) return <Alert>{served.error.message}</Alert>;
   if (served.data === undefined) return <Spinner label={t('app.loading')} />;
   const Form = registry.form(served.data.view.component ?? 'form');
   if (Form === undefined) return <Alert>No form renderer.</Alert>;
-  const recordId = id === 'new' ? 'new' : Number(id);
+  const go = (target: number) =>
+    void navigate({
+      to: '/$app/a/$action/$id',
+      params: { app, action: actionId, id: String(target) },
+    });
+  const near = recordId === 'new' || model === undefined ? undefined : neighbours(model, recordId);
+  const appLabel = apps.find((a) => a.code === app)?.label;
   return (
     <Form
       key={id}
       served={served.data}
       recordId={recordId}
+      crumbs={[
+        ...(appLabel === undefined
+          ? []
+          : [{ label: appLabel, onClick: () => void navigate({ to: '/$app', params: { app } }) }]),
+        {
+          label: action.data?.label ?? served.data.view.label ?? model ?? '',
+          onClick: () =>
+            void navigate({ to: '/$app/a/$action', params: { app, action: actionId } }),
+        },
+      ]}
+      {...(near === undefined
+        ? {}
+        : {
+            pager: {
+              position: near.position,
+              total: near.total,
+              ...(near.prev === undefined ? {} : { onPrev: () => go(near.prev as number) }),
+              ...(near.next === undefined ? {} : { onNext: () => go(near.next as number) }),
+            },
+          })}
       onSaved={(saved) =>
         void navigate({
           to: '/$app/a/$action/$id',

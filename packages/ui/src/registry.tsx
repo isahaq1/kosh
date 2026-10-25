@@ -54,6 +54,15 @@ export interface FormProps {
   readonly defaults?: Record<string, unknown>;
   readonly onSaved: (id: number) => void;
   readonly onBack: () => void;
+  /** Where the record sits: app › list (each with a way back), shown before the title (RFC 0010 §3.4). */
+  readonly crumbs?: readonly { readonly label: string; readonly onClick?: () => void }[];
+  /** Its position in the list it was opened from, and the way to its neighbours. */
+  readonly pager?: {
+    readonly position: number;
+    readonly total: number;
+    readonly onPrev?: () => void;
+    readonly onNext?: () => void;
+  };
 }
 
 /** Props of a page: what a client action opens (`{ type: 'client', page: 'settings.Apps' }`). */

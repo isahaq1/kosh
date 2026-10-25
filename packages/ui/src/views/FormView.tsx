@@ -14,8 +14,18 @@ import {
   type LinesNode,
 } from '@kosh/views';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
-import { type ReactElement, useEffect, useId, useMemo, useState } from 'react';
+import { useBlocker } from '@tanstack/react-router';
+import {
+  ArrowLeft,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  CircleDot,
+  MoreHorizontal,
+  Plus,
+  Trash2,
+} from 'lucide-react';
+import { type ReactElement, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, type Row, type ServedView, type ViewField } from '../api.js';
 import {
@@ -36,6 +46,7 @@ import {
 import { useKosh } from '../context.js';
 import { cn } from '../lib/cn.js';
 import type { FormProps } from '../registry.js';
+import { useToast } from '../shell/toast.js';
 import { PrefetchedNames, useRowNames } from './widgets.js';
 
 type Values = Record<string, unknown>;
@@ -222,9 +233,18 @@ function Lines({
 }
 
 /** The default form renderer. */
-export function FormView({ served, recordId, defaults, onSaved, onBack }: FormProps): ReactElement {
+export function FormView({
+  served,
+  recordId,
+  defaults,
+  onSaved,
+  onBack,
+  crumbs,
+  pager,
+}: FormProps): ReactElement {
   const { api, registry, uid, companyId } = useKosh();
   const { t } = useTranslation();
+  const toast = useToast();
   const queryClient = useQueryClient();
   const formId = useId();
   const view = served.view;
@@ -263,6 +283,14 @@ export function FormView({ served, recordId, defaults, onSaved, onBack }: FormPr
   const values = useMemo<Values>(() => ({ ...(record ?? {}), ...changes }), [record, changes]);
   const env = { uid, companyId };
   const dirty = Object.keys(changes).length > 0 || lines.size > 0;
+  // Leaving with unsaved changes asks first (in-app navigation and closing the tab). A ref, not the render's
+  // value: a save clears it before navigating to the saved record, ahead of the next render.
+  const unsaved = useRef(dirty);
+  unsaved.current = dirty;
+  useBlocker({
+    shouldBlockFn: () => unsaved.current && !window.confirm(t('views.leaveConfirm')),
+    enableBeforeUnload: () => unsaved.current,
+  });
   const canEdit = isNew ? served.operations.create : served.operations.write;
   const locked = !canEdit || (!isNew && holds(view.readonlyWhen, values, env));
 
@@ -278,6 +306,7 @@ export function FormView({ served, recordId, defaults, onSaved, onBack }: FormPr
       setLines(new Map());
       setProblem(null);
       await queryClient.invalidateQueries({ queryKey: ['list', model] });
+      unsaved.current = false;
       if (isNew) onSaved(result.record.id);
       else queryClient.setQueryData(['record', model, recordId], result);
     },
@@ -288,10 +317,13 @@ export function FormView({ served, recordId, defaults, onSaved, onBack }: FormPr
       if (dirty) await save.mutateAsync();
       return api.transition(model, recordId as number, name);
     },
-    onSuccess: async (result) => {
+    onSuccess: async (result, name) => {
       setProblem(null);
       queryClient.setQueryData(['record', model, recordId], result);
       await queryClient.invalidateQueries({ queryKey: ['list', model] });
+      const button =
+        view.type === 'form' ? view.header.buttons.find((b) => b.transition === name) : undefined;
+      toast({ title: t('views.transitionDone', { action: button?.label ?? name }) });
     },
     onError: (e) => setProblem(e instanceof ApiError ? e : null),
   });
@@ -299,6 +331,7 @@ export function FormView({ served, recordId, defaults, onSaved, onBack }: FormPr
     mutationFn: () => api.remove(model, recordId as number),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['list', model] });
+      toast({ title: t('views.deleted') });
       onBack();
     },
     onError: (e) => setProblem(e instanceof ApiError ? e : null),
@@ -486,34 +519,109 @@ export function FormView({ served, recordId, defaults, onSaved, onBack }: FormPr
       visible(b.visibleWhen)
     );
   });
-  const title = String(
-    values['displayName'] ?? values['name'] ?? (isNew ? t('views.new') : `#${recordId}`),
+  const named = [values['displayName'], values['name']].find(
+    (v) => typeof v === 'string' && v.trim() !== '',
   );
+  const title = named === undefined ? (isNew ? t('views.new') : `#${recordId}`) : String(named);
 
   return (
     <PrefetchedNames.Provider value={names}>
       <form
         aria-label={title}
+        data-kosh-form
         className="grid gap-4"
         onSubmit={(e) => {
           e.preventDefault();
           if (dirty && !locked) save.mutate();
         }}
       >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+        <div className="sticky top-12 z-20 -mx-4 flex flex-wrap items-center justify-between gap-2 border-b bg-background/95 px-4 py-2 backdrop-blur">
+          <div className="flex min-w-0 items-center gap-2">
             <Button
               type="button"
               variant="ghost"
               size="icon"
               aria-label={t('views.back')}
+              data-kosh-back
               onClick={onBack}
             >
               <ArrowLeft className="rtl:-scale-x-100" aria-hidden />
             </Button>
-            <h1 className="text-lg font-semibold">{title}</h1>
+            <div className="min-w-0">
+              {crumbs === undefined || crumbs.length === 0 ? null : (
+                <nav aria-label={t('views.breadcrumbs')}>
+                  <ol className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                    {crumbs.map((c, i) => (
+                      // biome-ignore lint/suspicious/noArrayIndexKey: a crumb's position in the path is its identity (app, then list); the path is never reordered
+                      <li key={i} className="flex items-center gap-1">
+                        {c.onClick === undefined ? (
+                          <span>{c.label}</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="hover:text-foreground hover:underline"
+                            onClick={c.onClick}
+                          >
+                            {c.label}
+                          </button>
+                        )}
+                        <ChevronRight className="size-3 rtl:-scale-x-100" aria-hidden />
+                      </li>
+                    ))}
+                  </ol>
+                </nav>
+              )}
+              <h1 className="truncate text-lg font-semibold">{title}</h1>
+            </div>
           </div>
           <div className="flex items-center gap-2">
+            <span
+              aria-live="polite"
+              className="flex items-center gap-1 text-xs text-muted-foreground"
+            >
+              {locked ? null : save.isPending ? (
+                t('views.saving')
+              ) : dirty ? (
+                <>
+                  <CircleDot className="size-3 text-warning-text" aria-hidden />
+                  {t('views.unsaved')}
+                </>
+              ) : save.isSuccess ? (
+                <>
+                  <Check className="size-3 text-success" aria-hidden />
+                  {t('views.allSaved')}
+                </>
+              ) : null}
+            </span>
+            {pager === undefined ? null : (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <span className="tabular-nums">
+                  {t('views.position', { position: pager.position, total: pager.total })}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('views.previousRecord')}
+                  disabled={pager.onPrev === undefined}
+                  data-kosh-prev
+                  onClick={pager.onPrev}
+                >
+                  <ChevronLeft className="rtl:-scale-x-100" aria-hidden />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('views.nextRecord')}
+                  disabled={pager.onNext === undefined}
+                  data-kosh-next
+                  onClick={pager.onNext}
+                >
+                  <ChevronRight className="rtl:-scale-x-100" aria-hidden />
+                </Button>
+              </div>
+            )}
             {dirty && !locked ? (
               <>
                 <Button
@@ -526,7 +634,7 @@ export function FormView({ served, recordId, defaults, onSaved, onBack }: FormPr
                 >
                   {t('views.discard')}
                 </Button>
-                <Button type="submit" variant="primary" busy={save.isPending}>
+                <Button type="submit" variant="primary" busy={save.isPending} data-kosh-save>
                   {t('views.save')}
                 </Button>
               </>

@@ -15,6 +15,7 @@ import { Alert, Button, Spinner } from '../components/primitives.js';
 import { useKosh } from '../context.js';
 import { cn } from '../lib/cn.js';
 import type { ViewProps } from '../registry.js';
+import { rememberList } from './listMemory.js';
 import { PrefetchedNames, useRowNames } from './widgets.js';
 
 const ROW_HEIGHT = 40;
@@ -148,6 +149,12 @@ function Rows({
         count: true,
       });
       onCount?.(result.count ?? result.items.length);
+      rememberList(
+        model,
+        result.items.map((r) => r.id),
+        offset,
+        result.count ?? result.items.length,
+      );
       return result;
     },
   });
