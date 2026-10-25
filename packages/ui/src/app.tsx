@@ -703,6 +703,24 @@ function RecordPage(): ReactElement {
   );
 }
 
+/** A deep link (emails, chat): opens the record where this user may open it. */
+function OpenRecordPage(): ReactElement {
+  const { api } = useServices();
+  const { t } = useTranslation();
+  const { model, id } = useParams({ strict: false }) as { model: string; id: string };
+  const routes = useQuery({ queryKey: ['routes'], queryFn: () => api.routes() });
+  if (routes.isPending) return <Spinner label={t('app.loading')} />;
+  const route = routes.data?.[model];
+  if (route?.app === undefined) return <Alert>{t('app.notFound')}</Alert>;
+  return (
+    <Navigate
+      to="/$app/a/$action/$id"
+      params={{ app: route.app, action: route.action, id }}
+      replace
+    />
+  );
+}
+
 function LoginPage(): ReactElement {
   const navigate = useNavigate();
   return <Login api={useServices().api} onSignedIn={() => void navigate({ to: '/' })} />;
@@ -741,9 +759,14 @@ const recordRoute = createRoute({
   path: '/$app/a/$action/$id',
   component: RecordPage,
 });
+const openRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/open/$model/$id',
+  component: OpenRecordPage,
+});
 const routeTree = rootRoute.addChildren([
   loginRoute,
-  shellRoute.addChildren([indexRoute, appRoute, actionRoute, recordRoute]),
+  shellRoute.addChildren([indexRoute, openRoute, appRoute, actionRoute, recordRoute]),
 ]);
 
 const LANG_KEY = 'kosh.lang';
