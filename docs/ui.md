@@ -165,6 +165,10 @@ activities assigned to them; opening one marks it read and goes to the record. E
 user (`PUT /api/v1/notifications/preferences`). Modules add their own header items with
 `registry.registerHeaderItem('module.Name', Component)`; the component receives the API.
 
+Users with an email address also get each notification by email when `SMTP_URL` is set (`MAIL_FROM` names the
+sender; Mailpit in development), in their language, with a link that opens the record (`/open/<model>/<id>`,
+resolved to where that user may open it). Each kind can be switched off per channel.
+
 ## Live screens (RFC 0006 §5, RFC 0010 Phase B)
 
 With the `realtime` module installed (every installation has it), the app keeps one WebSocket per tab to

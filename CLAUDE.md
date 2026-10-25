@@ -31,7 +31,7 @@ better than Odoo?"** If not, leave it out.
 - API: REST + auto-generated OpenAPI + generated typed client (GraphQL later, optional)
 - Auth: Kosh-native on Shutro (decided 2026-10-18 instead of Better Auth: one user store, audited, record rules apply):
   sessions, TOTP 2FA and recovery codes now; OAuth/SSO and passkeys built on the same models later
-- Jobs & scheduler: pg-boss (PostgreSQL) — BullMQ only if an RFC justifies Redis queues
+- Jobs & scheduler: Shutro's transactional jobs and outbox subscribers (decided 2026-10-25 with RFC 0006 instead of pg-boss: a job's database work commits exactly once, in the job's own transaction, as the enqueuing user); a scheduler on top later. BullMQ only if an RFC justifies Redis queues
 - Cache, rate limiting, pub/sub: Valkey/Redis
 - Real-time: WebSocket gateway + PostgreSQL LISTEN/NOTIFY + Redis pub/sub for multi-node
 - Files: S3-compatible storage (S3, MinIO)
@@ -266,7 +266,7 @@ export default defineModule({
 ### Phase 5 — Communication
 
 - [x] Chatter, activities, real-time gateway (`@kosh/realtime`: live lists, forms and presence; docs/ui.md)
-- [ ] Notifications + provider adapters (email, SMS, WhatsApp, push) — in-app inbox and bell done (`@kosh/notify`); adapters next
+- [ ] Notifications + provider adapters (email, SMS, WhatsApp, push) — in-app inbox, bell and the email channel done (`@kosh/notify`, `@kosh/mail`); web push, SMS and WhatsApp next
 - [ ] Internal chat; inbound email
 
 ### Phase 6 — Proof

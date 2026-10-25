@@ -115,7 +115,24 @@ Replying to the approval email posts the reply on the order's chatter.
   - Found on the way: Kosh's identity loader returned the user's raw role assignments, while Shutro replays an
     event's stored group closure to its subscriber and checks it against the loader; the loader now returns the
     closure (`AuthService.verify`).
-- **Jobs decision (Alignment section):** this part uses Shutro's outbox subscribers, which are the ORM's own, as
-  the RFC proposed. pg-boss has not been introduced; the decision stands open for the delivery jobs of the other
-  channels (email, web push, SMS), which come next with their adapters and digests.
-- **Not yet:** channel adapters, digests, quiet hours, delivery tracking, inbound email, chat.
+- **Jobs decision (Alignment section): taken on 2026-10-25.** Kosh's jobs are Shutro's transactional jobs and
+  outbox subscribers, as this RFC proposed; pg-boss is not introduced (CLAUDE.md updated). A scheduler on top of
+  them comes with the scheduled reports' move off their own engine.
+- **Not yet:** web push, SMS and WhatsApp adapters, digests, quiet hours, inbound email, chat.
+
+## Implementation notes (2026-10-25, part 4: the email channel)
+
+- `@kosh/mail`: the `Mailer` interface, the SMTP mailer (nodemailer, the package's one dependency: STARTTLS,
+  authentication, the usual SMTP edge cases) configured by `SMTP_URL` and `MAIL_FROM`, a memory mailer for tests,
+  and a plain HTML/text layout (inline styles, a `dir` for right-to-left languages, no images or scripts).
+- `@kosh/notify`: when notifications are written, the recipients whose preference allows email and who have an
+  address get a `notify.delivery` row and a `notify.deliver` job, in the same transaction (the job exists iff the
+  rows do). The job (`shutro.work`) renders the email in the recipient's language from the shared sentence
+  catalogue, with a link `${KOSH_BASE_URL}/open/<model>/<id>` that the back-office resolves to where the user may
+  open the record, sends it, and marks the delivery sent in its own transaction. A provider failure records the
+  attempt and the error outside the rolled-back transaction and lets Shutro retry with backoff (`failed` stays
+  visible on the delivery).
+- Without `SMTP_URL`, no email deliveries are created (the inbox still is). In development, Mailpit from
+  `pnpm dev:services` (`smtp://localhost:1025`, inbox on http://localhost:8025).
+- Tests: `packages/notify/test/email.integration.test.ts` sends through a Mailpit container and reads its API.
+
