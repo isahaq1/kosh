@@ -1,4 +1,6 @@
-/** Messages of the notifications bell (namespace `notify`). */
+/** Messages of the notifications bell (namespace `notify`): the shared sentences plus the panel's own words. */
+import { TEXTS } from '../messages.js';
+
 export const messages: Readonly<Record<string, object>> = {
   en: {
     title: 'Notifications',
@@ -6,13 +8,9 @@ export const messages: Readonly<Record<string, object>> = {
     unread_other: '{{count}} unread notifications',
     markAllRead: 'Mark all as read',
     empty: 'You are all caught up.',
-    kinds: {
-      mention: '{{actor}} mentioned you on {{record}}',
-      'approval.requested': '{{actor}} asks for your approval on {{record}}',
-      'approval.decided': '{{actor}} {{state}} {{record}}',
-      'activity.assigned': '{{actor}} assigned you an activity on {{record}} (due {{deadline}})',
-    },
-    states: { approved: 'approved', rejected: 'rejected' },
+    cannotOpen: 'You cannot open this record.',
+    kinds: TEXTS['en']?.kinds,
+    states: TEXTS['en']?.states,
   },
   bn: {
     title: 'বিজ্ঞপ্তি',
@@ -20,12 +18,8 @@ export const messages: Readonly<Record<string, object>> = {
     unread_other: '{{count}}টি অপঠিত বিজ্ঞপ্তি',
     markAllRead: 'সব পঠিত হিসেবে চিহ্নিত করুন',
     empty: 'নতুন কিছু নেই।',
-    kinds: {
-      mention: '{{actor}} আপনাকে {{record}}-এ উল্লেখ করেছেন',
-      'approval.requested': '{{actor}} {{record}}-এর জন্য আপনার অনুমোদন চেয়েছেন',
-      'approval.decided': '{{actor}} {{record}} {{state}}',
-      'activity.assigned': '{{actor}} আপনাকে {{record}}-এ একটি কাজ দিয়েছেন (শেষ তারিখ {{deadline}})',
-    },
-    states: { approved: 'অনুমোদন করেছেন', rejected: 'প্রত্যাখ্যান করেছেন' },
+    cannotOpen: 'আপনি এই রেকর্ডটি খুলতে পারবেন না।',
+    kinds: TEXTS['bn']?.kinds,
+    states: TEXTS['bn']?.states,
   },
 };

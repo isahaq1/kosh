@@ -8,6 +8,7 @@
 import { announceChange, type KoshRegistry, type ModuleContext } from '@kosh/server';
 import type { Env, Shutro, Worker } from '@kosh/server/orm';
 import { orm } from '@kosh/server/orm';
+import { type DeliveryContext, queueEmails } from './email.js';
 import type { Kind } from './models.js';
 
 type Row = Record<string, unknown>;
@@ -35,7 +36,7 @@ interface Draft {
 }
 
 /** What the subscriber needs from the server. */
-export interface InboxContext {
+export interface InboxContext extends DeliveryContext {
   readonly shutro: Shutro;
   readonly driver: ModuleContext['driver'];
   readonly registry: KoshRegistry;
@@ -103,11 +104,9 @@ async function mayRead(
   }
 }
 
-/** The recipient's preference for the kind on the inbox (enabled unless they switched it off). */
-async function wantsInApp(su: Env, uid: number, kind: Kind): Promise<boolean> {
-  const [pref] = await rows(su, 'notify.preference', { user: uid, kind, channel: 'inapp' }, [
-    'enabled',
-  ]);
+/** The recipient's preference for the kind on a channel (enabled unless they switched it off). */
+async function wants(su: Env, uid: number, kind: string, channel: string): Promise<boolean> {
+  const [pref] = await rows(su, 'notify.preference', { user: uid, kind, channel }, ['enabled']);
   return pref === undefined || pref['enabled'] === true;
 }
 
@@ -234,7 +233,7 @@ export async function handleEvent(
     for (const draft of found.drafts)
       if (
         (await mayRead(context, draft.user, event.companyId, found.model, found.id)) &&
-        (await wantsInApp(su, draft.user, draft.kind))
+        (await wants(su, draft.user, draft.kind, 'inapp'))
       )
         kept.push(draft);
     if (kept.length === 0) return [] as number[];
@@ -249,7 +248,10 @@ export async function handleEvent(
         company: event.companyId,
       })),
     );
-    return [...created.ids];
+    const ids = [...created.ids];
+    // The other channels: one delivery and one job each, in this transaction (the job exists iff the rows do).
+    await queueEmails(context, env, su, ids, (uid, kind) => wants(su, uid, kind, 'email'));
+    return ids;
   });
   if (ids.length > 0)
     announceChange(env, context.driver, { model: 'notify.notification', ids, op: 'create' });

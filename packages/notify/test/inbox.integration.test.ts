@@ -123,6 +123,7 @@ beforeAll(async () => {
     driver: server.driver,
     registry: server.registry,
     auth: server.auth,
+    baseUrl: 'http://localhost:5173',
   });
   // A subscription starts at the events emitted after it exists: register the cursors before the tests emit.
   for (const w of workers) await w.drain();

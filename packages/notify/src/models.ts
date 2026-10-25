@@ -65,9 +65,28 @@ const Preference = defineModel('notify.preference', {
   },
 });
 
+/** One attempt stream of a notification on a channel (the system's: no user access). */
+const Delivery = defineModel('notify.delivery', {
+  label: 'Notification delivery',
+  order: ['id desc'],
+  access: {},
+  fields: {
+    notification: f.many2one('notify.notification', { required: true, ondelete: 'cascade' }),
+    channel: f.char({ required: true }),
+    state: f.selection(
+      { pending: 'Pending', sent: 'Sent', failed: 'Failed', skipped: 'Skipped' },
+      { required: true, default: 'pending' },
+    ),
+    attempts: f.integer({ required: true, default: 0 }),
+    error: f.text(),
+    providerId: f.char(),
+    sentAt: f.datetime(),
+  },
+});
+
 export const notifyShutro: ReturnType<typeof orm.defineModule> = defineModule({
   name: 'notify',
   version: '0.1.0',
   depends: [baseShutro],
-  models: [Notification, Preference],
+  models: [Notification, Preference, Delivery],
 });

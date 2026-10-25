@@ -46,6 +46,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@kosh/mail": "workspace:*",
     "@kosh/modules-sdk": "workspace:*",
     "@kosh/server": "workspace:*",
     "@kosh/ui": "workspace:*",
@@ -54,19 +55,20 @@
     "radix-ui": "^1.8.1"
   },
   "peerDependencies": {
-    "react": "^19.3.1",
     "@tanstack/react-query": "^5.104.3",
     "@tanstack/react-router": "^1.170.45",
     "i18next": "^26.4.7",
+    "react": "^19.3.1",
     "react-i18next": "^17.0.21"
   },
   "devDependencies": {
-    "@testcontainers/postgresql": "^12.2.1",
-    "@types/react": "^19.3.0",
-    "react": "^19.3.1",
     "@tanstack/react-query": "^5.104.3",
     "@tanstack/react-router": "^1.170.45",
+    "@testcontainers/postgresql": "^12.2.1",
+    "@types/react": "^19.3.0",
     "i18next": "^26.4.7",
-    "react-i18next": "^17.0.21"
+    "react": "^19.3.1",
+    "react-i18next": "^17.0.21",
+    "testcontainers": "^12.2.1"
   }
 }

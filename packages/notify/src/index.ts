@@ -5,13 +5,23 @@
  * is re-checked as them, served by `/api/v1/notifications` and shown live by the bell in the header
  * (`@kosh/notify/web`). Channel adapters (email, web push) and digests come next.
  */
+import { mailerFromEnv } from '@kosh/mail';
 import { defineModule } from '@kosh/modules-sdk';
 import { base, type ModuleContext } from '@kosh/server';
+import { type DeliveryContext, deliveryWorker } from './email.js';
 import { inboxWorkers } from './inbox.js';
 import { notifyShutro } from './models.js';
 import { registerNotifyRoutes } from './routes.js';
 
+export {
+  DELIVER_JOB,
+  type DeliveryContext,
+  deliver,
+  deliveryWorker,
+  renderEmail,
+} from './email.js';
 export { handleEvent, type InboxContext, inboxWorkers, TOPICS } from './inbox.js';
+export { interpolate, sentence, TEXTS, textsFor } from './messages.js';
 export { CHANNELS, type Channel, KINDS, type Kind, notifyShutro } from './models.js';
 export { type NotificationItem, registerNotifyRoutes, unreadCount } from './routes.js';
 
@@ -32,7 +42,14 @@ export const notify: ReturnType<typeof defineModule> = defineModule({
     registerNotifyRoutes(context);
     // Background work is off in the CLI (kosh init, migrate), like the schedules.
     if (process.env['KOSH_SCHEDULES'] === 'off') return;
-    const workers = inboxWorkers(context);
+    const mailer = mailerFromEnv();
+    const delivery: DeliveryContext = {
+      shutro: context.shutro,
+      driver: context.driver,
+      ...(mailer === undefined ? {} : { mailer }),
+      baseUrl: process.env['KOSH_BASE_URL'] ?? 'http://localhost:5173',
+    };
+    const workers = [...inboxWorkers({ ...context, ...delivery }), deliveryWorker(delivery)];
     for (const w of workers) w.start();
     context.app.addHook('onClose', async () => {
       await Promise.all(workers.map((w) => w.stop()));
