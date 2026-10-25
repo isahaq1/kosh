@@ -75,7 +75,19 @@ export interface AppEntry {
   readonly code: string;
   readonly label: string;
   readonly icon?: string;
+  readonly category?: string;
+  readonly summary?: string;
   readonly sequence: number;
+}
+/** A model as `/api/v1/meta/:model` describes it for the user: what they may do, and the fields they may read. */
+export interface ModelMeta {
+  readonly name: string;
+  readonly label: string;
+  readonly operations: Readonly<
+    Record<'read' | 'write' | 'create' | 'unlink' | 'export' | 'import', boolean>
+  >;
+  readonly transitions: readonly string[];
+  readonly fields: readonly ViewField[];
 }
 /** A record the global search found, with the action and app that open it. */
 export interface FoundRecord {
@@ -159,6 +171,10 @@ export interface KoshApi {
   setLanguage(lang: string): void;
   /** Records named like `q` across the user's visible apps (the command palette). */
   find(q: string, limit?: number): Promise<FoundRecord[]>;
+  /** A model's operations and readable fields for the user. */
+  meta(model: string): Promise<ModelMeta>;
+  /** Where records of each model open for the user: `{ 'sale.order': { action, app } }`. */
+  routes(): Promise<Readonly<Record<string, { action: string; app: string | undefined }>>>;
   /** Raw call for module code (custom routes). */
   call<T>(method: string, path: string, body?: unknown): Promise<T>;
   /** A file from the API (exports, documents): the response body and its file name. */
@@ -328,6 +344,14 @@ export function createKoshApi(options: ApiOptions = {}): KoshApi {
       language = next;
     },
     call: (method, path, body) => json(method, path, body),
+    meta: (name) => json('GET', `/api/v1/meta/${encodeURIComponent(name)}`),
+    routes: async () =>
+      (
+        await json<{ routes: Record<string, { action: string; app: string | undefined }> }>(
+          'GET',
+          '/api/v1/routes',
+        )
+      ).routes,
     find: async (q, limit) =>
       (
         await request<{ results: FoundRecord[] }>('GET', '/api/v1/find', {

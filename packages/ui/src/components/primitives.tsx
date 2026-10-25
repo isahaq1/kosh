@@ -379,3 +379,38 @@ export function Card({ className, ...props }: ComponentProps<'div'>): ReactEleme
     />
   );
 }
+
+/** A placeholder shaped like the content that is loading (RFC 0010 §3.9). */
+export function Skeleton({ className, ...props }: ComponentProps<'div'>): ReactElement {
+  return (
+    <div aria-hidden className={cn('animate-pulse rounded-md bg-muted', className)} {...props} />
+  );
+}
+
+/** An empty list or board that says what it is and offers the next step. */
+export function EmptyState({
+  icon,
+  title,
+  description,
+  action,
+}: {
+  readonly icon?: ReactNode;
+  readonly title: string;
+  readonly description?: string;
+  readonly action?: ReactNode;
+}): ReactElement {
+  return (
+    <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
+      {icon === undefined ? null : (
+        <div className="mb-1 flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground [&_svg]:size-6">
+          {icon}
+        </div>
+      )}
+      <p className="font-medium">{title}</p>
+      {description === undefined ? null : (
+        <p className="max-w-md text-sm text-muted-foreground">{description}</p>
+      )}
+      {action === undefined ? null : <div className="mt-2">{action}</div>}
+    </div>
+  );
+}
