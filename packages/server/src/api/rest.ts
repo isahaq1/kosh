@@ -20,6 +20,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { audit } from '../audit.js';
 import { HttpProblem } from '../errors.js';
 import type { Driver, Env } from '../orm.js';
+import { announceChange } from './changes.js';
 import { idempotent, type Outcome } from './idempotency.js';
 import { type ApiField, type ApiModel, defaultFields } from './metadata.js';
 
@@ -291,6 +292,11 @@ export function registerRestApi(
       idempotent(request, env, driver, async () => {
         const created = await ref(env, model.name).create([coerceValues(model, values)]);
         await env.flush(); // computes and constraints run now: the response shows the stored record
+        announceChange(env, driver, {
+          model: model.name,
+          ids: [created.ids[0] as number],
+          op: 'create',
+        });
         const result = await record(env, model, created.ids[0] as number);
         return {
           ...result,
@@ -335,6 +341,7 @@ export function registerRestApi(
             expected === undefined ? {} : { expect: { updatedAt: expected } },
           );
         await env.flush();
+        announceChange(env, driver, { model: model.name, ids: [id], op: 'update' });
         return record(env, model, id);
       }),
     );
@@ -350,6 +357,7 @@ export function registerRestApi(
         const target = ref(env, model.name).browse([id]);
         if (expected !== undefined) await target.write({}, { expect: { updatedAt: expected } }); // locks and compares
         await target.unlink();
+        announceChange(env, driver, { model: model.name, ids: [id], op: 'delete' });
         return { status: 200, body: { deleted: 1 } };
       }),
     );
@@ -400,6 +408,7 @@ export function registerRestApi(
         >;
         await (target[name] as () => Promise<void>).call(target);
         await env.flush();
+        announceChange(env, driver, { model: model.name, ids: [id], op: 'update' });
         return record(env, model, id);
       }),
     );
@@ -561,6 +570,7 @@ export function registerRestApi(
           input.map((row) => coerceValues(model, row as Record<string, unknown>)),
         );
         await env.flush(); // all-or-nothing: constraints run before the response
+        announceChange(env, driver, { model: model.name, ids: [...created.ids], op: 'create' });
         await audit(env, {
           kind: 'data.import',
           summary: `Imported ${created.ids.length} ${model.name} record(s).`,
