@@ -181,8 +181,10 @@ export function form<M extends ModelRef>(
 /** A kanban view. */
 export function kanban<M extends ModelRef>(
   model: M,
-  spec: Omit<ViewInput<KanbanView>, 'groupBy' | 'card'> & {
+  spec: Omit<ViewInput<KanbanView>, 'groupBy' | 'card' | 'total'> & {
     readonly groupBy: FieldKey<M>;
+    /** A numeric or monetary field summed per column, shown in the column header. */
+    readonly total?: FieldKey<M>;
     readonly card: {
       readonly title: FieldKey<M>;
       readonly subtitle?: FieldKey<M>;

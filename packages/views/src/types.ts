@@ -120,6 +120,8 @@ export interface KanbanView extends ViewBase {
   readonly groupBy: string;
   readonly card: KanbanCard;
   readonly quickCreate?: boolean;
+  /** A numeric or monetary field summed per column, shown in the column header (`amountTotal`). */
+  readonly total?: string;
 }
 
 /** A measure of a report view: `'count'` or `{ sum | avg | min | max: field }`, with a label. */

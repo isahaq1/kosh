@@ -81,7 +81,11 @@ export class Navigation {
    * Records named like `text` in every model the user can open from a visible menu (one action per model: the
    * first menu's), at most `limit` per model, within ACL and record rules (the user's own search).
    */
-  async find(env: Env, text: string, limit: number): Promise<FoundRecord[]> {
+  /**
+   * For each model the user can open in a form from a visible menu: the first such menu's action and app. What
+   * the global search, and "open this record" links from elsewhere (approvals, activities), route to.
+   */
+  routes(env: Env): ReadonlyMap<string, { action: string; app: string | undefined }> {
     const targets = new Map<string, { action: string; app: string | undefined }>();
     for (const menu of this.#loaded.menus) {
       if (menu.action === undefined || !this.menuVisible(env, menu)) continue;
@@ -94,6 +98,11 @@ export class Navigation {
       if (model === undefined || targets.has(model) || !this.#models.has(model)) continue;
       targets.set(model, { action: menu.action, app: this.#appOf(menu) });
     }
+    return targets;
+  }
+
+  async find(env: Env, text: string, limit: number): Promise<FoundRecord[]> {
+    const targets = this.routes(env);
     const like = `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     const out: FoundRecord[] = [];
     for (const [model, target] of targets) {
@@ -187,7 +196,14 @@ export class Navigation {
   }
 
   /** The launcher: apps of modules the user has an access level of. */
-  apps(env: Env): { code: string; label: string; icon?: string; sequence: number }[] {
+  apps(env: Env): {
+    code: string;
+    label: string;
+    icon?: string;
+    category?: string;
+    summary?: string;
+    sequence: number;
+  }[] {
     return this.#loaded.modules
       .filter((m) => m.app !== undefined && moduleVisible(env, m))
       .map((m) => {
@@ -196,6 +212,8 @@ export class Navigation {
           code: app.code,
           label: app.label,
           ...(app.icon === undefined ? {} : { icon: app.icon }),
+          ...(app.category === undefined ? {} : { category: app.category }),
+          ...(app.summary === undefined ? {} : { summary: app.summary }),
           sequence: app.sequence ?? 10,
         };
       })
@@ -222,6 +240,10 @@ export class Navigation {
         throw new HttpProblem(400, 'invalid-limit', 'Invalid limit', 'limit must be 1–20.');
       return request.env(async (env) => ({ results: await this.find(env, text, limit) }));
     });
+    // Where records of each model open for this user (`{ 'sale.order': { action, app } }`).
+    app.get('/api/v1/routes', async (request) =>
+      request.env(async (env) => ({ routes: Object.fromEntries(this.routes(env)) })),
+    );
     app.get('/api/v1/actions/:id', async (request) => {
       const id = String((request.params as { id?: unknown }).id ?? '');
       const owner = this.#loaded.actions.get(id);
