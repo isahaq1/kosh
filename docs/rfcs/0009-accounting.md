@@ -1,6 +1,6 @@
 # RFC 0009: Accounting (the ledger, documents, payments, reports)
 
-- **Status:** Draft, waiting for approval (2026-10-25)
+- **Status:** Accepted (2026-10-25, with the proposed answers to §11); step 1 implemented (see Implementation notes)
 - **Depends on:** 0001 (modules), 0002 (generated API), 0003 (permissions, approvals), 0004 (views), 0005
   (reporting: pivots, comparisons, scheduled reports), 0006 (chatter, notifications), 0008 (apps, bridges)
 - **Followed by:** the `sale_account` and `purchase_account` bridges (RFC 0008 §5.1), Projects (RFC 0008 step 6)
@@ -251,6 +251,49 @@ rendered by the reporting engine's hierarchy view; every number drills to the li
 3. **Bangladesh template**: should VAT accounts follow the Mushak-6.x structure from the start (output VAT,
    input VAT, VAT payable, AT, SD)? Proposal: yes, those five, with the reports' Mushak layouts in a later step.
 4. **Cash basis VAT**: not in version 1 (tax reported on invoice date). Confirm.
+
+## Decisions (2026-10-25)
+
+1. Currency rates are maintained by hand in version 1 (`res.currency.rate`: per currency, date, optionally per
+   company); a rate adapter comes later.
+2. Sequences are per journal type and year (`INV/2026/00001`, `BILL/…`, `CSH/…`, `BNK/…`, `MISC/…`), gapless.
+3. The Bangladesh template carries the Mushak VAT accounts from the start (output VAT, input VAT, VAT payable,
+   AT, SD, plus AIT, TDS and VDS placeholders); the Mushak report layouts come with the reports step.
+4. No cash-basis VAT in version 1: tax is reported on the invoice date.
+
+## Implementation notes (2026-10-25): step 1 — the ledger core
+
+`modules/accounting` (`@kosh/accounting`, the Accounting app, `kosh-erp/accounting`):
+
+- **Models** (`src/module.ts`): `res.currency.rate` (Kosh defines it; Shutro's `env.fx` reads it), `account.account`
+  (typed by `ACCOUNT_TYPES`, unique code per company), `account.journal` (five types), `account.fiscal.year`
+  (open / closed, lock date, no overlap), `account.move` and `account.move.line` (debit and credit as monetary
+  fields in the company currency, the signed amount in the entry's currency beside them, a SQL check that a line
+  is one side only), and extensions of `res.company` (chart template, lock dates, default accounts) and
+  `account.tax` (tax account, refund account, price included).
+- **Posting** is the `post` transition's `before` hook, in its transaction: the lock date and closed years, the
+  rate of the entry's date (`env.fx.prepare`; a missing rate is a 422 with Shutro's message), company-currency
+  amounts for lines entered in the entry's currency (rounded to the currency's unit), the balance to the paisa
+  (the difference is in the message), the number from the journal type's sequence (`assignNumber`, so drafts and
+  deleted drafts leave no gap), and the posting time and transaction. Posting needs the `account.post`
+  permission (accountants, not invoicing users).
+- **Immutability** twice: a Shutro constraint on entries and lines refuses changes from any transaction but the
+  posting one (`postedTx`, `pg_current_xact_id()`), and database triggers (`installImmutability`, installed with
+  the module's defaults) refuse updates of the ledger columns and deletes below the ORM. A trigger's refusal is a
+  422 `database-rule` problem with the raised message (`problemOf` maps SQLSTATE P0001).
+- **Reversal**: `POST /api/v1/accounting/moves/:id/reverse` (`{ date?, post? }`) creates the negated entry in the
+  same journal, linked both ways, posted when asked; once per entry.
+- **Charts**: `POST /api/v1/accounting/charts/install` (`{ template }`, managers; once per company) creates the
+  accounts and the five journals, links the company's default accounts in system scope (companies are read-only
+  to everyone else) and points the product module's taxes at their accounts; `GET …/charts` lists the templates
+  and the installed one.
+- **Shutro requests**: a sequence per journal (#22; meanwhile one numbered field per journal type) and an
+  unlink / immutability hook (#23; meanwhile the triggers).
+- Tests: `modules/accounting/test/accounting.integration.test.ts` (install and chart, posting and numbering,
+  refusals with their reasons, immutability at the API and in the database, reversal, lock dates and closed
+  years, a USD entry at the rate of its date, permissions).
+- **Next:** step 2, the documents (invoices, bills, credit notes, payment terms, taxes posting, PDF) and the
+  `sale_account` / `purchase_account` bridges.
 
 ## Alignment with CLAUDE.md
 

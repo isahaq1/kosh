@@ -12,5 +12,5 @@ Design documents written before implementation. An RFC is implemented only after
 | 0006 | [Communication & notification architecture](0006-communication-and-notifications.md) | Accepted (jobs backend open); chatter and the realtime gateway implemented |
 | 0007 | [Frontend architecture & design system](0007-frontend-architecture.md) | Accepted, implemented |
 | 0008 | [Default business apps & App manager](0008-business-apps-and-app-manager.md) | Accepted; steps 1–2 implemented (`kosh apps`, app host, Settings → Apps) |
-| 0009 | [Accounting](0009-accounting.md) | Draft, waiting for approval |
+| 0009 | [Accounting](0009-accounting.md) | Accepted; step 1 implemented (the ledger core) |
 | 0010 | [A modern, fast, friendly back-office](0010-modern-ux.md) | Phase A accepted (within RFC 0007); Phase B implemented; C draft |
