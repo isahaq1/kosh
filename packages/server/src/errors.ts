@@ -2,7 +2,7 @@
  * Server errors and their HTTP form: RFC 9457 problem details with stable `type` codes (RFC 0002 §6.4). Shutro's typed
  * errors map to statuses here; the full mapping grows with the generated endpoints (step 3).
  */
-import { orm } from './orm.js';
+import { orm, pg } from './orm.js';
 
 /** A server set up wrongly (modules, options). The message says what and how to fix it. */
 export class ServerConfigError extends Error {
@@ -57,6 +57,17 @@ const SHUTRO_STATUS: Readonly<Record<string, number>> = {
 /** The problem document for any error; unknown errors are 500 without internals (they are logged instead). */
 export function problemOf(error: unknown): Problem {
   if (error instanceof HttpProblem) return error.problem;
+  // A rule enforced in the database (`RAISE EXCEPTION ... ERRCODE 'P0001'`, e.g. a posted accounting entry): the
+  // raised message is the user's answer, as for a constraint.
+  if (error instanceof pg.DriverError && error.sqlState === 'P0001') {
+    const raised = (error.cause as { message?: unknown } | undefined)?.message;
+    return {
+      type: 'https://kosh.dev/problems/database-rule',
+      title: 'Refused by a database rule',
+      status: 422,
+      detail: typeof raised === 'string' ? raised : error.message,
+    };
+  }
   if (error instanceof orm.ShutroError) {
     const status = SHUTRO_STATUS[error.code] ?? 500;
     if (status !== 500)
