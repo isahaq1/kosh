@@ -8,7 +8,7 @@ const api = process.env['KOSH_API'] ?? 'http://localhost:3000';
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: { conditions: ['@kosh/source'] },
-  server: { proxy: { '/api': api } },
-  preview: { proxy: { '/api': api } },
+  server: { proxy: { '/api': { target: api, ws: true } } },
+  preview: { proxy: { '/api': { target: api, ws: true } } },
   build: { chunkSizeWarningLimit: 900 },
 });

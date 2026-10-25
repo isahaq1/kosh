@@ -39,6 +39,7 @@ const PACKAGES = [
   'storage',
   'messaging',
   'settings',
+  'realtime',
   'contacts',
   'product',
   'sales',

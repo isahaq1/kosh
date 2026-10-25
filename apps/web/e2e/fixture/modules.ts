@@ -6,6 +6,7 @@
 import { messaging, messagingShutro } from '@kosh/messaging';
 import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
 import { approvalGuard, permissions, permissionsShutro, requestApprovals } from '@kosh/permissions';
+import { realtime } from '@kosh/realtime';
 import { reporting, reportingShutro } from '@kosh/reporting';
 import { base, baseShutro } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
@@ -397,7 +398,7 @@ export const purchaseApprovals = defineKoshModule({
   ],
 });
 
-export const MODULES = [purchaseApprovals];
+export const MODULES = [purchaseApprovals, realtime];
 
 // ---------------------------------------------------------------------------------------------------- library
 // In the catalogue but not installed: the App manager's end-to-end test installs and disables it (RFC 0008).

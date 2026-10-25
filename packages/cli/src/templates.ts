@@ -126,10 +126,11 @@ export function modulesTs(_options: StarterOptions): string {
  * then install them from Settings → Apps.
  */
 import { base } from 'kosh-erp';
+import { realtime } from 'kosh-erp/realtime';
 import { settings } from 'kosh-erp/settings';
 ${imports.join('\n')}
 
-export const modules = [base, settings${apps.map((a) => `, ${APPS[a].server}`).join('')}];
+export const modules = [base, settings, realtime${apps.map((a) => `, ${APPS[a].server}`).join('')}];
 `;
 }
 
@@ -165,8 +166,8 @@ const api = process.env['KOSH_API'] ?? 'http://localhost:${options.port}';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  server: { proxy: { '/api': api } },
-  preview: { proxy: { '/api': api } },
+  server: { proxy: { '/api': { target: api, ws: true } } },
+  preview: { proxy: { '/api': { target: api, ws: true } } },
 });
 `;
 }
@@ -313,6 +314,11 @@ server {
 
   location /api/ {
     proxy_pass http://api:3000;
+    # The realtime gateway (live updates) is a WebSocket.
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 1h;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;

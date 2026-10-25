@@ -35,6 +35,7 @@
     "@testcontainers/postgresql": "^12.2.1",
     "@kosh/server": "workspace:*",
     "@kosh/modules-sdk": "workspace:*",
-    "@kosh/views": "workspace:*"
+    "@kosh/views": "workspace:*",
+    "@kosh/realtime": "workspace:*"
   }
 }
