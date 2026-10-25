@@ -10,7 +10,8 @@ export type AppName =
   | 'contacts'
   | 'product'
   | 'sales'
-  | 'purchase';
+  | 'purchase'
+  | 'accounting';
 export interface AppSpec {
   readonly label: string;
   /** Shown next to the app in the installer (where the terminal shows pictographs). */
@@ -56,6 +57,11 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     label: 'Purchase: RFQs, purchase orders and approvals',
     icon: '🧾',
     server: 'purchase',
+  },
+  accounting: {
+    label: 'Accounting: chart of accounts, journals, entries, invoices and bills',
+    icon: '📒',
+    server: 'accounting',
   },
 };
 
