@@ -157,6 +157,23 @@ serious or critical violations) in both themes. Run `pnpm build && pnpm test:e2e
 - **Installable**: `public/manifest.webmanifest` and `icon.svg` make the back-office an app on phones and
   desktops (the starter project gets both).
 
+## Live screens (RFC 0006 §5, RFC 0010 Phase B)
+
+With the `realtime` module installed (every installation has it), the app keeps one WebSocket per tab to
+`GET /api/v1/realtime`, reconnecting with backoff:
+
+- **Lists and boards** refetch when records of their model change, whoever changed them (`useLiveModel`).
+- **Forms** refetch their record when someone else saves it. With unsaved changes, the form says so and offers a
+  reload instead of overwriting the user's work (`useLiveRecord`). The header shows who else has the record open
+  (initials, names on hover).
+- The server announces changes after each commit (`announceChange` in the generated API: create, update,
+  delete, transitions, import). A module's own routes call it too for records they write. An announcement
+  carries the model, the ids, the operation and the user, never the data: clients always refetch through the API,
+  which checks access again.
+- A browser may subscribe to a model it can read, or to a record its rules let it read; anything else is refused.
+- PostgreSQL `NOTIFY` reaches every server of the database, so a cluster needs no extra message bus. The dev and
+  preview proxies (`ws: true`) and the starter's nginx forward WebSocket upgrades.
+
 ## Not yet
 
 Code splitting per app (ECharts and MapLibre load on demand; the rest is one bundle), `kosh inspect view` on the

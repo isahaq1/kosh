@@ -1,7 +1,7 @@
 # RFC 0010: A modern, fast, friendly back-office (beyond Odoo 18)
 
 - **Status:** Phase A Accepted (2026-10-19; within RFC 0007, no new subsystem) and implemented (2026-10-25).
-  Phases B and C: Draft, waiting for approval.
+  Phase B in progress (2026-10-25: live updates and presence built). Phase C: Draft, waiting for approval.
 - **Depends on:** 0004 (views, search), 0005 (reporting), 0006 (chatter, realtime), 0007 (frontend), 0008 (apps)
 
 ## 1. Summary
@@ -163,3 +163,26 @@ empty states (§3.9) and the manifest (§3.10). With part 1, Phase A is complete
   manifest. The whole suite: 42 E2E tests.
 - **Not in Phase A after all:** formatted number inputs while not focused (§3.6) and the "+" quick create for state
   columns (new records start in the initial state, so the existing `quickCreate` applies to other fields only).
+
+## Implementation notes (2026-10-25): Phase B, part 1 — the realtime gateway
+
+- `@kosh/realtime` is the WebSocket gateway of RFC 0006 §5, a technical module every installation has (`kosh init`
+  installs it with base and Settings). `GET /api/v1/realtime` upgrades a signed-in user's connection through the
+  normal authentication hook; subscriptions are checked per channel (model ACL; record rules for one record).
+- **Changes** are announced by the server after commit (`announceChange`, `NOTIFY kosh_changes`), from every write
+  of the generated API. The gateway listens on each node and pushes `{ model, ids, op, by, at }` to subscribers.
+  Payloads never carry data; above 200 ids, "many" is sent and clients refetch the model.
+- **Presence** is shared between nodes over `NOTIFY kosh_presence`; each node keeps who is on which record from
+  those notes only (its own included), refreshes its clients' entries every 30 s and drops entries older than 90 s,
+  so a dead node leaves no ghosts.
+- **Valkey pub/sub** (RFC 0006 §5) is not needed: PostgreSQL notifications already reach every node of a database.
+- **The app host** now forwards HTTP upgrades to the current server generation (its plugin listens on the inner
+  server). A replaced generation closes its sockets; clients reconnect to the new one.
+- **UI:** `createRealtimeClient` (reconnect with backoff, re-subscribes after a reconnect, heartbeat every 25 s),
+  `useLiveModel` on lists and boards, `useLiveRecord` on forms (refetch, or a "changed by someone else" bar with
+  Reload while dirty; presence chips in the header).
+- **Tests:** `packages/realtime/test/gateway.integration.test.ts` (real sockets and PostgreSQL: delivery without
+  data, refusal, presence join/leave, anonymous closed) and `apps/web/e2e/live.spec.ts` (a list updates without a
+  reload; two users on one form: presence both ways, a save followed live, unsaved changes protected).
+- **Next in Phase B:** the notifications centre (mentions, approvals, assigned activities; web push), then the
+  offline-capable PWA and spreadsheet-grade list editing.
