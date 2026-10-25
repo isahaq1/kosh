@@ -102,6 +102,34 @@ importers:
         specifier: ^7.1.0
         version: 7.3.7(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.1)
 
+  modules/accounting:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   modules/contacts:
     dependencies:
       '@kosh/modules-sdk':
@@ -189,6 +217,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../../modules/accounting
       '@kosh/contacts':
         specifier: workspace:*
         version: link:../../modules/contacts

@@ -46,6 +46,7 @@ const PACKAGES = [
   'product',
   'sales',
   'purchase',
+  'accounting',
   'ui',
   'reporting',
   'cli',
