@@ -45,6 +45,7 @@ import {
 } from '../components/primitives.js';
 import { useKosh } from '../context.js';
 import { cn } from '../lib/cn.js';
+import { useLiveRecord } from '../live.js';
 import type { FormProps } from '../registry.js';
 import { useToast } from '../shell/toast.js';
 import { PrefetchedNames, useRowNames } from './widgets.js';
@@ -291,6 +292,7 @@ export function FormView({
     shouldBlockFn: () => unsaved.current && !window.confirm(t('views.leaveConfirm')),
     enableBeforeUnload: () => unsaved.current,
   });
+  const live = useLiveRecord(model, recordId, dirty);
   const canEdit = isNew ? served.operations.create : served.operations.write;
   const locked = !canEdit || (!isNew && holds(view.readonlyWhen, values, env));
 
@@ -575,6 +577,28 @@ export function FormView({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {live.others.length === 0 ? null : (
+              <ul
+                className="flex items-center -space-x-1"
+                aria-label={t('views.viewing', {
+                  names: live.others.map((u) => u.name).join(', '),
+                })}
+                title={t('views.viewing', { names: live.others.map((u) => u.name).join(', ') })}
+              >
+                {live.others.slice(0, 4).map((u) => (
+                  <li
+                    key={u.uid}
+                    className="flex size-6 items-center justify-center rounded-full border-2 border-surface bg-accent text-[10px] font-semibold text-accent-foreground"
+                  >
+                    {u.name
+                      .split(/\s+/)
+                      .slice(0, 2)
+                      .map((w) => w.charAt(0).toUpperCase())
+                      .join('')}
+                  </li>
+                ))}
+              </ul>
+            )}
             <span
               aria-live="polite"
               className="flex items-center gap-1 text-xs text-muted-foreground"
@@ -657,6 +681,27 @@ export function FormView({
           </div>
         </div>
 
+        {live.changedByOther ? (
+          <Alert
+            tone="warning"
+            action={
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  setChanges({});
+                  setLines(new Map());
+                  live.dismiss();
+                  void loaded.refetch();
+                }}
+              >
+                {t('views.reload')}
+              </Button>
+            }
+          >
+            {t('views.changedByOther')}
+          </Alert>
+        ) : null}
         {problem === null ? null : (
           <Alert
             tone={problem.kind === 'stale-record' ? 'warning' : 'danger'}

@@ -13,6 +13,7 @@ import {
 } from 'react';
 import type { KoshApi } from './api.js';
 import { createFormatter, type Formatter } from './lib/format.js';
+import type { RealtimeClient } from './realtime.js';
 import type { Registry } from './registry.js';
 
 export type ThemeChoice = 'light' | 'dark' | 'system';
@@ -25,6 +26,8 @@ export interface KoshContextValue {
   readonly format: Formatter;
   readonly theme: ThemeChoice;
   setTheme(theme: ThemeChoice): void;
+  /** The realtime gateway's client, when the app has one: live lists, records and presence. */
+  readonly realtime?: RealtimeClient;
 }
 
 const Context = createContext<KoshContextValue | null>(null);
@@ -76,6 +79,7 @@ export function KoshProvider({
   companyId,
   lang,
   tz,
+  realtime,
   children,
 }: {
   readonly api: KoshApi;
@@ -84,13 +88,23 @@ export function KoshProvider({
   readonly companyId: number;
   readonly lang: string;
   readonly tz: string;
+  readonly realtime?: RealtimeClient;
   readonly children: ReactNode;
 }): ReactElement {
   const [theme, setTheme] = useTheme();
   const format = useMemo(() => createFormatter(lang, tz), [lang, tz]);
   const value = useMemo(
-    () => ({ api, registry, uid, companyId, format, theme, setTheme }),
-    [api, registry, uid, companyId, format, theme, setTheme],
+    () => ({
+      api,
+      registry,
+      uid,
+      companyId,
+      format,
+      theme,
+      setTheme,
+      ...(realtime === undefined ? {} : { realtime }),
+    }),
+    [api, registry, uid, companyId, format, theme, setTheme, realtime],
   );
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }

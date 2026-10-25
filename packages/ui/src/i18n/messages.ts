@@ -36,6 +36,10 @@ export const en = {
     skip: 'Skip to content',
   },
   views: {
+    createFirst: 'Create the first one',
+    changedByOther:
+      'Someone else changed this record. Reload to see it (your unsaved changes will be lost).',
+    viewing: 'Also here: {{names}}',
     records_one: '{{count}} record',
     records_other: '{{count}} records',
     selected_one: '{{count}} selected',
@@ -215,6 +219,9 @@ export const bn: DeepPartial<Messages> = {
     skip: 'মূল অংশে যান',
   },
   views: {
+    createFirst: 'প্রথমটি তৈরি করুন',
+    changedByOther: 'অন্য কেউ এই রেকর্ড বদলেছেন। দেখতে রিলোড করুন (আপনার অসংরক্ষিত পরিবর্তন হারাবে)।',
+    viewing: 'এখানে আছেন: {{names}}',
     records_one: '{{count}}টি রেকর্ড',
     records_other: '{{count}}টি রেকর্ড',
     selected_one: '{{count}}টি নির্বাচিত',

@@ -74,6 +74,7 @@ import {
 import { KoshProvider, type ThemeChoice, useKosh } from './context.js';
 import { addMessages, createI18n, directionOf } from './i18n/index.js';
 import { LANGUAGES } from './i18n/messages.js';
+import { createRealtimeClient, type RealtimeClient } from './realtime.js';
 import type { Registry } from './registry.js';
 import { SearchBar } from './search/SearchBar.js';
 import { CommandPalette, PaletteContext } from './shell/CommandPalette.js';
@@ -87,6 +88,8 @@ import { neighbours } from './views/listMemory.js';
 interface Services {
   readonly api: KoshApi;
   readonly registry: Registry;
+  /** Live updates and presence (absent without a browser WebSocket, e.g. in tests). */
+  readonly realtime?: RealtimeClient;
   readonly i18n: i18n;
   readonly lang: string;
   setLang(lang: string): void;
@@ -250,7 +253,7 @@ function CompanySwitcher({
 }
 
 function Shell(): ReactElement {
-  const { api, registry, lang } = useServices();
+  const { api, registry, lang, realtime } = useServices();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -292,6 +295,7 @@ function Shell(): ReactElement {
       companyId={current}
       lang={lang}
       tz={Intl.DateTimeFormat().resolvedOptions().timeZone}
+      {...(realtime === undefined ? {} : { realtime })}
     >
       <ToastProvider>
         <PaletteContext.Provider value={openPalette}>
@@ -791,11 +795,18 @@ export function KoshApp({ api, registry, messages, fallback = null }: KoshAppPro
     };
   }, [startLang, messages]);
   const router = useMemo(() => createRouter({ routeTree, defaultPreload: 'intent' }), []);
+  // Live updates and presence: one connection per tab, for as long as the app lives.
+  const realtime = useMemo(
+    () => (typeof WebSocket === 'undefined' ? undefined : createRealtimeClient()),
+    [],
+  );
+  useEffect(() => () => realtime?.close(), [realtime]);
   api.setLanguage(lang);
   if (instance === null) return <>{fallback}</>;
   const services: Services = {
     api,
     registry,
+    ...(realtime === undefined ? {} : { realtime }),
     i18n: instance,
     lang,
     setLang(next) {

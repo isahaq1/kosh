@@ -42,6 +42,7 @@ import {
 } from '../components/primitives.js';
 import { useKosh } from '../context.js';
 import { cn } from '../lib/cn.js';
+import { useLiveModel } from '../live.js';
 import type { ViewProps } from '../registry.js';
 import { useToast } from '../shell/toast.js';
 import { rememberList } from './listMemory.js';
@@ -338,7 +339,7 @@ function Rows({
               action: (
                 <Button variant="primary" size="sm" onClick={() => props.onOpen('new')}>
                   <Plus aria-hidden />
-                  {t('views.new')}
+                  {t('views.createFirst')}
                 </Button>
               ),
             }
@@ -641,6 +642,7 @@ export function ListView(props: ViewProps): ReactElement {
   const served: ServedView = props.served;
   if (view.type !== 'list') throw new Error(`ListView renders list views, not ${view.type}.`);
   const model = view.model;
+  useLiveModel(model);
   const pageSize = view.pageSize ?? 80;
   const fields = served.fields[model] ?? {};
   const allColumns = view.columns.filter((c) => fields[c.field] !== undefined);

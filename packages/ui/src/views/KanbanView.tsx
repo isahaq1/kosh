@@ -25,6 +25,7 @@ import { ApiError, type Row, type ServedView, type ViewField } from '../api.js';
 import { Alert, Input, Skeleton } from '../components/primitives.js';
 import { useKosh } from '../context.js';
 import { cn } from '../lib/cn.js';
+import { useLiveModel } from '../live.js';
 import type { ViewProps } from '../registry.js';
 import { useToast } from '../shell/toast.js';
 import { PrefetchedNames, useRowNames } from './widgets.js';
@@ -269,6 +270,7 @@ export function KanbanView(props: ViewProps): ReactElement {
     useSensor(KeyboardSensor),
   );
   const view = props.served.view;
+  useLiveModel(view.model);
   const fields = view.type === 'kanban' ? (props.served.fields[view.model] ?? {}) : {};
   const groupField = view.type === 'kanban' ? fields[view.groupBy] : undefined;
   const totalField =
