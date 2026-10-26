@@ -147,6 +147,23 @@ to a form in Studio mode, apply, fill it on a record.
   fields on the extended model, the own model, the view extensions by node id, menus, actions and access levels),
   a missing anchor failing at load, and `kosh studio build`.
 
+## Implementation notes (2026-10-26): step 2 — App manager upgrade
+
+- `planApps` takes `upgrade` (installed modules moving to their code's version; never back, unchanged when equal)
+  and `outdatedApps` lists them; `prepareApps` accepts the database being behind the code only for an upgrade
+  (the drift is the upgrade), refuses destructive statements unless `removeData`; `applyApps` runs Shutro's
+  `applyMigrations` for upgrades even without schema statements (it runs the modules' data migrations and records
+  their versions), reloads the upgraded modules' seed data and the defaults, and records the version, the log and
+  the audit event in the change's transaction.
+- `kosh apps upgrade [app …] [--remove-data]` (default: every outdated app), the catalogue listing shows the
+  installed version when it is behind; the Settings API takes `upgrade` and the Apps page has Upgrade (it never
+  removes data: that stays a deliberate command).
+- Found on the way: `kosh_app_log.change` holds the change as a JSON string inside the jsonb (the parameter was
+  encoded twice); readers parse it twice for now (the test does); a fix with a data migration of the log later.
+- Tests: the planner (upgrade, unchanged, back refused, not installed, the outdated list); on PostgreSQL, a module
+  at 1.0.0 upgraded to 1.1.0 (a column added, its data migration filling it, the version and the log), refused
+  back, empty again, and 2.0.0 dropping a column refused until "remove data".
+
 ## Alignment with CLAUDE.md
 
 "Customizable without forking" and "explicit over magic": a Studio change is a module, traceable to the module

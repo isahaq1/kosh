@@ -4,8 +4,9 @@ Studio changes an installation without code and without database customizations:
 in `src/modules/<name>/`, made of `studio.json` (the specification, the only file Studio reads and writes) and the
 TypeScript generated from it. It is reviewed, versioned and installed like any module.
 
-Step 1 (this version) is the specification and the generator; the Studio API, the App manager's upgrade and the
-Studio mode of the back-office follow RFC 0012's plan.
+Steps 1–2 are the specification, the generator and the App manager's upgrade (a changed Studio module is
+applied with `kosh apps upgrade <name>`); the Studio API and the Studio mode of the back-office follow RFC 0012's
+plan.
 
 ## The specification
 

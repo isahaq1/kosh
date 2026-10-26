@@ -15,4 +15,4 @@ Design documents written before implementation. An RFC is implemented only after
 | 0009 | [Accounting](0009-accounting.md) | Accepted; steps 1–4 implemented (the ledger, documents and bridges, payments and reconciliation, reports and closing) |
 | 0010 | [A modern, fast, friendly back-office](0010-modern-ux.md) | Phase A accepted (within RFC 0007); Phase B implemented; C: its three subsystems get RFCs of their own, 0011 first |
 | 0011 | [Automation builder](0011-automation-builder.md) | Accepted; steps 1–3 implemented (the engine, the API, the editor, webhooks, date and schedule triggers) |
-| 0012 | [Kosh Studio](0012-studio.md) | Accepted; step 1 implemented (the spec and the generator, `kosh studio build`) |
+| 0012 | [Kosh Studio](0012-studio.md) | Accepted; steps 1–2 implemented (the spec and the generator, `kosh studio build`, `kosh apps upgrade`) |

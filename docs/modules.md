@@ -60,6 +60,8 @@ npx kosh apps                       # ● installed  ◌ disabled  ○ available
 npx kosh apps install sales         # the plan (sales and what it needs), then one transaction
 npx kosh apps disable projects      # menus, API and access go; tables and data stay (dependents go too)
 npx kosh apps enable projects       # back in seconds, with its data
+npx kosh apps upgrade               # every app whose code is newer than its installed version
+npx kosh apps upgrade acme --remove-data   # an upgrade that drops columns its code no longer has
 npx kosh apps install sales --plan  # only show the plan
 ```
 
@@ -100,6 +102,13 @@ and never proposes dropping them. Removing an app together with its data comes i
 Projects from before the App manager have no `kosh_module` yet. Until their first `kosh apps` change, servers and
 `kosh migrate` keep treating `src/modules.ts` as the installed set. That first change records the modules that have
 been migrated, and anything added to the list since then is shown as available.
+
+**Upgrading** (RFC 0012 §5.4): when a module's code is newer than its installed version (`kosh apps` shows
+"installed 1.0.0: kosh apps upgrade …", the Apps page an Upgrade button), `kosh apps upgrade` plans the schema
+difference, runs the module's data migrations (`migrations` in its Shutro module, each once, for the versions it
+passes) and its seed data again, and records the new version, in one transaction with the log. Dropping columns
+or tables the new code no longer has is refused with what it would drop, unless asked (`--remove-data`); going
+back to an older version is refused.
 
 ## Business apps (`modules/`)
 
