@@ -275,5 +275,6 @@ export default defineModule({
 - [x] App manager step 2: apps API, hot reload across nodes (app host), Settings app with the Apps page
 - [x] Business apps, part 1 (modules/): Contacts, Products (units, VAT), Sales, Purchase with approvals (RFC 0008 §8 steps 3–4)
 - [ ] Business apps, part 2: Accounting (RFC 0009 accepted; steps 1–4 done: the ledger core, invoices / bills / credit notes with taxes and approvals, the `sale_account` and `purchase_account` bridges, payments and reconciliation with exchange differences, the reports, year closing and the accounting screens; next the business apps' E2E catalogue and the default set), Projects and `sale_project`
+- [x] `kosh init` default set (Contacts, Products, Sales, Purchase, Accounting with their bridges; RFC 0008 step 7) and the business apps' E2E catalogue (`apps/web/e2e-apps`)
 - [ ] Demo modules: base, contacts, product, purchase (with approvals), inventory, sales
 - [ ] Performance benchmarks vs Odoo-like workloads

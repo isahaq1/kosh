@@ -226,6 +226,20 @@ soon as every module it connects is installed or part of the change, and `AppCha
 out. The first two are `sale_account` and `purchase_account` (RFC 0009 step 2). The Settings page and `kosh apps`
 show the reason; a pre-checked line to uncheck in the UI is still to come.
 
+## Implementation notes (2026-10-26): step 7 — the default set and the business apps' E2E catalogue
+
+- **`kosh init`** offers every app but the bridges (`SELECTABLE_APPS`), all selected by default: Contacts,
+  Products, Sales, Purchase and Accounting with the framework apps; the bridges of the chosen apps
+  (`bridgesFor`) come along without being asked for. Projects joins the default set when it is built.
+- **The business apps' E2E catalogue** (`apps/web/e2e-apps/server.ts`, Playwright project `apps`, its own API
+  and preview ports): a real installation of Sales, Purchase and Accounting with the bridges proposed by the
+  planner, the Bangladesh chart, partners, a product, a confirmed sales order and a posted customer invoice,
+  seeded through the API as users would. `apps/web/e2e-apps/accounting.spec.ts` invoices an order from its form,
+  registers a payment on an invoice from its form and sees it paid, reads the aged balances and the trial
+  balance, sets a lock date on the settings page and matches open items on the reconciliation page. The fixture
+  catalogue (`e2e/`) keeps its own partner model, so the two projects run on separate servers.
+- The back-office (`apps/web`) registers the accounting screens (`@kosh/accounting/web`), as the starter does.
+
 ## 9. Decisions (2026-10-19)
 
 1. Inventory stays out of the default set; it comes later as its own app with the `sale_stock` / `purchase_stock`
