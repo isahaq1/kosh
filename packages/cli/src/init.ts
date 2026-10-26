@@ -554,6 +554,7 @@ async function modulesFor(apps: readonly AppName[]): Promise<KoshModule[]> {
     (await import('@kosh/notify')).notify,
     (await import('@kosh/mail')).mail,
     (await import('@kosh/automation')).automation,
+    (await import('@kosh/studio')).studio,
   ];
   for (const app of apps) {
     if (app === 'permissions') modules.push((await import('@kosh/permissions')).permissions);
@@ -603,6 +604,10 @@ function envFile(a: Answers): string {
     '# MAIL_INBOUND_ALIAS=reply',
     `MAIL_INBOUND_WEBHOOK_SECRET=${a.inboundWebhookSecret}`,
     '# Without a webhook provider, a mailbox read every 30 s: IMAP_URL=imaps://user:password@host:993/INBOX',
+    '',
+    '# Kosh Studio (RFC 0012): propose (default: changes become patches) or write (development, one server: Studio',
+    '# writes src/modules/<name>/ and applies at once). KOSH_STUDIO_DIR: the project folder (default: the working one).',
+    '# KOSH_STUDIO=write',
     '',
     '# SMS and WhatsApp through Twilio (opt-in per user; a phone number on the user).',
     '# TWILIO_ACCOUNT_SID=',
@@ -975,9 +980,16 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
       ],
       [
         'Apps',
-        ['base', 'settings', 'realtime', 'notify', 'mail', 'automation', ...answers.apps].join(
-          ', ',
-        ),
+        [
+          'base',
+          'settings',
+          'realtime',
+          'notify',
+          'mail',
+          'automation',
+          'studio',
+          ...answers.apps,
+        ].join(', '),
       ],
       ...(answers.demo
         ? [['Demo users', `dina, rahim, karim, sumi · password "${DEMO_PASSWORD}"`] as CardRow]

@@ -167,9 +167,10 @@ import { mail } from 'kosh-erp/mail';
 import { notify } from 'kosh-erp/notify';
 import { realtime } from 'kosh-erp/realtime';
 import { settings } from 'kosh-erp/settings';
+import { studio } from 'kosh-erp/studio';
 ${imports.join('\n')}
 
-export const modules = [base, settings, realtime, notify, mail, automation${apps.map((a) => `, ${APPS[a].server}`).join('')}];
+export const modules = [base, settings, realtime, notify, mail, automation, studio${apps.map((a) => `, ${APPS[a].server}`).join('')}];
 `;
 }
 
