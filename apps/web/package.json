@@ -21,7 +21,8 @@
     "@kosh/reporting": "workspace:*",
     "@kosh/messaging": "workspace:*",
     "@kosh/settings": "workspace:*",
-    "@kosh/notify": "workspace:*"
+    "@kosh/notify": "workspace:*",
+    "@kosh/accounting": "workspace:*"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
@@ -37,6 +38,12 @@
     "@kosh/server": "workspace:*",
     "@kosh/modules-sdk": "workspace:*",
     "@kosh/views": "workspace:*",
-    "@kosh/realtime": "workspace:*"
+    "@kosh/realtime": "workspace:*",
+    "@kosh/sales": "workspace:*",
+    "@kosh/purchase": "workspace:*",
+    "@kosh/contacts": "workspace:*",
+    "@kosh/product": "workspace:*",
+    "@kosh/sale_account": "workspace:*",
+    "@kosh/purchase_account": "workspace:*"
   }
 }

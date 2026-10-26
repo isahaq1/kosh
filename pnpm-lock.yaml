@@ -34,6 +34,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../../modules/accounting
       '@kosh/messaging':
         specifier: workspace:*
         version: link:../../packages/messaging
@@ -65,12 +68,30 @@ importers:
       '@kosh/cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../../modules/contacts
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../../modules/product
+      '@kosh/purchase':
+        specifier: workspace:*
+        version: link:../../modules/purchase
+      '@kosh/purchase_account':
+        specifier: workspace:*
+        version: link:../../modules/purchase_account
       '@kosh/realtime':
         specifier: workspace:*
         version: link:../../packages/realtime
+      '@kosh/sale_account':
+        specifier: workspace:*
+        version: link:../../modules/sale_account
+      '@kosh/sales':
+        specifier: workspace:*
+        version: link:../../modules/sales
       '@kosh/server':
         specifier: workspace:*
         version: link:../../packages/server

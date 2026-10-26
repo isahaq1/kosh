@@ -3,6 +3,7 @@
  * distribution's modules, composed at build time. What a user sees is decided per request by the server.
  */
 import './index.css';
+import { accountingMessages, registerAccountingWeb } from '@kosh/accounting/web';
 import { messagingMessages, registerMessagingWeb } from '@kosh/messaging/web';
 import { notifyMessages, registerNotifyWeb } from '@kosh/notify/web';
 import { registerPermissionsWeb } from '@kosh/permissions/web';
@@ -18,7 +19,9 @@ registerReportingWeb(registry);
 registerMessagingWeb(registry);
 registerSettingsWeb(registry);
 registerNotifyWeb(registry);
+registerAccountingWeb(registry);
 const messages = {
+  accounting: accountingMessages,
   notify: notifyMessages,
   reporting: reportingMessages,
   messaging: messagingMessages,
