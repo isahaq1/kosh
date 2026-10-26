@@ -67,7 +67,18 @@ async function installedDigest(
 
 /** Creates the host and its first server (not listening yet). */
 export async function createAppHost(options: AppHostOptions): Promise<AppHost> {
-  const { catalogue, migrationsDir = 'migrations', listen = true, drainMs = 30_000 } = options;
+  const { migrationsDir = 'migrations', listen = true, drainMs = 30_000 } = options;
+  let catalogue: readonly KoshModule[] = [...options.catalogue];
+  const apps = {
+    get catalogue() {
+      return catalogue;
+    },
+    migrationsDir,
+    reload: () => host.reload(),
+    useModule(module: KoshModule) {
+      catalogue = [...catalogue.filter((m) => m.name !== module.name), module];
+    },
+  };
   const probe = pg.createDriver({ url: options.databaseUrl, max: 1, applicationName: 'kosh host' });
   let current: Generation;
   let count = 0;
@@ -131,7 +142,7 @@ export async function createAppHost(options: AppHostOptions): Promise<AppHost> {
         handler = h as Handler;
         return createHttpServer(); // never listens: the host's listener dispatches to `handler`
       },
-      apps: { catalogue, migrationsDir, reload: () => host.reload() },
+      apps,
     });
     await server.app.ready();
     if (handler === undefined) throw new Error('Fastify did not hand over its request handler.');

@@ -91,6 +91,11 @@ export interface AppsContext {
   readonly migrationsDir: string;
   /** Rebuilds the server for the installed set (after a change); true when it changed. */
   reload(): Promise<boolean>;
+  /**
+   * Puts a module's new code in the catalogue (Kosh Studio's write mode, RFC 0012 §5.3): the next rebuild serves
+   * it. This server only: other nodes learn it from their own code.
+   */
+  useModule?(module: KoshModule): void;
 }
 
 /** What a module's `routes` hook receives (`defineModule({ routes })`). */
