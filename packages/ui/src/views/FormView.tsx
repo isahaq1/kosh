@@ -394,16 +394,20 @@ export function FormView({
     const next = { ...changes, [key]: value };
     setChanges(next);
     if (!served.onchange.includes(key)) return;
+    // The record's id travels on its own: it is not a field of the draft.
+    const { id: _id, ...plain } = values;
     void api
       .onchange(model, {
         ...(isNew ? {} : { id: recordId }),
-        values: { ...values, [key]: value },
+        values: { ...plain, [key]: value },
         changed: [key],
       })
       .then((result) => {
         const assisted: Values = {};
+        // Computed values (display name, totals) come back too: shown, never written.
         for (const [k, v] of Object.entries(result.values))
-          if (k !== key && k !== 'id' && values[k] !== v) assisted[k] = v;
+          if (k !== key && k !== 'id' && fields[k]?.readonly !== true && values[k] !== v)
+            assisted[k] = v;
         if (Object.keys(assisted).length > 0) setChanges((c) => ({ ...c, ...assisted }));
         setWarnings(result.warnings ?? []);
       })

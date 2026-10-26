@@ -39,6 +39,9 @@ interface Column {
 const and = (a: Condition | undefined, b: Condition): Condition =>
   a === undefined ? b : { and: [a, b] };
 
+/** How many records of a many2one target become columns of their own (the rest group as the data has them). */
+const EXPANDED_COLUMNS = 50;
+
 /** The plain amount of an aggregate (Money comes back as `{ amount, currency }`). */
 function amountOf(v: unknown): string {
   if (typeof v === 'object' && v !== null && 'amount' in v)
@@ -295,6 +298,13 @@ export function KanbanView(props: ViewProps): ReactElement {
     (stats.data ?? []).map((g) => ({ [groupField?.key ?? '']: g[groupField?.key ?? ''] })),
     groupField === undefined ? [] : [groupField],
   );
+  // A many2one board shows every record of its target (stages, teams) as a column, empty ones included, in the
+  // target's order; the groups the aggregate returns beyond those (None, or a target past the limit) follow.
+  const expanded = useQuery({
+    queryKey: ['kanban-columns', groupField?.target],
+    queryFn: () => api.names(groupField?.target as string, { limit: EXPANDED_COLUMNS }),
+    enabled: groupField?.kind === 'many2one' && groupField.target !== undefined,
+  });
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ['list', view.model] });
     await queryClient.invalidateQueries({ queryKey: ['kanban-stats', view.model] });
@@ -344,20 +354,25 @@ export function KanbanView(props: ViewProps): ReactElement {
       <Alert>{`The kanban needs the field ${view.type === 'kanban' ? view.groupBy : ''}.`}</Alert>
     );
 
+  const grouped: Column[] = (stats.data ?? []).map((g) => {
+    const value = g[groupField.key] ?? null;
+    const label =
+      value === null
+        ? t('views.none')
+        : groupField.kind === 'many2one'
+          ? (groupNames.get(groupField.target ?? '')?.get(Number(value)) ?? `#${String(value)}`)
+          : String(value);
+    return { key: JSON.stringify(value), value, label };
+  });
+  const all: Column[] = (expanded.data ?? []).map((r) => ({
+    key: JSON.stringify(r.id),
+    value: r.id,
+    label: r.displayName,
+  }));
   const columns: Column[] =
     groupField.options !== undefined
       ? groupField.options.map((o) => ({ key: o.value, value: o.value, label: o.label }))
-      : (stats.data ?? []).map((g) => {
-          const value = g[groupField.key] ?? null;
-          const label =
-            value === null
-              ? t('views.none')
-              : groupField.kind === 'many2one'
-                ? (groupNames.get(groupField.target ?? '')?.get(Number(value)) ??
-                  `#${String(value)}`)
-                : String(value);
-          return { key: JSON.stringify(value), value, label };
-        });
+      : [...all, ...grouped.filter((g) => !all.some((c) => c.key === g.key))];
   const statsOf = (column: Column) => {
     if (stats.data === undefined) return undefined;
     const row = stats.data.find(
