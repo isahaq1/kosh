@@ -13,6 +13,7 @@ import { type AutomationContext, startAutomation } from './engine.js';
 import { automationShutro } from './models.js';
 import { registerAutomationRoutes } from './routes.js';
 
+export { type Cron, isDue, nextRun, parseCron } from './cron.js';
 export {
   type AutomationContext,
   applyChange,
@@ -20,19 +21,27 @@ export {
   type Change,
   chainOf,
   changesOf,
+  DATE_LOOKBACK_DAYS,
   loadRules,
   MAX_DEPTH,
   type Outcome,
   pollAudit,
   pollOutbox,
+  pollTimed,
   type RuleRow,
   render,
   retryRun,
   runActions,
+  sendWebhook,
+  signWebhook,
   startAutomation,
   testRule,
   trackedFields,
   triggerMismatch,
+  WEBHOOK_JOB,
+  webhookHosts,
+  webhookProblem,
+  webhookWorker,
 } from './engine.js';
 export {
   ACTION_KINDS,

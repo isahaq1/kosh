@@ -43,6 +43,9 @@ interface Rule {
   fromValues: Row;
   toValues: Row;
   topic: string;
+  dateField: string;
+  dateOffsetDays: number;
+  cron: string;
   condition: Row;
   actions: Row[];
   runAs: 'actor' | 'system';
@@ -53,7 +56,15 @@ interface Rule {
   description: string;
 }
 
-const TRIGGERS = ['created', 'updated', 'transition', 'deleted', 'event'] as const;
+const TRIGGERS = [
+  'created',
+  'updated',
+  'transition',
+  'deleted',
+  'event',
+  'date',
+  'schedule',
+] as const;
 const KINDS = [
   'set',
   'transition',
@@ -62,6 +73,7 @@ const KINDS = [
   'note',
   'comment',
   'create',
+  'webhook',
   'action',
 ] as const;
 const OPERATORS = ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'ilike', 'in', 'isNull'] as const;
@@ -74,6 +86,9 @@ const empty: Rule = {
   fromValues: {},
   toValues: {},
   topic: '',
+  dateField: '',
+  dateOffsetDays: 0,
+  cron: '',
   condition: {},
   actions: [],
   runAs: 'actor',
@@ -93,6 +108,9 @@ function ruleOf(record: Row): Rule {
     fromValues: (record['fromValues'] as Row | null) ?? {},
     toValues: (record['toValues'] as Row | null) ?? {},
     topic: String(record['topic'] ?? ''),
+    dateField: String(record['dateField'] ?? ''),
+    dateOffsetDays: Number(record['dateOffsetDays'] ?? 0),
+    cron: String(record['cron'] ?? ''),
     condition: (record['condition'] as Row | null) ?? {},
     actions: Array.isArray(record['actions']) ? (record['actions'] as Row[]) : [],
     runAs: record['runAs'] === 'system' ? 'system' : 'actor',
@@ -439,6 +457,39 @@ function ActionCard({
           />
         </div>
       ) : null}
+      {kind === 'webhook' ? (
+        <div className="grid gap-2">
+          <div className="grid gap-1">
+            <Label htmlFor={`a${index}-url`}>{t('editor.url')}</Label>
+            <Input
+              id={`a${index}-url`}
+              type="url"
+              placeholder="https://hooks.example.com/kosh"
+              value={String(action['url'] ?? '')}
+              onChange={(e) => patch({ url: e.target.value })}
+            />
+          </div>
+          <div className="grid gap-1">
+            <Label htmlFor={`a${index}-fields`}>{t('editor.webhookFields')}</Label>
+            <Input
+              id={`a${index}-fields`}
+              placeholder="name, amount, partner"
+              value={
+                Array.isArray(action['fields']) ? (action['fields'] as string[]).join(', ') : ''
+              }
+              onChange={(e) =>
+                patch({
+                  fields: e.target.value
+                    .split(',')
+                    .map((x) => x.trim())
+                    .filter((x) => x !== ''),
+                })
+              }
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">{t('editor.webhookHint')}</p>
+        </div>
+      ) : null}
       {kind === 'action' ? (
         <Select
           label={t('editor.moduleAction')}
@@ -529,6 +580,9 @@ export function RuleEditor({ recordId, onSaved, onBack, crumbs }: FormProps): Re
     fromValues: rule.fromValues,
     toValues: rule.toValues,
     topic: rule.topic === '' ? null : rule.topic,
+    dateField: rule.dateField === '' ? null : rule.dateField,
+    dateOffsetDays: rule.dateOffsetDays,
+    cron: rule.cron === '' ? null : rule.cron,
     condition: condition(),
     actions: rule.actions,
     runAs: rule.runAs,
@@ -718,6 +772,45 @@ export function RuleEditor({ recordId, onSaved, onBack, crumbs }: FormProps): Re
               fields={fields}
               onChange={(toValues) => setRule({ ...rule, toValues })}
             />
+          </div>
+        ) : null}
+        {rule.trigger === 'date' ? (
+          <div className="flex flex-wrap items-end gap-3">
+            <Select
+              id={`${id}-dateField`}
+              label={t('editor.dateField')}
+              value={rule.dateField === '' ? null : rule.dateField}
+              placeholder={t('editor.pickDateField')}
+              options={fields
+                .filter((f) => f.kind === 'date' || f.kind === 'datetime')
+                .map((f) => ({ value: f.key, label: `${f.label} (${f.key})` }))}
+              onChange={(dateField) => setRule({ ...rule, dateField })}
+              className="w-64"
+            />
+            <div className="grid gap-1">
+              <Label htmlFor={`${id}-offset`}>{t('editor.dateOffset')}</Label>
+              <Input
+                id={`${id}-offset`}
+                type="number"
+                className="w-28"
+                value={String(rule.dateOffsetDays)}
+                onChange={(e) => setRule({ ...rule, dateOffsetDays: Number(e.target.value) })}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">{t('editor.dateHint')}</p>
+          </div>
+        ) : null}
+        {rule.trigger === 'schedule' ? (
+          <div className="grid gap-1">
+            <Label htmlFor={`${id}-cron`}>{t('editor.cron')}</Label>
+            <Input
+              id={`${id}-cron`}
+              className="w-64 font-mono"
+              placeholder="0 2 * * *"
+              value={rule.cron}
+              onChange={(e) => setRule({ ...rule, cron: e.target.value })}
+            />
+            <p className="text-xs text-muted-foreground">{t('editor.cronHint')}</p>
           </div>
         ) : null}
         {rule.trigger === 'event' ? (

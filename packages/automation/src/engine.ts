@@ -6,6 +6,8 @@
  * engine's own writes carry the reason `automation:<rule>:<depth>`, which keeps a rule from firing on itself
  * and bounds chains.
  */
+
+import { createHmac, randomBytes } from 'node:crypto';
 import {
   type ChatterContext,
   postExternalMessage,
@@ -14,7 +16,8 @@ import {
 } from '@kosh/messaging';
 import type { AutomationActionSpec } from '@kosh/modules-sdk';
 import { type AuthService, HttpProblem, type KoshRegistry } from '@kosh/server';
-import { type Driver, type Env, orm, type Shutro } from '@kosh/server/orm';
+import { type Driver, type Env, orm, type Shutro, type Worker } from '@kosh/server/orm';
+import { isDue, parseCron } from './cron.js';
 
 type Row = Record<string, unknown>;
 interface Rows {
@@ -67,6 +70,8 @@ export interface Change {
   /** `event` triggers: the topic and the payload. */
   readonly topic?: string | undefined;
   readonly payload?: unknown;
+  /** `date` and `schedule` triggers: no change made them, the clock did. */
+  readonly timed?: 'date' | 'schedule' | undefined;
 }
 
 export interface RuleRow {
@@ -84,6 +89,12 @@ export interface RuleRow {
   readonly runAsUser: number | null;
   readonly logOnRecord: boolean;
   readonly company: number;
+  readonly dateField: string | null;
+  readonly dateOffsetDays: number;
+  readonly cron: string | null;
+  readonly webhookSecret: string | null;
+  readonly createdAt: Date;
+  readonly lastRunAt: Date | null;
 }
 
 export interface Outcome {
@@ -127,13 +138,26 @@ const asRule = (r: Row): RuleRow => ({
   runAsUser: (r['runAsUser'] as number | null) ?? null,
   logOnRecord: r['logOnRecord'] === true,
   company: r['company'] as number,
+  dateField: (r['dateField'] as string | null) ?? null,
+  dateOffsetDays: Number(r['dateOffsetDays'] ?? 0),
+  cron: (r['cron'] as string | null) ?? null,
+  webhookSecret: (r['webhookSecret'] as string | null) ?? null,
+  createdAt:
+    r['createdAt'] instanceof Date ? r['createdAt'] : new Date(String(r['createdAt'] ?? 0)),
+  lastRunAt:
+    r['lastRunAt'] instanceof Date
+      ? r['lastRunAt']
+      : r['lastRunAt'] === null || r['lastRunAt'] === undefined
+        ? null
+        : new Date(String(r['lastRunAt'])),
 });
 
 /** The enabled rules of every company, straight from the table (the engine matches each change to its company). */
 export async function loadRules(context: AutomationContext): Promise<RuleRow[]> {
   const found = await context.driver.query<Record<string, unknown>>({
     text: `SELECT id, name, target_model, trigger, watch_fields, to_values, from_values, topic, condition, actions,
-                  run_as, run_as_user_id, log_on_record, company_id
+                  run_as, run_as_user_id, log_on_record, company_id, date_field, date_offset_days, cron,
+                  webhook_secret, created_at, last_run_at
            FROM automation_rule WHERE enabled = true AND active = true ORDER BY sequence, id`,
     params: [],
   });
@@ -153,6 +177,12 @@ export async function loadRules(context: AutomationContext): Promise<RuleRow[]> 
       runAsUser: r['run_as_user_id'] === null ? null : Number(r['run_as_user_id']),
       logOnRecord: r['log_on_record'],
       company: Number(r['company_id']),
+      dateField: r['date_field'],
+      dateOffsetDays: r['date_offset_days'],
+      cron: r['cron'],
+      webhookSecret: r['webhook_secret'],
+      createdAt: r['created_at'],
+      lastRunAt: r['last_run_at'],
     }),
   );
 }
@@ -196,6 +226,9 @@ export function triggerMismatch(rule: RuleRow, change: Change): string | null {
       return change.action === 'unlink' ? null : 'trigger';
     case 'event':
       return change.topic !== undefined && change.topic === rule.topic ? null : 'trigger';
+    case 'date':
+    case 'schedule':
+      return change.timed === rule.trigger ? null : 'trigger';
     case 'updated':
     case 'transition': {
       if (change.action !== 'write') return 'trigger';
@@ -544,9 +577,38 @@ export async function runActions(
           });
           break;
         }
-        case 'webhook':
-          outcomes.push({ kind, outcome: 'skipped', detail: 'webhooks come with step 3' });
+        case 'webhook': {
+          const url = String(action['url'] ?? '');
+          const problem = webhookProblem(url);
+          if (problem !== null) throw new Error(problem);
+          const keys = Array.isArray(action['fields']) ? (action['fields'] as string[]) : [];
+          const record: Row = {};
+          if (id !== null && keys.length > 0) {
+            const [row] = (await ref(env, change.model).browse([id]).load(keys)).read([
+              'id',
+              ...keys,
+            ]);
+            Object.assign(record, row);
+          }
+          const job = await env.enqueue(
+            WEBHOOK_JOB,
+            {
+              rule: rule.id,
+              url,
+              body: {
+                rule: { id: rule.id, name: rule.name },
+                trigger: rule.trigger,
+                model: change.model,
+                id,
+                record,
+                at: new Date().toISOString(),
+              },
+            },
+            { attempts: 4 },
+          );
+          outcomes.push({ kind, outcome: 'done', detail: `queued job ${String(job)}` });
           break;
+        }
         default:
           throw new Error(`Unknown action '${kind}'.`);
       }
@@ -580,13 +642,21 @@ async function scopeFor(
   actor: { readonly id: number; readonly name: string } | null;
 } | null> {
   const reason = `automation:${rule.id}:${depth}`;
-  const uid = rule.runAs === 'actor' ? (change.su ? null : change.uid) : (rule.runAsUser ?? null);
+  // A timed trigger has no actor: the rule's user, else the system.
+  const uid =
+    change.timed !== undefined
+      ? (rule.runAsUser ?? null)
+      : rule.runAs === 'actor'
+        ? change.su
+          ? null
+          : change.uid
+        : (rule.runAsUser ?? null);
   const actorName = async (id: number) =>
     context.shutro.bootstrap({ reason: 'automation actor' }, async (su) => {
       const [u] = await rows(su, 'res.users', { id, active: { in: [true, false] } }, ['name']);
       return String(u?.['name'] ?? '');
     });
-  if (rule.runAs === 'system' && uid === null)
+  if ((rule.runAs === 'system' || change.timed !== undefined) && uid === null)
     return {
       actor: change.su ? null : { id: change.uid, name: await actorName(change.uid) },
       run: (fn) => context.shutro.bootstrap({ reason, company: change.company }, fn),
@@ -659,7 +729,8 @@ export async function applyRule(
         await ref(su, 'automation.run')
           .browse([row['id'] as number])
           .write({ ...values, finishedAt: new Date() });
-      await ref(su, 'automation.rule').browse([rule.id]).write({ lastRunAt: new Date() });
+      if (rule.trigger !== 'schedule')
+        await ref(su, 'automation.rule').browse([rule.id]).write({ lastRunAt: new Date() });
     });
   // 2. Skips: the trigger, watched fields, the loop guard, the condition, the actor.
   if ((rule.trigger === 'updated' || rule.trigger === 'transition') && change.action === 'write') {
@@ -743,6 +814,8 @@ export async function applyChange(
   for (const rule of rules) {
     if (rule.targetModel !== change.model || rule.company !== change.company) continue;
     if (rule.trigger === 'event' ? change.topic === undefined : change.topic !== undefined)
+      continue;
+    if ((rule.trigger === 'date' || rule.trigger === 'schedule') !== (change.timed !== undefined))
       continue;
     const result = await applyRule(context, rule, change);
     if (typeof result !== 'string') runs += 1;
@@ -838,7 +911,11 @@ export async function pollAudit(
     const changes = changesOf(audit);
     const models = new Set(changes.map((c) => c.model));
     const rules = (await loadRules(context)).filter(
-      (r) => models.has(r.targetModel) && r.trigger !== 'event',
+      (r) =>
+        models.has(r.targetModel) &&
+        r.trigger !== 'event' &&
+        r.trigger !== 'date' &&
+        r.trigger !== 'schedule',
     );
     let runs = 0;
     if (rules.length > 0)
@@ -925,6 +1002,189 @@ export async function pollOutbox(
   });
 }
 
+export const WEBHOOK_JOB = 'automation.webhook';
+/** How far back a `date` rule looks the first time (a new rule does not fire on years of old records). */
+export const DATE_LOOKBACK_DAYS = 7;
+
+/** The hosts webhooks may call (`KOSH_AUTOMATION_WEBHOOK_HOSTS`, comma-separated; `*.example.com` allowed). */
+export function webhookHosts(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string[] {
+  return (env['KOSH_AUTOMATION_WEBHOOK_HOSTS'] ?? '')
+    .split(',')
+    .map((h) => h.trim().toLowerCase())
+    .filter((h) => h !== '');
+}
+
+/** Why a URL may not be called, or `null`: https (http for localhost), and a host on the allow-list. */
+export function webhookProblem(
+  url: string,
+  hosts: readonly string[] = webhookHosts(),
+): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return `Not a URL: '${url}'.`;
+  }
+  const host = parsed.hostname.toLowerCase();
+  const local = host === 'localhost' || host === '127.0.0.1';
+  if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && local))
+    return 'Webhooks call https URLs (http only for localhost).';
+  const allowed = hosts.some((h) => (h.startsWith('*.') ? host.endsWith(h.slice(1)) : host === h));
+  if (!allowed)
+    return `The host ${host} is not on the webhook allow-list (KOSH_AUTOMATION_WEBHOOK_HOSTS).`;
+  return null;
+}
+
+/** The signature of a webhook body: `sha256=<hex HMAC>` with the rule's secret. */
+export function signWebhook(secret: string, body: string): string {
+  return `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`;
+}
+
+/** The rule's webhook secret, made on first use. */
+async function secretOf(context: AutomationContext, ruleId: number): Promise<string> {
+  const [row] = await context.driver.query<{ webhook_secret: string | null }>({
+    text: 'SELECT webhook_secret FROM automation_rule WHERE id = $1',
+    params: [ruleId],
+  });
+  if (row?.webhook_secret) return row.webhook_secret;
+  const secret = randomBytes(24).toString('base64url');
+  await context.driver.query({
+    text: 'UPDATE automation_rule SET webhook_secret = $2 WHERE id = $1 AND webhook_secret IS NULL',
+    params: [ruleId, secret],
+  });
+  const [again] = await context.driver.query<{ webhook_secret: string }>({
+    text: 'SELECT webhook_secret FROM automation_rule WHERE id = $1',
+    params: [ruleId],
+  });
+  return again?.webhook_secret ?? secret;
+}
+
+/** Sends one webhook: a signed JSON POST, 10 s; a failure throws (the job retries with backoff). */
+export async function sendWebhook(
+  context: AutomationContext,
+  payload: unknown,
+  doFetch: typeof fetch = fetch,
+): Promise<void> {
+  const p = (payload ?? {}) as { rule?: unknown; url?: unknown; body?: unknown };
+  const url = String(p.url ?? '');
+  const problem = webhookProblem(url);
+  if (problem !== null) throw new Error(problem);
+  const body = JSON.stringify(p.body ?? {});
+  const secret = await secretOf(context, Number(p.rule));
+  const response = await doFetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-kosh-signature': signWebhook(secret, body),
+      'x-kosh-rule': String(p.rule),
+    },
+    body,
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) throw new Error(`The webhook answered ${response.status}.`);
+}
+
+/** The webhook job worker. */
+export function webhookWorker(context: AutomationContext, doFetch: typeof fetch = fetch): Worker {
+  return context.shutro.work(
+    { [WEBHOOK_JOB]: (payload) => sendWebhook(context, payload, doFetch) },
+    { pollMs: 5000 },
+  );
+}
+
+const isoDate = (d: Date): string => d.toISOString().slice(0, 10);
+
+/**
+ * The timed triggers, once: `date` rules fire for each record whose date (plus the offset) is reached, once per
+ * record and date value (a date moved later fires again when reached); `schedule` rules fire for the records of
+ * their condition when their cron slot is due. `now` is for tests.
+ */
+export async function pollTimed(
+  context: AutomationContext,
+  options: { readonly now?: Date } = {},
+): Promise<{ readonly runs: number }> {
+  const now = options.now ?? new Date();
+  const rules = (await loadRules(context)).filter(
+    (r) => r.trigger === 'date' || r.trigger === 'schedule',
+  );
+  let runs = 0;
+  for (const rule of rules) {
+    if (rule.trigger === 'date') {
+      if (rule.dateField === null || rule.dateField === '') continue;
+      const reached = new Date(now.getTime() - rule.dateOffsetDays * 86_400_000);
+      const since = new Date(reached.getTime() - DATE_LOOKBACK_DAYS * 86_400_000);
+      const field = rule.dateField;
+      const found = await context.shutro.bootstrap(
+        { reason: 'automation date trigger', company: rule.company },
+        async (su) =>
+          rows(
+            su,
+            rule.targetModel,
+            { and: [{ [field]: { lte: isoDate(reached) } }, { [field]: { gt: isoDate(since) } }] },
+            [field],
+            {
+              limit: 500,
+            },
+          ),
+      );
+      for (const record of found) {
+        const value = record[field];
+        const day = value instanceof Date ? isoDate(value) : String(value ?? '').slice(0, 10);
+        const result = await applyRule(
+          context,
+          rule,
+          timedChange(rule, record['id'] as number, `date:${day}`, 'date'),
+        );
+        if (typeof result !== 'string') runs += 1;
+      }
+      continue;
+    }
+    if (rule.cron === null || rule.cron === '') continue;
+    let slot: Date | null;
+    try {
+      slot = isDue(parseCron(rule.cron), rule.lastRunAt, rule.createdAt, now);
+    } catch (error) {
+      context.log?.(`automation: rule ${rule.id} has a bad cron '${rule.cron}'`, error);
+      continue;
+    }
+    if (slot === null) continue;
+    const found = await context.shutro.bootstrap(
+      { reason: 'automation schedule', company: rule.company },
+      async (su) => rows(su, rule.targetModel, {}, [], { limit: 500 }),
+    );
+    for (const record of found) {
+      const result = await applyRule(
+        context,
+        rule,
+        timedChange(rule, record['id'] as number, `schedule:${slot.toISOString()}`, 'schedule'),
+      );
+      if (typeof result !== 'string') runs += 1;
+    }
+    await context.driver.query({
+      text: 'UPDATE automation_rule SET last_run_at = $2 WHERE id = $1',
+      params: [rule.id, slot],
+    });
+  }
+  return { runs };
+}
+
+function timedChange(rule: RuleRow, id: number, tx: string, timed: 'date' | 'schedule'): Change {
+  return {
+    tx,
+    model: rule.targetModel,
+    id,
+    action: 'write',
+    uid: orm.SYSTEM_UID,
+    company: rule.company,
+    su: true,
+    reason: null,
+    fields: new Map(),
+    timed,
+  };
+}
+
 /** Starts the engine: the audit and outbox pollers; `stop()` ends them after the round in progress. */
 export function startAutomation(
   context: AutomationContext,
@@ -938,8 +1198,11 @@ export function startAutomation(
     running = (async () => {
       await pollAudit(context);
       await pollOutbox(context);
+      await pollTimed(context);
     })().catch((error: unknown) => context.log?.('automation: a round failed', error));
   };
+  const webhooks = webhookWorker(context);
+  webhooks.start();
   const timer = setInterval(tick, pollMs);
   tick();
   return {
@@ -947,6 +1210,7 @@ export function startAutomation(
       stopped = true;
       clearInterval(timer);
       await running;
+      await webhooks.stop();
     },
   };
 }

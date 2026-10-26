@@ -5,6 +5,8 @@
  * runs as its actor (refused and logged when they may not) or as the system; a rule never fires on its own
  * writes; an event rule fires on an outbox event; a dry run and a retry; the run log and its permissions.
  */
+
+import { createServer as createHttpServer, type IncomingMessage } from 'node:http';
 import { messaging } from '@kosh/messaging';
 import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
 import { inboxWorkers, notifyModule } from '@kosh/notify';
@@ -12,7 +14,15 @@ import { base, baseShutro, createServer, installBase, type KoshServer } from '@k
 import { type Env, orm } from '@kosh/server/orm';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { automationContext, automationModule, pollAudit, pollOutbox } from '../src/index.js';
+import {
+  automationContext,
+  automationModule,
+  pollAudit,
+  pollOutbox,
+  pollTimed,
+  signWebhook,
+  webhookWorker,
+} from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
 const { defineGroup, defineModel, defineModule, f } = orm;
@@ -43,6 +53,7 @@ const Deal = defineModel('crm.deal', {
     partner: f.many2one('res.partner'),
     user: f.many2one('res.users', { default: (env: Env) => orm.asId(env.uid, 'res.users') }),
     amount: f.decimal({ scale: 2, default: '0' }),
+    closeDate: f.date(),
     /** Untracked: a rule watching it is refused. */
     notes: f.text(),
     priority: f.selection({ low: 'Low', high: 'High' }, { default: 'low' }),
@@ -461,4 +472,132 @@ test('a dry run renders the actions without running them; permissions: users rea
   const info = await ok('GET', '/api/v1/automation/models/crm.deal', 'admin');
   expect(info.tracked.sort()).toEqual(['amount', 'partner', 'state']);
   expect(info.transitions).toContain('win');
+});
+
+const day = (offset: number) =>
+  new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+
+test('date: a record whose date is reached fires once per date value; a moved date fires again when reached', async () => {
+  const r = await rule({
+    name: 'Closing soon',
+    trigger: 'date',
+    dateField: 'closeDate',
+    dateOffsetDays: -2, // two days before the date
+    runAs: 'system',
+    actions: [{ kind: 'note', text: '{{name}} closes on {{closeDate}}' }],
+  });
+  const soon = await deal('rahim', { name: 'Deal T1', closeDate: day(1) }); // in the window
+  const later = await deal('rahim', { name: 'Deal T2', closeDate: day(30) }); // not yet
+  await poll();
+  expect((await pollTimed(engine)).runs).toBe(1);
+  expect((await pollTimed(engine)).runs).toBe(0); // once per record and date
+  expect((await runsOf(r.id)).map((x: Json) => [x.targetId, x.state])).toEqual([[soon, 'done']]);
+  // The later deal moves closer: it fires now.
+  await ok('PATCH', `/api/v1/models/crm.deal/${later}`, 'rahim', { closeDate: day(2) });
+  expect((await pollTimed(engine)).runs).toBe(1);
+  // The first deal's date moves, and is reached again: it fires again, for the new date.
+  await ok('PATCH', `/api/v1/models/crm.deal/${soon}`, 'rahim', { closeDate: day(0) });
+  expect((await pollTimed(engine)).runs).toBe(1);
+  const notes = await ok('GET', `/api/v1/chatter/crm.deal/${soon}`, 'rahim');
+  expect(notes.items.filter((i: Json) => i.type === 'message').map((i: Json) => i.body)).toEqual([
+    `<p>Deal T1 closes on ${day(0)}</p>`,
+    `<p>Deal T1 closes on ${day(1)}</p>`,
+  ]);
+  await ok('PATCH', `/api/v1/models/automation.rule/${r.id}`, 'admin', { enabled: false });
+});
+
+test('schedule: the rule runs on the records of its condition when its cron slot is due, once per slot', async () => {
+  const r = await rule({
+    name: 'Nightly',
+    trigger: 'schedule',
+    cron: '0 2 * * *',
+    runAs: 'system',
+    condition: { priority: 'high', name: { ilike: 'Deal A%' } },
+    actions: [{ kind: 'note', text: 'Nightly check of {{name}}' }],
+  });
+  expect((await pollTimed(engine)).runs).toBe(0); // the next 02:00 has not come
+  const tomorrow = new Date(Date.now() + 26 * 3_600_000);
+  const due = await pollTimed(engine, { now: tomorrow });
+  expect(due.runs).toBe(1); // Deal A is high priority
+  expect((await pollTimed(engine, { now: tomorrow })).runs).toBe(0); // the slot is done
+  const runs = await runsOf(r.id);
+  expect(runs.filter((x: Json) => x.state === 'done')).toHaveLength(1);
+  await ok('PATCH', `/api/v1/models/automation.rule/${r.id}`, 'admin', { enabled: false });
+});
+
+test('webhook: a signed JSON POST through a job, to an allowed host only; a failure is retried by the job', async () => {
+  const received: { body: string; signature: string; rule: string }[] = [];
+  let status = 200;
+  const read = (request: IncomingMessage): Promise<string> =>
+    new Promise((resolve) => {
+      let data = '';
+      request.on('data', (chunk) => {
+        data += String(chunk);
+      });
+      request.on('end', () => resolve(data));
+    });
+  const hook = createHttpServer(async (request, response) => {
+    received.push({
+      body: await read(request),
+      signature: String(request.headers['x-kosh-signature'] ?? ''),
+      rule: String(request.headers['x-kosh-rule'] ?? ''),
+    });
+    response.writeHead(status);
+    response.end();
+  });
+  await new Promise<void>((resolve) => hook.listen(0, '127.0.0.1', resolve));
+  const address = hook.address();
+  if (address === null || typeof address === 'string') throw new Error('no address');
+  process.env['KOSH_AUTOMATION_WEBHOOK_HOSTS'] = '127.0.0.1';
+  try {
+    const r = await rule({
+      name: 'To the CRM',
+      actions: [
+        {
+          kind: 'webhook',
+          url: `http://127.0.0.1:${address.port}/deals`,
+          fields: ['name', 'amount'],
+        },
+      ],
+    });
+    const blocked = await rule({
+      name: 'Elsewhere',
+      actions: [{ kind: 'webhook', url: 'https://evil.test/x' }],
+    });
+    const id = await deal('rahim', { name: 'Deal W', amount: '42' });
+    await poll();
+    expect((await runsOf(blocked.id))[0]).toMatchObject({ state: 'failed' });
+    expect((await runsOf(blocked.id))[0].error).toContain('allow-list');
+    const worker = webhookWorker(engine);
+    status = 500; // the first delivery fails
+    await worker.drain();
+    expect(received).toHaveLength(1);
+    status = 200;
+    await server.driver.query({
+      text: "UPDATE shutro_job SET run_at = now() WHERE name = 'automation.webhook'",
+      params: [],
+    });
+    await worker.drain();
+    expect(received).toHaveLength(2); // retried
+    const last = received[1] as { body: string; signature: string; rule: string };
+    const body = JSON.parse(last.body) as Json;
+    expect(body).toMatchObject({
+      rule: { id: r.id, name: 'To the CRM' },
+      trigger: 'created',
+      model: 'crm.deal',
+      id,
+      record: { id, name: 'Deal W', amount: '42' },
+    });
+    const [secret] = await server.driver.query<{ webhook_secret: string }>({
+      text: 'SELECT webhook_secret FROM automation_rule WHERE id = $1',
+      params: [r.id],
+    });
+    expect(last.signature).toBe(signWebhook(secret?.webhook_secret as string, last.body));
+    expect(last.rule).toBe(String(r.id));
+    for (const x of [r, blocked])
+      await ok('PATCH', `/api/v1/models/automation.rule/${x.id}`, 'admin', { enabled: false });
+  } finally {
+    delete process.env['KOSH_AUTOMATION_WEBHOOK_HOSTS'];
+    await new Promise<void>((resolve) => hook.close(() => resolve()));
+  }
 });

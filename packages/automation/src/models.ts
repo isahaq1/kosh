@@ -71,8 +71,10 @@ const Rule = defineModel('automation.rule', {
     /** `date`: the date field and the offset in days. */
     dateField: f.char(),
     dateOffsetDays: f.integer({ default: 0 }),
-    /** `schedule`: a cron expression (step 3). */
+    /** `schedule`: a cron expression (UTC; `0 2 * * *`, `@daily`). */
     cron: f.char(),
+    /** Signs the rule's webhooks (`X-Kosh-Signature`); made on first use. */
+    webhookSecret: f.char({ label: 'Webhook secret' }),
     /** A Shutro domain the record must match after the change. */
     condition: f.json(),
     /** The ordered actions: `[{ kind, ...params }]`. */

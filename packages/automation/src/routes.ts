@@ -15,6 +15,7 @@ import {
   type AutomationContext,
   pollAudit,
   pollOutbox,
+  pollTimed,
   retryRun,
   testRule,
   trackedFields,
@@ -78,10 +79,11 @@ export function registerAutomationRoutes(context: ModuleContext, engine: Automat
     });
     const audit = await pollAudit(engine);
     const outbox = await pollOutbox(engine);
+    const timed = await pollTimed(engine);
     return {
       changes: audit?.changes ?? 0,
       events: outbox?.events ?? 0,
-      runs: (audit?.runs ?? 0) + (outbox?.runs ?? 0),
+      runs: (audit?.runs ?? 0) + (outbox?.runs ?? 0) + timed.runs,
     };
   });
 

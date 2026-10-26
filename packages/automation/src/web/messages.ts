@@ -7,6 +7,8 @@ export const messages: Readonly<Record<string, object>> = {
       transition: 'A record changes state',
       deleted: 'A record is deleted',
       event: 'An event is emitted',
+      date: 'A date is reached',
+      schedule: 'On a schedule',
     },
     kinds: {
       set: 'Set fields',
@@ -16,6 +18,7 @@ export const messages: Readonly<Record<string, object>> = {
       note: 'Post a note',
       comment: 'Post a comment',
       create: 'Create a record',
+      webhook: 'Call a webhook',
       action: 'Run a module action',
     },
     operators: {
@@ -52,6 +55,18 @@ export const messages: Readonly<Record<string, object>> = {
       fromValues: 'When it was',
       toValues: 'When it becomes',
       topic: 'Event topic',
+      dateField: 'Date field',
+      pickDateField: 'Pick a date field…',
+      dateOffset: 'Days after (negative: before)',
+      dateHint:
+        'Fires once per record when the date plus the offset is reached; a moved date fires again.',
+      cron: 'Schedule (cron, UTC)',
+      cronHint:
+        'Minute hour day month weekday: "0 2 * * *" is every night at 02:00; @daily, @weekly, @monthly too. Runs on the records the condition matches.',
+      url: 'URL',
+      webhookFields: 'Fields to send',
+      webhookHint:
+        "A signed JSON POST (X-Kosh-Signature: sha256 HMAC with the rule's webhook secret), retried on failure; the host must be on the allow-list (KOSH_AUTOMATION_WEBHOOK_HOSTS).",
       condition: 'And the record matches',
       conditionJson: 'Condition (domain)',
       field: 'Field',
@@ -105,6 +120,8 @@ export const messages: Readonly<Record<string, object>> = {
       transition: 'একটি রেকর্ডের অবস্থা বদলালে',
       deleted: 'একটি রেকর্ড মুছলে',
       event: 'একটি ইভেন্ট ঘটলে',
+      date: 'একটি তারিখে পৌঁছালে',
+      schedule: 'সময়সূচি অনুযায়ী',
     },
     kinds: {
       set: 'ফিল্ড সেট করুন',
@@ -114,6 +131,7 @@ export const messages: Readonly<Record<string, object>> = {
       note: 'নোট পোস্ট করুন',
       comment: 'মন্তব্য পোস্ট করুন',
       create: 'একটি রেকর্ড তৈরি করুন',
+      webhook: 'একটি ওয়েবহুক ডাকুন',
       action: 'মডিউলের কাজ চালান',
     },
     operators: {
@@ -150,6 +168,17 @@ export const messages: Readonly<Record<string, object>> = {
       fromValues: 'যখন ছিল',
       toValues: 'যখন হয়',
       topic: 'ইভেন্টের বিষয়',
+      dateField: 'তারিখের ফিল্ড',
+      pickDateField: 'একটি তারিখের ফিল্ড বাছুন…',
+      dateOffset: 'কত দিন পরে (ঋণাত্মক: আগে)',
+      dateHint: 'তারিখ ও অফসেটে পৌঁছালে প্রতি রেকর্ডে একবার চলে; তারিখ বদলালে আবার চলে।',
+      cron: 'সময়সূচি (ক্রন, UTC)',
+      cronHint:
+        'মিনিট ঘণ্টা দিন মাস সপ্তাহের দিন: "0 2 * * *" মানে প্রতি রাত ০২:০০; @daily, @weekly, @monthly-ও চলে। শর্তে মেলা রেকর্ডে চলে।',
+      url: 'URL',
+      webhookFields: 'যে ফিল্ড পাঠাবে',
+      webhookHint:
+        'স্বাক্ষরিত JSON POST (X-Kosh-Signature: নিয়মের ওয়েবহুক সিক্রেট দিয়ে sha256 HMAC), ব্যর্থ হলে আবার চেষ্টা; হোস্ট অনুমোদিত তালিকায় থাকতে হবে (KOSH_AUTOMATION_WEBHOOK_HOSTS)।',
       condition: 'এবং রেকর্ড মেলে',
       conditionJson: 'শর্ত (ডোমেইন)',
       field: 'ফিল্ড',
