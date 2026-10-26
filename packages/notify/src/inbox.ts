@@ -105,10 +105,14 @@ async function mayRead(
   }
 }
 
+/** Kinds off on a channel unless the user switches them on (RFC 0006 §6.3: chat never emails by default). */
+const OFF_BY_DEFAULT: ReadonlySet<string> = new Set(['chat.direct:email']);
+
 /** The recipient's preference for the kind on a channel (enabled unless they switched it off). */
 async function wants(su: Env, uid: number, kind: string, channel: string): Promise<boolean> {
   const [pref] = await rows(su, 'notify.preference', { user: uid, kind, channel }, ['enabled']);
-  return pref === undefined || pref['enabled'] === true;
+  if (pref === undefined) return !OFF_BY_DEFAULT.has(`${kind}:${channel}`);
+  return pref['enabled'] === true;
 }
 
 /** Turns one event into drafts (who, what); `null` when the event concerns nothing installed. */
@@ -180,6 +184,29 @@ async function draftsOf(
         ],
       };
     }
+    case 'chat.message.posted': {
+      // Mentioned members get a mention; the other side of a direct conversation gets the message.
+      const mentions = (payload['mentions'] as number[] | undefined) ?? [];
+      const direct = (payload['direct'] as number[] | undefined) ?? [];
+      if (mentions.length === 0 && direct.length === 0) return { model, id, drafts: [] };
+      const { record, actor } = await names(su, model, id, by);
+      const preview = String(payload['preview'] ?? '');
+      const mentioned = new Set(mentions.filter((u) => u !== by));
+      return {
+        model,
+        id,
+        drafts: [
+          ...[...mentioned].map((user) => ({
+            user,
+            kind: 'mention' as const,
+            params: { actor, record, preview },
+          })),
+          ...direct
+            .filter((u) => u !== by && !mentioned.has(u))
+            .map((user) => ({ user, kind: 'chat.direct' as const, params: { actor, preview } })),
+        ],
+      };
+    }
     case 'mail.activity.assigned': {
       const assignee = Number(payload['assignee']);
       if (!Number.isSafeInteger(assignee) || assignee === by) return { model, id, drafts: [] };
@@ -204,6 +231,7 @@ async function draftsOf(
 /** The topics the inbox subscribes to. */
 export const TOPICS: readonly string[] = [
   'mail.message.posted',
+  'chat.message.posted',
   'approval.requested',
   'approval.decided',
   'mail.activity.assigned',

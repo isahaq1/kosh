@@ -3,6 +3,8 @@
  * may not read the record gets nothing; a switched-off preference is honoured; the API serves and marks only the
  * caller's own; approvers are resolved from their roles in the company.
  */
+
+import { messaging } from '@kosh/messaging';
 import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
 import { base, baseShutro, createServer, installBase, type KoshServer } from '@kosh/server';
 import { type Env, orm } from '@kosh/server/orm';
@@ -83,7 +85,7 @@ beforeAll(async () => {
   container = await new PostgreSqlContainer('postgres:18').start();
   server = await createServer({
     databaseUrl: container.getConnectionUri(),
-    modules: [library, notify],
+    modules: [library, notify, messaging],
     auth: { secureCookies: false, cacheMs: 0, loginLimit: 0 },
     rateLimit: { max: 0, timeWindow: '1 minute' },
     logger: false,
@@ -98,8 +100,8 @@ beforeAll(async () => {
   });
   company = installed.company;
   for (const [login, name, groups] of [
-    ['rahim', 'Rahim Uddin', ['library.user']],
-    ['dina', 'Dina Rahman', ['library.manager']],
+    ['rahim', 'Rahim Uddin', ['library.user', 'messaging.user']],
+    ['dina', 'Dina Rahman', ['library.manager', 'messaging.user']],
     ['bob', 'Bob Smith', ['base.user']],
   ] as const)
     users[login] = await auth.createUser({
@@ -214,4 +216,39 @@ test('marking read: one, then all; only the owner can', async () => {
   });
   expect((await call('POST', '/api/v1/notifications/read-all', 'dina')).json).toEqual({ read: 1 });
   expect((await call('GET', '/api/v1/notifications/count', 'dina')).json).toEqual({ unread: 0 });
+});
+
+test('chat: the other side of a direct conversation is told, a mentioned member too, a non-member not', async () => {
+  // A direct conversation of Rahim and Dina (as the chat routes make it), and Bob outside it.
+  const channel = await server.shutro.bootstrap({ reason: 'test', company }, async (env) => {
+    type Model = { create(r: unknown[]): Promise<{ ids: number[] }> };
+    const model = (name: string) => env.model(name as never) as unknown as Model;
+    const created = await model('mail.channel').create([
+      { name: `${users['rahim']}:${users['dina']}`, kind: 'direct', pairKey: 'rahim:dina' },
+    ]);
+    const id = created.ids[0] as number;
+    await model('mail.channel.member').create([
+      { channel: id, user: users['rahim'] },
+      { channel: id, user: users['dina'] },
+    ]);
+    return id;
+  });
+  const handled = await emit('rahim', 'chat.message.posted', {
+    model: 'mail.channel',
+    id: channel,
+    message: 99,
+    author: users['rahim'],
+    mentions: [users['bob']],
+    direct: [users['dina']],
+    preview: 'Lunch?',
+  });
+  expect(handled).toBe(1);
+  const dina = await call('GET', '/api/v1/notifications', 'dina');
+  expect(dina.json.items[0]).toMatchObject({
+    kind: 'chat.direct',
+    model: 'mail.channel',
+    resId: channel,
+    params: { actor: 'Rahim Uddin', preview: 'Lunch?' },
+  });
+  expect((await call('GET', '/api/v1/notifications/count', 'bob')).json).toEqual({ unread: 0 }); // not a member
 });

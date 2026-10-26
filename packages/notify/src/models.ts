@@ -15,6 +15,7 @@ export const KINDS = [
   'approval.requested',
   'approval.decided',
   'activity.assigned',
+  'chat.direct',
 ] as const;
 export type Kind = (typeof KINDS)[number];
 /** Delivery channels; `inapp` is the inbox, the others come with their adapters. */

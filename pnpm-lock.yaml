@@ -576,6 +576,9 @@ importers:
         specifier: ^3.6.7
         version: 3.6.7
     devDependencies:
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../messaging
       '@tanstack/react-query':
         specifier: ^5.104.3
         version: 5.104.3(react@19.3.1)
