@@ -28,6 +28,11 @@
       "@kosh/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./web": {
+      "@kosh/source": "./src/web/index.ts",
+      "types": "./dist/web/index.d.ts",
+      "default": "./dist/web/index.js"
     }
   },
   "files": [
@@ -48,9 +53,21 @@
     "@kosh/product": "workspace:*",
     "@kosh/permissions": "workspace:*",
     "@kosh/messaging": "workspace:*",
-    "@kosh/reporting": "workspace:*"
+    "@kosh/reporting": "workspace:*",
+    "@kosh/ui": "workspace:*"
   },
   "devDependencies": {
-    "@testcontainers/postgresql": "^12.2.1"
+    "@testcontainers/postgresql": "^12.2.1",
+    "@tanstack/react-query": "^5.104.3",
+    "@types/react": "^19.3.0",
+    "i18next": "^26.4.7",
+    "react": "^19.3.1",
+    "react-i18next": "^17.0.21"
+  },
+  "peerDependencies": {
+    "@tanstack/react-query": "^5.104.3",
+    "i18next": "^26.4.7",
+    "react": "^19.3.1",
+    "react-i18next": "^17.0.21"
   }
 }

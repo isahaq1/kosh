@@ -185,6 +185,9 @@ export const AccountFiscalYear = defineModel('account.fiscal.year', {
     state: f.selection({ open: 'Open', closed: 'Closed' }, { required: true, default: 'open' }),
     /** Set when the year closes: nothing is posted on or before it. */
     lockDate: f.date({ label: 'Lock date' }),
+    /** The entry that moved the year's result to retained earnings (closing.ts). */
+    closingMove: f.many2one('account.move', { label: 'Closing entry' }),
+    reopenReason: f.char({ label: 'Reopened because' }),
   },
   sqlConstraints: {
     datesOrdered: {
@@ -713,6 +716,51 @@ export const AccountMoveLine = defineModel('account.move.line', {
     }),
     /** Set on the generated tax lines: the tax this line is the amount of. */
     taxLineOf: f.many2one('account.tax', { label: 'Tax line for' }),
+    /** Debit minus credit, for the reports (trial balance, ledgers, P&L, balance sheet). */
+    balance: f.monetary({
+      currency: 'companyCurrency',
+      store: true,
+      // companyCurrency too: money reads are null until it is stored, and the sides may never change again.
+      ...compute(
+        'account.move.line',
+        'balance',
+        ['debit', 'credit', 'companyCurrency'],
+        (lines) => {
+          for (const l of lines)
+            l.balance = (l.debit?.amount ?? orm.toDecimal(0)).minus(l.credit?.amount ?? 0);
+        },
+      ),
+    }),
+    /** The entry is posted: the reports read posted lines only. */
+    posted: f.boolean({
+      store: true,
+      index: true,
+      ...compute('account.move.line', 'posted', ['move.state'], (lines) => {
+        for (const l of lines) l.posted = l.move.state === 'posted';
+      }),
+    }),
+    /** The account's type, on the line for grouping (P&L, balance sheet, aging). */
+    accountType: f.selection(ACCOUNT_TYPES, {
+      store: true,
+      label: 'Account type',
+      ...compute('account.move.line', 'accountType', ['account.type'], (lines) => {
+        for (const l of lines) l.accountType = l.account?.type ?? null;
+      }),
+    }),
+    /** The tax a line reports under: a product line's tax (its base), a tax line's tax (its amount). */
+    taxReport: f.many2one('account.tax', {
+      store: true,
+      label: 'Tax (report)',
+      ...compute('account.move.line', 'taxReport', ['tax', 'taxLineOf', 'lineKind'], (lines) => {
+        for (const l of lines)
+          l.taxReport =
+            l.lineKind === 'tax'
+              ? (l.taxLineOf?.id ?? null)
+              : l.lineKind === 'product'
+                ? (l.tax?.id ?? null)
+                : null;
+      }),
+    }),
     /** Partial matches this line takes part in, on its debit or its credit side (`payments.ts`). */
     partialsAsDebit: f.one2many('account.partial.reconcile', 'debitLine'),
     partialsAsCredit: f.one2many('account.partial.reconcile', 'creditLine'),
@@ -947,13 +995,17 @@ async function postMoves(moves: Moves): Promise<void> {
     } else if (m.lines.length === 0)
       throw fail(['lines'], 'The entry has no lines.', 'Add at least one line before posting.');
     else
-      for (const l of m.lines)
+      for (const l of m.lines) {
         if (l.account === null)
           throw fail(
             ['lines'],
             `Line "${l.name ?? ''}" has no account.`,
             'Every line of an entry needs an account.',
           );
+        // The entry's partner is the lines' partner unless a line says otherwise (ledgers, aging).
+        if (l.partner === null && m.partner !== null)
+          await linesOf.browse([l.id]).write({ partner: m.partner.id });
+      }
 
     // Every line's company-currency side, at the entry's rate.
     let rate = m.rate;
@@ -1141,6 +1193,16 @@ export const accountingShutro = defineModule({
       code: 'account.reconcile',
       label: 'Reconcile and unreconcile',
       groups: ['account.user'],
+    }),
+    orm.definePermission({
+      code: 'account.close',
+      label: 'Close and reopen fiscal years',
+      groups: ['account.manager'],
+    }),
+    orm.definePermission({
+      code: 'account.settings',
+      label: 'Change the accounting settings',
+      groups: ['account.manager'],
     }),
   ],
   // Payment terms every installation starts with (shared; theirs to change afterwards).

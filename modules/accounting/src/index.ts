@@ -6,7 +6,10 @@
  * (step 2): customer invoices, vendor bills and credit notes with product lines, taxes posting to their accounts,
  * payment terms and due dates, a PDF, and amount-based approvals of bills. Payments and reconciliation (step 3):
  * payments through cash and bank journals that settle documents, partial matches with residuals, exchange
- * differences, manual reconciliation and unreconciliation. The reports follow (RFC 0009 §10).
+ * differences, manual reconciliation and unreconciliation. The reports, year closing and the screens (step 4):
+ * trial balance, ledgers, P&L, balance sheet and VAT as pivots over the journal items, aged balances, closing
+ * and reopening a fiscal year, and the settings, reconciliation, aging and register-payment screens
+ * (`@kosh/accounting/web`).
  */
 import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
@@ -15,7 +18,7 @@ import { permissions } from '@kosh/permissions';
 import { product } from '@kosh/product';
 import { reporting } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
-import { action, form, list, search } from '@kosh/views';
+import { action, form, list, pivot, search } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import {
   CHARTS,
@@ -26,10 +29,18 @@ import {
   installImmutability,
 } from './chart.js';
 import {
+  agingReport,
+  closeFiscalYear,
+  readSettings,
+  reopenFiscalYear,
+  updateSettings,
+} from './closing.js';
+import {
   AccountAccount,
   AccountFiscalYear,
   AccountJournal,
   AccountMove,
+  AccountMoveLine,
   AccountPayment,
   AccountPaymentTerm,
   accountingShutro,
@@ -47,6 +58,16 @@ export {
   installedChart,
   installImmutability,
 } from './chart.js';
+export {
+  type AgingRow,
+  agingReport,
+  type Closed,
+  closeFiscalYear,
+  readSettings,
+  reopenFiscalYear,
+  type Settings,
+  updateSettings,
+} from './closing.js';
 export {
   ACCOUNT_TYPES,
   AccountAccount,
@@ -72,7 +93,6 @@ export {
   ResCurrencyRate,
   TaxAccounts,
 } from './module.js';
-
 export {
   openLines,
   type ReconcileResult,
@@ -225,6 +245,79 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       label: 'Payments',
       views: ['list', 'form'],
     }),
+    'accounting.action_trial_balance': action(AccountMoveLine, {
+      label: 'Trial balance',
+      views: ['pivot', 'list'],
+      viewIds: { pivot: 'account.move.line.trial_balance' },
+      domain: { posted: true },
+    }),
+    'accounting.action_general_ledger': action(AccountMoveLine, {
+      label: 'General ledger',
+      views: ['list', 'pivot'],
+      viewIds: { pivot: 'account.move.line.trial_balance' },
+      domain: { posted: true },
+    }),
+    'accounting.action_partner_ledger': action(AccountMoveLine, {
+      label: 'Partner ledger',
+      views: ['pivot', 'list'],
+      viewIds: { pivot: 'account.move.line.partner_ledger' },
+      domain: { posted: true, accountType: { in: ['asset_receivable', 'liability_payable'] } },
+    }),
+    'accounting.action_profit_loss': action(AccountMoveLine, {
+      label: 'Profit and loss',
+      views: ['pivot', 'graph', 'list'],
+      viewIds: {
+        pivot: 'account.move.line.profit_loss',
+        graph: 'account.move.line.profit_loss_graph',
+      },
+      domain: {
+        posted: true,
+        accountType: {
+          in: ['income', 'income_other', 'expense', 'expense_direct_cost', 'expense_depreciation'],
+        },
+      },
+    }),
+    'accounting.action_balance_sheet': action(AccountMoveLine, {
+      label: 'Balance sheet',
+      views: ['pivot', 'list'],
+      viewIds: { pivot: 'account.move.line.balance_sheet' },
+      domain: {
+        posted: true,
+        accountType: {
+          in: [
+            'asset_receivable',
+            'asset_cash',
+            'asset_current',
+            'asset_prepayments',
+            'asset_fixed',
+            'asset_non_current',
+            'liability_payable',
+            'liability_current',
+            'liability_non_current',
+            'equity',
+            'equity_unaffected',
+          ],
+        },
+      },
+    }),
+    'accounting.action_vat': action(AccountMoveLine, {
+      label: 'VAT',
+      views: ['pivot', 'list'],
+      viewIds: { pivot: 'account.move.line.vat' },
+      domain: { posted: true, lineKind: { in: ['product', 'tax'] } },
+    }),
+    'accounting.action_aging': { type: 'client', page: 'accounting.Aging', label: 'Aged balances' },
+    'accounting.action_reconcile': {
+      type: 'client',
+      page: 'accounting.Reconcile',
+      label: 'Reconciliation',
+    },
+    'accounting.action_settings': {
+      type: 'client',
+      page: 'accounting.Settings',
+      label: 'Settings',
+      visibleTo: ['account.manager'],
+    },
     'accounting.action_payment_terms': action(AccountPaymentTerm, {
       label: 'Payment terms',
       views: ['list', 'form'],
@@ -275,6 +368,70 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       label: 'Journal entries',
       action: 'accounting.action_moves',
       sequence: 4,
+    },
+    {
+      id: 'accounting.reconcile',
+      parent: 'accounting.root',
+      label: 'Reconciliation',
+      action: 'accounting.action_reconcile',
+      sequence: 5,
+    },
+    { id: 'accounting.reporting', parent: 'accounting.root', label: 'Reporting', sequence: 8 },
+    {
+      id: 'accounting.trial_balance',
+      parent: 'accounting.reporting',
+      label: 'Trial balance',
+      action: 'accounting.action_trial_balance',
+      sequence: 1,
+    },
+    {
+      id: 'accounting.general_ledger',
+      parent: 'accounting.reporting',
+      label: 'General ledger',
+      action: 'accounting.action_general_ledger',
+      sequence: 2,
+    },
+    {
+      id: 'accounting.partner_ledger',
+      parent: 'accounting.reporting',
+      label: 'Partner ledger',
+      action: 'accounting.action_partner_ledger',
+      sequence: 3,
+    },
+    {
+      id: 'accounting.aging',
+      parent: 'accounting.reporting',
+      label: 'Aged balances',
+      action: 'accounting.action_aging',
+      sequence: 4,
+    },
+    {
+      id: 'accounting.profit_loss',
+      parent: 'accounting.reporting',
+      label: 'Profit and loss',
+      action: 'accounting.action_profit_loss',
+      sequence: 5,
+    },
+    {
+      id: 'accounting.balance_sheet',
+      parent: 'accounting.reporting',
+      label: 'Balance sheet',
+      action: 'accounting.action_balance_sheet',
+      sequence: 6,
+    },
+    {
+      id: 'accounting.vat',
+      parent: 'accounting.reporting',
+      label: 'VAT',
+      action: 'accounting.action_vat',
+      sequence: 7,
+    },
+    {
+      id: 'accounting.settings',
+      parent: 'accounting.configuration',
+      label: 'Settings',
+      action: 'accounting.action_settings',
+      sequence: 0,
     },
     {
       id: 'accounting.configuration',
@@ -459,11 +616,68 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
           k.page('money', 'Currency', ['currency', 'rate', 'reversalOf', 'reversedBy']),
           k.page('notes', 'Notes', ['narration']),
         ]),
+        k.component('register_payment', 'accounting.RegisterPayment'),
         k.component('approvals', 'approvals.Panel'),
       ],
       readonlyWhen: { state: { ne: 'draft' } },
       chatter: true,
     })),
+    'account.move.line.list': list(AccountMoveLine, {
+      columns: [
+        'date',
+        'move',
+        'account',
+        'partner',
+        'name',
+        { field: 'debit', sum: true },
+        { field: 'credit', sum: true },
+        { field: 'balance', sum: true },
+        'dateMaturity',
+        'reconciled',
+      ],
+      defaultOrder: ['date asc', 'move asc', 'id asc'],
+    }),
+    'account.move.line.trial_balance': pivot(AccountMoveLine, {
+      rows: ['account'],
+      measures: [{ sum: 'debit' }, { sum: 'credit' }, { sum: 'balance' }],
+      comparison: { field: 'date', mode: 'previous' },
+    }),
+    'account.move.line.partner_ledger': pivot(AccountMoveLine, {
+      rows: ['partner', 'account'],
+      measures: [
+        { sum: 'debit' },
+        { sum: 'credit' },
+        { sum: 'balance' },
+        { sum: 'amountResidual', label: 'Open' },
+      ],
+    }),
+    'account.move.line.profit_loss': pivot(AccountMoveLine, {
+      rows: ['accountType', 'account'],
+      cols: ['date:month'],
+      measures: [{ sum: 'balance' }],
+      comparison: { field: 'date', mode: 'previous' },
+    }),
+    'account.move.line.profit_loss_graph': {
+      type: 'graph',
+      id: '',
+      model: 'account.move.line',
+      chart: 'bar',
+      groupBy: ['date:month', 'accountType'],
+      measure: { id: 'balance', measure: { sum: 'balance' } },
+    },
+    'account.move.line.balance_sheet': pivot(AccountMoveLine, {
+      rows: ['accountType', 'account'],
+      measures: [{ sum: 'balance' }],
+      comparison: { field: 'date', mode: 'yoy' },
+    }),
+    'account.move.line.vat': pivot(AccountMoveLine, {
+      rows: ['taxReport'],
+      cols: ['lineKind'],
+      measures: [
+        { sum: 'subtotal', label: 'Base' },
+        { sum: 'balance', label: 'Amount' },
+      ],
+    }),
     'account.payment.list': list(AccountPayment, {
       columns: [
         'name',
@@ -595,6 +809,33 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
         },
       },
       groupBy: ['journal', 'state', 'partner', 'date:month', 'kind'],
+    }),
+    'account.move.line': search(AccountMoveLine, {
+      fields: ['name', 'partner.name', 'account.code', 'account.name'],
+      filters: {
+        receivable: {
+          label: 'Receivable',
+          domain: { accountType: 'asset_receivable' },
+          group: 'type',
+        },
+        payable: { label: 'Payable', domain: { accountType: 'liability_payable' }, group: 'type' },
+        open: {
+          label: 'Open items',
+          domain: {
+            reconciled: false,
+            accountType: { in: ['asset_receivable', 'liability_payable'] },
+          },
+        },
+      },
+      groupBy: [
+        'account',
+        'partner',
+        'accountType',
+        'date:month',
+        'date:year',
+        'taxReport',
+        'move',
+      ],
     }),
     'account.payment': search(AccountPayment, {
       fields: ['name', 'memo', 'partner.name'],
@@ -766,6 +1007,54 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
           })),
         };
       });
+    });
+    context.app.get('/api/v1/accounting/settings', async (request) =>
+      request.env((env) => readSettings(env as Env)),
+    );
+    context.app.put('/api/v1/accounting/settings', async (request) => {
+      const body = (request.body ?? {}) as { lockDate?: unknown; taxLockDate?: unknown };
+      const date = (v: unknown, name: string): string | null | undefined => {
+        if (v === undefined) return undefined;
+        if (v === null || v === '') return null;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(v)))
+          throw new HttpProblem(400, 'invalid-date', 'Invalid date', `${name} is YYYY-MM-DD.`);
+        return String(v);
+      };
+      const lockDate = date(body.lockDate, 'lockDate');
+      const taxLockDate = date(body.taxLockDate, 'taxLockDate');
+      return request.env(
+        (env) =>
+          updateSettings(env as Env, {
+            ...(lockDate === undefined ? {} : { lockDate }),
+            ...(taxLockDate === undefined ? {} : { taxLockDate }),
+          }),
+        { write: true },
+      );
+    });
+    context.app.post('/api/v1/accounting/fiscal-years/:id/close', async (request) => {
+      const id = Number((request.params as { id: string }).id);
+      if (!Number.isInteger(id))
+        throw new HttpProblem(400, 'invalid-id', 'Invalid id', 'The fiscal year id is an integer.');
+      return request.env((env) => closeFiscalYear(env as Env, id), { write: true });
+    });
+    context.app.post('/api/v1/accounting/fiscal-years/:id/reopen', async (request) => {
+      const id = Number((request.params as { id: string }).id);
+      const reason = String((request.body as { reason?: unknown } | null)?.reason ?? '');
+      if (!Number.isInteger(id))
+        throw new HttpProblem(400, 'invalid-id', 'Invalid id', 'The fiscal year id is an integer.');
+      return request.env((env) => reopenFiscalYear(env as Env, id, reason), { write: true });
+    });
+    context.app.get('/api/v1/accounting/reports/aging', async (request) => {
+      const query = request.query as { type?: unknown; date?: unknown };
+      const type = query.type === 'payable' ? 'payable' : 'receivable';
+      if (query.date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(query.date)))
+        throw new HttpProblem(400, 'invalid-date', 'Invalid date', 'date is YYYY-MM-DD.');
+      return request.env((env) =>
+        agingReport(env as Env, {
+          type,
+          date: query.date === undefined ? undefined : String(query.date),
+        }),
+      );
     });
     context.app.post('/api/v1/accounting/moves/:id/reverse', async (request) => {
       const id = Number((request.params as { id: string }).id);
