@@ -96,3 +96,50 @@ test('without Studio: no Studio button, and the server refuses', async ({ page }
   });
   expect(refused.status()).toBe(403);
 });
+
+test('a rule made in the Automation app moves into a Studio module; the original is archived', async ({
+  page,
+}) => {
+  await signIn(page, 'dina');
+  await page.goto('/studio/a/studio.action_studio');
+  const csrf = await page.evaluate(() => sessionStorage.getItem('kosh.csrf'));
+  const made = await page.request.post('/api/v1/models/automation.rule', {
+    headers: { 'x-csrf-token': csrf ?? '' },
+    data: {
+      name: 'Greet new contacts',
+      targetModel: 'res.partner',
+      trigger: 'created',
+      actions: [{ kind: 'note', text: 'Hello {{name}}' }],
+    },
+  });
+  expect(made.ok()).toBe(true);
+  await page.reload();
+
+  await page.getByRole('button', { name: 'Move into module: Greet new contacts' }).click();
+  const review = page.getByRole('dialog', { name: /Review: Customizations/ });
+  await expect(review.getByRole('region', { name: 'src/modules/custom/index.ts' })).toContainText(
+    'greet_new_contacts',
+  );
+  await review.getByRole('button', { name: 'Apply' }).click();
+  await expect(review.getByText(/applied\. Reloading…/)).toBeVisible();
+
+  // After the reload: the rule is no longer one of the Automation app's; the module ships it.
+  await expect(page.getByRole('heading', { name: 'Rules made in the Automation app' })).toBeVisible(
+    {
+      timeout: 15_000,
+    },
+  );
+  await expect(
+    page.getByRole('button', { name: 'Move into module: Greet new contacts' }),
+  ).toHaveCount(0);
+  const owned = await page.request.get(
+    `/api/v1/models/automation.rule?fields=name,module,moduleKey&filter=${encodeURIComponent(JSON.stringify({ module: 'custom' }))}`,
+  );
+  expect(((await owned.json()) as { items: unknown[] }).items).toEqual([
+    expect.objectContaining({
+      name: 'Greet new contacts',
+      module: 'custom',
+      moduleKey: 'greet_new_contacts',
+    }),
+  ]);
+});
