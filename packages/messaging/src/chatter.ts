@@ -173,8 +173,8 @@ export interface Chatter {
   readonly canManageFollowers: boolean;
 }
 
-/** Names of users (archived ones too: authors of old messages). */
-async function userNames(env: Env, ids: Iterable<number>): Promise<Map<number, string>> {
+/** @internal Names of users (archived ones too: authors of old messages). */
+export async function userNames(env: Env, ids: Iterable<number>): Promise<Map<number, string>> {
   const wanted = [...new Set(ids)].filter((id) => Number.isSafeInteger(id) && id > 0);
   if (wanted.length === 0) return new Map();
   const found = await rows(
@@ -211,7 +211,8 @@ const MESSAGE_KEYS = [
   'createdAt',
 ];
 
-async function messageItems(
+/** @internal Message rows as items (names, attachments the caller may see). Chat reuses it. */
+export async function messageItems(
   env: Env,
   context: ChatterContext,
   found: Row[],
@@ -402,7 +403,8 @@ async function canWrite(env: Env, model: string, id: number): Promise<boolean> {
   }
 }
 
-function needMessaging(env: Env): void {
+/** @internal Refuses callers without the Messaging access level. */
+export function needMessaging(env: Env): void {
   if (!env.access.can('mail.message' as never, 'read'))
     refuse(403, 'forbidden', 'Forbidden', 'The chatter needs the Messaging access level.');
 }
@@ -500,14 +502,15 @@ async function ensureFollower(env: Env, model: string, id: number, user: number)
     await ref(env, 'mail.follower').create([{ resModel: model, resId: id, user }]);
 }
 
-function checkText(text: unknown): string {
+/** @internal A message text of 1 to MAX_TEXT characters. */
+export function checkText(text: unknown): string {
   if (typeof text !== 'string' || text.trim() === '' || text.length > MAX_TEXT)
     refuse(400, 'invalid-body', 'Invalid message', `text is 1 to ${MAX_TEXT} characters.`);
   return text as string;
 }
 
-/** Active users among `ids` (mentions of unknown or archived users are left as plain text). */
-async function activeUsers(env: Env, ids: readonly number[]): Promise<Map<number, string>> {
+/** @internal Active users among `ids` (mentions of unknown or archived users are left as plain text). */
+export async function activeUsers(env: Env, ids: readonly number[]): Promise<Map<number, string>> {
   if (ids.length === 0) return new Map();
   const found = await rows(env, 'res.users', { id: { in: [...ids] } }, ['name']);
   return new Map(found.map((u) => [u['id'] as number, String(u['name'])]));

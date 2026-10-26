@@ -8,11 +8,34 @@ import { defineModule } from '@kosh/modules-sdk';
 import { base, type ModuleContext } from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
 import { storage } from '@kosh/storage';
+import { registerChatRoutes } from './chat-routes.js';
 import { installActivityTypes } from './chatter.js';
 import { messagingShutro } from './models.js';
 import { registerChatterRoutes } from './routes.js';
 
 export { MAX_TEXT, mentionIds, plainText, renderBody } from './body.js';
+export {
+  CHANNEL_MODEL,
+  type ChannelItem,
+  type ChatContext,
+  type ChatMessageItem,
+  channelItem,
+  channelMessages,
+  createChannel,
+  deleteChatMessage,
+  directChannel,
+  editChatMessage,
+  joinChannel,
+  leaveChannel,
+  markRead,
+  myChannels,
+  postChatMessage,
+  type ReactionItem,
+  react,
+  unreact,
+  updateChannel,
+} from './chat.js';
+export { registerChatRoutes } from './chat-routes.js';
 export {
   type ActivityItem,
   activityTypes,
@@ -54,9 +77,27 @@ export const messaging: ReturnType<typeof defineModule> = defineModule({
   shutro: messagingShutro,
   kosh: '^0.1.0',
   depends: [base, storage],
-  accessLevels: { user: { label: 'Messaging', groups: ['messaging.user'] } },
-  privateModels: ['mail.message', 'mail.follower', 'mail.activity', 'mail.activity.type'],
-  routes: (context: ModuleContext) => registerChatterRoutes(context),
+  accessLevels: {
+    user: { label: 'Messaging (chatter, chat)', groups: ['messaging.user'] },
+    manager: {
+      label: 'Manager (public chat channels)',
+      groups: ['messaging.manager'],
+      implies: ['user'],
+    },
+  },
+  privateModels: [
+    'mail.message',
+    'mail.follower',
+    'mail.activity',
+    'mail.activity.type',
+    'mail.message.reaction',
+    'mail.channel',
+    'mail.channel.member',
+  ],
+  routes: (context: ModuleContext) => {
+    registerChatterRoutes(context);
+    registerChatRoutes(context);
+  },
   hooks: {
     defaults: async (env) => `${await installActivityTypes(env as Env)} activity type(s) installed`,
   },
