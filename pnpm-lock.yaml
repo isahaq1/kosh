@@ -35,6 +35,9 @@ importers:
       '@kosh/accounting':
         specifier: workspace:*
         version: link:../../modules/accounting
+      '@kosh/automation':
+        specifier: workspace:*
+        version: link:../../packages/automation
       '@kosh/contacts':
         specifier: workspace:*
         version: link:../../modules/contacts
@@ -127,6 +130,9 @@ importers:
       '@axe-core/playwright':
         specifier: ^4.14.0
         version: 4.14.0(playwright-core@1.64.1)
+      '@kosh/automation':
+        specifier: workspace:*
+        version: link:../../packages/automation
       '@kosh/cli':
         specifier: workspace:*
         version: link:../../packages/cli
@@ -434,11 +440,39 @@ importers:
         specifier: ^12.2.1
         version: 12.2.1
 
+  packages/automation:
+    dependencies:
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../modules-sdk
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../views
+      fastify:
+        specifier: ^5.12.7
+        version: 5.12.7
+    devDependencies:
+      '@kosh/notify':
+        specifier: workspace:*
+        version: link:../notify
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   packages/cli:
     dependencies:
       '@kosh/accounting':
         specifier: workspace:*
         version: link:../../modules/accounting
+      '@kosh/automation':
+        specifier: workspace:*
+        version: link:../automation
       '@kosh/contacts':
         specifier: workspace:*
         version: link:../../modules/contacts
