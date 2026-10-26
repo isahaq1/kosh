@@ -87,6 +87,11 @@ export const SaleOrder = defineModel('sale.order', {
             return loaded.filter((o) => o.lines.length === 0);
           }),
           message: 'Add at least one line before confirming the order.',
+          // Other apps act on a confirmation through the outbox (sale_project creates the tasks).
+          after: records('sale.order', async (orders) => {
+            for (const o of await orders.load({}))
+              await orders.env.emit('sale.order.confirmed', { id: o.id });
+          }),
         },
         lock: { from: ['sale'], to: 'done' },
         unlock: { from: ['done'], to: 'sale' },

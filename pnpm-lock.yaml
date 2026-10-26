@@ -77,6 +77,9 @@ importers:
       '@kosh/product':
         specifier: workspace:*
         version: link:../../modules/product
+      '@kosh/project':
+        specifier: workspace:*
+        version: link:../../modules/project
       '@kosh/purchase':
         specifier: workspace:*
         version: link:../../modules/purchase
@@ -89,6 +92,9 @@ importers:
       '@kosh/sale_account':
         specifier: workspace:*
         version: link:../../modules/sale_account
+      '@kosh/sale_project':
+        specifier: workspace:*
+        version: link:../../modules/sale_project
       '@kosh/sales':
         specifier: workspace:*
         version: link:../../modules/sales
@@ -204,6 +210,28 @@ importers:
         specifier: ^12.2.1
         version: 12.2.1
 
+  modules/project:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   modules/purchase:
     dependencies:
       '@kosh/contacts':
@@ -288,6 +316,34 @@ importers:
         specifier: ^12.2.1
         version: 12.2.1
 
+  modules/sale_project:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/project':
+        specifier: workspace:*
+        version: link:../project
+      '@kosh/sales':
+        specifier: workspace:*
+        version: link:../sales
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   modules/sales:
     dependencies:
       '@kosh/contacts':
@@ -336,6 +392,9 @@ importers:
       '@kosh/product':
         specifier: workspace:*
         version: link:../../modules/product
+      '@kosh/project':
+        specifier: workspace:*
+        version: link:../../modules/project
       '@kosh/purchase':
         specifier: workspace:*
         version: link:../../modules/purchase
@@ -351,6 +410,9 @@ importers:
       '@kosh/sale_account':
         specifier: workspace:*
         version: link:../../modules/sale_account
+      '@kosh/sale_project':
+        specifier: workspace:*
+        version: link:../../modules/sale_project
       '@kosh/sales':
         specifier: workspace:*
         version: link:../../modules/sales

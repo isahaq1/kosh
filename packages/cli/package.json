@@ -59,7 +59,9 @@
     "@kosh/notify": "workspace:*",
     "@kosh/accounting": "workspace:*",
     "@kosh/sale_account": "workspace:*",
-    "@kosh/purchase_account": "workspace:*"
+    "@kosh/purchase_account": "workspace:*",
+    "@kosh/project": "workspace:*",
+    "@kosh/sale_project": "workspace:*"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1"

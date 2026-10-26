@@ -548,6 +548,8 @@ async function modulesFor(apps: readonly AppName[]): Promise<KoshModule[]> {
     if (app === 'sale_account') modules.push((await import('@kosh/sale_account')).saleAccount);
     if (app === 'purchase_account')
       modules.push((await import('@kosh/purchase_account')).purchaseAccount);
+    if (app === 'project') modules.push((await import('@kosh/project')).project);
+    if (app === 'sale_project') modules.push((await import('@kosh/sale_project')).saleProject);
   }
   return modules;
 }

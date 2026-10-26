@@ -13,7 +13,9 @@ export type AppName =
   | 'purchase'
   | 'accounting'
   | 'sale_account'
-  | 'purchase_account';
+  | 'purchase_account'
+  | 'project'
+  | 'sale_project';
 export interface AppSpec {
   readonly label: string;
   /** Shown next to the app in the installer (where the terminal shows pictographs). */
@@ -68,6 +70,11 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     server: 'accounting',
     web: 'registerAccountingWeb',
   },
+  project: {
+    label: 'Projects: projects, tasks on a kanban, timesheets',
+    icon: '🗂️',
+    server: 'project',
+  },
   sale_account: {
     label: 'Bridge: invoices from sales orders (Sales ↔ Accounting)',
     icon: '🔗',
@@ -79,6 +86,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'purchaseAccount',
     bridge: ['purchase', 'accounting'],
+  },
+  sale_project: {
+    label: 'Bridge: tasks and projects from sales orders (Sales ↔ Projects)',
+    icon: '🔗',
+    server: 'saleProject',
+    bridge: ['sales', 'project'],
   },
 };
 
