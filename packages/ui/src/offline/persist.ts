@@ -33,6 +33,7 @@ const KEPT = new Set([
   'totals',
   'groups',
   'kanban-stats',
+  'chat',
 ]);
 
 /** The user whose cache is being written (none: nothing is written, e.g. the login page or after sign-out). */

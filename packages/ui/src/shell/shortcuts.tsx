@@ -45,7 +45,8 @@ export function useShortcuts(handlers: {
       const key = e.key.toLowerCase();
       if (mod && key === 'k') {
         e.preventDefault();
-        handlers.palette();
+        if (e.shiftKey) click('[data-kosh-chat]');
+        else handlers.palette();
         return;
       }
       if (mod && key === 's') {

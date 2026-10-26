@@ -29,6 +29,10 @@ export interface RealtimeClient {
   ): () => void;
   /** Says this tab has the record open; returns the way to leave. One record per tab. */
   setPresence(model: string, id: number): () => void;
+  /** Told that someone is typing on a record (a chat channel) this tab is subscribed to. */
+  onTyping(model: string, id: number, handler: (user: PresenceUser) => void): () => void;
+  /** Says this user is typing on a record (a chat channel) this tab is subscribed to. */
+  sendTyping(model: string, id: number): void;
   readonly connected: boolean;
   close(): void;
 }
@@ -50,6 +54,7 @@ export function createRealtimeClient(options: RealtimeOptions = {}): RealtimeCli
     `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/v1/realtime`;
   const channels = new Map<string, Set<(event: ChangeEvent) => void>>();
   const presenceHandlers = new Map<string, Set<(users: readonly PresenceUser[]) => void>>();
+  const typingHandlers = new Map<string, Set<(user: PresenceUser) => void>>();
   let presence: { model: string; id: number } | null = null;
   let socket: WebSocket | null = null;
   let closed = false;
@@ -90,6 +95,10 @@ export function createRealtimeClient(options: RealtimeOptions = {}): RealtimeCli
         const key = `${String(message['model'])}:${String(message['id'])}`;
         for (const handler of presenceHandlers.get(key) ?? [])
           handler((message['users'] as PresenceUser[] | undefined) ?? []);
+      } else if (message['type'] === 'typing') {
+        const key = `${String(message['model'])}:${String(message['id'])}`;
+        const user = { uid: Number(message['uid']), name: String(message['name'] ?? '') };
+        for (const handler of typingHandlers.get(key) ?? []) handler(user);
       }
     };
     socket.onclose = (e) => {
@@ -133,6 +142,19 @@ export function createRealtimeClient(options: RealtimeOptions = {}): RealtimeCli
         handlers.delete(handler);
         if (handlers.size === 0) presenceHandlers.delete(key);
       };
+    },
+    onTyping(model, id, handler) {
+      const key = `${model}:${id}`;
+      const handlers = typingHandlers.get(key) ?? new Set();
+      handlers.add(handler);
+      typingHandlers.set(key, handlers);
+      return () => {
+        handlers.delete(handler);
+        if (handlers.size === 0) typingHandlers.delete(key);
+      };
+    },
+    sendTyping(model, id) {
+      send({ type: 'typing', model, id });
     },
     setPresence(model, id) {
       presence = { model, id };
