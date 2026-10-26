@@ -1,6 +1,6 @@
 # RFC 0009: Accounting (the ledger, documents, payments, reports)
 
-- **Status:** Accepted (2026-10-25, with the proposed answers to §11); steps 1–3 implemented (see Implementation notes)
+- **Status:** Accepted (2026-10-25, with the proposed answers to §11); steps 1–4 implemented (see Implementation notes)
 - **Depends on:** 0001 (modules), 0002 (generated API), 0003 (permissions, approvals), 0004 (views), 0005
   (reporting: pivots, comparisons, scheduled reports), 0006 (chatter, notifications), 0008 (apps, bridges)
 - **Followed by:** the `sale_account` and `purchase_account` bridges (RFC 0008 §5.1), Projects (RFC 0008 step 6)
@@ -361,6 +361,42 @@ rendered by the reporting engine's hierarchy view; every number drills to the li
   with its exchange gain, a write-off).
 - **Next:** step 4, the reports (trial balance, ledgers, aging, P&L, balance sheet, VAT), year closing and
   Settings → Accounting with the payment and reconciliation screens.
+
+## Implementation notes (2026-10-26): step 4 — reports, year closing, the screens
+
+- **Reports are views over the journal items.** `account.move.line` gained stored columns for reporting:
+  `balance` (debit − credit), `posted`, `accountType` (the account's type) and `taxReport` (the tax a product
+  line is the base of, or a tax line the amount of). The report actions are window actions on the lines with a
+  fixed `posted: true` domain and pivots of the reporting engine (RFC 0005): trial balance (account × debit,
+  credit, balance, previous-period comparison), general ledger (the lines list, grouped by account from the
+  search bar), partner ledger (partner × account with the open amount), profit and loss (type and account by
+  month, with a bar chart), balance sheet (type and account, year-over-year), VAT (tax × line kind: the base
+  from product lines, the amount from tax lines). Every number drills to the lines, exports to Excel and PDF,
+  and can be scheduled, like any report.
+- **Aged balances** (`GET /api/v1/accounting/reports/aging?type=receivable|payable&date=`): the open receivable or
+  payable lines bucketed by days overdue at the date (not due, 1–30, 31–60, 61–90, 90+) per partner, one SQL
+  aggregation; a page shows it.
+- **Year closing** (`closing.ts`, `POST /api/v1/accounting/fiscal-years/:id/close`, managers): refused while
+  entries of the year are in draft; otherwise one entry in the miscellaneous journal dated the year's end moves
+  every income and expense balance to retained earnings, the year is closed with its lock date, and the
+  company's lock date moves to the year's end (never back). **Reopening** (`…/reopen`, a reason required)
+  steps the lock date back before the year, reopens it and reverses the closing entry; the reason stays on the
+  year.
+- **Settings** (`GET` / `PUT /api/v1/accounting/settings`, managers): the chart installed and the default
+  accounts; the lock date and the tax lock date.
+- **Screens** (`@kosh/accounting/web`, `registerAccountingWeb`): Settings (install a chart once, lock dates),
+  Reconciliation (the open items of a reconcilable account, selected and matched, a write-off account for the
+  difference), Aged balances, and "Register payment" on a posted, unpaid document (journal, date, amount
+  defaulting to the amount due, memo). The starter registers them; E2E tests of these screens need the
+  business apps' own E2E catalogue (RFC 0008 step 7), which is still to come.
+- Posting an entry now gives its lines the entry's partner when they have none (the ledgers and the aging
+  report group by the line's partner).
+- Tests: `modules/accounting/test/closing.integration.test.ts` (settings rights, a draft blocking the closing,
+  the closing entry's lines and the lock date, reopening with a reason, the aging buckets, the report actions
+  and pivots, the posted lines balancing to zero by type).
+- **Not in this step:** bank statements, the Mushak report layouts, analytic accounting, assets (RFC §2).
+- **Next:** RFC 0008 step 7 (the default set with Accounting, and the business apps' E2E catalogue), then
+  Projects and `sale_project`.
 
 ## Alignment with CLAUDE.md
 
