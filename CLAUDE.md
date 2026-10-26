@@ -267,7 +267,7 @@ export default defineModule({
 
 - [x] Chatter, activities, real-time gateway (`@kosh/realtime`: live lists, forms and presence; docs/ui.md)
 - [ ] Notifications + provider adapters (email, SMS, WhatsApp, push) — in-app inbox, bell, email and web push done (`@kosh/notify`, `@kosh/mail`); SMS and WhatsApp need a provider account
-- [ ] Internal chat (done 2026-10-26: RFC 0006 part 6, channels / groups / directs, threads, reactions, the Chat app and its dock); inbound email (part 7: replies by email through the webhook, the quarantine page done 2026-10-26; the IMAP poller and catch-all aliases next)
+- [x] Internal chat (RFC 0006 part 6: channels / groups / directs, threads, reactions, the Chat app and its dock) and inbound email (part 7: signed reply addresses, the webhook for Postmark / Mailgun / raw, the IMAP poller, catch-all aliases, bounces, the quarantine page), 2026-10-26
 
 ### Phase 6 — Proof
 

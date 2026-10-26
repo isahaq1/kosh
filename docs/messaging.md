@@ -121,6 +121,14 @@ Each message is logged once by its Message-ID (`mail.inbound_message`), then:
 - a reply from the record's partner or from a follower's address is posted as the system naming the sender
   (`authorEmail`, shown as "Name <address>"); any other sender is quarantined (`sender-unknown`).
 
+Without a webhook provider, set `IMAP_URL` (`imap://user:password@host:143/INBOX`, or `imaps://` for TLS): one
+node at a time (a PostgreSQL advisory lock) reads the mailbox every `MAIL_INBOUND_POLL_MS` (30 s), hands each
+unseen message to the same handler and marks it seen. Mailgun's forward to a URL ending in `/mime` is accepted
+too (`body-mime` in a form post). A **catch-all alias** declared by a module (`inboundAliases` in its manifest:
+`support@<domain>` in Projects makes a task in the support project, the sender named on it) takes a message that
+names no record; a bounce of a message we sent marks its delivery `bounced` and tells, through the bell, the user
+whose action caused the email (`email.bounced`).
+
 HTML from outside is reduced to a small allow-list (`sanitize-html`); the chatter shows the plain text. The
 **Email** app (`mail.manager`) lists the log by state: a quarantined message is attached to a record by hand
 (posted as the system naming the sender, on a record the manager can read), tried again, or discarded.
@@ -150,6 +158,6 @@ same transaction: they exist exactly when the message or activity does. The noti
 
 ## Not yet
 
-Typing across nodes (relayed on the node of the sender only), sending chat messages offline, the IMAP poller and
-catch-all aliases of part 7 (step 4); a cleanup job for objects left behind by failed commits and for attachments of deleted records; decimal
+Typing across nodes (relayed on the node of the sender only), sending chat messages offline, Mailgun's signed
+webhook parameters (the shared secret authenticates instead); a cleanup job for objects left behind by failed commits and for attachments of deleted records; decimal
 changes are shown as stored (`8,000 → 8,500`, without the field's scale).

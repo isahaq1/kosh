@@ -261,8 +261,13 @@ member table hidden behind a kanban.
   `postExternalMessage` (a superuser scope the caller opens, audited). The chatter and the chat show such a sender
   as "Name <address>".
 - The two dependencies: `postal-mime` (pure JS MIME parsing) and `sanitize-html` (the allow-list).
-- Step 4 (the IMAP poller, catch-all aliases with the Projects user, bounce handling beyond marking the delivery,
-  Mailgun's form-encoded webhook) is next.
+- Step 4 (2026-10-26): `inbound/poller.ts` reads a mailbox (`imapflow`, `IMAP_URL`) every `MAIL_INBOUND_POLL_MS`,
+  one node at a time by `pg_try_advisory_xact_lock`, unseen messages received and marked seen (left unseen on a
+  failure, logged); the manifest's `inboundAliases` (Projects: `support@` makes a task in the support project, or
+  the first project, else the message is quarantined `alias-unavailable`); a bounce marks its delivery `bounced`
+  (a new delivery state) and writes an `email.bounced` notification for the notification's actor; Mailgun's form
+  posts (`body-mime`, urlencoded or multipart). Tests: the poller against GreenMail (SMTP in, IMAP out, the
+  lock), an alias making a deal, the two Mailgun shapes, and the bounce in the notify tests.
 - Tests: `packages/mail/test/parse.test.ts` (addresses, a raw message with an attachment, quotes, HTML, automatic
   messages, Postmark), `packages/mail/test/inbound.integration.test.ts` (the webhook's secret; a reply posted as
   the user with the file; delivered twice posted once; a partner's reply as the system; quarantine, attach by
