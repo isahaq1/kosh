@@ -69,6 +69,8 @@ const ResUsers = defineModel('res.users', {
     login: f.char({ required: true, index: 'unique' }),
     name: f.char({ required: true }),
     email: f.char(),
+    /** E.164 (`+8801711000001`): the SMS and WhatsApp channels of the notifications. */
+    phone: f.char(),
     company: f.many2one('res.company'),
     companies: f.many2many('res.company'),
     lang: f.char({ default: 'en_US' }),

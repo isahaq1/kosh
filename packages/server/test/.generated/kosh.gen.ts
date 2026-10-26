@@ -260,6 +260,8 @@ export interface ResUsers {
   name: string;
   /** Email */
   email?: string | null;
+  /** Phone */
+  phone?: string | null;
   /** Company: Id of a res.company record. */
   company?: number | null;
   /** Companies: Ids of res.company records. */
@@ -279,6 +281,8 @@ export interface ResUsersCreate {
   name: string;
   /** Email */
   email?: string | null;
+  /** Phone */
+  phone?: string | null;
   /** Company: Id of a res.company record. */
   company?: number | null;
   /** Companies: Commands on res.company records. */
@@ -309,6 +313,8 @@ export interface ResUsersUpdate {
   name?: string;
   /** Email */
   email?: string | null;
+  /** Phone */
+  phone?: string | null;
   /** Company: Id of a res.company record. */
   company?: number | null;
   /** Companies: Commands on res.company records. */
