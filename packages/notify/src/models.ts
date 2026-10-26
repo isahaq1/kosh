@@ -19,8 +19,8 @@ export const KINDS = [
   'email.bounced',
 ] as const;
 export type Kind = (typeof KINDS)[number];
-/** Delivery channels; `inapp` is the inbox, the others come with their adapters. */
-export const CHANNELS = ['inapp', 'email', 'webpush'] as const;
+/** Delivery channels; `inapp` is the inbox, the others come with their adapters (SMS and WhatsApp opt in). */
+export const CHANNELS = ['inapp', 'email', 'webpush', 'sms', 'whatsapp'] as const;
 export type Channel = (typeof CHANNELS)[number];
 
 const Notification = defineModel('notify.notification', {

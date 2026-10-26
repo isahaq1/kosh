@@ -11,6 +11,7 @@ import { defineModule } from '@kosh/modules-sdk';
 import { base, type ModuleContext } from '@kosh/server';
 import { type DeliveryContext, deliveryWorker } from './email.js';
 import { inboxWorkers } from './inbox.js';
+import { type Messenger, messengerFromEnv } from './messenger.js';
 import { notifyShutro } from './models.js';
 import { type Pusher, pusherFromEnv } from './push.js';
 import { registerNotifyRoutes } from './routes.js';
@@ -20,10 +21,22 @@ export {
   type DeliveryContext,
   deliver,
   deliveryWorker,
+  queueMessages,
   renderEmail,
+  renderText,
 } from './email.js';
-export { handleEvent, type InboxContext, inboxWorkers, TOPICS } from './inbox.js';
+export { defaultEnabled, handleEvent, type InboxContext, inboxWorkers, TOPICS } from './inbox.js';
 export { interpolate, sentence, TEXTS, textsFor } from './messages.js';
+export {
+  createMemoryMessenger,
+  createTwilioMessenger,
+  type Messenger,
+  messengerFromEnv,
+  normalizePhone,
+  type TextChannel,
+  type TextMessage,
+  type TwilioOptions,
+} from './messenger.js';
 export { CHANNELS, type Channel, KINDS, type Kind, notifyShutro } from './models.js';
 export {
   createMemoryPusher,
@@ -51,6 +64,8 @@ export const PACKAGE: { readonly name: string; readonly rfc: string } = Object.f
 export interface NotifyOptions {
   readonly mailer?: Mailer | undefined;
   readonly pusher?: Pusher | undefined;
+  /** The SMS / WhatsApp provider; default: Twilio from the environment, or none. */
+  readonly messenger?: Messenger | undefined;
   readonly baseUrl?: string | undefined;
   /** Start the outbox subscribers and the delivery worker (default: unless `KOSH_SCHEDULES=off`). */
   readonly workers?: boolean | undefined;
@@ -70,12 +85,14 @@ export function notifyModule(options: NotifyOptions = {}): ReturnType<typeof def
       // Background work is off in the CLI (kosh init, migrate), like the schedules.
       if (!(options.workers ?? process.env['KOSH_SCHEDULES'] !== 'off')) return;
       const mailer = options.mailer ?? mailerFromEnv();
+      const messenger = options.messenger ?? messengerFromEnv();
       const inbound = inboundConfigFromEnv();
       const delivery: DeliveryContext = {
         shutro: context.shutro,
         driver: context.driver,
         ...(mailer === undefined ? {} : { mailer }),
         ...(pusher === undefined ? {} : { pusher }),
+        ...(messenger === undefined ? {} : { messenger }),
         baseUrl: options.baseUrl ?? process.env['KOSH_BASE_URL'] ?? 'http://localhost:5173',
         ...(inbound === undefined
           ? {}

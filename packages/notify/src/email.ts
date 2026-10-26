@@ -7,6 +7,7 @@
 import { layout, type Mailer } from '@kosh/mail';
 import type { Driver, Env, Shutro, Worker } from '@kosh/server/orm';
 import { sentence, textsFor } from './messages.js';
+import { type Messenger, normalizePhone } from './messenger.js';
 import { type Pusher, sendPush } from './push.js';
 
 type Row = Record<string, unknown>;
@@ -34,6 +35,8 @@ export interface DeliveryContext {
   readonly mailer?: Mailer | undefined;
   /** The web push provider; without it, no push deliveries are created. */
   readonly pusher?: Pusher | undefined;
+  /** The SMS / WhatsApp provider; without it, no text deliveries are created. */
+  readonly messenger?: Messenger | undefined;
   /** Where the back-office is reached (`KOSH_BASE_URL`), for the links in messages. */
   readonly baseUrl: string;
   /** The reply address of a record email to a recipient (RFC 0006 §7.1), when replies by email are on. */
@@ -66,6 +69,56 @@ export function renderEmail(
     dir: /^(ar|fa|he|ur)/.test(recipient.lang ?? '') ? 'rtl' : 'ltr',
   });
   return { subject, ...rendered };
+}
+
+/**
+ * Creates the SMS and WhatsApp deliveries of freshly written notifications and enqueues their jobs, in the
+ * caller's transaction. Recipients without a phone number get none; both channels are opt-in per user.
+ */
+export async function queueMessages(
+  context: DeliveryContext,
+  env: Env,
+  su: Env,
+  notificationIds: readonly number[],
+  wants: (uid: number, kind: string, channel: string) => Promise<boolean>,
+): Promise<number> {
+  const messenger = context.messenger;
+  if (messenger === undefined || notificationIds.length === 0) return 0;
+  const keys = ['id', 'user', 'kind'];
+  const rows = (await ref(su, 'notify.notification').browse(notificationIds).load(keys)).read(keys);
+  let queued = 0;
+  for (const n of rows) {
+    const uid = n['user'] as number;
+    const [user] = (await ref(su, 'res.users').browse([uid]).load(['phone'])).read(['phone']);
+    const phone = typeof user?.['phone'] === 'string' ? normalizePhone(user['phone']) : null;
+    if (phone === null) continue;
+    for (const channel of messenger.channels) {
+      if (!(await wants(uid, String(n['kind']), channel))) continue;
+      const created = await ref(su, 'notify.delivery').create([
+        { notification: n['id'], channel, state: 'pending', attempts: 0 },
+      ]);
+      const id = created.ids[0] as number;
+      await env.enqueue(DELIVER_JOB, { delivery: id }, { key: `${DELIVER_JOB}:${id}` });
+      queued += 1;
+    }
+  }
+  return queued;
+}
+
+/** The text of a notification for SMS or WhatsApp: the sentence and the record's link. */
+export function renderText(
+  context: Pick<DeliveryContext, 'baseUrl'>,
+  lang: string | null,
+  notification: {
+    readonly kind: string;
+    readonly params: Readonly<Record<string, unknown>>;
+    readonly model: string;
+    readonly resId: number;
+  },
+): string {
+  const line = sentence(lang, notification.kind, notification.params);
+  const url = `${context.baseUrl.replace(/\/$/, '')}/open/${encodeURIComponent(notification.model)}/${notification.resId}`;
+  return `${line}\n${url}`;
 }
 
 /**
@@ -140,6 +193,45 @@ export async function deliver(context: DeliveryContext, env: Env, payload: unkno
         },
         (user?.['lang'] as string | null) ?? null,
       );
+      return;
+    }
+    if (delivery['channel'] === 'sms' || delivery['channel'] === 'whatsapp') {
+      const channel = delivery['channel'];
+      const messenger = context.messenger;
+      const [phoneRow] = (
+        await ref(su, 'res.users')
+          .browse([n['user'] as number])
+          .load(['phone'])
+      ).read(['phone']);
+      const phone =
+        typeof phoneRow?.['phone'] === 'string' ? normalizePhone(phoneRow['phone']) : null;
+      if (messenger === undefined || !messenger.channels.includes(channel) || phone === null) {
+        await ref(su, 'notify.delivery')
+          .browse([id])
+          .write({
+            state: 'skipped',
+            error: messenger === undefined ? 'no messenger' : 'no phone number',
+          });
+        return;
+      }
+      const text = renderText(context, (user?.['lang'] as string | null) ?? null, {
+        kind: String(n['kind']),
+        params: (n['params'] as Record<string, unknown> | null) ?? {},
+        model: String(n['resModel']),
+        resId: n['resId'] as number,
+      });
+      try {
+        const sent = await messenger.send({ channel, to: phone, text });
+        await ref(su, 'notify.delivery')
+          .browse([id])
+          .write({ state: 'sent', sentAt: new Date(), providerId: sent.id, error: null });
+      } catch (error) {
+        await context.driver.query({
+          text: `UPDATE notify_delivery SET attempts = attempts + 1, error = $2, state = 'failed' WHERE id = $1`,
+          params: [id, error instanceof Error ? error.message.slice(0, 500) : String(error)],
+        });
+        throw error;
+      }
       return;
     }
     if (mailer === undefined || typeof to !== 'string' || to === '') {

@@ -8,7 +8,7 @@
 import { announceChange, type KoshRegistry, type ModuleContext } from '@kosh/server';
 import type { Env, Shutro, Worker } from '@kosh/server/orm';
 import { orm } from '@kosh/server/orm';
-import { DELIVER_JOB, type DeliveryContext, queueEmails } from './email.js';
+import { DELIVER_JOB, type DeliveryContext, queueEmails, queueMessages } from './email.js';
 import type { Kind } from './models.js';
 import { queuePush } from './push.js';
 
@@ -107,11 +107,18 @@ async function mayRead(
 
 /** Kinds off on a channel unless the user switches them on (RFC 0006 §6.3: chat never emails by default). */
 const OFF_BY_DEFAULT: ReadonlySet<string> = new Set(['chat.direct:email']);
+/** Channels off for every kind unless the user switches them on (they cost money: SMS, WhatsApp). */
+const OPT_IN_CHANNELS: ReadonlySet<string> = new Set(['sms', 'whatsapp']);
 
-/** The recipient's preference for the kind on a channel (enabled unless they switched it off). */
+/** Whether a kind reaches a channel for a user who never set it: on, except the opt-in ones. */
+export function defaultEnabled(kind: string, channel: string): boolean {
+  return !OPT_IN_CHANNELS.has(channel) && !OFF_BY_DEFAULT.has(`${kind}:${channel}`);
+}
+
+/** The recipient's preference for the kind on a channel (the default unless they set it). */
 async function wants(su: Env, uid: number, kind: string, channel: string): Promise<boolean> {
   const [pref] = await rows(su, 'notify.preference', { user: uid, kind, channel }, ['enabled']);
-  if (pref === undefined) return !OFF_BY_DEFAULT.has(`${kind}:${channel}`);
+  if (pref === undefined) return defaultEnabled(kind, channel);
   return pref['enabled'] === true;
 }
 
@@ -280,6 +287,9 @@ export async function handleEvent(
     const ids = [...created.ids];
     // The other channels: one delivery and one job each, in this transaction (the job exists iff the rows do).
     await queueEmails(context, env, su, ids, (uid, kind) => wants(su, uid, kind, 'email'));
+    await queueMessages(context, env, su, ids, (uid, kind, channel) =>
+      wants(su, uid, kind, channel),
+    );
     await queuePush(
       context,
       async (deliveryId) => {

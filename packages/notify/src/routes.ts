@@ -15,6 +15,7 @@
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
 import type { FastifyRequest } from 'fastify';
+import { defaultEnabled } from './inbox.js';
 import { CHANNELS, KINDS } from './models.js';
 import { type Pusher, subscribePush, unsubscribePush } from './push.js';
 
@@ -171,8 +172,10 @@ export function registerNotifyRoutes(
         found.length === 0
           ? []
           : (await found.load(['kind', 'channel', 'enabled'])).read(['kind', 'channel', 'enabled']);
-      const enabled = (kind: string, channel: string) =>
-        rows.find((r) => r['kind'] === kind && r['channel'] === channel)?.['enabled'] !== false;
+      const enabled = (kind: string, channel: string) => {
+        const row = rows.find((r) => r['kind'] === kind && r['channel'] === channel);
+        return row === undefined ? defaultEnabled(kind, channel) : row['enabled'] === true;
+      };
       return {
         kinds: KINDS.map((kind) => ({
           kind,
