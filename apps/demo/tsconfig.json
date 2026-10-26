@@ -5,5 +5,5 @@
     "noEmit": true,
     "isolatedDeclarations": false
   },
-  "include": ["src", "test"]
+  "include": ["src", "test", "bench"]
 }

@@ -5,7 +5,7 @@ export default defineConfig({
   resolve: { conditions: ['@kosh/source'] },
   ssr: { resolve: { conditions: ['@kosh/source'] } },
   test: {
-    include: ['packages/*/bench/**/*.bench.test.ts'],
+    include: ['packages/*/bench/**/*.bench.test.ts', 'apps/*/bench/**/*.bench.test.ts'],
     passWithNoTests: false,
     maxWorkers: 1,
     testTimeout: 1_800_000,
