@@ -1,6 +1,6 @@
 # RFC 0006: Communication & notification architecture
 
-- **Status:** Accepted; parts 1–7 implemented (chatter, the realtime gateway, the inbox, email, web push, SMS and WhatsApp, internal chat, inbound email); the jobs decision taken on 2026-10-25. Part 8 (fallback channels, digests, quiet hours) designed below and accepted on 2026-10-27 with the proposed answers; steps 1–2 implemented.
+- **Status:** Accepted; parts 1–7 implemented (chatter, the realtime gateway, the inbox, email, web push, SMS and WhatsApp, internal chat, inbound email); the jobs decision taken on 2026-10-25. Part 8 (fallback channels, digests, quiet hours) designed below and accepted on 2026-10-27 with the proposed answers; implemented (steps 1–3).
 - **Depends on:** 0001, 0002, 0003; Shutro RFC 0013 (audit), 0018 (outbox events, jobs)
 
 ## 1. Summary
@@ -278,6 +278,18 @@ and Bangla).
 - **Interrupting channels**: web push, SMS and WhatsApp held in quiet hours, email not (proposed); or email too?
 - **Default fallback**: email (proposed), or none until the user picks one?
 - **Digest period**: daily only (proposed), or also weekly?
+
+## Implementation notes (2026-10-27, part 8 step 3: the settings dialog)
+
+- §8.1 assumed a Notifications page; there was none (the per-kind switches only had an API). The settings are a
+  dialog opened from the bell ("Notification settings", `NotificationSettings` in `@kosh/notify/web`): quiet hours
+  (time inputs, "every day" to switch them off), days off, the digest hour and the fallback channel saved with
+  Save; and a table of kinds by channel — the bell, push, SMS and WhatsApp as switches, email as at once / daily
+  summary / off — each saved at once. The time zone is named; the table scrolls sideways on a phone. English and
+  Bangla; kinds have short names (`kindNames`) next to the sentences the bell shows.
+- E2E (`apps/web/e2e/notification-settings.spec.ts`): Maria sets quiet hours to 06:30, Friday off, the summary
+  at 09:15, push as fallback, mentions by email daily and without push; the API returns all of it and the dialog
+  shows it after a reload; the dialog has no serious axe violation in light or dark theme, and reads in Bangla.
 
 ## Implementation notes (2026-10-27, part 8 step 2: digests and fallback channels)
 

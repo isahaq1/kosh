@@ -198,6 +198,10 @@ sentence and the record's link, one delivery per channel. Both channels are opt-
 money): nothing goes out until the user switches a kind on for the channel in their preferences. Another provider
 is a `Messenger` (`notifyModule({ messenger })`): one `send` per message, no module changes.
 
+**Notification settings** open from the bell ("Notification settings"): quiet hours and days off, the hour of the
+daily summary, the fallback channel, and a table of what reaches the user where (the bell, push, SMS, WhatsApp on or
+off per kind; email at once, in the daily summary, or off). Each switch is saved at once; the schedule with Save.
+
 **Quiet hours and email modes** (RFC 0006 part 8). Each user has settings (`GET` / `PUT
 /api/v1/notifications/settings`): quiet hours `quietFrom` – `quietTo` (`HH:MM` in their time zone, `tz` on their
 user; may cross midnight), whole `quietDays` off, the `digestHour` and the `fallback` channel. During quiet hours web

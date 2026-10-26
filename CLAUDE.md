@@ -268,7 +268,7 @@ export default defineModule({
 ### Phase 5 — Communication
 
 - [x] Chatter, activities, real-time gateway (`@kosh/realtime`: live lists, forms and presence; docs/ui.md)
-- [x] Notifications + provider adapters (email, SMS, WhatsApp, push): in-app inbox, bell, email, web push, and SMS / WhatsApp through Twilio (opt-in per user and kind; a `Messenger` adapter for other providers; a Twilio account to run it) — `@kosh/notify`, `@kosh/mail`; fallback channels, digests and quiet hours later
+- [x] Notifications + provider adapters (email, SMS, WhatsApp, push): in-app inbox, bell, email, web push, and SMS / WhatsApp through Twilio (opt-in per user and kind; a `Messenger` adapter for other providers; a Twilio account to run it) — `@kosh/notify`, `@kosh/mail`; fallback channels, daily digests and quiet hours with the settings dialog (RFC 0006 part 8, 2026-10-27)
 - [x] Internal chat (RFC 0006 part 6: channels / groups / directs, threads, reactions, the Chat app and its dock) and inbound email (part 7: signed reply addresses, the webhook for Postmark / Mailgun / raw, the IMAP poller, catch-all aliases, bounces, the quarantine page), 2026-10-26
 
 ### Phase 6 — Proof
