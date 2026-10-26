@@ -397,8 +397,22 @@ export async function runReport(
       },
     });
   }
-  const current = await run(base);
-  const previous = previousWhere === undefined ? undefined : await run(previousWhere);
+  // A many2one group value may come as `{ id, … }` (targets with a record name): keys and labels use the id.
+  const idOf = (value: unknown): unknown =>
+    typeof value === 'object' && value !== null && 'id' in value
+      ? Number((value as { id: unknown }).id)
+      : value;
+  const normalize = (rows: readonly Row[]): Row[] =>
+    rows.map((row) => {
+      const out: Record<string, unknown> = { ...row };
+      for (const group of all) {
+        const info = fields.get(group.split(':')[0] as string);
+        if (info?.kind === 'many2one') out[group] = idOf(row[group]);
+      }
+      return out as Row;
+    });
+  const current = normalize(await run(base));
+  const previous = previousWhere === undefined ? undefined : normalize(await run(previousWhere));
 
   // Labels: selection options, many2one display names, dates as they are (the client formats them).
   const idsByTarget = new Map<string, Set<number>>();
