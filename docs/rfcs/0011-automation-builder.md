@@ -177,6 +177,20 @@ cannot read rules); E2E: a rule made in the app fires on a record and shows in t
   run as the actor refused and logged versus the system, a module action, an activity, a retry, an event rule
   and its notification, a dry run, permissions, the tracked fields route).
 
+## Implementation notes (2026-10-26): step 2 — the editor
+
+- `@kosh/automation/web`: `RuleEditor` is the form renderer of `automation.rule` (the view's `component`), so
+  the generated list, the record route, the breadcrumbs and the pager stay; `RetryRun` is a component node of the
+  run form. The editor reads what the model offers through `GET /api/v1/automation/models/:model` (tracked
+  fields, transitions, fields), the module actions and the activity types; the condition is rows of field,
+  operator and value turned into a domain (an existing domain the rows cannot express is edited as JSON); users
+  are typed as ids, `field:<key>` or `role:<code>` (the search layer's filter editor was not reused: it edits a
+  search, not a stored domain, and the rows cover what rules need).
+- `POST /api/v1/automation/poll` ("Run pending changes now", managers) reads the trail and the outbox once:
+  what a demo, a test or an administrator wants without waiting for the next round.
+- E2E: `apps/web/e2e/automation.spec.ts` (a rule made in the editor, a dry run, run now, the log, the note on
+  the record).
+
 ## Alignment with CLAUDE.md
 
 Rules are data, actions are a fixed menu plus typed module code (explicit over magic, secure by default: no scripts

@@ -241,7 +241,7 @@ export default defineModule({
 - [x] RFC 0007 Frontend architecture & design system
 - [x] RFC 0008 Default business apps (Settings, Accounting, Sales, Purchase, Projects) & App manager (install / disable / uninstall)
 - [x] RFC 0010 Modern back-office: Phase A built (palette, shortcuts, toasts with Undo, pager, bulk actions, export, home page, PWA); Phase B done (live updates, notifications, offline, spreadsheet-grade lists, SMS/WhatsApp); C split into RFCs of its own
-- [ ] RFC 0011 Automation builder: accepted; step 1 done (the engine on the audit trail and outbox, the actions, the run log, the API, the models' generated views; docs/automation.md); next the editor (step 2), webhooks and timed triggers (step 3)
+- [ ] RFC 0011 Automation builder: accepted; steps 1–2 done (the engine on the audit trail and outbox, the actions, the run log, the API, the rule editor with the condition builder, dry run and run-now; docs/automation.md); next webhooks and timed triggers (step 3)
 
 ### Phase 1 — Server foundation
 

@@ -220,8 +220,11 @@ and mentions reach the bell (`chat.direct`, `mention`); `docs/messaging.md` has 
 ## Automation (RFC 0011)
 
 With the `automation` module installed (every installation has it), automation managers get the **Automation**
-app: the rules (a generated list and form for now; the editor with the condition builder comes with step 2) and
-the run log. `docs/automation.md` describes the triggers, the actions and the templates.
+app: the rules, opened in the **rule editor** (the model and the trigger; the tracked fields to watch and the
+from / to values; a condition built row by row, or as a domain; the ordered actions with the model's fields,
+transitions, activity types and module actions; who the actions run as; "Test on a record", a dry run that
+shows the rendered actions; "Run pending changes now"), and the run log with "Try again" on a failed run.
+`docs/automation.md` describes the triggers, the actions and the templates.
 
 ## Email (RFC 0006 part 7)
 

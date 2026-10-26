@@ -57,7 +57,10 @@ the `reason`: `trigger`, `fields`, `from`, `to`, `condition`, `untracked`, `loop
 `outcomes` of the actions and the `error`. Unique per `(rule, tx, record)`: a re-read of the trail after a crash
 is a no-op. `POST /api/v1/automation/runs/:id/retry` runs a failed run's actions again as a new run;
 `POST /api/v1/automation/rules/:id/test { record }` is a dry run (the condition's result, the rendered actions).
-`automation.user` reads runs; `automation.manager` reads and writes rules.
+`automation.user` reads runs; `automation.manager` reads and writes rules. The Automation app's **rule editor**
+builds all of this without JSON: the trigger, the watched fields, the condition rows (or a domain), the actions
+with pickers, run-as, a dry run on a record, and "Run pending changes now" (`POST /api/v1/automation/poll`,
+managers: one read of the trail and the outbox, for a demo or a test). A failed run has "Try again" on its form.
 
 ## Example
 
