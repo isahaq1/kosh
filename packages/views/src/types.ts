@@ -256,6 +256,8 @@ export interface WindowAction {
   readonly domain?: Condition;
   /** Search filters selected when the action opens. */
   readonly defaultFilters?: readonly string[];
+  /** Values of a record created from this action (`{ kind: 'out_invoice' }`). */
+  readonly defaults?: Readonly<Record<string, unknown>>;
   /** Group or permission codes; otherwise any access level of the module. */
   readonly visibleTo?: readonly string[];
 }

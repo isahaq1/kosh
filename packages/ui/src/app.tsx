@@ -756,6 +756,7 @@ function RecordPage(): ReactElement {
       key={id}
       served={served.data}
       recordId={recordId}
+      {...(action.data?.defaults === undefined ? {} : { defaults: action.data.defaults })}
       crumbs={[
         // The app, then the list; one crumb when they share a name (Contacts › Contacts says nothing more).
         ...(appLabel === undefined || appLabel === listLabel
