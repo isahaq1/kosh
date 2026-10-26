@@ -270,3 +270,103 @@ test('applied app migrations missing from the folder are restored byte for byte'
   // Planning works on the restored folder (checksums match, no pending file).
   expect((await prepareApps({ driver, catalogue, change: {}, dir })).empty).toBe(true);
 });
+
+/** The notes module at a version: 1.1.0 adds `body` and fills it; 2.0.0 drops `legacy`. */
+function notesAt(version: '1.0.0' | '1.1.0' | '2.0.0'): KoshModule[] {
+  const fields: Record<string, ReturnType<typeof f.char>> = { title: f.char({ required: true }) };
+  if (version !== '2.0.0') fields['legacy'] = f.char();
+  if (version !== '1.0.0') fields['body'] = f.char();
+  const shutro = defineModule({
+    name: 'notes',
+    version,
+    depends: [baseShutro],
+    groups: [group('notes')],
+    models: [defineModel('notes.note', { access: { 'notes.user': ['read'] }, fields })],
+    migrations:
+      version === '1.0.0'
+        ? []
+        : [
+            {
+              version: '1.1.0',
+              description: 'Fill the new body from the title',
+              up: async ({ sql }) => {
+                await sql`UPDATE notes_note SET body = 'about ' || title WHERE body IS NULL`;
+              },
+            },
+          ],
+  });
+  return [...catalogue, app(shutro, [base])]; // the rest of the installed set stays in the catalogue
+}
+
+test('upgrade: the schema, the data migrations and the version, in one change; data is dropped only when asked', async () => {
+  const v1 = notesAt('1.0.0');
+  await applyApps(
+    await prepareApps({ driver, catalogue: v1, change: { install: ['notes'] }, dir }),
+    {
+      driver,
+      dir,
+      actor: 'test',
+    },
+  );
+  await driver.query({
+    text: "INSERT INTO notes_note (title, legacy, created_at, updated_at) VALUES ('Beams', 'old', now(), now())",
+    params: [],
+  });
+
+  // The new code: an app change is refused until the upgrade is asked for (the database is behind the code).
+  const v11 = notesAt('1.1.0');
+  await expect(prepareApps({ driver, catalogue: v11, change: {}, dir })).rejects.toThrow(
+    'does not match',
+  );
+  const prepared = await prepareApps({
+    driver,
+    catalogue: v11,
+    change: { upgrade: ['notes'] },
+    dir,
+  });
+  expect(prepared.plan.upgrade).toEqual([{ name: 'notes', from: '1.0.0', to: '1.1.0' }]);
+  expect(prepared.migration.statements.map((s) => s.sql).join('\n')).toContain('"body"');
+  const result = await applyApps(prepared, { driver, dir, actor: 'test' });
+  expect(result.upgraded).toEqual(['notes']);
+  expect(await driver.query({ text: 'SELECT title, body FROM notes_note', params: [] })).toEqual([
+    { title: 'Beams', body: 'about Beams' },
+  ]);
+  const installed = (await readInstalledApps(driver))?.find((r) => r.name === 'notes');
+  expect(installed?.version).toBe('1.1.0');
+  const [log] = await driver.query<{ change: string }>({
+    text: `SELECT change::text AS change FROM ${APPS_LOG_TABLE} ORDER BY id DESC LIMIT 1`,
+    params: [],
+  });
+  // The change is stored as a JSON string inside the jsonb (as every log row is).
+  const raw = JSON.parse(log?.change ?? '{}') as unknown;
+  const logged = (typeof raw === 'string' ? JSON.parse(raw) : raw) as { upgrade: unknown };
+  expect(logged.upgrade).toEqual([{ name: 'notes', from: '1.0.0', to: '1.1.0' }]);
+
+  // Back to older code: refused. The same version again: nothing to do.
+  await expect(
+    prepareApps({ driver, catalogue: v1, change: { upgrade: ['notes'] }, dir }),
+  ).rejects.toThrow('go back');
+  const again = await prepareApps({ driver, catalogue: v11, change: { upgrade: ['notes'] }, dir });
+  expect(again.empty).toBe(true);
+
+  // 2.0.0 drops a field: refused with what it would drop, unless "remove data".
+  const v2 = notesAt('2.0.0');
+  await expect(
+    prepareApps({ driver, catalogue: v2, change: { upgrade: ['notes'] }, dir }),
+  ).rejects.toThrow(/legacy/);
+  const removing = await prepareApps({
+    driver,
+    catalogue: v2,
+    change: { upgrade: ['notes'] },
+    dir,
+    removeData: true,
+  });
+  expect(removing.allowDestructive).toBe(true);
+  await applyApps(removing, { driver, dir, actor: 'test' });
+  expect(
+    await count(
+      "SELECT count(*) AS n FROM information_schema.columns WHERE table_name = 'notes_note' AND column_name = 'legacy'",
+    ),
+  ).toBe(0);
+  expect((await readInstalledApps(driver))?.find((r) => r.name === 'notes')?.version).toBe('2.0.0');
+});

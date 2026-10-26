@@ -10,6 +10,7 @@ export {
   type AppState,
   catalogueOf,
   type InstalledApp,
+  outdatedApps,
   planApps,
   servedModules,
 } from './apps.js';
@@ -33,4 +34,4 @@ export {
   type ModuleInput,
   type ShutroModuleShape,
 } from './manifest.js';
-export { satisfies } from './semver.js';
+export { compareVersions, satisfies } from './semver.js';

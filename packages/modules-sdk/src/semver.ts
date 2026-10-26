@@ -48,6 +48,15 @@ function one(version: Triple, term: string): boolean | undefined {
  * True when `version` satisfies `range`.
  * @throws {RangeError} for a version or range this subset cannot read.
  */
+/** Compares two `major.minor.patch` versions: negative, zero or positive. @throws on a malformed one */
+export function compareVersions(a: string, b: string): number {
+  const x = parse(a);
+  const y = parse(b);
+  if (x === undefined || y === undefined)
+    throw new Error(`Not a version: '${x === undefined ? a : b}'.`);
+  return compare(x, y);
+}
+
 export function satisfies(version: string, range: string): boolean {
   const v = parse(version);
   if (v === undefined)

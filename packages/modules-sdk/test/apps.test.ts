@@ -97,3 +97,25 @@ test('refusals: unknown, protected, not installed, contradictory', () => {
     }),
   ).toThrow(/on and off|enabled and disabled/);
 });
+
+test('upgrade: installed modules move to their code version; never back; unchanged when equal; the outdated list', async () => {
+  const { planApps, outdatedApps, compareVersions } = await import('../src/index.js');
+  expect(compareVersions('1.10.0', '1.9.9')).toBeGreaterThan(0);
+  expect(compareVersions('2.0.0', '2.0.0')).toBe(0);
+  const mod = (name: string, version: string) =>
+    ({ name, version, depends: [], accessLevels: {} }) as unknown as Parameters<
+      typeof planApps
+    >[0][number];
+  const cat = [mod('a', '1.2.0'), mod('b', '1.0.0')];
+  const current = [
+    { name: 'a', version: '1.0.0', state: 'installed', reason: 'selected' },
+    { name: 'b', version: '1.0.0', state: 'installed', reason: 'selected' },
+  ] as const;
+  const plan = planApps(cat, current, { upgrade: ['a', 'b'] });
+  expect(plan.upgrade).toEqual([{ name: 'a', from: '1.0.0', to: '1.2.0' }]);
+  expect(plan.unchanged).toEqual(['b']);
+  expect(plan.after.find((r) => r.name === 'a')?.version).toBe('1.2.0');
+  expect(outdatedApps(cat, current)).toEqual([{ name: 'a', from: '1.0.0', to: '1.2.0' }]);
+  expect(() => planApps([mod('a', '0.9.0')], current, { upgrade: ['a'] })).toThrow('go back');
+  expect(() => planApps(cat, [], { upgrade: ['a'] })).toThrow('Not installed');
+});

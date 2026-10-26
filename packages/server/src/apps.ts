@@ -226,6 +226,8 @@ export interface PreparedApps {
   readonly migration: MigrationPlan;
   /** True when the plan changes nothing. */
   readonly empty: boolean;
+  /** An upgrade may drop columns or tables its new code no longer has (`removeData`). */
+  readonly allowDestructive: boolean;
 }
 
 /** Options of {@link prepareApps}. */
@@ -238,6 +240,11 @@ export interface PrepareAppsOptions {
   readonly dir: string;
   /** Modules that can never be disabled. Default: `base`. */
   readonly protect?: readonly string[];
+  /**
+   * An upgrade may drop the columns and tables its new code no longer has (RFC 0012 §5.4: "remove data"). Default:
+   * false, and such an upgrade is refused with what it would drop.
+   */
+  readonly removeData?: boolean;
 }
 
 /** Plans an app change against the live database. Changes nothing. @throws {AppPlanError} */
@@ -262,7 +269,8 @@ export async function prepareApps(options: PrepareAppsOptions): Promise<Prepared
     registry: before.registry,
     ignore: FRAMEWORK_TABLES,
   });
-  if (drift.statements.length > 0)
+  // An upgrade is exactly that difference: the upgraded modules' code ahead of the database.
+  if (drift.statements.length > 0 && plan.upgrade.length === 0)
     throw new AppPlanError(
       `The database does not match the installed modules (${drift.statements.length} change(s) not migrated).`,
       'Run kosh migrate first.',
@@ -275,10 +283,13 @@ export async function prepareApps(options: PrepareAppsOptions): Promise<Prepared
     registry: schema.registry,
     ignore: FRAMEWORK_TABLES,
   });
-  if (migration.destructive.length > 0)
+  const removeData = options.removeData === true && plan.upgrade.length > 0;
+  if (migration.destructive.length > 0 && !removeData)
     throw new AppPlanError(
       `The change would drop or alter data: ${migration.destructive.map((op) => migrate.renderOperation(op)).join('; ')}.`,
-      'App changes never destroy data; review the modules, or use kosh migrate --plan.',
+      plan.upgrade.length > 0
+        ? 'Upgrade with "remove data" (kosh apps upgrade --remove-data) to drop them, or keep the fields in the code.'
+        : 'App changes never destroy data; review the modules, or use kosh migrate --plan.',
     );
   // A disabled module's columns stay in other modules' tables: a NOT NULL one without a database default (a function
   // default or a compute lives in the ORM) would make every insert there fail.
@@ -312,7 +323,9 @@ WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2`,
       plan.install.length === 0 &&
       plan.enable.length === 0 &&
       plan.disable.length === 0 &&
+      plan.upgrade.length === 0 &&
       migration.statements.length === 0,
+    allowDestructive: removeData,
   };
 }
 
@@ -354,6 +367,7 @@ export interface AppsResult {
   readonly installed: readonly string[];
   readonly enabled: readonly string[];
   readonly disabled: readonly string[];
+  readonly upgraded: readonly string[];
 }
 
 /**
@@ -452,12 +466,14 @@ export async function applyApps(
           'Plan it again.',
         );
 
-      if (file !== null) {
+      // Upgrades run the modules' data migrations even without schema statements (Shutro tracks the versions).
+      if (file !== null || plan.upgrade.length > 0) {
         step('schema', `${prepared.migration.statements.length} statement(s)`);
         await migrate.applyMigrations({
           driver: tx,
           dir: options.dir,
           registry: prepared.schema.registry,
+          allowDestructive: prepared.allowDestructive,
         });
       }
       const shutro = orm.createShutro({ driver: tx, registry: prepared.runtime.registry });
@@ -495,6 +511,16 @@ export async function applyApps(
         }
       }
 
+      const upgraded = plan.upgrade.map((u) => u.name);
+      if (upgraded.length > 0) {
+        // Their seed data again (records they changed), then every module's defaults.
+        step('data', upgraded.join(', '));
+        await (options.load ?? defaultLoad)(
+          { shutro, driver: tx, registry: prepared.runtime, company: companyId },
+          upgraded,
+        );
+      }
+
       step('state', `${plan.after.length} module(s)`);
       for (const row of plan.after)
         await tx.query({
@@ -516,6 +542,7 @@ VALUES ($1, $2::jsonb, $3, $4, $5, $6)`,
             install: plan.install,
             enable: plan.enable,
             disable: plan.disable,
+            upgrade: plan.upgrade,
             migration: file === null ? null : `${file.version}_${file.name}.sql`,
           }),
           sql,
@@ -529,6 +556,7 @@ VALUES ($1, $2::jsonb, $3, $4, $5, $6)`,
           ...plan.install.map((m) => `installed ${m.name}`),
           ...plan.enable.map((n) => `enabled ${n}`),
           ...plan.disable.map((m) => `disabled ${m.name}`),
+          ...plan.upgrade.map((u) => `upgraded ${u.name} ${u.from} → ${u.to}`),
         ];
         await shutro.bootstrap({ reason: 'apps change audit' }, (env) =>
           audit(env, {
@@ -559,5 +587,6 @@ VALUES ($1, $2::jsonb, $3, $4, $5, $6)`,
     installed: plan.install.map((m) => m.name),
     enabled: plan.enable,
     disabled: plan.disable.map((m) => m.name),
+    upgraded: plan.upgrade.map((u) => u.name),
   };
 }

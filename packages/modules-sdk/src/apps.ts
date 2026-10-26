@@ -4,8 +4,10 @@
  * set. Dependencies come along on install and enable; dependents go along on disable. The server turns a plan into
  * schema changes and applies it (`@kosh/server`, `prepareApps` / `applyApps`).
  */
+
 import { ModuleLoadError } from './errors.js';
 import type { KoshModule } from './manifest.js';
+import { compareVersions } from './semver.js';
 
 /** A module's state in a database: `installed` serves it; `disabled` keeps its tables and data, serves nothing. */
 export type AppState = 'installed' | 'disabled';
@@ -27,6 +29,8 @@ export interface AppChange {
   readonly disable?: readonly string[];
   /** Bridges (RFC 0008 §5.1) to leave out although every module they connect is installed. */
   readonly withoutBridges?: readonly string[];
+  /** Installed modules whose code is newer than the installed version (RFC 0012 §5.4). */
+  readonly upgrade?: readonly string[];
 }
 
 /** What a change does to the installed set. */
@@ -37,6 +41,12 @@ export interface AppPlan {
   readonly enable: readonly string[];
   /** Modules switched off; `cascade` when it goes because a module it depends on does. */
   readonly disable: readonly { readonly name: string; readonly cascade: boolean }[];
+  /** Installed modules moving to their code's version. */
+  readonly upgrade: readonly {
+    readonly name: string;
+    readonly from: string;
+    readonly to: string;
+  }[];
   /** Asked for but already in the requested state. */
   readonly unchanged: readonly string[];
   /** The installed set afterwards. */
@@ -93,7 +103,12 @@ export function planApps(
 ): AppPlan {
   const catalogue = catalogueOf(catalogueModules);
   const state = new Map(current.map((row) => [row.name, row]));
-  const asked = [...(change.install ?? []), ...(change.enable ?? []), ...(change.disable ?? [])];
+  const asked = [
+    ...(change.install ?? []),
+    ...(change.enable ?? []),
+    ...(change.disable ?? []),
+    ...(change.upgrade ?? []),
+  ];
   const unknown = asked.filter((n) => !catalogue.has(n));
   if (unknown.length > 0)
     throw new AppPlanError(
@@ -190,7 +205,32 @@ export function planApps(
     .reverse() // dependents first
     .map((name) => ({ name, cascade: switchedOff.get(name) === true }));
 
+  // Upgrades: installed modules whose code is newer; never a downgrade.
+  const upgrade: { name: string; from: string; to: string }[] = [];
+  for (const name of withDependencies(change.upgrade ?? [], catalogue)) {
+    if (!(change.upgrade ?? []).includes(name)) continue;
+    const row = state.get(name);
+    if (row === undefined)
+      throw new AppPlanError(
+        `Not installed, so it cannot be upgraded: ${name}.`,
+        'Install it instead.',
+      );
+    const to = catalogue.get(name)?.version ?? row.version;
+    const order = compareVersions(to, row.version);
+    if (order < 0)
+      throw new AppPlanError(
+        `${name} would go back from ${row.version} to ${to}.`,
+        'Install the code of the installed version, or a newer one.',
+      );
+    if (order === 0) unchanged.push(name);
+    else upgrade.push({ name, from: row.version, to });
+  }
+
   const after = new Map(current.map((row) => [row.name, row]));
+  for (const u of upgrade) {
+    const row = after.get(u.name);
+    if (row !== undefined) after.set(u.name, { ...row, version: u.to });
+  }
   for (const { name, reason } of install)
     after.set(name, {
       name,
@@ -210,6 +250,7 @@ export function planApps(
     install,
     enable,
     disable,
+    upgrade,
     unchanged: [...new Set(unchanged)],
     after: withDependencies([...after.keys()], catalogue)
       .map((n) => after.get(n))
@@ -228,4 +269,25 @@ export function servedModules(
     .filter((row) => states.includes(row.state))
     .map((row) => catalogue.get(row.name))
     .filter((m): m is KoshModule => m !== undefined);
+}
+
+/** The installed modules whose code is newer than their installed version. */
+export function outdatedApps(
+  catalogueModules: readonly KoshModule[],
+  current: readonly InstalledApp[],
+): { readonly name: string; readonly from: string; readonly to: string }[] {
+  const catalogue = catalogueOf(catalogueModules);
+  return current
+    .map((row) => ({
+      name: row.name,
+      from: row.version,
+      to: catalogue.get(row.name)?.version ?? row.version,
+    }))
+    .filter((u) => {
+      try {
+        return compareVersions(u.to, u.from) > 0;
+      } catch {
+        return false;
+      }
+    });
 }
