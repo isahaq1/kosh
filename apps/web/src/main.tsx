@@ -4,6 +4,7 @@
  */
 import './index.css';
 import { accountingMessages, registerAccountingWeb } from '@kosh/accounting/web';
+import { automationMessages, registerAutomationWeb } from '@kosh/automation/web';
 import { mailMessages, registerMailWeb } from '@kosh/mail/web';
 import { messagingMessages, registerMessagingWeb } from '@kosh/messaging/web';
 import { notifyMessages, registerNotifyWeb } from '@kosh/notify/web';
@@ -22,8 +23,10 @@ registerSettingsWeb(registry);
 registerNotifyWeb(registry);
 registerAccountingWeb(registry);
 registerMailWeb(registry);
+registerAutomationWeb(registry);
 const messages = {
   accounting: accountingMessages,
+  automation: automationMessages,
   mail: mailMessages,
   notify: notifyMessages,
   reporting: reportingMessages,

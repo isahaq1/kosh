@@ -162,7 +162,13 @@ for (const [login, name, groups] of [
   [
     'dina',
     'Dina Rahman',
-    ['contacts.manager', 'purchase.approver', 'reporting.designer', 'messaging.user'],
+    [
+      'contacts.manager',
+      'purchase.approver',
+      'reporting.designer',
+      'messaging.user',
+      'automation.manager',
+    ],
   ],
   ['maria', 'Maria Das', ['contacts.user', 'purchase.manager', 'reporting.user', 'messaging.user']],
   ['bob', 'Bob Smith', ['base.user']],
