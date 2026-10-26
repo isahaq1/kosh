@@ -1,6 +1,6 @@
 # RFC 0012: Kosh Studio
 
-- **Status:** Draft, awaiting approval (RFC 0010 Phase C, the second of its three subsystems)
+- **Status:** Accepted 2026-10-26 with the proposed answers (the installation's `src/modules/`, patches first, the prefix, administrators); step 1 implemented (`@kosh/studio`, `kosh studio build`, `docs/studio.md`)
 - **Depends on:** 0001 (manifests), 0002 (metadata), 0003 (permissions, approvals), 0004 (views and their
   extensions), 0008 (App manager, migrations), 0011 (automation rules); Shutro's `extendModel` and migration
   planner
@@ -131,6 +131,21 @@ to a form in Studio mode, apply, fill it on a record.
 - **Propose mode's git integration** in version 1 (GitHub and GitLab pull requests), or patches only at first?
 - **Prefix**: `x_<module>_` for fields on other apps' models (proposed), or the module name alone?
 - **Who may use Studio**: administrators only (proposed), or a separate `studio.manager` role they grant?
+
+## Implementation notes (2026-10-26): step 1 — the spec and the generator
+
+- `@kosh/studio`: `StudioSpec` and `validateSpec` (every problem with where it is: `fields[2].target`),
+  `generateModule` (deterministic; `models.ts` with `extendModel` per extended model and `defineModel` per own
+  model, `index.ts` with access levels, views, searches, view extensions, actions, menus and approvals,
+  `README.md`), `buildModule` / `runStudio` (`kosh studio build`, writing only the files that changed).
+- **The prefix is camelCase**: Shutro field keys are `[a-z][a-zA-Z0-9]*`, so `x_<module>_` became `x<Module>`
+  (`xAcmeGstNumber`, column `x_acme_gst_number`); own models are `x_<module>.<name>`.
+- A list view has no container node: list columns are anchored on a column (`insertAfter: 'city'`), noted in the
+  spec type.
+- Tests: `packages/studio/test/studio.test.ts`: validation, literals and prefixes, determinism, the round trip (the
+  generated module, with workspace imports, loads next to a fixture app through `buildKoshRegistry`: prefixed
+  fields on the extended model, the own model, the view extensions by node id, menus, actions and access levels),
+  a missing anchor failing at load, and `kosh studio build`.
 
 ## Alignment with CLAUDE.md
 
