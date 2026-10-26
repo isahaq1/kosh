@@ -14,3 +14,4 @@ dist-npm/
 packages/cli/test/.work-*/
 **/.generated-api/
 **/.kosh-studio/
+**/.studio-project/

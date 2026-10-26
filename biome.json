@@ -19,7 +19,8 @@
       "!**/.kosh",
       "!**/.generated",
       "!**/.generated-api",
-      "!**/.kosh-studio"
+      "!**/.kosh-studio",
+      "!**/.studio-project"
     ]
   },
   "formatter": {

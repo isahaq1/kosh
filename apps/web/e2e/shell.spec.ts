@@ -43,6 +43,7 @@ test('administrators sign in with a second factor', async ({ page }) => {
     /^Reports/,
     /^Automation/,
     /^Email/,
+    /^Studio/,
     /^Settings/, // administrators see every installed app
   ]);
 });

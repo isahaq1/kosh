@@ -11,6 +11,7 @@ import { notifyMessages, registerNotifyWeb } from '@kosh/notify/web';
 import { registerPermissionsWeb } from '@kosh/permissions/web';
 import { registerReportingWeb, reportingMessages } from '@kosh/reporting/web';
 import { registerSettingsWeb, settingsMessages } from '@kosh/settings/web';
+import { registerStudioWeb, studioMessages } from '@kosh/studio/web';
 import { createDefaultRegistry, createKoshApi, KoshApp } from '@kosh/ui';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -24,6 +25,7 @@ registerNotifyWeb(registry);
 registerAccountingWeb(registry);
 registerMailWeb(registry);
 registerAutomationWeb(registry);
+registerStudioWeb(registry);
 const messages = {
   accounting: accountingMessages,
   automation: automationMessages,
@@ -32,6 +34,7 @@ const messages = {
   reporting: reportingMessages,
   messaging: messagingMessages,
   settings: settingsMessages,
+  studio: studioMessages,
 };
 
 const root = document.getElementById('root');

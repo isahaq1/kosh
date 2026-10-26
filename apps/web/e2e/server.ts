@@ -6,13 +6,13 @@
  *
  * Users (password `correct horse battery`):
  * - `rahim`: contacts user, purchase requester
- * - `dina`: contacts manager, purchase approver
+ * - `dina`: contacts manager, purchase approver, Studio manager
  * - `maria`: purchase manager (finance director level)
  * - `rahim`, `dina`, `maria` also have Messaging (the chatter)
  * - `bob`: an internal user without any app role
  * - `admin`: administrator with 2FA (secret {@link ADMIN_TOTP_SECRET})
  */
-import { mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { installActivityTypes } from '@kosh/messaging';
@@ -28,6 +28,7 @@ import {
 } from '@kosh/server';
 import { orm, pg } from '@kosh/server/orm';
 import { settings } from '@kosh/settings';
+import { createStudio } from '@kosh/studio';
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
 import { library, MODULES } from './fixture/modules.ts';
 
@@ -39,7 +40,22 @@ const PORT = Number(process.env['KOSH_E2E_PORT'] ?? 3100);
 process.env['KOSH_STORAGE_DIR'] ??= mkdtempSync(join(tmpdir(), 'kosh-e2e-files-'));
 const container = await new PostgreSqlContainer('postgres:18').start();
 const databaseUrl = container.getConnectionUri();
-const CATALOGUE = [...MODULES, settings, library];
+// Studio in write mode on a project folder of its own (recreated at every start): its modules import the workspace
+// packages, and the e2e Contacts app from the fixture.
+const STUDIO_ROOT = join(import.meta.dirname, '.studio-project');
+rmSync(STUDIO_ROOT, { recursive: true, force: true });
+mkdirSync(join(STUDIO_ROOT, 'src'), { recursive: true });
+writeFileSync(join(STUDIO_ROOT, 'src', 'modules.ts'), 'export const modules = [];\n');
+const studio = createStudio({
+  mode: 'write',
+  root: STUDIO_ROOT,
+  generate: {
+    imports: 'workspace',
+    extension: '.ts',
+    moduleImport: (name) => (name === 'contacts' ? '../../../../fixture/modules.ts' : undefined),
+  },
+});
+const CATALOGUE = [...MODULES, settings, studio, library];
 const migrations = mkdtempSync(join(tmpdir(), 'kosh-e2e-migrations-'));
 // A fresh installation: the e2e modules and Settings, installed like any app (Library stays available).
 const setup = pg.createDriver({ url: databaseUrl, max: 2, parseNumeric: orm.toDecimal });
@@ -48,7 +64,7 @@ await applyApps(
   await prepareApps({
     driver: setup,
     catalogue: CATALOGUE,
-    change: { install: [...MODULES.map((m) => m.name), 'settings'] },
+    change: { install: [...MODULES.map((m) => m.name), 'settings', 'studio'] },
     dir: migrations,
   }),
   { driver: setup, dir: migrations, actor: 'e2e' },
@@ -168,6 +184,7 @@ for (const [login, name, groups] of [
       'reporting.designer',
       'messaging.user',
       'automation.manager',
+      'studio.manager',
     ],
   ],
   ['maria', 'Maria Das', ['contacts.user', 'purchase.manager', 'reporting.user', 'messaging.user']],

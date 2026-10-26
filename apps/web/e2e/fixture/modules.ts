@@ -61,7 +61,7 @@ const Partner = defineModel('res.partner', {
   },
 });
 
-const contactsShutro = defineModule({
+export const contactsShutro = defineModule({
   name: 'contacts',
   version: '0.1.0',
   depends: [baseShutro, reportingShutro],

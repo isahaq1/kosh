@@ -245,6 +245,7 @@ export function mainTsx(_options: StarterOptions): string {
     { name: 'notify', fn: 'registerNotifyWeb' },
     { name: 'mail', fn: 'registerMailWeb' },
     { name: 'automation', fn: 'registerAutomationWeb' },
+    { name: 'studio', fn: 'registerStudioWeb' },
   ].map(({ name, fn }) => {
     const messages = name === 'permissions' ? null : `${name}Messages`;
     return {
