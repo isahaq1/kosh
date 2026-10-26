@@ -158,8 +158,10 @@ to a form in Studio mode, apply, fill it on a record.
 - `kosh apps upgrade [app …] [--remove-data]` (default: every outdated app), the catalogue listing shows the
   installed version when it is behind; the Settings API takes `upgrade` and the Apps page has Upgrade (it never
   removes data: that stays a deliberate command).
-- Found on the way: `kosh_app_log.change` holds the change as a JSON string inside the jsonb (the parameter was
-  encoded twice); readers parse it twice for now (the test does); a fix with a data migration of the log later.
+- Found on the way: `kosh_app_log.change` held the change as a JSON string inside the jsonb (the parameter was
+  encoded twice). Fixed 2026-10-27: the value goes to the driver unencoded, and the log's table preparation (at
+  every app change) turns old rows back into objects. The idempotency table had the same fault (a replayed
+  response was a JSON string): fixed the same way, repaired at server start.
 - Tests: the planner (upgrade, unchanged, back refused, not installed, the outdated list); on PostgreSQL, a module
   at 1.0.0 upgraded to 1.1.0 (a column added, its data migration filling it, the version and the log), refused
   back, empty again, and 2.0.0 dropping a column refused until "remove data".
