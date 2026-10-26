@@ -6,8 +6,8 @@ TypeScript generated from it. It is reviewed, versioned and installed like any m
 
 RFC 0012 is implemented: the specification, the generator, the App manager's upgrade (a changed Studio module is
 applied with `kosh apps upgrade <name>`), the Studio API (review, apply, propose), Studio mode in the back-office,
-and approval policies and automation rules in Studio modules. Proposals are patches; pushing them as pull requests
-to GitHub or GitLab comes later.
+and approval policies and automation rules in Studio modules. Proposals are patches, or pull requests on GitHub and
+merge requests on GitLab when a repository is configured.
 
 ## Studio mode
 
@@ -122,7 +122,20 @@ KOSH_STUDIO_DIR=.     # the project folder (default: the working directory)
 ```
 
 In propose mode the patch (`git apply`) goes through review, CI and deploy, then `kosh apps upgrade <name>` (or
-`install`). Write mode changes this server only: other servers serve the module once they run the new code, so
+`install`). With a repository configured, "Open a pull request" (GitHub) or "Open a merge request" (GitLab) pushes
+the change on a branch of its own (`studio/<name>-<version>`, a fresh one if it exists) from the base branch and
+opens the request, its description naming the command to run after deploying and the database changes
+(`POST /api/v1/studio/propose` with `pullRequest: true`):
+
+```sh
+KOSH_STUDIO_GIT_URL=https://github.com/acme/erp   # or https://gitlab.example.com/group/erp
+KOSH_STUDIO_GIT_TOKEN=...                         # from the environment or the secret manager; never stored
+KOSH_STUDIO_GIT_BASE=main
+# KOSH_STUDIO_GIT_PROVIDER=github|gitlab           # when the host does not say; KOSH_STUDIO_GIT_API for self-hosted
+```
+
+The token needs the rights to push branches and open requests (GitHub: contents and pull requests; GitLab: `api`).
+Studio's API never returns it. Write mode changes this server only: other servers serve the module once they run the new code, so
 use it where there is one. To plan, Studio loads the generated module from `.kosh-studio/plan/` in the project
 (removed at once; keep `.kosh-studio/` out of git).
 

@@ -1,6 +1,6 @@
 # RFC 0012: Kosh Studio
 
-- **Status:** Accepted 2026-10-26 with the proposed answers (the installation's `src/modules/`, patches first, the prefix, administrators); implemented 2026-10-26 (steps 1–5; git pull requests later, as answered; `docs/studio.md`)
+- **Status:** Accepted 2026-10-26 with the proposed answers (the installation's `src/modules/`, patches first, the prefix, administrators); implemented 2026-10-26 (steps 1–5; git pull requests added 2026-10-27; `docs/studio.md`)
 - **Depends on:** 0001 (manifests), 0002 (metadata), 0003 (permissions, approvals), 0004 (views and their
   extensions), 0008 (App manager, migrations), 0011 (automation rules); Shutro's `extendModel` and migration
   planner
@@ -229,6 +229,22 @@ to a form in Studio mode, apply, fill it on a record.
 - Tests: the module rules on PostgreSQL (installed, firing, an upgrade keeping the switch, archived when dropped);
   the edits, validation and generation; the API moving a rule and adding a policy (the module's copy installed,
   the original archived, the policy installed, an owned rule refused); E2E: "Move into module" on the Studio page.
+
+## Implementation notes (2026-10-27): git proposals
+
+- After "patches first", proposals can open requests: `KOSH_STUDIO_GIT_URL` and `KOSH_STUDIO_GIT_TOKEN` (the
+  environment or the secret manager filling it, as CLAUDE.md asks of secrets: Kosh keeps no store of its own),
+  `KOSH_STUDIO_GIT_BASE`, and the provider from the host or `KOSH_STUDIO_GIT_PROVIDER` (`KOSH_STUDIO_GIT_API` for
+  self-hosted GitHub Enterprise or GitLab).
+- GitHub: the base branch's head, a branch `studio/<name>-<version>` (a suffix when the name is taken), one
+  `PUT contents` per changed file (with the file's sha when it exists), a pull request. GitLab: one commit of
+  create / update actions starting from the base branch, a merge request. Only the changed files go, with their whole
+  new content; the description names `kosh apps install|upgrade <name>` and the SQL. A refusal is a 502 naming what
+  was refused; the patch still downloads. `GET /api/v1/studio` names the repository, never the token.
+- The review dialog in propose mode has "Open a pull request" / "Open a merge request" with the link once opened.
+- Tests: the settings from the environment (GitHub, GitLab with subgroups, GitHub Enterprise); a proposal on fake
+  GitHub and GitLab APIs (a taken branch, created and updated files, the requests); a refusal; the route on
+  PostgreSQL (the five files of a new module, the description, nothing written, refused without a repository).
 
 ## Alignment with CLAUDE.md
 
