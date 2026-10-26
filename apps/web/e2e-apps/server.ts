@@ -13,6 +13,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { accounting } from '@kosh/accounting';
+import { automation } from '@kosh/automation';
 import { contacts } from '@kosh/contacts';
 import { mail } from '@kosh/mail';
 import { installActivityTypes, messaging } from '@kosh/messaging';
@@ -55,6 +56,7 @@ const CATALOGUE = [
   realtime,
   notify,
   mail,
+  automation,
   permissions,
   reporting,
   messaging,
@@ -81,6 +83,7 @@ await applyApps(
         'realtime',
         'notify',
         'mail',
+        'automation',
         'sales',
         'purchase',
         'accounting',

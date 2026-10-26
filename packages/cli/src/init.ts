@@ -553,6 +553,7 @@ async function modulesFor(apps: readonly AppName[]): Promise<KoshModule[]> {
     (await import('@kosh/realtime')).realtime,
     (await import('@kosh/notify')).notify,
     (await import('@kosh/mail')).mail,
+    (await import('@kosh/automation')).automation,
   ];
   for (const app of apps) {
     if (app === 'permissions') modules.push((await import('@kosh/permissions')).permissions);
@@ -972,7 +973,12 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
         'Administrator',
         `${answers.admin.login} ${ui.style(enrolled ? 'green' : 'yellow', enrolled ? '· 2FA on' : '· 2FA pending')}`,
       ],
-      ['Apps', ['base', 'settings', 'realtime', 'notify', 'mail', ...answers.apps].join(', ')],
+      [
+        'Apps',
+        ['base', 'settings', 'realtime', 'notify', 'mail', 'automation', ...answers.apps].join(
+          ', ',
+        ),
+      ],
       ...(answers.demo
         ? [['Demo users', `dina, rahim, karim, sumi · password "${DEMO_PASSWORD}"`] as CardRow]
         : []),

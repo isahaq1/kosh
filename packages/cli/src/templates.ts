@@ -162,13 +162,14 @@ export function modulesTs(_options: StarterOptions): string {
  * then install them from Settings → Apps.
  */
 import { base } from 'kosh-erp';
+import { automation } from 'kosh-erp/automation';
 import { mail } from 'kosh-erp/mail';
 import { notify } from 'kosh-erp/notify';
 import { realtime } from 'kosh-erp/realtime';
 import { settings } from 'kosh-erp/settings';
 ${imports.join('\n')}
 
-export const modules = [base, settings, realtime, notify, mail${apps.map((a) => `, ${APPS[a].server}`).join('')}];
+export const modules = [base, settings, realtime, notify, mail, automation${apps.map((a) => `, ${APPS[a].server}`).join('')}];
 `;
 }
 

@@ -22,6 +22,7 @@ import {
   Users,
   Wallet,
   Warehouse,
+  Workflow,
 } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { cn } from '../lib/cn.js';
@@ -50,6 +51,7 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   warehouse: Warehouse,
   inventory: Warehouse,
   'message-square': MessageSquare,
+  automation: Workflow,
   mail: Mail,
   messaging: MessageSquare,
   chat: MessagesSquare,
