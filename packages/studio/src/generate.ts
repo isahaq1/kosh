@@ -20,6 +20,8 @@ export interface GenerateOptions {
   readonly imports?: 'kosh-erp' | 'workspace';
   /** Where a dependency is imported from, when not the default (`kosh-erp/<name>`, `@kosh/<name>`). */
   readonly moduleImport?: ((name: string) => string | undefined) | undefined;
+  /** The extension of the module's own imports (default: `.ts` for `kosh-erp`, `.js` for `workspace`). */
+  readonly extension?: '.ts' | '.js';
 }
 
 export class StudioSpecError extends Error {
@@ -85,7 +87,7 @@ function importsOf(options: GenerateOptions) {
     views: workspace ? '@kosh/views' : 'kosh-erp/views',
     module: (name: string) =>
       options.moduleImport?.(name) ?? (workspace ? `@kosh/${name}` : `kosh-erp/${name}`),
-    ext: workspace ? '.js' : '.ts',
+    ext: options.extension ?? (workspace ? '.js' : '.ts'),
   };
 }
 

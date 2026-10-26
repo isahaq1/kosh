@@ -22,6 +22,7 @@ import { pathToFileURL } from 'node:url';
 import {
   type AppChange,
   AppPlanError,
+  catalogueOf,
   compareVersions,
   defineModule,
   type KoshModule,
@@ -43,6 +44,7 @@ import { orm } from '@kosh/server/orm';
 import type { FastifyRequest } from 'fastify';
 import { readSpec, studioModules } from './build.js';
 import { unifiedDiff } from './diff.js';
+import { applyEdit, emptySpec, type Owners, type StudioEdit, StudioEditError } from './edit.js';
 import { type GenerateOptions, generateModule } from './generate.js';
 import { camel, type StudioSpec, validateSpec } from './spec.js';
 
@@ -118,7 +120,27 @@ export function createStudio(options: StudioOptions = {}): KoshModule {
     shutro: studioShutro,
     kosh: '^0.1.0',
     depends: [base],
+    app: {
+      code: 'studio',
+      label: 'Studio',
+      icon: 'studio',
+      sequence: 990,
+      category: 'Administration',
+      summary: 'Fields, columns, models and menus of your own, saved as a module',
+    },
     accessLevels: { manager: { label: 'Studio', groups: ['studio.manager'] } },
+    actions: {
+      'studio.action_studio': { type: 'client', page: 'studio.Studio', label: 'Studio' },
+    },
+    menus: [
+      { id: 'studio.root', label: 'Studio', app: 'studio' },
+      {
+        id: 'studio.modules',
+        parent: 'studio.root',
+        label: 'Modules',
+        action: 'studio.action_studio',
+      },
+    ],
     routes: (context: ModuleContext) => registerStudioRoutes(context, options),
   });
 }
@@ -200,7 +222,7 @@ export function registerStudioRoutes(context: ModuleContext, options: StudioOpti
     const apps = appsOf();
     const name = input.name;
     const dir = join(modulesDir, name);
-    const known = new Set(apps.catalogue.map((m) => m.name));
+    const known = new Set(catalogueOf(apps.catalogue).keys()); // with the dependencies
     const studioManaged = existsSync(join(dir, 'studio.json'));
     if (protect.includes(name) || (known.has(name) && !studioManaged))
       throw new HttpProblem(
@@ -263,7 +285,7 @@ export function registerStudioRoutes(context: ModuleContext, options: StudioOpti
       await rm(scratch, { recursive: true, force: true });
     }
 
-    const catalogue = [...apps.catalogue.filter((m) => m.name !== name), module];
+    const catalogue = [module, ...apps.catalogue.filter((m) => m.name !== name)]; // first wins
     const change: AppChange = installed === undefined ? { install: [name] } : { upgrade: [name] };
     const prepared = await prepareApps({
       driver,
@@ -322,6 +344,63 @@ export function registerStudioRoutes(context: ModuleContext, options: StudioOpti
       modules.push({ name: spec.name, label: spec.label, version: spec.version });
     }
     return { mode, modules };
+  });
+
+  /** Who defines a model or a view, among the modules this server serves. */
+  const owners = (): Owners => {
+    const modules = context.registry.loaded.modules;
+    return {
+      modelOwner: (model) =>
+        modules.find((m) =>
+          ((m.shutro as { models?: readonly { name: string }[] }).models ?? []).some(
+            (d) => d.name === model,
+          ),
+        )?.name,
+      viewOwner: (view) => modules.find((m) => m.views?.[view] !== undefined)?.name,
+    };
+  };
+
+  // A change made in Studio mode, merged into the module's spec (from the project, or a new module): the spec to
+  // review. The UI says where and what; the server names the field and works out the dependencies.
+  app.post('/api/v1/studio/edit', async (request) => {
+    await guard(request);
+    const body = (request.body ?? {}) as { module?: unknown; label?: unknown; edit?: unknown };
+    const name = body.module ?? 'custom';
+    if (typeof name !== 'string' || !/^[a-z][a-z0-9_]{1,40}$/.test(name))
+      return invalid('module: lower-case letters, digits and _.');
+    const edit = body.edit as StudioEdit | undefined;
+    if (
+      edit === null ||
+      typeof edit !== 'object' ||
+      !['field', 'show', 'model'].includes((edit as { kind?: unknown }).kind as string)
+    )
+      return invalid('edit: a field, show or model change.');
+    const dir = join(modulesDir, name);
+    const current = existsSync(join(dir, 'studio.json'))
+      ? await readSpec(dir)
+      : emptySpec(
+          name,
+          typeof body.label === 'string' && body.label.trim() !== ''
+            ? body.label.trim()
+            : 'Customizations',
+        );
+    let spec: StudioSpec;
+    try {
+      spec = applyEdit(current, edit, owners());
+    } catch (error) {
+      if (error instanceof StudioEditError)
+        throw new HttpProblem(400, 'studio-edit-invalid', 'The change is not valid', error.message);
+      return invalid('edit: not a Studio change.');
+    }
+    const problems = validateSpec(spec);
+    if (problems.length > 0)
+      throw new HttpProblem(
+        400,
+        'studio-spec-invalid',
+        'The Studio spec is not valid',
+        problems.join('\n'),
+      );
+    return { spec };
   });
 
   app.get('/api/v1/studio/modules/:name', async (request) => {
@@ -400,7 +479,7 @@ export function registerStudioRoutes(context: ModuleContext, options: StudioOpti
       await writeFile(join(root, 'src', 'modules.ts'), modulesTs, 'utf8');
       written.push('src/modules.ts');
     }
-    apps.useModule?.(module);
+    apps.serveModule?.(module);
     await apps.reload();
     return {
       name: review.spec.name,

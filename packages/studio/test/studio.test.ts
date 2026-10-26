@@ -10,11 +10,15 @@ import { join } from 'node:path';
 import { base, buildKoshRegistry, publicApiModels, ViewRegistry } from '@kosh/server';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import {
+  applyEdit,
   buildModule,
+  emptySpec,
   generateModule,
   lit,
+  nameFromLabel,
   prefixedKey,
   runStudio,
+  StudioEditError,
   type StudioSpec,
   unifiedDiff,
   validateSpec,
@@ -236,4 +240,94 @@ test('the unified diff: hunks with context, new files, and git apply reads it', 
   expect(await read('a.txt')).toBe(next);
   expect(await read('b.txt')).toBe('one\ntwo\n');
   await rm(repo, { recursive: true, force: true });
+});
+
+test('Studio edits: a field in a form section, a column, a model with a menu, merged into the spec', () => {
+  const owners = {
+    modelOwner: (m: string) => ({ 'res.partner': 'crm', 'res.users': 'base' })[m],
+    viewOwner: (v: string) => (v.startsWith('res.partner.') ? 'crm' : undefined),
+  };
+  let spec = emptySpec('acme', 'Acme');
+  spec = applyEdit(
+    spec,
+    {
+      kind: 'field',
+      model: 'res.partner',
+      field: { label: 'GST number', type: 'char' },
+      view: 'res.partner.form',
+      anchor: { append: 'main' },
+    },
+    owners,
+  );
+  expect(spec.fields).toEqual([
+    { model: 'res.partner', name: 'gstNumber', label: 'GST number', type: 'char' },
+  ]);
+  expect(spec.depends).toEqual(['crm']);
+  // The same label again gets a free name; the view change joins the view's operations.
+  spec = applyEdit(
+    spec,
+    {
+      kind: 'field',
+      model: 'res.partner',
+      field: { label: 'GST number', type: 'char' },
+      view: 'res.partner.form',
+      anchor: { insertAfter: 'email' },
+    },
+    owners,
+  );
+  expect(spec.fields?.map((f) => f.name)).toEqual(['gstNumber', 'gstNumber2']);
+  spec = applyEdit(
+    spec,
+    { kind: 'show', view: 'res.partner.list', field: 'email', anchor: { insertAfter: 'city' } },
+    owners,
+  );
+  expect(spec.viewChanges).toEqual([
+    {
+      view: 'res.partner.form',
+      operations: [
+        { append: 'main', fields: ['gstNumber'] },
+        { insertAfter: 'email', fields: ['gstNumber2'] },
+      ],
+    },
+    { view: 'res.partner.list', operations: [{ insertAfter: 'city', fields: ['email'] }] },
+  ]);
+  spec = applyEdit(
+    spec,
+    {
+      kind: 'model',
+      model: {
+        label: 'Fuel log',
+        fields: [
+          { label: 'Litres used', type: 'decimal' },
+          { label: 'Driver', type: 'many2one', target: 'res.users' },
+        ],
+      },
+      menu: { label: 'Fuel logs' },
+    },
+    owners,
+  );
+  expect(spec.models?.[0]).toMatchObject({
+    name: 'fuel_log',
+    fields: [{ name: 'litresUsed' }, { name: 'driver' }],
+  });
+  expect(spec.menus).toEqual([{ id: 'fuel_log', label: 'Fuel logs', model: 'fuel_log' }]);
+  expect(spec.app).toEqual({ label: 'Acme' });
+  expect(spec.depends).toEqual(['crm']); // base is always there
+  expect(validateSpec(spec)).toEqual([]);
+  // A field on a Studio model: on the model, no view change.
+  spec = applyEdit(
+    spec,
+    { kind: 'field', model: 'x_acme.fuel_log', field: { label: 'Odometer', type: 'integer' } },
+    owners,
+  );
+  expect(spec.models?.[0]?.fields.map((f) => f.name)).toEqual(['litresUsed', 'driver', 'odometer']);
+  expect(() =>
+    applyEdit(
+      spec,
+      { kind: 'field', model: 'hr.employee', field: { label: 'Badge', type: 'char' } },
+      owners,
+    ),
+  ).toThrow(StudioEditError);
+  expect(nameFromLabel('2nd phone')).toBe('f2ndPhone');
+  expect(nameFromLabel('VAT / BIN no.')).toBe('vatBinNo');
 });

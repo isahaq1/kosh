@@ -7,6 +7,16 @@
 export { type BuildResult, buildModule, readSpec, runStudio, studioModules } from './build.js';
 export { unifiedDiff } from './diff.js';
 export {
+  applyEdit,
+  type EditAnchor,
+  emptySpec,
+  localFromLabel,
+  nameFromLabel,
+  type Owners,
+  type StudioEdit,
+  StudioEditError,
+} from './edit.js';
+export {
   type GenerateOptions,
   generateModule,
   lit,

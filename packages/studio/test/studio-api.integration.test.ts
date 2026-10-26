@@ -169,6 +169,18 @@ test('only Administrators and Studio managers reach Studio', async () => {
     ['POST', '/api/v1/studio/preview', { spec }],
     ['POST', '/api/v1/studio/apply', { spec, planId: 'x' }],
     ['POST', '/api/v1/studio/propose', { spec }],
+    [
+      'POST',
+      '/api/v1/studio/edit',
+      {
+        edit: {
+          kind: 'show',
+          view: 'res.partner.list',
+          field: 'email',
+          anchor: { insertAfter: 'city' },
+        },
+      },
+    ],
   ] as const) {
     expect((await http(method, path, { body })).status, path).toBe(401);
     const bob = await http(method, path, { as: 'bob', body });
@@ -216,6 +228,47 @@ test('invalid specs and taken names are refused', async () => {
   expect(anchor.status).toBe(422);
   expect(anchor.json.title).toBe('A view change does not apply');
   expect(anchor.json.detail).toContain('phone');
+});
+
+test('edit: a change made in Studio mode becomes the spec to review', async () => {
+  const { status, json } = await http('POST', '/api/v1/studio/edit', {
+    as: 'designer',
+    body: {
+      module: 'acme',
+      label: 'Acme customizations',
+      edit: {
+        kind: 'field',
+        model: 'res.partner',
+        field: { label: 'GST number', type: 'char' },
+        view: 'res.partner.form',
+        anchor: { insertAfter: 'email' },
+      },
+    },
+  });
+  expect(status).toBe(200);
+  expect(json.spec).toEqual({
+    name: 'acme',
+    label: 'Acme customizations',
+    version: '0.1.0',
+    depends: ['crm'],
+    fields: [{ model: 'res.partner', name: 'gstNumber', label: 'GST number', type: 'char' }],
+    viewChanges: [
+      { view: 'res.partner.form', operations: [{ insertAfter: 'email', fields: ['gstNumber'] }] },
+    ],
+  });
+  const unknown = await http('POST', '/api/v1/studio/edit', {
+    as: 'designer',
+    body: {
+      edit: { kind: 'field', model: 'hr.employee', field: { label: 'Badge', type: 'char' } },
+    },
+  });
+  expect(unknown.status).toBe(400);
+  expect(unknown.json.detail).toBe('The model hr.employee is not served here.');
+  const bad = await http('POST', '/api/v1/studio/edit', {
+    as: 'designer',
+    body: { edit: { kind: 'drop' } },
+  });
+  expect(bad.status).toBe(400);
 });
 
 test('preview: the diff and the SQL, nothing written', async () => {
