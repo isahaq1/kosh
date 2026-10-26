@@ -127,6 +127,7 @@ export function automationModule(options: AutomationOptions = {}): ReturnType<ty
         inlineEdit: ['enabled'],
       }),
       'automation.rule.form': form('automation.rule', (k) => ({
+        component: 'automation.RuleEditor',
         header: { buttons: [] },
         sheet: [
           k.group('main', ['name', 'targetModel', 'trigger', 'enabled', 'sequence']),
@@ -157,6 +158,7 @@ export function automationModule(options: AutomationOptions = {}): ReturnType<ty
           k.group('main', ['rule', 'trigger', 'targetModel', 'targetId', 'actor', 'tx']),
           k.group('result', ['state', 'reason', 'startedAt', 'finishedAt']),
           k.group('details', ['outcomes', 'error'], { columns: 1 }),
+          k.component('retry', 'automation.RetryRun'),
         ],
       })),
     },

@@ -366,6 +366,7 @@ test('runAs: the actor without rights fails and is logged; the system succeeds; 
         assignee: ['field:user'],
         inDays: 2,
       },
+      { kind: 'note', text: 'Flagged by the system' },
     ],
   });
   const partner = (await ok('POST', '/api/v1/models/res.partner', 'rahim', { name: 'Acme' }))
@@ -377,7 +378,13 @@ test('runAs: the actor without rights fails and is logged; the system succeeds; 
   expect(actorRuns[0].outcomes[0]).toMatchObject({ kind: 'action', outcome: 'failed' });
   const systemRuns = await runsOf(asSystem.id);
   expect(systemRuns[0]).toMatchObject({ state: 'done', targetId: id });
-  expect(systemRuns[0].outcomes.map((o: Json) => o.outcome)).toEqual(['done', 'done']);
+  expect(systemRuns[0].outcomes.map((o: Json) => o.outcome)).toEqual(['done', 'done', 'done']);
+  const noted = await ok('GET', `/api/v1/chatter/crm.deal/${id}`, 'rahim');
+  expect(noted.items.find((i: Json) => i.type === 'message')).toMatchObject({
+    author: null,
+    authorName: 'Rule: Flag (system)',
+    body: '<p>Flagged by the system</p>',
+  });
   expect((await ok('GET', `/api/v1/models/res.partner/${partner}?fields=vip`, 'dina')).vip).toBe(
     true,
   );
@@ -447,6 +454,10 @@ test('a dry run renders the actions without running them; permissions: users rea
       })
     ).status,
   ).toBe(403);
+  // "Run pending changes now": managers only; it reads the trail and the outbox once.
+  expect((await call('POST', '/api/v1/automation/poll', 'rahim')).status).toBe(403);
+  const polled = await ok('POST', '/api/v1/automation/poll', 'admin');
+  expect(polled).toMatchObject({ changes: 0, runs: 0 }); // earlier events may still be counted, none fires a rule
   const info = await ok('GET', '/api/v1/automation/models/crm.deal', 'admin');
   expect(info.tracked.sort()).toEqual(['amount', 'partner', 'state']);
   expect(info.transitions).toContain('win');

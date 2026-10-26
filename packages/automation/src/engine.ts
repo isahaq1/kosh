@@ -6,10 +6,15 @@
  * engine's own writes carry the reason `automation:<rule>:<depth>`, which keeps a rule from firing on itself
  * and bounds chains.
  */
-import { type ChatterContext, postMessage, scheduleActivity } from '@kosh/messaging';
+import {
+  type ChatterContext,
+  postExternalMessage,
+  postMessage,
+  scheduleActivity,
+} from '@kosh/messaging';
 import type { AutomationActionSpec } from '@kosh/modules-sdk';
 import { type AuthService, HttpProblem, type KoshRegistry } from '@kosh/server';
-import type { Driver, Env, Shutro } from '@kosh/server/orm';
+import { type Driver, type Env, orm, type Shutro } from '@kosh/server/orm';
 
 type Row = Record<string, unknown>;
 interface Rows {
@@ -457,17 +462,26 @@ export async function runActions(
         case 'note':
         case 'comment': {
           if (id === null) throw new Error('No record (deleted).');
-          await postMessage(env, context.chatter, change.model, id, {
-            kind: kind === 'note' ? 'note' : 'comment',
-            text: await render(
-              env,
-              change.model,
-              id,
-              String(action['text'] ?? ''),
-              extra,
-              context.chatter.models,
-            ),
-          });
+          const text = await render(
+            env,
+            change.model,
+            id,
+            String(action['text'] ?? ''),
+            extra,
+            context.chatter.models,
+          );
+          // The system has no user to be the author: the message names the rule instead.
+          if (env.uid === orm.SYSTEM_UID)
+            await postExternalMessage(env, context.chatter, change.model, id, {
+              text,
+              authorEmail: '',
+              authorName: `Rule: ${rule.name}`,
+            });
+          else
+            await postMessage(env, context.chatter, change.model, id, {
+              kind: kind === 'note' ? 'note' : 'comment',
+              text,
+            });
           outcomes.push({ kind, outcome: 'done' });
           break;
         }

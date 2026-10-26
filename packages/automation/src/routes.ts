@@ -7,10 +7,18 @@
  *                                                transitions, the fields with their kinds
  * - `POST /api/v1/automation/rules/:id/test`     `{ record }`: a dry run (the condition, the rendered actions)
  * - `POST /api/v1/automation/runs/:id/retry`     runs a failed run's actions again (a new run)
+ * - `POST /api/v1/automation/poll`               reads the pending changes and events now (managers)
  */
 import { HttpProblem, type ModuleContext, publicApiModels } from '@kosh/server';
 import type { FastifyRequest } from 'fastify';
-import { type AutomationContext, retryRun, testRule, trackedFields } from './engine.js';
+import {
+  type AutomationContext,
+  pollAudit,
+  pollOutbox,
+  retryRun,
+  testRule,
+  trackedFields,
+} from './engine.js';
 
 const positive = (value: unknown, what: string): number => {
   const n = Number(value);
@@ -61,6 +69,20 @@ export function registerAutomationRoutes(context: ModuleContext, engine: Automat
     const id = idOf(request);
     const record = positive((request.body as { record?: unknown } | null)?.record, 'record');
     return request.env((env) => testRule(engine, env, id, record));
+  });
+
+  app.post('/api/v1/automation/poll', async (request) => {
+    await request.env(async (env) => {
+      if (!env.access.can('automation.rule' as never, 'write'))
+        throw new HttpProblem(403, 'forbidden', 'Forbidden', 'Automation managers run the engine.');
+    });
+    const audit = await pollAudit(engine);
+    const outbox = await pollOutbox(engine);
+    return {
+      changes: audit?.changes ?? 0,
+      events: outbox?.events ?? 0,
+      runs: (audit?.runs ?? 0) + (outbox?.runs ?? 0),
+    };
   });
 
   app.post('/api/v1/automation/runs/:id/retry', async (request) => {
