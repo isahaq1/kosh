@@ -105,6 +105,12 @@ export interface ModuleInput {
   readonly kosh: string;
   /** Kosh modules this one needs; must cover every dependency of the Shutro module. */
   readonly depends?: readonly KoshModule[];
+  /**
+   * A bridge (RFC 0008 §5.1): the modules this one connects. It is proposed, and installed with reason `bridge`,
+   * whenever every one of them is installed, unless the change leaves it out (`withoutBridges`). They must be
+   * among `depends`.
+   */
+  readonly bridge?: readonly KoshModule[];
   readonly app?: AppSpec;
   /** Required and non-empty: a module without access levels fails to load (CLAUDE.md). */
   readonly accessLevels: Readonly<Record<string, AccessLevel>>;

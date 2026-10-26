@@ -25,6 +25,8 @@ export interface AppChange {
   readonly install?: readonly string[];
   readonly enable?: readonly string[];
   readonly disable?: readonly string[];
+  /** Bridges (RFC 0008 §5.1) to leave out although every module they connect is installed. */
+  readonly withoutBridges?: readonly string[];
 }
 
 /** What a change does to the installed set. */
@@ -116,12 +118,40 @@ export function planApps(
   const install: { name: string; reason: AppReason }[] = [];
   const enable: string[] = [];
   const selected = new Set(change.install ?? []);
-  for (const name of withDependencies([...up], catalogue)) {
-    const row = state.get(name);
-    if (row === undefined)
-      install.push({ name, reason: selected.has(name) ? 'selected' : 'dependency' });
-    else if (row.state === 'disabled') enable.push(name);
-    else if (up.has(name)) unchanged.push(name);
+  const bring = (names: readonly string[], reasonOf: (name: string) => AppReason) => {
+    for (const name of withDependencies(names, catalogue)) {
+      const row = state.get(name);
+      if (row === undefined) {
+        if (!install.some((i) => i.name === name)) install.push({ name, reason: reasonOf(name) });
+      } else if (row.state === 'disabled') {
+        if (!enable.includes(name)) enable.push(name);
+      } else if (up.has(name)) unchanged.push(name);
+    }
+  };
+  bring([...up], (name) => (selected.has(name) ? 'selected' : 'dependency'));
+  // Bridges: proposed whenever every module they connect is (or becomes) installed, unless left out.
+  const leftOut = new Set(change.withoutBridges ?? []);
+  const willServe = () =>
+    new Set([
+      ...current.filter((r) => r.state === 'installed').map((r) => r.name),
+      ...install.map((i) => i.name),
+      ...enable,
+    ]);
+  for (;;) {
+    const served = willServe();
+    const due = [...catalogue.values()].filter(
+      (m) =>
+        (m.bridge ?? []).length > 0 &&
+        !served.has(m.name) &&
+        !leftOut.has(m.name) &&
+        !(change.disable ?? []).includes(m.name) &&
+        (m.bridge ?? []).every((b) => served.has(b.name)),
+    );
+    if (due.length === 0) break;
+    bring(
+      due.map((m) => m.name),
+      (name) => (due.some((m) => m.name === name) ? 'bridge' : 'dependency'),
+    );
   }
 
   // Disabling takes every installed module that depends on it (directly or not) along.
