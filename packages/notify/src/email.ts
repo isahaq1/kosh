@@ -27,6 +27,9 @@ const ref = (env: Env, name: string): Ref => env.model(name as never) as unknown
 /** The job's name. */
 export const DELIVER_JOB = 'notify.deliver';
 
+/** How a kind reaches a user by email (RFC 0006 §8.1). */
+export type EmailMode = 'instant' | 'daily' | 'off';
+
 /** What delivering needs. */
 export interface DeliveryContext {
   readonly shutro: Shutro;
@@ -39,6 +42,13 @@ export interface DeliveryContext {
   readonly messenger?: Messenger | undefined;
   /** Where the back-office is reached (`KOSH_BASE_URL`), for the links in messages. */
   readonly baseUrl: string;
+  /**
+   * Whether the recipient may still read the record (RFC 0006 §8.5), checked again when a held or digest delivery
+   * is finally sent; absent: not checked.
+   */
+  readonly mayRead?:
+    | ((uid: number, company: number, model: string, id: number) => Promise<boolean>)
+    | undefined;
   /** The reply address of a record email to a recipient (RFC 0006 §7.1), when replies by email are on. */
   readonly replyAddress?:
     | ((target: { readonly model: string; readonly id: number; readonly uid: number }) => string)
@@ -81,6 +91,7 @@ export async function queueMessages(
   su: Env,
   notificationIds: readonly number[],
   wants: (uid: number, kind: string, channel: string) => Promise<boolean>,
+  holdUntil: (uid: number) => Promise<Date | null> = async () => null,
 ): Promise<number> {
   const messenger = context.messenger;
   if (messenger === undefined || notificationIds.length === 0) return 0;
@@ -94,11 +105,23 @@ export async function queueMessages(
     if (phone === null) continue;
     for (const channel of messenger.channels) {
       if (!(await wants(uid, String(n['kind']), channel))) continue;
+      // Quiet hours hold the interrupting channels until they end (RFC 0006 §8.2).
+      const hold = await holdUntil(uid);
       const created = await ref(su, 'notify.delivery').create([
-        { notification: n['id'], channel, state: 'pending', attempts: 0 },
+        {
+          notification: n['id'],
+          channel,
+          state: hold === null ? 'pending' : 'held',
+          notBefore: hold,
+          attempts: 0,
+        },
       ]);
       const id = created.ids[0] as number;
-      await env.enqueue(DELIVER_JOB, { delivery: id }, { key: `${DELIVER_JOB}:${id}` });
+      await env.enqueue(
+        DELIVER_JOB,
+        { delivery: id },
+        { key: `${DELIVER_JOB}:${id}`, ...(hold === null ? {} : { runAt: hold }) },
+      );
       queued += 1;
     }
   }
@@ -130,7 +153,7 @@ export async function queueEmails(
   env: Env,
   su: Env,
   notificationIds: readonly number[],
-  wants: (uid: number, kind: string) => Promise<boolean>,
+  modeOf: (uid: number, kind: string) => Promise<EmailMode>,
 ): Promise<number> {
   if (context.mailer === undefined || notificationIds.length === 0) return 0;
   const keys = ['id', 'user', 'kind'];
@@ -138,14 +161,25 @@ export async function queueEmails(
   let queued = 0;
   for (const n of rows) {
     const uid = n['user'] as number;
-    if (!(await wants(uid, String(n['kind'])))) continue;
+    const mode = await modeOf(uid, String(n['kind']));
+    if (mode === 'off') continue;
     const [user] = (await ref(su, 'res.users').browse([uid]).load(['email'])).read(['email']);
     const email = user?.['email'];
     if (typeof email !== 'string' || email === '') continue;
     const created = await ref(su, 'notify.delivery').create([
-      { notification: n['id'], channel: 'email', state: 'pending', attempts: 0 },
+      {
+        notification: n['id'],
+        channel: 'email',
+        state: mode === 'daily' ? 'digest' : 'pending',
+        attempts: 0,
+      },
     ]);
     const id = created.ids[0] as number;
+    // A daily email waits for the user's digest (RFC 0006 §8.3): no job of its own.
+    if (mode === 'daily') {
+      queued += 1;
+      continue;
+    }
     await env.enqueue(DELIVER_JOB, { delivery: id }, { key: `${DELIVER_JOB}:${id}` });
     queued += 1;
   }
@@ -164,13 +198,31 @@ export async function deliver(context: DeliveryContext, env: Env, payload: unkno
         .load(['id', 'notification', 'channel', 'state', 'attempts'])
     ).read(['id', 'notification', 'channel', 'state', 'attempts']);
     if (delivery === undefined || delivery['state'] === 'sent') return;
-    const nKeys = ['kind', 'params', 'resModel', 'resId', 'user'];
+    const nKeys = ['kind', 'params', 'resModel', 'resId', 'user', 'readAt', 'company'];
     const [n] = (
       await ref(su, 'notify.notification')
         .browse([delivery['notification'] as number])
         .load(nKeys)
     ).read(nKeys);
     if (n === undefined) return;
+    if (delivery['state'] === 'held') {
+      // Released after quiet hours (RFC 0006 §8.2): not if it was read in the inbox meanwhile, nor if the user may
+      // no longer read the record (§8.5).
+      const skip = async (reason: string) => {
+        await ref(su, 'notify.delivery').browse([id]).write({ state: 'skipped', error: reason });
+      };
+      if (n['readAt'] !== null && n['readAt'] !== undefined) return skip('read');
+      if (
+        context.mayRead !== undefined &&
+        !(await context.mayRead(
+          n['user'] as number,
+          (n['company'] as number | null) ?? 0,
+          String(n['resModel']),
+          n['resId'] as number,
+        ))
+      )
+        return skip('no access');
+    }
     const uKeys = ['name', 'email', 'lang'];
     const [user] = (
       await ref(su, 'res.users')

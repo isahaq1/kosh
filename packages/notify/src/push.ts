@@ -155,10 +155,11 @@ export async function unsubscribePush(env: Env, endpoint: string): Promise<boole
  */
 export async function queuePush(
   context: { readonly pusher?: Pusher | undefined },
-  enqueue: (deliveryId: number) => Promise<void>,
+  enqueue: (deliveryId: number, runAt?: Date) => Promise<void>,
   su: Env,
   notificationIds: readonly number[],
   wants: (uid: number, kind: string) => Promise<boolean>,
+  holdUntil: (uid: number) => Promise<Date | null> = async () => null,
 ): Promise<number> {
   if (context.pusher === undefined || notificationIds.length === 0) return 0;
   const keys = ['id', 'user', 'kind'];
@@ -171,10 +172,18 @@ export async function queuePush(
       where: { user: uid },
     });
     if (subscriptions.length === 0) continue;
+    // Quiet hours hold push until they end (RFC 0006 §8.2).
+    const hold = await holdUntil(uid);
     const created = await ref(su, 'notify.delivery').create([
-      { notification: n['id'], channel: 'webpush', state: 'pending', attempts: 0 },
+      {
+        notification: n['id'],
+        channel: 'webpush',
+        state: hold === null ? 'pending' : 'held',
+        notBefore: hold,
+        attempts: 0,
+      },
     ]);
-    await enqueue(created.ids[0] as number);
+    await enqueue(created.ids[0] as number, hold ?? undefined);
     queued += 1;
   }
   return queued;

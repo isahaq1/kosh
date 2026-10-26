@@ -10,6 +10,7 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testconta
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import {
   createMemoryPusher,
+  deliver,
   deliveryWorker,
   generateVapidKeys,
   inboxWorkers,
@@ -45,7 +46,12 @@ let book: number;
 const tokens = new Map<string, string>();
 const pusher = createMemoryPusher((endpoint) => (endpoint.endsWith('/gone') ? 410 : 201));
 
-async function call(method: 'GET' | 'POST' | 'DELETE', url: string, as: string, payload?: unknown) {
+async function call(
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  url: string,
+  as: string,
+  payload?: unknown,
+) {
   let token = tokens.get(as);
   if (token === undefined) {
     const res = await server.app.inject({
@@ -195,4 +201,159 @@ test('a mention is pushed to every subscription; a gone one is deleted', async (
     params: [],
   });
   expect(left.map((r) => r.endpoint)).toEqual(['https://push.example.com/phone']); // 410 → deleted
+});
+
+test('settings: the defaults, validation, and every user reads and writes only their own', async () => {
+  expect((await call('GET', '/api/v1/notifications/settings', 'dina')).json).toEqual({
+    quietFrom: null,
+    quietTo: null,
+    quietDays: [],
+    digestHour: '08:00',
+    fallback: 'email',
+    timezone: 'UTC',
+  });
+  const bad = await call('PUT', '/api/v1/notifications/settings', 'dina', {
+    quietFrom: '25:00',
+    quietTo: null,
+    quietDays: ['someday'],
+    digestHour: '8',
+    fallback: 'inapp',
+  });
+  expect(bad.status).toBe(400);
+  expect(bad.json.detail).toBe(
+    'quietFrom and quietTo: HH:MM or null; quietFrom and quietTo: both or neither; quietDays: a list of sun, mon, tue, wed, thu, fri, sat; digestHour: HH:MM; fallback: one of email, webpush, sms, whatsapp, none',
+  );
+  const settings = {
+    quietFrom: '22:00',
+    quietTo: '07:00',
+    quietDays: ['fri', 'sat', 'fri'],
+    digestHour: '09:30',
+    fallback: 'webpush',
+  };
+  expect((await call('PUT', '/api/v1/notifications/settings', 'rahim', settings)).status).toBe(200);
+  expect((await call('GET', '/api/v1/notifications/settings', 'rahim')).json).toMatchObject({
+    ...settings,
+    quietDays: ['fri', 'sat'],
+  });
+  expect((await call('GET', '/api/v1/notifications/settings', 'dina')).json.quietFrom).toBeNull();
+  // Email per kind: instant, daily or off; other channels stay on / off.
+  expect(
+    (
+      await call('PUT', '/api/v1/notifications/preferences', 'dina', {
+        kind: 'mention',
+        channel: 'email',
+        mode: 'daily',
+      })
+    ).json,
+  ).toEqual({ kind: 'mention', channel: 'email', enabled: true, mode: 'daily' });
+  expect(
+    (
+      await call('PUT', '/api/v1/notifications/preferences', 'dina', {
+        kind: 'mention',
+        channel: 'webpush',
+        mode: 'daily',
+      })
+    ).status,
+  ).toBe(400);
+  const prefs = (await call('GET', '/api/v1/notifications/preferences', 'dina')).json.kinds;
+  expect(prefs.find((k: { kind: string }) => k.kind === 'mention').emailMode).toBe('daily');
+  expect(prefs.find((k: { kind: string }) => k.kind === 'automation').emailMode).toBe('instant');
+  // Switching email off, then on, resets the mode.
+  await call('PUT', '/api/v1/notifications/preferences', 'dina', {
+    kind: 'mention',
+    channel: 'email',
+    enabled: true,
+  });
+  const after = (await call('GET', '/api/v1/notifications/preferences', 'dina')).json.kinds;
+  expect(after.find((k: { kind: string }) => k.kind === 'mention').emailMode).toBe('instant');
+});
+
+test('quiet hours hold push until they end; read meanwhile, or access lost: skipped; else sent', async () => {
+  const context = {
+    shutro: server.shutro,
+    driver: server.driver,
+    registry: server.registry,
+    auth: server.auth,
+    pusher,
+    baseUrl: 'https://erp.example.com',
+  };
+  const inbox = inboxWorkers(context);
+  const delivery = deliveryWorker(context);
+  for (const w of inbox) await w.drain();
+  await delivery.drain();
+  // Dina's quiet hours: from an hour ago to an hour from now, in her time zone (Dhaka).
+  await server.driver.query({
+    text: "UPDATE res_users SET tz = 'Asia/Dhaka' WHERE id = $1",
+    params: [users['dina']],
+  });
+  const local = (offset: number) =>
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Dhaka',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).format(new Date(Date.now() + offset * 3_600_000));
+  await call('PUT', '/api/v1/notifications/settings', 'dina', {
+    quietFrom: local(-1),
+    quietTo: local(1),
+    quietDays: [],
+    digestHour: '08:00',
+    fallback: 'email',
+  });
+  const mention = (preview: string) =>
+    server.shutro.run({ user: users['rahim'] as number, company }, (env: Env) =>
+      env.emit('mail.message.posted', {
+        model: 'library.book',
+        id: book,
+        message: 2,
+        kind: 'comment',
+        author: users['rahim'],
+        mentions: [users['dina']],
+        preview,
+      }),
+    );
+  const before = pusher.sent.length;
+  await mention('First');
+  await mention('Second');
+  await mention('Third');
+  for (const w of inbox) await w.drain();
+  // Held, not sent: the jobs run at the end of the quiet hours.
+  expect(await delivery.drain()).toBe(0);
+  expect(pusher.sent.length).toBe(before);
+  const held = await server.driver.query<{
+    id: number;
+    state: string;
+    not_before: Date;
+    notification: number;
+  }>({
+    text: "SELECT id, state, not_before, notification_id AS notification FROM notify_delivery WHERE state = 'held' ORDER BY id",
+    params: [],
+  });
+  expect(held).toHaveLength(3);
+  const ends = held[0]?.not_before.getTime() ?? 0;
+  expect(Math.abs(ends - Date.now() - 3_600_000)).toBeLessThan(2 * 60_000);
+
+  // The quiet hours end (the jobs run): the first was read in the inbox meanwhile, the second is sent.
+  await server.driver.query({
+    text: 'UPDATE notify_notification SET read_at = now() WHERE id = $1',
+    params: [held[0]?.notification],
+  });
+  const release = (id: number | undefined, mayRead?: () => Promise<boolean>) =>
+    server.shutro.bootstrap({ reason: 'test', company }, (env) =>
+      deliver({ ...context, ...(mayRead === undefined ? {} : { mayRead }) }, env, { delivery: id }),
+    );
+  await release(held[0]?.id);
+  await release(held[1]?.id);
+  // The third: Dina lost access to the book meanwhile.
+  await release(held[2]?.id, async () => false);
+  const states = await server.driver.query<{ state: string; error: string | null }>({
+    text: `SELECT state, error FROM notify_delivery WHERE id IN (${held.map((h) => h.id).join(',')}) ORDER BY id`,
+    params: [],
+  });
+  expect(states).toEqual([
+    { state: 'skipped', error: 'read' },
+    { state: 'sent', error: null },
+    { state: 'skipped', error: 'no access' },
+  ]);
+  expect(pusher.sent.slice(before).map((p) => p.payload.body)).toEqual(['Second']);
 });

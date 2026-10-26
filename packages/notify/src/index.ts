@@ -10,7 +10,7 @@ import { inboundConfigFromEnv, type Mailer, mailerFromEnv, replyAddress } from '
 import { defineModule } from '@kosh/modules-sdk';
 import { base, type ModuleContext } from '@kosh/server';
 import { type DeliveryContext, deliveryWorker } from './email.js';
-import { inboxWorkers } from './inbox.js';
+import { inboxWorkers, mayRead } from './inbox.js';
 import { type Messenger, messengerFromEnv } from './messenger.js';
 import { notifyShutro } from './models.js';
 import { type Pusher, pusherFromEnv } from './push.js';
@@ -25,7 +25,16 @@ export {
   renderEmail,
   renderText,
 } from './email.js';
-export { defaultEnabled, handleEvent, type InboxContext, inboxWorkers, TOPICS } from './inbox.js';
+export {
+  defaultEnabled,
+  emailModeOf,
+  handleEvent,
+  holdUntil,
+  type InboxContext,
+  inboxWorkers,
+  mayRead,
+  TOPICS,
+} from './inbox.js';
 export { interpolate, sentence, TEXTS, textsFor } from './messages.js';
 export {
   createMemoryMessenger,
@@ -52,6 +61,7 @@ export {
   unsubscribePush,
   type VapidKeys,
 } from './push.js';
+export { isQuiet, type QuietSettings, quietUntil } from './quiet.js';
 export { type NotificationItem, registerNotifyRoutes, unreadCount } from './routes.js';
 
 /** Package identity. */
@@ -78,7 +88,12 @@ export function notifyModule(options: NotifyOptions = {}): ReturnType<typeof def
     kosh: '^0.1.0',
     depends: [base],
     accessLevels: { user: { label: 'Notifications', groups: ['base.user'] } },
-    privateModels: ['notify.notification', 'notify.preference', 'notify.push_subscription'],
+    privateModels: [
+      'notify.notification',
+      'notify.preference',
+      'notify.settings',
+      'notify.push_subscription',
+    ],
     routes: (context: ModuleContext) => {
       const pusher = options.pusher ?? pusherFromEnv();
       registerNotifyRoutes(context, { pusher });
@@ -98,7 +113,15 @@ export function notifyModule(options: NotifyOptions = {}): ReturnType<typeof def
           ? {}
           : { replyAddress: (target) => replyAddress(inbound, target) }),
       };
-      const workers = [...inboxWorkers({ ...context, ...delivery }), deliveryWorker(delivery)];
+      const inbox = { ...context, ...delivery };
+      const workers = [
+        ...inboxWorkers(inbox),
+        // Held deliveries check the recipient's access again when they are released (RFC 0006 §8.5).
+        deliveryWorker({
+          ...delivery,
+          mayRead: (uid, company, model, id) => mayRead(inbox, uid, company, model, id),
+        }),
+      ];
       for (const w of workers) w.start();
       context.app.addHook('onClose', async () => {
         await Promise.all(workers.map((w) => w.stop()));

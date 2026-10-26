@@ -261,3 +261,25 @@ test('with replies by email configured, a record email carries the signed reply 
     replyAddress(config, { model: 'library.book', id: book, uid: users['dina'] as number }),
   );
 });
+
+test('email set to daily: the delivery waits for the digest, with no job of its own (RFC 0006 §8.3)', async () => {
+  await server.shutro.bootstrap({ reason: 'test', company }, async (env) => {
+    const prefs = env.model('notify.preference' as never) as unknown as {
+      search(q: unknown): Promise<{ unlink(): Promise<void> }>;
+      create(r: unknown[]): Promise<unknown>;
+    };
+    await (await prefs.search({ where: { user: users['dina'] } })).unlink();
+    await prefs.create([
+      { user: users['dina'], kind: 'mention', channel: 'email', enabled: true, mode: 'daily' },
+    ]);
+  });
+  const memory = createMemoryMailer();
+  const { sent } = await emitAndRun(memory, mention(users['dina'] as number, 'for the digest'));
+  expect(sent).toBe(0);
+  expect(memory.sent).toHaveLength(0);
+  const [last] = await server.driver.query<{ state: string; channel: string }>({
+    text: 'SELECT state, channel FROM notify_delivery ORDER BY id DESC LIMIT 1',
+    params: [],
+  });
+  expect(last).toEqual({ state: 'digest', channel: 'email' });
+});

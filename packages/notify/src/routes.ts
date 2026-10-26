@@ -15,7 +15,15 @@
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
 import type { FastifyRequest } from 'fastify';
+import type { EmailMode } from './email.js';
 import { defaultEnabled } from './inbox.js';
+import { DAYS, minutesOf, zoneOf } from './quiet.js';
+
+const EMAIL_MODES: readonly EmailMode[] = ['instant', 'daily', 'off'];
+/** A fallback channel (never the inbox: every notification is there already), or none. */
+const FALLBACKS = ['email', 'webpush', 'sms', 'whatsapp', 'none'] as const;
+const SETTINGS = ['quietFrom', 'quietTo', 'quietDays', 'digestHour', 'fallback'];
+
 import { CHANNELS, KINDS } from './models.js';
 import { type Pusher, subscribePush, unsubscribePush } from './push.js';
 
@@ -168,42 +176,118 @@ export function registerNotifyRoutes(
   app.get('/api/v1/notifications/preferences', async (request) =>
     request.env(async (env) => {
       const found = await ref(env, 'notify.preference').search({ where: {} });
-      const rows =
-        found.length === 0
-          ? []
-          : (await found.load(['kind', 'channel', 'enabled'])).read(['kind', 'channel', 'enabled']);
+      const keys = ['kind', 'channel', 'enabled', 'mode'];
+      const rows = found.length === 0 ? [] : (await found.load(keys)).read(keys);
+      const row = (kind: string, channel: string) =>
+        rows.find((r) => r['kind'] === kind && r['channel'] === channel);
       const enabled = (kind: string, channel: string) => {
-        const row = rows.find((r) => r['kind'] === kind && r['channel'] === channel);
-        return row === undefined ? defaultEnabled(kind, channel) : row['enabled'] === true;
+        const r = row(kind, channel);
+        return r === undefined ? defaultEnabled(kind, channel) : r['enabled'] === true;
+      };
+      /** Email: instant, daily (the digest) or off (RFC 0006 §8.1). */
+      const emailMode = (kind: string): EmailMode => {
+        const mode = row(kind, 'email')?.['mode'];
+        if (mode === 'instant' || mode === 'daily' || mode === 'off') return mode;
+        return enabled(kind, 'email') ? 'instant' : 'off';
       };
       return {
         kinds: KINDS.map((kind) => ({
           kind,
           channels: Object.fromEntries(CHANNELS.map((c) => [c, enabled(kind, c)])),
+          emailMode: emailMode(kind),
         })),
       };
     }),
   );
 
   app.put('/api/v1/notifications/preferences', async (request) => {
-    const body = (request.body ?? {}) as { kind?: unknown; channel?: unknown; enabled?: unknown };
+    const body = (request.body ?? {}) as {
+      kind?: unknown;
+      channel?: unknown;
+      enabled?: unknown;
+      mode?: unknown;
+    };
+    const mode = body.mode;
     if (
       !KINDS.includes(body.kind as never) ||
       !CHANNELS.includes(body.channel as never) ||
-      typeof body.enabled !== 'boolean'
+      (mode === undefined
+        ? typeof body.enabled !== 'boolean'
+        : body.channel !== 'email' || !EMAIL_MODES.includes(mode as never))
     )
       throw new HttpProblem(
         400,
         'invalid-body',
         'Invalid preference',
-        `kind is one of ${KINDS.join(', ')}; channel one of ${CHANNELS.join(', ')}; enabled a boolean.`,
+        `kind is one of ${KINDS.join(', ')}; channel one of ${CHANNELS.join(', ')}; enabled a boolean, or for email a mode (${EMAIL_MODES.join(', ')}).`,
       );
-    const { kind, channel, enabled } = body as { kind: string; channel: string; enabled: boolean };
+    const { kind, channel } = body as { kind: string; channel: string };
+    const values =
+      mode === undefined
+        ? // Switching email on or off resets its mode to instant / off.
+          { enabled: body.enabled as boolean, ...(channel === 'email' ? { mode: null } : {}) }
+        : { enabled: mode !== 'off', mode: mode as EmailMode };
     return request.env(async (env) => {
       const existing = await ref(env, 'notify.preference').search({ where: { kind, channel } });
-      if (existing.length > 0) await existing.write({ enabled });
-      else await ref(env, 'notify.preference').create([{ user: env.uid, kind, channel, enabled }]);
-      return { kind, channel, enabled };
+      if (existing.length > 0) await existing.write(values);
+      else
+        await ref(env, 'notify.preference').create([{ user: env.uid, kind, channel, ...values }]);
+      return { kind, channel, ...values };
+    });
+  });
+
+  // The user's settings (RFC 0006 §8.1): quiet hours, the digest hour, the fallback channel.
+  app.get('/api/v1/notifications/settings', async (request) =>
+    request.env(async (env) => {
+      const found = await ref(env, 'notify.settings').search({ where: {} }); // rules: own only
+      const [row] = found.length === 0 ? [] : (await found.load(SETTINGS)).read(SETTINGS);
+      const [user] = (await ref(env, 'res.users').browse([env.uid]).load(['tz'])).read(['tz']);
+      return {
+        quietFrom: (row?.['quietFrom'] as string | null | undefined) ?? null,
+        quietTo: (row?.['quietTo'] as string | null | undefined) ?? null,
+        quietDays: Array.isArray(row?.['quietDays']) ? (row?.['quietDays'] as string[]) : [],
+        digestHour: (row?.['digestHour'] as string | undefined) ?? '08:00',
+        fallback: (row?.['fallback'] as string | undefined) ?? 'email',
+        timezone: zoneOf(user?.['tz'] as string | null),
+      };
+    }),
+  );
+
+  app.put('/api/v1/notifications/settings', async (request) => {
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const time = (v: unknown) => v === null || (typeof v === 'string' && minutesOf(v) !== null);
+    const days = body['quietDays'];
+    const problems = [
+      ...(time(body['quietFrom']) && time(body['quietTo'])
+        ? []
+        : ['quietFrom and quietTo: HH:MM or null']),
+      ...((body['quietFrom'] === null) === (body['quietTo'] === null)
+        ? []
+        : ['quietFrom and quietTo: both or neither']),
+      ...(Array.isArray(days) && days.every((d) => DAYS.includes(d as never))
+        ? []
+        : [`quietDays: a list of ${DAYS.join(', ')}`]),
+      ...(typeof body['digestHour'] === 'string' && minutesOf(body['digestHour']) !== null
+        ? []
+        : ['digestHour: HH:MM']),
+      ...(FALLBACKS.includes(body['fallback'] as never)
+        ? []
+        : [`fallback: one of ${FALLBACKS.join(', ')}`]),
+    ];
+    if (problems.length > 0)
+      throw new HttpProblem(400, 'invalid-body', 'Invalid settings', problems.join('; '));
+    const values = {
+      quietFrom: body['quietFrom'] as string | null,
+      quietTo: body['quietTo'] as string | null,
+      quietDays: [...new Set(days as string[])],
+      digestHour: body['digestHour'] as string,
+      fallback: body['fallback'] as string,
+    };
+    return request.env(async (env) => {
+      const existing = await ref(env, 'notify.settings').search({ where: {} });
+      if (existing.length > 0) await existing.write(values);
+      else await ref(env, 'notify.settings').create([{ user: env.uid, ...values }]);
+      return values;
     });
   });
 }

@@ -59,6 +59,11 @@ const Preference = defineModel('notify.preference', {
     kind: f.char({ required: true }),
     channel: f.char({ required: true }),
     enabled: f.boolean({ required: true, default: true }),
+    /**
+     * Email only (RFC 0006 §8.1): `instant`, `daily` (in the digest) or `off`. Unset: `enabled` decides
+     * (`instant` or `off`), so rows from before the digests need no migration.
+     */
+    mode: f.char({ size: 10 }),
   },
   sqlConstraints: {
     onePerKindAndChannel: {
@@ -83,13 +88,42 @@ const Delivery = defineModel('notify.delivery', {
         failed: 'Failed',
         skipped: 'Skipped',
         bounced: 'Bounced',
+        held: 'Held (quiet hours)',
+        digest: 'In the next digest',
       },
       { required: true, default: 'pending' },
     ),
+    /** `held`: not sent before this instant (the end of the recipient's quiet hours). */
+    notBefore: f.datetime(),
     attempts: f.integer({ required: true, default: 0 }),
     error: f.text(),
     providerId: f.char(),
     sentAt: f.datetime(),
+  },
+});
+
+/** A user's notification settings (RFC 0006 §8.1): quiet hours, the digest hour, the fallback channel. */
+const Settings = defineModel('notify.settings', {
+  label: 'Notification settings',
+  access: { 'base.user': ['read', 'write', 'create'] },
+  rules: {
+    own: {
+      groups: ['base.user'],
+      perms: ['read', 'write', 'create'],
+      domain: { user: { $env: 'uid' } },
+    },
+  },
+  fields: {
+    user: f.many2one('res.users', { required: true, ondelete: 'cascade', index: 'unique' }),
+    /** `HH:MM` in the user's time zone; with `quietTo`, the daily quiet hours (may cross midnight). */
+    quietFrom: f.char({ size: 5 }),
+    quietTo: f.char({ size: 5 }),
+    /** Whole days off: `["fri", "sat"]`. */
+    quietDays: f.json(),
+    /** When the daily digest goes out, `HH:MM` in the user's time zone. */
+    digestHour: f.char({ size: 5, required: true, default: '08:00' }),
+    /** The channel that takes over when another cannot deliver (`none`: no fallback). */
+    fallback: f.char({ size: 10, required: true, default: 'email' }),
   },
 });
 
@@ -116,7 +150,7 @@ const PushSubscription = defineModel('notify.push_subscription', {
 
 export const notifyShutro: ReturnType<typeof orm.defineModule> = defineModule({
   name: 'notify',
-  version: '0.1.0',
+  version: '0.2.0',
   depends: [baseShutro],
-  models: [Notification, Preference, Delivery, PushSubscription],
+  models: [Notification, Preference, Delivery, Settings, PushSubscription],
 });
