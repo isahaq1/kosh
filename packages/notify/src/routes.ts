@@ -16,7 +16,7 @@ import { HttpProblem, type ModuleContext } from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
 import type { FastifyRequest } from 'fastify';
 import type { EmailMode } from './email.js';
-import { defaultEnabled } from './inbox.js';
+import { defaultEnabled } from './prefs.js';
 import { DAYS, minutesOf, zoneOf } from './quiet.js';
 
 const EMAIL_MODES: readonly EmailMode[] = ['instant', 'daily', 'off'];

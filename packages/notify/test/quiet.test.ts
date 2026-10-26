@@ -1,6 +1,14 @@
 /** Quiet hours (RFC 0006 §8.2): local hours across midnight, days off, time zones, when the period ends. */
 import { expect, test } from 'vitest';
-import { isQuiet, localTime, minutesOf, quietUntil, zoneOf } from '../src/quiet.js';
+import {
+  isQuiet,
+  localDate,
+  localTime,
+  minutesOf,
+  nextLocal,
+  quietUntil,
+  zoneOf,
+} from '../src/quiet.js';
 
 const DHAKA = 'Asia/Dhaka'; // UTC+6, no daylight saving
 const night = { quietFrom: '22:00', quietTo: '07:00' };
@@ -60,4 +68,20 @@ test('days off, chained with the quiet morning that follows', () => {
       DHAKA,
     ),
   ).toBeNull();
+});
+
+test('the next digest hour and its local date', () => {
+  // 07:00 in Dhaka (01:00 UTC): today's 08:00 is in an hour.
+  expect(nextLocal(new Date('2026-10-28T01:00:00Z'), 8 * 60, DHAKA).toISOString()).toBe(
+    '2026-10-28T02:00:00.000Z',
+  );
+  // 08:00 exactly: the next one is tomorrow's.
+  expect(nextLocal(new Date('2026-10-28T02:00:00Z'), 8 * 60, DHAKA).toISOString()).toBe(
+    '2026-10-29T02:00:00.000Z',
+  );
+  // 23:30 UTC on the 27th is 05:30 on the 28th in Dhaka.
+  expect(localDate(new Date('2026-10-27T23:30:00Z'), DHAKA)).toBe('2026-10-28');
+  // Across a daylight-saving change (Europe/London falls back on 2026-10-25): still 08:00 local.
+  const london = nextLocal(new Date('2026-10-24T12:00:00Z'), 8 * 60, 'Europe/London');
+  expect(london.toISOString()).toBe('2026-10-25T08:00:00.000Z');
 });

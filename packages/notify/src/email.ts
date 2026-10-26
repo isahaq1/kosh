@@ -24,11 +24,11 @@ interface Ref {
 }
 const ref = (env: Env, name: string): Ref => env.model(name as never) as unknown as Ref;
 
-/** The job's name. */
-export const DELIVER_JOB = 'notify.deliver';
+import { scheduleDigest, sendDigest } from './digest.js';
+import { fallsBack, queueFallback } from './fallback.js';
+import { DELIVER_JOB, DIGEST_JOB, type EmailMode, MAX_ATTEMPTS } from './jobs.js';
 
-/** How a kind reaches a user by email (RFC 0006 §8.1). */
-export type EmailMode = 'instant' | 'daily' | 'off';
+export { DELIVER_JOB, type EmailMode } from './jobs.js';
 
 /** What delivering needs. */
 export interface DeliveryContext {
@@ -175,8 +175,9 @@ export async function queueEmails(
       },
     ]);
     const id = created.ids[0] as number;
-    // A daily email waits for the user's digest (RFC 0006 §8.3): no job of its own.
+    // A daily email waits for the user's digest (RFC 0006 §8.3), sent by the digest job.
     if (mode === 'daily') {
+      await scheduleDigest(env, su, uid);
       queued += 1;
       continue;
     }
@@ -223,119 +224,145 @@ export async function deliver(context: DeliveryContext, env: Env, payload: unkno
       )
         return skip('no access');
     }
-    const uKeys = ['name', 'email', 'lang'];
-    const [user] = (
-      await ref(su, 'res.users')
-        .browse([n['user'] as number])
-        .load(uKeys)
-    ).read(uKeys);
-    const to = user?.['email'];
-    if (delivery['channel'] === 'webpush') {
-      await sendPush(
+    // One attempt on the delivery's channel; a skip leaves the delivery `skipped`, a failure throws.
+    const attempt = async (): Promise<void> => {
+      const uKeys = ['name', 'email', 'lang'];
+      const [user] = (
+        await ref(su, 'res.users')
+          .browse([n['user'] as number])
+          .load(uKeys)
+      ).read(uKeys);
+      const to = user?.['email'];
+      if (delivery['channel'] === 'webpush') {
+        await sendPush(
+          context,
+          su,
+          id,
+          {
+            id: delivery['notification'] as number,
+            user: n['user'] as number,
+            kind: String(n['kind']),
+            params: (n['params'] as Record<string, unknown> | null) ?? {},
+            model: String(n['resModel']),
+            resId: n['resId'] as number,
+          },
+          (user?.['lang'] as string | null) ?? null,
+        );
+        return;
+      }
+      if (delivery['channel'] === 'sms' || delivery['channel'] === 'whatsapp') {
+        const channel = delivery['channel'];
+        const messenger = context.messenger;
+        const [phoneRow] = (
+          await ref(su, 'res.users')
+            .browse([n['user'] as number])
+            .load(['phone'])
+        ).read(['phone']);
+        const phone =
+          typeof phoneRow?.['phone'] === 'string' ? normalizePhone(phoneRow['phone']) : null;
+        if (messenger === undefined || !messenger.channels.includes(channel) || phone === null) {
+          await ref(su, 'notify.delivery')
+            .browse([id])
+            .write({
+              state: 'skipped',
+              error: messenger === undefined ? 'no messenger' : 'no phone number',
+            });
+          return;
+        }
+        const text = renderText(context, (user?.['lang'] as string | null) ?? null, {
+          kind: String(n['kind']),
+          params: (n['params'] as Record<string, unknown> | null) ?? {},
+          model: String(n['resModel']),
+          resId: n['resId'] as number,
+        });
+        try {
+          const sent = await messenger.send({ channel, to: phone, text });
+          await ref(su, 'notify.delivery')
+            .browse([id])
+            .write({ state: 'sent', sentAt: new Date(), providerId: sent.id, error: null });
+        } catch (error) {
+          await context.driver.query({
+            text: `UPDATE notify_delivery SET attempts = attempts + 1, error = $2, state = 'failed' WHERE id = $1`,
+            params: [id, error instanceof Error ? error.message.slice(0, 500) : String(error)],
+          });
+          throw error;
+        }
+        return;
+      }
+      if (mailer === undefined || typeof to !== 'string' || to === '') {
+        await ref(su, 'notify.delivery')
+          .browse([id])
+          .write({
+            state: 'skipped',
+            error: mailer === undefined ? 'no mailer' : 'no email address',
+          });
+        return;
+      }
+      const mail = renderEmail(
         context,
-        su,
-        id,
+        { name: String(user?.['name'] ?? ''), lang: (user?.['lang'] as string | null) ?? null },
         {
-          id: delivery['notification'] as number,
-          user: n['user'] as number,
           kind: String(n['kind']),
           params: (n['params'] as Record<string, unknown> | null) ?? {},
           model: String(n['resModel']),
           resId: n['resId'] as number,
         },
-        (user?.['lang'] as string | null) ?? null,
       );
-      return;
-    }
-    if (delivery['channel'] === 'sms' || delivery['channel'] === 'whatsapp') {
-      const channel = delivery['channel'];
-      const messenger = context.messenger;
-      const [phoneRow] = (
-        await ref(su, 'res.users')
-          .browse([n['user'] as number])
-          .load(['phone'])
-      ).read(['phone']);
-      const phone =
-        typeof phoneRow?.['phone'] === 'string' ? normalizePhone(phoneRow['phone']) : null;
-      if (messenger === undefined || !messenger.channels.includes(channel) || phone === null) {
-        await ref(su, 'notify.delivery')
-          .browse([id])
-          .write({
-            state: 'skipped',
-            error: messenger === undefined ? 'no messenger' : 'no phone number',
-          });
-        return;
-      }
-      const text = renderText(context, (user?.['lang'] as string | null) ?? null, {
-        kind: String(n['kind']),
-        params: (n['params'] as Record<string, unknown> | null) ?? {},
-        model: String(n['resModel']),
-        resId: n['resId'] as number,
-      });
       try {
-        const sent = await messenger.send({ channel, to: phone, text });
+        const replyTo = context.replyAddress?.({
+          model: String(n['resModel']),
+          id: n['resId'] as number,
+          uid: n['user'] as number,
+        });
+        const sent = await mailer.send({
+          to,
+          subject: mail.subject,
+          text: mail.text,
+          html: mail.html,
+          ...(replyTo === undefined ? {} : { replyTo }),
+        });
         await ref(su, 'notify.delivery')
           .browse([id])
           .write({ state: 'sent', sentAt: new Date(), providerId: sent.id, error: null });
       } catch (error) {
+        // Outside the job's transaction (which rolls back on the throw): the attempt stays recorded.
         await context.driver.query({
           text: `UPDATE notify_delivery SET attempts = attempts + 1, error = $2, state = 'failed' WHERE id = $1`,
           params: [id, error instanceof Error ? error.message.slice(0, 500) : String(error)],
         });
         throw error;
       }
-      return;
-    }
-    if (mailer === undefined || typeof to !== 'string' || to === '') {
-      await ref(su, 'notify.delivery')
-        .browse([id])
-        .write({
-          state: 'skipped',
-          error: mailer === undefined ? 'no mailer' : 'no email address',
-        });
-      return;
-    }
-    const mail = renderEmail(
-      context,
-      { name: String(user?.['name'] ?? ''), lang: (user?.['lang'] as string | null) ?? null },
-      {
-        kind: String(n['kind']),
-        params: (n['params'] as Record<string, unknown> | null) ?? {},
-        model: String(n['resModel']),
-        resId: n['resId'] as number,
-      },
-    );
+    };
     try {
-      const replyTo = context.replyAddress?.({
-        model: String(n['resModel']),
-        id: n['resId'] as number,
-        uid: n['user'] as number,
-      });
-      const sent = await mailer.send({
-        to,
-        subject: mail.subject,
-        text: mail.text,
-        html: mail.html,
-        ...(replyTo === undefined ? {} : { replyTo }),
-      });
-      await ref(su, 'notify.delivery')
-        .browse([id])
-        .write({ state: 'sent', sentAt: new Date(), providerId: sent.id, error: null });
+      await attempt();
     } catch (error) {
-      // Outside the job's transaction (which rolls back on the throw): the attempt stays recorded.
-      await context.driver.query({
-        text: `UPDATE notify_delivery SET attempts = attempts + 1, error = $2, state = 'failed' WHERE id = $1`,
-        params: [id, error instanceof Error ? error.message.slice(0, 500) : String(error)],
+      const [row] = await context.driver.query<{ attempts: number }>({
+        text: 'SELECT attempts FROM notify_delivery WHERE id = $1',
+        params: [id],
       });
-      throw error;
+      if ((row?.attempts ?? 0) < MAX_ATTEMPTS) throw error;
+      // The last attempt failed (RFC 0006 §8.4): the fallback channel takes over and the job ends. The delivery is
+      // already `failed` (written outside this transaction, which must not write the row again: repeatable read).
+      await queueFallback(context, env, su, id, { failed: true });
+      return;
     }
+    // Skipped because the channel has nowhere to deliver: the fallback channel takes over.
+    const [after] = (await ref(su, 'notify.delivery').browse([id]).load(['state', 'error'])).read([
+      'state',
+      'error',
+    ]);
+    if (after?.['state'] === 'skipped' && fallsBack(after['state'], after['error']))
+      await queueFallback(context, env, su, id);
   });
 }
 
 /** The job worker: `start()` it to run in the background; tests `drain()` it. */
 export function deliveryWorker(context: DeliveryContext): Worker {
   return context.shutro.work(
-    { [DELIVER_JOB]: (payload, env) => deliver(context, env, payload) },
+    {
+      [DELIVER_JOB]: (payload, env) => deliver(context, env, payload),
+      [DIGEST_JOB]: (payload, env) => sendDigest(context, env, payload),
+    },
     { pollMs: 5000 },
   );
 }

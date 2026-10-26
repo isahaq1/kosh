@@ -10,12 +10,14 @@ import { inboundConfigFromEnv, type Mailer, mailerFromEnv, replyAddress } from '
 import { defineModule } from '@kosh/modules-sdk';
 import { base, type ModuleContext } from '@kosh/server';
 import { type DeliveryContext, deliveryWorker } from './email.js';
+import { fallbackWorker } from './fallback.js';
 import { inboxWorkers, mayRead } from './inbox.js';
 import { type Messenger, messengerFromEnv } from './messenger.js';
 import { notifyShutro } from './models.js';
 import { type Pusher, pusherFromEnv } from './push.js';
 import { registerNotifyRoutes } from './routes.js';
 
+export { renderDigest, scheduleDigest, sendDigest } from './digest.js';
 export {
   DELIVER_JOB,
   type DeliveryContext,
@@ -25,16 +27,9 @@ export {
   renderEmail,
   renderText,
 } from './email.js';
-export {
-  defaultEnabled,
-  emailModeOf,
-  handleEvent,
-  holdUntil,
-  type InboxContext,
-  inboxWorkers,
-  mayRead,
-  TOPICS,
-} from './inbox.js';
+export { BOUNCED_TOPIC, fallbackWorker, fallsBack, queueFallback } from './fallback.js';
+export { handleEvent, type InboxContext, inboxWorkers, mayRead, TOPICS } from './inbox.js';
+export { DIGEST_JOB, MAX_ATTEMPTS } from './jobs.js';
 export { interpolate, sentence, TEXTS, textsFor } from './messages.js';
 export {
   createMemoryMessenger,
@@ -47,6 +42,7 @@ export {
   type TwilioOptions,
 } from './messenger.js';
 export { CHANNELS, type Channel, KINDS, type Kind, notifyShutro } from './models.js';
+export { defaultEnabled, deliverySettingsOf, emailModeOf, holdUntil } from './prefs.js';
 export {
   createMemoryPusher,
   createWebPusher,
@@ -121,6 +117,8 @@ export function notifyModule(options: NotifyOptions = {}): ReturnType<typeof def
           ...delivery,
           mayRead: (uid, company, model, id) => mayRead(inbox, uid, company, model, id),
         }),
+        // Bounced emails fall back to the recipient's fallback channel (RFC 0006 §8.4).
+        fallbackWorker(delivery),
       ];
       for (const w of workers) w.start();
       context.app.addHook('onClose', async () => {

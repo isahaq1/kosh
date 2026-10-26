@@ -95,6 +95,8 @@ const Delivery = defineModel('notify.delivery', {
     ),
     /** `held`: not sent before this instant (the end of the recipient's quiet hours). */
     notBefore: f.datetime(),
+    /** The delivery this one replaces on the recipient's fallback channel (RFC 0006 §8.4). */
+    fallbackOf: f.many2one('notify.delivery', { ondelete: 'set null' }),
     attempts: f.integer({ required: true, default: 0 }),
     error: f.text(),
     providerId: f.char(),

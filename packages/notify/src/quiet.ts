@@ -85,3 +85,23 @@ export function quietUntil(at: Date, settings: QuietSettings, tz: string): Date 
   }
   return isQuiet(t, settings, tz) ? null : t;
 }
+
+/** The next instant (strictly after `at`, on the minute) when the local time is `minutes` after midnight. */
+export function nextLocal(at: Date, minutes: number, tz: string): Date {
+  let t = new Date(at.getTime() + minutesUntil(at, tz, minutes) * 60_000);
+  t = new Date(Math.floor(t.getTime() / 60_000) * 60_000);
+  // A daylight-saving shift on the way moves the wall clock by an hour: correct once.
+  const drift = localTime(t, tz).minutes - minutes;
+  if (drift !== 0 && Math.abs(drift) <= 60) t = new Date(t.getTime() - drift * 60_000);
+  return t;
+}
+
+/** The local calendar date of an instant: `2026-10-27`. */
+export function localDate(at: Date, tz: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: zoneOf(tz),
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(at);
+}

@@ -10,6 +10,9 @@ interface Texts {
   readonly email: {
     readonly open: string;
     readonly why: string;
+    /** The daily digest (RFC 0006 §8.3). */
+    readonly digestSubject: string;
+    readonly digestIntro: string;
   };
 }
 
@@ -28,6 +31,8 @@ export const TEXTS: Readonly<Record<string, Texts>> = {
     email: {
       open: 'Open in Kosh',
       why: 'You receive this email because of your notification settings in Kosh.',
+      digestSubject: 'Your Kosh summary: {{count}} notifications',
+      digestIntro: 'What happened since your last summary, by record.',
     },
   },
   bn: {
@@ -44,6 +49,8 @@ export const TEXTS: Readonly<Record<string, Texts>> = {
     email: {
       open: 'কোষে খুলুন',
       why: 'কোষে আপনার বিজ্ঞপ্তি সেটিংসের কারণে আপনি এই ইমেইল পেয়েছেন।',
+      digestSubject: 'আপনার কোষ সারাংশ: {{count}}টি বিজ্ঞপ্তি',
+      digestIntro: 'আপনার শেষ সারাংশের পর থেকে যা ঘটেছে, রেকর্ড অনুযায়ী।',
     },
   },
 };
