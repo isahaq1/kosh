@@ -24,7 +24,8 @@
     "@kosh/sale_project": "workspace:*",
     "@kosh/sales": "workspace:*",
     "@kosh/server": "workspace:*",
-    "@kosh/settings": "workspace:*"
+    "@kosh/settings": "workspace:*",
+    "@kosh/mail": "workspace:*"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1",

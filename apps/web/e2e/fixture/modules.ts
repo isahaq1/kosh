@@ -3,6 +3,8 @@
  * approvals), plus `purchase_approvals`, which adds the approval panel to the purchase form by a view extension.
  * Server-side code, run by Node (type stripping) against the built packages.
  */
+
+import { mail } from '@kosh/mail';
 import { messaging, messagingShutro } from '@kosh/messaging';
 import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
 import { notify } from '@kosh/notify';
@@ -399,7 +401,7 @@ export const purchaseApprovals = defineKoshModule({
   ],
 });
 
-export const MODULES = [purchaseApprovals, realtime, notify];
+export const MODULES = [purchaseApprovals, realtime, notify, mail];
 
 // ---------------------------------------------------------------------------------------------------- library
 // In the catalogue but not installed: the App manager's end-to-end test installs and disables it (RFC 0008).

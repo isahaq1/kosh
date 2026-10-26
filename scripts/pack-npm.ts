@@ -42,6 +42,7 @@ const PACKAGES = [
   'realtime',
   'notify',
   'mail',
+  'mail',
   'contacts',
   'product',
   'sales',

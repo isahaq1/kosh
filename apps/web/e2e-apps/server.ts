@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { accounting } from '@kosh/accounting';
 import { contacts } from '@kosh/contacts';
+import { mail } from '@kosh/mail';
 import { installActivityTypes, messaging } from '@kosh/messaging';
 import { notify } from '@kosh/notify';
 import { installApprovalPolicies, permissions } from '@kosh/permissions';
@@ -53,6 +54,7 @@ const CATALOGUE = [
   settings,
   realtime,
   notify,
+  mail,
   permissions,
   reporting,
   messaging,
@@ -74,7 +76,16 @@ await applyApps(
     driver: setup,
     catalogue: CATALOGUE,
     change: {
-      install: ['settings', 'realtime', 'notify', 'sales', 'purchase', 'accounting', 'project'],
+      install: [
+        'settings',
+        'realtime',
+        'notify',
+        'mail',
+        'sales',
+        'purchase',
+        'accounting',
+        'project',
+      ],
     },
     dir: migrations,
   }),

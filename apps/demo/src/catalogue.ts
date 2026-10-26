@@ -1,6 +1,7 @@
 /** The demo's catalogue: every framework app and business app, with the bridges the planner proposes. */
 import { accounting } from '@kosh/accounting';
 import { contacts } from '@kosh/contacts';
+import { mail } from '@kosh/mail';
 import { messaging } from '@kosh/messaging';
 import type { KoshModule } from '@kosh/modules-sdk';
 import { notify } from '@kosh/notify';
@@ -22,6 +23,7 @@ export const DEMO_APPS: readonly string[] = [
   'settings',
   'realtime',
   'notify',
+  'mail',
   'sales',
   'purchase',
   'accounting',
@@ -34,6 +36,7 @@ export function demoCatalogue(): KoshModule[] {
     settings,
     realtime,
     notify,
+    mail,
     permissions,
     reporting,
     messaging,

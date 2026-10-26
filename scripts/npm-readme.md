@@ -79,7 +79,7 @@ npx kosh init --yes \
 ```
 
 With `--yes` nothing is asked, so the authenticator is not enrolled: run `npx kosh init` again in a terminal to
-enrol it (administrator rights wait for it). `npx kosh init --help` lists every flag. `--demo` (or a yes to the
+enrol it (administrator rights wait for it). `npx kosh init --help` lists every flag. Replies by email: set `MAIL_INBOUND_DOMAIN` in `.env` (the secrets are generated) and point your email provider's inbound webhook at `/api/v1/mail/inbound` with the `MAIL_INBOUND_WEBHOOK_SECRET`. `--demo` (or a yes to the
 question after the apps) loads a sample company with contacts, products, orders, invoices and projects, made by
 the demo users `dina`, `rahim`, `karim` and `sumi` (one shared password, printed at the end); not for production.
 

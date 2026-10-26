@@ -46,6 +46,7 @@
     "@kosh/sale_account": "workspace:*",
     "@kosh/purchase_account": "workspace:*",
     "@kosh/project": "workspace:*",
-    "@kosh/sale_project": "workspace:*"
+    "@kosh/sale_project": "workspace:*",
+    "@kosh/mail": "workspace:*"
   }
 }
