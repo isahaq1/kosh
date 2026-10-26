@@ -36,6 +36,10 @@ export interface DeliveryContext {
   readonly pusher?: Pusher | undefined;
   /** Where the back-office is reached (`KOSH_BASE_URL`), for the links in messages. */
   readonly baseUrl: string;
+  /** The reply address of a record email to a recipient (RFC 0006 §7.1), when replies by email are on. */
+  readonly replyAddress?:
+    | ((target: { readonly model: string; readonly id: number; readonly uid: number }) => string)
+    | undefined;
 }
 
 /** Renders the email of a notification for a recipient. */
@@ -158,11 +162,17 @@ export async function deliver(context: DeliveryContext, env: Env, payload: unkno
       },
     );
     try {
+      const replyTo = context.replyAddress?.({
+        model: String(n['resModel']),
+        id: n['resId'] as number,
+        uid: n['user'] as number,
+      });
       const sent = await mailer.send({
         to,
         subject: mail.subject,
         text: mail.text,
         html: mail.html,
+        ...(replyTo === undefined ? {} : { replyTo }),
       });
       await ref(su, 'notify.delivery')
         .browse([id])

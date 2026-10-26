@@ -6,7 +6,7 @@
  * (`@kosh/notify/web`). Part 4 is the email channel (`@kosh/mail`), part 5 web push (VAPID, the service worker in
  * the starter's `public/sw.js`); digests, SMS and WhatsApp come next.
  */
-import { type Mailer, mailerFromEnv } from '@kosh/mail';
+import { inboundConfigFromEnv, type Mailer, mailerFromEnv, replyAddress } from '@kosh/mail';
 import { defineModule } from '@kosh/modules-sdk';
 import { base, type ModuleContext } from '@kosh/server';
 import { type DeliveryContext, deliveryWorker } from './email.js';
@@ -70,12 +70,16 @@ export function notifyModule(options: NotifyOptions = {}): ReturnType<typeof def
       // Background work is off in the CLI (kosh init, migrate), like the schedules.
       if (!(options.workers ?? process.env['KOSH_SCHEDULES'] !== 'off')) return;
       const mailer = options.mailer ?? mailerFromEnv();
+      const inbound = inboundConfigFromEnv();
       const delivery: DeliveryContext = {
         shutro: context.shutro,
         driver: context.driver,
         ...(mailer === undefined ? {} : { mailer }),
         ...(pusher === undefined ? {} : { pusher }),
         baseUrl: options.baseUrl ?? process.env['KOSH_BASE_URL'] ?? 'http://localhost:5173',
+        ...(inbound === undefined
+          ? {}
+          : { replyAddress: (target) => replyAddress(inbound, target) }),
       };
       const workers = [...inboxWorkers({ ...context, ...delivery }), deliveryWorker(delivery)];
       for (const w of workers) w.start();

@@ -4,7 +4,7 @@
  * link that opens the record, and marks the delivery sent; a recipient without an address or with email switched
  * off gets none; a provider failure is recorded and retried.
  */
-import { createMemoryMailer, createSmtpMailer, type Mailer } from '@kosh/mail';
+import { createMemoryMailer, createSmtpMailer, type Mailer, replyAddress } from '@kosh/mail';
 import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
 import { base, baseShutro, createServer, installBase, type KoshServer } from '@kosh/server';
 import { type Env, orm } from '@kosh/server/orm';
@@ -42,7 +42,11 @@ const users: Record<string, number> = {};
 let company: number;
 let book: number;
 
-async function emitAndRun(mailerUsed: Mailer | undefined, payload: unknown) {
+async function emitAndRun(
+  mailerUsed: Mailer | undefined,
+  payload: unknown,
+  replyTo?: (target: { model: string; id: number; uid: number }) => string,
+) {
   const context = {
     shutro: server.shutro,
     driver: server.driver,
@@ -50,6 +54,7 @@ async function emitAndRun(mailerUsed: Mailer | undefined, payload: unknown) {
     auth: server.auth,
     ...(mailerUsed === undefined ? {} : { mailer: mailerUsed }),
     baseUrl: 'https://erp.example.com/',
+    ...(replyTo === undefined ? {} : { replyAddress: replyTo }),
   };
   const inbox = inboxWorkers(context);
   const delivery = deliveryWorker(context);
@@ -241,4 +246,18 @@ test('a provider failure is recorded and retried later', async () => {
   );
   await memory.send({ to: 'a@b', subject: mail.subject, text: mail.text, html: mail.html });
   expect(memory.sent[0]?.subject).toBe('Maria rejected PO 1');
+});
+
+test('with replies by email configured, a record email carries the signed reply address (RFC 0006 §7.1)', async () => {
+  const memory = createMemoryMailer();
+  const config = { secret: 'top secret', domain: 'mail.padma.test', alias: 'reply' };
+  const { sent } = await emitAndRun(
+    memory,
+    mention(users['dina'] as number, 'Reply to this one'),
+    (t) => replyAddress(config, t),
+  );
+  expect(sent).toBe(1);
+  expect(memory.sent[0]?.replyTo).toBe(
+    replyAddress(config, { model: 'library.book', id: book, uid: users['dina'] as number }),
+  );
 });

@@ -4,6 +4,7 @@
  * caller's own; approvers are resolved from their roles in the company.
  */
 
+import { mailModule } from '@kosh/mail';
 import { messaging } from '@kosh/messaging';
 import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
 import { base, baseShutro, createServer, installBase, type KoshServer } from '@kosh/server';
@@ -85,7 +86,15 @@ beforeAll(async () => {
   container = await new PostgreSqlContainer('postgres:18').start();
   server = await createServer({
     databaseUrl: container.getConnectionUri(),
-    modules: [library, notify, messaging],
+    modules: [
+      library,
+      notify,
+      messaging,
+      mailModule({
+        inbound: { secret: 's', domain: 'mail.test', alias: 'reply' },
+        webhookSecret: 'hook',
+      }),
+    ],
     auth: { secureCookies: false, cacheMs: 0, loginLimit: 0 },
     rateLimit: { max: 0, timeWindow: '1 minute' },
     logger: false,
@@ -251,4 +260,54 @@ test('chat: the other side of a direct conversation is told, a mentioned member 
     params: { actor: 'Rahim Uddin', preview: 'Lunch?' },
   });
   expect((await call('GET', '/api/v1/notifications/count', 'bob')).json).toEqual({ unread: 0 }); // not a member
+});
+
+test('a reply by email to a notification we sent resolves by In-Reply-To and posts as the recipient', async () => {
+  // Dina's email address, and a notification delivered to her with the Message-ID the mailer returned.
+  await server.shutro.bootstrap({ reason: 'test', company }, async (env) => {
+    type Model = {
+      create(r: unknown[]): Promise<{ ids: number[] }>;
+      browse(ids: number[]): { write(v: unknown): Promise<void> };
+    };
+    const model = (name: string) => env.model(name as never) as unknown as Model;
+    await model('res.users')
+      .browse([users['dina'] as number])
+      .write({ email: 'dina@padma.test' });
+    const n = await model('notify.notification').create([
+      {
+        user: users['dina'],
+        kind: 'mention',
+        params: {},
+        resModel: 'library.book',
+        resId: book,
+        company,
+      },
+    ]);
+    await model('notify.delivery').create([
+      { notification: n.ids[0], channel: 'email', state: 'sent', providerId: '<sent-77@kosh>' },
+    ]);
+  });
+  const res = await server.app.inject({
+    method: 'POST',
+    url: '/api/v1/mail/inbound',
+    headers: { 'content-type': 'message/rfc822', 'x-kosh-inbound-secret': 'hook' },
+    payload: [
+      'From: Dina Rahman <dina@padma.test>',
+      'To: kosh@padma.test',
+      'Subject: Re: mention',
+      'Message-ID: <reply-77@padma.test>',
+      'In-Reply-To: <sent-77@kosh>',
+      '',
+      'Noted, thanks.',
+      '',
+      'On Monday, Kosh wrote:',
+      '> Rahim mentioned you',
+    ].join('\r\n'),
+  });
+  expect(res.statusCode, res.body).toBe(202);
+  expect(res.json()).toMatchObject({ state: 'posted', model: 'library.book', resId: book });
+  const page = await call('GET', `/api/v1/chatter/library.book/${book}`, 'dina');
+  expect(page.status).toBe(200);
+  const [posted] = page.json.items.filter((i: { type: string }) => i.type === 'message');
+  expect(posted).toMatchObject({ author: { name: 'Dina Rahman' }, body: '<p>Noted, thanks.</p>' });
 });
