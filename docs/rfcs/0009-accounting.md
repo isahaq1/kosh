@@ -1,6 +1,6 @@
 # RFC 0009: Accounting (the ledger, documents, payments, reports)
 
-- **Status:** Accepted (2026-10-25, with the proposed answers to §11); steps 1–2 implemented (see Implementation notes)
+- **Status:** Accepted (2026-10-25, with the proposed answers to §11); steps 1–3 implemented (see Implementation notes)
 - **Depends on:** 0001 (modules), 0002 (generated API), 0003 (permissions, approvals), 0004 (views), 0005
   (reporting: pivots, comparisons, scheduled reports), 0006 (chatter, notifications), 0008 (apps, bridges)
 - **Followed by:** the `sale_account` and `purchase_account` bridges (RFC 0008 §5.1), Projects (RFC 0008 step 6)
@@ -329,6 +329,38 @@ rendered by the reporting engine's hierarchy view; every number drills to the li
 - **Not in this step:** partner-specific receivable / payable accounts, product-category income and expense
   accounts (the journal's default account is used), down payments.
 - **Next:** step 3, payments and reconciliation.
+
+## Implementation notes (2026-10-26): step 3 — payments and reconciliation
+
+- **Matches are records.** `account.partial.reconcile` (a debit line, a credit line, the matched amount in the
+  company currency and in the lines' currency, the exchange entry it created) and `account.full.reconcile` (the
+  lines settled together). A line's `amountResidual`, `amountResidualCurrency` and `reconciled` are stored
+  computes over its partials; a document's `amountResidual` and `paymentState` (`not_paid`, `partial`, `paid`)
+  over its counterpart lines. Nothing on a posted line changes but these computed columns and the match links,
+  so the immutability rules stand.
+- **Reconcile** (`payments.ts`): lines of one reconcilable account, debit residuals against credit residuals,
+  oldest due first. Lines in the same foreign currency match in that currency; the company-currency difference
+  between the two lines' rates is posted in the miscellaneous journal to the company's exchange gain or loss
+  account and matched too, so both lines reach zero in both currencies. A `writeOff` account takes what is left
+  on the last line. Every line settled gives one full reconciliation. **Unreconcile** removes a line's matches
+  (whole settlements go together) and reverses the exchange entries they posted. Both need the
+  `account.reconcile` permission (accountants).
+- **Payments** (`account.payment`): direction, partner, a cash or bank journal, amount in a currency, the documents
+  it pays (a many2many). Posting creates the entry (the journal's account against the receivable / payable) with
+  posting rights granted for that step (`env.withGrants`), then matches the receivable / payable line with the
+  documents' counterpart lines. Invoicing users may register payments; the entry and the matches are made on
+  their behalf, audited. `POST /api/v1/accounting/payments/register` (`{ moves, journal, date?, amount?, memo? }`)
+  builds a payment for posted documents of one partner with their residual as the default amount and posts it.
+  `POST …/reconcile` (`{ lines, writeOff? }`), `POST …/unreconcile` (`{ lines }`) and `GET …/open-items?account=&partner=`
+  (the open lines with residuals, for a reconciliation screen) complete the API. A document shows its amount due,
+  payment state and payments; the Payments menu lists them.
+- **Not in this step:** a "Register payment" dialog on the invoice form and the manual reconciliation screen (the
+  API is there; the screens come with step 4), bank statements (RFC §2), partner-specific accounts.
+- Tests: `modules/accounting/test/payments.integration.test.ts` (full and partial payments, two invoices settled
+  oldest due first, unreconciling and matching by hand through open items, a USD invoice paid at another rate
+  with its exchange gain, a write-off).
+- **Next:** step 4, the reports (trial balance, ledgers, aging, P&L, balance sheet, VAT), year closing and
+  Settings → Accounting with the payment and reconciliation screens.
 
 ## Alignment with CLAUDE.md
 
