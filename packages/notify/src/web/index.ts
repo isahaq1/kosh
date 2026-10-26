@@ -8,6 +8,7 @@ import { messages } from './messages.js';
 import { NotificationBell } from './NotificationBell.js';
 
 export { NotificationBell } from './NotificationBell.js';
+export { NotificationSettings } from './NotificationSettings.js';
 export { type PushState, usePush } from './push.js';
 
 /** Registers the bell (and its messages in `i18n`, when given). */

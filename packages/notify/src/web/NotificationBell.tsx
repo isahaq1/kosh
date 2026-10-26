@@ -6,10 +6,11 @@
 import { type HeaderItemProps, useKosh } from '@kosh/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { Bell, BellRing, CheckCheck } from 'lucide-react';
+import { Bell, BellRing, CheckCheck, Settings2 } from 'lucide-react';
 import { Popover } from 'radix-ui';
 import { type ReactElement, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { NotificationSettings } from './NotificationSettings.js';
 import { usePush } from './push.js';
 
 interface Item {
@@ -28,6 +29,7 @@ export function NotificationBell({ api }: HeaderItemProps): ReactElement {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const count = useQuery({
     queryKey: ['notifications', 'count'],
     queryFn: () => api.call<{ unread: number }>('GET', '/api/v1/notifications/count'),
@@ -76,90 +78,108 @@ export function NotificationBell({ api }: HeaderItemProps): ReactElement {
     });
   };
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger asChild>
-        <button
-          type="button"
-          className="relative inline-flex size-9 items-center justify-center rounded-md hover:bg-muted"
-          aria-label={unread === 0 ? t('title') : t('unread', { count: unread })}
-        >
-          <Bell className="size-4" aria-hidden />
-          {unread === 0 ? null : (
-            <span
-              aria-hidden
-              className="absolute -end-0.5 -top-0.5 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] font-semibold leading-4 text-danger-foreground"
-            >
-              {unread > 99 ? '99+' : unread}
-            </span>
-          )}
-        </button>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content
-          align="end"
-          sideOffset={6}
-          className="z-40 w-[min(24rem,calc(100vw-1rem))] rounded-lg border bg-surface text-surface-foreground shadow-xl"
-        >
-          <div className="flex items-center justify-between border-b px-3 py-2">
-            <h2 className="text-sm font-semibold">{t('title')}</h2>
+    <>
+      <NotificationSettings api={api} open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <Popover.Root open={open} onOpenChange={setOpen}>
+        <Popover.Trigger asChild>
+          <button
+            type="button"
+            className="relative inline-flex size-9 items-center justify-center rounded-md hover:bg-muted"
+            aria-label={unread === 0 ? t('title') : t('unread', { count: unread })}
+          >
+            <Bell className="size-4" aria-hidden />
             {unread === 0 ? null : (
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-primary hover:bg-muted"
-                onClick={() => readAll.mutate()}
+              <span
+                aria-hidden
+                className="absolute -end-0.5 -top-0.5 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] font-semibold leading-4 text-danger-foreground"
               >
-                <CheckCheck className="size-3.5" aria-hidden />
-                {t('markAllRead')}
-              </button>
-            )}
-          </div>
-          <ul aria-label={t('title')} className="max-h-[60vh] overflow-y-auto py-1">
-            {(list.data?.items ?? []).length === 0 ? (
-              <li className="px-3 py-6 text-center text-sm text-muted-foreground">{t('empty')}</li>
-            ) : (
-              (list.data?.items ?? []).map((n) => (
-                <li key={n.id}>
-                  <button
-                    type="button"
-                    className="flex w-full items-start gap-2 px-3 py-2 text-start text-sm hover:bg-muted"
-                    onClick={() => openOne(n)}
-                  >
-                    <span
-                      aria-hidden
-                      className={`mt-1.5 size-2 shrink-0 rounded-full ${n.readAt === null ? 'bg-primary' : 'bg-transparent'}`}
-                    />
-                    <span className="grid gap-0.5">
-                      <span className={n.readAt === null ? 'font-medium' : ''}>{text(n)}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {format.datetime(n.createdAt)}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
-          {push.state === 'unsupported' || push.state === 'unavailable' ? null : (
-            <div className="flex items-center justify-between gap-2 border-t px-3 py-2 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <BellRing className="size-3.5" aria-hidden />
-                {t(`push.${push.state}`)}
+                {unread > 99 ? '99+' : unread}
               </span>
-              {push.state === 'denied' ? null : (
+            )}
+          </button>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content
+            align="end"
+            sideOffset={6}
+            className="z-40 w-[min(24rem,calc(100vw-1rem))] rounded-lg border bg-surface text-surface-foreground shadow-xl"
+          >
+            <div className="flex items-center justify-between border-b px-3 py-2">
+              <h2 className="text-sm font-semibold">{t('title')}</h2>
+              {unread === 0 ? null : (
                 <button
                   type="button"
-                  className="rounded px-2 py-1 font-medium text-primary hover:bg-muted disabled:opacity-60"
-                  disabled={push.state === 'busy'}
-                  aria-pressed={push.state === 'on'}
-                  onClick={() => void push.toggle()}
+                  className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-primary hover:bg-muted"
+                  onClick={() => readAll.mutate()}
                 >
-                  {push.state === 'on' ? t('push.turnOff') : t('push.turnOn')}
+                  <CheckCheck className="size-3.5" aria-hidden />
+                  {t('markAllRead')}
                 </button>
               )}
             </div>
-          )}
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+            <ul aria-label={t('title')} className="max-h-[60vh] overflow-y-auto py-1">
+              {(list.data?.items ?? []).length === 0 ? (
+                <li className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  {t('empty')}
+                </li>
+              ) : (
+                (list.data?.items ?? []).map((n) => (
+                  <li key={n.id}>
+                    <button
+                      type="button"
+                      className="flex w-full items-start gap-2 px-3 py-2 text-start text-sm hover:bg-muted"
+                      onClick={() => openOne(n)}
+                    >
+                      <span
+                        aria-hidden
+                        className={`mt-1.5 size-2 shrink-0 rounded-full ${n.readAt === null ? 'bg-primary' : 'bg-transparent'}`}
+                      />
+                      <span className="grid gap-0.5">
+                        <span className={n.readAt === null ? 'font-medium' : ''}>{text(n)}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {format.datetime(n.createdAt)}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+            {push.state === 'unsupported' || push.state === 'unavailable' ? null : (
+              <div className="flex items-center justify-between gap-2 border-t px-3 py-2 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <BellRing className="size-3.5" aria-hidden />
+                  {t(`push.${push.state}`)}
+                </span>
+                {push.state === 'denied' ? null : (
+                  <button
+                    type="button"
+                    className="rounded px-2 py-1 font-medium text-primary hover:bg-muted disabled:opacity-60"
+                    disabled={push.state === 'busy'}
+                    aria-pressed={push.state === 'on'}
+                    onClick={() => void push.toggle()}
+                  >
+                    {push.state === 'on' ? t('push.turnOff') : t('push.turnOn')}
+                  </button>
+                )}
+              </div>
+            )}
+            <div className="border-t px-3 py-2">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-primary hover:bg-muted"
+                onClick={() => {
+                  setOpen(false);
+                  setSettingsOpen(true);
+                }}
+              >
+                <Settings2 className="size-3.5" aria-hidden />
+                {t('openSettings')}
+              </button>
+            </div>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+    </>
   );
 }
