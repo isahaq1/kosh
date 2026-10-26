@@ -12,7 +12,13 @@ import { defineModule } from '@kosh/modules-sdk';
 import { base, type ModuleContext } from '@kosh/server';
 import { type Storage, storage, storageOf } from '@kosh/storage';
 import nodemailer from 'nodemailer';
-import { type InboundContext, registerInboundRoutes } from './inbound/index.js';
+import {
+  type ImapConfig,
+  type InboundContext,
+  imapConfigFromEnv,
+  registerInboundRoutes,
+  startPoller,
+} from './inbound/index.js';
 import { mailShutro } from './inbound/models.js';
 import { type InboundConfig, inboundConfigFromEnv } from './inbound/token.js';
 
@@ -137,6 +143,10 @@ export interface MailOptions {
   readonly inbound?: InboundConfig | undefined;
   /** The webhook's shared secret; default `MAIL_INBOUND_WEBHOOK_SECRET`. Without one the webhook answers 404. */
   readonly webhookSecret?: string | undefined;
+  /** The mailbox to poll; default `IMAP_URL`. Without one, no poller runs. */
+  readonly imap?: ImapConfig | undefined;
+  /** Start the poller (default: unless `KOSH_SCHEDULES=off`). */
+  readonly workers?: boolean | undefined;
 }
 
 /** The store attachments go to, or none when the installation has no file storage. */
@@ -185,6 +195,17 @@ export function mailModule(options: MailOptions = {}): ReturnType<typeof defineM
       };
       registerInboundRoutes(context, inbound, {
         webhookSecret: options.webhookSecret ?? process.env['MAIL_INBOUND_WEBHOOK_SECRET'],
+      });
+      // Background work is off in the CLI (kosh init, migrate), like the schedules.
+      if (!(options.workers ?? process.env['KOSH_SCHEDULES'] !== 'off')) return;
+      const imap = options.imap ?? imapConfigFromEnv();
+      if (imap === undefined) return;
+      const poller = startPoller(inbound, imap, {
+        pollMs: Number(process.env['MAIL_INBOUND_POLL_MS'] ?? 30_000),
+        log: (message, error) => context.app.log.warn({ err: error }, message),
+      });
+      context.app.addHook('onClose', async () => {
+        await poller.stop();
       });
     },
   });

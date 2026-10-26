@@ -11,6 +11,7 @@ import {
   postExternalMessage,
   postMessage,
 } from '@kosh/messaging';
+import type { InboundAliasSpec } from '@kosh/modules-sdk';
 import { type AuthService, HttpProblem, type KoshRegistry } from '@kosh/server';
 import type { Driver, Env, Shutro } from '@kosh/server/orm';
 import { type Storage, saveAttachment } from '@kosh/storage';
@@ -290,13 +291,9 @@ export async function processInbound(
       });
       return { ...outcome, id: logId, duplicate: false };
     });
-  // 2. Automatic messages never post; a bounce of ours marks its delivery.
+  // 2. Automatic messages never post; a bounce of ours marks its delivery and tells the one who wrote.
   if (mail.automatic) {
-    if (mail.bounce && mail.inReplyTo !== null)
-      await context.driver.query({
-        text: `UPDATE notify_delivery SET error = $2 WHERE provider_id = $1 AND channel = 'email'`,
-        params: [mail.inReplyTo, `bounced: ${mail.subject.slice(0, 200)}`],
-      });
+    if (mail.bounce) await recordBounce(context, mail);
     return finish({
       state: 'dropped',
       reason: 'automatic',
@@ -309,7 +306,9 @@ export async function processInbound(
   const target = await context.shutro.bootstrap({ reason: 'inbound email' }, (su) =>
     targetOf(context, su, mail),
   );
-  if (target === null)
+  if (target === null) {
+    const alias = aliasOf(context, mail);
+    if (alias !== null) return finish(await receiveForAlias(context, logId, mail, alias, text));
     return finish({
       state: 'quarantined',
       reason: 'no-target',
@@ -317,6 +316,7 @@ export async function processInbound(
       resId: null,
       message: null,
     });
+  }
   await context.shutro.bootstrap({ reason: 'inbound email' }, (su) =>
     ref(su, 'mail.inbound_message')
       .browse([logId])
@@ -377,6 +377,148 @@ export async function processInbound(
     model: target.model,
     resId: target.id,
     message: null,
+  });
+}
+
+/** The catch-all alias a message was sent to, among the loaded modules', when the address is at our domain. */
+function aliasOf(context: InboundContext, mail: InboundMail): InboundAliasSpec | null {
+  const domain = context.config?.domain.toLowerCase();
+  const aliases = context.registry.loaded.modules.flatMap((m) => m.inboundAliases ?? []);
+  if (aliases.length === 0) return null;
+  for (const to of mail.to) {
+    const at = to.indexOf('@');
+    if (at < 0) continue;
+    const local = to.slice(0, at).split('+')[0] ?? '';
+    const host = to.slice(at + 1);
+    if (domain !== undefined && host !== domain) continue;
+    const found = aliases.find((a) => a.alias.toLowerCase() === local);
+    if (found !== undefined) return found;
+  }
+  return null;
+}
+
+/** A message to a catch-all alias: a new record of the alias's model, the message posted on it naming the sender. */
+async function receiveForAlias(
+  context: InboundContext,
+  logId: number,
+  mail: InboundMail,
+  alias: InboundAliasSpec,
+  text: string,
+): Promise<Omit<InboundOutcome, 'id' | 'duplicate'>> {
+  const [first] = await context.driver.query<{ id: number | null }>({
+    text: 'SELECT min(id)::int AS id FROM res_company',
+    params: [],
+  });
+  const company = first?.id;
+  if (company === undefined || company === null || !modelsOf(context).has(alias.model))
+    return {
+      state: 'quarantined',
+      reason: 'alias-unavailable',
+      model: alias.model,
+      resId: null,
+      message: null,
+    };
+  const subject = mail.subject.trim() === '' ? '(no subject)' : mail.subject.slice(0, 200);
+  const created = await context.shutro.bootstrap(
+    { reason: `inbound email: ${alias.alias}@`, company },
+    async (su) => {
+      const defaults =
+        typeof alias.defaults === 'function' ? await alias.defaults(su) : (alias.defaults ?? {});
+      if (defaults === null) return null;
+      const values: Record<string, unknown> = { ...defaults, [alias.subjectField]: subject };
+      if (alias.bodyField !== undefined) values[alias.bodyField] = text;
+      const created = await ref(su, alias.model).create([values]);
+      const id = created.ids[0] as number;
+      const posted = await postAsSender(
+        context,
+        su,
+        mail,
+        alias.model,
+        id,
+        text === '' ? subject : text,
+      );
+      return { id, message: posted.id };
+    },
+  );
+  if (created === null)
+    return {
+      state: 'quarantined',
+      reason: 'alias-unavailable',
+      model: alias.model,
+      resId: null,
+      message: null,
+    };
+  await context.shutro.bootstrap({ reason: 'inbound email' }, (su) =>
+    ref(su, 'mail.inbound_message')
+      .browse([logId])
+      .write({ resModel: alias.model, resId: created.id }),
+  );
+  return {
+    state: 'posted',
+    reason: `alias:${alias.alias}`,
+    model: alias.model,
+    resId: created.id,
+    message: created.message,
+  };
+}
+
+/**
+ * A bounce of a message we sent: the delivery is marked bounced, and the user whose action caused the email (the
+ * notification's actor) is told through the bell, when the notify models are installed.
+ */
+async function recordBounce(context: InboundContext, mail: InboundMail): Promise<void> {
+  const ids = [
+    ...new Set(
+      [mail.inReplyTo, ...mail.references].filter((r): r is string => r !== null && r !== ''),
+    ),
+  ];
+  if (ids.length === 0 || !context.registry.registry.models.has('notify.delivery' as never)) return;
+  await context.shutro.bootstrap({ reason: 'inbound email: bounce' }, async (su) => {
+    const deliveries = await rows(
+      su,
+      'notify.delivery',
+      { providerId: { in: ids }, channel: 'email' },
+      ['notification'],
+    );
+    for (const d of deliveries) {
+      await ref(su, 'notify.delivery')
+        .browse([d['id'] as number])
+        .write({ state: 'bounced', error: `bounced: ${mail.subject.slice(0, 200)}` });
+      const [n] = await rows(su, 'notify.notification', { id: d['notification'] }, [
+        'user',
+        'actor',
+        'resModel',
+        'resId',
+        'company',
+      ]);
+      if (n === undefined || typeof n['actor'] !== 'number' || n['actor'] === n['user']) continue;
+      const [recipient] = await rows(
+        su,
+        'res.users',
+        { id: n['user'], active: { in: [true, false] } },
+        ['name', 'email'],
+      );
+      const [record] = (
+        await ref(su, String(n['resModel']))
+          .browse([n['resId'] as number])
+          .load(['displayName'])
+      ).read(['displayName']);
+      await ref(su, 'notify.notification').create([
+        {
+          user: n['actor'],
+          kind: 'email.bounced',
+          params: {
+            recipient: String(recipient?.['name'] ?? ''),
+            address: String(recipient?.['email'] ?? ''),
+            record: String(record?.['displayName'] ?? `#${String(n['resId'])}`),
+          },
+          resModel: n['resModel'],
+          resId: n['resId'],
+          actor: null,
+          company: n['company'],
+        },
+      ]);
+    }
   });
 }
 

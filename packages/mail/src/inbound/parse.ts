@@ -327,17 +327,60 @@ export function fromPostmark(json: Record<string, unknown>): InboundMail {
   };
 }
 
-/** A raw message, or a provider's JSON: Postmark (`FromFull`), or any `{ RawEmail }`. */
+/** The fields of a `multipart/form-data` body (text fields only: a provider's form post, not a browser's). */
+export function formFields(body: Uint8Array, contentType: string): Map<string, string> {
+  const out = new Map<string, string>();
+  const boundary = /boundary="?([^";]+)"?/i.exec(contentType)?.[1];
+  if (boundary === undefined) return out;
+  const text = Buffer.from(body).toString('latin1');
+  for (const part of text.split(`--${boundary}`)) {
+    const headerEnd = part.indexOf('\r\n\r\n');
+    if (headerEnd < 0) continue;
+    const headers = part.slice(0, headerEnd);
+    const name = /name="([^"]+)"/i.exec(headers)?.[1];
+    if (name === undefined) continue;
+    let value = part.slice(headerEnd + 4);
+    if (value.endsWith('\r\n')) value = value.slice(0, -2);
+    out.set(name, Buffer.from(value, 'latin1').toString('utf8'));
+  }
+  return out;
+}
+
+/** Mailgun's forwarded message: the raw MIME in `body-mime` (a route forwarding to a URL ending in `/mime`). */
+function fromForm(fields: Map<string, string>): string {
+  const raw = fields.get('body-mime');
+  if (raw === undefined || raw === '')
+    throw new Error(
+      "The form has no 'body-mime' field: forward the raw message (Mailgun: a URL ending in /mime).",
+    );
+  return raw;
+}
+
+/**
+ * A raw message, or a provider's post: Postmark's JSON (`FromFull`), any `{ RawEmail }` JSON, Mailgun's form
+ * (`application/x-www-form-urlencoded` or `multipart/form-data` with `body-mime`).
+ */
 export async function parseInbound(
   body: string | Uint8Array,
   contentType: string,
 ): Promise<InboundMail> {
-  if (contentType.includes('application/json')) {
+  const type = contentType.toLowerCase();
+  if (type.includes('application/json')) {
     const json = JSON.parse(
       typeof body === 'string' ? body : new TextDecoder().decode(body),
     ) as Record<string, unknown>;
     if (typeof json['RawEmail'] === 'string') return parseMail(json['RawEmail']);
     return fromPostmark(json);
+  }
+  if (type.includes('application/x-www-form-urlencoded')) {
+    const params = new URLSearchParams(
+      typeof body === 'string' ? body : new TextDecoder().decode(body),
+    );
+    return parseMail(fromForm(new Map(params)));
+  }
+  if (type.includes('multipart/form-data')) {
+    const bytes = typeof body === 'string' ? new TextEncoder().encode(body) : body;
+    return parseMail(fromForm(formFields(bytes, contentType)));
   }
   return parseMail(body);
 }

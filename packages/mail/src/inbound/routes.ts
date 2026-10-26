@@ -80,8 +80,9 @@ export function registerInboundRoutes(
           error instanceof Error ? error.message : String(error),
         );
       }
-      const raw = contentType.includes('application/json')
-        ? new TextDecoder().decode(body)
+      // The source is kept for a retry: a raw message or JSON as sent; a form post as the message it carried.
+      const raw = /form-data|x-www-form-urlencoded/i.test(contentType)
+        ? null
         : new TextDecoder().decode(body);
       const outcome = await receiveMail(inbound, mail, raw);
       return reply.code(outcome.duplicate ? 200 : 202).send(outcome);

@@ -15,6 +15,7 @@ export {
   bodyText,
   cleanHtml,
   cutQuotes,
+  formFields,
   fromPostmark,
   htmlToText,
   type InboundAddress,
@@ -24,6 +25,7 @@ export {
   parseInbound,
   parseMail,
 } from './parse.js';
+export { type ImapConfig, imapConfigFromEnv, pollOnce, startPoller } from './poller.js';
 export { registerInboundRoutes } from './routes.js';
 export {
   type InboundConfig,

@@ -49,6 +49,8 @@ const crm = defineKoshModule({
   kosh: '^0.1.0',
   depends: [base],
   accessLevels: { user: { label: 'User', groups: ['crm.user'] } },
+  // sales@<domain>: a deal from the message (RFC 0006 §7.1).
+  inboundAliases: [{ alias: 'sales', model: 'crm.deal', subjectField: 'name' }],
 });
 
 let container: StartedPostgreSqlContainer;
@@ -277,7 +279,7 @@ test('an unknown sender is quarantined; the email manager attaches it by hand, o
     resId: deal,
   });
   const second = await webhook(
-    raw('Nobody <nobody@else.test>', 'sales@mail.padma.test', 'Price list please', {
+    raw('Nobody <nobody@else.test>', 'info@mail.padma.test', 'Price list please', {
       subject: 'Prices',
     }),
   );
@@ -350,4 +352,72 @@ test('Postmark JSON is accepted (the secret in the query string too)', async () 
     author: { name: 'Rahim Uddin' },
     body: '<p>Replying from my phone.</p>',
   });
+});
+
+test('a message to a catch-all alias creates the record and posts on it naming the sender', async () => {
+  const res = await webhook(
+    raw('New Lead <lead@bigcorp.test>', 'Sales <sales@mail.padma.test>', 'We need 200 beams.', {
+      subject: 'Quote request',
+    }),
+  );
+  expect(res.statusCode, res.body).toBe(202);
+  expect(res.json()).toMatchObject({ state: 'posted', reason: 'alias:sales', model: 'crm.deal' });
+  const id = res.json().resId as number;
+  const [posted] = await chatter('dina', id); // the manager reads every deal
+  expect(posted).toMatchObject({
+    author: null,
+    authorEmail: 'lead@bigcorp.test',
+    body: '<p>We need 200 beams.</p>',
+  });
+  const created = await call('GET', `/api/v1/models/crm.deal/${id}`, 'dina');
+  expect(created.json.name).toBe('Quote request');
+  // Another domain is not ours: no record.
+  const other = await webhook(
+    raw('X <x@y.test>', 'sales@elsewhere.test', 'hi', { subject: 'Elsewhere' }),
+  );
+  expect(other.json()).toMatchObject({ state: 'quarantined', reason: 'no-target' });
+});
+
+test("Mailgun's form post carries the raw message in body-mime", async () => {
+  const to = replyAddress(config, { model: 'crm.deal', id: deal, uid: users['rahim'] as number });
+  const message = raw('Rahim Uddin <rahim@padma.test>', to, 'From Mailgun.');
+  const boundary = 'mgboundary';
+  const form = [
+    `--${boundary}`,
+    'Content-Disposition: form-data; name="recipient"',
+    '',
+    to,
+    `--${boundary}`,
+    'Content-Disposition: form-data; name="body-mime"',
+    '',
+    message,
+    `--${boundary}--`,
+    '',
+  ].join('\r\n');
+  const res = await server.app.inject({
+    method: 'POST',
+    url: '/api/v1/mail/inbound',
+    headers: {
+      'content-type': `multipart/form-data; boundary=${boundary}`,
+      'x-kosh-inbound-secret': WEBHOOK,
+    },
+    payload: form,
+  });
+  expect(res.statusCode, res.body).toBe(202);
+  expect(res.json()).toMatchObject({ state: 'posted', resId: deal });
+  const [posted] = await chatter('rahim', deal);
+  expect(posted.body).toBe('<p>From Mailgun.</p>');
+  const encoded = await server.app.inject({
+    method: 'POST',
+    url: '/api/v1/mail/inbound',
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      'x-kosh-inbound-secret': WEBHOOK,
+    },
+    payload: new URLSearchParams({
+      'body-mime': raw('Rahim Uddin <rahim@padma.test>', to, 'Encoded too.'),
+    }).toString(),
+  });
+  expect(encoded.statusCode, encoded.body).toBe(202);
+  expect(encoded.json()).toMatchObject({ state: 'posted' });
 });
