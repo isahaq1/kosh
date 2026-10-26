@@ -1,6 +1,6 @@
 # RFC 0011: Automation builder
 
-- **Status:** Draft, awaiting approval (RFC 0010 Phase C, the first of its three subsystems)
+- **Status:** Accepted 2026-10-26 with the proposed answers (run as the actor by default, templates without logic, managers = administrators); step 1 implemented (`@kosh/automation`, `docs/automation.md`)
 - **Depends on:** 0001 (manifests), 0003 (permissions, approval policies), 0004 (search domains), 0006 (chatter,
   notifications, outbox and jobs), 0008 (apps); Shutro RFC 0013 (audit trail), 0018 (outbox events, jobs)
 
@@ -156,6 +156,26 @@ cannot read rules); E2E: a rule made in the app fires on a record and shows in t
   proposal keeps logic out: a module `action` is the place for it.
 - **Who gets `automation.manager` by default**: administrators only (proposed), or every app's managers for their
   own models?
+
+## Implementation notes (2026-10-26): step 1 — the engine
+
+- `@kosh/automation`: `automation.rule` and `automation.run` (served by the generated API with list and form
+  views under the Automation app; `automation.cursor` private). The engine (`engine.ts`) reads `shutro_audit`
+  and `shutro_outbox` past cursors of its own, one node at a time by advisory locks, groups audit rows into one
+  change per transaction, model and record, and applies the enabled rules of the change's model and company:
+  the untracked check, the trigger (watched fields, from / to values, the loop guard), the condition (a search with
+  the record's id and the domain), then the actions in one transaction of the run's scope (`shutro.run` as the
+  actor with the groups `AuthService.verify` gives, or `bootstrap` as the system), the run row written before
+  (`queued`) and after (`done` / `failed` / `skipped`), unique per `(rule, tx, record)`.
+- Outbox events are read with a cursor rather than `shutro.subscribe`: a subscriber's handler is a Shutro scope,
+  and the engine's runs need scopes of their own (the first try nested them and left runs queued).
+- Actions: `set`, `transition`, `activity`, `notify` (an `automation.notify` event the inbox subscriber turns
+  into `automation` notifications), `note` / `comment`, `create`, `action` (the manifest's `automationActions`);
+  `webhook` is skipped until step 3. Templates keep a single path's type.
+- Tests: `packages/automation/test/automation.integration.test.ts` (created with templates and the loop guard,
+  updated with watched fields, from / to, the condition and an untracked field, a transition creating a record,
+  run as the actor refused and logged versus the system, a module action, an activity, a retry, an event rule
+  and its notification, a dry run, permissions, the tracked fields route).
 
 ## Alignment with CLAUDE.md
 

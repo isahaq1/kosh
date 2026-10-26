@@ -217,6 +217,12 @@ conversation (day separators, grouped messages, reactions, a thread panel, who i
 is shown, and conversations read offline from the persisted cache (sending needs the network). Direct messages
 and mentions reach the bell (`chat.direct`, `mention`); `docs/messaging.md` has the routes and the rules.
 
+## Automation (RFC 0011)
+
+With the `automation` module installed (every installation has it), automation managers get the **Automation**
+app: the rules (a generated list and form for now; the editor with the condition builder comes with step 2) and
+the run log. `docs/automation.md` describes the triggers, the actions and the templates.
+
 ## Email (RFC 0006 part 7)
 
 With the `mail` module installed (every installation has it), email managers get the **Email** app: the log of
