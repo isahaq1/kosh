@@ -198,6 +198,19 @@ permission, registers the service worker (`/sw.js`, built by `koshPwa()`) and sa
 Clicking a push notification opens the record. "Turn off" removes the subscription on both sides, and the
 server drops subscriptions the push service reports gone.
 
+## Chat (RFC 0006 part 6)
+
+With the `messaging` module installed (every installation has it), users with Messaging get the **Chat** app
+(`messaging.action_chat`, a client action: `/chat/a/messaging.action_chat`, `Ctrl+Shift+K` from anywhere) and a
+**dock** in the header: the unread count, the recent conversations, and small panels at the bottom corner of any
+page for the conversations opened from it (full screen on a phone), so a chat goes on while working on a record.
+The app has the sidebar (pinned, public channels, private groups, direct messages, unread badges), the
+conversation (day separators, grouped messages, reactions, a thread panel, who is typing) and the composer
+(mentions, files, `Ctrl+Enter`). Users without Messaging see neither. Everything is live through the gateway
+(`record:mail.channel:<id>`: posts, reactions and edits refetch; typing is relayed), the read receipt follows what
+is shown, and conversations read offline from the persisted cache (sending needs the network). Direct messages
+and mentions reach the bell (`chat.direct`, `mention`); `docs/messaging.md` has the routes and the rules.
+
 ## Live screens (RFC 0006 §5, RFC 0010 Phase B)
 
 With the `realtime` module installed (every installation has it), the app keeps one WebSocket per tab to

@@ -99,7 +99,9 @@ conversation (`chat.direct`: in-app and web push, never email unless switched on
 
 Posting emits `chat.message.posted` (`{ model: 'mail.channel', id, message, author, mentions, direct, preview }`):
 `mentions` are the mentioned members (never a non-member), `direct` the other, unmuted side of a direct
-conversation. Attachments in chat and the Chat app itself come with part 6 step 2.
+conversation. Files are attached to the channel (`POST /api/v1/attachments/mail.channel/:id`: the channel is a
+private model that the manifest marks `attachable`, so the attachment routes serve it under its rules) and
+listed on the message. The Chat app and its dock are described in `docs/ui.md`.
 
 ## Storage
 
@@ -123,6 +125,6 @@ same transaction: they exist exactly when the message or activity does. The noti
 
 ## Not yet
 
-The Chat app, attachments in chat and typing across nodes (part 6 step 2), replies by email (part 7); a cleanup job
-for objects left behind by failed commits and for attachments of deleted records; decimal changes are shown as
-stored (`8,000 → 8,500`, without the field's scale).
+Typing across nodes (relayed on the node of the sender only), sending chat messages offline, replies by email
+(part 7); a cleanup job for objects left behind by failed commits and for attachments of deleted records; decimal
+changes are shown as stored (`8,000 → 8,500`, without the field's scale).

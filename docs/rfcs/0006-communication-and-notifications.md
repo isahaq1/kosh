@@ -230,6 +230,23 @@ member table hidden behind a kanban.
   counts, threads, reactions, pagination, editing and removal), the inbox test's chat case, the gateway's typing
   test.
 
+## Implementation notes (2026-10-26, part 6 step 2: the Chat app and the dock)
+
+- `@kosh/messaging/web`: the page `messaging.Chat` (sidebar, conversation, thread panel, composer reusing the
+  chatter's mention area and files) and the header item `messaging.Dock` (unread count, recent conversations,
+  small panels at the bottom corner of any page; full screen on a phone, as decided). `messaging` became an app
+  (`chat`, category Communication) with the client action and its menu, so the palette and the launcher reach it;
+  `Ctrl+Shift+K` opens the dock (`data-kosh-chat`).
+- Attachments: the manifest's new `attachable` lists private models whose records take attachments through the
+  attachment routes under their own rules (`mail.channel`); the chat composer uploads to the channel.
+- Live: the browser's realtime client gained `onTyping` / `sendTyping` (the gateway's `typing` message); a
+  conversation subscribes to its record channel and refetches on others' changes; the channel list to
+  `model:mail.channel`. The read receipt follows the newest message shown. The `chat` query keys are kept by the
+  offline persister, so conversations read offline.
+- Not in this step: sending offline (the queue is for model writes), typing across nodes.
+- Tests: `apps/web/e2e/chat.spec.ts` (a group made from the app, live for its member, a reaction and a thread
+  seen by both; a direct message in the dock and the bell; no dock without Messaging; accessibility).
+
 ## Implementation notes (2026-10-19, part 1: chatter)
 
 - `@kosh/messaging` and `@kosh/storage` as described in §5.1; guide in `docs/messaging.md`. The chatter's models are
