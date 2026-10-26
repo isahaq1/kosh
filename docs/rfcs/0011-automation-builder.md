@@ -147,7 +147,8 @@ cannot read rules); E2E: a rule made in the app fires on a record and shows in t
    `note`, `create` and module `action`s, `runAs`, the loop guard, the run log, the API, tests.
 2. The Automation app: rules, the condition builder, the actions editor, runs with retry, dry run, E2E.
 3. `webhook` with the allow-list and signature; `date` and `schedule` triggers, with the scheduler job.
-4. Shutro request #26 adopted when it lands; Studio (RFC 0012) exports rules as a module.
+4. Shutro request #26 adopted when it lands; Studio (RFC 0012) exports rules as a module (done 2026-10-26 with
+   RFC 0012 step 5: `automationRules` in manifests, rules owned by modules, "Move into module").
 
 ## 7. Open questions (answers wanted with the approval)
 

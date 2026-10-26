@@ -1,6 +1,6 @@
 # RFC 0012: Kosh Studio
 
-- **Status:** Accepted 2026-10-26 with the proposed answers (the installation's `src/modules/`, patches first, the prefix, administrators); steps 1–4 implemented (`@kosh/studio`, `kosh studio build`, `kosh apps upgrade`, the Studio API, Studio mode; `docs/studio.md`)
+- **Status:** Accepted 2026-10-26 with the proposed answers (the installation's `src/modules/`, patches first, the prefix, administrators); implemented 2026-10-26 (steps 1–5; git pull requests later, as answered; `docs/studio.md`)
 - **Depends on:** 0001 (manifests), 0002 (metadata), 0003 (permissions, approvals), 0004 (views and their
   extensions), 0008 (App manager, migrations), 0011 (automation rules); Shutro's `extendModel` and migration
   planner
@@ -209,6 +209,24 @@ to a form in Studio mode, apply, fill it on a record.
   `apps/web/e2e/studio.spec.ts`: Studio mode on a contact, Add field in a section, review (new module, ADD COLUMN),
   apply, fill and save the field; Add column with a field the model has (an upgrade, no SQL); the Studio page;
   a user without Studio sees no button and is refused (403).
+
+## Implementation notes (2026-10-26): step 5 — approvals and automation rules
+
+- The manifest has `automationRules` (`AutomationRuleSpec` by key, checked by `defineModule`). The Automation app
+  (version 0.2.0: `module` and `moduleKey` on `automation.rule`) installs them in its `defaults` hook after every
+  app change, in every company: created as declared, rewritten by upgrades keeping the on/off switch, archived when
+  no longer declared; rules of modules not served are left alone.
+- The Studio spec has `automationRules` (with a local `id`) and validates `approvals` and rules; the generator
+  writes both into `index.ts` and the README. Edits `approval` and `rule` add them (free keys from names) with the
+  dependencies (`permissions`, `automation`, the model's owner); `move-rule` turns a rule of the Automation app the
+  caller reads (not one a module ships: 409) into a Studio rule and returns it in `retire`; `apply` archives the
+  retired rules as the caller once the module is installed. `GET /api/v1/studio/rules` lists the movable rules.
+- The Studio page has "Approval policy" (levels with an approver group and an optional amount threshold, kept as a
+  decimal string) and "Rules made in the Automation app" with "Move into module".
+- Git proposals: not in version 1 (the accepted answer, "patches first"); propose mode returns the patch.
+- Tests: the module rules on PostgreSQL (installed, firing, an upgrade keeping the switch, archived when dropped);
+  the edits, validation and generation; the API moving a rule and adding a policy (the module's copy installed,
+  the original archived, the policy installed, an owned rule refused); E2E: "Move into module" on the Studio page.
 
 ## Alignment with CLAUDE.md
 

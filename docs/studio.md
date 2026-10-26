@@ -4,9 +4,10 @@ Studio changes an installation without code and without database customizations:
 in `src/modules/<name>/`, made of `studio.json` (the specification, the only file Studio reads and writes) and the
 TypeScript generated from it. It is reviewed, versioned and installed like any module.
 
-Steps 1–4 are the specification, the generator, the App manager's upgrade (a changed Studio module is applied
-with `kosh apps upgrade <name>`), the Studio API (review, apply, propose) and Studio mode in the back-office;
-approvals and automation rules in Studio modules follow RFC 0012's plan.
+RFC 0012 is implemented: the specification, the generator, the App manager's upgrade (a changed Studio module is
+applied with `kosh apps upgrade <name>`), the Studio API (review, apply, propose), Studio mode in the back-office,
+and approval policies and automation rules in Studio modules. Proposals are patches; pushing them as pull requests
+to GitHub or GitLab comes later.
 
 ## Studio mode
 
@@ -15,8 +16,10 @@ Administrators and Studio managers see a **Studio** button in the header. While 
 - each **form section** ends with **Add field**: a label, a type (text, long text, whole or decimal number, date,
   date and time, yes / no, a choice with its options, a link to a record), required, track changes;
 - a **list** has **Add column**: a field the model has but the list does not show, or a new field;
-- the **Studio app** (Studio → Modules) lists the Studio modules and adds a **model** of the module's own with its
-  fields and a menu entry in the module's app.
+- the **Studio app** (Studio → Modules) lists the Studio modules, adds a **model** of the module's own with its
+  fields and a menu entry in the module's app, adds an **approval policy** (levels in order, each with an approver
+  group and an optional "only when this field is above"), and **moves a rule** made in the Automation app into a
+  module (the original is archived on apply; in propose mode, archive it after deploying).
 
 The dialog asks which Studio module saves the change (a new module `custom`, "Customizations", the first time),
 then **Review changes** shows what the server will do: the module's version (install, or upgrade to the next patch),
@@ -65,7 +68,11 @@ dependencies, merges the view change, and checks everything again on apply.
   group, `remove`, `setAttrs`); a list's columns are anchored on a column. An anchor that does not exist fails at
   load with the anchors that do, naming the view.
 - **Menus** open a model's records (an action is made for each), under the module's app or a `parent` menu.
-- **Approvals** are RFC 0003 policies.
+- **Approvals** are RFC 0003 policies, installed by the Permissions app (by name, once: administrators edit them
+  afterwards).
+- **Automation rules** (`automationRules`: `id`, `name`, `model`, `trigger`, `actions`, and the rule editor's other
+  fields) are shipped by the module and installed by the Automation app as rules owned by it (see
+  docs/automation.md): an upgrade rewrites them, keeping their on/off switch.
 
 ## Building
 
@@ -88,9 +95,10 @@ and holders of **Studio** (`studio.manager`) reach it; it changes the schema.
 | --- | --- |
 | `GET /api/v1/studio` | the mode and the Studio modules of the project |
 | `GET /api/v1/studio/modules/:name` | a module's `studio.json` and generated files |
-| `POST /api/v1/studio/edit` `{ module?, label?, edit }` | a Studio-mode change merged into the module's spec (to review) |
+| `POST /api/v1/studio/edit` `{ module?, label?, edit }` | a change (`field`, `show`, `model`, `approval`, `rule`, `move-rule`) merged into the module's spec, and the rules to archive (`retire`) |
+| `GET /api/v1/studio/rules` | the rules made in the Automation app (movable) |
 | `POST /api/v1/studio/preview` `{ spec }` | the review; changes nothing |
-| `POST /api/v1/studio/apply` `{ spec, planId }` | write mode: installs or upgrades the module, writes its files |
+| `POST /api/v1/studio/apply` `{ spec, planId, retire? }` | write mode: installs or upgrades the module, writes its files, archives the moved rules |
 | `POST /api/v1/studio/propose` `{ spec }` | the change as a patch; writes nothing |
 
 The **review** (`preview`) holds the spec as it will be applied (an installed module moves to at least its next

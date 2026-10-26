@@ -97,6 +97,33 @@ defineModule({
 });
 ```
 
+## Rules shipped by modules
+
+A module can ship rules (`automationRules` in its manifest, by key). The Automation app installs them in every
+company after each app change, as rules owned by the module (**From module**, **Key in the module** on the rule):
+an upgrade of the module rewrites them but keeps their on/off switch, and a rule the module no longer declares is
+archived (its runs stay). Kosh Studio moves a rule made here into a Studio module (Studio → Modules → "Move into
+module"); the original is archived once the module's copy is installed.
+
+```ts
+export const crmExtras = defineModule({
+  // ...
+  depends: [base, automation, contacts],
+  automationRules: {
+    welcome_note: {
+      name: 'Welcome note',
+      model: 'res.partner',
+      trigger: 'created',
+      runAs: 'system',
+      actions: [{ kind: 'note', text: 'Welcome, {{name}}!' }],
+    },
+  },
+});
+```
+
+The Automation app's version is 0.2.0 (the rules' `module` and `moduleKey` columns): existing installations run
+`kosh apps upgrade automation`. Companies created later get the rules at the next app change.
+
 ## Settings
 
 `KOSH_AUTOMATION_POLL_MS` (5 000): how often a node reads the trail and the outbox and checks the timed rules
