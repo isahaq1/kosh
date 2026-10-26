@@ -161,6 +161,30 @@ test('presence: subscribers of a record see who has it open, and when they leave
   dina.socket.close();
 });
 
+test('typing: relayed to the other subscribers of a record the sender is subscribed to, never stored', async () => {
+  const [book] = await server.driver.query<{ id: number }>({
+    text: 'SELECT id FROM library_book ORDER BY id LIMIT 1',
+    params: [],
+  });
+  const id = book?.id as number;
+  const dina = await connect('dina');
+  const rahim = await connect('rahim');
+  dina.send({ type: 'subscribe', channels: [`record:library.book:${id}`] });
+  await dina.next('presence');
+  rahim.send({ type: 'typing', model: 'library.book', id }); // not subscribed: dropped
+  rahim.send({ type: 'subscribe', channels: [`record:library.book:${id}`] });
+  await rahim.next('presence');
+  rahim.send({ type: 'typing', model: 'library.book', id });
+  expect(await dina.next('typing')).toMatchObject({
+    model: 'library.book',
+    id,
+    name: 'Rahim Uddin',
+  });
+  await expect(rahim.next('typing', 300)).rejects.toThrow(); // not echoed to the sender
+  dina.socket.close();
+  rahim.socket.close();
+});
+
 test('anonymous connections are closed', async () => {
   const socket = new WebSocket(`${url.replace('http', 'ws')}/api/v1/realtime`);
   const [code] = (await once(socket, 'close')) as [number];

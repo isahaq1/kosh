@@ -13,9 +13,10 @@
  * PostgreSQL notifications reach every node connected to the database, so a cluster needs no other bus.
  *
  * Client → gateway messages (JSON): `{ type: 'subscribe', channels }`, `{ type: 'unsubscribe', channels }`,
- * `{ type: 'presence', model, id }` (or `model: null` to leave), `{ type: 'ping' }`.
+ * `{ type: 'presence', model, id }` (or `model: null` to leave), `{ type: 'typing', model, id }` (a chat channel
+ * the client is subscribed to), `{ type: 'ping' }`.
  * Gateway → client: `{ type: 'change', model, ids, op, by, at }`, `{ type: 'presence', model, id, users }`,
- * `{ type: 'error', channel, reason }`, `{ type: 'pong' }`.
+ * `{ type: 'typing', model, id, uid, name }`, `{ type: 'error', channel, reason }`, `{ type: 'pong' }`.
  */
 import { randomUUID } from 'node:crypto';
 import websocket, { type WebSocket } from '@fastify/websocket';
@@ -70,6 +71,7 @@ interface Client {
 type ClientMessage =
   | { readonly type: 'subscribe' | 'unsubscribe'; readonly channels: readonly string[] }
   | { readonly type: 'presence'; readonly model: string | null; readonly id?: number }
+  | { readonly type: 'typing'; readonly model: string; readonly id: number }
   | { readonly type: 'ping' };
 
 function parseMessage(raw: string): ClientMessage | null {
@@ -81,6 +83,12 @@ function parseMessage(raw: string): ClientMessage | null {
       if (!Array.isArray(channels) || channels.length > MAX_SUBSCRIPTIONS) return null;
       if (!channels.every((c) => typeof c === 'string' && CHANNEL.test(c))) return null;
       return { type: value['type'], channels: channels as string[] };
+    }
+    if (value['type'] === 'typing') {
+      const id = value['id'];
+      if (typeof value['model'] !== 'string' || !Number.isSafeInteger(id) || (id as number) <= 0)
+        return null;
+      return { type: 'typing', model: value['model'], id: id as number };
     }
     if (value['type'] === 'presence') {
       if (value['model'] === null) return { type: 'presence', model: null };
@@ -209,6 +217,23 @@ export class Gateway {
           } else send(client, { type: 'error', channel, reason: 'not allowed' });
         }
         return;
+      case 'typing': {
+        // Relayed to the record's subscribers on this node (a chat channel: its members), never stored. The
+        // sender proves membership by being subscribed itself.
+        const channel = `record:${message.model}:${message.id}`;
+        if (!client.channels.has(channel)) return;
+        await client.named;
+        const typing = {
+          type: 'typing',
+          model: message.model,
+          id: message.id,
+          uid: client.identity.user,
+          name: client.name,
+        };
+        for (const other of this.#clients)
+          if (other !== client && other.channels.has(channel)) send(other, typing);
+        return;
+      }
       case 'presence': {
         const previous = client.presence;
         if (message.model === null) {
