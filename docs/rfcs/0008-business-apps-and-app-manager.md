@@ -186,6 +186,18 @@ kosh apps upgrade [name…]              # newer catalogue versions: reviewed mi
 | Disable or enable an app | < 1 s |
 | Registry rebuild on other nodes | < 1 s after `NOTIFY` |
 
+### 5.8 Demo data
+
+An evaluator wants to see the apps at work, not an empty database. Each module may declare `hooks.demo`: a seeder
+that makes a realistic sample set **as demo users through the models**, so that audit, sequences, approvals and
+record rules apply exactly as for real data (Odoo loads demo records as the superuser, outside every rule). The
+server's `installDemo` runs the seeders in dependency order, once per module (`kosh_module.demo_at`), and resumes
+with the modules still to do after a failure. It runs only when asked for: `kosh init --demo`, the question in the
+interactive setup, or `pnpm demo` in this repository (a throwaway installation of every app). The demo users
+(`dina`, the manager of every app; `rahim`, sales and invoicing; `karim`, purchasing; `sumi`, projects) share one
+password, printed by the installer; a seeder names the groups it needs and the user is created or extended on
+first use. Demo data is never loaded on its own and the flag is not for production databases.
+
 ## 6. Purchase with approvals
 
 From a fresh installation, an administrator opens Settings → Apps; Purchase is already installed. They grant
@@ -264,6 +276,22 @@ show the reason; a pre-checked line to uncheck in the UI is still to come.
   stages, the open task count, timesheet visibility, the planner's bridge proposal, the outbox delivery and its
   replay); `apps/web/e2e-apps/projects.spec.ts` on the catalogue (project and task from their forms, the board,
   a timesheet and its hours). `kosh init` offers Projects; `sale_project` follows Sales and Projects.
+
+## Implementation notes (2026-10-26): demo data (§5.8)
+
+- `DemoContext` (`@kosh/modules-sdk`): `as(user, fn)` runs `fn` as a demo user (created with the groups asked for,
+  or given the missing ones), `system(reason, fn)` an audited system scope of the company, `date(days)` the
+  installation-relative dates the demo uses; `idByName` finds a record of an earlier seeder by name. The server's
+  `installDemo` (`@kosh/server`) keeps `kosh_module.demo_at` and returns a summary line per module.
+- Seeders: Contacts (8 Bangladeshi companies, 3 people), Products (3 categories, 9 goods and services with
+  VAT 15 %), Sales (5 orders: 3 confirmed, 1 sent, 1 draft), Purchase (5 orders: confirmed, approved by the manager,
+  one waiting for the director, one draft), Accounting (the Bangladesh chart when none is installed, 3 posted
+  invoices of which one paid and one in part, 2 posted bills), Projects (2 projects, 7 tasks across the stages, 5
+  timesheets of two members), and the bridges: draft invoices and bills from the confirmed orders, and the service
+  products set to create tasks or a project when sold.
+- `kosh init --demo` (or the question after the apps) loads it after the defaults and prints the demo users;
+  `pnpm demo` starts a throwaway installation of every app with the demo data (`apps/demo`); its integration test
+  loads the demo on a fresh database, checks what each user sees and that a second run adds nothing.
 
 ## 9. Decisions (2026-10-19)
 

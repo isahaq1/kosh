@@ -79,7 +79,9 @@ npx kosh init --yes \
 ```
 
 With `--yes` nothing is asked, so the authenticator is not enrolled: run `npx kosh init` again in a terminal to
-enrol it (administrator rights wait for it). `npx kosh init --help` lists every flag.
+enrol it (administrator rights wait for it). `npx kosh init --help` lists every flag. `--demo` (or a yes to the
+question after the apps) loads a sample company with contacts, products, orders, invoices and projects, made by
+the demo users `dina`, `rahim`, `karim` and `sumi` (one shared password, printed at the end); not for production.
 
 ## Install with Docker
 

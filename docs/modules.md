@@ -139,6 +139,21 @@ export const SaleOrder = defineModel('sale.order', {
 The views come from Shutro's own type generator, run through Kosh's single Shutro gateway (`loadCodegen` in
 `@kosh/server/orm`). Their imports point at `@kosh/server/orm`, and other modules are referenced by package name.
 
+## Demo data (RFC 0008 §5.8)
+
+`npx kosh init --demo` (or a yes to the question after the apps) loads every installed app's demo data: a sample
+company with contacts, products, orders at every stage, approvals waiting, posted and paid invoices, projects and
+timesheets, made by the demo users `dina` (manager of every app), `rahim` (sales, invoicing), `karim`
+(purchasing) and `sumi` (projects) with one shared password that the installer prints. In this repository
+`pnpm demo` starts a throwaway installation of every app with the demo data (PostgreSQL from `DATABASE_URL` or a
+container) and tells how to point the back-office at it.
+
+An app seeds its demo data with `hooks.demo` in its manifest: a function of a `DemoContext` whose `as(user, fn)`
+runs `fn` as a demo user (created with the groups it names on first use), so the data goes through the same
+audit, sequences, approvals and record rules as real data. Seeders run once per module, in dependency order
+(`kosh_module.demo_at`), and may look up what earlier seeders made by name (`idByName`). Demo data is never loaded
+without being asked for, and the flag is not meant for production databases.
+
 **Default access is none.** Each app declares its own groups and access levels. A salesperson (`sales.user`) gets
 read access to contacts and products through the groups it implies, and sees only their own orders (a record
 rule). Managers see every order of their companies.

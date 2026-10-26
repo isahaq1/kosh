@@ -8,6 +8,7 @@ pnpm dev:services        # PostgreSQL 18, Valkey 8, S3 storage (+ bucket), Mailp
 cp .env.example .env
 pnpm typecheck && pnpm lint && pnpm test && pnpm build
 pnpm test:e2e            # Playwright (first time: pnpm --filter @kosh/web exec playwright install chromium)
+pnpm demo                # a throwaway installation of every app with the demo data (API on :3000)
 ```
 
 - Mailpit UI: http://localhost:8025 · S3 API: http://localhost:8333 (SeaweedFS; MinIO's free images are no longer
