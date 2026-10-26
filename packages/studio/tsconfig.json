@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "isolatedDeclarations": false
+  },
+  "include": ["src", "test"],
+  "exclude": ["test/.generated"]
+}

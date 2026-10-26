@@ -16,7 +16,8 @@
       "!**/test-results",
       "!pnpm-lock.yaml",
       "!**/*.gen.ts",
-      "!**/.kosh"
+      "!**/.kosh",
+      "!**/.generated"
     ]
   },
   "formatter": {
