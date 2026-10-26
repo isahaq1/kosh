@@ -111,6 +111,9 @@ export interface MessageItem {
   readonly kind: 'comment' | 'note' | 'activity' | 'system';
   readonly at: string;
   readonly author: UserRef | null;
+  /** The sender of a message that came by email from outside (no user): their address and name. */
+  readonly authorEmail: string | null;
+  readonly authorName: string | null;
   readonly body: string;
   /** The source text, for its author to edit. */
   readonly text: string | null;
@@ -203,6 +206,8 @@ async function displayNames(
 const MESSAGE_KEYS = [
   'kind',
   'author',
+  'authorEmail',
+  'authorName',
   'text',
   'body',
   'mentions',
@@ -238,6 +243,8 @@ export async function messageItems(
       kind: m['kind'] as MessageItem['kind'],
       at: iso(m['createdAt']) ?? '',
       author: userRef(names, m['author']),
+      authorEmail: (m['authorEmail'] as string | null) ?? null,
+      authorName: (m['authorName'] as string | null) ?? null,
       body: String(m['body']),
       text: mine ? String(m['text']) : null,
       mentions: ((m['mentions'] as number[] | null) ?? [])
@@ -587,6 +594,54 @@ export async function postMessage(
     preview: plainText(text, users).slice(0, 200),
   });
   const [item] = await messageItems(env, context, [row as Row]);
+  return item as MessageItem;
+}
+
+/**
+ * Posts a message on a record from outside (RFC 0006 part 7: a partner's reply by email), as the system in a
+ * superuser scope the caller opened (audited), naming the sender. The attachments are the system's uploads on
+ * the record.
+ */
+export async function postExternalMessage(
+  su: Env,
+  context: ChatterContext,
+  model: string,
+  id: number,
+  input: {
+    readonly text: string;
+    readonly authorEmail: string;
+    readonly authorName?: string | undefined;
+    readonly attachments?: readonly number[] | undefined;
+  },
+): Promise<MessageItem> {
+  const text = checkText(input.text);
+  await checkRecord(su, servedModels(context), model, id);
+  const users = await activeUsers(su, mentionIds(text));
+  const created = await ref(su, 'mail.message').create([
+    {
+      resModel: model,
+      resId: id,
+      kind: 'comment',
+      author: null,
+      authorEmail: input.authorEmail.slice(0, 254),
+      authorName: (input.authorName ?? '').slice(0, 200) || null,
+      text,
+      body: renderBody(text, users),
+      mentions: { set: [...users.keys()] },
+      attachments: { set: [...(input.attachments ?? [])] },
+    },
+  ]);
+  const [row] = (await load(created, MESSAGE_KEYS)).read(['id', ...MESSAGE_KEYS]);
+  await su.emit('mail.message.posted', {
+    model,
+    id,
+    message: row?.['id'],
+    kind: 'comment',
+    author: null,
+    mentions: [...users.keys()],
+    preview: plainText(text, users).slice(0, 200),
+  });
+  const [item] = await messageItems(su, context, [row as Row]);
   return item as MessageItem;
 }
 

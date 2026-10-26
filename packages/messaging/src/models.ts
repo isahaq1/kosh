@@ -33,6 +33,9 @@ const Message = defineModel('mail.message', {
       { required: true, default: 'note' },
     ),
     author: f.many2one('res.users', { ondelete: 'set null' }),
+    /** A message that came by email from someone who is not a user (RFC 0006 part 7): the sender. */
+    authorEmail: f.char(),
+    authorName: f.char(),
     /** What the author wrote (a small markdown subset, mentions as `@[Name](user:12)`). */
     text: f.text({ required: true }),
     /** HTML rendered from `text` on the server, escaped by construction. */

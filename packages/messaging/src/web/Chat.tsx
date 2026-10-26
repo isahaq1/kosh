@@ -62,7 +62,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { ChannelItem, ChatMessageItem } from '../chat.js';
 import type { UserRef } from '../chatter.js';
-import { Avatar, type FileInfo, Files, MentionArea, withMentions } from './Chatter.js';
+import { Avatar, authorLabel, type FileInfo, Files, MentionArea, withMentions } from './Chatter.js';
 
 const MODEL = 'mail.channel';
 const EMOJIS = ['👍', '❤️', '😂', '🎉', '👀', '✅'] as const;
@@ -526,7 +526,7 @@ function ChatMessage({
       api.call('POST', `/api/v1/chat/messages/${item.id}/reactions`, { emoji }),
     onSuccess: refresh,
   });
-  const label = `${item.author?.name ?? t('system')}, ${format.datetime(item.at)}`;
+  const label = `${authorLabel(item, t('system'))}, ${format.datetime(item.at)}`;
   return (
     <article
       className={cn(
@@ -539,7 +539,7 @@ function ChatMessage({
       <div className="grid min-w-0 flex-1 gap-1">
         {compact ? null : (
           <p className="flex flex-wrap items-baseline gap-2 text-sm">
-            <span className="font-medium">{item.author?.name ?? t('system')}</span>
+            <span className="font-medium">{authorLabel(item, t('system'))}</span>
             <time className="text-xs text-muted-foreground" dateTime={item.at}>
               {format.datetime(item.at)}
             </time>

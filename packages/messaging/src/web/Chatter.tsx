@@ -868,7 +868,7 @@ function Change({ item }: { readonly item: ChangeItem }): ReactElement {
       <Avatar user={item.author} />
       <div className="grid gap-1 text-sm">
         <p>
-          <span className="font-medium">{item.author?.name ?? t('system')}</span>{' '}
+          <span className="font-medium">{authorLabel(item, t('system'))}</span>{' '}
           <time className="text-xs text-muted-foreground" dateTime={item.at}>
             {format.datetime(item.at)}
           </time>
@@ -928,12 +928,12 @@ function Message({
   return (
     <article
       className={`flex gap-3 rounded-md p-2 ${item.kind === 'note' ? 'bg-muted/40' : ''}`}
-      aria-label={`${item.author?.name ?? t('system')}, ${format.datetime(item.at)}`}
+      aria-label={`${authorLabel(item, t('system'))}, ${format.datetime(item.at)}`}
     >
       <Avatar user={item.author} />
       <div className="grid min-w-0 flex-1 gap-1">
         <p className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="font-medium">{item.author?.name ?? t('system')}</span>
+          <span className="font-medium">{authorLabel(item, t('system'))}</span>
           <time className="text-xs text-muted-foreground" dateTime={item.at}>
             {format.datetime(item.at)}
           </time>
@@ -1010,6 +1010,22 @@ function Message({
       />
     </article>
   );
+}
+
+/** @internal The author's name, the email sender's name or address, or the system. */
+export function authorLabel(
+  item: {
+    readonly author: UserRef | null;
+    readonly authorEmail?: string | null;
+    readonly authorName?: string | null;
+  },
+  system: string,
+): string {
+  if (item.author !== null) return item.author.name;
+  const email = item.authorEmail ?? '';
+  if (email === '') return system;
+  const name = item.authorName ?? '';
+  return name === '' ? email : `${name} <${email}>`;
 }
 
 function dayOf(at: string): string {

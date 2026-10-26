@@ -55,6 +55,7 @@ export {
   type ModelFields,
   myActivities,
   pageSize,
+  postExternalMessage,
   postMessage,
   scheduleActivity,
   setFollower,
