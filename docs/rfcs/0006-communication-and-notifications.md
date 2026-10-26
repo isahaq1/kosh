@@ -209,6 +209,27 @@ member table hidden behind a kanban.
 - **Chat retention of attachments** counts against the company's storage like record attachments. Yes?
 - **Dock on mobile widths**: a full-screen conversation instead of bubbles. Yes?
 
+## Implementation notes (2026-10-26, part 6 step 1: the chat model, routes, gateway, notifications)
+
+- `@kosh/messaging`: `mail.channel` (channel / group / direct; `pairKey` keeps one direct conversation per pair),
+  `mail.channel.member` (read receipt, mute, pin), `mail.message.reaction`, and `parent` / `replyCount` /
+  `deletedAt` on `mail.message`. Record rules are the fence: a channel is visible to its members (and to
+  everyone when public), writable by its creator or a `messaging.manager` (the new group: it runs public channels,
+  it does not read private groups). `docs/messaging.md` lists the routes.
+- Live: no new gateway prefix was needed. A chat conversation is the record channel `record:mail.channel:<id>`,
+  whose subscription check (ACL and rules) is the membership check; posts, reactions, edits and removals announce
+  the channel's change, and a new client message `typing` is relayed to the channel's subscribers on the node
+  (across nodes with step 2).
+- Notifications: `chat.message.posted` joins the inbox subscriber's topics; mentioned members get a `mention`,
+  the other side of a direct conversation the new kind `chat.direct` (in-app and web push; email off unless the
+  user switches it on: `OFF_BY_DEFAULT`). Muted members are left out of the event by the poster.
+- Found on the way: Shutro's event tables are created on first use inside the emitting transaction, and a rollback
+  of that first transaction leaves later emits without a table (`docs/shutro-requests.md` #25); tests create them
+  up front.
+- Tests: `packages/messaging/test/chat.integration.test.ts` (groups, public channels, directs, receipts and unread
+  counts, threads, reactions, pagination, editing and removal), the inbox test's chat case, the gateway's typing
+  test.
+
 ## Implementation notes (2026-10-19, part 1: chatter)
 
 - `@kosh/messaging` and `@kosh/storage` as described in §5.1; guide in `docs/messaging.md`. The chatter's models are

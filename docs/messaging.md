@@ -72,6 +72,35 @@ Downloads are always `Content-Disposition: attachment` with `X-Content-Type-Opti
 only PNG, JPEG, GIF, WebP and PDF are shown inline when asked (`?inline=true`), so an uploaded HTML or SVG file never
 runs in the application's origin.
 
+## Chat (RFC 0006 part 6)
+
+Public channels of the company, private groups and direct conversations on the same message model
+(`resModel = 'mail.channel'`), with one-level threads, reactions and read receipts. Membership is the fence: a
+channel the caller is not in is a 404 (a public one is readable and joinable by every user of the company),
+posting needs membership, and a member removed from a group loses its history. `messaging.manager` creates and
+runs public channels; a group's creator runs the group; authors edit and delete their own messages, and a manager
+or the creator removes anyone's (the text goes, the row keeps the thread whole). Live updates come through the
+gateway's `record:mail.channel:<id>` channel (changes announced after commit, typing relayed to the channel's
+subscribers); the notification pipeline tells mentioned members (`mention`) and the other side of a direct
+conversation (`chat.direct`: in-app and web push, never email unless switched on).
+
+| Route | |
+|---|---|
+| `GET /api/v1/chat/channels` | mine and the public ones, with unread counts |
+| `POST /api/v1/chat/channels { kind: 'group' \| 'channel', name, description?, public?, members? }` | public channels: managers |
+| `POST /api/v1/chat/channels/direct/:user` | the direct conversation with a user of the company, made on first use |
+| `GET` / `PATCH /api/v1/chat/channels/:id { name?, description?, add?, remove?, muted?, pinned? }` | the creator or a manager changes it; any member mutes or pins |
+| `POST /api/v1/chat/channels/:id/join`, `…/leave` | public channels are joined; groups are added to |
+| `GET /api/v1/chat/channels/:id/messages?before=&limit=&thread=` | newest first (a thread oldest first) |
+| `POST /api/v1/chat/channels/:id/messages { text, parent? }` | members; `parent` replies in a thread |
+| `POST /api/v1/chat/channels/:id/read { message? }` | the read receipt |
+| `PATCH` / `DELETE /api/v1/chat/messages/:id` | the author (deletion: the creator or a manager too) |
+| `POST /api/v1/chat/messages/:id/reactions { emoji }`, `DELETE …/reactions/:emoji` | |
+
+Posting emits `chat.message.posted` (`{ model: 'mail.channel', id, message, author, mentions, direct, preview }`):
+`mentions` are the mentioned members (never a non-member), `direct` the other, unmuted side of a direct
+conversation. Attachments in chat and the Chat app itself come with part 6 step 2.
+
 ## Storage
 
 Bytes live in an object store, metadata in `storage.attachment` (name, type, size, SHA-256, object key):
@@ -94,7 +123,6 @@ same transaction: they exist exactly when the message or activity does. The noti
 
 ## Not yet
 
-Realtime updates (part 2: the chatter refreshes after the user's own actions, not yet when someone else posts),
-notifications (part 3), chat channels (part 4), replies by email (part 5); a cleanup job for objects left behind by
-failed commits and for attachments of deleted records; decimal changes are shown as stored (`8,000 → 8,500`, without
-the field's scale).
+The Chat app, attachments in chat and typing across nodes (part 6 step 2), replies by email (part 7); a cleanup job
+for objects left behind by failed commits and for attachments of deleted records; decimal changes are shown as
+stored (`8,000 → 8,500`, without the field's scale).
