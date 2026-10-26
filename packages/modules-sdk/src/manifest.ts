@@ -119,6 +119,27 @@ export interface InboundAliasSpec {
     | ((env: unknown) => Promise<Readonly<Record<string, unknown>> | null>);
 }
 
+/** An action a module offers to automation rules (RFC 0011 §5.3). */
+export interface AutomationActionSpec {
+  /** Unique (`crm.flag_vip`). */
+  readonly key: string;
+  readonly label: string;
+  /** The model it applies to; any when omitted. */
+  readonly model?: string;
+  /** The parameters a rule may give (shown in the rule editor). */
+  readonly params?: readonly {
+    readonly key: string;
+    readonly label: string;
+    readonly kind: 'char' | 'integer' | 'boolean';
+  }[];
+  /** Runs in the run's environment (`Env` of `@kosh/server/orm`); `record.id` is null for a deleted record. */
+  readonly run: (
+    env: unknown,
+    record: { readonly model: string; readonly id: number | null },
+    params: Readonly<Record<string, unknown>>,
+  ) => Promise<string | undefined>;
+}
+
 /** Lifecycle hooks (RFC 0001 §5.7); run by the server in a system scope inside the install transaction. */
 export interface ModuleHooks {
   readonly postInstall?: (env: unknown) => Promise<void>;
@@ -182,6 +203,11 @@ export interface ModuleInput {
    * sender.
    */
   readonly inboundAliases?: readonly InboundAliasSpec[];
+  /**
+   * Actions the automation builder (RFC 0011) offers beyond its fixed menu: typed TypeScript a rule runs on a
+   * record in the run's scope (the actor's rights, or the system's), with the parameters the rule gives.
+   */
+  readonly automationActions?: readonly AutomationActionSpec[];
   /**
    * Default approval policies (RFC 0003 §5.3), installed as data and editable afterwards by administrators. Levels
    * apply in order; a level applies when its condition (a Shutro domain on the record) matches.

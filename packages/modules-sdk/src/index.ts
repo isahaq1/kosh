@@ -21,6 +21,7 @@ export {
   type ApprovalLevelSpec,
   type ApprovalSpec,
   type AppSpec,
+  type AutomationActionSpec,
   type DemoContext,
   type DemoUser,
   type DocumentSpec,
