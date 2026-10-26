@@ -192,6 +192,12 @@ Users with an email address also get each notification by email when `SMTP_URL` 
 sender; Mailpit in development), in their language, with a link that opens the record (`/open/<model>/<id>`,
 resolved to where that user may open it). Each kind can be switched off per channel.
 
+**SMS and WhatsApp** reach a user's phone (`phone` on their user, E.164) through Twilio when
+`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_SMS_FROM` and / or `TWILIO_WHATSAPP_FROM` are set: the
+sentence and the record's link, one delivery per channel. Both channels are opt-in per user and kind (they cost
+money): nothing goes out until the user switches a kind on for the channel in their preferences. Another provider
+is a `Messenger` (`notifyModule({ messenger })`): one `send` per message, no module changes.
+
 Push notifications reach a device even with Kosh closed: the bell's footer has "Turn on" when the installation
 has VAPID keys (`kosh init` writes them to `.env`) and the browser supports push; it asks the browser's
 permission, registers the service worker (`/sw.js`, built by `koshPwa()`) and saves the device's subscription for the user.

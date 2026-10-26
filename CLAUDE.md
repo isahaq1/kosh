@@ -237,7 +237,7 @@ export default defineModule({
 - [x] RFC 0003 Permission system
 - [x] RFC 0004 View definitions & shared search layer
 - [x] RFC 0005 Reporting engine
-- [x] RFC 0006 Communication & notification architecture (jobs decided 2026-10-25; parts 6–7, internal chat and inbound email, designed 2026-10-26 and awaiting approval)
+- [x] RFC 0006 Communication & notification architecture (jobs decided 2026-10-25; parts 6–7 accepted and implemented 2026-10-26)
 - [x] RFC 0007 Frontend architecture & design system
 - [x] RFC 0008 Default business apps (Settings, Accounting, Sales, Purchase, Projects) & App manager (install / disable / uninstall)
 - [x] RFC 0010 Modern back-office: Phase A built (palette, shortcuts, toasts with Undo, pager, bulk actions, export, home page, PWA); Phase B done (live updates, notifications, offline, spreadsheet-grade lists; SMS/WhatsApp wait for a provider); C awaits approval
@@ -266,7 +266,7 @@ export default defineModule({
 ### Phase 5 — Communication
 
 - [x] Chatter, activities, real-time gateway (`@kosh/realtime`: live lists, forms and presence; docs/ui.md)
-- [ ] Notifications + provider adapters (email, SMS, WhatsApp, push) — in-app inbox, bell, email and web push done (`@kosh/notify`, `@kosh/mail`); SMS and WhatsApp need a provider account
+- [x] Notifications + provider adapters (email, SMS, WhatsApp, push): in-app inbox, bell, email, web push, and SMS / WhatsApp through Twilio (opt-in per user and kind; a `Messenger` adapter for other providers; a Twilio account to run it) — `@kosh/notify`, `@kosh/mail`; fallback channels, digests and quiet hours later
 - [x] Internal chat (RFC 0006 part 6: channels / groups / directs, threads, reactions, the Chat app and its dock) and inbound email (part 7: signed reply addresses, the webhook for Postmark / Mailgun / raw, the IMAP poller, catch-all aliases, bounces, the quarantine page), 2026-10-26
 
 ### Phase 6 — Proof

@@ -274,6 +274,19 @@ member table hidden behind a kanban.
   hand, discard; an auto-reply dropped; Postmark's JSON) and the notify tests (the reply address on the email; a
   reply resolved by `In-Reply-To`).
 
+## Implementation notes (2026-10-26, part 4b: the SMS and WhatsApp channels)
+
+- `@kosh/notify`: the `Messenger` adapter (`messenger.ts`): `createTwilioMessenger` (Twilio's Messages API over
+  `fetch`, basic authentication, a form body, the `whatsapp:` prefixes; no SDK), `messengerFromEnv`
+  (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_SMS_FROM`, `TWILIO_WHATSAPP_FROM`), a memory messenger for
+  tests. `res.users.phone` (E.164, normalized) is the recipient. The inbox subscriber queues one delivery per
+  channel the provider serves (`queueMessages`), the delivery job sends the sentence and the record's link, and
+  a provider failure is recorded and retried like email.
+- **Opt-in**: `sms` and `whatsapp` are off for every kind until the user switches them on (`defaultEnabled`,
+  which the preferences API reports), as the design's cost rule asks. A Twilio account is needed to run it; the
+  tests use the memory messenger and a local HTTP server for the adapter.
+- Not yet: fallback channels when one fails or bounces, digests, quiet hours (§5.4).
+
 ## Implementation notes (2026-10-19, part 1: chatter)
 
 - `@kosh/messaging` and `@kosh/storage` as described in §5.1; guide in `docs/messaging.md`. The chatter's models are
