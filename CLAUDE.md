@@ -240,7 +240,8 @@ export default defineModule({
 - [x] RFC 0006 Communication & notification architecture (jobs decided 2026-10-25; parts 6–7 accepted and implemented 2026-10-26)
 - [x] RFC 0007 Frontend architecture & design system
 - [x] RFC 0008 Default business apps (Settings, Accounting, Sales, Purchase, Projects) & App manager (install / disable / uninstall)
-- [x] RFC 0010 Modern back-office: Phase A built (palette, shortcuts, toasts with Undo, pager, bulk actions, export, home page, PWA); Phase B done (live updates, notifications, offline, spreadsheet-grade lists; SMS/WhatsApp wait for a provider); C awaits approval
+- [x] RFC 0010 Modern back-office: Phase A built (palette, shortcuts, toasts with Undo, pager, bulk actions, export, home page, PWA); Phase B done (live updates, notifications, offline, spreadsheet-grade lists, SMS/WhatsApp); C split into RFCs of its own
+- [ ] RFC 0011 Automation builder ("when X, then Y" rules on Shutro's audit trail and outbox, a run log, an Automation app) — draft, awaiting approval
 
 ### Phase 1 — Server foundation
 
