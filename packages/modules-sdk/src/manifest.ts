@@ -156,6 +156,11 @@ export interface ModuleInput {
    */
   readonly privateModels?: readonly string[];
   /**
+   * Private models whose records take attachments through the attachment routes all the same (a chat channel):
+   * the record's rules decide who uploads, lists and downloads, as for a public model.
+   */
+  readonly attachable?: readonly string[];
+  /**
    * Default approval policies (RFC 0003 §5.3), installed as data and editable afterwards by administrators. Levels
    * apply in order; a level applies when its condition (a Shutro domain on the record) matches.
    */

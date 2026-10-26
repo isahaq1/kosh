@@ -77,7 +77,10 @@ export function storageProblem(error: unknown, request: FastifyRequest): never {
 /** Registers the attachment routes. */
 export function registerAttachmentRoutes(context: ModuleContext): void {
   const { app } = context;
-  const models = new Set(publicApiModels(context.registry).keys());
+  const models = new Set([
+    ...publicApiModels(context.registry).keys(),
+    ...context.registry.loaded.modules.flatMap((m) => m.attachable ?? []),
+  ]);
   const limit = maxAttachmentBytes();
 
   // Uploads: the body is the file, whatever its type. Own parsers in an encapsulated context, so a JSON file stays
