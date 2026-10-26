@@ -5,5 +5,5 @@
     "isolatedDeclarations": false
   },
   "include": ["src", "test"],
-  "exclude": ["test/.generated"]
+  "exclude": ["test/.generated", "test/.generated-api"]
 }

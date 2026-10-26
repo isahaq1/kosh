@@ -17,7 +17,9 @@
       "!pnpm-lock.yaml",
       "!**/*.gen.ts",
       "!**/.kosh",
-      "!**/.generated"
+      "!**/.generated",
+      "!**/.generated-api",
+      "!**/.kosh-studio"
     ]
   },
   "formatter": {

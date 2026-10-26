@@ -948,16 +948,23 @@ importers:
         version: 12.2.1
 
   packages/studio:
-    devDependencies:
+    dependencies:
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../modules-sdk
       '@kosh/server':
         specifier: workspace:*
         version: link:../server
+      fastify:
+        specifier: ^5.12.7
+        version: 5.12.7
+    devDependencies:
       '@kosh/views':
         specifier: workspace:*
         version: link:../views
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
 
   packages/ui:
     dependencies:

@@ -12,3 +12,5 @@ shutro-src/
 !/packages/server/test/.generated/kosh.gen.ts
 dist-npm/
 packages/cli/test/.work-*/
+**/.generated-api/
+**/.kosh-studio/

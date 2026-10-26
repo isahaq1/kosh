@@ -23,9 +23,13 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
-  "devDependencies": {
+  "dependencies": {
     "@kosh/modules-sdk": "workspace:*",
     "@kosh/server": "workspace:*",
-    "@kosh/views": "workspace:*"
+    "fastify": "^5.12.7"
+  },
+  "devDependencies": {
+    "@kosh/views": "workspace:*",
+    "@testcontainers/postgresql": "^12.2.1"
   }
 }

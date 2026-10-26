@@ -5,6 +5,7 @@
  * its own, view changes by node id, menus, approval policies — an ordinary module, reviewed and versioned as code.
  */
 export { type BuildResult, buildModule, readSpec, runStudio, studioModules } from './build.js';
+export { unifiedDiff } from './diff.js';
 export {
   type GenerateOptions,
   generateModule,
@@ -12,6 +13,15 @@ export {
   StudioSpecError,
   viewModel,
 } from './generate.js';
+export {
+  createStudio,
+  registerStudioRoutes,
+  type StudioMode,
+  type StudioOptions,
+  type StudioReview,
+  studio,
+  studioShutro,
+} from './module.js';
 export {
   camel,
   FIELD_TYPES,

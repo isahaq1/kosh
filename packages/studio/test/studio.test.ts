@@ -4,7 +4,8 @@
  * the models with their prefix, the own model exists with its access, the view extensions apply by node id, the
  * menus and actions are there; `kosh studio build` writes only what changed.
  */
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { base, buildKoshRegistry, publicApiModels, ViewRegistry } from '@kosh/server';
 import { afterAll, beforeAll, expect, test } from 'vitest';
@@ -15,6 +16,7 @@ import {
   prefixedKey,
   runStudio,
   type StudioSpec,
+  unifiedDiff,
   validateSpec,
 } from '../src/index.js';
 import { crm } from './fixtures/crm.js';
@@ -201,4 +203,37 @@ test('kosh studio build: every src/modules/*/studio.json, only what changed', as
   expect(await runStudio(['build'], (t) => lines.push(t), project)).toBe(1);
   expect(lines[0]).toContain('version: major.minor.patch');
   expect(await runStudio(['nope'], (t) => lines.push(t), project)).toBe(2);
+});
+
+test('the unified diff: hunks with context, new files, and git apply reads it', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const before = Array.from({ length: 30 }, (_, i) => `line ${i + 1}`);
+  const after = [...before];
+  after[4] = 'line 5 changed';
+  after.splice(20, 1);
+  after.push('line 31');
+  const text = `${before.join('\n')}\n`;
+  const next = `${after.join('\n')}\n`;
+  const diff = unifiedDiff('src/a.txt', text, next);
+  expect(diff).toContain('@@ -2,7 +2,7 @@');
+  expect(diff).toContain('-line 5\n+line 5 changed');
+  expect(diff.match(/^@@/gm)).toHaveLength(3);
+  expect(unifiedDiff('src/a.txt', text, text)).toBe('');
+  const created = unifiedDiff('src/b.txt', null, 'one\ntwo\n');
+  expect(created).toContain(
+    'new file mode 100644\n--- /dev/null\n+++ b/src/b.txt\n@@ -0,0 +1,2 @@\n+one\n+two\n',
+  );
+
+  // Outside this repository: git apply inside one ignores paths outside the current folder.
+  const repo = await mkdtemp(join(tmpdir(), 'kosh-diff-'));
+  await mkdir(join(repo, 'src'), { recursive: true });
+  await writeFile(join(repo, 'src', 'a.txt'), text);
+  await writeFile(join(repo, 'change.patch'), diff + created);
+  execFileSync('git', ['apply', 'change.patch'], { cwd: repo });
+  // git may write CRLF on Windows (core.autocrlf).
+  const read = async (file: string) =>
+    (await readFile(join(repo, 'src', file), 'utf8')).replace(/\r\n/g, '\n');
+  expect(await read('a.txt')).toBe(next);
+  expect(await read('b.txt')).toBe('one\ntwo\n');
+  await rm(repo, { recursive: true, force: true });
 });
