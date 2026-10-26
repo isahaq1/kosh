@@ -17,6 +17,7 @@ export const KINDS = [
   'activity.assigned',
   'chat.direct',
   'email.bounced',
+  'automation',
 ] as const;
 export type Kind = (typeof KINDS)[number];
 /** Delivery channels; `inapp` is the inbox, the others come with their adapters (SMS and WhatsApp opt in). */

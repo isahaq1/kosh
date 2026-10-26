@@ -214,6 +214,22 @@ async function draftsOf(
         ],
       };
     }
+    case 'automation.notify': {
+      // A rule's notify action: the users it names, with its text (RFC 0011 §5.3).
+      const users = (payload['users'] as number[] | undefined) ?? [];
+      if (users.length === 0) return { model, id, drafts: [] };
+      const { record } = id > 0 ? await names(su, model, id, null) : { record: '' };
+      const text = String(payload['text'] ?? '');
+      return {
+        model,
+        id,
+        drafts: [...new Set(users)].map((user) => ({
+          user,
+          kind: 'automation' as const,
+          params: { text, record },
+        })),
+      };
+    }
     case 'mail.activity.assigned': {
       const assignee = Number(payload['assignee']);
       if (!Number.isSafeInteger(assignee) || assignee === by) return { model, id, drafts: [] };
@@ -239,6 +255,7 @@ async function draftsOf(
 export const TOPICS: readonly string[] = [
   'mail.message.posted',
   'chat.message.posted',
+  'automation.notify',
   'approval.requested',
   'approval.decided',
   'mail.activity.assigned',
