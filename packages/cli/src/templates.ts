@@ -22,6 +22,8 @@ export interface AppSpec {
   readonly server: string;
   /** The web registration in `kosh-erp/<app>/web` (apps built only from views and actions have none). */
   readonly web?: string;
+  /** A bridge (RFC 0008 §5.1): not offered in the installer; proposed when the apps it connects are installed. */
+  readonly bridge?: readonly AppName[];
 }
 
 /** The apps `kosh init` can install (base and Settings are always there), in the order the installer lists them. */
@@ -70,11 +72,13 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     label: 'Bridge: invoices from sales orders (Sales ↔ Accounting)',
     icon: '🔗',
     server: 'saleAccount',
+    bridge: ['sales', 'accounting'],
   },
   purchase_account: {
     label: 'Bridge: bills from purchase orders (Purchase ↔ Accounting)',
     icon: '🔗',
     server: 'purchaseAccount',
+    bridge: ['purchase', 'accounting'],
   },
 };
 
@@ -473,4 +477,16 @@ docker compose up -d --build    # everything in Docker: http://localhost:8080
 Settings (database, file storage, port) are in \`.env\`, which is not committed. Modules are listed in
 \`src/modules.ts\`.
 `;
+}
+
+/** The apps the installer offers (every app but the bridges, which come by themselves). */
+export const SELECTABLE_APPS: readonly AppName[] = (Object.keys(APPS) as AppName[]).filter(
+  (a) => APPS[a].bridge === undefined,
+);
+
+/** The bridges whose every connected app is in `apps`. */
+export function bridgesFor(apps: readonly AppName[]): AppName[] {
+  return (Object.keys(APPS) as AppName[]).filter((a) => {
+    return APPS[a].bridge?.every((b) => apps.includes(b)) === true;
+  });
 }

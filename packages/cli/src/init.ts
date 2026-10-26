@@ -28,7 +28,7 @@ import {
 import { seed } from './project.js';
 import { defaultsPrompter, type Prompter, terminalPrompter } from './prompt.js';
 import * as templates from './templates.js';
-import { APPS, type AppName } from './templates.js';
+import { APPS, type AppName, bridgesFor, SELECTABLE_APPS } from './templates.js';
 import { type CardRow, createUi, PLAIN_TERMINAL, type Terminal, type Ui } from './ui.js';
 
 export const INIT_USAGE: string = `Usage: kosh init [folder] [options]
@@ -45,7 +45,7 @@ Options (each also answers its question; with --yes the rest take their defaults
   --lang <en|bn>            language                 --tz <zone>         time zone (IANA)
   --admin-login <login>     --admin-name <name>      --admin-email <email>
   --admin-password <pw>     (or KOSH_ADMIN_PASSWORD; at least 12 characters)
-  --apps <list>             comma-separated: ${Object.keys(APPS).join(', ')} (default: all)
+  --apps <list>             comma-separated: ${SELECTABLE_APPS.join(', ')} (default: all; bridges come with the apps they connect)
   --storage-dir <dir>       attachments in a folder (default ./var/attachments)
   --s3-endpoint <url> --s3-bucket <name> --s3-access-key <key> --s3-secret-key <secret> [--s3-region <r>]
   --valkey-url <url>        optional: rate limits and caches shared across servers
@@ -442,25 +442,22 @@ async function ask(
     }
 
   ui.step('apps', 'Apps', 'All are selected; remove the ones you do not need');
-  for (const [key, app] of Object.entries(APPS))
+  for (const key of SELECTABLE_APPS) {
+    const app = APPS[key];
     ui.write(
       `  ${ui.terminal.emoji ? app.icon : ui.style('cyan', '•')}  ${ui.style('bold', key.padEnd(12))} ${ui.style('gray', app.label)}\n`,
     );
-  const appList = await q(
-    'apps',
-    'Apps to install (comma-separated)',
-    Object.keys(APPS).join(','),
-    {
-      validate: (v) => {
-        const unknown = v
-          .split(',')
-          .map((s) => s.trim())
-          .filter((s) => s !== '' && !(s in APPS));
-        return unknown.length === 0 ? null : `Unknown: ${unknown.join(', ')}`;
-      },
+  }
+  const appList = await q('apps', 'Apps to install (comma-separated)', SELECTABLE_APPS.join(','), {
+    validate: (v) => {
+      const unknown = v
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s !== '' && !(s in APPS));
+      return unknown.length === 0 ? null : `Unknown: ${unknown.join(', ')}`;
     },
-  );
-  const apps = [
+  });
+  const chosen = [
     ...new Set(
       appList
         .split(',')
@@ -468,6 +465,8 @@ async function ask(
         .filter((s): s is AppName => s in APPS),
     ),
   ];
+  // The bridges of the chosen apps come along (RFC 0008 §5.1).
+  const apps = [...chosen, ...bridgesFor(chosen).filter((b) => !chosen.includes(b))];
 
   ui.step('storage', 'File storage', 'Where attachments and generated documents are kept');
   let storage: Answers['storage'];
