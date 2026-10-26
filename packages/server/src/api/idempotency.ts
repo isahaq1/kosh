@@ -21,6 +21,11 @@ export function idempotencyTableStatements(): readonly {
       text: `CREATE TABLE IF NOT EXISTS ${IDEMPOTENCY_TABLE} ("user_id" bigint NOT NULL, "key" text NOT NULL, "fingerprint" text NOT NULL, "status" integer, "response" jsonb, "created_at" timestamp with time zone NOT NULL DEFAULT now(), PRIMARY KEY ("user_id", "key"))`,
       params: [],
     },
+    {
+      // Responses stored before 2026-10-27 as a JSON string holding the body (encoded twice): the object again.
+      text: `UPDATE ${IDEMPOTENCY_TABLE} SET response = (response #>> '{}')::jsonb WHERE jsonb_typeof(response) = 'string' AND left(response #>> '{}', 1) IN ('{', '[')`,
+      params: [],
+    },
   ];
 }
 
@@ -93,6 +98,6 @@ export async function idempotent(
     return { status: row.status, body: row.response, replayed: true };
   }
   const outcome = await compute();
-  await env.sql`UPDATE kosh_idempotency SET status = ${outcome.status}, response = (${JSON.stringify(outcome.body ?? null)})::jsonb WHERE user_id = ${env.uid} AND key = ${key}`;
+  await env.sql`UPDATE kosh_idempotency SET status = ${outcome.status}, response = ${outcome.body ?? null}::jsonb WHERE user_id = ${env.uid} AND key = ${key}`;
   return outcome;
 }

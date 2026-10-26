@@ -15,6 +15,7 @@ import {
   APPS_LOG_TABLE,
   applyApps,
   appsDigest,
+  appTableStatements,
   installedModules,
   prepareApps,
   readInstalledApps,
@@ -337,9 +338,8 @@ test('upgrade: the schema, the data migrations and the version, in one change; d
     text: `SELECT change::text AS change FROM ${APPS_LOG_TABLE} ORDER BY id DESC LIMIT 1`,
     params: [],
   });
-  // The change is stored as a JSON string inside the jsonb (as every log row is).
-  const raw = JSON.parse(log?.change ?? '{}') as unknown;
-  const logged = (typeof raw === 'string' ? JSON.parse(raw) : raw) as { upgrade: unknown };
+  // Stored as a JSON object (rows written as a JSON string before 2026-10-27 are repaired at the next change).
+  const logged = JSON.parse(log?.change ?? '{}') as { upgrade: unknown };
   expect(logged.upgrade).toEqual([{ name: 'notes', from: '1.0.0', to: '1.1.0' }]);
 
   // Back to older code: refused. The same version again: nothing to do.
@@ -369,4 +369,24 @@ test('upgrade: the schema, the data migrations and the version, in one change; d
     ),
   ).toBe(0);
   expect((await readInstalledApps(driver))?.find((r) => r.name === 'notes')?.version).toBe('2.0.0');
+});
+
+test('log rows written as a JSON string (before 2026-10-27) are repaired when the tables are prepared', async () => {
+  await driver.query({
+    text: `INSERT INTO ${APPS_LOG_TABLE} (actor, change, statements, digest) VALUES ('old', to_jsonb($1::text), '', '')`,
+    params: ['{"install":[{"name":"legacy","reason":"selected"}]}'],
+  });
+  for (const statement of appTableStatements()) await driver.query(statement);
+  const rows = await driver.query<{ kind: string; change: { install?: unknown } }>({
+    text: `SELECT jsonb_typeof(change) AS kind, change FROM ${APPS_LOG_TABLE} WHERE actor = 'old'`,
+    params: [],
+  });
+  expect(rows).toEqual([
+    { kind: 'object', change: { install: [{ name: 'legacy', reason: 'selected' }] } },
+  ]);
+  const strings = await driver.query<{ n: string }>({
+    text: `SELECT count(*)::text AS n FROM ${APPS_LOG_TABLE} WHERE jsonb_typeof(change) <> 'object'`,
+    params: [],
+  });
+  expect(strings[0]?.n).toBe('0');
 });

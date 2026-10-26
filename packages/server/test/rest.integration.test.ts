@@ -265,6 +265,12 @@ describe('idempotency keys', () => {
     expect([first.statusCode, retry.statusCode]).toEqual([201, 201]);
     expect(retry.json().id).toBe(first.json().id);
     expect(retry.headers['idempotent-replayed']).toBe('true');
+    // Stored as a JSON object, not as a JSON string holding it (a jsonb parameter is encoded by the driver).
+    const [stored] = await server.driver.query<{ kind: string }>({
+      text: "SELECT jsonb_typeof(response) AS kind FROM kosh_idempotency WHERE key = 'create-once-1'",
+      params: [],
+    });
+    expect(stored?.kind).toBe('object');
     const other = await call({
       method: 'POST',
       url: P,

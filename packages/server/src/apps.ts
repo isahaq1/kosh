@@ -85,6 +85,12 @@ export function appTableStatements(): DriverQuery[] {
 )`,
       params: [],
     },
+    {
+      // Rows written before 2026-10-27 hold the change as a JSON string inside the jsonb (it was encoded twice):
+      // turn them back into the object. Idempotent; nothing to do once repaired.
+      text: `UPDATE ${APPS_LOG_TABLE} SET change = (change #>> '{}')::jsonb WHERE jsonb_typeof(change) = 'string'`,
+      params: [],
+    },
   ];
 }
 
@@ -538,13 +544,14 @@ ON CONFLICT (name) DO UPDATE SET version = EXCLUDED.version, state = EXCLUDED.st
 VALUES ($1, $2::jsonb, $3, $4, $5, $6)`,
         params: [
           options.actor,
-          JSON.stringify({
+          // The driver encodes a jsonb parameter itself: pass the value, not its JSON text.
+          {
             install: plan.install,
             enable: plan.enable,
             disable: plan.disable,
             upgrade: plan.upgrade,
             migration: file === null ? null : `${file.version}_${file.name}.sql`,
-          }),
+          },
           sql,
           createHash('sha256').update(sql).digest('hex'),
           file === null ? null : `${file.version}_${file.name}.sql`,
