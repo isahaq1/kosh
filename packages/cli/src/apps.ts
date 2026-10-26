@@ -7,7 +7,7 @@ import { existsSync } from 'node:fs';
 import { userInfo } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { type AppChange, catalogueOf, type KoshModule } from '@kosh/modules-sdk';
+import { type AppChange, catalogueOf, type KoshModule, outdatedApps } from '@kosh/modules-sdk';
 import {
   applyApps,
   installedApps,
@@ -29,9 +29,12 @@ export const APPS_USAGE: string = `Usage: kosh apps [command] [app …] [options
   kosh apps enable <app …>      serve disabled apps again (their data is still there)
   kosh apps disable <app …>     switch apps off: menus, API and access go, tables and data stay
                                 (apps that depend on them are disabled too)
+  kosh apps upgrade [app …]     move installed apps to their code's version: schema, data migrations,
+                                seed data (default: every app whose code is newer)
 
 Options:
   --plan              only show the plan
+  --remove-data       an upgrade may drop the columns and tables its code no longer has
   --yes               apply without asking
   --modules <file>    the catalogue (default src/modules.ts)
   --dir <dir>         migration files (default migrations)
@@ -64,7 +67,7 @@ export interface AppsIo {
   readonly prompter?: Prompter;
 }
 
-const COMMANDS = ['list', 'install', 'enable', 'disable', 'uninstall'] as const;
+const COMMANDS = ['list', 'install', 'enable', 'disable', 'upgrade', 'uninstall'] as const;
 type Command = (typeof COMMANDS)[number];
 
 function iconOf(ui: Ui, name: string): string {
@@ -100,8 +103,12 @@ async function list(
     counts[s] += 1;
     const label = m.app?.label ?? '';
     const why = row?.reason === 'dependency' ? ui.style('gray', ' (needed by another app)') : '';
+    const behind =
+      row !== undefined && row.version !== m.version
+        ? ui.style('cyan', ` (installed ${row.version}: kosh apps upgrade ${m.name})`)
+        : '';
     ui.write(
-      `  ${marks[s]} ${iconOf(ui, m.name)}  ${ui.style('bold', m.name.padEnd(width))}  ${ui.style('gray', m.version.padEnd(8))} ${s.padEnd(9)} ${label}${why}\n`,
+      `  ${marks[s]} ${iconOf(ui, m.name)}  ${ui.style('bold', m.name.padEnd(width))}  ${ui.style('gray', m.version.padEnd(8))} ${s.padEnd(9)} ${label}${why}${behind}\n`,
     );
   }
   ui.write(
@@ -127,7 +134,13 @@ function showPlan(ui: Ui, prepared: PreparedApps, catalogue: readonly KoshModule
     ui.write(
       `  ${ui.style('yellow', u ? '↓' : 'v')} ${iconOf(ui, d.name)}  ${d.name.padEnd(width)}  ${' '.repeat(8)} disable${d.cascade ? ui.style('gray', ' (it depends on a disabled app)') : ''}\n`,
     );
+  for (const u of plan.upgrade)
+    ui.write(
+      `  ${ui.style('cyan', ui.terminal.unicode ? '⇧' : '^')} ${iconOf(ui, u.name)}  ${u.name.padEnd(width)}  ${ui.style('gray', u.to.padEnd(8))} upgrade from ${u.from}\n`,
+    );
   for (const name of plan.unchanged) ui.detail(`${name}: already so`);
+  if (prepared.allowDestructive && migration.destructive.length > 0)
+    ui.warn(`removes data: ${migration.destructive.length} column(s) or table(s) dropped`);
   if (migration.statements.length > 0)
     ui.detail(`${migration.statements.length} schema statement(s), written to a migration file`);
   if (plan.disable.length > 0) ui.detail('tables and data stay; enable brings everything back');
@@ -142,6 +155,7 @@ export async function runApps(argv: readonly string[], io: AppsIo): Promise<numb
       modules: { type: 'string', default: 'src/modules.ts' },
       dir: { type: 'string', default: 'migrations' },
       plan: { type: 'boolean' },
+      'remove-data': { type: 'boolean' },
       yes: { type: 'boolean', short: 'y' },
       help: { type: 'boolean', short: 'h' },
     },
@@ -165,7 +179,7 @@ export async function runApps(argv: readonly string[], io: AppsIo): Promise<numb
     );
     return 2;
   }
-  if (command !== 'list' && names.length === 0) {
+  if (command !== 'list' && command !== 'upgrade' && names.length === 0) {
     ui.fail(`Name the app(s): kosh apps ${command} <app …>`);
     return 2;
   }
@@ -193,10 +207,25 @@ export async function runApps(argv: readonly string[], io: AppsIo): Promise<numb
       await list(ui, driver, catalogue);
       return 0;
     }
-    const change: AppChange = { [command]: names };
+    let targets = names;
+    if (command === 'upgrade' && targets.length === 0) {
+      targets = outdatedApps(catalogue, await installedApps(driver, catalogue)).map((u) => u.name);
+      if (targets.length === 0) {
+        ui.ok("Every installed app is at its code's version.");
+        return 0;
+      }
+    }
+    const change: AppChange = { [command]: targets };
     const dir = resolve(io.cwd, values.dir);
     const prepared = await ui.task('Planning against the database', async (task) => {
-      const p = await prepareApps({ driver, catalogue, change, dir, protect: PROTECTED_APPS });
+      const p = await prepareApps({
+        driver,
+        catalogue,
+        change,
+        dir,
+        protect: PROTECTED_APPS,
+        removeData: values['remove-data'] === true,
+      });
       task.finish('Planned');
       return p;
     });
@@ -225,7 +254,7 @@ export async function runApps(argv: readonly string[], io: AppsIo): Promise<numb
         driver,
         dir,
         actor: `cli:${userInfo().username}`,
-        name: `apps_${command}_${names.join('_').replace(/[^a-z0-9_]/g, '_')}`.slice(0, 60),
+        name: `apps_${command}_${targets.join('_').replace(/[^a-z0-9_]/g, '_')}`.slice(0, 60),
         onStep: (step, detail) => task.update(`${steps[step]}: ${detail}`),
         load: (context, modules) =>
           seedWith(
@@ -245,6 +274,7 @@ export async function runApps(argv: readonly string[], io: AppsIo): Promise<numb
       ...result.installed.map((n) => `installed ${n}`),
       ...result.enabled.map((n) => `enabled ${n}`),
       ...result.disabled.map((n) => `disabled ${n}`),
+      ...result.upgraded.map((n) => `upgraded ${n}`),
     ];
     ui.card(`${ui.terminal.emoji ? '🧩 ' : ''}Apps changed`, [
       ['Changes', done.join(', ')],

@@ -34,6 +34,8 @@ export interface AppInfo {
   readonly category: string;
   readonly summary: string | null;
   readonly state: 'installed' | 'disabled' | 'available';
+  /** The installed version, when it differs from the code's (an upgrade is waiting). */
+  readonly installedVersion: string | null;
   /** Installed because another app needs it. */
   readonly dependency: boolean;
   /** Modules it needs. */
@@ -49,6 +51,11 @@ export interface PlanInfo {
   readonly install: readonly { readonly name: string; readonly reason: string }[];
   readonly enable: readonly string[];
   readonly disable: readonly { readonly name: string; readonly cascade: boolean }[];
+  readonly upgrade: readonly {
+    readonly name: string;
+    readonly from: string;
+    readonly to: string;
+  }[];
   readonly unchanged: readonly string[];
   readonly statements: readonly string[];
   readonly empty: boolean;
@@ -58,8 +65,8 @@ const NAME = /^[a-z][a-z0-9_]{0,63}$/;
 
 function changeOf(body: unknown): AppChange {
   const b = (body ?? {}) as Record<string, unknown>;
-  const out: { install?: string[]; enable?: string[]; disable?: string[] } = {};
-  for (const key of ['install', 'enable', 'disable'] as const) {
+  const out: { install?: string[]; enable?: string[]; disable?: string[]; upgrade?: string[] } = {};
+  for (const key of ['install', 'enable', 'disable', 'upgrade'] as const) {
     const value = b[key];
     if (value === undefined) continue;
     if (
@@ -75,12 +82,18 @@ function changeOf(body: unknown): AppChange {
       );
     out[key] = [...new Set(value as string[])].sort();
   }
-  if ((out.install?.length ?? 0) + (out.enable?.length ?? 0) + (out.disable?.length ?? 0) === 0)
+  if (
+    (out.install?.length ?? 0) +
+      (out.enable?.length ?? 0) +
+      (out.disable?.length ?? 0) +
+      (out.upgrade?.length ?? 0) ===
+    0
+  )
     throw new HttpProblem(
       400,
       'invalid-body',
       'Invalid request',
-      'Name at least one app to install, enable or disable.',
+      'Name at least one app to install, enable, disable or upgrade.',
     );
   return out;
 }
@@ -106,6 +119,7 @@ function planInfo(change: AppChange, prepared: PreparedApps): PlanInfo {
     install: plan.install,
     enable: plan.enable,
     disable: plan.disable,
+    upgrade: plan.upgrade,
     unchanged: plan.unchanged,
     statements: prepared.migration.statements.map((s) => s.sql),
     empty: prepared.empty,
@@ -161,6 +175,10 @@ export function registerAppRoutes(context: ModuleContext): void {
           category: m.app?.category ?? (m.app === undefined ? 'Technical' : 'Other'),
           summary: m.app?.summary ?? null,
           state: state.get(m.name)?.state ?? 'available',
+          installedVersion:
+            state.get(m.name) !== undefined && state.get(m.name)?.version !== m.version
+              ? (state.get(m.name)?.version ?? null)
+              : null,
           dependency: state.get(m.name)?.reason === 'dependency',
           depends: m.depends.map((d) => d.name),
           application: m.app !== undefined,

@@ -24,7 +24,7 @@ import { type ReactElement, useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AppInfo, PlanInfo } from '../routes.js';
 
-type Kind = 'install' | 'enable' | 'disable';
+type Kind = 'install' | 'enable' | 'disable' | 'upgrade';
 type Filter = 'all' | 'installed' | 'available';
 
 interface Pending {
@@ -70,7 +70,7 @@ export function AppsPage({ api, label }: PageProps): ReactElement {
   });
   const apply = useMutation({
     mutationFn: (p: Pending) =>
-      api.call<{ installed: string[]; enabled: string[]; disabled: string[] }>(
+      api.call<{ installed: string[]; enabled: string[]; disabled: string[]; upgraded: string[] }>(
         'POST',
         '/api/v1/settings/apps/apply',
         { change: { [p.kind]: [p.app.name] }, planId: p.plan.planId },
@@ -82,6 +82,7 @@ export function AppsPage({ api, label }: PageProps): ReactElement {
         ...result.installed.map((n) => t('doneInstalled', { name: labelOf(n) })),
         ...result.enabled.map((n) => t('doneEnabled', { name: labelOf(n) })),
         ...result.disabled.map((n) => t('doneDisabled', { name: labelOf(n) })),
+        ...(result.upgraded ?? []).map((n) => t('doneUpgraded', { name: labelOf(n) })),
       ];
       setPending(null);
       setDone(parts.length === 0 ? t('nothingToDo') : t('done', { list: parts.join(', ') }));
@@ -208,6 +209,9 @@ export function AppsPage({ api, label }: PageProps): ReactElement {
                       </h2>
                       <p className="text-xs text-muted-foreground">
                         {a.category} · {t('version', { version: a.version })}
+                        {a.installedVersion === null
+                          ? ''
+                          : ` · ${t('installedVersion', { version: a.installedVersion })}`}
                       </p>
                     </div>
                     <Badge tone={TONE[a.state]}>{t(a.state)}</Badge>
@@ -223,6 +227,21 @@ export function AppsPage({ api, label }: PageProps): ReactElement {
                             ? ''
                             : t('needs', { list: a.depends.map(labelOf).join(', ') })}
                     </p>
+                    {a.installedVersion === null || a.state !== 'installed' ? null : (
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        busy={
+                          plan.isPending &&
+                          plan.variables?.kind === 'upgrade' &&
+                          plan.variables.app.name === a.name
+                        }
+                        aria-label={`${t('upgrade')} ${a.label}`}
+                        onClick={() => plan.mutate({ kind: 'upgrade', app: a })}
+                      >
+                        {t('upgrade')}
+                      </Button>
+                    )}
                     {kind === null ? null : (
                       <Button
                         size="sm"
@@ -281,7 +300,9 @@ function PlanDialog({
       ? 'planTitleInstall'
       : kind === 'enable'
         ? 'planTitleEnable'
-        : 'planTitleDisable',
+        : kind === 'upgrade'
+          ? 'planTitleUpgrade'
+          : 'planTitleDisable',
     { name: app.label },
   );
   return (
@@ -309,7 +330,9 @@ function PlanDialog({
                     ? 'confirmInstall'
                     : kind === 'enable'
                       ? 'confirmEnable'
-                      : 'confirmDisable',
+                      : kind === 'upgrade'
+                        ? 'confirmUpgrade'
+                        : 'confirmDisable',
                 )}
           </Button>
         </>
@@ -344,6 +367,18 @@ function PlanDialog({
                 {m.cascade ? (
                   <span className="text-muted-foreground"> · {t('planCascade')}</span>
                 ) : null}
+              </li>
+            ))}
+          </PlanList>
+        )}
+        {plan.upgrade.length === 0 ? null : (
+          <PlanList title={t('planUpgrade')}>
+            {plan.upgrade.map((u) => (
+              <li key={u.name}>
+                {labelOf(u.name)}{' '}
+                <span className="text-muted-foreground">
+                  {u.from} → {u.to}
+                </span>
               </li>
             ))}
           </PlanList>
