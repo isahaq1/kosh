@@ -7,6 +7,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { generateClient, openApiOf } from '@kosh/server';
+import { runStudio } from '@kosh/studio';
 import { runApps } from './apps.js';
 import { runInit } from './init.js';
 import { modulesOf, runMigrate, runModule, runSeed, runUser } from './project.js';
@@ -67,6 +68,7 @@ Commands (run in the installation's folder; they read .env and src/modules.ts):
   migrate status         Applied and pending migration files
   seed [module ...]      Load the modules' seed data and the apps' defaults (all modules, or those named)
   module create <name>   Scaffold src/modules/<name>/ (models, views, menus, access, seed data, data migrations)
+  studio build [dir …]   Regenerate the Studio modules from their studio.json (default: every src/modules/*/studio.json)
   user create <login>    Create a user: --name, --email, --roles reporting.user,messaging.user, --password
   user password <login>  Set a new password
   generate client   Typed API client from the module set or an OpenAPI document
@@ -178,6 +180,7 @@ export async function runCli(
     migrate: runMigrate,
     seed: runSeed,
     module: runModule,
+    studio: runStudio,
     user: (args, out, dir) => runUser(args, out, dir),
   };
   const command = commands[argv[0] ?? ''];
