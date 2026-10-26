@@ -24,7 +24,7 @@ test('apps follow the roles: a user without roles sees none', async ({ page }) =
 test('requesters see their apps and menus', async ({ page }) => {
   await signIn(page, 'rahim');
   const apps = page.getByRole('main').getByRole('link');
-  await expect(apps).toHaveText(['Contacts', 'Purchase', 'Reports']);
+  await expect(apps).toHaveText(['Contacts', 'Purchase', /^Chat/, 'Reports']);
   await page.getByRole('link', { name: 'Purchase' }).click();
   await expect(page).toHaveURL(/\/purchase\/a\/purchase\.action_orders/);
   await expect(
@@ -39,6 +39,7 @@ test('administrators sign in with a second factor', async ({ page }) => {
   await expect(page.getByRole('region', { name: 'Apps' }).getByRole('link')).toHaveText([
     /^Contacts/,
     /^Purchase/,
+    /^Chat/,
     /^Reports/,
     /^Settings/, // administrators see every installed app
   ]);

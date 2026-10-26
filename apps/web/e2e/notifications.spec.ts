@@ -42,10 +42,9 @@ test('a mention lands in the bell, live; opening it goes to the record', async (
   await expect(bell).toBeVisible();
   await bell.click();
   const panel = page.getByRole('list', { name: 'Notifications' });
-  await expect(panel.getByRole('button')).toContainText(
-    'Rahim Uddin mentioned you on Acme Trading',
-  );
-  await panel.getByRole('button').first().click();
+  const mention = panel.getByRole('button', { name: /mentioned you/ });
+  await expect(mention).toContainText('Rahim Uddin mentioned you on Acme Trading');
+  await mention.click();
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Acme Trading');
   await expect(page.getByRole('button', { name: 'Notifications' })).toBeVisible(); // read
 
