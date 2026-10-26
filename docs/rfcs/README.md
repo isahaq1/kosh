@@ -9,10 +9,11 @@ Design documents written before implementation. An RFC is implemented only after
 | 0003 | [Permission system](0003-permission-system.md) | Accepted, implemented |
 | 0004 | [View definitions & shared search layer](0004-views-and-search.md) | Accepted, implemented |
 | 0005 | [Reporting engine](0005-reporting-engine.md) | Accepted, implemented |
-| 0006 | [Communication & notification architecture](0006-communication-and-notifications.md) | Accepted; parts 1–5 implemented (chatter, gateway, inbox, email, web push); parts 6–7 (internal chat, inbound email) designed, awaiting approval |
+| 0006 | [Communication & notification architecture](0006-communication-and-notifications.md) | Accepted; parts 1–8 implemented (chatter, gateway, inbox, email, web push, SMS / WhatsApp, internal chat, inbound email, quiet hours / digests / fallbacks) |
 | 0007 | [Frontend architecture & design system](0007-frontend-architecture.md) | Accepted, implemented |
 | 0008 | [Default business apps & App manager](0008-business-apps-and-app-manager.md) | Accepted; steps 1–7 implemented (`kosh apps`, app host, Settings → Apps, Contacts / Products / Sales / Purchase / Accounting / Projects and the bridges, the default set, the apps' E2E catalogue) |
 | 0009 | [Accounting](0009-accounting.md) | Accepted; steps 1–4 implemented (the ledger, documents and bridges, payments and reconciliation, reports and closing) |
 | 0010 | [A modern, fast, friendly back-office](0010-modern-ux.md) | Phase A accepted (within RFC 0007); Phase B implemented; C: its three subsystems get RFCs of their own, 0011 first |
-| 0011 | [Automation builder](0011-automation-builder.md) | Accepted; steps 1–3 implemented (the engine, the API, the editor, webhooks, date and schedule triggers) |
-| 0012 | [Kosh Studio](0012-studio.md) | Accepted; steps 1–2 implemented (the spec and the generator, `kosh studio build`, `kosh apps upgrade`) |
+| 0011 | [Automation builder](0011-automation-builder.md) | Accepted; steps 1–3 implemented (the engine, the API, the editor, webhooks, date and schedule triggers; rules shipped by modules); step 4 waits for Shutro request #26 |
+| 0012 | [Kosh Studio](0012-studio.md) | Accepted, implemented (the spec and generator, `kosh apps upgrade`, the API, Studio mode, approvals and rules, git proposals) |
+| 0013 | [AI assistant](0013-ai-assistant.md) | Draft, waiting for approval |
