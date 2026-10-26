@@ -13,12 +13,20 @@ import { applyApps, prepareApps, recordInstalledApps } from '../src/apps.js';
 import { base, baseShutro } from '../src/auth/base.js';
 import { type AppHost, createAppHost } from '../src/host.js';
 import { type Driver, orm, pg } from '../src/orm.js';
-import type { ModuleContext } from '../src/server.js';
+import type { AppsContext, ModuleContext } from '../src/server.js';
 
 const { defineGroup, defineModel, defineModule, f } = orm;
 
+/** The app host's context, as module routes get it (Studio hands new module code over through it). */
+let appsContext: AppsContext | undefined;
+
 /** A module with one model and a public route `/api/v1/<name>/ping` (`?wait=ms` answers late). */
-function app(name: string, depends: KoshModule[], shutroDepends: never[]): KoshModule {
+function app(
+  name: string,
+  depends: KoshModule[],
+  shutroDepends: never[],
+  answer: Record<string, unknown> = {},
+): KoshModule {
   return defineKoshModule({
     shutro: defineModule({
       name,
@@ -35,11 +43,12 @@ function app(name: string, depends: KoshModule[], shutroDepends: never[]): KoshM
     kosh: '^0.1.0',
     depends,
     accessLevels: { user: { label: 'User', groups: [`${name}.user`] } },
-    routes: ({ app: fastify }: ModuleContext) => {
+    routes: ({ app: fastify, apps }: ModuleContext) => {
+      appsContext = apps;
       fastify.get(`/api/v1/${name}/ping`, { config: { public: true } }, async (request) => {
         const wait = Number((request.query as { wait?: string }).wait ?? 0);
         if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-        return { module: name };
+        return { module: name, ...answer };
       });
     },
   });
@@ -128,4 +137,15 @@ test('reload without a change does nothing', async () => {
   const before = host.generation;
   expect(await host.reload()).toBe(false);
   expect(host.generation).toBe(before);
+});
+
+test('new code of an installed module is served at the next reload, even if NOTIFY rebuilt first', async () => {
+  // The installed set is unchanged since the last rebuild: only the code is new (Kosh Studio's write mode).
+  const before = host.generation;
+  expect(await host.reload()).toBe(false);
+  appsContext?.serveModule?.(app('library', [base], [baseShutro as never], { code: 'new' }));
+  expect(await host.reload()).toBe(true);
+  expect(host.generation).toBe(before + 1);
+  expect((await get('/api/v1/library/ping')).body).toEqual({ module: 'library', code: 'new' });
+  expect(await host.reload()).toBe(false);
 });

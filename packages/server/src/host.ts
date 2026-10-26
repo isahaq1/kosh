@@ -69,14 +69,19 @@ async function installedDigest(
 export async function createAppHost(options: AppHostOptions): Promise<AppHost> {
   const { migrationsDir = 'migrations', listen = true, drainMs = 30_000 } = options;
   let catalogue: readonly KoshModule[] = [...options.catalogue];
+  // New module code arrived (serveModule): the next rebuild happens even when the installed set did not change
+  // since the last one (the database's NOTIFY can rebuild with the old code before the new code is handed over).
+  let codeChanged = false;
   const apps = {
     get catalogue() {
       return catalogue;
     },
     migrationsDir,
     reload: () => host.reload(),
-    useModule(module: KoshModule) {
-      catalogue = [...catalogue.filter((m) => m.name !== module.name), module];
+    serveModule(module: KoshModule) {
+      // First: the catalogue is walked through dependencies, and the first module of a name wins.
+      catalogue = [module, ...catalogue.filter((m) => m.name !== module.name)];
+      codeChanged = true;
     },
   };
   const probe = pg.createDriver({ url: options.databaseUrl, max: 1, applicationName: 'kosh host' });
@@ -165,11 +170,14 @@ export async function createAppHost(options: AppHostOptions): Promise<AppHost> {
   async function rebuild(): Promise<boolean> {
     if (closing !== undefined) return false;
     const { digest } = await installedDigest(probe);
-    if (digest === current.digest) return false;
+    if (digest === current.digest && !codeChanged) return false;
+    const serving = codeChanged;
+    codeChanged = false;
     let next: Generation;
     try {
       next = await build();
     } catch (error) {
+      codeChanged ||= serving;
       current.server.app.log.error({ err: error }, 'rebuilding for the new installed apps failed');
       return false;
     }
