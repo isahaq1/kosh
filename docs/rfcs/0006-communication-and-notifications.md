@@ -1,6 +1,6 @@
 # RFC 0006: Communication & notification architecture
 
-- **Status:** Accepted; parts 1–7 implemented (chatter, the realtime gateway, the inbox, email, web push, SMS and WhatsApp, internal chat, inbound email); the jobs decision taken on 2026-10-25. Part 8 (fallback channels, digests, quiet hours) designed below on 2026-10-27, awaiting approval.
+- **Status:** Accepted; parts 1–7 implemented (chatter, the realtime gateway, the inbox, email, web push, SMS and WhatsApp, internal chat, inbound email); the jobs decision taken on 2026-10-25. Part 8 (fallback channels, digests, quiet hours) designed below and accepted on 2026-10-27 with the proposed answers; step 1 implemented.
 - **Depends on:** 0001, 0002, 0003; Shutro RFC 0013 (audit), 0018 (outbox events, jobs)
 
 ## 1. Summary
@@ -278,6 +278,27 @@ and Bangla).
 - **Interrupting channels**: web push, SMS and WhatsApp held in quiet hours, email not (proposed); or email too?
 - **Default fallback**: email (proposed), or none until the user picks one?
 - **Digest period**: daily only (proposed), or also weekly?
+
+## Implementation notes (2026-10-27, part 8 step 1: settings, email modes, quiet hours)
+
+- Answers: web push, SMS and WhatsApp are held in quiet hours, email is not; the default fallback is email;
+  digests are daily only.
+- `notify.settings` (one per user, private, own rows only) and `GET` / `PUT /api/v1/notifications/settings`
+  (validated: `HH:MM` times, both quiet bounds or neither, the day names, a fallback among email, web push, SMS,
+  WhatsApp or none). `notify.preference.mode` holds the email mode; **no data migration**: an unset mode means
+  `enabled` (`instant` or `off`), so existing rows keep working, and switching email on or off resets the mode.
+  The preferences API returns `emailMode` per kind and takes `mode` for email.
+- Quiet hours are pure functions on instants (`quiet.ts`, `Intl` for the time zone and its daylight saving):
+  hours that may cross midnight, days off, and the end of a period stepping through adjacent ones (a day off into
+  the next quiet morning); when every day is off, nothing is held. A delivery on an interrupting channel in quiet
+  hours is `held` with `notBefore`, its job enqueued with Shutro's `runAt`; when it runs, a notification read
+  meanwhile is `skipped` (`read`), and the recipient's access to the record is checked again (`skipped`,
+  `no access`). An email whose mode is `daily` is a `digest` delivery without a job (step 2 sends the digest).
+- `notify` is version 0.2.0 (the settings table, two columns, two delivery states).
+- Tests: quiet hours (Dhaka across midnight, the last seconds of a period, days off chained with the night, every
+  day off); the settings API (defaults, every validation, own rows only), the email modes; on PostgreSQL, three
+  mentions in Dina's quiet hours held about an hour, not run early, then read meanwhile / sent / access lost; a
+  daily email waiting for the digest.
 
 ## Implementation notes (2026-10-26, part 6 step 1: the chat model, routes, gateway, notifications)
 

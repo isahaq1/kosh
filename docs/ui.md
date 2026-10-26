@@ -198,6 +198,22 @@ sentence and the record's link, one delivery per channel. Both channels are opt-
 money): nothing goes out until the user switches a kind on for the channel in their preferences. Another provider
 is a `Messenger` (`notifyModule({ messenger })`): one `send` per message, no module changes.
 
+**Quiet hours and email modes** (RFC 0006 part 8). Each user has settings (`GET` / `PUT
+/api/v1/notifications/settings`): quiet hours `quietFrom` – `quietTo` (`HH:MM` in their time zone, `tz` on their
+user; may cross midnight), whole `quietDays` off, the `digestHour` and the `fallback` channel. During quiet hours web
+push, SMS and WhatsApp are held until the quiet period ends, then sent unless the notification was read in the inbox
+meanwhile or the user may no longer read the record; the inbox and email are never held. Email per kind is
+`instant`, `daily` (in the digest) or `off` (`PUT /api/v1/notifications/preferences` with `mode`).
+
+```sh
+curl -X PUT /api/v1/notifications/settings -d '{"quietFrom":"22:00","quietTo":"07:00","quietDays":["fri"],
+  "digestHour":"08:00","fallback":"email"}'
+curl -X PUT /api/v1/notifications/preferences -d '{"kind":"mention","channel":"email","mode":"daily"}'
+```
+
+The `notify` module's version is 0.2.0 (the settings, the email mode, held deliveries): existing installations run
+`kosh apps upgrade notify`.
+
 Push notifications reach a device even with Kosh closed: the bell's footer has "Turn on" when the installation
 has VAPID keys (`kosh init` writes them to `.env`) and the browser supports push; it asks the browser's
 permission, registers the service worker (`/sw.js`, built by `koshPwa()`) and saves the device's subscription for the user.
