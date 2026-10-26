@@ -18,11 +18,13 @@ import { installActivityTypes, messaging } from '@kosh/messaging';
 import { notify } from '@kosh/notify';
 import { installApprovalPolicies, permissions } from '@kosh/permissions';
 import { product } from '@kosh/product';
+import { project } from '@kosh/project';
 import { purchase } from '@kosh/purchase';
 import { purchaseAccount } from '@kosh/purchase_account';
 import { realtime } from '@kosh/realtime';
 import { installTemplates, reporting } from '@kosh/reporting';
 import { saleAccount } from '@kosh/sale_account';
+import { saleProject } from '@kosh/sale_project';
 import { sales } from '@kosh/sales';
 import {
   applyApps,
@@ -59,8 +61,10 @@ const CATALOGUE = [
   sales,
   purchase,
   accounting,
+  project,
   saleAccount,
   purchaseAccount,
+  saleProject,
 ];
 const migrations = mkdtempSync(join(tmpdir(), 'kosh-e2e-apps-migrations-'));
 const setup = pg.createDriver({ url: databaseUrl, max: 2, parseNumeric: orm.toDecimal });
@@ -69,7 +73,9 @@ await applyApps(
   await prepareApps({
     driver: setup,
     catalogue: CATALOGUE,
-    change: { install: ['settings', 'realtime', 'notify', 'sales', 'purchase', 'accounting'] },
+    change: {
+      install: ['settings', 'realtime', 'notify', 'sales', 'purchase', 'accounting', 'project'],
+    },
     dir: migrations,
   }),
   { driver: setup, dir: migrations, actor: 'e2e' },
@@ -109,12 +115,19 @@ for (const [login, name, groups] of [
   [
     'dina',
     'Dina Rahman',
-    ['account.manager', 'sales.manager', 'purchase.manager', 'messaging.user', 'reporting.user'],
+    [
+      'account.manager',
+      'sales.manager',
+      'purchase.manager',
+      'project.manager',
+      'messaging.user',
+      'reporting.user',
+    ],
   ],
   [
     'rahim',
     'Rahim Uddin',
-    ['sale_account.user', 'account.user', 'messaging.user', 'reporting.user'],
+    ['sale_account.user', 'sale_project.user', 'account.user', 'messaging.user', 'reporting.user'],
   ],
 ] as const)
   await auth.createUser({
