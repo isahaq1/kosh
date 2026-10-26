@@ -46,7 +46,7 @@ import { readSpec, studioModules } from './build.js';
 import { unifiedDiff } from './diff.js';
 import { applyEdit, emptySpec, type Owners, type StudioEdit, StudioEditError } from './edit.js';
 import { type GenerateOptions, generateModule } from './generate.js';
-import { camel, type StudioSpec, validateSpec } from './spec.js';
+import { camel, type StudioRule, type StudioSpec, validateSpec } from './spec.js';
 
 export type StudioMode = 'write' | 'propose';
 
@@ -114,6 +114,54 @@ export const studioShutro: ReturnType<typeof orm.defineModule> = orm.defineModul
   models: [],
 });
 
+interface RuleRows {
+  readonly ids: readonly number[];
+  readonly length: number;
+  load(
+    keys: readonly string[],
+  ): Promise<{ read(keys: readonly string[]): Record<string, unknown>[] }>;
+  write(values: unknown): Promise<void>;
+}
+const ruleRef = (env: unknown) =>
+  (env as { model(name: string): unknown }).model('automation.rule') as {
+    search(q: unknown): Promise<RuleRows>;
+  };
+const RULE_LIST = ['id', 'name', 'targetModel', 'trigger', 'enabled'];
+/** The fields of a rule a module ships (`automationRules`), as `automation.rule` names them. */
+const RULE_FIELDS = [
+  'id',
+  'module',
+  'name',
+  'targetModel',
+  'trigger',
+  'actions',
+  'condition',
+  'watchFields',
+  'toValues',
+  'fromValues',
+  'topic',
+  'dateField',
+  'dateOffsetDays',
+  'cron',
+  'runAs',
+  'logOnRecord',
+  'description',
+  'sequence',
+  'enabled',
+];
+
+/** A rule of the Automation app as a Studio rule (nulls dropped). */
+export function studioRuleOf(row: Readonly<Record<string, unknown>>): Omit<StudioRule, 'id'> {
+  const out: Record<string, unknown> = {};
+  for (const key of RULE_FIELDS) {
+    const value = row[key];
+    if (value === null || value === undefined || key === 'id' || key === 'module') continue;
+    if (key === 'dateOffsetDays' && value === 0) continue;
+    out[key === 'targetModel' ? 'model' : key] = value;
+  }
+  return out as unknown as Omit<StudioRule, 'id'>;
+}
+
 /** Kosh Studio, configured. */
 export function createStudio(options: StudioOptions = {}): KoshModule {
   return defineModule({
@@ -179,6 +227,28 @@ export function registerStudioRoutes(context: ModuleContext, options: StudioOpti
           'Studio changes the schema: it needs the Administrator role or the Studio access.',
         );
       return e.uid;
+    });
+  /** A rule of the Automation app the caller reads and no module ships. */
+  const movableRule = (request: FastifyRequest, id: number): Promise<Omit<StudioRule, 'id'>> =>
+    request.env(async (env) => {
+      if (owners().modelOwner('automation.rule') === undefined)
+        throw new HttpProblem(
+          400,
+          'studio-edit-invalid',
+          'The change is not valid',
+          'The Automation app is not installed.',
+        );
+      const set = await ruleRef(env).search({ where: { id } });
+      const [row] = set.length === 0 ? [] : (await set.load(RULE_FIELDS)).read(RULE_FIELDS);
+      if (row === undefined) throw new HttpProblem(404, 'not-found', 'Not found', `No rule ${id}.`);
+      if (row['module'] !== null && row['module'] !== undefined)
+        throw new HttpProblem(
+          409,
+          'studio-rule-owned',
+          'The rule belongs to a module',
+          `The rule is shipped by the module ${String(row['module'])}: change it there.`,
+        );
+      return studioRuleOf(row);
     });
   const invalid = (detail: string): never => {
     throw new HttpProblem(400, 'invalid-body', 'Invalid request', detail);
@@ -368,13 +438,21 @@ export function registerStudioRoutes(context: ModuleContext, options: StudioOpti
     const name = body.module ?? 'custom';
     if (typeof name !== 'string' || !/^[a-z][a-z0-9_]{1,40}$/.test(name))
       return invalid('module: lower-case letters, digits and _.');
-    const edit = body.edit as StudioEdit | undefined;
+    const kind = (body.edit as { kind?: unknown } | null | undefined)?.kind;
     if (
-      edit === null ||
-      typeof edit !== 'object' ||
-      !['field', 'show', 'model'].includes((edit as { kind?: unknown }).kind as string)
+      typeof kind !== 'string' ||
+      !['field', 'show', 'model', 'approval', 'rule', 'move-rule'].includes(kind)
     )
-      return invalid('edit: a field, show or model change.');
+      return invalid('edit: a field, show, model, approval, rule or move-rule change.');
+    // Moving a rule made in the Automation app: the module ships a copy, the original is archived on apply.
+    let retire: number[] = [];
+    let edit = body.edit as StudioEdit;
+    if (kind === 'move-rule') {
+      const id = (body.edit as { rule?: unknown }).rule;
+      if (typeof id !== 'number' || !Number.isInteger(id)) return invalid('rule: a rule id.');
+      edit = { kind: 'rule', rule: await movableRule(request, id) };
+      retire = [id];
+    }
     const dir = join(modulesDir, name);
     const current = existsSync(join(dir, 'studio.json'))
       ? await readSpec(dir)
@@ -400,7 +478,18 @@ export function registerStudioRoutes(context: ModuleContext, options: StudioOpti
         'The Studio spec is not valid',
         problems.join('\n'),
       );
-    return { spec };
+    return { spec, retire };
+  });
+
+  // The rules made in the Automation app (not shipped by a module): what Studio can move into a module.
+  app.get('/api/v1/studio/rules', async (request) => {
+    await guard(request);
+    if (owners().modelOwner('automation.rule') === undefined) return { rules: [] };
+    const rules = await request.env(async (env) => {
+      const set = await ruleRef(env).search({ where: { module: null }, order: ['name asc'] });
+      return set.length === 0 ? [] : (await set.load(RULE_LIST)).read(RULE_LIST);
+    });
+    return { rules };
   });
 
   app.get('/api/v1/studio/modules/:name', async (request) => {
@@ -446,6 +535,13 @@ export function registerStudioRoutes(context: ModuleContext, options: StudioOpti
       );
     const planId = (request.body as { planId?: unknown } | null)?.planId;
     if (typeof planId !== 'string') return invalid('planId (from /preview) is required.');
+    const retire = (request.body as { retire?: unknown }).retire ?? [];
+    if (
+      !Array.isArray(retire) ||
+      retire.length > 50 ||
+      retire.some((id) => typeof id !== 'number' || !Number.isInteger(id))
+    )
+      return invalid('retire: the ids of the rules moved into the module (from /edit).');
     const { review, files, modulesTs, module, prepared } = await prepare(specOf(request.body));
     if (review.planId !== planId)
       throw new HttpProblem(
@@ -481,7 +577,16 @@ export function registerStudioRoutes(context: ModuleContext, options: StudioOpti
     }
     apps.serveModule?.(module);
     await apps.reload();
+    // Rules moved into the module: its copy is installed now, so the originals are archived (as the caller).
+    const retired: number[] = [];
+    if (retire.length > 0)
+      await request.env(async (env) => {
+        const set = await ruleRef(env).search({ where: { id: { in: retire }, module: null } });
+        if (set.length > 0) await set.write({ active: false });
+        retired.push(...set.ids);
+      });
     return {
+      retired,
       name: review.spec.name,
       version: review.spec.version,
       change: review.change,

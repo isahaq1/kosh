@@ -232,7 +232,7 @@ export function generateModule(
     HEADER,
     '/**',
     ` * ${spec.label}${spec.description === undefined ? '' : `: ${spec.description}`}`,
-    ' * A Kosh Studio module (RFC 0012): its fields, models, view changes, menus and approvals, from studio.json.',
+    ' * A Kosh Studio module (RFC 0012): its fields, models, view changes, menus, approvals and rules, from studio.json.',
     ' */',
     `import { base } from '${im.base}';`,
     ...deps.map((d) => `import { ${camel(d)} } from '${im.module(d)}';`),
@@ -261,6 +261,16 @@ export function generateModule(
     ...(searches.length === 0 ? [] : ['  search: {', ...searches, '  },']),
     ...(extensions.length === 0 ? [] : ['  viewExtensions: [', ...extensions, '  ],']),
     ...((spec.approvals ?? []).length === 0 ? [] : [`  approvals: ${lit(spec.approvals, '  ')},`]),
+    ...((spec.automationRules ?? []).length === 0
+      ? []
+      : [
+          `  automationRules: ${lit(
+            Object.fromEntries(
+              (spec.automationRules ?? []).map(({ id: key, ...rule }) => [key, rule]),
+            ),
+            '  ',
+          )},`,
+        ]),
     '});',
     '',
   ].join('\n');
@@ -314,6 +324,16 @@ export function generateModule(
           '## Approval policies',
           '',
           ...(spec.approvals ?? []).map((a) => `- ${a.name} on \`${a.model}\``),
+          '',
+        ]),
+    ...((spec.automationRules ?? []).length === 0
+      ? []
+      : [
+          '## Automation rules',
+          '',
+          ...(spec.automationRules ?? []).map(
+            (r) => `- \`${r.id}\`: ${r.name} (\`${r.model}\`, ${r.trigger})`,
+          ),
           '',
         ]),
   ].join('\n');

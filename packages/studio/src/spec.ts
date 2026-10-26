@@ -101,6 +101,42 @@ export interface StudioApproval {
   }[];
 }
 
+export const RULE_TRIGGERS = [
+  'created',
+  'updated',
+  'deleted',
+  'transition',
+  'event',
+  'date',
+  'schedule',
+] as const;
+
+/**
+ * An automation rule the module ships (`automationRules` in the manifest, RFC 0011): installed by the Automation
+ * app as a rule owned by the module, rewritten by its upgrades. The fields are the rule editor's.
+ */
+export interface StudioRule {
+  /** Local key: `welcome_note`. */
+  readonly id: string;
+  readonly name: string;
+  readonly model: string;
+  readonly trigger: (typeof RULE_TRIGGERS)[number];
+  readonly actions: readonly Readonly<Record<string, unknown>>[];
+  readonly condition?: Readonly<Record<string, unknown>>;
+  readonly watchFields?: readonly string[];
+  readonly toValues?: Readonly<Record<string, unknown>>;
+  readonly fromValues?: Readonly<Record<string, unknown>>;
+  readonly topic?: string;
+  readonly dateField?: string;
+  readonly dateOffsetDays?: number;
+  readonly cron?: string;
+  readonly runAs?: 'actor' | 'system';
+  readonly logOnRecord?: boolean;
+  readonly description?: string;
+  readonly sequence?: number;
+  readonly enabled?: boolean;
+}
+
 export interface StudioSpec {
   /** The module's name: lower-case letters, digits and `_` (`acme_custom`). */
   readonly name: string;
@@ -117,6 +153,7 @@ export interface StudioSpec {
   readonly viewChanges?: readonly StudioViewChange[];
   readonly menus?: readonly StudioMenu[];
   readonly approvals?: readonly StudioApproval[];
+  readonly automationRules?: readonly StudioRule[];
 }
 
 const MODULE = /^[a-z][a-z0-9_]{1,40}$/;
@@ -224,6 +261,34 @@ export function validateSpec(spec: StudioSpec): string[] {
     menuIds.add(m.id);
     if (m.parent === undefined && spec.app === undefined)
       at(`menus[${i}].parent`, 'a parent menu, or an app of the module');
+  });
+  const approvalNames = new Set<string>();
+  (spec.approvals ?? []).forEach((a, i) => {
+    if (typeof a.name !== 'string' || a.name.trim() === '') at(`approvals[${i}].name`, 'required');
+    if (approvalNames.has(a.name)) at(`approvals[${i}].name`, `'${a.name}' twice`);
+    approvalNames.add(a.name);
+    if (!MODEL.test(a.model)) at(`approvals[${i}].model`, 'a model name (purchase.order)');
+    if (!Array.isArray(a.levels) || a.levels.length === 0)
+      at(`approvals[${i}].levels`, 'at least one');
+    (a.levels ?? []).forEach((l, j) => {
+      if (typeof l.name !== 'string' || l.name.trim() === '')
+        at(`approvals[${i}].levels[${j}].name`, 'required');
+      if (!MODEL.test(l.approverRole))
+        at(`approvals[${i}].levels[${j}].approverRole`, 'a group code (purchase.approver)');
+    });
+  });
+  const ruleIds = new Set<string>();
+  (spec.automationRules ?? []).forEach((r, i) => {
+    if (!LOCAL.test(r.id)) at(`automationRules[${i}].id`, 'lower-case letters, digits and _');
+    if (ruleIds.has(r.id)) at(`automationRules[${i}].id`, `'${r.id}' twice`);
+    ruleIds.add(r.id);
+    if (typeof r.name !== 'string' || r.name.trim() === '')
+      at(`automationRules[${i}].name`, 'required');
+    if (!MODEL.test(r.model)) at(`automationRules[${i}].model`, 'a model name (res.partner)');
+    if (!RULE_TRIGGERS.includes(r.trigger))
+      at(`automationRules[${i}].trigger`, `one of ${RULE_TRIGGERS.join(', ')}`);
+    if (!Array.isArray(r.actions) || r.actions.length === 0)
+      at(`automationRules[${i}].actions`, 'at least one');
   });
   return problems;
 }

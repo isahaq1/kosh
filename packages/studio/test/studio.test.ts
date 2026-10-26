@@ -331,3 +331,88 @@ test('Studio edits: a field in a form section, a column, a model with a menu, me
   expect(nameFromLabel('2nd phone')).toBe('f2ndPhone');
   expect(nameFromLabel('VAT / BIN no.')).toBe('vatBinNo');
 });
+
+test('Studio edits: approval policies and automation rules, validated and generated', () => {
+  const owners = {
+    modelOwner: (m: string) =>
+      ({ 'res.partner': 'crm', 'approval.policy': 'permissions', 'automation.rule': 'automation' })[
+        m
+      ],
+    viewOwner: () => undefined,
+  };
+  let spec = applyEdit(
+    emptySpec('acme', 'Acme'),
+    {
+      kind: 'rule',
+      rule: {
+        name: 'Welcome note',
+        model: 'res.partner',
+        trigger: 'created',
+        actions: [{ kind: 'note', text: 'Welcome' }],
+      },
+    },
+    owners,
+  );
+  spec = applyEdit(
+    spec,
+    {
+      kind: 'rule',
+      rule: {
+        name: 'Welcome note',
+        model: 'res.partner',
+        trigger: 'updated',
+        actions: [{ kind: 'note' }],
+      },
+    },
+    owners,
+  );
+  expect(spec.automationRules?.map((r) => r.id)).toEqual(['welcome_note', 'welcome_note2']);
+  spec = applyEdit(
+    spec,
+    {
+      kind: 'approval',
+      approval: {
+        name: 'Big ones',
+        model: 'res.partner',
+        levels: [{ name: 'Boss', approverRole: 'crm.manager' }],
+      },
+    },
+    owners,
+  );
+  expect(spec.depends).toEqual(['automation', 'crm', 'permissions']);
+  expect(validateSpec(spec)).toEqual([]);
+  expect(() =>
+    applyEdit(
+      spec,
+      {
+        kind: 'approval',
+        approval: {
+          name: 'Big ones',
+          model: 'res.partner',
+          levels: [{ name: 'Boss', approverRole: 'crm.manager' }],
+        },
+      },
+      owners,
+    ),
+  ).toThrow(/already/);
+  expect(
+    validateSpec({
+      ...spec,
+      automationRules: [
+        { id: 'Bad', name: '', model: 'x', trigger: 'never' as 'created', actions: [] },
+      ],
+      approvals: [{ name: 'P', model: 'res.partner', levels: [] }],
+    }),
+  ).toEqual([
+    'approvals[0].levels: at least one',
+    'automationRules[0].id: lower-case letters, digits and _',
+    'automationRules[0].name: required',
+    'automationRules[0].model: a model name (res.partner)',
+    'automationRules[0].trigger: one of created, updated, deleted, transition, event, date, schedule',
+    'automationRules[0].actions: at least one',
+  ]);
+  const index = generateModule(spec, { imports: 'workspace' })['index.ts'];
+  expect(index).toContain('  automationRules: {\n    welcome_note: {');
+  expect(index).toContain("      trigger: 'created',");
+  expect(index).toContain('  approvals: [');
+});

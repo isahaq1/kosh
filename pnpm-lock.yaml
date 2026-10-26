@@ -968,6 +968,12 @@ importers:
         specifier: ^1.59.0
         version: 1.59.0(@types/react@19.3.0)(react@19.3.1)
     devDependencies:
+      '@kosh/automation':
+        specifier: workspace:*
+        version: link:../automation
+      '@kosh/permissions':
+        specifier: workspace:*
+        version: link:../permissions
       '@kosh/views':
         specifier: workspace:*
         version: link:../views

@@ -22,6 +22,7 @@ import type { StudioEdit } from '../edit.js';
 import type { StudioSpec } from '../spec.js';
 import { EMPTY_FIELD, type FieldDraft, FieldEditor, fieldOf } from './FieldEditor.js';
 import { message, ReviewDialog } from './Review.js';
+import { ApprovalSection, type Proposed, RulesSection } from './Sections.js';
 import { ModuleSelect, reloadSoon, useStudioInfo } from './StudioToggle.js';
 
 export function StudioPage({ api, label }: PageProps): ReactElement {
@@ -32,7 +33,7 @@ export function StudioPage({ api, label }: PageProps): ReactElement {
   const [modelLabel, setModelLabel] = useState('');
   const [menuLabel, setMenuLabel] = useState('');
   const [fields, setFields] = useState<readonly FieldDraft[]>([{ ...EMPTY_FIELD }]);
-  const [spec, setSpec] = useState<StudioSpec | null>(null);
+  const [proposed, setProposed] = useState<Proposed | null>(null);
   const edit = useMutation({
     mutationFn: (target: string) => {
       const change: StudioEdit = {
@@ -45,7 +46,7 @@ export function StudioPage({ api, label }: PageProps): ReactElement {
         edit: change,
       });
     },
-    onSuccess: (result) => setSpec(result.spec),
+    onSuccess: (result) => setProposed({ spec: result.spec, retire: [] }),
   });
 
   if (info.isPending) return <Spinner label={t('studio')} />;
@@ -159,12 +160,16 @@ export function StudioPage({ api, label }: PageProps): ReactElement {
         </Card>
       </section>
 
-      {spec === null ? null : (
+      <ApprovalSection api={api} module={target} onPropose={setProposed} />
+      <RulesSection api={api} module={target} onPropose={setProposed} />
+
+      {proposed === null ? null : (
         <ReviewDialog
           api={api}
-          spec={spec}
+          spec={proposed.spec}
+          retire={proposed.retire}
           mode={data.mode}
-          onClose={() => setSpec(null)}
+          onClose={() => setProposed(null)}
           onApplied={reloadSoon}
         />
       )}

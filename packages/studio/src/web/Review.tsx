@@ -59,9 +59,12 @@ export function ReviewDialog({
   mode,
   onClose,
   onApplied,
+  retire,
 }: {
   readonly api: KoshApi;
   readonly spec: StudioSpec;
+  /** Rules moved into the module: archived once its copy is installed (from `/edit`). */
+  readonly retire?: readonly number[];
   readonly mode: StudioMode;
   readonly onClose: () => void;
   readonly onApplied: () => void;
@@ -78,6 +81,7 @@ export function ReviewDialog({
       api.call<{ name: string; version: string }>('POST', '/api/v1/studio/apply', {
         spec,
         planId: r.planId,
+        ...(retire === undefined || retire.length === 0 ? {} : { retire }),
       }),
     onSuccess: onApplied,
   });

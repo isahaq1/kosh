@@ -9,6 +9,8 @@ import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { automationModule } from '@kosh/automation';
+import { permissions } from '@kosh/permissions';
 import {
   type AppHost,
   applyApps,
@@ -112,10 +114,15 @@ beforeAll(async () => {
   });
   dir = await mkdtemp(join(tmpdir(), 'kosh-studio-'));
   const studio = createStudio({ mode: 'write', root: project, generate });
-  const catalogue = [base, crm, studio];
+  const catalogue = [base, crm, studio, permissions, automationModule({ workers: false })];
   await recordInstalledApps(driver, [], [], 'test');
   await applyApps(
-    await prepareApps({ driver, catalogue, change: { install: ['crm', 'studio'] }, dir }),
+    await prepareApps({
+      driver,
+      catalogue,
+      change: { install: ['crm', 'studio', 'permissions', 'automation'] },
+      dir,
+    }),
     { driver, dir, actor: 'test' },
   );
   const common = {
@@ -134,7 +141,7 @@ beforeAll(async () => {
     admin: { login: 'admin', name: 'Administrator', password: PASSWORD },
   });
   for (const [login, groups] of [
-    ['designer', ['studio.manager', 'crm.user']],
+    ['designer', ['studio.manager', 'crm.user', 'automation.manager']],
     ['bob', ['crm.user']],
   ] as const)
     await auth.createUser({
@@ -148,7 +155,13 @@ beforeAll(async () => {
   url = await host.listen({ port: 0, host: '127.0.0.1' });
   proposer = await createAppHost({
     ...common,
-    catalogue: [base, crm, createStudio({ mode: 'propose', root: production, generate })],
+    catalogue: [
+      base,
+      crm,
+      createStudio({ mode: 'propose', root: production, generate }),
+      permissions,
+      automationModule({ workers: false }),
+    ],
   });
   proposeUrl = await proposer.listen({ port: 0, host: '127.0.0.1' });
 }, 180_000);
@@ -433,4 +446,107 @@ test('a second apply upgrades the module to its next patch version', async () =>
     params: ['acme'],
   });
   expect(row?.version).toBe('0.1.1');
+});
+
+test('a rule made in the Automation app moves into the module; an approval policy; the original is archived', async () => {
+  const made = await http('POST', '/api/v1/models/automation.rule', {
+    as: 'designer',
+    body: {
+      name: 'Welcome note',
+      targetModel: 'res.partner',
+      trigger: 'created',
+      actions: [{ kind: 'note', text: 'Welcome {{name}}' }],
+    },
+  });
+  expect(made.status).toBe(201);
+  const listed = await http('GET', '/api/v1/studio/rules', { as: 'designer' });
+  expect(listed.json.rules).toEqual([
+    {
+      id: made.json.id,
+      name: 'Welcome note',
+      targetModel: 'res.partner',
+      trigger: 'created',
+      enabled: true,
+    },
+  ]);
+
+  const moved = await http('POST', '/api/v1/studio/edit', {
+    as: 'designer',
+    body: { module: 'acme', edit: { kind: 'move-rule', rule: made.json.id } },
+  });
+  expect(moved.status).toBe(200);
+  expect(moved.json.retire).toEqual([made.json.id]);
+  expect(moved.json.spec.automationRules).toEqual([
+    {
+      id: 'welcome_note',
+      name: 'Welcome note',
+      model: 'res.partner',
+      trigger: 'created',
+      actions: [{ kind: 'note', text: 'Welcome {{name}}' }],
+      runAs: 'actor',
+      logOnRecord: false,
+      sequence: 10,
+      enabled: true,
+    },
+  ]);
+  expect(moved.json.spec.depends).toEqual(['automation', 'crm']);
+  // The edits build on the module's spec in the project: add the approval policy to the moved rule's spec.
+  const withPolicy = await http('POST', '/api/v1/studio/edit', {
+    as: 'designer',
+    body: {
+      module: 'acme',
+      edit: {
+        kind: 'approval',
+        approval: {
+          name: 'Big customers',
+          model: 'res.partner',
+          levels: [{ name: 'Manager', approverRole: 'crm.user' }],
+        },
+      },
+    },
+  });
+  expect(withPolicy.json.spec.depends).toEqual(['crm', 'permissions']);
+  const spec = {
+    ...moved.json.spec,
+    approvals: withPolicy.json.spec.approvals,
+    depends: ['automation', 'crm', 'permissions'],
+  };
+
+  const preview = await http('POST', '/api/v1/studio/preview', { as: 'designer', body: { spec } });
+  expect(preview.status).toBe(200);
+  const index = (preview.json.diff as Json[]).find((d) => d.path.endsWith('index.ts'));
+  expect(index.diff).toContain('+  automationRules: {');
+  expect(index.diff).toContain('+  approvals: [');
+  const applied = await http('POST', '/api/v1/studio/apply', {
+    as: 'designer',
+    body: { spec, planId: preview.json.planId, retire: [made.json.id] },
+  });
+  expect(applied.status).toBe(200);
+  expect(applied.json.retired).toEqual([made.json.id]);
+
+  const rules = await driver.query<{
+    id: number;
+    module: string | null;
+    module_key: string | null;
+    active: boolean;
+  }>({
+    text: 'SELECT id, module, module_key, active FROM automation_rule ORDER BY id',
+    params: [],
+  });
+  expect(rules).toEqual([
+    { id: made.json.id, module: null, module_key: null, active: false },
+    { id: expect.any(Number), module: 'acme', module_key: 'welcome_note', active: true },
+  ]);
+  const policies = await driver.query<{ name: string }>({
+    text: 'SELECT name FROM approval_policy ORDER BY id',
+    params: [],
+  });
+  expect(policies.map((p) => p.name)).toContain('Big customers');
+  // A rule shipped by a module is changed in the module, not moved again.
+  const owned = rules.find((r) => r.module === 'acme');
+  const again = await http('POST', '/api/v1/studio/edit', {
+    as: 'designer',
+    body: { module: 'acme', edit: { kind: 'move-rule', rule: owned?.id } },
+  });
+  expect(again.status).toBe(409);
 });

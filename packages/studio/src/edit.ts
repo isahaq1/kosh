@@ -4,7 +4,15 @@
  * this (the UI only says where and what): the new field's name, the dependencies on the modules that own the
  * models and views, the view change merged into the existing ones.
  */
-import { camel, modelName, type StudioField, type StudioModel, type StudioSpec } from './spec.js';
+import {
+  camel,
+  modelName,
+  type StudioApproval,
+  type StudioField,
+  type StudioModel,
+  type StudioRule,
+  type StudioSpec,
+} from './spec.js';
 
 /** Where the change goes in a view: after a node, or at the end of a container (a form group). */
 export type EditAnchor = { readonly insertAfter: string } | { readonly append: string };
@@ -35,7 +43,11 @@ export type StudioEdit =
         readonly fields: readonly (Omit<StudioField, 'name'> & { readonly name?: string })[];
       };
       readonly menu: { readonly label: string };
-    };
+    }
+  /** An approval policy (RFC 0003) the module ships; needs the Permissions app. */
+  | { readonly kind: 'approval'; readonly approval: StudioApproval }
+  /** An automation rule the module ships; without `id`, the key comes from the name. Needs the Automation app. */
+  | { readonly kind: 'rule'; readonly rule: Omit<StudioRule, 'id'> & { readonly id?: string } };
 
 /** Who owns what, from the served registry: the module defining a model, and the module defining a view. */
 export interface Owners {
@@ -168,6 +180,29 @@ export function applyEdit(spec: StudioSpec, edit: StudioEdit, owners: Owners): S
       for (const f of fields)
         if (f.target !== undefined && !f.target.startsWith(`x_${spec.name}.`))
           needs(owners.modelOwner(f.target), `The model ${f.target}`);
+      break;
+    }
+    case 'approval': {
+      if ((spec.approvals ?? []).some((a) => a.name === edit.approval.name))
+        throw new StudioEditError(
+          `The module has an approval policy "${edit.approval.name}" already.`,
+        );
+      needs(owners.modelOwner('approval.policy'), 'The Permissions app (approval policies)');
+      if (!edit.approval.model.startsWith(`x_${spec.name}.`))
+        needs(owners.modelOwner(edit.approval.model), `The model ${edit.approval.model}`);
+      next = { ...spec, approvals: [...(spec.approvals ?? []), edit.approval] };
+      break;
+    }
+    case 'rule': {
+      const ids = new Set((spec.automationRules ?? []).map((r) => r.id));
+      const rule: StudioRule = {
+        ...edit.rule,
+        id: unique(ids, edit.rule.id ?? localFromLabel(edit.rule.name)),
+      };
+      needs(owners.modelOwner('automation.rule'), 'The Automation app (rules)');
+      if (!rule.model.startsWith(`x_${spec.name}.`))
+        needs(owners.modelOwner(rule.model), `The model ${rule.model}`);
+      next = { ...spec, automationRules: [...(spec.automationRules ?? []), rule] };
       break;
     }
   }
