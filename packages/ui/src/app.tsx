@@ -79,6 +79,7 @@ import {
   Spinner,
 } from './components/primitives.js';
 import { KoshProvider, type ThemeChoice, useKosh } from './context.js';
+import { DesignProvider } from './design.js';
 import { addMessages, createI18n, directionOf } from './i18n/index.js';
 import { LANGUAGES } from './i18n/messages.js';
 import {
@@ -377,119 +378,123 @@ function Shell(): ReactElement {
       {...(offline === undefined ? {} : { offline })}
     >
       <ToastProvider>
-        <OfflineAgent uid={user.id} />
-        <PaletteContext.Provider value={openPalette}>
-          <a
-            href="#content"
-            className="sr-only focus:not-sr-only focus:absolute focus:start-2 focus:top-2 focus:z-50 focus:rounded focus:bg-surface focus:px-3 focus:py-2"
-          >
-            {t('shell.skip')}
-          </a>
-          <header className="sticky top-0 z-30 border-b bg-surface">
-            <div className="flex h-12 items-center gap-2 px-3">
-              <Menu>
-                <MenuTrigger asChild>
-                  <Button variant="ghost" size="icon" aria-label={t('shell.apps')}>
-                    <Grid3x3 aria-hidden />
-                  </Button>
-                </MenuTrigger>
-                <MenuContent align="start">
-                  <MenuItem onSelect={() => void navigate({ to: '/' })}>{t('shell.apps')}</MenuItem>
-                  <MenuSeparator />
-                  {(apps.data ?? []).map((a) => (
-                    <MenuItem
-                      key={a.code}
-                      onSelect={() => void navigate({ to: '/$app', params: { app: a.code } })}
-                    >
-                      {a.label}
+        <DesignProvider>
+          <OfflineAgent uid={user.id} />
+          <PaletteContext.Provider value={openPalette}>
+            <a
+              href="#content"
+              className="sr-only focus:not-sr-only focus:absolute focus:start-2 focus:top-2 focus:z-50 focus:rounded focus:bg-surface focus:px-3 focus:py-2"
+            >
+              {t('shell.skip')}
+            </a>
+            <header className="sticky top-0 z-30 border-b bg-surface">
+              <div className="flex h-12 items-center gap-2 px-3">
+                <Menu>
+                  <MenuTrigger asChild>
+                    <Button variant="ghost" size="icon" aria-label={t('shell.apps')}>
+                      <Grid3x3 aria-hidden />
+                    </Button>
+                  </MenuTrigger>
+                  <MenuContent align="start">
+                    <MenuItem onSelect={() => void navigate({ to: '/' })}>
+                      {t('shell.apps')}
                     </MenuItem>
-                  ))}
-                </MenuContent>
-              </Menu>
-              <Link to="/" className="font-semibold">
-                {app?.label ?? t('app.name')}
-              </Link>
-              <nav aria-label={t('shell.menu')} className="ms-2 flex-1">
-                {params.app === undefined ? null : (
-                  <MenuLinks app={params.app} menus={menus.data ?? []} />
-                )}
-              </nav>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="hidden h-8 w-56 justify-between text-muted-foreground sm:flex"
-                onClick={() => setPalette(true)}
-                aria-keyshortcuts="Control+K Meta+K"
-              >
-                <span className="flex items-center gap-2">
-                  <Search className="size-4" aria-hidden />
-                  {t('palette.button')}
-                </span>
-                <kbd className="rounded border bg-surface px-1.5 text-xs">Ctrl K</kbd>
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="sm:hidden"
-                aria-label={t('palette.button')}
-                onClick={() => setPalette(true)}
-              >
-                <Search aria-hidden />
-              </Button>
-              <OfflineMenu />
-              {registry.headerItems().map(({ name, component: Item }) => (
-                <Item key={name} api={api} />
-              ))}
-              <CompanySwitcher
-                me={user}
-                company={current}
-                onChange={(id) => {
-                  api.setCompany(id);
-                  setCompany(id);
-                  void queryClient.invalidateQueries();
-                }}
-              />
-              <LanguageMenu />
-              <ThemeMenu />
-              <Menu>
-                <MenuTrigger asChild>
-                  <Button variant="ghost" size="icon" aria-label={user.name}>
-                    <UserRound aria-hidden />
-                  </Button>
-                </MenuTrigger>
-                <MenuContent>
-                  <MenuLabel>{user.name}</MenuLabel>
-                  <MenuItem
-                    onSelect={async () => {
-                      await api.logout();
-                      queryClient.clear();
-                      await dropOfflineCache(persister);
-                      await navigate({ to: '/login' });
-                    }}
-                  >
-                    <LogOut className="size-4" aria-hidden />
-                    {t('auth.signOut')}
-                  </MenuItem>
-                </MenuContent>
-              </Menu>
-            </div>
-          </header>
-          {user.administratorNeedsSecondFactor ? (
-            <div className="px-4 pt-3">
-              <Alert tone="info">{t('auth.adminNeeds2fa')}</Alert>
-            </div>
-          ) : null}
-          <main id="content" className="mx-auto w-full max-w-[100rem] p-4">
-            <Outlet />
-          </main>
-          <CommandPalette
-            open={palette}
-            onOpenChange={setPalette}
-            api={api}
-            onShortcuts={openHelp}
-          />
-          <ShortcutsHelp open={help} onOpenChange={setHelp} />
-        </PaletteContext.Provider>
+                    <MenuSeparator />
+                    {(apps.data ?? []).map((a) => (
+                      <MenuItem
+                        key={a.code}
+                        onSelect={() => void navigate({ to: '/$app', params: { app: a.code } })}
+                      >
+                        {a.label}
+                      </MenuItem>
+                    ))}
+                  </MenuContent>
+                </Menu>
+                <Link to="/" className="font-semibold">
+                  {app?.label ?? t('app.name')}
+                </Link>
+                <nav aria-label={t('shell.menu')} className="ms-2 flex-1">
+                  {params.app === undefined ? null : (
+                    <MenuLinks app={params.app} menus={menus.data ?? []} />
+                  )}
+                </nav>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="hidden h-8 w-56 justify-between text-muted-foreground sm:flex"
+                  onClick={() => setPalette(true)}
+                  aria-keyshortcuts="Control+K Meta+K"
+                >
+                  <span className="flex items-center gap-2">
+                    <Search className="size-4" aria-hidden />
+                    {t('palette.button')}
+                  </span>
+                  <kbd className="rounded border bg-surface px-1.5 text-xs">Ctrl K</kbd>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="sm:hidden"
+                  aria-label={t('palette.button')}
+                  onClick={() => setPalette(true)}
+                >
+                  <Search aria-hidden />
+                </Button>
+                <OfflineMenu />
+                {registry.headerItems().map(({ name, component: Item }) => (
+                  <Item key={name} api={api} />
+                ))}
+                <CompanySwitcher
+                  me={user}
+                  company={current}
+                  onChange={(id) => {
+                    api.setCompany(id);
+                    setCompany(id);
+                    void queryClient.invalidateQueries();
+                  }}
+                />
+                <LanguageMenu />
+                <ThemeMenu />
+                <Menu>
+                  <MenuTrigger asChild>
+                    <Button variant="ghost" size="icon" aria-label={user.name}>
+                      <UserRound aria-hidden />
+                    </Button>
+                  </MenuTrigger>
+                  <MenuContent>
+                    <MenuLabel>{user.name}</MenuLabel>
+                    <MenuItem
+                      onSelect={async () => {
+                        await api.logout();
+                        queryClient.clear();
+                        await dropOfflineCache(persister);
+                        await navigate({ to: '/login' });
+                      }}
+                    >
+                      <LogOut className="size-4" aria-hidden />
+                      {t('auth.signOut')}
+                    </MenuItem>
+                  </MenuContent>
+                </Menu>
+              </div>
+            </header>
+            {user.administratorNeedsSecondFactor ? (
+              <div className="px-4 pt-3">
+                <Alert tone="info">{t('auth.adminNeeds2fa')}</Alert>
+              </div>
+            ) : null}
+            <main id="content" className="mx-auto w-full max-w-[100rem] p-4">
+              <Outlet />
+            </main>
+            <CommandPalette
+              open={palette}
+              onOpenChange={setPalette}
+              api={api}
+              onShortcuts={openHelp}
+            />
+            <ShortcutsHelp open={help} onOpenChange={setHelp} />
+          </PaletteContext.Provider>
+        </DesignProvider>
       </ToastProvider>
     </KoshProvider>
   );

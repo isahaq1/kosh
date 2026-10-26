@@ -51,6 +51,7 @@ import {
   TabsTrigger,
 } from '../components/primitives.js';
 import { useKosh } from '../context.js';
+import { useDesign } from '../design.js';
 import { cn } from '../lib/cn.js';
 import { useLiveRecord } from '../live.js';
 import type { FormProps } from '../registry.js';
@@ -252,6 +253,7 @@ export function FormView({
 }: FormProps): ReactElement {
   const { api, registry, uid, companyId, offline } = useKosh();
   const { t } = useTranslation();
+  const design = useDesign();
   const toast = useToast();
   const queryClient = useQueryClient();
   const formId = useId();
@@ -496,6 +498,26 @@ export function FormView({
               >
                 {renderNodes(node.children)}
               </div>
+              {design.active ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="mt-2 border border-dashed border-primary/50 text-primary"
+                  onClick={() =>
+                    design.choose({
+                      kind: 'form',
+                      view: view.id,
+                      model,
+                      group: node.id,
+                      ...(node.label === undefined ? {} : { groupLabel: node.label }),
+                    })
+                  }
+                >
+                  <Plus aria-hidden />
+                  {t('views.design.addField')}
+                </Button>
+              ) : null}
             </fieldset>
           );
         case 'notebook': {

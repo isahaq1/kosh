@@ -48,6 +48,7 @@ import {
   Skeleton,
 } from '../components/primitives.js';
 import { useKosh } from '../context.js';
+import { useDesign } from '../design.js';
 import { cn } from '../lib/cn.js';
 import { useLiveModel } from '../live.js';
 import type { ViewProps } from '../registry.js';
@@ -1075,6 +1076,7 @@ export function ListView(props: ViewProps): ReactElement {
   );
   const height = HEIGHTS[density];
   const columns = allColumns.filter((c) => !hidden.has(c.id));
+  const design = useDesign();
   const [offset, setOffset] = useState(0);
   const [count, setCount] = useState<number | null>(null);
   const [pageRows, setPageRows] = useState<readonly Row[]>([]);
@@ -1281,6 +1283,25 @@ export function ListView(props: ViewProps): ReactElement {
           )}
         </span>
         <span className="flex-1" />
+        {design.active ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="border border-dashed border-primary/50 text-primary"
+            onClick={() =>
+              design.choose({
+                kind: 'list',
+                view: view.id,
+                model,
+                after: allColumns.at(-1)?.id ?? '',
+                shown: allColumns.map((c) => c.field),
+              })
+            }
+          >
+            <Plus aria-hidden />
+            {t('views.design.addColumn')}
+          </Button>
+        ) : null}
         <Button
           size="sm"
           variant="ghost"

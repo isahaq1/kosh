@@ -266,6 +266,7 @@ export function Dialog({
   description,
   children,
   footer,
+  wide,
 }: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
@@ -273,12 +274,21 @@ export function Dialog({
   readonly description?: string;
   readonly children?: ReactNode;
   readonly footer?: ReactNode;
+  /** A wider dialog with its own scrolling (reviews, diffs). */
+  readonly wide?: boolean;
 }): ReactElement {
   return (
     <RDialog.Root open={open} onOpenChange={onOpenChange}>
       <RDialog.Portal>
         <RDialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
-        <RDialog.Content className="fixed start-1/2 top-1/2 z-50 w-[min(32rem,calc(100vw-2rem))] -translate-y-1/2 rtl:translate-x-1/2 ltr:-translate-x-1/2 rounded-lg border bg-surface p-5 text-surface-foreground shadow-xl">
+        <RDialog.Content
+          className={cn(
+            'fixed start-1/2 top-1/2 z-50 -translate-y-1/2 rtl:translate-x-1/2 ltr:-translate-x-1/2 rounded-lg border bg-surface p-5 text-surface-foreground shadow-xl',
+            wide === true
+              ? 'max-h-[calc(100vh-2rem)] w-[min(56rem,calc(100vw-2rem))] overflow-y-auto'
+              : 'w-[min(32rem,calc(100vw-2rem))]',
+          )}
+        >
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
               <RDialog.Title className="text-base font-semibold">{title}</RDialog.Title>

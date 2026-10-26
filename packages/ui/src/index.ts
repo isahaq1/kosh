@@ -32,6 +32,12 @@ export { KoshApp, type KoshAppProps } from './app.js';
 export { AppIcon } from './components/AppIcon.js';
 export * from './components/primitives.js';
 export { type KoshContextValue, KoshProvider, type ThemeChoice, useKosh } from './context.js';
+export {
+  type DesignContextValue,
+  DesignProvider,
+  type DesignSpot,
+  useDesign,
+} from './design.js';
 export { addMessages, createI18n, directionOf, NAMESPACE } from './i18n/index.js';
 export { LANGUAGES } from './i18n/messages.js';
 export { cn } from './lib/cn.js';
