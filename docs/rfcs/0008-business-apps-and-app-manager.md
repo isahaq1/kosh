@@ -186,6 +186,22 @@ kosh apps upgrade [name…]              # newer catalogue versions: reviewed mi
 | Disable or enable an app | < 1 s |
 | Registry rebuild on other nodes | < 1 s after `NOTIFY` |
 
+Measured by `apps/demo/bench/apps.bench.test.ts` (`pnpm bench`, CI on main) on the demo data plus 10 000 orders
+and 1 000 posted invoices, as API time through the real server (2026-10-26, PostgreSQL 18 in Docker on a laptop):
+
+| Operation | Target | Measured |
+| --- | --- | --- |
+| Plan against the live database | < 500 ms | 72 ms |
+| Install Sales on a fresh database | < 5 s | 330 ms |
+| Disable / enable Projects | < 1 s | 77 / 87 ms |
+| The other node serves the new set | < 1 s | 63 / 68 ms |
+| Order list page, 80 rows / 1 000 rows, with the count | < 300 ms | 25 / 91 ms |
+| Search by customer name and state; the kanban's aggregate | < 300 ms | 27 / 27 ms |
+| An order's form with its lines | < 150 ms | 23 ms |
+| Confirm an order (median) | < 300 ms | 28 ms |
+| Post an invoice (median) | < 300 ms | 80 ms |
+| Trial balance / aged balances over 1 000 invoices | < 500 ms | 25 / 22 ms |
+
 ### 5.8 Demo data
 
 An evaluator wants to see the apps at work, not an empty database. Each module may declare `hooks.demo`: a seeder
