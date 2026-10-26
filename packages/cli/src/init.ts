@@ -17,8 +17,10 @@ import type { KoshModule } from '@kosh/modules-sdk';
 import {
   base,
   createServer,
+  DEMO_PASSWORD,
   FRAMEWORK_TABLES,
   installBase,
+  installDemo,
   KOSH_VERSION,
   type KoshServer,
   migrate,
@@ -50,6 +52,8 @@ Options (each also answers its question; with --yes the rest take their defaults
   --s3-endpoint <url> --s3-bucket <name> --s3-access-key <key> --s3-secret-key <secret> [--s3-region <r>]
   --valkey-url <url>        optional: rate limits and caches shared across servers
   --port <port>             the API's port (default 3000)
+  --demo                    load demo data: a sample company with contacts, products, orders, invoices and
+                            projects, made by demo users (dina, rahim, karim, sumi; one shared password)
   --no-2fa                  skip the authenticator enrolment (administrator rights wait for it)
   --yes                     do not ask; use flags and defaults
 `;
@@ -73,6 +77,8 @@ interface Answers {
   readonly tz: string;
   readonly admin: { login: string; name: string; email: string; password: string };
   readonly apps: AppName[];
+  /** Load the apps' demo data (RFC 0008 §5.8). */
+  readonly demo: boolean;
   readonly storage:
     | { readonly kind: 'dir'; readonly dir: string }
     | {
@@ -467,6 +473,12 @@ async function ask(
   ];
   // The bridges of the chosen apps come along (RFC 0008 §5.1).
   const apps = [...chosen, ...bridgesFor(chosen).filter((b) => !chosen.includes(b))];
+  const demo =
+    flags['demo'] === true ||
+    (await prompter.confirm(
+      '  Load demo data (a sample company with orders, invoices and projects; not for production)?',
+      false,
+    ));
 
   ui.step('storage', 'File storage', 'Where attachments and generated documents are kept');
   let storage: Answers['storage'];
@@ -517,6 +529,7 @@ async function ask(
     tz,
     admin: { login, name: adminName, email, password: password as string },
     apps,
+    demo,
     storage,
     valkeyUrl,
     port,
@@ -725,6 +738,26 @@ async function setUp(server: KoshServer, a: Answers, ui: Ui): Promise<number | n
       ui.detail(t.trim());
     });
   });
+  if (a.demo)
+    await ui.task('Loading the demo data', async (task) => {
+      const [first] = await server.driver.query<{ id: number }>({
+        text: 'SELECT min(id)::int AS id FROM res_company',
+        params: [],
+      });
+      const seeded = await installDemo({
+        shutro: server.shutro,
+        auth,
+        driver: server.driver,
+        modules: server.registry.loaded.modules,
+        company: first?.id as number,
+        write: (t) => ui.detail(t),
+      });
+      task.finish(
+        seeded.length === 0
+          ? 'no installed app has demo data'
+          : `${seeded.length} app(s) seeded; demo users dina, rahim, karim and sumi`,
+      );
+    });
   return admin;
 }
 
@@ -820,6 +853,7 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
       'valkey-url': { type: 'string' },
       port: { type: 'string' },
       'no-2fa': { type: 'boolean' },
+      demo: { type: 'boolean' },
       'docker-db': { type: 'boolean' },
       yes: { type: 'boolean', short: 'y' },
       help: { type: 'boolean', short: 'h' },
@@ -921,6 +955,9 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
         `${answers.admin.login} ${ui.style(enrolled ? 'green' : 'yellow', enrolled ? '· 2FA on' : '· 2FA pending')}`,
       ],
       ['Apps', ['base', 'settings', 'realtime', 'notify', ...answers.apps].join(', ')],
+      ...(answers.demo
+        ? [['Demo users', `dina, rahim, karim, sumi · password "${DEMO_PASSWORD}"`] as CardRow]
+        : []),
       ['Database', answers.dockerDb ? `Docker (port ${answers.postgres.port})` : 'your server'],
       ['API', `http://localhost:${answers.port}`],
       ['Took', `${((Date.now() - started) / 1000).toFixed(1)}s`],

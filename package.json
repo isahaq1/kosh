@@ -19,6 +19,7 @@
     "dev:services": "docker compose up -d --wait",
     "changeset": "changeset",
     "bench": "vitest run --config vitest.bench.config.ts",
+    "demo": "node --conditions=@kosh/source apps/demo/src/index.ts",
     "pack:npm": "pnpm build && node scripts/pack-npm.ts",
     "generate:models": "node --conditions=@kosh/source scripts/generate-models.ts"
   },

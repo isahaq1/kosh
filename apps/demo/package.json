@@ -3,8 +3,31 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Demo ERP: base, contacts, product, purchase, inventory, sales (CLAUDE.md, Phase 6)",
+  "description": "A throwaway Kosh with every app and the demo data (CLAUDE.md, Phase 6): pnpm demo",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@kosh/accounting": "workspace:*",
+    "@kosh/contacts": "workspace:*",
+    "@kosh/messaging": "workspace:*",
+    "@kosh/modules-sdk": "workspace:*",
+    "@kosh/notify": "workspace:*",
+    "@kosh/permissions": "workspace:*",
+    "@kosh/product": "workspace:*",
+    "@kosh/project": "workspace:*",
+    "@kosh/purchase": "workspace:*",
+    "@kosh/purchase_account": "workspace:*",
+    "@kosh/realtime": "workspace:*",
+    "@kosh/reporting": "workspace:*",
+    "@kosh/sale_account": "workspace:*",
+    "@kosh/sale_project": "workspace:*",
+    "@kosh/sales": "workspace:*",
+    "@kosh/server": "workspace:*",
+    "@kosh/settings": "workspace:*"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^12.2.1",
+    "vitest": "^5.0.4"
   }
 }

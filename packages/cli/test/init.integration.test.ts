@@ -228,7 +228,7 @@ test('the database asked part by part: host, port, user, hidden password, databa
     'Password (12+ characters)': PASSWORD,
     'Repeat the password': PASSWORD,
   });
-  const code = await runInit(['parts', '--no-2fa'], {
+  const code = await runInit(['parts', '--no-2fa', '--demo'], {
     write: (t) => output.push(t),
     prompter,
     cwd: dir,
@@ -237,6 +237,11 @@ test('the database asked part by part: host, port, user, hidden password, databa
   expect(code, text).toBe(0);
   expect(text).toContain('connected (PostgreSQL 18');
   expect(prompter.asked).toContain('  Database name (created if missing)');
+  // The demo data of every app (all are installed by default), made by the demo users.
+  expect(text).toContain('contacts: 8 companies and 3 people');
+  expect(text).toContain('sale_project: 2 service products create tasks or projects when sold');
+  expect(text).toContain('Demo users');
+  expect(text).toContain('dina, rahim, karim, sumi');
   const env = await readFile(join(dir, 'parts', '.env'), 'utf8');
   expect(env).toContain(
     `DATABASE_URL=postgres://${uri.username}:${uri.password}@${uri.hostname}:${uri.port}/kosh_parts`,

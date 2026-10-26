@@ -30,7 +30,66 @@ importers:
         specifier: ^5.0.4
         version: 5.0.5(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(jsdom@30.1.3)(vite@7.3.7(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.1))
 
-  apps/demo: {}
+  apps/demo:
+    dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../../modules/accounting
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../../modules/contacts
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/notify':
+        specifier: workspace:*
+        version: link:../../packages/notify
+      '@kosh/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../../modules/product
+      '@kosh/project':
+        specifier: workspace:*
+        version: link:../../modules/project
+      '@kosh/purchase':
+        specifier: workspace:*
+        version: link:../../modules/purchase
+      '@kosh/purchase_account':
+        specifier: workspace:*
+        version: link:../../modules/purchase_account
+      '@kosh/realtime':
+        specifier: workspace:*
+        version: link:../../packages/realtime
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
+      '@kosh/sale_account':
+        specifier: workspace:*
+        version: link:../../modules/sale_account
+      '@kosh/sale_project':
+        specifier: workspace:*
+        version: link:../../modules/sale_project
+      '@kosh/sales':
+        specifier: workspace:*
+        version: link:../../modules/sales
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+    devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+      vitest:
+        specifier: ^5.0.4
+        version: 5.0.5(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(jsdom@30.1.3)(vite@7.3.7(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.1))
 
   apps/web:
     dependencies:
