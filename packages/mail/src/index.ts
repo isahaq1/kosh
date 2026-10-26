@@ -100,10 +100,23 @@ export function layout(input: {
   readonly title: string;
   readonly paragraphs: readonly string[];
   readonly action?: { readonly label: string; readonly url: string };
+  /** Groups of lines under a linked heading (a digest: one per record). */
+  readonly sections?: readonly {
+    readonly heading: string;
+    readonly url: string;
+    readonly lines: readonly string[];
+  }[];
   readonly footer?: string;
   readonly lang?: string;
   readonly dir?: 'ltr' | 'rtl';
 }): { readonly html: string; readonly text: string } {
+  const sections = (input.sections ?? [])
+    .map(
+      (s) =>
+        `<h2 style="margin:20px 0 6px;font-size:15px"><a href="${escapeHtml(s.url)}" style="color:#1d4ed8;text-decoration:none">${escapeHtml(s.heading)}</a></h2>` +
+        `<ul style="margin:0;padding-inline-start:20px;line-height:1.5">${s.lines.map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>`,
+    )
+    .join('\n    ');
   const e = escapeHtml;
   const html = `<!doctype html>
 <html lang="${e(input.lang ?? 'en')}" dir="${input.dir ?? 'ltr'}">
@@ -111,6 +124,7 @@ export function layout(input: {
   <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:24px">
     <h1 style="margin:0 0 16px;font-size:18px">${e(input.title)}</h1>
     ${input.paragraphs.map((p) => `<p style="margin:0 0 12px;line-height:1.5">${e(p)}</p>`).join('\n    ')}
+    ${sections}
     ${
       input.action === undefined
         ? ''
@@ -125,6 +139,11 @@ export function layout(input: {
     input.title,
     '',
     ...input.paragraphs,
+    ...(input.sections ?? []).flatMap((s) => [
+      '',
+      `${s.heading} (${s.url})`,
+      ...s.lines.map((l) => `- ${l}`),
+    ]),
     ...(input.action === undefined ? [] : ['', `${input.action.label}: ${input.action.url}`]),
     ...(input.footer === undefined ? [] : ['', input.footer]),
   ].join('\n');

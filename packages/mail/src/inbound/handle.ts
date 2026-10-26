@@ -484,6 +484,8 @@ async function recordBounce(context: InboundContext, mail: InboundMail): Promise
       await ref(su, 'notify.delivery')
         .browse([d['id'] as number])
         .write({ state: 'bounced', error: `bounced: ${mail.subject.slice(0, 200)}` });
+      // The notifications module falls back to the recipient's fallback channel (RFC 0006 §8.4).
+      await su.emit('notify.delivery.bounced', { delivery: d['id'] });
       const [n] = await rows(su, 'notify.notification', { id: d['notification'] }, [
         'user',
         'actor',
