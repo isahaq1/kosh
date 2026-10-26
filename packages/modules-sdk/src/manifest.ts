@@ -84,6 +84,27 @@ export interface DocumentSpec {
   readonly scope?: 'record' | 'list';
 }
 
+/** A user the demo data is made by: created on first use with these groups (added to an existing one). */
+export interface DemoUser {
+  readonly login: string;
+  readonly name: string;
+  readonly groups: readonly string[];
+}
+
+/** What a module's demo seeder gets (RFC 0008 §5.8). Every scope is a transaction of its own. */
+export interface DemoContext {
+  /** The company the demo data belongs to. */
+  readonly company: number;
+  /** Every served module: a seeder may adapt to the others that are installed. */
+  readonly modules: readonly KoshModule[];
+  /** Runs `fn` as a demo user (`Env` of `@kosh/server/orm`): audit, sequences and record rules apply as for real data. */
+  as<T>(user: DemoUser, fn: (env: unknown) => Promise<T>): Promise<T>;
+  /** Runs `fn` in an audited system scope of the company, for what no user does by hand (a chart of accounts). */
+  system<T>(reason: string, fn: (env: unknown) => Promise<T>): Promise<T>;
+  /** Today in the company's calendar, `days` from now, as an ISO date: dates of the demo follow the installation. */
+  date(days: number): string;
+}
+
 /** Lifecycle hooks (RFC 0001 §5.7); run by the server in a system scope inside the install transaction. */
 export interface ModuleHooks {
   readonly postInstall?: (env: unknown) => Promise<void>;
@@ -95,6 +116,12 @@ export interface ModuleHooks {
    * the log (`3 approval policies installed`), or nothing.
    */
   readonly defaults?: (env: unknown, modules: readonly KoshModule[]) => Promise<string | undefined>;
+  /**
+   * Seeds this module's demo data (RFC 0008 §5.8): a realistic sample set made as demo users through the models,
+   * so that an evaluator sees the app at work. Run once per module (`installDemo`), in dependency order, when an
+   * installation asks for it (`kosh init --demo`); never on its own. Returns a summary line for the log.
+   */
+  readonly demo?: (context: DemoContext) => Promise<string | undefined>;
 }
 
 /** The input of {@link defineModule}. */

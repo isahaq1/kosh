@@ -68,6 +68,7 @@ export {
   timeOf,
   type UserInfo,
 } from './auth/service.js';
+export { DEMO_PASSWORD, type DemoResult, installDemo } from './demo.js';
 export { HttpProblem, type Problem, problemOf, ServerConfigError } from './errors.js';
 export { type AppHost, type AppHostOptions, createAppHost, startAppHost } from './host.js';
 export {

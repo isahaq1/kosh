@@ -70,6 +70,8 @@ export function appTableStatements(): DriverQuery[] {
 )`,
       params: [],
     },
+    // When the module's demo data was loaded (RFC 0008 §5.8); added to tables from before it.
+    { text: `ALTER TABLE ${APPS_TABLE} ADD COLUMN IF NOT EXISTS demo_at timestamptz`, params: [] },
     {
       text: `CREATE TABLE IF NOT EXISTS ${APPS_LOG_TABLE} (
   id bigserial PRIMARY KEY,
