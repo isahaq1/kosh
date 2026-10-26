@@ -1,6 +1,6 @@
 # RFC 0006: Communication & notification architecture
 
-- **Status:** Accepted; parts 1–5 implemented (chatter, the realtime gateway, the inbox, email and web push); the jobs decision taken on 2026-10-25. Parts 6 (internal chat) and 7 (inbound email) designed below, awaiting approval.
+- **Status:** Accepted; parts 1–7 implemented (chatter, the realtime gateway, the inbox, email, web push, SMS and WhatsApp, internal chat, inbound email); the jobs decision taken on 2026-10-25. Part 8 (fallback channels, digests, quiet hours) designed below on 2026-10-27, awaiting approval.
 - **Depends on:** 0001, 0002, 0003; Shutro RFC 0013 (audit), 0018 (outbox events, jobs)
 
 ## 1. Summary
@@ -208,6 +208,76 @@ member table hidden behind a kanban.
   when asked. Development uses Mailpit's webhook. Yes?
 - **Chat retention of attachments** counts against the company's storage like record attachments. Yes?
 - **Dock on mobile widths**: a full-screen conversation instead of bubbles. Yes?
+
+## Design (2026-10-27): part 8 — fallback channels, digests, quiet hours
+
+§5.4 promises them; today every channel a user enables gets every notification at once, and a failed or bounced
+delivery just stays failed. Odoo has no quiet hours, no fallback between channels, and its digest is a separate
+"digest email" app of KPIs, not a summary of what happened to you.
+
+### 8.1 The user's notification settings
+
+One private model `notify.settings` per user (created on first save; absent means the defaults), edited on the
+existing Notifications page next to the per-kind channel switches:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `quietFrom`, `quietTo` | none | quiet hours, `HH:MM` in the user's time zone (`res.users.tz`); may cross midnight (22:00–07:00) |
+| `quietDays` | none | whole days off (`sat`, `sun`, …) |
+| `digestHour` | 08:00 | when the daily digest goes out, in the user's time zone |
+| `fallback` | `email` | the channel that takes over when another one cannot deliver; `none` to switch it off |
+
+The per-kind, per-channel switch (`notify.preference.enabled`) becomes a **mode** for email: `instant` (today's
+behaviour), `daily` (in the digest) or `off`. Other channels stay on / off. Existing rows map `true` → `instant`,
+`false` → `off` (a data migration of `notify`).
+
+### 8.2 Quiet hours
+
+During a user's quiet hours, the **interrupting channels** (web push, SMS, WhatsApp) are held: the delivery is
+created in a new state `held` with `notBefore` set to the end of the quiet period, and its job is enqueued with
+Shutro's `runAt` at that instant. When the job runs, it delivers if the notification is still unread (read in the
+inbox meanwhile: `skipped`, reason `read`). The inbox and email are never held: they do not interrupt. No kind
+bypasses quiet hours in version 1; an "urgent" flag per kind can come later if users ask for it.
+
+### 8.3 Digests
+
+An email delivery whose mode is `daily` is created in state `digest` (no job). One job per user and day,
+`notify.digest:<user>:<date>` (deduplicated by key, `runAt` = the next `digestHour`), sends **one** email listing
+the user's `digest` deliveries since the last digest, grouped by record, each line linking to it, translated in the
+user's language, skipping notifications already read in the inbox. Every included delivery becomes `sent` with the
+digest's provider id; an empty digest sends nothing. The digest email uses the same transport as instant email, so
+bounces mark every included delivery `bounced`.
+
+### 8.4 Fallback channels
+
+When a delivery on a channel other than the inbox ends **without reaching the user** — `failed` after its last
+attempt, `bounced`, or `skipped` because the channel has no destination (no phone number, no push subscription
+left) — and no other channel of the same notification was `sent`, a delivery on the user's `fallback` channel is
+created (`fallbackOf` = the failed delivery) and runs like any other (quiet hours and the mode apply; a `daily`
+email fallback goes in the digest). One level only: a fallback never falls back again, and a channel is never its
+own fallback, so there is no loop. SMS and WhatsApp as fallbacks still need the user's opt-in and a phone number.
+
+### 8.5 Permissions and tests
+
+Settings are the user's own (record rules as for preferences); the inbox re-check of the recipient's access
+(§5.3) runs again when a held or digest delivery is finally sent, so a user who lost access meanwhile gets nothing.
+Tests on PostgreSQL: quiet hours across midnight in a non-UTC time zone hold a push and release it at the end
+(read meanwhile → skipped); a daily email goes in one digest with two notifications, a read one left out, an empty
+digest sends nothing; a bounced email falls back to web push once, a failed push falls back to email, a fallback
+never chains; access lost before the digest drops the line. E2E: the settings on the Notifications page (English
+and Bangla).
+
+### 8.6 Delivery plan (each step reviewed)
+
+1. `notify.settings`, modes, the data migration, quiet hours (held deliveries); the settings API.
+2. Digests (the daily job and email), fallback channels.
+3. The Notifications page: quiet hours, digest hour, fallback, the email mode per kind; E2E.
+
+### 8.7 Open questions (answers wanted with the approval)
+
+- **Interrupting channels**: web push, SMS and WhatsApp held in quiet hours, email not (proposed); or email too?
+- **Default fallback**: email (proposed), or none until the user picks one?
+- **Digest period**: daily only (proposed), or also weekly?
 
 ## Implementation notes (2026-10-26, part 6 step 1: the chat model, routes, gateway, notifications)
 
