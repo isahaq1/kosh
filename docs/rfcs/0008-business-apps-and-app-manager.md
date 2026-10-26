@@ -230,7 +230,7 @@ show the reason; a pre-checked line to uncheck in the UI is still to come.
 
 - **`kosh init`** offers every app but the bridges (`SELECTABLE_APPS`), all selected by default: Contacts,
   Products, Sales, Purchase and Accounting with the framework apps; the bridges of the chosen apps
-  (`bridgesFor`) come along without being asked for. Projects joins the default set when it is built.
+  (`bridgesFor`) come along without being asked for (Projects and `sale_project` joined on 2026-10-26).
 - **The business apps' E2E catalogue** (`apps/web/e2e-apps/server.ts`, Playwright project `apps`, its own API
   and preview ports): a real installation of Sales, Purchase and Accounting with the bridges proposed by the
   planner, the Bangladesh chart, partners, a product, a confirmed sales order and a posted customer invoice,
@@ -239,6 +239,31 @@ show the reason; a pre-checked line to uncheck in the UI is still to come.
   balance, sets a lock date on the settings page and matches open items on the reconciliation page. The fixture
   catalogue (`e2e/`) keeps its own partner model, so the two projects run on separate servers.
 - The back-office (`apps/web`) registers the accounting screens (`@kosh/accounting/web`), as the starter does.
+
+## Implementation notes (2026-10-26): step 6 — Projects and `sale_project`
+
+- **`@kosh/project`** (`modules/project`): projects with a customer and a manager (the creator by default), tasks
+  on a kanban of shared stages (a stage may close the task; `done` and the project's open `taskCount` are stored
+  computes; the stage's `fold` flag waits for the board to honour it), assignees, priorities, deadlines (a calendar of them), planned hours, and
+  timesheets whose hours add up on the task and the project (`effectiveHours`, `hours`). `project.user` sees every
+  project and task of their companies and their own timesheets, `project.manager` everything and the stages.
+  Timesheets are one line per entry with a positive-hours SQL check. Sub-tasks, tags, milestones, gantt and the
+  project dashboard of §5.1 come when asked for; the task kanban has no quick create until there are per-project
+  boards (a task needs a project).
+- **`@kosh/sale_project`** (`modules/sale_project`, `bridge: [sales, project]`): a service product says what its
+  sale creates on confirmation (nothing, a task in a project, a project of its own). Sales now emits an outbox
+  event `sale.order.confirmed` after the confirmation; the bridge's subscriber (`saleProjectWorker`, started by
+  its routes unless `KOSH_SCHEDULES=off`) creates the tasks and projects in its own transaction as the user who
+  confirmed, exactly once (a line already served is skipped, so a replayed event adds nothing). The order's form
+  shows its task count; the product form takes the tracking and the project.
+- Two framework fixes the board and the task form needed: the web form's onchange sent the record's `id` among
+  the values (refused by the server, so no form's onchange ever ran in the browser) and wrote back the computed
+  values the result carries; a kanban grouped by a many2one now shows every record of the target (up to 50, in its
+  order) as a column, empty ones included, so a new board has its stages.
+- Tests: `modules/project/test` and `modules/sale_project/test` on real PostgreSQL through the HTTP API (install,
+  stages, the open task count, timesheet visibility, the planner's bridge proposal, the outbox delivery and its
+  replay); `apps/web/e2e-apps/projects.spec.ts` on the catalogue (project and task from their forms, the board,
+  a timesheet and its hours). `kosh init` offers Projects; `sale_project` follows Sales and Projects.
 
 ## 9. Decisions (2026-10-19)
 
