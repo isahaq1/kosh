@@ -242,7 +242,7 @@ export default defineModule({
 - [x] RFC 0008 Default business apps (Settings, Accounting, Sales, Purchase, Projects) & App manager (install / disable / uninstall)
 - [x] RFC 0010 Modern back-office: Phase A built (palette, shortcuts, toasts with Undo, pager, bulk actions, export, home page, PWA); Phase B done (live updates, notifications, offline, spreadsheet-grade lists, SMS/WhatsApp); C split into RFCs of its own
 - [x] RFC 0011 Automation builder: the engine on the audit trail and outbox, the actions (incl. signed webhooks), date and schedule triggers, the run log, the rule editor with the condition builder, dry run and run-now (docs/automation.md); step 4 waits for Shutro request #26 and Studio
-- [ ] RFC 0012 Kosh Studio: accepted; steps 1–2 done (the spec, the deterministic generator, `kosh studio build`; the App manager's upgrade, `kosh apps upgrade`, the Apps page's Upgrade; docs/studio.md); next the Studio API (step 3)
+- [ ] RFC 0012 Kosh Studio: accepted; steps 1–3 done (the spec, the deterministic generator, `kosh studio build`; the App manager's upgrade, `kosh apps upgrade`, the Apps page's Upgrade; the Studio API with review, apply in write mode and patches in propose mode; docs/studio.md); next Studio mode in the back-office (step 4)
 
 ### Phase 1 — Server foundation
 

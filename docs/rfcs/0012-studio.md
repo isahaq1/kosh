@@ -1,6 +1,6 @@
 # RFC 0012: Kosh Studio
 
-- **Status:** Accepted 2026-10-26 with the proposed answers (the installation's `src/modules/`, patches first, the prefix, administrators); step 1 implemented (`@kosh/studio`, `kosh studio build`, `docs/studio.md`)
+- **Status:** Accepted 2026-10-26 with the proposed answers (the installation's `src/modules/`, patches first, the prefix, administrators); steps 1–3 implemented (`@kosh/studio`, `kosh studio build`, `kosh apps upgrade`, the Studio API; `docs/studio.md`)
 - **Depends on:** 0001 (manifests), 0002 (metadata), 0003 (permissions, approvals), 0004 (views and their
   extensions), 0008 (App manager, migrations), 0011 (automation rules); Shutro's `extendModel` and migration
   planner
@@ -163,6 +163,27 @@ to a form in Studio mode, apply, fill it on a record.
 - Tests: the planner (upgrade, unchanged, back refused, not installed, the outdated list); on PostgreSQL, a module
   at 1.0.0 upgraded to 1.1.0 (a column added, its data migration filling it, the version and the log), refused
   back, empty again, and 2.0.0 dropping a column refused until "remove data".
+
+## Implementation notes (2026-10-26): step 3 — the Studio API
+
+- The `studio` module (`@kosh/studio`, group `studio.manager`, in the starter's catalogue and default set):
+  `GET /api/v1/studio`, `GET …/modules/:name`, `POST …/preview`, `…/apply` (write mode), `…/propose`.
+- A review generates the files, loads the generated module from `.kosh-studio/plan/<name>-<uuid>/` (as deep in the
+  project as `src/modules/<name>/`, so the imports are the same; removed at once, also in propose mode), plans
+  with the App manager on the catalogue with the module replaced (`install`, or `upgrade` to at least the next
+  patch of the installed version), and checks the view changes against the views as served (a missing anchor is
+  a 422 at preview, not a failed reload). The diff is a small unified diff (`unifiedDiff`, `git apply` reads it).
+- Apply: the plan id must match; the database first (one App manager transaction), then the files and
+  `src/modules.ts`, then `AppsContext.useModule` (new: the app host's catalogue takes the new code) and a reload.
+  Write mode is single-server by design: another node serves the change once it runs the new code.
+- Safety: names of modules Studio does not manage (no `studio.json`) and `base`, `settings`, `studio` are refused;
+  dependencies must be in the catalogue; a destructive change is refused (dropping data stays
+  `kosh apps upgrade --remove-data`).
+- Tests (`packages/studio/test/studio-api.integration.test.ts`, real PostgreSQL and HTTP): every route refuses
+  anonymous and non-Studio users; invalid specs, unknown dependencies, taken names and missing anchors; a preview
+  with the SQL and the diff and nothing written; a stale plan refused; apply installs, the REST API serves the field
+  at once, the files and `src/modules.ts` are written; a second apply upgrades to 0.1.1 with one `ADD COLUMN`;
+  propose mode returns a patch, refuses apply and writes nothing. The diff is applied with `git apply` in a test.
 
 ## Alignment with CLAUDE.md
 
