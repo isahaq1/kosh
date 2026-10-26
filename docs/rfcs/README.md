@@ -14,4 +14,4 @@ Design documents written before implementation. An RFC is implemented only after
 | 0008 | [Default business apps & App manager](0008-business-apps-and-app-manager.md) | Accepted; steps 1–7 implemented (`kosh apps`, app host, Settings → Apps, Contacts / Products / Sales / Purchase / Accounting / Projects and the bridges, the default set, the apps' E2E catalogue) |
 | 0009 | [Accounting](0009-accounting.md) | Accepted; steps 1–4 implemented (the ledger, documents and bridges, payments and reconciliation, reports and closing) |
 | 0010 | [A modern, fast, friendly back-office](0010-modern-ux.md) | Phase A accepted (within RFC 0007); Phase B implemented; C: its three subsystems get RFCs of their own, 0011 first |
-| 0011 | [Automation builder](0011-automation-builder.md) | Accepted; steps 1–2 implemented (the engine, the models, the API, the editor) |
+| 0011 | [Automation builder](0011-automation-builder.md) | Accepted; steps 1–3 implemented (the engine, the API, the editor, webhooks, date and schedule triggers) |

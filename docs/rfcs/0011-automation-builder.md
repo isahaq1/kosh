@@ -191,6 +191,24 @@ cannot read rules); E2E: a rule made in the app fires on a record and shows in t
 - E2E: `apps/web/e2e/automation.spec.ts` (a rule made in the editor, a dry run, run now, the log, the note on
   the record).
 
+## Implementation notes (2026-10-26): step 3 — webhooks, date and schedule triggers
+
+- `webhook`: the action enqueues an `automation.webhook` job (Shutro's jobs: 4 attempts with backoff) carrying the
+  URL and the body; the worker signs the body with the rule's `webhookSecret` (made on first use; managers read
+  it on the rule) and posts it with a 10 s timeout. The allow-list is `KOSH_AUTOMATION_WEBHOOK_HOSTS` for now
+  (settings with the Automation settings page later); https only, http for localhost.
+- `date` and `schedule` run in the engine's round (`pollTimed`) rather than as one job per record: a `date`
+  rule searches the records whose date plus the offset falls in the last 7 days and applies once per record and
+  date value (the run's key is `date:<value>`, so a moved date fires again, and no job needs rescheduling); a
+  `schedule` rule parses its cron (`cron.ts`, UTC), and when its next slot after the last one has passed, applies
+  to the records of its condition (500) once per slot (`schedule:<slot>`). Both run as `runAsUser`, else the
+  system. The same indexed searches a list view makes; no table scan beyond the date window.
+- The editor offers both triggers (the model's date fields, the offset, the cron with a hint) and the webhook
+  action (the URL, the fields to send). `POST /api/v1/automation/poll` checks the timed rules too.
+- Tests: `packages/automation/test/cron.test.ts` (parsing, the next slot, due or not, the webhook checks and the
+  signature) and three integration cases (a date reached once per value and again when moved; a nightly slot
+  once; a signed webhook through the job, retried after a 500, a host off the list refused).
+
 ## Alignment with CLAUDE.md
 
 Rules are data, actions are a fixed menu plus typed module code (explicit over magic, secure by default: no scripts

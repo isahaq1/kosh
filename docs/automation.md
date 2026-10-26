@@ -15,7 +15,8 @@ module), and every evaluation is a row of the run log.
 | `transition` | the state field changed | `fromValues` / `toValues`; `watchFields` names the state field (`state` by default) |
 | `deleted` | a record is deleted | |
 | `event` | an app emitted an outbox event whose payload names a record (`{ model, id }`) | `topic` (`sale.order.confirmed`, `approval.decided`, `crm.deal.won`) |
-| `date`, `schedule` | a date field reached, a cron | step 3 |
+| `date` | a date field of the record (plus `dateOffsetDays`, negative for before) is reached | `dateField`, `dateOffsetDays`; once per record and date value, a moved date fires again; records whose date passed more than 7 days before the rule existed are left alone |
+| `schedule` | a cron slot (UTC: `0 2 * * *`, `*/15 * * * *`, `@daily`) is due | `cron`; runs on the records the condition matches (500 per slot), once per slot |
 
 The audit trail logs field changes of **tracked** fields only (`tracking` on the model or the field): an `updated`
 rule watching another field is skipped with the reason `untracked` on every change (`GET
@@ -36,7 +37,7 @@ syntax, the one approval policies use), e.g. `{ amountTotal: { gte: '50000' }, p
 | `note`, `comment` | `text` | posts on the record's chatter |
 | `create` | `model`, `values` | creates a record (its rules fire too, up to a depth of 5) |
 | `action` | `key`, `params` | runs an action a module declares (`automationActions` in its manifest: typed TypeScript) |
-| `webhook` | | step 3 |
+| `webhook` | `url`, `fields` | a signed JSON POST through a job (`automation.webhook`, 4 attempts with backoff, 10 s timeout): `{ rule, trigger, model, id, record, at }`, `X-Kosh-Signature: sha256=<HMAC of the body with the rule's webhookSecret>` (made on first use), `X-Kosh-Rule`; https only (http for localhost), and the host on `KOSH_AUTOMATION_WEBHOOK_HOSTS` (comma-separated, `*.example.com` allowed) |
 
 **Users** (`assignee`, `users`) are ids, `field:<key>` (a user field of the record, `field:user`), or `role:<code>`
 (every holder of the role in the company). **Templates** in `values`, `summary`, `note`, `text`: `{{field}}`,
@@ -98,6 +99,7 @@ defineModule({
 
 ## Settings
 
-`KOSH_AUTOMATION_POLL_MS` (5 000): how often a node reads the trail and the outbox (one node at a time, an
-advisory lock). `KOSH_SCHEDULES=off` keeps the engine off (the CLI). Steps 2 (the editor with the condition
-builder), 3 (webhooks, date and schedule triggers) follow RFC 0011's plan.
+`KOSH_AUTOMATION_POLL_MS` (5 000): how often a node reads the trail and the outbox and checks the timed rules
+(one node at a time for the feeds, an advisory lock). `KOSH_AUTOMATION_WEBHOOK_HOSTS`: the webhook allow-list.
+`KOSH_SCHEDULES=off` keeps the engine off (the CLI). A `date` or `schedule` rule has no actor: it runs as
+`runAsUser` when set, else as the system.
