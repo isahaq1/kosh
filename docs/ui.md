@@ -211,8 +211,16 @@ curl -X PUT /api/v1/notifications/settings -d '{"quietFrom":"22:00","quietTo":"0
 curl -X PUT /api/v1/notifications/preferences -d '{"kind":"mention","channel":"email","mode":"daily"}'
 ```
 
-The `notify` module's version is 0.2.0 (the settings, the email mode, held deliveries): existing installations run
-`kosh apps upgrade notify`.
+**The daily digest**: emails set to `daily` wait, and one email goes out at the user's `digestHour` (their time
+zone) with every unread notification since the last one, grouped by record with a link to each; notifications read
+in the inbox meanwhile, and records the user may no longer read, are left out, and an empty digest sends nothing.
+
+**Fallback channels**: when a delivery cannot reach the user — the push device is gone, there is no email address
+or phone number, the email bounced, or the last retry failed — and no other channel reached them, their `fallback`
+channel (email by default; `none` switches it off) takes over, once: a fallback never falls back again.
+
+The `notify` module's version is 0.2.0 (the settings, the email mode, held, digest and fallback deliveries):
+existing installations run `kosh apps upgrade notify`.
 
 Push notifications reach a device even with Kosh closed: the bell's footer has "Turn on" when the installation
 has VAPID keys (`kosh init` writes them to `.env`) and the browser supports push; it asks the browser's

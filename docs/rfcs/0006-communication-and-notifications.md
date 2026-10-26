@@ -1,6 +1,6 @@
 # RFC 0006: Communication & notification architecture
 
-- **Status:** Accepted; parts 1–7 implemented (chatter, the realtime gateway, the inbox, email, web push, SMS and WhatsApp, internal chat, inbound email); the jobs decision taken on 2026-10-25. Part 8 (fallback channels, digests, quiet hours) designed below and accepted on 2026-10-27 with the proposed answers; step 1 implemented.
+- **Status:** Accepted; parts 1–7 implemented (chatter, the realtime gateway, the inbox, email, web push, SMS and WhatsApp, internal chat, inbound email); the jobs decision taken on 2026-10-25. Part 8 (fallback channels, digests, quiet hours) designed below and accepted on 2026-10-27 with the proposed answers; steps 1–2 implemented.
 - **Depends on:** 0001, 0002, 0003; Shutro RFC 0013 (audit), 0018 (outbox events, jobs)
 
 ## 1. Summary
@@ -278,6 +278,31 @@ and Bangla).
 - **Interrupting channels**: web push, SMS and WhatsApp held in quiet hours, email not (proposed); or email too?
 - **Default fallback**: email (proposed), or none until the user picks one?
 - **Digest period**: daily only (proposed), or also weekly?
+
+## Implementation notes (2026-10-27, part 8 step 2: digests and fallback channels)
+
+- **Digest**: a `daily` email delivery enqueues `notify.digest` `{ user }` with Shutro's `runAt` at the user's next
+  digest hour and the key `notify.digest:<user>:<local date>`, so a day has one job however many notifications
+  arrive (the key deduplicates while it is pending). The job (`sendDigest`) takes the user's `digest` deliveries,
+  leaves out the read ones and the records the user may no longer read (`skipped`), and sends one email: the
+  layout of `@kosh/mail` gained `sections` (a linked heading and its lines, per record); the subject and
+  introduction are translated (English, Bangla). Every included delivery becomes `sent` with the same provider id.
+- **Fallback** (`queueFallback`, `notify.delivery.fallbackOf`): after a delivery is `skipped` for want of a
+  destination (not `read` / `no access`), after its last failed attempt (`MAX_ATTEMPTS`, Shutro's default: the last
+  attempt no longer throws, it falls back and ends the job), or when it bounced, and when no other channel of the
+  notification was sent, a delivery on the user's fallback channel is created and runs like any other (the email
+  mode, quiet hours, the channel's opt-in and destination apply). Never a second level, never the same channel, never
+  a channel the notification already used. Bounces are recorded by the mail package, which cannot import notify: it
+  emits `notify.delivery.bounced`, and notify's `notify.fallback` subscriber falls back.
+- Found on the way: Shutro's transactions are repeatable read, so a job must not write a row its attempt counter
+  already changed outside the transaction (a serialization failure): the last attempt tells the fallback the
+  delivery failed instead of rewriting it. The helpers moved out of the inbox (`prefs.ts`, `jobs.ts`) to keep the
+  modules free of import cycles.
+- Tests: the next digest hour (also across a daylight-saving change) and its local date; on PostgreSQL, three daily
+  mentions on two books make one digest job at 08:00 Dhaka, one email of two (the read one left out, grouped by
+  book, one provider id), and a second run sends nothing; a push to a gone device falls back to email, which is
+  sent; a bounced email falls back to push through the event, and that push does not fall back again; four failed
+  attempts retry and the fifth falls back.
 
 ## Implementation notes (2026-10-27, part 8 step 1: settings, email modes, quiet hours)
 
