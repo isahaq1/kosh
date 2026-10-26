@@ -1,6 +1,6 @@
 # RFC 0012: Kosh Studio
 
-- **Status:** Accepted 2026-10-26 with the proposed answers (the installation's `src/modules/`, patches first, the prefix, administrators); steps 1–3 implemented (`@kosh/studio`, `kosh studio build`, `kosh apps upgrade`, the Studio API; `docs/studio.md`)
+- **Status:** Accepted 2026-10-26 with the proposed answers (the installation's `src/modules/`, patches first, the prefix, administrators); steps 1–4 implemented (`@kosh/studio`, `kosh studio build`, `kosh apps upgrade`, the Studio API, Studio mode; `docs/studio.md`)
 - **Depends on:** 0001 (manifests), 0002 (metadata), 0003 (permissions, approvals), 0004 (views and their
   extensions), 0008 (App manager, migrations), 0011 (automation rules); Shutro's `extendModel` and migration
   planner
@@ -174,7 +174,7 @@ to a form in Studio mode, apply, fill it on a record.
   patch of the installed version), and checks the view changes against the views as served (a missing anchor is
   a 422 at preview, not a failed reload). The diff is a small unified diff (`unifiedDiff`, `git apply` reads it).
 - Apply: the plan id must match; the database first (one App manager transaction), then the files and
-  `src/modules.ts`, then `AppsContext.useModule` (new: the app host's catalogue takes the new code) and a reload.
+  `src/modules.ts`, then `AppsContext.serveModule` (new: the app host's catalogue takes the new code) and a reload.
   Write mode is single-server by design: another node serves the change once it runs the new code.
 - Safety: names of modules Studio does not manage (no `studio.json`) and `base`, `settings`, `studio` are refused;
   dependencies must be in the catalogue; a destructive change is refused (dropping data stays
@@ -184,6 +184,31 @@ to a form in Studio mode, apply, fill it on a record.
   with the SQL and the diff and nothing written; a stale plan refused; apply installs, the REST API serves the field
   at once, the files and `src/modules.ts` are written; a second apply upgrades to 0.1.1 with one `ADD COLUMN`;
   propose mode returns a patch, refuses apply and writes nothing. The diff is applied with `git apply` in a test.
+
+## Implementation notes (2026-10-26): step 4 — Studio mode in the back-office
+
+- `@kosh/ui` has a **design mode** (`DesignProvider`, `useDesign`): while it is on, a form section ends with "Add
+  field" and a list's toolbar has "Add column"; the renderers only report the spot (view, model, group or last
+  column). The shell provides it to every screen.
+- `@kosh/studio/web`: the header item `studio.Toggle` (shown when `GET /api/v1/studio` answers, so only to
+  Administrators and Studio managers), the add dialog (module, new field or a field the model has), the review
+  dialog (the code diff and the SQL, Apply or Download patch), and the Studio app's page `studio.Studio` (the
+  Studio modules, a new model with its fields and a menu). English and Bangla.
+- The server merges the change: `POST /api/v1/studio/edit` (`applyEdit`) names the field from its label (free
+  names `gstNumber2`), the model from its label (`fuel_log`), adds the dependencies on the modules owning the
+  models and views, merges view changes per view; a field on a Studio model goes on the model (its generated views
+  show every field). The `studio` module is now an app (Studio → Modules).
+- Found on the way: (1) a dependency only present as another app's dependency was refused (the check now walks
+  the catalogue's closure); (2) after an apply, the database's NOTIFY could rebuild the server with the old code
+  before Studio handed the new one over, and Studio's own reload then saw no change: the app host now rebuilds
+  whenever module code was handed over (`serveModule`), and puts the new module first in its catalogue (the first
+  module of a name wins in the dependency walk). Both have tests (the host test; the E2E on the e2e Contacts app,
+  a dependency of another app). `useModule` was renamed `serveModule` (a `use…` name reads as a React hook).
+- Tests: `applyEdit` (fields and free names, a column, a model with a menu, a field on a Studio model, an unknown
+  model refused); `POST /api/v1/studio/edit` on PostgreSQL (the spec, refusals, non-managers 403); E2E
+  `apps/web/e2e/studio.spec.ts`: Studio mode on a contact, Add field in a section, review (new module, ADD COLUMN),
+  apply, fill and save the field; Add column with a field the model has (an upgrade, no SQL); the Studio page;
+  a user without Studio sees no button and is refused (403).
 
 ## Alignment with CLAUDE.md
 

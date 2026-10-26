@@ -4,9 +4,26 @@ Studio changes an installation without code and without database customizations:
 in `src/modules/<name>/`, made of `studio.json` (the specification, the only file Studio reads and writes) and the
 TypeScript generated from it. It is reviewed, versioned and installed like any module.
 
-Steps 1–3 are the specification, the generator, the App manager's upgrade (a changed Studio module is applied
-with `kosh apps upgrade <name>`) and the Studio API (review, apply, propose); the Studio mode of the back-office
-follows RFC 0012's plan.
+Steps 1–4 are the specification, the generator, the App manager's upgrade (a changed Studio module is applied
+with `kosh apps upgrade <name>`), the Studio API (review, apply, propose) and Studio mode in the back-office;
+approvals and automation rules in Studio modules follow RFC 0012's plan.
+
+## Studio mode
+
+Administrators and Studio managers see a **Studio** button in the header. While it is on:
+
+- each **form section** ends with **Add field**: a label, a type (text, long text, whole or decimal number, date,
+  date and time, yes / no, a choice with its options, a link to a record), required, track changes;
+- a **list** has **Add column**: a field the model has but the list does not show, or a new field;
+- the **Studio app** (Studio → Modules) lists the Studio modules and adds a **model** of the module's own with its
+  fields and a menu entry in the module's app.
+
+The dialog asks which Studio module saves the change (a new module `custom`, "Customizations", the first time),
+then **Review changes** shows what the server will do: the module's version (install, or upgrade to the next patch),
+the diff of every file and the database statements. **Apply** (write mode) installs or upgrades the module and the
+page reloads with the change; in propose mode the button downloads the patch instead. The browser only says where
+and what: the server names the field (`GST number` → `gstNumber`, column `x_custom_gst_number`), adds the
+dependencies, merges the view change, and checks everything again on apply.
 
 ## The specification
 
@@ -71,6 +88,7 @@ and holders of **Studio** (`studio.manager`) reach it; it changes the schema.
 | --- | --- |
 | `GET /api/v1/studio` | the mode and the Studio modules of the project |
 | `GET /api/v1/studio/modules/:name` | a module's `studio.json` and generated files |
+| `POST /api/v1/studio/edit` `{ module?, label?, edit }` | a Studio-mode change merged into the module's spec (to review) |
 | `POST /api/v1/studio/preview` `{ spec }` | the review; changes nothing |
 | `POST /api/v1/studio/apply` `{ spec, planId }` | write mode: installs or upgrades the module, writes its files |
 | `POST /api/v1/studio/propose` `{ spec }` | the change as a patch; writes nothing |
