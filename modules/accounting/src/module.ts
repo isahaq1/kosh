@@ -131,13 +131,18 @@ export const ResCurrencyRate = defineModel('res.currency.rate', {
 export const AccountAccount = defineModel('account.account', {
   label: 'Account',
   order: ['code asc'],
-  recName: 'name',
   archivable: true,
   companyScoped: { required: true },
   access: { 'account.invoicing': READ, 'account.user': READ, 'account.manager': ALL },
   fields: {
     code: f.char({ required: true, size: 32, index: true }),
     name: f.char({ required: true, translate: true }),
+    /** Shown everywhere as "1100 Accounts receivable". */
+    displayName: f.char({
+      ...compute('account.account', 'displayName', ['code', 'name'], (accounts) => {
+        for (const a of accounts) a.displayName = `${a.code} ${a.name}`;
+      }),
+    }),
     type: f.selection(ACCOUNT_TYPES, { required: true }),
     /** Lines on this account are matched against each other (receivables, payables, suspense). */
     reconcile: f.boolean({ default: false, label: 'Allow reconciliation' }),
