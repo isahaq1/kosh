@@ -219,6 +219,13 @@ App management is framework code: it lives in Kosh (`@kosh/modules-sdk`, `@kosh/
 6. Add **Projects** and `sale_project`.
 7. Switch `kosh init` to the default set in §5.1 and update the docs and benchmarks.
 
+## Implementation notes (2026-10-25): bridges
+
+`defineModule({ bridge: [sales, accounting] })` declares a bridge; `planApps` proposes it (reason `bridge`) as
+soon as every module it connects is installed or part of the change, and `AppChange.withoutBridges` leaves one
+out. The first two are `sale_account` and `purchase_account` (RFC 0009 step 2). The Settings page and `kosh apps`
+show the reason; a pre-checked line to uncheck in the UI is still to come.
+
 ## 9. Decisions (2026-10-19)
 
 1. Inventory stays out of the default set; it comes later as its own app with the `sale_stock` / `purchase_stock`

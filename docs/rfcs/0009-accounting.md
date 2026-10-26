@@ -1,6 +1,6 @@
 # RFC 0009: Accounting (the ledger, documents, payments, reports)
 
-- **Status:** Accepted (2026-10-25, with the proposed answers to §11); step 1 implemented (see Implementation notes)
+- **Status:** Accepted (2026-10-25, with the proposed answers to §11); steps 1–2 implemented (see Implementation notes)
 - **Depends on:** 0001 (modules), 0002 (generated API), 0003 (permissions, approvals), 0004 (views), 0005
   (reporting: pivots, comparisons, scheduled reports), 0006 (chatter, notifications), 0008 (apps, bridges)
 - **Followed by:** the `sale_account` and `purchase_account` bridges (RFC 0008 §5.1), Projects (RFC 0008 step 6)
@@ -294,6 +294,41 @@ rendered by the reporting engine's hierarchy view; every number drills to the li
   years, a USD entry at the rate of its date, permissions).
 - **Next:** step 2, the documents (invoices, bills, credit notes, payment terms, taxes posting, PDF) and the
   `sale_account` / `purchase_account` bridges.
+
+## Implementation notes (2026-10-25): step 2 — the documents and the bridges
+
+- **Documents are entries of a `kind`** (`out_invoice`, `out_refund`, `in_invoice`, `in_refund`) whose lines are
+  typed by `lineKind`: the user's **product** lines (product, description, quantity, unit price, discount, tax;
+  `subtotal` and `taxAmount` computed in the document currency, price-included taxes handled) and, generated at
+  posting, the **tax** lines (one per tax, the per-line amounts summed and rounded to the currency's unit per
+  document, posted to the tax's account or its credit-note account) and the **counterpart** lines on the
+  company's receivable / payable account, one per payment term part with its due date (the rounded total
+  allocated between the parts with `Money.allocate`, so the paisa lands once). The document's `dateDue` is the
+  latest part. Every line's company-currency side is then settled at the entry's rate as for any entry, and the
+  balance, number and immutability rules apply unchanged. `invoiceLines` (a second one2many through a computed
+  `invoice` link on product lines) gives the PDF and the reports the product lines only.
+- **Payment terms** (`account.payment.term` with parts in days and percent; four shipped as shared data).
+- **Approvals**: a vendor bill above the policy's threshold (100,000 by default) is submitted (`submit` →
+  `to_approve`, approval requests from RFC 0003) and posted by the last approval (`onApproved: 'post'`); a bill
+  no level applies to posts after submission; `reject` sends a bill back to draft.
+- **PDF**: the `accounting.invoice` document template (RFC 0005), listing the product lines, totals and the
+  payment terms' note; printed from the document routes.
+- **Reversal of a document** is a credit note: the product lines are copied and the reversed kind flips the sides.
+- **Window actions** gained `defaults` (values of a record created from the action: the customer invoices action
+  creates `out_invoice`, the vendor bills action `in_invoice`); `@kosh/views` and the shell carry them.
+- **Bridges** (RFC 0008 §5.1): the manifest's `bridge: [a, b]` field; the planner proposes a bridge (reason
+  `bridge`) whenever every module it connects is installed, unless the change names it in `withoutBridges`.
+  `sale_account` adds the `invoice` transition to a confirmed sales order (a draft customer invoice from its lines
+  in the sales journal; the order's `invoiceState` is computed from its invoices) and `purchase_account` the
+  `bill` transition to a confirmed purchase order (a draft vendor bill with the vendor's reference), each with a
+  button and a status on the order's form and list through view extensions. A bridge's access level combines
+  the two apps' user groups.
+- Tests: `modules/accounting/test/documents.integration.test.ts` (an invoice with three lines and two taxes, parts
+  and due dates, the PDF, a credit note, the bill approval flow, refusals), `modules/sale_account/test` and
+  `modules/purchase_account/test` (the plan's proposal, invoicing and billing once, posting).
+- **Not in this step:** partner-specific receivable / payable accounts, product-category income and expense
+  accounts (the journal's default account is used), down payments.
+- **Next:** step 3, payments and reconciliation.
 
 ## Alignment with CLAUDE.md
 
