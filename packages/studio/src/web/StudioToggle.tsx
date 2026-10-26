@@ -27,6 +27,11 @@ import { message, ReviewDialog, type StudioMode } from './Review.js';
 
 export interface StudioInfo {
   readonly mode: StudioMode;
+  readonly git: {
+    readonly provider: 'github' | 'gitlab';
+    readonly repository: string;
+    readonly base: string;
+  } | null;
   readonly modules: readonly {
     readonly name: string;
     readonly label: string;
@@ -126,6 +131,7 @@ function AddDialog({
         api={api}
         spec={spec}
         mode={info.mode}
+        git={info.git}
         onClose={() => setSpec(null)}
         onApplied={reloadSoon}
       />

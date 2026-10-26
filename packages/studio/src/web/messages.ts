@@ -32,6 +32,9 @@ export const messages: Readonly<Record<string, object>> = {
     apply: 'Apply',
     applied: '{{name}} {{version}} applied. Reloading…',
     propose: 'Download patch',
+    openPullRequest: 'Open a pull request',
+    openMergeRequest: 'Open a merge request',
+    proposalOpened: 'Opened on {{repository}}:',
     proposeNote:
       'This server proposes changes: download the patch, commit it, and deploy it (then kosh apps upgrade).',
     modulesTitle: 'Studio modules',
@@ -106,6 +109,9 @@ export const messages: Readonly<Record<string, object>> = {
     apply: 'প্রয়োগ করুন',
     applied: '{{name}} {{version}} প্রয়োগ হয়েছে। আবার লোড হচ্ছে…',
     propose: 'প্যাচ ডাউনলোড করুন',
+    openPullRequest: 'পুল রিকোয়েস্ট খুলুন',
+    openMergeRequest: 'মার্জ রিকোয়েস্ট খুলুন',
+    proposalOpened: '{{repository}}-এ খোলা হয়েছে:',
     proposeNote:
       'এই সার্ভার পরিবর্তন প্রস্তাব করে: প্যাচ ডাউনলোড করে কমিট ও ডিপ্লয় করুন (তারপর kosh apps upgrade)।',
     modulesTitle: 'স্টুডিও মডিউল',

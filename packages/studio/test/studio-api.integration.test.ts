@@ -35,6 +35,26 @@ const generate = {
   imports: 'workspace',
   moduleImport: (name: string) => (name === 'crm' ? '../../../../../fixtures/crm.js' : undefined),
 } as const;
+/** A fake GitHub: every call is recorded; the branch, the files and the pull request are accepted. */
+const githubCalls: { method: string; path: string; body: Record<string, unknown> }[] = [];
+const github = (async (input: string | URL | Request, init?: RequestInit) => {
+  const url = new URL(String(input));
+  const method = init?.method ?? 'GET';
+  const body = (init?.body === undefined ? {} : JSON.parse(String(init.body))) as Record<
+    string,
+    unknown
+  >;
+  githubCalls.push({ method, path: url.pathname, body });
+  const json = (status: number, value: unknown) => new Response(JSON.stringify(value), { status });
+  if (url.pathname.endsWith('/git/ref/heads/main')) return json(200, { object: { sha: 'base' } });
+  if (url.pathname.endsWith('/git/refs')) return json(201, {});
+  if (method === 'GET' && url.pathname.includes('/contents/'))
+    return json(404, { message: 'Not Found' });
+  if (method === 'PUT') return json(201, {});
+  if (url.pathname.endsWith('/pulls'))
+    return json(201, { html_url: 'https://github.com/acme/erp/pull/1' });
+  return json(500, { message: 'unexpected' });
+}) as typeof fetch;
 const MODULES_TS = `import { base } from 'kosh-erp';\n\nexport const modules = [base];\n`;
 
 const spec: StudioSpec = {
@@ -113,7 +133,7 @@ beforeAll(async () => {
     parseNumeric: orm.toDecimal,
   });
   dir = await mkdtemp(join(tmpdir(), 'kosh-studio-'));
-  const studio = createStudio({ mode: 'write', root: project, generate });
+  const studio = createStudio({ mode: 'write', root: project, generate, git: null });
   const catalogue = [base, crm, studio, permissions, automationModule({ workers: false })];
   await recordInstalledApps(driver, [], [], 'test');
   await applyApps(
@@ -158,7 +178,19 @@ beforeAll(async () => {
     catalogue: [
       base,
       crm,
-      createStudio({ mode: 'propose', root: production, generate }),
+      createStudio({
+        mode: 'propose',
+        root: production,
+        generate,
+        git: {
+          provider: 'github',
+          repository: 'acme/erp',
+          api: 'https://api.github.test',
+          token: 'ghp_secret',
+          base: 'main',
+          fetch: github,
+        },
+      }),
       permissions,
       automationModule({ workers: false }),
     ],
@@ -202,7 +234,7 @@ test('only Administrators and Studio managers reach Studio', async () => {
   }
   const { status, json } = await http('GET', '/api/v1/studio', { as: 'designer' });
   expect(status).toBe(200);
-  expect(json).toEqual({ mode: 'write', modules: [] });
+  expect(json).toEqual({ mode: 'write', modules: [], git: null });
 });
 
 test('invalid specs and taken names are refused', async () => {
@@ -309,6 +341,54 @@ test('preview: the diff and the SQL, nothing written', async () => {
   expect(json.diff[4].diff).toContain('+export const modules = [base, acme];');
   expect(await entries(join(project, 'src'))).toEqual(['modules.ts']);
   expect(await entries(join(project, '.kosh-studio', 'plan'))).toEqual([]);
+});
+
+test('propose mode: a pull request on the configured repository, nothing written; none without one', async () => {
+  const fleet: StudioSpec = { ...spec, name: 'fleet', viewChanges: [] };
+  const info = await http('GET', '/api/v1/studio', { as: 'designer', base: proposeUrl });
+  expect(info.json.git).toEqual({ provider: 'github', repository: 'acme/erp', base: 'main' }); // never the token
+  const opened = await http('POST', '/api/v1/studio/propose', {
+    as: 'designer',
+    base: proposeUrl,
+    body: { spec: fleet, pullRequest: true },
+  });
+  expect(opened.status).toBe(200);
+  expect(opened.json.pullRequest).toEqual({
+    url: 'https://github.com/acme/erp/pull/1',
+    branch: 'studio/fleet-0.1.0',
+  });
+  const puts = githubCalls
+    .filter((c) => c.method === 'PUT')
+    .map((c) => c.path.replace('/repos/acme/erp/contents/', ''));
+  expect(puts).toEqual([
+    'src/modules/fleet/studio.json',
+    'src/modules/fleet/models.ts',
+    'src/modules/fleet/index.ts',
+    'src/modules/fleet/README.md',
+    'src/modules.ts',
+  ]);
+  const pull = githubCalls.find((c) => c.path.endsWith('/pulls'));
+  expect(pull?.body['title']).toBe('Studio: Acme customizations 0.1.0');
+  expect(String(pull?.body['body'])).toContain('npx kosh apps install fleet');
+  expect(String(pull?.body['body'])).toMatch(/ADD COLUMN "x_fleet_gst_number"/);
+  // The server wrote nothing.
+  expect(await entries(join(production, 'src'))).toEqual(['modules.ts']);
+  // Without a repository: refused, the patch still works.
+  const none = await http('POST', '/api/v1/studio/propose', {
+    as: 'designer',
+    body: { spec: fleet, pullRequest: true },
+  });
+  expect(none.status).toBe(409);
+  expect(none.json.title).toBe('No repository for proposals');
+  expect(
+    (
+      await http('POST', '/api/v1/studio/propose', {
+        as: 'designer',
+        base: proposeUrl,
+        body: { spec: fleet },
+      })
+    ).json.pullRequest,
+  ).toBeUndefined();
 });
 
 test('propose mode: a patch, no apply, nothing written', async () => {

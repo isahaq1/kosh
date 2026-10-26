@@ -24,6 +24,16 @@ export {
   viewModel,
 } from './generate.js';
 export {
+  type GitConfig,
+  GitProposalError,
+  type GitProvider,
+  gitConfigFromEnv,
+  type Proposal,
+  type ProposalResult,
+  type ProposedFile,
+  proposeOnGit,
+} from './git.js';
+export {
   createStudio,
   registerStudioRoutes,
   type StudioMode,

@@ -46,6 +46,7 @@ import { readSpec, studioModules } from './build.js';
 import { unifiedDiff } from './diff.js';
 import { applyEdit, emptySpec, type Owners, type StudioEdit, StudioEditError } from './edit.js';
 import { type GenerateOptions, generateModule } from './generate.js';
+import { type GitConfig, GitProposalError, gitConfigFromEnv, proposeOnGit } from './git.js';
 import { camel, type StudioRule, type StudioSpec, validateSpec } from './spec.js';
 
 export type StudioMode = 'write' | 'propose';
@@ -59,6 +60,8 @@ export interface StudioOptions {
   readonly generate?: GenerateOptions;
   /** Modules Studio never replaces (default: the App manager's protected ones). */
   readonly protect?: readonly string[];
+  /** Where proposals become pull requests (default: `KOSH_STUDIO_GIT_URL` and its token; null: patches only). */
+  readonly git?: GitConfig | null;
 }
 
 /** The review of a Studio change, as the API returns it. */
@@ -204,6 +207,7 @@ export function registerStudioRoutes(context: ModuleContext, options: StudioOpti
   const root = resolve(options.root ?? env['KOSH_STUDIO_DIR'] ?? process.cwd());
   const protect = options.protect ?? PROTECTED;
   const generate = options.generate ?? {};
+  const git = options.git === undefined ? gitConfigFromEnv(env) : options.git;
   const modulesDir = join(root, 'src', 'modules');
 
   const appsOf = (): AppsContext => {
@@ -413,7 +417,15 @@ export function registerStudioRoutes(context: ModuleContext, options: StudioOpti
       const spec = await readSpec(dir);
       modules.push({ name: spec.name, label: spec.label, version: spec.version });
     }
-    return { mode, modules };
+    return {
+      mode,
+      modules,
+      // The repository proposals go to (never the token).
+      git:
+        git === null
+          ? null
+          : { provider: git.provider, repository: git.repository, base: git.base },
+    };
   });
 
   /** Who defines a model or a view, among the modules this server serves. */
@@ -514,13 +526,71 @@ export function registerStudioRoutes(context: ModuleContext, options: StudioOpti
 
   app.post('/api/v1/studio/propose', async (request) => {
     await guard(request);
-    const { review } = await prepare(specOf(request.body));
-    return {
-      spec: review.spec,
-      change: review.change,
-      statements: review.statements,
-      patch: review.diff.map((d) => d.diff).join(''),
-    };
+    const pullRequest = (request.body as { pullRequest?: unknown } | null)?.pullRequest === true;
+    if (pullRequest && git === null)
+      throw new HttpProblem(
+        409,
+        'studio-git-unconfigured',
+        'No repository for proposals',
+        'Set KOSH_STUDIO_GIT_URL and KOSH_STUDIO_GIT_TOKEN to open pull requests; download the patch meanwhile.',
+      );
+    const { review, files, modulesTs } = await prepare(specOf(request.body));
+    const patch = review.diff.map((d) => d.diff).join('');
+    if (!pullRequest || git === null)
+      return { spec: review.spec, change: review.change, statements: review.statements, patch };
+    // The whole new content of every changed file, on a branch of its own.
+    const name = review.spec.name;
+    const content = (path: string): string | null =>
+      path === 'src/modules.ts'
+        ? modulesTs
+        : (files[path.slice(`src/modules/${name}/`.length)] ?? null);
+    const proposed = review.diff.flatMap((d) => {
+      const text = content(d.path);
+      return text === null ? [] : [{ path: d.path, content: text }];
+    });
+    const command = review.change === 'install' ? 'install' : 'upgrade';
+    const body = [
+      `A Kosh Studio change: **${review.spec.label}** (\`${name}\` ${review.spec.version}).`,
+      '',
+      review.change === 'install'
+        ? `Installs the module \`${name}\`.`
+        : `Upgrades \`${name}\` from ${review.from} to ${review.spec.version}.`,
+      '',
+      'After deploying:',
+      '',
+      '```sh',
+      `npx kosh apps ${command} ${name}`,
+      '```',
+      '',
+      ...(review.statements.length === 0
+        ? ['No database change.']
+        : ['The database changes:', '', '```sql', ...review.statements.map((s) => `${s};`), '```']),
+    ].join('\n');
+    try {
+      const opened = await proposeOnGit(git, {
+        branch: `studio/${name}-${review.spec.version}`,
+        title: `Studio: ${review.spec.label} ${review.spec.version}`,
+        body,
+        files: proposed,
+      });
+      return {
+        spec: review.spec,
+        change: review.change,
+        statements: review.statements,
+        patch,
+        pullRequest: opened,
+      };
+    } catch (error) {
+      if (error instanceof GitProposalError)
+        throw new HttpProblem(
+          502,
+          'studio-git-failed',
+          'The repository refused the proposal',
+          error.message,
+          'Check KOSH_STUDIO_GIT_URL, the token and its rights (contents and pull requests); the patch can be downloaded meanwhile.',
+        );
+      throw error;
+    }
   });
 
   app.post('/api/v1/studio/apply', async (request) => {

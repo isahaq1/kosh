@@ -60,7 +60,10 @@ export function ReviewDialog({
   onClose,
   onApplied,
   retire,
+  git,
 }: {
+  /** The repository proposals go to, when one is configured (propose mode). */
+  readonly git?: { readonly provider: 'github' | 'gitlab'; readonly repository: string } | null;
   readonly api: KoshApi;
   readonly spec: StudioSpec;
   /** Rules moved into the module: archived once its copy is installed (from `/edit`). */
@@ -97,6 +100,13 @@ export function ReviewDialog({
       URL.revokeObjectURL(url);
     },
   });
+  const pull = useMutation({
+    mutationFn: () =>
+      api.call<{ pullRequest: { url: string; branch: string } }>('POST', '/api/v1/studio/propose', {
+        spec,
+        pullRequest: true,
+      }),
+  });
   const r = review.data;
   return (
     <Dialog
@@ -126,14 +136,26 @@ export function ReviewDialog({
               {t('apply')}
             </Button>
           ) : (
-            <Button
-              variant="primary"
-              disabled={r === undefined}
-              busy={propose.isPending}
-              onClick={() => propose.mutate()}
-            >
-              {t('propose')}
-            </Button>
+            <>
+              <Button
+                variant={git === null || git === undefined ? 'primary' : 'secondary'}
+                disabled={r === undefined}
+                busy={propose.isPending}
+                onClick={() => propose.mutate()}
+              >
+                {t('propose')}
+              </Button>
+              {git === null || git === undefined ? null : (
+                <Button
+                  variant="primary"
+                  disabled={r === undefined || pull.isSuccess}
+                  busy={pull.isPending}
+                  onClick={() => pull.mutate()}
+                >
+                  {t(git.provider === 'gitlab' ? 'openMergeRequest' : 'openPullRequest')}
+                </Button>
+              )}
+            </>
           )}
         </>
       }
@@ -176,6 +198,20 @@ export function ReviewDialog({
       )}
       {apply.isError ? <Alert>{message(apply.error)}</Alert> : null}
       {propose.isError ? <Alert>{message(propose.error)}</Alert> : null}
+      {pull.isError ? <Alert>{message(pull.error)}</Alert> : null}
+      {pull.isSuccess ? (
+        <Alert tone="info">
+          {t('proposalOpened', { repository: git?.repository ?? '' })}{' '}
+          <a
+            className="font-medium underline"
+            href={pull.data.pullRequest.url}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {pull.data.pullRequest.url}
+          </a>
+        </Alert>
+      ) : null}
       {apply.isSuccess ? (
         <Alert tone="info">
           {t('applied', { name: apply.data.name, version: apply.data.version })}

@@ -169,6 +169,7 @@ export function StudioPage({ api, label }: PageProps): ReactElement {
           spec={proposed.spec}
           retire={proposed.retire}
           mode={data.mode}
+          git={data.git}
           onClose={() => setProposed(null)}
           onApplied={reloadSoon}
         />
