@@ -4,8 +4,9 @@
  * Bangladesh templates), journals, fiscal years and lock dates, currency rates, and journal entries posted in exact
  * money, numbered gaplessly per journal type, immutable once posted and corrected by reversal. The documents
  * (step 2): customer invoices, vendor bills and credit notes with product lines, taxes posting to their accounts,
- * payment terms and due dates, a PDF, and amount-based approvals of bills. Payments, reconciliation and the
- * reports follow (RFC 0009 §10).
+ * payment terms and due dates, a PDF, and amount-based approvals of bills. Payments and reconciliation (step 3):
+ * payments through cash and bank journals that settle documents, partial matches with residuals, exchange
+ * differences, manual reconciliation and unreconciliation. The reports follow (RFC 0009 §10).
  */
 import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
@@ -29,11 +30,13 @@ import {
   AccountFiscalYear,
   AccountJournal,
   AccountMove,
+  AccountPayment,
   AccountPaymentTerm,
   accountingShutro,
   REVERSED_KIND,
   ResCurrencyRate,
 } from './module.js';
+import { openLines, reconcile, registerPayment, unreconcile } from './payments.js';
 
 export {
   CHARTS,
@@ -48,9 +51,12 @@ export {
   ACCOUNT_TYPES,
   AccountAccount,
   AccountFiscalYear,
+  AccountFullReconcile,
   AccountJournal,
   AccountMove,
   AccountMoveLine,
+  AccountPartialReconcile,
+  AccountPayment,
   AccountPaymentTerm,
   AccountPaymentTermLine,
   type AccountType,
@@ -66,6 +72,15 @@ export {
   ResCurrencyRate,
   TaxAccounts,
 } from './module.js';
+
+export {
+  openLines,
+  type ReconcileResult,
+  type RegisterInput,
+  reconcile,
+  registerPayment,
+  unreconcile,
+} from './payments.js';
 
 export interface Reversed {
   readonly id: number;
@@ -206,6 +221,10 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       views: ['list', 'form'],
       viewIds: { list: 'account.move.list', form: 'account.move.form' },
     }),
+    'accounting.action_payments': action(AccountPayment, {
+      label: 'Payments',
+      views: ['list', 'form'],
+    }),
     'accounting.action_payment_terms': action(AccountPaymentTerm, {
       label: 'Payment terms',
       views: ['list', 'form'],
@@ -244,11 +263,18 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       sequence: 2,
     },
     {
+      id: 'accounting.payments',
+      parent: 'accounting.root',
+      label: 'Payments',
+      action: 'accounting.action_payments',
+      sequence: 3,
+    },
+    {
       id: 'accounting.moves',
       parent: 'accounting.root',
       label: 'Journal entries',
       action: 'accounting.action_moves',
-      sequence: 3,
+      sequence: 4,
     },
     {
       id: 'accounting.configuration',
@@ -382,7 +408,9 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
         'dateDue',
         'invoiceOrigin',
         { field: 'amountTotal', sum: true },
+        { field: 'amountResidual', sum: true },
         { field: 'state', widget: 'badge' },
+        { field: 'paymentState', widget: 'badge' },
       ],
       defaultOrder: ['date desc', 'name desc'],
     }),
@@ -414,13 +442,53 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
           ],
           { readonlyWhen: { state: { ne: 'draft' } } },
         ),
-        k.group('totals', ['amountUntaxed', 'amountTax', 'amountTotal'], { label: 'Totals' }),
+        k.group(
+          'totals',
+          [
+            'amountUntaxed',
+            'amountTax',
+            'amountTotal',
+            'amountResidual',
+            { field: 'paymentState', widget: 'badge' },
+            'payments',
+          ],
+          { label: 'Totals' },
+        ),
         // The journal items of a document (taxes, the counterpart) are read in Journal entries.
         k.notebook('more', [
           k.page('money', 'Currency', ['currency', 'rate', 'reversalOf', 'reversedBy']),
           k.page('notes', 'Notes', ['narration']),
         ]),
         k.component('approvals', 'approvals.Panel'),
+      ],
+      readonlyWhen: { state: { ne: 'draft' } },
+      chatter: true,
+    })),
+    'account.payment.list': list(AccountPayment, {
+      columns: [
+        'name',
+        'date',
+        'partner',
+        'journal',
+        { field: 'kind', widget: 'badge' },
+        { field: 'amount', sum: true },
+        { field: 'state', widget: 'badge' },
+      ],
+      defaultOrder: ['date desc', 'name desc'],
+    }),
+    'account.payment.form': form(AccountPayment, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('post', { primary: true, label: 'Confirm' }),
+          k.button('cancel', { label: 'Cancel', confirm: 'Cancel this payment?' }),
+          k.button('redraft', { label: 'Set to draft' }),
+        ],
+      },
+      sheet: [
+        k.group('who', ['partner', 'kind', 'journal', 'date']),
+        k.group('how_much', ['currency', 'amount', 'memo', 'move']),
+        k.group('what', ['documents'], { label: 'Pays', columns: 1 }),
       ],
       readonlyWhen: { state: { ne: 'draft' } },
       chatter: true,
@@ -528,6 +596,15 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       },
       groupBy: ['journal', 'state', 'partner', 'date:month', 'kind'],
     }),
+    'account.payment': search(AccountPayment, {
+      fields: ['name', 'memo', 'partner.name'],
+      filters: {
+        inbound: { label: 'Received', domain: { kind: 'inbound' }, group: 'kind' },
+        outbound: { label: 'Sent', domain: { kind: 'outbound' }, group: 'kind' },
+        posted: { label: 'Posted', domain: { state: 'posted' }, group: 'state' },
+      },
+      groupBy: ['journal', 'partner', 'state', 'date:month'],
+    }),
     'account.account': search(AccountAccount, {
       fields: ['code', 'name'],
       filters: {
@@ -578,6 +655,118 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
         templates: TEMPLATES.map((t) => ({ code: t, label: CHARTS[t].label })),
       })),
     );
+    context.app.post('/api/v1/accounting/payments/register', async (request) => {
+      const body = (request.body ?? {}) as {
+        moves?: unknown;
+        journal?: unknown;
+        date?: unknown;
+        amount?: unknown;
+        memo?: unknown;
+      };
+      const moves = Array.isArray(body.moves) ? body.moves.map(Number) : [];
+      if (moves.length === 0 || moves.some((m) => !Number.isInteger(m) || m <= 0))
+        throw new HttpProblem(
+          400,
+          'invalid-body',
+          'Invalid request',
+          'moves is a list of document ids.',
+        );
+      const journal = Number(body.journal);
+      if (!Number.isInteger(journal) || journal <= 0)
+        throw new HttpProblem(
+          400,
+          'invalid-body',
+          'Invalid request',
+          'journal is a cash or bank journal id.',
+        );
+      if (body.date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(body.date)))
+        throw new HttpProblem(400, 'invalid-date', 'Invalid date', 'date is YYYY-MM-DD.');
+      if (body.amount !== undefined && !/^\d+(\.\d+)?$/.test(String(body.amount)))
+        throw new HttpProblem(
+          400,
+          'invalid-body',
+          'Invalid request',
+          'amount is a positive decimal string.',
+        );
+      return request.env(
+        (env) =>
+          registerPayment(env as Env, {
+            moves,
+            journal,
+            date: body.date === undefined ? undefined : String(body.date),
+            amount: body.amount === undefined ? undefined : String(body.amount),
+            memo: body.memo === undefined ? undefined : String(body.memo),
+          }),
+        { write: true },
+      );
+    });
+    const lineIds = (body: unknown): number[] => {
+      const lines = (body as { lines?: unknown } | null)?.lines;
+      const ids = Array.isArray(lines) ? lines.map(Number) : [];
+      if (ids.length === 0 || ids.some((id) => !Number.isInteger(id) || id <= 0))
+        throw new HttpProblem(
+          400,
+          'invalid-body',
+          'Invalid request',
+          'lines is a list of journal item ids.',
+        );
+      return ids;
+    };
+    context.app.post('/api/v1/accounting/reconcile', async (request) => {
+      const ids = lineIds(request.body);
+      const writeOff = (request.body as { writeOff?: { account?: unknown; label?: unknown } })
+        .writeOff;
+      const options =
+        writeOff === undefined
+          ? {}
+          : {
+              writeOff: {
+                account: Number(writeOff.account),
+                ...(writeOff.label === undefined ? {} : { label: String(writeOff.label) }),
+              },
+            };
+      if (options.writeOff !== undefined && !Number.isInteger(options.writeOff.account))
+        throw new HttpProblem(
+          400,
+          'invalid-body',
+          'Invalid request',
+          'writeOff.account is an account id.',
+        );
+      return request.env((env) => reconcile(env as Env, ids, options), { write: true });
+    });
+    context.app.post('/api/v1/accounting/unreconcile', async (request) =>
+      request.env((env) => unreconcile(env as Env, lineIds(request.body)), { write: true }),
+    );
+    context.app.get('/api/v1/accounting/open-items', async (request) => {
+      const query = request.query as { account?: unknown; partner?: unknown };
+      const account = Number(query.account);
+      if (!Number.isInteger(account) || account <= 0)
+        throw new HttpProblem(400, 'invalid-query', 'Invalid request', 'account is an account id.');
+      const partner = query.partner === undefined ? undefined : Number(query.partner);
+      return request.env(async (env) => {
+        const found = await (env as Env).model('account.move.line').search({
+          where: {
+            account: account as never,
+            reconciled: false,
+            ...(partner === undefined ? {} : { partner: partner as never }),
+          },
+          order: ['dateMaturity asc', 'id asc'],
+        });
+        const posted = (await found.load({ move: true })).filter((l) => l.move.state === 'posted');
+        const { lines } =
+          posted.length === 0 ? { lines: [] } : await openLines(env as Env, posted.ids);
+        return {
+          items: lines.map((l) => ({
+            id: l.id,
+            partner: l.partner,
+            dateMaturity: l.dateMaturity,
+            residual: l.residual.toString(),
+            residualCurrency: l.residualCurrency.toString(),
+            currency: l.currency,
+          })),
+        };
+      });
+    });
     context.app.post('/api/v1/accounting/moves/:id/reverse', async (request) => {
       const id = Number((request.params as { id: string }).id);
       const body = (request.body ?? {}) as { date?: unknown; post?: unknown };

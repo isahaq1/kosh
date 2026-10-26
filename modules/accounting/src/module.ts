@@ -8,7 +8,10 @@
  * of a `kind` whose product lines (`lineKind: 'product'`) carry quantities, prices, discounts and taxes; posting
  * generates the tax lines (one per tax, rounded per document) and the receivable / payable counterpart (one per
  * payment term line, with its due date), then settles every line's company-currency side. Vendor bills above
- * the policy's threshold wait for approval (`submit` → `to_approve`; the last approval posts).
+ * the policy's threshold wait for approval (`submit` → `to_approve`; the last approval posts). Payments (step 3)
+ * are entries in a cash or bank journal whose receivable / payable line is **reconciled** with the documents'
+ * counterpart lines: partial matches are records, residuals are computed from them, and a document is paid when
+ * its counterpart lines are settled (`payments.ts` holds the matching).
  */
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
@@ -28,6 +31,7 @@ import {
   records,
   ref,
 } from './.kosh/bindings.js';
+import { postPayments } from './payments.js';
 
 const READ = ['read'] as const;
 const WRITE = ['read', 'write', 'create'] as const;
@@ -315,6 +319,38 @@ const documentTotals = compute(
   },
 );
 
+const moveResidual = compute(
+  'account.move',
+  ['amountResidual', 'paymentState'],
+  ['kind', 'state', 'amountTotal', 'lines.lineKind', 'lines.amountResidualCurrency'],
+  (moves) => {
+    for (const m of moves) {
+      if (m.kind === 'entry') {
+        m.amountResidual = orm.toDecimal(0);
+        m.paymentState = 'not_applicable';
+        continue;
+      }
+      // The counterpart is a debit on outgoing documents (receivable) and a credit on incoming ones.
+      const sign = m.kind === 'out_invoice' || m.kind === 'in_refund' ? 1 : -1;
+      let residual = orm.toDecimal(0);
+      for (const l of m.lines)
+        if (l.lineKind === 'counterpart')
+          residual = residual.plus(l.amountResidualCurrency?.amount ?? 0);
+      residual = residual.times(sign);
+      m.amountResidual = residual;
+      const total = m.amountTotal?.amount ?? orm.toDecimal(0);
+      m.paymentState =
+        m.state !== 'posted' || total.isZero()
+          ? 'not_paid'
+          : residual.isZero()
+            ? 'paid'
+            : residual.equals(total)
+              ? 'not_paid'
+              : 'partial';
+    }
+  },
+);
+
 const NUMBER_FIELDS = [
   'numberSale',
   'numberPurchase',
@@ -421,6 +457,23 @@ export const AccountMove = defineModel('account.move', {
       label: 'Total',
       ...documentTotals,
     }),
+    /** What is still due on a posted document, in its currency. */
+    amountResidual: f.monetary({
+      currency: 'currency',
+      store: true,
+      label: 'Amount due',
+      ...moveResidual,
+    }),
+    paymentState: f.selection(
+      {
+        not_applicable: '—',
+        not_paid: 'Not paid',
+        partial: 'Partially paid',
+        paid: 'Paid',
+      },
+      { store: true, label: 'Payment', ...moveResidual },
+    ),
+    payments: f.many2many('account.payment', { label: 'Paid by' }),
     state: f.state({
       states: {
         draft: 'Draft',
@@ -472,6 +525,88 @@ export const AccountMove = defineModel('account.move', {
       ),
       message: 'A posted entry cannot be changed. Reverse it instead.',
     },
+  },
+});
+
+const lineResiduals = compute(
+  'account.move.line',
+  ['amountResidual', 'amountResidualCurrency', 'reconciled'],
+  [
+    'debit',
+    'credit',
+    'amountCurrency',
+    'account.reconcile',
+    'move.state',
+    'partialsAsDebit.amount',
+    'partialsAsDebit.amountCurrency',
+    'partialsAsCredit.amount',
+    'partialsAsCredit.amountCurrency',
+  ],
+  (lines) => {
+    for (const l of lines) {
+      const open = l.account?.reconcile === true && l.move.state === 'posted';
+      if (!open) {
+        l.amountResidual = orm.toDecimal(0);
+        l.amountResidualCurrency = orm.toDecimal(0);
+        l.reconciled = false;
+        continue;
+      }
+      let residual = (l.debit?.amount ?? orm.toDecimal(0)).minus(l.credit?.amount ?? 0);
+      let inCurrency = l.amountCurrency?.amount ?? residual;
+      for (const p of l.partialsAsDebit) {
+        residual = residual.minus(p.amount);
+        inCurrency = inCurrency.minus(p.amountCurrency ?? p.amount);
+      }
+      for (const p of l.partialsAsCredit) {
+        residual = residual.plus(p.amount);
+        inCurrency = inCurrency.plus(p.amountCurrency ?? p.amount);
+      }
+      l.amountResidual = residual;
+      l.amountResidualCurrency = inCurrency;
+      l.reconciled = residual.isZero() && inCurrency.isZero();
+    }
+  },
+);
+
+/** A match between a debit line and a credit line of one reconcilable account (RFC 0009 §4). */
+export const AccountPartialReconcile = defineModel('account.partial.reconcile', {
+  label: 'Partial reconciliation',
+  order: ['id asc'],
+  access: {
+    'account.invoicing': READ,
+    'account.user': ['read', 'write', 'create', 'unlink'],
+    'account.manager': ALL,
+  },
+  fields: {
+    debitLine: f.many2one('account.move.line', { required: true, ondelete: 'restrict' }),
+    creditLine: f.many2one('account.move.line', { required: true, ondelete: 'restrict' }),
+    /** Matched amount in the company currency. */
+    amount: f.decimal({ scale: 6, required: true }),
+    /** Matched amount in the lines' currency (the company currency's when they have none). */
+    amountCurrency: f.decimal({ scale: 6 }),
+    currency: f.many2one('res.currency'),
+    /** The entry that posted the exchange difference this match created, when any. */
+    exchangeMove: f.many2one('account.move', { label: 'Exchange difference entry' }),
+    fullReconcile: f.many2one('account.full.reconcile', { ondelete: 'set null' }),
+  },
+  sqlConstraints: {
+    amountPositive: { check: orm.sql`amount >= 0`, message: 'A match is zero or more.' },
+  },
+});
+
+/** A set of lines settled together: every line's residual is zero (RFC 0009 §4). */
+export const AccountFullReconcile = defineModel('account.full.reconcile', {
+  label: 'Reconciliation',
+  order: ['id desc'],
+  access: {
+    'account.invoicing': READ,
+    'account.user': ['read', 'write', 'create', 'unlink'],
+    'account.manager': ALL,
+  },
+  fields: {
+    name: f.char({ required: true }),
+    lines: f.one2many('account.move.line', 'fullReconcile'),
+    partials: f.one2many('account.partial.reconcile', 'fullReconcile'),
   },
 });
 
@@ -578,7 +713,24 @@ export const AccountMoveLine = defineModel('account.move.line', {
     }),
     /** Set on the generated tax lines: the tax this line is the amount of. */
     taxLineOf: f.many2one('account.tax', { label: 'Tax line for' }),
-    reconciled: f.boolean({ default: false, readonly: true }),
+    /** Partial matches this line takes part in, on its debit or its credit side (`payments.ts`). */
+    partialsAsDebit: f.one2many('account.partial.reconcile', 'debitLine'),
+    partialsAsCredit: f.one2many('account.partial.reconcile', 'creditLine'),
+    fullReconcile: f.many2one('account.full.reconcile', { ondelete: 'set null', label: 'Matched' }),
+    /** What is still open on a reconcilable account's line, in the company currency (debit positive). */
+    amountResidual: f.monetary({
+      currency: 'companyCurrency',
+      store: true,
+      label: 'Residual',
+      ...lineResiduals,
+    }),
+    amountResidualCurrency: f.monetary({
+      currency: 'currency',
+      store: true,
+      label: 'Residual in currency',
+      ...lineResiduals,
+    }),
+    reconciled: f.boolean({ store: true, ...lineResiduals }),
   },
   sqlConstraints: {
     sides: {
@@ -752,9 +904,15 @@ async function postMoves(moves: Moves): Promise<void> {
           'Install a chart of accounts (Accounting › Configuration), or set the account on the company.',
         );
       // One counterpart line per payment term part, the whole rounded total allocated between them.
+      // Without payment terms, one part due on the document's due date (or its date).
       const parts =
         m.paymentTerm === null || m.paymentTerm.lines.length === 0
-          ? [{ days: 0, percent: orm.toDecimal(100) }]
+          ? [
+              {
+                days: m.dateDue === null ? 0 : daysBetween(m.date, m.dateDue),
+                percent: orm.toDecimal(100),
+              },
+            ]
           : m.paymentTerm.lines.map((pl) => ({ days: pl.days, percent: pl.percent }));
       const totalMoney = orm.Money.of(
         total,
@@ -858,12 +1016,78 @@ async function postMoves(moves: Moves): Promise<void> {
   }
 }
 
+/** Whole days from `from` to `to` (YYYY-MM-DD), negative when `to` is earlier. */
+export function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}
+
 /** `date` (YYYY-MM-DD) plus `days`, as YYYY-MM-DD. */
 export function addDays(date: string, days: number): string {
   const d = new Date(`${date}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
+
+/**
+ * A payment: money received from a customer or sent to a vendor through a cash or bank journal. Posting creates
+ * and posts its entry (the journal's account against the receivable / payable) and matches the receivable /
+ * payable line with the documents it pays (`payments.ts`).
+ */
+export const AccountPayment = defineModel('account.payment', {
+  label: 'Payment',
+  order: ['date desc', 'id desc'],
+  companyScoped: { required: true },
+  tracking: ['state', 'amount', 'partner'],
+  access: { 'account.invoicing': WRITE, 'account.user': ALL, 'account.manager': ALL },
+  rules: {
+    all: {
+      groups: ['account.invoicing', 'account.user', 'account.manager'],
+      perms: ['read', 'write', 'create', 'unlink'],
+      domain: {},
+    },
+  },
+  fields: {
+    /** The entry's number once posted. */
+    name: f.char({
+      required: true,
+      store: true,
+      label: 'Number',
+      ...compute('account.payment', 'name', ['move.name'], (payments) => {
+        for (const p of payments) p.name = p.move?.name ?? orm.UNNUMBERED;
+      }),
+    }),
+    kind: f.selection(
+      { inbound: 'Receive', outbound: 'Send' },
+      { required: true, default: 'inbound', label: 'Direction' },
+    ),
+    partner: f.many2one('res.partner', { required: true, checkCompany: true }),
+    journal: f.many2one('account.journal', { required: true, checkCompany: true }),
+    date: f.date({ required: true, default: (env: Env) => env.today() }),
+    currency: f.many2one('res.currency', { required: true }),
+    amount: f.monetary({ currency: 'currency', required: true }),
+    memo: f.char(),
+    /** The documents this payment settles (oldest due first); none: an open payment to match later. */
+    documents: f.many2many('account.move', { label: 'Pays' }),
+    move: f.many2one('account.move', { label: 'Entry' }),
+    state: f.state({
+      states: { draft: 'Draft', posted: 'Posted', cancel: 'Cancelled' },
+      initial: 'draft',
+      transitions: {
+        post: {
+          from: ['draft'],
+          to: 'posted',
+          before: records('account.payment', (payments) => postPayments(payments)),
+        },
+        cancel: { from: ['draft'], to: 'cancel' },
+        redraft: { from: ['cancel'], to: 'draft' },
+      },
+      tracking: true,
+    }),
+  },
+  sqlConstraints: {
+    amountPositive: { check: orm.sql`amount > 0`, message: 'A payment amount is positive.' },
+  },
+});
 
 const sequence = (type: JournalType, prefix: string) =>
   orm.defineSequence({
@@ -891,9 +1115,6 @@ export const accountingShutro = defineModule({
       implies: ['account.user', 'product.manager'],
     }),
   ],
-  permissions: [
-    orm.definePermission({ code: 'account.post', label: 'Post entries', groups: ['account.user'] }),
-  ],
   sequences: [
     sequence('sale', 'INV'),
     sequence('purchase', 'BILL'),
@@ -910,6 +1131,17 @@ export const accountingShutro = defineModule({
     AccountPaymentTermLine,
     AccountMove,
     AccountMoveLine,
+    AccountPartialReconcile,
+    AccountFullReconcile,
+    AccountPayment,
+  ],
+  permissions: [
+    orm.definePermission({ code: 'account.post', label: 'Post entries', groups: ['account.user'] }),
+    orm.definePermission({
+      code: 'account.reconcile',
+      label: 'Reconcile and unreconcile',
+      groups: ['account.user'],
+    }),
   ],
   // Payment terms every installation starts with (shared; theirs to change afterwards).
   data: [
