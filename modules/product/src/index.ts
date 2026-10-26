@@ -6,6 +6,7 @@
 import { defineModule } from '@kosh/modules-sdk';
 import { base } from '@kosh/server';
 import { action, form, kanban, list, search } from '@kosh/views';
+import { productDemo } from './demo.js';
 import { AccountTax, ProductCategory, ProductProduct, productShutro, UomUom } from './module.js';
 
 export { AccountTax, ProductCategory, ProductProduct, productShutro, UomUom } from './module.js';
@@ -13,6 +14,7 @@ export { AccountTax, ProductCategory, ProductProduct, productShutro, UomUom } fr
 export const product: ReturnType<typeof defineModule> = defineModule({
   shutro: productShutro,
   kosh: '^0.1.0',
+  hooks: { demo: productDemo },
   depends: [base],
   app: {
     code: 'product',

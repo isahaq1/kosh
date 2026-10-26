@@ -10,6 +10,7 @@ import { defineModule } from '@kosh/modules-sdk';
 import { permissions } from '@kosh/permissions';
 import { product } from '@kosh/product';
 import { action, form, kanban, list, search } from '@kosh/views';
+import { purchaseDemo } from './demo.js';
 import { PurchaseOrder, purchaseShutro } from './module.js';
 
 export { PurchaseOrder, PurchaseOrderLine, purchaseShutro } from './module.js';
@@ -17,6 +18,7 @@ export { PurchaseOrder, PurchaseOrderLine, purchaseShutro } from './module.js';
 export const purchase: ReturnType<typeof defineModule> = defineModule({
   shutro: purchaseShutro,
   kosh: '^0.1.0',
+  hooks: { demo: purchaseDemo },
   depends: [contacts, product, messaging, permissions],
   app: {
     code: 'purchase',

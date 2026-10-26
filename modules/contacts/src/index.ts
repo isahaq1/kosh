@@ -6,13 +6,16 @@
 import { defineModule } from '@kosh/modules-sdk';
 import { base } from '@kosh/server';
 import { action, form, hierarchy, list, search } from '@kosh/views';
+import { contactsDemo } from './demo.js';
 import { contactsShutro, ResPartner } from './module.js';
 
+export { contactsDemo, DINA } from './demo.js';
 export { contactsShutro, ResPartner } from './module.js';
 
 export const contacts: ReturnType<typeof defineModule> = defineModule({
   shutro: contactsShutro,
   kosh: '^0.1.0',
+  hooks: { demo: contactsDemo },
   depends: [base],
   app: {
     code: 'contacts',

@@ -8,6 +8,7 @@ import { accounting } from '@kosh/accounting';
 import { defineModule } from '@kosh/modules-sdk';
 import { purchase } from '@kosh/purchase';
 import { field } from '@kosh/views';
+import { purchaseAccountDemo } from './demo.js';
 import { purchaseAccountShutro } from './module.js';
 
 export { MovePurchaseOrder, PurchaseOrderBilling, purchaseAccountShutro } from './module.js';
@@ -15,6 +16,7 @@ export { MovePurchaseOrder, PurchaseOrderBilling, purchaseAccountShutro } from '
 export const purchaseAccount: ReturnType<typeof defineModule> = defineModule({
   shutro: purchaseAccountShutro,
   kosh: '^0.1.0',
+  hooks: { demo: purchaseAccountDemo },
   depends: [purchase, accounting],
   bridge: [purchase, accounting],
   accessLevels: {

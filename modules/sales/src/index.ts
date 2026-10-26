@@ -9,6 +9,7 @@ import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
 import { product } from '@kosh/product';
 import { action, form, kanban, list, search } from '@kosh/views';
+import { salesDemo } from './demo.js';
 import { SaleOrder, SaleOrderLine, salesShutro } from './module.js';
 
 export { SaleOrder, SaleOrderLine, salesShutro } from './module.js';
@@ -16,6 +17,7 @@ export { SaleOrder, SaleOrderLine, salesShutro } from './module.js';
 export const sales: ReturnType<typeof defineModule> = defineModule({
   shutro: salesShutro,
   kosh: '^0.1.0',
+  hooks: { demo: salesDemo },
   depends: [contacts, product, messaging],
   app: {
     code: 'sales',

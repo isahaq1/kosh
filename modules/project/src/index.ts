@@ -8,6 +8,7 @@ import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
 import { action, calendar, form, kanban, list, pivot, search } from '@kosh/views';
+import { projectDemo } from './demo.js';
 import {
   ProjectProject,
   ProjectTask,
@@ -16,6 +17,7 @@ import {
   projectShutro,
 } from './module.js';
 
+export { SUPPORT_PROJECT } from './demo.js';
 export {
   ProjectProject,
   ProjectTask,
@@ -27,6 +29,7 @@ export {
 export const project: ReturnType<typeof defineModule> = defineModule({
   shutro: projectShutro,
   kosh: '^0.1.0',
+  hooks: { demo: projectDemo },
   depends: [contacts, messaging],
   app: {
     code: 'projects',

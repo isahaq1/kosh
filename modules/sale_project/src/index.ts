@@ -12,6 +12,7 @@ import type { ModuleContext } from '@kosh/server';
 import type { Worker } from '@kosh/server/orm';
 import { field } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
+import { saleProjectDemo } from './demo.js';
 import { createTasksFor, saleProjectShutro } from './module.js';
 
 export {
@@ -40,6 +41,7 @@ export function saleProjectWorker(context: Pick<ModuleContext, 'shutro'>): Worke
 export const saleProject: ReturnType<typeof defineModule> = defineModule({
   shutro: saleProjectShutro,
   kosh: '^0.1.0',
+  hooks: { demo: saleProjectDemo },
   depends: [sales, project, product],
   bridge: [sales, project],
   accessLevels: {

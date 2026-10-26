@@ -35,6 +35,7 @@ import {
   reopenFiscalYear,
   updateSettings,
 } from './closing.js';
+import { accountingDemo } from './demo.js';
 import {
   AccountAccount,
   AccountFiscalYear,
@@ -861,6 +862,7 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       await installImmutability(env as Env);
       return undefined;
     },
+    demo: accountingDemo,
   },
   routes: (context: ModuleContext) => {
     context.app.post('/api/v1/accounting/charts/install', async (request) => {
