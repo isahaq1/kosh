@@ -11,6 +11,7 @@ import { base, type ModuleContext } from '@kosh/server';
 import { action, form, list, search } from '@kosh/views';
 import { type AutomationContext, startAutomation } from './engine.js';
 import { automationShutro } from './models.js';
+import { installModuleRules } from './module-rules.js';
 import { registerAutomationRoutes } from './routes.js';
 
 export { type Cron, isDue, nextRun, parseCron } from './cron.js';
@@ -50,6 +51,7 @@ export {
   TRIGGERS,
   type Trigger,
 } from './models.js';
+export { installModuleRules, ruleValues } from './module-rules.js';
 export { registerAutomationRoutes } from './routes.js';
 
 /** Package identity. */
@@ -103,6 +105,14 @@ export function automationModule(options: AutomationOptions = {}): ReturnType<ty
       },
     },
     privateModels: ['automation.cursor'],
+    hooks: {
+      defaults: async (env, modules) => {
+        const { created, updated, archived } = await installModuleRules(env as never, modules);
+        return created + updated + archived === 0
+          ? undefined
+          : `module rules: ${created} created, ${updated} updated, ${archived} archived`;
+      },
+    },
     actions: {
       'automation.action_rules': action('automation.rule', {
         label: 'Rules',
@@ -144,7 +154,7 @@ export function automationModule(options: AutomationOptions = {}): ReturnType<ty
             columns: 1,
           }),
           k.group('then', ['actions', 'runAs', 'runAsUser', 'logOnRecord'], { columns: 1 }),
-          k.group('about', ['description', 'lastRunAt'], { columns: 1 }),
+          k.group('about', ['description', 'lastRunAt', 'module', 'moduleKey'], { columns: 1 }),
         ],
         chatter: true,
       })),

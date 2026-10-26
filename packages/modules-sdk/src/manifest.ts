@@ -73,6 +73,41 @@ export interface ApprovalSpec {
   readonly onRejected?: string;
 }
 
+/**
+ * An automation rule a module ships (RFC 0011, RFC 0012 §5.1): installed by the Automation app as a rule owned by
+ * the module (`module` + key) in every company, updated when the module is upgraded (its on/off switch stays the
+ * administrator's), archived when the module no longer declares it. The fields are those of `automation.rule`.
+ */
+export interface AutomationRuleSpec {
+  readonly name: string;
+  /** The model it watches (`res.partner`). */
+  readonly model: string;
+  readonly trigger:
+    | 'created'
+    | 'updated'
+    | 'deleted'
+    | 'transition'
+    | 'event'
+    | 'date'
+    | 'schedule';
+  /** The ordered actions: `[{ kind, ...params }]` as the rule editor makes them. */
+  readonly actions: readonly Readonly<Record<string, unknown>>[];
+  readonly condition?: Readonly<Record<string, unknown>>;
+  readonly watchFields?: readonly string[];
+  readonly toValues?: Readonly<Record<string, unknown>>;
+  readonly fromValues?: Readonly<Record<string, unknown>>;
+  readonly topic?: string;
+  readonly dateField?: string;
+  readonly dateOffsetDays?: number;
+  readonly cron?: string;
+  readonly runAs?: 'actor' | 'system';
+  readonly logOnRecord?: boolean;
+  readonly description?: string;
+  readonly sequence?: number;
+  /** Installed switched on (default) or off. */
+  readonly enabled?: boolean;
+}
+
 /** A default document template of a module. */
 export interface DocumentSpec {
   /** Unique within the module (`purchase_order`); stored as `module.key`. */
@@ -213,6 +248,11 @@ export interface ModuleInput {
    * apply in order; a level applies when its condition (a Shutro domain on the record) matches.
    */
   readonly approvals?: readonly ApprovalSpec[];
+  /**
+   * Automation rules the module ships, by key (`welcome_note`), installed by the Automation app as rules owned by
+   * the module (needs `automation` installed; RFC 0012 §5.1).
+   */
+  readonly automationRules?: Readonly<Record<string, AutomationRuleSpec>>;
   /** Default document templates (RFC 0005), installed as data (`key` = `module.name`) and editable by designers. */
   readonly documents?: readonly DocumentSpec[];
   /**
@@ -296,6 +336,28 @@ export function defineModule(input: ModuleInput): KoshModule {
           `approval level '${level.name}' of '${policy.name}' has no approverRole group code.`,
           "Use a group or role code, e.g. 'purchase.approver'.",
         );
+  }
+  const RULE_TRIGGERS = [
+    'created',
+    'updated',
+    'deleted',
+    'transition',
+    'event',
+    'date',
+    'schedule',
+  ];
+  for (const [key, rule] of Object.entries(input.automationRules ?? {})) {
+    if (!LEVEL.test(key))
+      fail(`automation rule key '${key}' is not snake_case.`, "Use e.g. 'welcome_note'.");
+    if (!ID.test(rule.model))
+      fail(`automation rule '${key}' names the model '${rule.model}'.`, "Use e.g. 'res.partner'.");
+    if (!RULE_TRIGGERS.includes(rule.trigger))
+      fail(
+        `automation rule '${key}' has the trigger '${rule.trigger}'.`,
+        `Use one of ${RULE_TRIGGERS.join(', ')}.`,
+      );
+    if (!Array.isArray(rule.actions) || rule.actions.length === 0)
+      fail(`automation rule '${key}' has no actions.`, "Give at least one, e.g. { kind: 'note' }.");
   }
   const menuIds = new Set<string>();
   for (const menu of input.menus ?? []) {

@@ -17,6 +17,7 @@ import { afterAll, beforeAll, expect, test } from 'vitest';
 import {
   automationContext,
   automationModule,
+  installModuleRules,
   pollAudit,
   pollOutbox,
   pollTimed,
@@ -600,4 +601,62 @@ test('webhook: a signed JSON POST through a job, to an allowed host only; a fail
     delete process.env['KOSH_AUTOMATION_WEBHOOK_HOSTS'];
     await new Promise<void>((resolve) => hook.close(() => resolve()));
   }
+});
+
+test('module rules: installed owned by the module, upgraded keeping the switch, archived when dropped; they fire', async () => {
+  const shipping = (rules: Record<string, unknown>) =>
+    ({ ...crm, automationRules: rules }) as unknown as typeof crm;
+  const install = (rules: Record<string, unknown>) =>
+    server.shutro.bootstrap({ reason: 'test', company }, (env) =>
+      installModuleRules(env as Env, [shipping(rules)]),
+    );
+  const welcome = {
+    name: 'Welcome deal',
+    model: 'crm.deal',
+    trigger: 'created',
+    actions: [{ kind: 'note', text: 'Welcome {{name}}' }],
+    runAs: 'system',
+  };
+  expect(await install({ welcome })).toEqual({ created: 1, updated: 0, archived: 0 });
+  const find = async () =>
+    (
+      await ok(
+        'GET',
+        `/api/v1/models/automation.rule?fields=id,name,enabled,module,moduleKey,active&filter=${encodeURIComponent(JSON.stringify({ module: 'crm' }))}`,
+        'admin',
+      )
+    ).items as Json[];
+  const [installed] = await find();
+  expect(installed).toMatchObject({
+    name: 'Welcome deal',
+    enabled: true,
+    module: 'crm',
+    moduleKey: 'welcome',
+  });
+
+  // It fires like any rule.
+  await poll();
+  const id = await deal('rahim', { name: 'Shipped rule deal' });
+  await poll();
+  expect((await runsOf(installed.id)).map((r) => [r.targetId, r.state])).toEqual([[id, 'done']]);
+
+  // The administrator switches it off; an upgrade rewrites the rule and keeps the switch.
+  await ok('PATCH', `/api/v1/models/automation.rule/${installed.id}`, 'admin', { enabled: false });
+  expect(await install({ welcome: { ...welcome, name: 'Welcome deal (v2)' } })).toEqual({
+    created: 0,
+    updated: 1,
+    archived: 0,
+  });
+  expect(await find()).toMatchObject([
+    { id: installed.id, name: 'Welcome deal (v2)', enabled: false },
+  ]);
+
+  // Dropped from the module: archived, not deleted (its runs stay).
+  expect(await install({})).toEqual({ created: 0, updated: 0, archived: 1 });
+  expect(await find()).toEqual([]); // the API lists active rules
+  const [row] = await server.driver.query<{ active: boolean }>({
+    text: 'SELECT active FROM automation_rule WHERE id = $1',
+    params: [installed.id],
+  });
+  expect(row?.active).toBe(false);
 });

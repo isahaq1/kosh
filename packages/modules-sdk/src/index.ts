@@ -23,6 +23,7 @@ export {
   type ApprovalSpec,
   type AppSpec,
   type AutomationActionSpec,
+  type AutomationRuleSpec,
   type DemoContext,
   type DemoUser,
   type DocumentSpec,

@@ -89,6 +89,10 @@ const Rule = defineModel('automation.rule', {
     logOnRecord: f.boolean({ default: false }),
     description: f.text(),
     lastRunAt: f.datetime(),
+    /** The module that ships the rule (`automationRules` in its manifest): an upgrade of it rewrites the rule. */
+    module: f.char({ label: 'From module' }),
+    /** The rule's key in that module. */
+    moduleKey: f.char({ label: 'Key in the module' }),
   },
 });
 
@@ -131,7 +135,7 @@ const Cursor = defineModel('automation.cursor', {
 
 export const automationShutro: ReturnType<typeof orm.defineModule> = defineModule({
   name: 'automation',
-  version: '0.1.0',
+  version: '0.2.0',
   depends: [baseShutro],
   groups: [
     defineGroup({ code: 'automation.user', label: 'Automation (runs)', implies: ['base.user'] }),
