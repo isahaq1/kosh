@@ -3,9 +3,20 @@
  * `@kosh/mail` (RFC 0006 §5.4): outbound email. A {@link Mailer} sends one message; {@link createSmtpMailer} is the
  * SMTP implementation (nodemailer: the one dependency, for SMTP with STARTTLS and authentication), and
  * {@link mailerFromEnv} reads `SMTP_URL` and `MAIL_FROM`. In development, `SMTP_URL=smtp://localhost:1025` points at
- * Mailpit (`pnpm dev:services`, inbox on http://localhost:8025). Templates and inbound email come next.
+ * Mailpit (`pnpm dev:services`, inbox on http://localhost:8025). Inbound email (RFC 0006 part 7): replies to
+ * notification emails post on the record (`inbound/`), through the provider's webhook; the Kosh module `mail`
+ * serves the routes and the quarantine page for messages that match no one.
  */
+import { chatterContext, messaging } from '@kosh/messaging';
+import { defineModule } from '@kosh/modules-sdk';
+import { base, type ModuleContext } from '@kosh/server';
+import { type Storage, storage, storageOf } from '@kosh/storage';
 import nodemailer from 'nodemailer';
+import { type InboundContext, registerInboundRoutes } from './inbound/index.js';
+import { mailShutro } from './inbound/models.js';
+import { type InboundConfig, inboundConfigFromEnv } from './inbound/token.js';
+
+export * from './inbound/index.js';
 
 /** One outbound message. */
 export interface OutboundMail {
@@ -119,3 +130,65 @@ export const PACKAGE: { readonly name: string; readonly rfc: string } = Object.f
   name: '@kosh/mail',
   rfc: 'RFC 0006',
 });
+
+/** Options of {@link mailModule}: explicit settings (tests, installations wiring their own). */
+export interface MailOptions {
+  /** The reply address settings; default: `MAIL_INBOUND_SECRET`, `MAIL_INBOUND_DOMAIN`, `MAIL_INBOUND_ALIAS`. */
+  readonly inbound?: InboundConfig | undefined;
+  /** The webhook's shared secret; default `MAIL_INBOUND_WEBHOOK_SECRET`. Without one the webhook answers 404. */
+  readonly webhookSecret?: string | undefined;
+}
+
+/** The store attachments go to, or none when the installation has no file storage. */
+function storageOrNone(app: object): Storage | undefined {
+  try {
+    return storageOf(app);
+  } catch {
+    return undefined;
+  }
+}
+
+/** The mail module with explicit settings. */
+export function mailModule(options: MailOptions = {}): ReturnType<typeof defineModule> {
+  return defineModule({
+    shutro: mailShutro,
+    kosh: '^0.1.0',
+    depends: [base, messaging, storage],
+    app: {
+      code: 'mail',
+      label: 'Email',
+      icon: 'mail',
+      sequence: 950,
+      category: 'Administration',
+      summary: 'Inbound email: replies posted on records, and the ones that matched no one',
+    },
+    accessLevels: {
+      manager: { label: 'Email manager (the inbound log)', groups: ['mail.manager'] },
+    },
+    actions: {
+      'mail.action_inbound': { type: 'client', page: 'mail.Inbound', label: 'Inbound email' },
+    },
+    menus: [
+      { id: 'mail.root', label: 'Email', app: 'mail' },
+      { id: 'mail.inbound', parent: 'mail.root', label: 'Inbound', action: 'mail.action_inbound' },
+    ],
+    privateModels: ['mail.inbound_message'],
+    routes: (context: ModuleContext) => {
+      const inbound: InboundContext = {
+        shutro: context.shutro,
+        driver: context.driver,
+        registry: context.registry,
+        auth: context.auth,
+        storage: storageOrNone(context.app),
+        config: options.inbound ?? inboundConfigFromEnv(),
+        chatter: chatterContext(context),
+      };
+      registerInboundRoutes(context, inbound, {
+        webhookSecret: options.webhookSecret ?? process.env['MAIL_INBOUND_WEBHOOK_SECRET'],
+      });
+    },
+  });
+}
+
+/** The mail module: a technical module every installation has (the Email app shows for its managers only). */
+export const mail: ReturnType<typeof defineModule> = mailModule();
