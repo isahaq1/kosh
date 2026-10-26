@@ -21,6 +21,7 @@ export const TEXTS: Readonly<Record<string, Texts>> = {
       'approval.decided': '{{actor}} {{state}} {{record}}',
       'activity.assigned': '{{actor}} assigned you an activity on {{record}} (due {{deadline}})',
       'chat.direct': '{{actor}}: {{preview}}',
+      'email.bounced': 'The email to {{recipient}} ({{address}}) about {{record}} bounced',
     },
     states: { approved: 'approved', rejected: 'rejected' },
     email: {
@@ -35,6 +36,7 @@ export const TEXTS: Readonly<Record<string, Texts>> = {
       'approval.decided': '{{actor}} {{record}} {{state}}',
       'activity.assigned': '{{actor}} আপনাকে {{record}}-এ একটি কাজ দিয়েছেন (শেষ তারিখ {{deadline}})',
       'chat.direct': '{{actor}}: {{preview}}',
+      'email.bounced': '{{record}} সম্পর্কে {{recipient}} ({{address}})-কে পাঠানো ইমেইল ফেরত এসেছে',
     },
     states: { approved: 'অনুমোদন করেছেন', rejected: 'প্রত্যাখ্যান করেছেন' },
     email: {

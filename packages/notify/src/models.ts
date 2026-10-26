@@ -16,6 +16,7 @@ export const KINDS = [
   'approval.decided',
   'activity.assigned',
   'chat.direct',
+  'email.bounced',
 ] as const;
 export type Kind = (typeof KINDS)[number];
 /** Delivery channels; `inapp` is the inbox, the others come with their adapters. */
@@ -75,7 +76,13 @@ const Delivery = defineModel('notify.delivery', {
     notification: f.many2one('notify.notification', { required: true, ondelete: 'cascade' }),
     channel: f.char({ required: true }),
     state: f.selection(
-      { pending: 'Pending', sent: 'Sent', failed: 'Failed', skipped: 'Skipped' },
+      {
+        pending: 'Pending',
+        sent: 'Sent',
+        failed: 'Failed',
+        skipped: 'Skipped',
+        bounced: 'Bounced',
+      },
       { required: true, default: 'pending' },
     ),
     attempts: f.integer({ required: true, default: 0 }),

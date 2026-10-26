@@ -311,3 +311,59 @@ test('a reply by email to a notification we sent resolves by In-Reply-To and pos
   const [posted] = page.json.items.filter((i: { type: string }) => i.type === 'message');
   expect(posted).toMatchObject({ author: { name: 'Dina Rahman' }, body: '<p>Noted, thanks.</p>' });
 });
+
+test('a bounce of an email we sent marks the delivery and tells the user whose action caused it', async () => {
+  await server.shutro.bootstrap({ reason: 'test', company }, async (env) => {
+    type Model = { create(r: unknown[]): Promise<{ ids: number[] }> };
+    const model = (name: string) => env.model(name as never) as unknown as Model;
+    const n = await model('notify.notification').create([
+      {
+        user: users['dina'],
+        actor: users['rahim'],
+        kind: 'mention',
+        params: {},
+        resModel: 'library.book',
+        resId: book,
+        company,
+      },
+    ]);
+    await model('notify.delivery').create([
+      { notification: n.ids[0], channel: 'email', state: 'sent', providerId: '<sent-78@kosh>' },
+    ]);
+  });
+  const before = (await call('GET', '/api/v1/notifications/count', 'rahim')).json.unread as number;
+  const res = await server.app.inject({
+    method: 'POST',
+    url: '/api/v1/mail/inbound',
+    headers: { 'content-type': 'message/rfc822', 'x-kosh-inbound-secret': 'hook' },
+    payload: [
+      'From: Mail Delivery System <MAILER-DAEMON@padma.test>',
+      'To: kosh@padma.test',
+      'Subject: Undelivered Mail Returned to Sender',
+      'Message-ID: <bounce-78@padma.test>',
+      'In-Reply-To: <sent-78@kosh>',
+      'Content-Type: multipart/report; report-type=delivery-status; boundary="r"',
+      '',
+      '--r',
+      'Content-Type: text/plain',
+      '',
+      'The address does not exist.',
+      '--r--',
+      '',
+    ].join('\r\n'),
+  });
+  expect(res.statusCode, res.body).toBe(202);
+  expect(res.json()).toMatchObject({ state: 'dropped', reason: 'automatic' });
+  const [delivery] = await server.driver.query<{ state: string; error: string }>({
+    text: "SELECT state, error FROM notify_delivery WHERE provider_id = '<sent-78@kosh>'",
+    params: [],
+  });
+  expect(delivery).toMatchObject({ state: 'bounced' });
+  expect(delivery?.error).toContain('bounced');
+  const after = await call('GET', '/api/v1/notifications', 'rahim');
+  expect(after.json.unread).toBe(before + 1);
+  expect(after.json.items[0]).toMatchObject({
+    kind: 'email.bounced',
+    params: { recipient: 'Dina Rahman', address: 'dina@padma.test', record: 'Padma Nadir Majhi' },
+  });
+});
