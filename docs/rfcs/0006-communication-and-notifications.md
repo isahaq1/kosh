@@ -247,6 +247,28 @@ member table hidden behind a kanban.
 - Tests: `apps/web/e2e/chat.spec.ts` (a group made from the app, live for its member, a reaction and a thread
   seen by both; a direct message in the dock and the bell; no dock without Messaging; accessibility).
 
+## Implementation notes (2026-10-26, part 7 step 3: replies by email, the webhook, the quarantine)
+
+- `@kosh/mail` is a Kosh module now (`mail`, every installation has it; the Email app shows for `mail.manager`):
+  `inbound/token.ts` (the signed reply addresses; `@kosh/notify` sets `Reply-To` on every record email when
+  `MAIL_INBOUND_SECRET` and `MAIL_INBOUND_DOMAIN` are set), `inbound/parse.ts` (`postal-mime` for raw messages,
+  Postmark's JSON, `sanitize-html` for HTML from outside, quote cutting, auto-reply and bounce detection),
+  `inbound/handle.ts` (the log row once per Message-ID, the target from the token or `In-Reply-To` against the
+  Message-IDs we sent — the SMTP mailer's `providerId` —, posting as the recipient under their rules or as the
+  system naming a known sender, quarantine otherwise), `inbound/routes.ts` (the public webhook with its shared
+  secret; the log's routes) and `web/InboundPage.tsx`.
+- `mail.message` gained `authorEmail` / `authorName` for messages from outside, and the chatter has
+  `postExternalMessage` (a superuser scope the caller opens, audited). The chatter and the chat show such a sender
+  as "Name <address>".
+- The two dependencies: `postal-mime` (pure JS MIME parsing) and `sanitize-html` (the allow-list).
+- Step 4 (the IMAP poller, catch-all aliases with the Projects user, bounce handling beyond marking the delivery,
+  Mailgun's form-encoded webhook) is next.
+- Tests: `packages/mail/test/parse.test.ts` (addresses, a raw message with an attachment, quotes, HTML, automatic
+  messages, Postmark), `packages/mail/test/inbound.integration.test.ts` (the webhook's secret; a reply posted as
+  the user with the file; delivered twice posted once; a partner's reply as the system; quarantine, attach by
+  hand, discard; an auto-reply dropped; Postmark's JSON) and the notify tests (the reply address on the email; a
+  reply resolved by `In-Reply-To`).
+
 ## Implementation notes (2026-10-19, part 1: chatter)
 
 - `@kosh/messaging` and `@kosh/storage` as described in §5.1; guide in `docs/messaging.md`. The chatter's models are

@@ -103,6 +103,31 @@ conversation. Files are attached to the channel (`POST /api/v1/attachments/mail.
 private model that the manifest marks `attachable`, so the attachment routes serve it under its rules) and
 listed on the message. The Chat app and its dock are described in `docs/ui.md`.
 
+## Replies by email (RFC 0006 part 7)
+
+Every notification email about a record carries a **reply address**, `reply+<model>-<id>-<user>-<token>@<domain>`,
+whose token is an HMAC of the model, the record and the recipient with `MAIL_INBOUND_SECRET` (`MAIL_INBOUND_DOMAIN`
+names the mailbox's domain, `MAIL_INBOUND_ALIAS` the local part, default `reply`). A reply to it comes back through
+the provider's webhook, `POST /api/v1/mail/inbound`, authenticated by `MAIL_INBOUND_WEBHOOK_SECRET`
+(`X-Kosh-Inbound-Secret`, or `?secret=`): a raw message (`message/rfc822`), Postmark's JSON, or `{ RawEmail }`.
+Each message is logged once by its Message-ID (`mail.inbound_message`), then:
+
+- an auto-reply, a bounce or a bulk message is **dropped** (a bounce of a message we sent marks its delivery);
+- the target is the reply address's token, else `In-Reply-To` / `References` against the Message-IDs we sent;
+  without one the message is **quarantined** (`no-target`);
+- a reply from the recipient's own address is **posted as that user** through the chatter, under their rules
+  (the quote cut at the usual markers, the files attached to the record); one they may not read any more is
+  quarantined (`no-access`);
+- a reply from the record's partner or from a follower's address is posted as the system naming the sender
+  (`authorEmail`, shown as "Name <address>"); any other sender is quarantined (`sender-unknown`).
+
+HTML from outside is reduced to a small allow-list (`sanitize-html`); the chatter shows the plain text. The
+**Email** app (`mail.manager`) lists the log by state: a quarantined message is attached to a record by hand
+(posted as the system naming the sender, on a record the manager can read), tried again, or discarded.
+Routes: `GET /api/v1/mail/inbound?state=`, `POST /api/v1/mail/inbound/:id/attach { model, id }`, `…/discard`,
+`…/retry`. The webhook answers 404 until `MAIL_INBOUND_WEBHOOK_SECRET` is set; `kosh init` writes both secrets
+into `.env` (the domain stays to fill in).
+
 ## Storage
 
 Bytes live in an object store, metadata in `storage.attachment` (name, type, size, SHA-256, object key):
@@ -125,6 +150,6 @@ same transaction: they exist exactly when the message or activity does. The noti
 
 ## Not yet
 
-Typing across nodes (relayed on the node of the sender only), sending chat messages offline, replies by email
-(part 7); a cleanup job for objects left behind by failed commits and for attachments of deleted records; decimal
+Typing across nodes (relayed on the node of the sender only), sending chat messages offline, the IMAP poller and
+catch-all aliases of part 7 (step 4); a cleanup job for objects left behind by failed commits and for attachments of deleted records; decimal
 changes are shown as stored (`8,000 → 8,500`, without the field's scale).

@@ -211,6 +211,12 @@ conversation (day separators, grouped messages, reactions, a thread panel, who i
 is shown, and conversations read offline from the persisted cache (sending needs the network). Direct messages
 and mentions reach the bell (`chat.direct`, `mention`); `docs/messaging.md` has the routes and the rules.
 
+## Email (RFC 0006 part 7)
+
+With the `mail` module installed (every installation has it), email managers get the **Email** app: the log of
+inbound messages by state, where a message that matched no record or no known sender is attached to a record by
+hand, tried again, or discarded. `docs/messaging.md` describes how replies reach the chatter.
+
 ## Live screens (RFC 0006 §5, RFC 0010 Phase B)
 
 With the `realtime` module installed (every installation has it), the app keeps one WebSocket per tab to
