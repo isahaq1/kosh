@@ -1,6 +1,6 @@
 # RFC 0006: Communication & notification architecture
 
-- **Status:** Accepted; part 1 (chatter, attachments) implemented. The jobs backend decision (below) is still open.
+- **Status:** Accepted; parts 1–5 implemented (chatter, the realtime gateway, the inbox, email and web push); the jobs decision taken on 2026-10-25. Parts 6 (internal chat) and 7 (inbound email) designed below, awaiting approval.
 - **Depends on:** 0001, 0002, 0003; Shutro RFC 0013 (audit), 0018 (outbox events, jobs)
 
 ## 1. Summary
@@ -79,6 +79,135 @@ Replying to the approval email posts the reply on the order's chatter.
 - Packages: chatter, followers, activities and chat in `packages/messaging`; email (outbound, inbound, templates with
   React Email) in `packages/mail`; channels and adapters (in-app, web push, mobile push, email, SMS, WhatsApp,
   Telegram) in `packages/notify`; the gateway in `packages/realtime`; attachments in `packages/storage`.
+
+## Design (2026-10-26): part 6 — internal chat; part 7 — inbound email
+
+What §5.6 and §5.7 say in one line each, made precise enough to build. Both reuse what exists: `mail.message`
+for the text, the outbox and `@kosh/notify` for who is told, the gateway for the live part, `@kosh/storage` for
+attachments. Nothing is copied from Odoo's `discuss`: no bus of its own, no second message table, no per-channel
+member table hidden behind a kanban.
+
+### 6.1 Chat: the model
+
+- **`mail.channel`** (`@kosh/messaging`, private model, company-scoped): `name`, `kind` (`channel` | `group` |
+  `direct`), `description`, `members` (many2many `res.users` through `mail.channel.member`, see below), `public`
+  (a channel every user of the company may read and join; false for groups and directs), `archived`
+  (`archivable`), `lastMessageAt` (stored, for the sidebar's order). A **direct** channel is a two-member
+  channel with no name (its name is the other member's); the same pair never gets a second one (a unique index on a
+  sorted pair key, `pairKey`, set for directs only).
+- **`mail.channel.member`**: `channel`, `user`, `lastReadMessage` (many2one `mail.message`, the read receipt),
+  `muted` (no notifications), `pinned`, `joinedAt`. One row per member; the chatter's `mail.follower` stays what it
+  is (record followers), these are chat members.
+- **Messages** are `mail.message` rows with `resModel = 'mail.channel'`, `resId = channel`, kind `comment`, plus
+  three fields added to the model: `parent` (many2one `mail.message`, the thread a reply belongs to; a top-level
+  message has none; one level only, like Slack), `replyCount` (stored compute), `reactions` (one2many
+  `mail.message.reaction`: `message`, `user`, `emoji`; unique per message, user and emoji). The record card of
+  §5.5 is a message whose `text` holds a record token `#[Name](record:sale.order:12)`, rendered by the existing
+  markdown subset as a link the reader may or may not open (`GET /api/v1/routes` decides, as the bell does).
+- **Typing** is not stored: the gateway relays `{ type: 'typing', channel }` to the channel's subscribers for
+  five seconds, as it does presence.
+
+### 6.2 Chat: who may do what
+
+- `messaging.user` may read and post in the channels they are a member of (a rule on `mail.channel.member`:
+  `user = uid`; messages of a channel are reachable through the channel's routes only, which check membership
+  first, like the chatter checks the record), create groups and directs, join and leave public channels.
+- `messaging.manager` (new group, implies `messaging.user`) creates and archives public channels and manages
+  their members; the Settings → Chat page lists channels and members for administrators.
+- Authors edit and delete their own messages (the existing `own` rule); a manager deletes any message of a
+  channel they manage (audited, the row keeps `deletedAt` and loses its text, so threads stay whole).
+- Record rules are the fence here as everywhere: a direct message never reaches a user of another company; a
+  user removed from a channel loses the history with the membership (no copy exists elsewhere).
+
+### 6.3 Chat: API, realtime, notifications
+
+- Routes under `/api/v1/chat`: `GET /channels` (mine, with unread counts from `lastReadMessage`), `POST /channels`
+  (group or public), `POST /channels/direct/:user`, `GET /channels/:id/messages?before=&limit=` (and
+  `?thread=<message>` for a thread), `POST /channels/:id/messages` (text, attachments, `parent`), `POST
+  /channels/:id/read` (the receipt), `POST /channels/:id/join|leave`, `POST /messages/:id/reactions` and its
+  `DELETE`, `PATCH /channels/:id` (name, description, members, by a manager or the group's creator).
+- Gateway channel `chat:<id>`: subscribing needs membership (the gateway's `#mayRead` learns one more prefix and
+  asks `mail.channel.member`); the server announces `message`, `reaction`, `read` and `typing` events on it after
+  commit through the existing `NOTIFY kosh_changes` path (a change on `mail.message` with the channel in its
+  payload). Clients refetch the tail through the API, as views do; the payload never carries the text.
+- Notifications ride the existing pipeline: posting emits `chat.message.posted`; `@kosh/notify`'s subscriber
+  creates a `mention` notification for mentioned members, and a new kind `chat.direct` for the other member of a
+  direct channel (in-app, and web push when the recipient is away, i.e. no presence anywhere for two minutes;
+  never email by default). Muted channels create nothing. Preferences per kind as today.
+- Unread counts come from `lastReadMessage` and a message count per channel, computed in one query for the sidebar;
+  no counter column to keep in step.
+
+### 6.4 Chat: the UI (`@kosh/messaging/web`)
+
+- A **Chat** app (`messaging.action_chat`, a client action; menu under its own app icon, and `Ctrl+Shift+K` in the
+  palette) with the sidebar (pinned, channels, directs, unread badges), the message pane (day separators, grouped
+  consecutive messages, reactions, thread side panel, composer with mentions, attachments, record tokens
+  through the palette's record search), and the channel header (members, join, mute, pin).
+- A **dock**: a small bubble per open direct conversation at the bottom right of any page, so a conversation
+  continues while working on a record; the bell counts chat too.
+- Works offline for reading (the persisted query cache) and queues sent messages like other writes (RFC 0010).
+- Everything through i18n, keyboard reachable, light and dark; the live part through the gateway hook views use.
+
+### 7.1 Inbound email: how a message comes in
+
+- **Reply addresses.** Every outbound notification email of a record sets `Reply-To` to
+  `<alias>+<token>@<MAIL_INBOUND_DOMAIN>`: `alias` is the installation's inbound mailbox, `token` a signed value
+  (`HMAC-SHA256` of `model:id:recipient user` with the installation's `MAIL_INBOUND_SECRET`, base32, 20
+  characters, plus the model and id in clear so a human can read it). The token proves the mail was sent by us
+  to that person about that record; no guessable `record-12@` aliases.
+- **Catch-all aliases** (optional, per company): `sales@…` creates a lead-like record when an app declares an
+  `inboundAlias` in its manifest (`{ alias: 'support', model: 'project.task', defaults, assignTo }`); version 1
+  ships the mechanism and one user in Projects (a task in the support project). Unknown aliases are refused with
+  a bounce only when the sender is a known partner; otherwise dropped and logged (no backscatter).
+- **Two sources, one parser.** `@kosh/mail` gains `inbound/`: a parser (`postal-mime`, pure JS; the one new
+  dependency) that turns a raw RFC 5322 message into `{ from, to, subject, text, html, attachments,
+  messageId, inReplyTo, references }`, and two entry points: `POST /api/v1/mail/inbound` for a provider webhook
+  (Postmark, Mailgun, SES/SNS, Mailpit's webhook in development: the raw message, authenticated by a shared
+  secret header per provider adapter), and an **IMAP poller** (`imapflow`, the second dependency, only loaded
+  when `IMAP_URL` is set) that runs as a worker like the outbox subscribers (`pollMs` 30 s, one node at a time by
+  a `pg_advisory_lock`), fetches unseen messages, hands them to the same handler and marks them seen on success.
+- **The handler** (`mail.inbound` job, exactly once per `messageId`: a unique index on `mail.inbound_message`):
+  resolves the target from the token, else from `In-Reply-To` / `References` against our own sent `Message-ID`s
+  (`notify.delivery.messageId`, new column), else from a catch-all alias; checks the sender against the
+  recipient the token names (the user's email, or a partner's address of the record: a vendor replies about the
+  bill from `accounts@vendor`), and **posts to the record's chatter as that user** when the sender is a user, or
+  as the system with the partner named as the author (`mail.message.authorEmail`, new field) when the sender is
+  a partner; mails whose sender matches neither are kept in `mail.inbound_message` as `quarantined` for an
+  administrator to attach by hand or discard (Settings → Email → Inbound).
+- **Bodies.** HTML from outside is sanitized (`sanitize-html`, allow-list: paragraphs, emphasis, lists, links
+  with `rel="noopener nofollow"`, images only as attachments), quoted history is cut at the usual markers
+  (`On … wrote:`, `-----Original Message-----`, our own separator) and kept folded, attachments go to
+  `@kosh/storage` under the record and the message, inline images referenced by `cid:` become attachment links.
+- **Bounces and auto-replies** (`Auto-Submitted`, `X-Autoreply`, `Return-Path: <>`) never post; a bounce of our
+  own message marks the delivery `bounced` (§5.4) and tells the sender of the original message through the bell.
+
+### 7.2 Inbound email: permissions and tests
+
+- Posting as the sender user goes through the same route logic as a typed comment: the user's record rules
+  decide; a user who may not read the record any more gets the mail quarantined, not posted (the token is not a
+  capability, only an address).
+- A partner's reply is posted by the system (audited, `reason: inbound email`) only on records where that partner is
+  the record's partner or a follower address; everything else is quarantined.
+- Tests: the parser on a fixture set (plain, HTML with quotes, attachments, inline images, auto-replies, a
+  bounce), the handler on real PostgreSQL (token reply as a user, a vendor's reply on a bill, a mail without a
+  valid target quarantined, the same message delivered twice posted once), the webhook with a bad secret
+  refused, and an IMAP round trip against a GreenMail container; E2E: a reply shows in the chatter live.
+
+### 7.3 Delivery plan (each step reviewed)
+
+1. Chat model, routes, gateway channel, notifications, tests on PostgreSQL (`@kosh/messaging`).
+2. Chat UI: the app, the dock, offline, E2E (`@kosh/messaging/web`).
+3. Inbound parser, reply tokens on outbound mail, the webhook and the handler, quarantine page, tests.
+4. IMAP poller, catch-all aliases with the Projects user, bounce handling, E2E.
+
+### 7.4 Open questions (answers wanted with the approval)
+
+- **Retention** (§7): propose per-company settings, default to keep everything; erasure of a user's messages on
+  request replaces text by "message removed" and keeps the row (threads and audit stay consistent).
+- **Email providers for the webhook**: Postmark and Mailgun adapters first (clear raw-message webhooks), SES
+  when asked. Development uses Mailpit's webhook. Yes?
+- **Chat retention of attachments** counts against the company's storage like record attachments. Yes?
+- **Dock on mobile widths**: a full-screen conversation instead of bubbles. Yes?
 
 ## Implementation notes (2026-10-19, part 1: chatter)
 
