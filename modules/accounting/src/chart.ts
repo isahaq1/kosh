@@ -204,9 +204,11 @@ export async function installChart(env: Env, template: ChartTemplate): Promise<C
 }
 
 export class ChartInstalledError extends Error {
-  constructor(readonly template: ChartTemplate) {
+  readonly template: ChartTemplate;
+  constructor(template: ChartTemplate) {
     super(`This company already has the ${template} chart of accounts.`);
     this.name = 'ChartInstalledError';
+    this.template = template;
   }
 }
 

@@ -119,6 +119,9 @@ importers:
       '@kosh/product':
         specifier: workspace:*
         version: link:../product
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
       '@kosh/server':
         specifier: workspace:*
         version: link:../../packages/server
@@ -190,6 +193,62 @@ importers:
         specifier: ^12.2.1
         version: 12.2.1
 
+  modules/purchase_account:
+    dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../accounting
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/purchase':
+        specifier: workspace:*
+        version: link:../purchase
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/sale_account:
+    dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../accounting
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/sales':
+        specifier: workspace:*
+        version: link:../sales
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   modules/sales:
     dependencies:
       '@kosh/contacts':
@@ -241,12 +300,18 @@ importers:
       '@kosh/purchase':
         specifier: workspace:*
         version: link:../../modules/purchase
+      '@kosh/purchase_account':
+        specifier: workspace:*
+        version: link:../../modules/purchase_account
       '@kosh/realtime':
         specifier: workspace:*
         version: link:../realtime
       '@kosh/reporting':
         specifier: workspace:*
         version: link:../reporting
+      '@kosh/sale_account':
+        specifier: workspace:*
+        version: link:../../modules/sale_account
       '@kosh/sales':
         specifier: workspace:*
         version: link:../../modules/sales

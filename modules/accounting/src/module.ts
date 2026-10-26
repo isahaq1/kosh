@@ -1,15 +1,21 @@
 /**
- * The data layer of Accounting (RFC 0009), step 1: the ledger core. Accounts typed for the reports, journals,
+ * The data layer of Accounting (RFC 0009), steps 1 and 2: the ledger core and the documents. Accounts typed for the reports, journals,
  * fiscal years with lock dates, currency rates, and journal entries (`account.move`) whose lines carry debit and
  * credit in the company currency as exact money, with the document-currency amount beside them. Posting checks
  * the lock dates, balances the entry to the paisa, converts foreign-currency lines at the entry's rate, takes the
  * number from the journal type's sequence (gapless, yearly) and freezes the entry: a posted entry is never edited
- * or deleted, only reversed. Everything is per company.
+ * or deleted, only reversed. Everything is per company. Documents (invoices, bills, credit notes) are entries
+ * of a `kind` whose product lines (`lineKind: 'product'`) carry quantities, prices, discounts and taxes; posting
+ * generates the tax lines (one per tax, rounded per document) and the receivable / payable counterpart (one per
+ * payment term line, with its due date), then settles every line's company-currency side. Vendor bills above
+ * the policy's threshold wait for approval (`submit` → `to_approve`; the last approval posts).
  */
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
+import { approvalGuard, permissionsShutro, requestApprovals } from '@kosh/permissions';
 import { productShutro } from '@kosh/product';
-import { orm } from '@kosh/server/orm';
+import { reportingShutro } from '@kosh/reporting';
+import { type Decimal, type Money, orm } from '@kosh/server/orm';
 import {
   check,
   compute,
@@ -18,7 +24,9 @@ import {
   type Env,
   extendModel,
   f,
+  record,
   records,
+  ref,
 } from './.kosh/bindings.js';
 
 const READ = ['read'] as const;
@@ -203,6 +211,41 @@ export const AccountFiscalYear = defineModel('account.fiscal.year', {
   },
 });
 
+export const AccountPaymentTerm = defineModel('account.payment.term', {
+  label: 'Payment term',
+  order: ['name asc'],
+  archivable: true,
+  access: { 'account.invoicing': READ, 'account.user': READ, 'account.manager': ALL },
+  fields: {
+    name: f.char({ required: true, translate: true }),
+    note: f.text({ label: 'Shown on documents' }),
+    lines: f.one2many('account.payment.term.line', 'term'),
+  },
+});
+
+/** A part of the amount due some days after the document date (the parts sum to 100 %). */
+export const AccountPaymentTermLine = defineModel('account.payment.term.line', {
+  label: 'Payment term line',
+  order: ['days asc', 'id asc'],
+  access: {
+    'account.invoicing': READ,
+    'account.user': READ,
+    'account.manager': ['read', 'write', 'create', 'unlink'],
+  },
+  fields: {
+    term: f.many2one('account.payment.term', { required: true, ondelete: 'cascade' }),
+    days: f.integer({ required: true, default: 0 }),
+    percent: f.decimal({ scale: 2, required: true, default: '100' }),
+  },
+  sqlConstraints: {
+    percentRange: {
+      check: orm.sql`percent > 0 AND percent <= 100`,
+      message: 'A part is between 0 and 100 %.',
+    },
+    daysPositive: { check: orm.sql`days >= 0`, message: 'Days are zero or more.' },
+  },
+});
+
 /** The company's accounting settings: lock dates and the accounts its documents post to. */
 export const CompanyAccounting = extendModel('res.company', {
   fields: {
@@ -248,6 +291,26 @@ const moveTotals = compute(
       }
       m.amountDebit = debit;
       m.amountCredit = credit;
+    }
+  },
+);
+
+const documentTotals = compute(
+  'account.move',
+  ['amountUntaxed', 'amountTax', 'amountTotal'],
+  ['lines.subtotal', 'lines.taxAmount', 'lines.lineKind'],
+  (moves) => {
+    for (const m of moves) {
+      let untaxed = orm.toDecimal(0);
+      let tax = orm.toDecimal(0);
+      for (const l of m.lines) {
+        if (l.lineKind !== 'product') continue;
+        untaxed = untaxed.plus(l.subtotal?.amount ?? 0);
+        tax = tax.plus(l.taxAmount?.amount ?? 0);
+      }
+      m.amountUntaxed = untaxed;
+      m.amountTax = tax;
+      m.amountTotal = untaxed.plus(tax);
     }
   },
 );
@@ -327,6 +390,8 @@ export const AccountMove = defineModel('account.move', {
     }),
     narration: f.text({ label: 'Notes' }),
     lines: f.one2many('account.move.line', 'move'),
+    /** The product lines of a document (what was sold or bought), for the PDF and the reports. */
+    invoiceLines: f.one2many('account.move.line', 'invoice'),
     amountDebit: f.monetary({
       currency: 'companyCurrency',
       store: true,
@@ -339,17 +404,48 @@ export const AccountMove = defineModel('account.move', {
       label: 'Credit',
       ...moveTotals,
     }),
+    // Documents
+    dateDue: f.date({ label: 'Due date' }),
+    paymentTerm: f.many2one('account.payment.term', { label: 'Payment terms' }),
+    invoiceOrigin: f.char({ label: 'Source document' }),
+    amountUntaxed: f.monetary({
+      currency: 'currency',
+      store: true,
+      label: 'Untaxed',
+      ...documentTotals,
+    }),
+    amountTax: f.monetary({ currency: 'currency', store: true, label: 'Taxes', ...documentTotals }),
+    amountTotal: f.monetary({
+      currency: 'currency',
+      store: true,
+      label: 'Total',
+      ...documentTotals,
+    }),
     state: f.state({
-      states: { draft: 'Draft', posted: 'Posted', cancel: 'Cancelled' },
+      states: {
+        draft: 'Draft',
+        to_approve: 'Waiting approval',
+        posted: 'Posted',
+        cancel: 'Cancelled',
+      },
       initial: 'draft',
       transitions: {
-        post: {
+        /** Bills: ask the approvers the amount needs (none needed: post right after). */
+        submit: {
           from: ['draft'],
+          to: 'to_approve',
+          after: records('account.move', (moves) => requestApprovals(moves)),
+        },
+        post: {
+          from: ['draft', 'to_approve'],
           to: 'posted',
           requires: 'account.post',
+          guard: records('account.move', (moves) => approvalGuard(moves)),
+          message: 'Waiting for approvals.',
           before: records('account.move', (moves) => postMoves(moves)),
         },
-        cancel: { from: ['draft'], to: 'cancel' },
+        reject: { from: ['to_approve'], to: 'draft' },
+        cancel: { from: ['draft', 'to_approve'], to: 'cancel' },
         redraft: { from: ['cancel'], to: 'draft' },
       },
       extensible: true,
@@ -389,7 +485,8 @@ export const AccountMoveLine = defineModel('account.move.line', {
   },
   fields: {
     move: f.many2one('account.move', { required: true, ondelete: 'cascade', label: 'Entry' }),
-    account: f.many2one('account.account', { required: true, ondelete: 'restrict' }),
+    /** Required at posting (a document's product lines take the journal's default account). */
+    account: f.many2one('account.account', { ondelete: 'restrict' }),
     partner: f.many2one('res.partner'),
     name: f.char({ label: 'Label' }),
     /** The entry's date, kept on the line for the reports. */
@@ -419,9 +516,66 @@ export const AccountMoveLine = defineModel('account.move.line', {
     credit: f.monetary({ currency: 'companyCurrency', required: true, default: '0' }),
     /** Signed amount in the entry's currency (debit positive); equals debit − credit in the company currency. */
     amountCurrency: f.monetary({ currency: 'currency', label: 'Amount in currency' }),
+    /** What the line is: an entry line, a document's product line, or a generated tax / counterpart line. */
+    lineKind: f.selection(
+      {
+        entry: 'Entry',
+        product: 'Product',
+        tax: 'Tax',
+        counterpart: 'Receivable / payable',
+      },
+      { required: true, default: 'entry', label: 'Kind' },
+    ),
+    /** The document this is a product line of (null on entry lines and generated lines). */
+    invoice: f.many2one('account.move', {
+      store: true,
+      readonly: true,
+      ...compute('account.move.line', 'invoice', ['move', 'lineKind'], (lines) => {
+        for (const l of lines) l.invoice = l.lineKind === 'product' ? l.move.id : null;
+      }),
+    }),
     product: f.many2one('product.product'),
-    quantity: f.decimal({ scale: 3 }),
+    quantity: f.decimal({ scale: 3, default: '1' }),
+    priceUnit: f.decimal({ scale: 2, default: '0', label: 'Unit price' }),
+    /** Percent off the unit price (0–100). */
+    discount: f.decimal({ scale: 2, default: '0', label: 'Discount %' }),
     tax: f.many2one('account.tax'),
+    /** Tax-excluded amount of a product line in the document currency. */
+    subtotal: f.monetary({
+      currency: 'currency',
+      store: true,
+      label: 'Subtotal',
+      ...compute(
+        'account.move.line',
+        'subtotal',
+        ['lineKind', 'quantity', 'priceUnit', 'discount', 'tax.rate', 'tax.priceIncluded'],
+        (lines) => {
+          for (const l of lines) {
+            if (l.lineKind !== 'product') {
+              l.subtotal = null;
+              continue;
+            }
+            const gross = (l.quantity ?? orm.toDecimal(1))
+              .times(l.priceUnit ?? 0)
+              .times(orm.toDecimal(100).minus(l.discount ?? 0))
+              .div(100);
+            const rate = l.tax?.rate ?? orm.toDecimal(0);
+            l.subtotal = l.tax?.priceIncluded === true ? gross.div(rate.plus(1)) : gross;
+          }
+        },
+      ),
+    }),
+    /** The tax of a product line in the document currency (summed and rounded per tax at posting). */
+    taxAmount: f.monetary({
+      currency: 'currency',
+      store: true,
+      label: 'Tax',
+      ...compute('account.move.line', 'taxAmount', ['subtotal', 'tax.rate'], (lines) => {
+        for (const l of lines)
+          l.taxAmount =
+            l.subtotal === null ? null : l.subtotal.amount.times(l.tax?.rate ?? orm.toDecimal(0));
+      }),
+    }),
     /** Set on the generated tax lines: the tax this line is the amount of. */
     taxLineOf: f.many2one('account.tax', { label: 'Tax line for' }),
     reconciled: f.boolean({ default: false, readonly: true }),
@@ -436,7 +590,22 @@ export const AccountMoveLine = defineModel('account.move.line', {
     postedImmutable: {
       ...check(
         'account.move.line',
-        ['move', 'account', 'partner', 'name', 'debit', 'credit', 'amountCurrency', 'dateMaturity'],
+        [
+          'move',
+          'account',
+          'partner',
+          'name',
+          'debit',
+          'credit',
+          'amountCurrency',
+          'dateMaturity',
+          'lineKind',
+          'product',
+          'quantity',
+          'priceUnit',
+          'discount',
+          'tax',
+        ],
         async (lines) => {
           const loaded = await lines.load({ move: true });
           const tx = await currentTx(lines.env);
@@ -465,16 +634,15 @@ async function currentTx(env: Env): Promise<string> {
 async function postMoves(moves: Moves): Promise<void> {
   const env = moves.env;
   const loaded = await moves.load({
-    lines: true,
+    lines: { tax: true },
     journal: true,
     company: { currency: true },
     currency: true,
+    paymentTerm: { lines: true },
   });
   for (const m of loaded) {
     const fail = (fields: string[], problem: string, hint: string) =>
       new orm.ValidationError('account.move', fields, problem, hint);
-    if (m.lines.length === 0)
-      throw fail(['lines'], 'The entry has no lines.', 'Add at least one line before posting.');
     const lock = m.company.lockDate;
     if (lock !== null && m.date <= lock)
       throw fail(
@@ -497,64 +665,186 @@ async function postMoves(moves: Moves): Promise<void> {
     const companyCurrency = m.company.currency;
     const foreign = m.currency.id !== companyCurrency.id;
     const one = env.model('account.move').browse([m.id]);
+    const linesOf = env.model('account.move.line');
+
+    // Documents: the generated lines (taxes, the counterpart with its due dates).
+    if (m.kind !== 'entry') {
+      const generated = m.lines.filter((l) => l.lineKind === 'tax' || l.lineKind === 'counterpart');
+      if (generated.length > 0) await linesOf.browse(generated.map((l) => l.id)).unlink();
+      const products = m.lines.filter((l) => l.lineKind === 'product');
+      if (products.length === 0)
+        throw fail(['lines'], 'The document has no product lines.', 'Add at least one line.');
+      if (m.partner === null)
+        throw fail(
+          ['partner'],
+          'The document has no partner.',
+          'Choose the customer or the vendor.',
+        );
+      const outgoing = m.kind === 'out_invoice' || m.kind === 'in_refund';
+      // Product and tax lines of an outgoing document are credits (income), the counterpart a debit.
+      const sign = outgoing ? -1 : 1;
+      const refund = m.kind === 'out_refund' || m.kind === 'in_refund';
+      const unit = m.currency.rounding;
+      const round = (d: Decimal) =>
+        d.div(unit).toDecimalPlaces(0, orm.Decimal.ROUND_HALF_UP).times(unit);
+      let total = orm.toDecimal(0);
+      const byTax = new Map<number, { amount: Decimal; account: number | null; name: string }>();
+      for (const l of products) {
+        const account = l.account?.id ?? m.journal.defaultAccount?.id ?? null;
+        if (account === null)
+          throw fail(
+            ['lines'],
+            `Line "${l.name ?? ''}" has no account and the journal ${m.journal.code} has no default account.`,
+            'Set the account on the line, or a default account on the journal.',
+          );
+        const subtotal = round(l.subtotal?.amount ?? orm.toDecimal(0));
+        total = total.plus(subtotal);
+        await linesOf.browse([l.id]).write({
+          account: orm.asId(account, 'account.account'),
+          partner: m.partner.id,
+          amountCurrency: subtotal.times(sign),
+          debit: '0',
+          credit: '0',
+        });
+        if (l.tax !== null) {
+          const entry = byTax.get(l.tax.id) ?? {
+            amount: orm.toDecimal(0),
+            account:
+              (refund ? (l.tax.refundAccount?.id ?? l.tax.account?.id) : l.tax.account?.id) ?? null,
+            name: l.tax.name,
+          };
+          entry.amount = entry.amount.plus(l.taxAmount?.amount ?? 0);
+          byTax.set(l.tax.id, entry);
+        }
+      }
+      for (const [taxId, t] of byTax) {
+        if (t.account === null)
+          throw fail(
+            ['lines'],
+            `Tax ${t.name} has no account.`,
+            'Set the tax account on the tax (Accounting › Configuration › Taxes).',
+          );
+        const amount = round(t.amount);
+        if (amount.isZero()) continue;
+        total = total.plus(amount);
+        await linesOf.create([
+          {
+            move: m.id,
+            lineKind: 'tax',
+            account: orm.asId(t.account, 'account.account'),
+            partner: m.partner.id,
+            name: t.name,
+            taxLineOf: orm.asId(taxId, 'account.tax'),
+            amountCurrency: amount.times(sign),
+            debit: '0',
+            credit: '0',
+          },
+        ]);
+      }
+      const counterpart =
+        outgoing || m.kind === 'out_refund'
+          ? m.company.accountReceivable
+          : m.company.accountPayable;
+      if (counterpart === null)
+        throw fail(
+          ['partner'],
+          `The company has no ${outgoing || m.kind === 'out_refund' ? 'receivable' : 'payable'} account.`,
+          'Install a chart of accounts (Accounting › Configuration), or set the account on the company.',
+        );
+      // One counterpart line per payment term part, the whole rounded total allocated between them.
+      const parts =
+        m.paymentTerm === null || m.paymentTerm.lines.length === 0
+          ? [{ days: 0, percent: orm.toDecimal(100) }]
+          : m.paymentTerm.lines.map((pl) => ({ days: pl.days, percent: pl.percent }));
+      const totalMoney = orm.Money.of(
+        total,
+        orm.defineCurrency({
+          code: m.currency.name,
+          rounding: m.currency.rounding,
+          decimalPlaces: m.currency.decimalPlaces ?? 2,
+          id: m.currency.id,
+        }),
+      );
+      const amounts =
+        parts.length === 1 ? [totalMoney] : totalMoney.allocate(parts.map((pt) => pt.percent));
+      let latest = m.date;
+      for (const [i, part] of parts.entries()) {
+        const due = addDays(m.date, part.days);
+        if (due > latest) latest = due;
+        await linesOf.create([
+          {
+            move: m.id,
+            lineKind: 'counterpart',
+            account: counterpart.id,
+            partner: m.partner.id,
+            name: m.ref ?? m.invoiceOrigin ?? m.name,
+            dateMaturity: due,
+            amountCurrency: (amounts[i] as Money).amount.times(-sign),
+            debit: '0',
+            credit: '0',
+          },
+        ]);
+      }
+      await one.write({ dateDue: m.dateDue ?? latest });
+    } else if (m.lines.length === 0)
+      throw fail(['lines'], 'The entry has no lines.', 'Add at least one line before posting.');
+    else
+      for (const l of m.lines)
+        if (l.account === null)
+          throw fail(
+            ['lines'],
+            `Line "${l.name ?? ''}" has no account.`,
+            'Every line of an entry needs an account.',
+          );
+
+    // Every line's company-currency side, at the entry's rate.
+    let rate = m.rate;
+    if (foreign && rate === null) {
+      try {
+        const rates = await env.fx.prepare({
+          date: m.date,
+          currencies: [m.currency.id],
+          company: m.company.id,
+        });
+        rate = rates.rate(m.currency.id).rate;
+      } catch (error) {
+        throw fail(
+          ['currency'],
+          error instanceof Error ? error.message : String(error),
+          "Add a currency rate for the entry's date, or set the rate on the entry.",
+        );
+      }
+    }
+    if (!foreign) rate = orm.toDecimal(1);
+    if (m.rate === null) await one.write({ rate });
+    const unitCompany = companyCurrency.rounding;
     let debit = orm.toDecimal(0);
     let credit = orm.toDecimal(0);
-    if (foreign) {
-      let rate = m.rate;
-      if (rate === null) {
-        try {
-          const rates = await env.fx.prepare({
-            date: m.date,
-            currencies: [m.currency.id],
-            company: m.company.id,
-          });
-          rate = rates.rate(m.currency.id).rate;
-        } catch (error) {
-          throw fail(
-            ['currency'],
-            error instanceof Error ? error.message : String(error),
-            "Add a currency rate for the entry's date, or set the rate on the entry.",
-          );
-        }
+    const current = await linesOf.search({ where: { move: m.id } });
+    for (const l of await current.load({})) {
+      const sides = l.debit.isZero() && l.credit.isZero();
+      if (sides && l.amountCurrency !== null && !l.amountCurrency.isZero()) {
+        // Entered in the entry's currency: the company-currency side at the rate.
+        const converted = l.amountCurrency.amount.div(rate as Decimal);
+        const rounded = converted
+          .abs()
+          .div(unitCompany)
+          .toDecimalPlaces(0, orm.Decimal.ROUND_HALF_UP)
+          .times(unitCompany);
+        const side = converted.isNegative()
+          ? { debit: '0', credit: rounded }
+          : { debit: rounded, credit: '0' };
+        await linesOf.browse([l.id]).write(side);
+        debit = debit.plus(side.debit);
+        credit = credit.plus(side.credit);
+        continue;
       }
-      if (m.rate === null) await one.write({ rate });
-      for (const l of m.lines) {
-        // Lines entered in the entry's currency get their company-currency side at the entry's rate.
-        if (
-          l.debit.isZero() &&
-          l.credit.isZero() &&
-          l.amountCurrency !== null &&
-          !l.amountCurrency.isZero()
-        ) {
-          const converted = l.amountCurrency.amount.div(rate);
-          const unit = companyCurrency.rounding;
-          const rounded = converted
-            .abs()
-            .div(unit)
-            .toDecimalPlaces(0, orm.Decimal.ROUND_HALF_UP)
-            .times(unit);
-          const side = converted.isNegative()
-            ? { debit: '0', credit: rounded }
-            : { debit: rounded, credit: '0' };
-          await env.model('account.move.line').browse([l.id]).write(side);
-          debit = debit.plus(side.debit);
-          credit = credit.plus(side.credit);
-          continue;
-        }
-        debit = debit.plus(l.debit.amount);
-        credit = credit.plus(l.credit.amount);
-      }
-    } else {
-      for (const l of m.lines) {
-        debit = debit.plus(l.debit.amount);
-        credit = credit.plus(l.credit.amount);
-        if (l.amountCurrency === null)
-          await env
-            .model('account.move.line')
-            .browse([l.id])
-            .write({ amountCurrency: l.debit.amount.minus(l.credit.amount) });
-      }
-      if (m.rate === null) await one.write({ rate: '1' });
+      debit = debit.plus(l.debit.amount);
+      credit = credit.plus(l.credit.amount);
+      if (l.amountCurrency === null)
+        await linesOf.browse([l.id]).write({
+          amountCurrency: l.debit.amount.minus(l.credit.amount).times(rate as Decimal),
+        });
     }
     const places = companyCurrency.decimalPlaces ?? 2;
     if (!debit.equals(credit))
@@ -566,6 +856,13 @@ async function postMoves(moves: Moves): Promise<void> {
     await one.assignNumber(NUMBER_FIELD[m.journal.type], { date: m.date });
     await one.write({ postedAt: env.now(), postedTx: await currentTx(env) });
   }
+}
+
+/** `date` (YYYY-MM-DD) plus `days`, as YYYY-MM-DD. */
+export function addDays(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 const sequence = (type: JournalType, prefix: string) =>
@@ -580,12 +877,12 @@ const sequence = (type: JournalType, prefix: string) =>
 export const accountingShutro = defineModule({
   name: 'accounting',
   version: '0.1.0',
-  depends: [contactsShutro, productShutro, messagingShutro],
+  depends: [contactsShutro, productShutro, messagingShutro, permissionsShutro, reportingShutro],
   groups: [
     orm.defineGroup({
       code: 'account.invoicing',
       label: 'Invoicing',
-      implies: ['contacts.user', 'product.user', 'messaging.user'],
+      implies: ['contacts.user', 'product.user', 'messaging.user', 'reporting.user'],
     }),
     orm.defineGroup({ code: 'account.user', label: 'Accountant', implies: ['account.invoicing'] }),
     orm.defineGroup({
@@ -609,8 +906,57 @@ export const accountingShutro = defineModule({
     AccountAccount,
     AccountJournal,
     AccountFiscalYear,
+    AccountPaymentTerm,
+    AccountPaymentTermLine,
     AccountMove,
     AccountMoveLine,
+  ],
+  // Payment terms every installation starts with (shared; theirs to change afterwards).
+  data: [
+    record(
+      'account.payment.term',
+      'term_immediate',
+      { name: 'Immediate payment' },
+      { noupdate: true },
+    ),
+    record(
+      'account.payment.term.line',
+      'term_immediate_line',
+      { term: ref('account.payment.term', 'accounting.term_immediate'), days: 0, percent: '100' },
+      { noupdate: true },
+    ),
+    record('account.payment.term', 'term_15', { name: '15 days' }, { noupdate: true }),
+    record(
+      'account.payment.term.line',
+      'term_15_line',
+      { term: ref('account.payment.term', 'accounting.term_15'), days: 15, percent: '100' },
+      { noupdate: true },
+    ),
+    record('account.payment.term', 'term_30', { name: '30 days' }, { noupdate: true }),
+    record(
+      'account.payment.term.line',
+      'term_30_line',
+      { term: ref('account.payment.term', 'accounting.term_30'), days: 30, percent: '100' },
+      { noupdate: true },
+    ),
+    record(
+      'account.payment.term',
+      'term_half',
+      { name: '50 % now, 50 % in 30 days' },
+      { noupdate: true },
+    ),
+    record(
+      'account.payment.term.line',
+      'term_half_now',
+      { term: ref('account.payment.term', 'accounting.term_half'), days: 0, percent: '50' },
+      { noupdate: true },
+    ),
+    record(
+      'account.payment.term.line',
+      'term_half_later',
+      { term: ref('account.payment.term', 'accounting.term_half'), days: 30, percent: '50' },
+      { noupdate: true },
+    ),
   ],
   extensions: [CompanyAccounting, TaxAccounts],
 });

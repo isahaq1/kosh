@@ -1,14 +1,18 @@
 /**
  * @packageDocumentation
- * `@kosh/accounting` (RFC 0009): the Accounting app. Step 1, the ledger core: chart of accounts (generic and
+ * `@kosh/accounting` (RFC 0009): the Accounting app. The ledger core (step 1): chart of accounts (generic and
  * Bangladesh templates), journals, fiscal years and lock dates, currency rates, and journal entries posted in exact
- * money, numbered gaplessly per journal type, immutable once posted and corrected by reversal. Invoices, bills,
- * payments, reconciliation and the reports follow (RFC 0009 §10).
+ * money, numbered gaplessly per journal type, immutable once posted and corrected by reversal. The documents
+ * (step 2): customer invoices, vendor bills and credit notes with product lines, taxes posting to their accounts,
+ * payment terms and due dates, a PDF, and amount-based approvals of bills. Payments, reconciliation and the
+ * reports follow (RFC 0009 §10).
  */
 import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
+import { permissions } from '@kosh/permissions';
 import { product } from '@kosh/product';
+import { reporting } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import { action, form, list, search } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
@@ -25,6 +29,7 @@ import {
   AccountFiscalYear,
   AccountJournal,
   AccountMove,
+  AccountPaymentTerm,
   accountingShutro,
   REVERSED_KIND,
   ResCurrencyRate,
@@ -46,8 +51,11 @@ export {
   AccountJournal,
   AccountMove,
   AccountMoveLine,
+  AccountPaymentTerm,
+  AccountPaymentTermLine,
   type AccountType,
   accountingShutro,
+  addDays,
   CompanyAccounting,
   JOURNAL_TYPES,
   type JournalType,
@@ -76,7 +84,7 @@ export async function reverseMove(
 ): Promise<Reversed> {
   const moves = env.model('account.move');
   const [m] = await moves.browse([id]).load({
-    lines: { account: true, partner: true },
+    lines: { account: true, partner: true, product: true, tax: true },
     journal: true,
     partner: true,
     currency: true,
@@ -104,16 +112,39 @@ export async function reverseMove(
       ref: `Reversal of ${m.name}`,
       reversalOf: m.id,
       company: m.company.id,
+      ...(m.kind === 'entry'
+        ? {}
+        : { invoiceOrigin: m.name, paymentTerm: m.paymentTerm?.id ?? null }),
       lines: {
-        create: m.lines.map((l) => ({
-          account: l.account.id,
-          partner: l.partner?.id ?? null,
-          name: l.name,
-          debit: l.credit.amount,
-          credit: l.debit.amount,
-          amountCurrency: l.amountCurrency === null ? null : l.amountCurrency.amount.negated(),
-          dateMaturity: l.dateMaturity,
-        })),
+        // An entry: every line negated. A document: its product lines as they were (the reversed kind flips the
+        // sides, and posting generates the tax and counterpart lines again).
+        create:
+          m.kind === 'entry'
+            ? m.lines.map((l) => ({
+                account: l.account?.id ?? null,
+                partner: l.partner?.id ?? null,
+                name: l.name,
+                debit: l.credit.amount,
+                credit: l.debit.amount,
+                amountCurrency:
+                  l.amountCurrency === null ? null : l.amountCurrency.amount.negated(),
+                dateMaturity: l.dateMaturity,
+              }))
+            : m.lines
+                .filter((l) => l.lineKind === 'product')
+                .map((l) => ({
+                  lineKind: 'product' as const,
+                  account: l.account?.id ?? null,
+                  partner: l.partner?.id ?? null,
+                  name: l.name,
+                  product: l.product?.id ?? null,
+                  quantity: l.quantity,
+                  priceUnit: l.priceUnit,
+                  discount: l.discount,
+                  tax: l.tax?.id ?? null,
+                  debit: '0',
+                  credit: '0',
+                })),
       },
     },
   ]);
@@ -133,14 +164,14 @@ const TEMPLATES = Object.keys(CHARTS) as ChartTemplate[];
 export const accounting: ReturnType<typeof defineModule> = defineModule({
   shutro: accountingShutro,
   kosh: '^0.1.0',
-  depends: [contacts, product, messaging],
+  depends: [contacts, product, messaging, permissions, reporting],
   app: {
     code: 'accounting',
     label: 'Accounting',
     icon: 'accounting',
     sequence: 30,
     category: 'Finance',
-    summary: 'Chart of accounts, journals, entries posted in exact money',
+    summary: 'Invoices, bills, journals and entries posted in exact money',
   },
   accessLevels: {
     invoicing: { label: 'Invoicing (invoices and their payments)', groups: ['account.invoicing'] },
@@ -156,8 +187,27 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
     },
   },
   actions: {
+    'accounting.action_customer_invoices': action(AccountMove, {
+      label: 'Customer invoices',
+      views: ['list', 'form'],
+      viewIds: { list: 'account.move.invoice.list', form: 'account.move.invoice.form' },
+      domain: { kind: { in: ['out_invoice', 'out_refund'] } },
+      defaults: { kind: 'out_invoice' },
+    }),
+    'accounting.action_vendor_bills': action(AccountMove, {
+      label: 'Vendor bills',
+      views: ['list', 'form'],
+      viewIds: { list: 'account.move.invoice.list', form: 'account.move.invoice.form' },
+      domain: { kind: { in: ['in_invoice', 'in_refund'] } },
+      defaults: { kind: 'in_invoice' },
+    }),
     'accounting.action_moves': action(AccountMove, {
       label: 'Journal entries',
+      views: ['list', 'form'],
+      viewIds: { list: 'account.move.list', form: 'account.move.form' },
+    }),
+    'accounting.action_payment_terms': action(AccountPaymentTerm, {
+      label: 'Payment terms',
       views: ['list', 'form'],
     }),
     'accounting.action_accounts': action(AccountAccount, {
@@ -180,11 +230,25 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
   menus: [
     { id: 'accounting.root', label: 'Accounting', app: 'accounting' },
     {
+      id: 'accounting.customer_invoices',
+      parent: 'accounting.root',
+      label: 'Customer invoices',
+      action: 'accounting.action_customer_invoices',
+      sequence: 1,
+    },
+    {
+      id: 'accounting.vendor_bills',
+      parent: 'accounting.root',
+      label: 'Vendor bills',
+      action: 'accounting.action_vendor_bills',
+      sequence: 2,
+    },
+    {
       id: 'accounting.moves',
       parent: 'accounting.root',
       label: 'Journal entries',
       action: 'accounting.action_moves',
-      sequence: 1,
+      sequence: 3,
     },
     {
       id: 'accounting.configuration',
@@ -220,8 +284,156 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       action: 'accounting.action_rates',
       sequence: 4,
     },
+    {
+      id: 'accounting.payment_terms',
+      parent: 'accounting.configuration',
+      label: 'Payment terms',
+      action: 'accounting.action_payment_terms',
+      sequence: 5,
+    },
+  ],
+  approvals: [
+    {
+      name: 'Vendor bill approvals',
+      model: 'account.move',
+      onApproved: 'post',
+      onRejected: 'reject',
+      levels: [
+        {
+          name: 'Accounting manager',
+          condition: { kind: 'in_invoice', amountTotal: { gt: '100000' } },
+          approverRole: 'account.manager',
+        },
+      ],
+    },
+  ],
+  documents: [
+    {
+      key: 'invoice',
+      name: 'Invoice',
+      model: 'account.move',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: '{{kind}} {{name}}', level: 1 },
+          {
+            kind: 'columns',
+            id: 'parties',
+            left: [
+              {
+                kind: 'fields',
+                id: 'partner',
+                items: [
+                  { label: 'Partner', bind: 'partner.name' },
+                  { label: 'Reference', bind: 'ref' },
+                  { label: 'Source', bind: 'invoiceOrigin' },
+                ],
+              },
+            ],
+            right: [
+              {
+                kind: 'fields',
+                id: 'dates',
+                items: [
+                  { label: 'Date', bind: 'date' },
+                  { label: 'Due date', bind: 'dateDue' },
+                  { label: 'Payment terms', bind: 'paymentTerm.name' },
+                ],
+              },
+            ],
+          },
+          {
+            kind: 'table',
+            id: 'lines',
+            bind: 'invoiceLines',
+            columns: [
+              { label: 'Description', bind: 'name' },
+              { label: 'Quantity', bind: 'quantity', align: 'end' },
+              { label: 'Unit price', bind: 'priceUnit', align: 'end' },
+              { label: 'Discount %', bind: 'discount', align: 'end' },
+              { label: 'Tax', bind: 'tax.name' },
+              { label: 'Subtotal', bind: 'subtotal', align: 'end', sum: true },
+            ],
+          },
+          {
+            kind: 'fields',
+            id: 'totals',
+            columns: 3,
+            items: [
+              { label: 'Untaxed', bind: 'amountUntaxed' },
+              { label: 'Taxes', bind: 'amountTax' },
+              { label: 'Total', bind: 'amountTotal' },
+            ],
+          },
+          { kind: 'text', id: 'terms', text: '{{paymentTerm.note}}' },
+          { kind: 'text', id: 'notes', text: '{{narration}}' },
+        ],
+      },
+    },
   ],
   views: {
+    'account.move.invoice.list': list(AccountMove, {
+      columns: [
+        'name',
+        'partner',
+        'date',
+        'dateDue',
+        'invoiceOrigin',
+        { field: 'amountTotal', sum: true },
+        { field: 'state', widget: 'badge' },
+      ],
+      defaultOrder: ['date desc', 'name desc'],
+    }),
+    'account.move.invoice.form': form(AccountMove, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('submit', { label: 'Submit for approval' }),
+          k.button('post', { primary: true, label: 'Confirm' }),
+          k.button('reject', { label: 'Send back' }),
+          k.button('cancel', { label: 'Cancel', confirm: 'Cancel this document?' }),
+          k.button('redraft', { label: 'Set to draft' }),
+        ],
+      },
+      sheet: [
+        k.group('party', ['partner', 'kind', 'invoiceOrigin', 'ref']),
+        k.group('dates', ['date', 'dateDue', 'paymentTerm', 'journal']),
+        k.lines(
+          'lines',
+          [
+            'product',
+            { field: 'name', id: 'line_name' },
+            { field: 'account', id: 'line_account' },
+            'quantity',
+            'priceUnit',
+            'discount',
+            'tax',
+            'subtotal',
+          ],
+          { readonlyWhen: { state: { ne: 'draft' } } },
+        ),
+        k.group('totals', ['amountUntaxed', 'amountTax', 'amountTotal'], { label: 'Totals' }),
+        // The journal items of a document (taxes, the counterpart) are read in Journal entries.
+        k.notebook('more', [
+          k.page('money', 'Currency', ['currency', 'rate', 'reversalOf', 'reversedBy']),
+          k.page('notes', 'Notes', ['narration']),
+        ]),
+        k.component('approvals', 'approvals.Panel'),
+      ],
+      readonlyWhen: { state: { ne: 'draft' } },
+      chatter: true,
+    })),
+    'account.payment.term.list': list(AccountPaymentTerm, { columns: ['name'] }),
+    'account.payment.term.form': form(AccountPaymentTerm, (k) => ({
+      header: { buttons: [] },
+      sheet: [
+        k.group('main', ['name']),
+        k.lines('lines', ['days', 'percent']),
+        k.group('notes', ['note'], { columns: 1 }),
+      ],
+    })),
     'account.move.list': list(AccountMove, {
       columns: [
         'name',
@@ -314,7 +526,7 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
           group: 'kind',
         },
       },
-      groupBy: ['journal', 'state', 'partner', 'date:month'],
+      groupBy: ['journal', 'state', 'partner', 'date:month', 'kind'],
     }),
     'account.account': search(AccountAccount, {
       fields: ['code', 'name'],

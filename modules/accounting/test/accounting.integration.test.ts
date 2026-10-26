@@ -165,7 +165,9 @@ test('installing Accounting brings its dependencies; the chart installs once, by
     'base',
     'contacts',
     'messaging',
+    'permissions',
     'product',
+    'reporting',
     'storage',
   ]);
   const before = await call('GET', '/api/v1/accounting/charts', 'maria');
