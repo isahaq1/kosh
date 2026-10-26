@@ -68,7 +68,7 @@ import type {
   UserRef,
 } from '../chatter.js';
 
-interface FileInfo {
+export interface FileInfo {
   readonly id: number;
   readonly name: string;
   readonly mime: string;
@@ -106,7 +106,8 @@ function initials(name: string): string {
   ).toUpperCase();
 }
 
-function Avatar({ user }: { readonly user: UserRef | null }): ReactElement {
+/** @internal Initials of a user (the chat reuses it). */
+export function Avatar({ user }: { readonly user: UserRef | null }): ReactElement {
   return (
     <span
       aria-hidden
@@ -117,7 +118,8 @@ function Avatar({ user }: { readonly user: UserRef | null }): ReactElement {
   );
 }
 
-async function save(api: KoshApi, file: FileInfo): Promise<void> {
+/** @internal Downloads an attachment through the browser (the chat reuses it). */
+export async function save(api: KoshApi, file: FileInfo): Promise<void> {
   const { blob, filename } = await api.download(
     `/api/v1/attachments/${file.id}/download`,
     undefined,
@@ -162,7 +164,8 @@ function Thumbnail({
   );
 }
 
-function Files({
+/** @internal The files of a message, or of a draft with their removal (the chat reuses it). */
+export function Files({
   api,
   files,
   onRemove,
@@ -208,16 +211,16 @@ function Files({
   );
 }
 
-/** The text with the picked mentions turned into tokens (`@[Name](user:12)`) for the server. */
-function withMentions(text: string, mentions: readonly UserRef[]): string {
+/** @internal The text with the picked mentions turned into tokens (`@[Name](user:12)`) for the server. */
+export function withMentions(text: string, mentions: readonly UserRef[]): string {
   let out = text;
   for (const m of [...mentions].sort((a, b) => b.name.length - a.name.length))
     out = out.split(`@${m.name}`).join(`@[${m.name.replace(/[[\]]/g, '')}](user:${m.id})`);
   return out;
 }
 
-/** A textarea that suggests users after `@` (a combobox: arrows, Enter / Tab to pick, Escape to close). */
-function MentionArea({
+/** @internal A textarea that suggests users after `@` (a combobox: arrows, Enter / Tab to pick, Escape to close). */
+export function MentionArea({
   api,
   value,
   onChange,

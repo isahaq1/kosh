@@ -77,6 +77,22 @@ export const messaging: ReturnType<typeof defineModule> = defineModule({
   shutro: messagingShutro,
   kosh: '^0.1.0',
   depends: [base, storage],
+  app: {
+    code: 'chat',
+    label: 'Chat',
+    icon: 'chat',
+    sequence: 90,
+    category: 'Communication',
+    summary: 'Channels, groups and direct messages with your colleagues',
+  },
+  actions: {
+    'messaging.action_chat': { type: 'client', page: 'messaging.Chat', label: 'Chat' },
+  },
+  menus: [
+    { id: 'chat.root', label: 'Chat', app: 'chat' },
+    { id: 'chat.chat', parent: 'chat.root', label: 'Chat', action: 'messaging.action_chat' },
+  ],
+  attachable: ['mail.channel'],
   accessLevels: {
     user: { label: 'Messaging (chatter, chat)', groups: ['messaging.user'] },
     manager: {

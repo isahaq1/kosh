@@ -51,13 +51,15 @@
     "@kosh/storage": "workspace:*",
     "fastify": "^5.12.7",
     "@kosh/ui": "workspace:*",
-    "lucide-react": "^1.59.0"
+    "lucide-react": "^1.59.0",
+    "radix-ui": "^1.8.1"
   },
   "peerDependencies": {
     "react": "^19.3.1",
     "@tanstack/react-query": "^5.104.3",
     "i18next": "^26.4.7",
-    "react-i18next": "^17.0.21"
+    "react-i18next": "^17.0.21",
+    "@tanstack/react-router": "^1.170.45"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1",

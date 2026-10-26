@@ -8,6 +8,7 @@
  */
 import { announceChange, HttpProblem, type ModuleContext } from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
+import { attachmentsById } from '@kosh/storage';
 import { MAX_TEXT, mentionIds, plainText, renderBody } from './body.js';
 import {
   activeUsers,
@@ -139,7 +140,7 @@ async function mustBeMember(env: Env, id: number): Promise<{ channel: Row; membe
   return found as { channel: Row; membership: Row };
 }
 
-/** Unread counts per channel for the caller: messages by others after their read receipt. */
+/** Unread counts per channel for the caller: top-level messages by others after their read receipt (a thread reply does not make the channel unread). */
 async function unreadCounts(env: Env, channels: readonly number[]): Promise<Map<number, number>> {
   if (channels.length === 0) return new Map();
   const found = await env.sql<{ channel: number; n: string }>`
@@ -148,7 +149,7 @@ async function unreadCounts(env: Env, channels: readonly number[]): Promise<Map<
     JOIN mail_channel_member cm ON cm.channel_id = m.res_id AND cm.user_id = ${env.uid}
     WHERE m.res_model = ${CHANNEL_MODEL} AND m.res_id = ANY(${[...channels]}::bigint[])
       AND (cm.last_read_message_id IS NULL OR m.id > cm.last_read_message_id)
-      AND m.author_id IS DISTINCT FROM ${env.uid} AND m.deleted_at IS NULL
+      AND m.author_id IS DISTINCT FROM ${env.uid} AND m.deleted_at IS NULL AND m.parent_id IS NULL
     GROUP BY m.res_id`;
   return new Map(found.map((r) => [Number(r.channel), Number(r.n)]));
 }
@@ -479,10 +480,44 @@ export async function postChatMessage(
   env: Env,
   context: ChatContext,
   id: number,
-  input: { readonly text?: unknown; readonly parent?: unknown },
+  input: { readonly text?: unknown; readonly parent?: unknown; readonly attachments?: unknown },
 ): Promise<ChatMessageItem> {
   const { channel } = await mustBeMember(env, id);
   const text = checkText(input.text);
+  const attachments = input.attachments ?? [];
+  if (
+    !Array.isArray(attachments) ||
+    attachments.length > 20 ||
+    !attachments.every((a) => Number.isSafeInteger(a) && (a as number) > 0)
+  )
+    refuse(400, 'invalid-body', 'Invalid message', 'attachments is a list of at most 20 ids.');
+  const files = attachments as number[];
+  if (files.length > 0) {
+    const found = await attachmentsById(env, new Set(context.models.keys()), files);
+    if (
+      found.length !== files.length ||
+      found.some((a) => a.resModel !== CHANNEL_MODEL || a.resId !== id || a.createdBy !== env.uid)
+    )
+      refuse(
+        400,
+        'invalid-attachment',
+        'Invalid attachment',
+        'Attach your own uploads to this channel.',
+      );
+    const used = await rows(
+      env,
+      'mail.message',
+      { attachments: { any: { id: { in: files } } } },
+      [],
+    );
+    if (used.length > 0)
+      refuse(
+        400,
+        'invalid-attachment',
+        'Invalid attachment',
+        'An attachment belongs to another message.',
+      );
+  }
   let parent: number | null = null;
   if (input.parent !== undefined && input.parent !== null) {
     parent = Number(input.parent);
@@ -510,7 +545,7 @@ export async function postChatMessage(
       text,
       body: renderBody(text, users),
       mentions: { set: [...users.keys()] },
-      attachments: { set: [] },
+      attachments: { set: files },
       parent,
     },
   ]);

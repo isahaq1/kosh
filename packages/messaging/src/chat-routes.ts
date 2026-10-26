@@ -19,6 +19,7 @@ import type { ModuleContext } from '@kosh/server';
 import { positive } from '@kosh/storage';
 import type { FastifyRequest } from 'fastify';
 import {
+  CHANNEL_MODEL,
   type ChatContext,
   channelItem,
   channelMessages,
@@ -35,7 +36,7 @@ import {
   unreact,
   updateChannel,
 } from './chat.js';
-import { pageSize } from './chatter.js';
+import { type FieldMeta, pageSize } from './chatter.js';
 import { chatterContext } from './routes.js';
 
 type Body = Record<string, unknown>;
@@ -49,7 +50,11 @@ const idOf = (request: FastifyRequest, key = 'id'): number =>
 /** Registers the chat routes. */
 export function registerChatRoutes(context: ModuleContext): void {
   const { app } = context;
-  const chat: ChatContext = { ...chatterContext(context), driver: context.driver };
+  const base = chatterContext(context);
+  // The channel is a private model: the attachment helpers learn it (its rules decide who sees what).
+  const models = new Map<string, ReadonlyMap<string, FieldMeta>>(base.models);
+  models.set(CHANNEL_MODEL, new Map());
+  const chat: ChatContext = { models, driver: context.driver };
 
   app.get('/api/v1/chat/channels', async (request) =>
     request.env(async (env) => ({ channels: await myChannels(env) })),
