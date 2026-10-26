@@ -25,6 +25,7 @@ export {
   type DemoUser,
   type DocumentSpec,
   defineModule,
+  type InboundAliasSpec,
   type KoshModule,
   type MenuSpec,
   type ModuleHooks,

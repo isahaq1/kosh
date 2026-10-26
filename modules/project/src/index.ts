@@ -8,7 +8,8 @@ import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
 import { action, calendar, form, kanban, list, pivot, search } from '@kosh/views';
-import { projectDemo } from './demo.js';
+import type { Env } from './.kosh/bindings.js';
+import { projectDemo, SUPPORT_PROJECT } from './demo.js';
 import {
   ProjectProject,
   ProjectTask,
@@ -30,6 +31,25 @@ export const project: ReturnType<typeof defineModule> = defineModule({
   shutro: projectShutro,
   kosh: '^0.1.0',
   hooks: { demo: projectDemo },
+  // support@<inbound domain>: a task in the support project (RFC 0006 §7.1), or the first project there is.
+  inboundAliases: [
+    {
+      alias: 'support',
+      model: 'project.task',
+      subjectField: 'name',
+      bodyField: 'description',
+      defaults: async (raw) => {
+        const env = raw as Env;
+        const named = await env
+          .model('project.project')
+          .search({ where: { name: SUPPORT_PROJECT }, limit: 1 });
+        const any =
+          named.ids.length > 0 ? named : await env.model('project.project').search({ limit: 1 });
+        const project = any.ids[0];
+        return project === undefined ? null : { project };
+      },
+    },
+  ],
   depends: [contacts, messaging],
   app: {
     code: 'projects',

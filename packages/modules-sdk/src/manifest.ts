@@ -105,6 +105,20 @@ export interface DemoContext {
   date(days: number): string;
 }
 
+/** A catch-all email alias of a module (RFC 0006 §7.1). */
+export interface InboundAliasSpec {
+  /** The local part of the address (`support` for `support@<inbound domain>`). */
+  readonly alias: string;
+  readonly model: string;
+  /** The field that takes the subject (`name`). */
+  readonly subjectField: string;
+  /** The field that takes the message text, when any. */
+  readonly bodyField?: string;
+  readonly defaults?:
+    | Readonly<Record<string, unknown>>
+    | ((env: unknown) => Promise<Readonly<Record<string, unknown>> | null>);
+}
+
 /** Lifecycle hooks (RFC 0001 §5.7); run by the server in a system scope inside the install transaction. */
 export interface ModuleHooks {
   readonly postInstall?: (env: unknown) => Promise<void>;
@@ -160,6 +174,14 @@ export interface ModuleInput {
    * the record's rules decide who uploads, lists and downloads, as for a public model.
    */
   readonly attachable?: readonly string[];
+  /**
+   * Catch-all email aliases (RFC 0006 §7.1): a message to `<alias>@<inbound domain>` that names no record creates
+   * one of `model` (as the system, in the first company), its subject and text in `subjectField` and
+   * `bodyField`, with `defaults` (a value, or a function of a system environment returning values; `null` when the
+   * alias cannot take a message right now, which quarantines it), and the message is posted on it naming the
+   * sender.
+   */
+  readonly inboundAliases?: readonly InboundAliasSpec[];
   /**
    * Default approval policies (RFC 0003 §5.3), installed as data and editable afterwards by administrators. Levels
    * apply in order; a level applies when its condition (a Shutro domain on the record) matches.
