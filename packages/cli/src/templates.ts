@@ -64,6 +64,7 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     label: 'Accounting: chart of accounts, journals, entries, invoices and bills',
     icon: '📒',
     server: 'accounting',
+    web: 'registerAccountingWeb',
   },
   sale_account: {
     label: 'Bridge: invoices from sales orders (Sales ↔ Accounting)',
