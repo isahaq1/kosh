@@ -74,8 +74,8 @@ export async function productDemo(context: DemoContext): Promise<string> {
         uom: orm.asId(uoms.get(p.uom) as number, 'uom.uom'),
         listPrice: p.list,
         standardPrice: p.cost,
-        tax: orm.asId(vatSale, 'account.tax'),
-        purchaseTax: orm.asId(vatPurchase, 'account.tax'),
+        taxes: { set: [orm.asId(vatSale, 'account.tax')] },
+        purchaseTaxes: { set: [orm.asId(vatPurchase, 'account.tax')] },
       })),
     );
     return `${CATEGORIES.length} categories and ${PRODUCTS.length} products`;

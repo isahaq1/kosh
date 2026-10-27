@@ -92,8 +92,8 @@ export const product: ReturnType<typeof defineModule> = defineModule({
         k.group('prices', ['listPrice', 'standardPrice', 'uom'], { label: 'Prices' }),
         k.notebook('more', [
           k.page('sales', 'Sales & purchase', [
-            k.group('sell', ['saleOk', 'tax']),
-            k.group('buy', ['purchaseOk', 'purchaseTax']),
+            k.group('sell', ['saleOk', 'taxes']),
+            k.group('buy', ['purchaseOk', 'purchaseTaxes']),
           ]),
           k.page('description_page', 'Description', ['description']),
         ]),
@@ -107,9 +107,14 @@ export const product: ReturnType<typeof defineModule> = defineModule({
     'uom.uom.form': form(UomUom, (k) => ({
       sheet: [k.group('main', ['name', 'category', 'ratio', 'rounding'])],
     })),
-    'account.tax.list': list(AccountTax, { columns: ['name', 'use', 'rate'] }),
+    'account.tax.list': list(AccountTax, {
+      columns: ['sequence', 'name', 'use', 'amountType', 'rate', 'affectsBase'],
+    }),
     'account.tax.form': form(AccountTax, (k) => ({
-      sheet: [k.group('main', ['name', 'use', 'rate'])],
+      sheet: [
+        k.group('main', ['name', 'use', 'sequence']),
+        k.group('amount', ['amountType', 'rate', 'fixedAmount', 'affectsBase', 'priceIncluded']),
+      ],
     })),
   },
   search: {

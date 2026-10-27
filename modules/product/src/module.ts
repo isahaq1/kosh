@@ -55,13 +55,29 @@ export const ProductCategory = defineModel('product.category', {
 export const AccountTax = defineModel('account.tax', {
   label: 'Tax',
   archivable: true,
-  order: ['use asc', 'rate desc'],
+  order: ['use asc', 'sequence asc', 'rate desc'],
   access: { 'product.user': READ, 'product.manager': ALL },
   fields: {
     name: f.char({ required: true, translate: true }),
     use: f.selection({ sale: 'Sales', purchase: 'Purchases' }, { required: true, default: 'sale' }),
-    /** 0.15 for 15 %. */
+    /** The order a line's taxes apply in (lower first): supplementary duty before VAT. */
+    sequence: f.integer({ required: true, default: 10 }),
+    amountType: f.selection(
+      { percent: 'Percentage of the base', fixed: 'Fixed amount per unit' },
+      { required: true, default: 'percent', label: 'Computed as' },
+    ),
+    /** 0.15 for 15 % (percentage taxes). */
     rate: f.decimal({ scale: 4, required: true, default: '0' }),
+    /** Per unit, in the document's currency (fixed taxes). */
+    fixedAmount: f.decimal({ scale: 4, required: true, default: '0', label: 'Amount per unit' }),
+    /** Its amount is added to the base of the taxes after it (supplementary duty, then VAT on price + SD). */
+    affectsBase: f.boolean({
+      required: true,
+      default: false,
+      label: 'Affects the base of later taxes',
+    }),
+    /** Included in the unit price (the price is gross). */
+    priceIncluded: f.boolean({ required: true, default: false, label: 'Included in price' }),
   },
   constraints: {
     rateRange: {
@@ -93,10 +109,19 @@ export const ProductProduct = defineModel('product.product', {
     standardPrice: f.decimal({ scale: 2, required: true, default: '0', label: 'Cost' }),
     saleOk: f.boolean({ default: true, label: 'Can be sold' }),
     purchaseOk: f.boolean({ default: true, label: 'Can be purchased' }),
-    /** The default tax on sales. */
-    tax: f.many2one('account.tax', { label: 'Sales tax' }),
-    /** The default tax on purchases. */
-    purchaseTax: f.many2one('account.tax', { label: 'Purchase tax' }),
+    /** The taxes on sales, in order (RFC 0016). */
+    taxes: f.many2many('account.tax', { relation: 'product_sale_tax_rel', label: 'Sales taxes' }),
+    /** The taxes on purchases, in order. */
+    purchaseTaxes: f.many2many('account.tax', {
+      relation: 'product_purchase_tax_rel',
+      label: 'Purchase taxes',
+    }),
+    /** Before 0.2.0, one tax each: copied into `taxes` / `purchaseTaxes` by the migration; dropped later. */
+    tax: f.many2one('account.tax', { label: 'Sales tax (before 0.2.0)', readonly: true }),
+    purchaseTax: f.many2one('account.tax', {
+      label: 'Purchase tax (before 0.2.0)',
+      readonly: true,
+    }),
     description: f.text({ translate: true }),
   },
   constraints: {
@@ -121,7 +146,20 @@ const tax = (id: string, name: string, use: 'sale' | 'purchase', rate: string) =
 
 export const productShutro = defineModule({
   name: 'product',
-  version: '0.1.0',
+  version: '0.2.0',
+  migrations: [
+    {
+      version: '0.2.0',
+      description:
+        'Several taxes per product: the single sales and purchase taxes become the first of each list',
+      up: async (ctx) => {
+        await ctx.sql`INSERT INTO product_sale_tax_rel (product_product_id, account_tax_id)
+          SELECT id, tax_id FROM product_product WHERE tax_id IS NOT NULL ON CONFLICT DO NOTHING`;
+        await ctx.sql`INSERT INTO product_purchase_tax_rel (product_product_id, account_tax_id)
+          SELECT id, purchase_tax_id FROM product_product WHERE purchase_tax_id IS NOT NULL ON CONFLICT DO NOTHING`;
+      },
+    },
+  ],
   depends: [baseShutro],
   groups: [
     orm.defineGroup({ code: 'product.user', label: 'Products user', implies: ['base.user'] }),
