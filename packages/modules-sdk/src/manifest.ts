@@ -276,6 +276,12 @@ export interface ModuleInput {
   readonly automationRules?: Readonly<Record<string, AutomationRuleSpec>>;
   /** Default document templates (RFC 0005), installed as data (`key` = `module.name`) and editable by designers. */
   readonly documents?: readonly DocumentSpec[];
+  /**
+   * Groups of users from outside the company: the customers and vendors of the portal (RFC 0015 §5.1). A user whose
+   * groups are all external reaches only the sign-in routes and `/api/portal/`; every other route answers 403. An
+   * external group may not imply `base.user` (checked when the server starts).
+   */
+  readonly externalGroups?: readonly string[];
   /** Import templates for the module's models (RFC 0014 §5.4), offered when `import` is installed. */
   readonly importTemplates?: readonly ImportTemplateSpec[];
   /**

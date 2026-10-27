@@ -20,7 +20,7 @@ import { registerRestApi } from './api/rest.js';
 import { ViewRegistry } from './api/views.js';
 import { registerAuthRoutes } from './auth/routes.js';
 import { type AuthOptions, AuthService } from './auth/service.js';
-import { HttpProblem, problemOf } from './errors.js';
+import { HttpProblem, problemOf, ServerConfigError } from './errors.js';
 import { type Authenticator, denyAll, type RequestIdentity, runOptionsOf } from './identity.js';
 import { type Driver, type Env, orm, pg, type Shutro } from './orm.js';
 import { buildKoshRegistry, KOSH_VERSION, type KoshRegistry } from './registry.js';
@@ -128,6 +128,30 @@ const REDACT = [
   'res.headers["set-cookie"]',
 ];
 
+/** What a portal user reaches: the portal API, and signing in and out (RFC 0015 §5.1). */
+const PORTAL_PATHS = ['/api/portal/', '/api/v1/auth/'];
+
+/**
+ * The external groups the modules declare (RFC 0015 §5.1). @throws {ServerConfigError} for one implying
+ * `base.user`: its holders would be internal users.
+ */
+function externalGroupsOf(registry: KoshRegistry): ReadonlySet<string> {
+  const groups = new Set(registry.loaded.modules.flatMap((m) => m.externalGroups ?? []));
+  for (const group of groups) {
+    if (!registry.registry.security.groups.has(group))
+      throw new ServerConfigError(
+        `The external group '${group}' is not defined.`,
+        'Define it in the module that declares it.',
+      );
+    if (registry.registry.security.closure([group]).has('base.user'))
+      throw new ServerConfigError(
+        `The external group '${group}' implies base.user: its users would be internal.`,
+        'Remove base.user from what it implies.',
+      );
+  }
+  return groups;
+}
+
 /** Creates the server (not listening yet). @throws {ServerConfigError} for modules that cannot load together */
 export async function createServer(options: ServerOptions): Promise<KoshServer> {
   const registry = buildKoshRegistry(options.modules, {
@@ -140,6 +164,7 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
     applicationName: 'kosh',
   });
   const hasBase = registry.registry.models.has('auth.session' as never);
+  const external = externalGroupsOf(registry);
   let shutro: Shutro | undefined;
   const auth = hasBase ? new AuthService(() => shutro as Shutro, options.auth) : undefined;
   const verify =
@@ -218,6 +243,21 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
     const config = request.routeOptions.config;
     if (config.public === true || config.auth === false) return;
     request.identity = await authenticate(request);
+    // Customers and vendors of the portal (RFC 0015 §5.1): the portal API and signing in, nothing else.
+    if (
+      request.identity !== null &&
+      external.size > 0 &&
+      request.identity.groups.length > 0 &&
+      request.identity.groups.every((g) => external.has(g)) &&
+      !PORTAL_PATHS.some((p) => request.url.startsWith(p)) &&
+      request.url.startsWith('/api/')
+    )
+      throw new HttpProblem(
+        403,
+        'internal-only',
+        'For the company’s users only',
+        'Portal users reach the portal only.',
+      );
   });
   if (options.rateLimit?.max !== 0)
     await app.register(rateLimit, {
