@@ -121,8 +121,8 @@ test('deterministic: the same spec gives the same bytes', () => {
   expect(generateModule(spec)).toEqual(generateModule(structuredClone(spec)));
   const files = generateModule(spec);
   expect(Object.keys(files)).toEqual(['models.ts', 'index.ts', 'README.md']);
-  expect(files['models.ts']).toContain("import { orm } from 'kosh-erp/orm';");
-  expect(files['index.ts']).toContain("import { crm } from 'kosh-erp/crm';");
+  expect(files['models.ts']).toContain("import { orm } from 'shutro-erp/orm';");
+  expect(files['index.ts']).toContain("import { crm } from 'shutro-erp/crm';");
   expect(files['README.md']).toContain('- `res.partner.xAcmeGstNumber`: GST number (char)');
 });
 

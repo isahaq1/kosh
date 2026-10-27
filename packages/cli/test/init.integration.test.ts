@@ -112,16 +112,16 @@ test('a fresh installation: database created, project written, migrated, adminis
   expect(env).toMatch(/^POSTGRES_PASSWORD=[A-Za-z0-9]{20,}$/m); // for compose.yaml
   const modules = await readFile(join(project, 'src/modules.ts'), 'utf8');
   // The catalogue lists every app; the database says which are installed (RFC 0008).
-  expect(modules).toContain("import { reporting } from 'kosh-erp/reporting';");
+  expect(modules).toContain("import { reporting } from 'shutro-erp/reporting';");
   expect(modules).toContain(
     'export const modules = [base, settings, realtime, notify, mail, automation, studio, assistant, permissions, reporting, messaging, contacts, product, sales, purchase, accounting, project, saleAccount, purchaseAccount, saleProject];',
   );
   const main = await readFile(join(project, 'src/web/main.tsx'), 'utf8');
   expect(main).toContain(
-    "import { messagingMessages, registerMessagingWeb } from 'kosh-erp/messaging/web';",
+    "import { messagingMessages, registerMessagingWeb } from 'shutro-erp/messaging/web';",
   );
   expect(main).toContain(
-    "import { settingsMessages, registerSettingsWeb } from 'kosh-erp/settings/web';",
+    "import { settingsMessages, registerSettingsWeb } from 'shutro-erp/settings/web';",
   );
   expect(await readFile(join(project, 'src/server.ts'), 'utf8')).toContain('createAppHost');
   const pkg = JSON.parse(await readFile(join(project, 'package.json'), 'utf8')) as {
@@ -130,8 +130,8 @@ test('a fresh installation: database created, project written, migrated, adminis
   };
   expect(pkg.scripts['start']).toBe('node --env-file=.env src/server.ts');
   expect(pkg.scripts).toMatchObject({ migrate: 'kosh migrate', seed: 'kosh seed' });
-  expect(pkg.dependencies).toMatchObject({ 'kosh-erp': '^0.1.0' });
-  expect(pkg.dependencies).not.toHaveProperty('shutro'); // it comes with kosh-erp
+  expect(pkg.dependencies).toMatchObject({ 'shutro-erp': '^0.1.0' });
+  expect(pkg.dependencies).not.toHaveProperty('shutro'); // it comes with shutro-erp
   expect(await readdir(join(project, 'migrations'))).toEqual(['0001_init.sql']);
   expect(existsSync(join(project, 'var', 'attachments'))).toBe(true);
 

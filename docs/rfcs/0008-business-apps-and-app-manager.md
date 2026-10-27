@@ -50,7 +50,7 @@ silently adds bridge modules. In practice this has several weaknesses:
 
 ### 5.1 The default apps
 
-`kosh init` (and `npm create kosh-erp`) selects these apps by default. Every app can be deselected
+`kosh init` (and `npx shutro-erp init`) selects these apps by default. Every app can be deselected
 (`--apps`, or `--minimal` for base + Settings only).
 
 | App | Icon | Category | Version 1 scope | Depends on |
@@ -74,8 +74,8 @@ Default bridges: `sale_account` (invoice from order), `purchase_account` (bill f
 
 ### 5.2 Catalogue and installed set
 
-- **Catalogue:** the modules this installation *can* install: the business apps shipped in `kosh-erp` (code-split:
-  `kosh-erp/sales`, …), the project's own modules, and installed npm module packages. `src/modules.ts` exports
+- **Catalogue:** the modules this installation *can* install: the business apps shipped in `shutro-erp` (code-split:
+  `shutro-erp/sales`, …), the project's own modules, and installed npm module packages. `src/modules.ts` exports
   `catalogue`. The old `modules` export keeps working: on first start it is read as "catalogue = installed set".
 - **Installed set:** the `kosh_module` table (RFC 0001 §5), with these columns:
   - `name`, `version`
@@ -397,7 +397,7 @@ show the reason; a pre-checked line to uncheck in the UI is still to come.
 ## Implementation notes (2026-10-19): steps 3 and 4
 
 - **Where apps live:** `modules/<app>/` in Kosh, one package each (`@kosh/contacts`, `@kosh/product`,
-  `@kosh/sales`, `@kosh/purchase`), bundled into `kosh-erp`. Shutro is the ORM only. Its former apps, app
+  `@kosh/sales`, `@kosh/purchase`), bundled into `shutro-erp`. Shutro is the ORM only. Its former apps, app
   installer and web client were removed from the Shutro repository on 2026-10-19 at the owner's request (Shutro
   commits `5286564`…`f5440fc`; Shutro RFCs 0019 and 0020 withdrawn).
 - **Typed model views:** `scripts/generate-models.ts` runs Shutro's generator through `@kosh/server/orm`

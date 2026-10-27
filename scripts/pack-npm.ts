@@ -1,16 +1,16 @@
 /**
- * Assembles the single npm package `kosh-erp` from the built workspace packages (run `pnpm build` first):
+ * Assembles the single npm package `shutro-erp` from the built workspace packages (run `pnpm build` first):
  *
- *   dist-npm/kosh-erp/dist/<package>/…   one folder per published workspace package
+ *   dist-npm/shutro-erp/dist/<package>/…   one folder per published workspace package
  *
  * Imports between workspace packages (`@kosh/server`, `@kosh/reporting/web`, …) are rewritten to relative paths,
- * remaining mentions in comments and messages name the package's entry points (`kosh-erp/views`), and source maps
+ * remaining mentions in comments and messages name the package's entry points (`shutro-erp/views`), and source maps
  * are dropped (they point at sources not shipped). Entry points:
  *
- *   kosh-erp            the server (`@kosh/server`)        kosh-erp/orm         Shutro, through the server
- *   kosh-erp/<package>  modules-sdk, views, search, permissions, reporting, storage, messaging, ui, cli, server
- *   kosh-erp/<package>/web   permissions, reporting, messaging (their React contributions)
- *   kosh-erp/ui/styles.css   the design tokens
+ *   shutro-erp            the server (`@kosh/server`)        shutro-erp/orm         Shutro, through the server
+ *   shutro-erp/<package>  modules-sdk, views, search, permissions, reporting, storage, messaging, ui, cli, server
+ *   shutro-erp/<package>/web   permissions, reporting, messaging (their React contributions)
+ *   shutro-erp/ui/styles.css   the design tokens
  *
  * Usage: node scripts/pack-npm.ts [version] (default: the version being released, 0.2.0)
  */
@@ -27,7 +27,7 @@ import {
 import { dirname, join, relative, sep } from 'node:path';
 
 const ROOT = join(import.meta.dirname, '..');
-const NAME = 'kosh-erp';
+const NAME = 'shutro-erp';
 const OUT = join(ROOT, 'dist-npm', NAME);
 /** Published packages (the RFC 0006 placeholders jobs, mail, notify and realtime are not). */
 const PACKAGES = [
@@ -103,7 +103,7 @@ function target(pkg: string, sub: string): string {
   return `${pkg}/${path.replace(/^\.\/dist\//, '')}`;
 }
 
-/** The public entry point of a workspace export (`kosh-erp/reporting/web`). */
+/** The public entry point of a workspace export (`shutro-erp/reporting/web`). */
 function publicName(pkg: string, sub: string): string {
   if (pkg === 'server' && sub === '') return NAME;
   if (pkg === 'server' && sub === '/orm') return `${NAME}/orm`;
@@ -171,12 +171,15 @@ for (const [name, manifest] of manifests)
   }
 exports['./package.json'] = './package.json';
 
-const bin = Object.fromEntries(
-  Object.entries(manifests.get('cli')?.bin ?? {}).map(([cmd, path]) => [
-    cmd,
-    `dist/cli/${path.replace(/^\.\/dist\//, '')}`, // npm's form (no leading ./)
-  ]),
-);
+const cliBins = Object.entries(manifests.get('cli')?.bin ?? {}).map(([cmd, path]) => [
+  cmd,
+  `dist/cli/${path.replace(/^\.\/dist\//, '')}`, // npm's form (no leading ./)
+]);
+// The package's own name runs the CLI too: `npx shutro-erp init my-erp` in an empty folder.
+const bin = Object.fromEntries([
+  ...cliBins,
+  ...cliBins.slice(0, 1).map(([, path]) => [NAME, path]),
+]);
 
 const sorted = (deps: Record<string, string>) =>
   Object.fromEntries(Object.entries(deps).sort(([a], [b]) => a.localeCompare(b)));
@@ -184,7 +187,7 @@ const pkg = {
   name: NAME,
   version,
   description:
-    'Kosh: a modern ERP framework on TypeScript, PostgreSQL and the Shutro ORM — typed end to end, permissions enforced on the server, metadata-driven views, reporting, documents and a chatter on every record.',
+    'Shutro ERP (Kosh): a modern ERP framework on TypeScript, PostgreSQL and the Shutro ORM — typed end to end, permissions enforced on the server, metadata-driven views, reporting, documents and a chatter on every record.',
   keywords: ['erp', 'framework', 'typescript', 'postgresql', 'shutro', 'fastify', 'react', 'odoo'],
   author: { name: 'Isahaq', email: 'hmisahaq01@gmail.com' },
   license: 'MIT',

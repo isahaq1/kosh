@@ -263,7 +263,7 @@ rendered by the reporting engine's hierarchy view; every number drills to the li
 
 ## Implementation notes (2026-10-25): step 1 — the ledger core
 
-`modules/accounting` (`@kosh/accounting`, the Accounting app, `kosh-erp/accounting`):
+`modules/accounting` (`@kosh/accounting`, the Accounting app, `shutro-erp/accounting`):
 
 - **Models** (`src/module.ts`): `res.currency.rate` (Kosh defines it; Shutro's `env.fx` reads it), `account.account`
   (typed by `ACCOUNT_TYPES`, unique code per company), `account.journal` (five types), `account.fiscal.year`

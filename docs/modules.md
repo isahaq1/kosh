@@ -114,7 +114,7 @@ back to an older version is refused.
 
 The business apps are Kosh code in `modules/`, one package each: `@kosh/contacts`, `@kosh/product`,
 `@kosh/sales`, `@kosh/purchase`, `@kosh/accounting` and `@kosh/project`, with the bridges `@kosh/sale_account`,
-`@kosh/purchase_account` and `@kosh/sale_project`. They ship in `kosh-erp` as `kosh-erp/sales` and so on. Shutro is only the ORM: no app, module or generated app code lives in it. The framework
+`@kosh/purchase_account` and `@kosh/sale_project`. They ship in `shutro-erp` as `shutro-erp/sales` and so on. Shutro is only the ORM: no app, module or generated app code lives in it. The framework
 (`packages/`) never imports an app (`pnpm lint` checks this); only the CLI, which assembles installations, does.
 
 An app has three parts:

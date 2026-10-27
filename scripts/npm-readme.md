@@ -1,4 +1,4 @@
-# kosh-erp
+# shutro-erp
 
 **Kosh** is an ERP framework for Node.js, TypeScript and PostgreSQL, built on the
 [Shutro](https://www.npmjs.com/package/shutro) ORM. Define a model once and get a REST API with OpenAPI, a typed
@@ -29,14 +29,14 @@ chatter on every record. Permissions are checked on the server on every route.
 One command creates the project, installs Kosh and asks for everything it needs:
 
 ```sh
-npm create kosh-erp@latest my-erp   # the project my-erp
-npm create kosh-erp@latest          # asks for the project name first
+npx shutro-erp@latest init my-erp   # the project my-erp
+npx shutro-erp@latest init          # asks for the project name first
 ```
 
-(`pnpm create kosh-erp my-erp` and `yarn create kosh-erp my-erp` work too.) In an existing folder:
+(`pnpm dlx shutro-erp init my-erp` and `yarn dlx shutro-erp init my-erp` work too.) In an existing folder:
 
 ```sh
-npm install kosh-erp      # Shutro, the ORM, comes with it
+npm install shutro-erp      # Shutro, the ORM, comes with it
 npx kosh init
 ```
 
@@ -56,8 +56,7 @@ The setup asks for what the installation needs. Press **Enter** to keep the valu
 | Authenticator code | `123456` | scan the printed secret, type a code; **keep the recovery codes** it prints |
 
 Then it writes the project, creates the database tables (`migrations/0001_init.sql`), the company and the
-administrator, and loads the apps' default data (`npm create kosh-erp` also installs the back-office's build tools;
-after `npx kosh init`, run `npm install` once). Start it:
+administrator, and loads the apps' default data. Run `npm install` once in the project, then start it:
 
 ```sh
 npm start            # the API on http://localhost:3000
@@ -66,10 +65,10 @@ npm run web          # the back-office on http://localhost:5173, in a second ter
 
 Sign in with the administrator's login, password and a code from the authenticator app.
 
-**Without questions** (scripts, CI): pass the answers as flags (after `--` with `npm create kosh-erp`).
+**Without questions** (scripts, CI): pass the answers as flags.
 
 ```sh
-npm create kosh-erp@latest my-erp -- --yes --docker-db --admin-password "a long passphrase here"
+npx shutro-erp@latest init my-erp --yes --docker-db --admin-password "a long passphrase here"
 
 npx kosh init --yes \
   --database-url postgres://postgres:postgres@localhost:5432/my_erp --create-database \
@@ -90,7 +89,7 @@ the demo users `dina`, `rahim`, `karim` and `sumi` (one shared password, printed
 **PostgreSQL in Docker, the app on your machine** (development):
 
 ```sh
-npm create kosh-erp@latest my-erp   # answer 2 to "PostgreSQL": it starts the db service for you
+npx shutro-erp@latest init my-erp   # answer 2 to "PostgreSQL": it starts the db service for you
 cd my-erp && npm start              # the API; npm run web for the back-office
 ```
 
@@ -103,7 +102,7 @@ docker compose up -d db      # uses POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES
 **Everything in Docker** (a server, a demo):
 
 ```sh
-npm create kosh-erp@latest my-erp   # once: the project, .env, tables, administrator (answer 2 for PostgreSQL)
+npx shutro-erp@latest init my-erp   # once: the project, .env, tables, administrator (answer 2 for PostgreSQL)
 cd my-erp
 docker compose up -d --build        # db + api + web; the back-office on http://localhost:8080
 ```
@@ -167,7 +166,7 @@ back-office, the **Library** app appears for the administrator.
 **`models.ts`**: models and their fields, with access per group (nobody has access by default):
 
 ```ts
-import { orm } from 'kosh-erp/orm';
+import { orm } from 'shutro-erp/orm';
 const { defineModel, f } = orm;
 
 export const Book = defineModel('library.book', {
@@ -195,10 +194,10 @@ export const Book = defineModel('library.book', {
 Kosh part (access levels, app, menus, actions, views):
 
 ```ts
-import { base, baseShutro } from 'kosh-erp';
-import { defineModule } from 'kosh-erp/modules-sdk';
-import { orm } from 'kosh-erp/orm';
-import { form, list } from 'kosh-erp/views';
+import { base, baseShutro } from 'shutro-erp';
+import { defineModule } from 'shutro-erp/modules-sdk';
+import { orm } from 'shutro-erp/orm';
+import { form, list } from 'shutro-erp/views';
 import { data } from './data.ts';
 import { migrations } from './migrations.ts';
 import { Book } from './models.ts';
@@ -245,8 +244,8 @@ export const library = defineModule({
 
 ```ts
 // src/modules.ts
-import { base } from 'kosh-erp';
-import { messaging } from 'kosh-erp/messaging';
+import { base } from 'shutro-erp';
+import { messaging } from 'shutro-erp/messaging';
 import { library } from './modules/library/index.ts';
 
 export const modules = [base, messaging, library];
@@ -284,7 +283,7 @@ npx kosh migrate --allow-destructive
 
 ```ts
 // src/modules/library/migrations.ts
-import type { DataMigration } from 'kosh-erp/orm';
+import type { DataMigration } from 'shutro-erp/orm';
 
 export const migrations: DataMigration[] = [
   {
@@ -310,7 +309,7 @@ records created once and then left to the users.
 
 ```ts
 // src/modules/library/data.ts
-import { orm } from 'kosh-erp/orm';
+import { orm } from 'shutro-erp/orm';
 
 export const data = [
   orm.record('res.partner', 'author_tagore', { name: 'Rabindranath Tagore' }),
@@ -380,15 +379,15 @@ Run them in the project folder (`npx kosh …`, or `npm run migrate` / `npm run 
 
 | Import | What |
 |---|---|
-| `kosh-erp` | the server: `createServer`, `startServer`, `base`, REST + OpenAPI, sessions and 2FA |
-| `kosh-erp/orm` | Shutro (models, fields, groups, records, migrations) as Kosh uses it |
-| `kosh-erp/modules-sdk` | `defineModule`: manifests, access levels, menus, actions |
-| `kosh-erp/views`, `kosh-erp/search` | view definitions (`list`, `form`, `kanban`, `pivot`, …) and the search layer |
-| `kosh-erp/permissions` | roles, field security, approvals (`/web`: the approval panel) |
-| `kosh-erp/reporting` | pivots, exports, documents, scheduled reports (`/web`: the report views) |
-| `kosh-erp/messaging`, `kosh-erp/storage` | the chatter, activities, attachments (`/web`: the chatter) |
-| `kosh-erp/ui` | the React app shell, design system and renderers; `kosh-erp/ui/styles.css` the tokens |
-| `kosh-erp/cli` | the `kosh` command's functions |
+| `shutro-erp` | the server: `createServer`, `startServer`, `base`, REST + OpenAPI, sessions and 2FA |
+| `shutro-erp/orm` | Shutro (models, fields, groups, records, migrations) as Kosh uses it |
+| `shutro-erp/modules-sdk` | `defineModule`: manifests, access levels, menus, actions |
+| `shutro-erp/views`, `shutro-erp/search` | view definitions (`list`, `form`, `kanban`, `pivot`, …) and the search layer |
+| `shutro-erp/permissions` | roles, field security, approvals (`/web`: the approval panel) |
+| `shutro-erp/reporting` | pivots, exports, documents, scheduled reports (`/web`: the report views) |
+| `shutro-erp/messaging`, `shutro-erp/storage` | the chatter, activities, attachments (`/web`: the chatter) |
+| `shutro-erp/ui` | the React app shell, design system and renderers; `shutro-erp/ui/styles.css` the tokens |
+| `shutro-erp/cli` | the `kosh` command's functions |
 
 ## Troubleshooting
 

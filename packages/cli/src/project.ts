@@ -54,7 +54,7 @@ export async function modulesOf(specifier: string, cwd: string): Promise<KoshMod
   const all = Object.values(exported).filter(isModule);
   if (all.length === 0)
     throw new Error(
-      `${specifier} exports no Kosh modules (defineModule from kosh-erp/modules-sdk).`,
+      `${specifier} exports no Kosh modules (defineModule from shutro-erp/modules-sdk).`,
     );
   return all;
 }
@@ -319,7 +319,7 @@ export function moduleFiles(name: string): Record<string, string> {
   const model = `${name}.item`;
   return {
     'models.ts': `/** The models of the ${label} module (Shutro): fields, access per group, rules. */
-import { orm } from 'kosh-erp/orm';
+import { orm } from 'shutro-erp/orm';
 
 const { defineModel, f } = orm;
 
@@ -342,7 +342,7 @@ export const Item = defineModel('${model}', {
  * change here, and delete records removed from this list. \`noupdate\` records are created once, then left to the users.
  * Refer to other records by external id: orm.ref('res.currency', 'base.currency_bdt').
  */
-import { orm } from 'kosh-erp/orm';
+import { orm } from 'shutro-erp/orm';
 
 export const data = [
   orm.record('${model}', 'item_sample', { name: 'Sample item', code: 'SAMPLE' }, { noupdate: true }),
@@ -352,7 +352,7 @@ export const data = [
  * Data migrations of the ${label} module: each runs once, when an installed module is upgraded past its version
  * (raise \`version\` in index.ts, then \`kosh migrate\`). Schema changes need none: \`kosh migrate\` plans them.
  */
-import type { DataMigration } from 'kosh-erp/orm';
+import type { DataMigration } from 'shutro-erp/orm';
 
 export const migrations: DataMigration[] = [
   // {
@@ -368,10 +368,10 @@ export const migrations: DataMigration[] = [
  * The ${label} module: its Shutro models, groups, seed data and data migrations, plus access levels, an app,
  * menus, actions and views. Installed by listing it in src/modules.ts, then \`kosh migrate\`.
  */
-import { base, baseShutro } from 'kosh-erp';
-import { defineModule } from 'kosh-erp/modules-sdk';
-import { orm } from 'kosh-erp/orm';
-import { form, list } from 'kosh-erp/views';
+import { base, baseShutro } from 'shutro-erp';
+import { defineModule } from 'shutro-erp/modules-sdk';
+import { orm } from 'shutro-erp/orm';
+import { form, list } from 'shutro-erp/views';
 import { data } from './data.ts';
 import { migrations } from './migrations.ts';
 import { Item } from './models.ts';

@@ -234,7 +234,7 @@ test('module create: the files and the modules list; invalid names are refused',
   await mkdir(join(project, 'src'), { recursive: true });
   await writeFile(
     join(project, 'src', 'modules.ts'),
-    "import { base } from 'kosh-erp';\nimport { messaging } from 'kosh-erp/messaging';\n\nexport const modules = [base, messaging];\n",
+    "import { base } from 'shutro-erp';\nimport { messaging } from 'shutro-erp/messaging';\n\nexport const modules = [base, messaging];\n",
   );
   const out: string[] = [];
   expect(

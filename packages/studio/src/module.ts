@@ -56,7 +56,7 @@ export interface StudioOptions {
   readonly mode?: StudioMode;
   /** The project's folder (its `src/modules.ts`); default: `KOSH_STUDIO_DIR`, else the working directory. */
   readonly root?: string;
-  /** How the generated modules import Kosh (default: an installation's `kosh-erp`). */
+  /** How the generated modules import Kosh (default: an installation's `shutro-erp`). */
   readonly generate?: GenerateOptions;
   /** Modules Studio never replaces (default: the App manager's protected ones). */
   readonly protect?: readonly string[];

@@ -2,7 +2,7 @@
  * The Studio generator (RFC 0012 §5.2): a spec becomes the module's files, deterministically (the same spec gives
  * the same bytes). `models.ts` holds the Shutro side (extensions of other modules' models, the module's own
  * models, its groups), `index.ts` the Kosh manifest (access levels, views and their extensions, menus, actions,
- * approvals), `README.md` what the module changes, for reviewers. Imports point at `kosh-erp` (an installation)
+ * approvals), `README.md` what the module changes, for reviewers. Imports point at `shutro-erp` (an installation)
  * or at the workspace packages (`@kosh/…`, the tests).
  */
 import {
@@ -16,11 +16,11 @@ import {
 } from './spec.js';
 
 export interface GenerateOptions {
-  /** `kosh-erp` (default): an installation's imports; `workspace`: this repository's packages. */
-  readonly imports?: 'kosh-erp' | 'workspace';
-  /** Where a dependency is imported from, when not the default (`kosh-erp/<name>`, `@kosh/<name>`). */
+  /** `shutro-erp` (default): an installation's imports; `workspace`: this repository's packages. */
+  readonly imports?: 'shutro-erp' | 'workspace';
+  /** Where a dependency is imported from, when not the default (`shutro-erp/<name>`, `@kosh/<name>`). */
   readonly moduleImport?: ((name: string) => string | undefined) | undefined;
-  /** The extension of the module's own imports (default: `.ts` for `kosh-erp`, `.js` for `workspace`). */
+  /** The extension of the module's own imports (default: `.ts` for `shutro-erp`, `.js` for `workspace`). */
   readonly extension?: '.ts' | '.js';
 }
 
@@ -81,12 +81,12 @@ function fieldCall(field: StudioField, indent: string): string {
 function importsOf(options: GenerateOptions) {
   const workspace = options.imports === 'workspace';
   return {
-    base: workspace ? '@kosh/server' : 'kosh-erp',
-    orm: workspace ? '@kosh/server/orm' : 'kosh-erp/orm',
-    sdk: workspace ? '@kosh/modules-sdk' : 'kosh-erp/modules-sdk',
-    views: workspace ? '@kosh/views' : 'kosh-erp/views',
+    base: workspace ? '@kosh/server' : 'shutro-erp',
+    orm: workspace ? '@kosh/server/orm' : 'shutro-erp/orm',
+    sdk: workspace ? '@kosh/modules-sdk' : 'shutro-erp/modules-sdk',
+    views: workspace ? '@kosh/views' : 'shutro-erp/views',
     module: (name: string) =>
-      options.moduleImport?.(name) ?? (workspace ? `@kosh/${name}` : `kosh-erp/${name}`),
+      options.moduleImport?.(name) ?? (workspace ? `@kosh/${name}` : `shutro-erp/${name}`),
     ext: options.extension ?? (workspace ? '.js' : '.ts'),
   };
 }

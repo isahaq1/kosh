@@ -55,7 +55,7 @@ const github = (async (input: string | URL | Request, init?: RequestInit) => {
     return json(201, { html_url: 'https://github.com/acme/erp/pull/1' });
   return json(500, { message: 'unexpected' });
 }) as typeof fetch;
-const MODULES_TS = `import { base } from 'kosh-erp';\n\nexport const modules = [base];\n`;
+const MODULES_TS = `import { base } from 'shutro-erp';\n\nexport const modules = [base];\n`;
 
 const spec: StudioSpec = {
   name: 'acme',

@@ -1,5 +1,5 @@
 /**
- * The starter project `kosh init` writes: an API server and the back-office app, both importing `kosh-erp`.
+ * The starter project `kosh init` writes: an API server and the back-office app, both importing `shutro-erp`.
  * Server files run on Node.js directly (type stripping); the back-office is a Vite app proxying `/api` to the server.
  */
 
@@ -20,9 +20,9 @@ export interface AppSpec {
   readonly label: string;
   /** Shown next to the app in the installer (where the terminal shows pictographs). */
   readonly icon: string;
-  /** The module's export in `kosh-erp/<app>`. */
+  /** The module's export in `shutro-erp/<app>`. */
   readonly server: string;
-  /** The web registration in `kosh-erp/<app>/web` (apps built only from views and actions have none). */
+  /** The web registration in `shutro-erp/<app>/web` (apps built only from views and actions have none). */
   readonly web?: string;
   /** A bridge (RFC 0008 §5.1): not offered in the installer; proposed when the apps it connects are installed. */
   readonly bridge?: readonly AppName[];
@@ -137,7 +137,7 @@ export function packageJson(
     }),
     engines: { node: '>=24', ...((base['engines'] as Record<string, string> | undefined) ?? {}) },
     dependencies: merge('dependencies', {
-      'kosh-erp': `^${options.koshVersion}`,
+      'shutro-erp': `^${options.koshVersion}`,
       ...REACT,
     }),
     devDependencies: merge('devDependencies', {
@@ -154,21 +154,21 @@ export function packageJson(
 
 export function modulesTs(_options: StarterOptions): string {
   const apps = Object.keys(APPS) as AppName[];
-  const imports = apps.map((a) => `import { ${APPS[a].server} } from 'kosh-erp/${a}';`);
+  const imports = apps.map((a) => `import { ${APPS[a].server} } from 'shutro-erp/${a}';`);
   return `/**
  * The apps this installation can install (the catalogue). The database records which are installed: Settings → Apps
  * in the back-office, or \`npx kosh apps\`, installs, disables and enables them. \`base\` (users, companies, sign-in)
- * and Settings are always installed. Add your own modules here (\`defineModule\` from \`kosh-erp/modules-sdk\`),
+ * and Settings are always installed. Add your own modules here (\`defineModule\` from \`shutro-erp/modules-sdk\`),
  * then install them from Settings → Apps.
  */
-import { base } from 'kosh-erp';
-import { automation } from 'kosh-erp/automation';
-import { mail } from 'kosh-erp/mail';
-import { notify } from 'kosh-erp/notify';
-import { realtime } from 'kosh-erp/realtime';
-import { settings } from 'kosh-erp/settings';
-import { assistant } from 'kosh-erp/assistant';
-import { studio } from 'kosh-erp/studio';
+import { base } from 'shutro-erp';
+import { automation } from 'shutro-erp/automation';
+import { mail } from 'shutro-erp/mail';
+import { notify } from 'shutro-erp/notify';
+import { realtime } from 'shutro-erp/realtime';
+import { settings } from 'shutro-erp/settings';
+import { assistant } from 'shutro-erp/assistant';
+import { studio } from 'shutro-erp/studio';
 ${imports.join('\n')}
 
 export const modules = [base, settings, realtime, notify, mail, automation, studio, assistant${apps.map((a) => `, ${APPS[a].server}`).join('')}];
@@ -180,7 +180,7 @@ export function serverTs(): string {
  * The Kosh API server: \`npm start\` (reads .env). It serves the installed apps of src/modules.ts, and switches to
  * the new set without a restart when apps are installed or disabled (here or on another server).
  */
-import { createAppHost, startAppHost } from 'kosh-erp';
+import { createAppHost, startAppHost } from 'shutro-erp';
 import { modules } from './modules.ts';
 
 const env = process.env;
@@ -201,7 +201,7 @@ export function viteConfig(options: StarterOptions): string {
   return `/** The back-office app: \`npm run web\` (proxies /api to the server, same origin for the session cookie). */
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { koshPwa } from 'kosh-erp/ui/vite';
+import { koshPwa } from 'shutro-erp/ui/vite';
 import { defineConfig } from 'vite';
 
 const api = process.env['KOSH_API'] ?? 'http://localhost:${options.port}';
@@ -251,15 +251,15 @@ export function mainTsx(_options: StarterOptions): string {
   ].map(({ name, fn }) => {
     const messages = name === 'permissions' ? null : `${name}Messages`;
     return {
-      line: `import { ${[messages, fn].filter((x) => x !== null).join(', ')} } from 'kosh-erp/${name}/web';`,
+      line: `import { ${[messages, fn].filter((x) => x !== null).join(', ')} } from 'shutro-erp/${name}/web';`,
       call: `${fn}(registry);`,
       messages: messages === null ? null : `${name}: ${messages}`,
     };
   });
   const messages = web.map((w) => w.messages).filter((m) => m !== null);
-  return `/** The back-office: the renderers of kosh-erp/ui plus every catalogue app's web contribution. */
+  return `/** The back-office: the renderers of shutro-erp/ui plus every catalogue app's web contribution. */
 import './index.css';
-import { createDefaultRegistry, createKoshApi, KoshApp } from 'kosh-erp/ui';
+import { createDefaultRegistry, createKoshApi, KoshApp } from 'shutro-erp/ui';
 ${web.map((w) => w.line).join('\n')}
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -307,10 +307,10 @@ export function icon(): string {
 
 export function indexCss(): string {
   return `@import "tailwindcss";
-@import "kosh-erp/ui/styles.css";
+@import "shutro-erp/ui/styles.css";
 
 /* Tailwind scans Kosh's components for the classes they use. */
-@source "../../node_modules/kosh-erp/dist";
+@source "../../node_modules/shutro-erp/dist";
 `;
 }
 
@@ -479,7 +479,7 @@ export function tsconfig(): string {
 export function readme(options: StarterOptions): string {
   return `# ${options.name}
 
-A [Kosh](https://www.npmjs.com/package/kosh-erp) installation, created with \`kosh init\`.
+A [Kosh](https://www.npmjs.com/package/shutro-erp) installation, created with \`kosh init\`.
 
 \`\`\`sh
 npm install
