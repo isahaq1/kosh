@@ -31,6 +31,71 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
     user: { label: 'Salesperson (own orders)', groups: ['sales.user'] },
     manager: { label: 'Manager (all orders)', groups: ['sales.manager'], implies: ['user'] },
   },
+  // The printed quotation (RFC 0005), installed as a template designers can change; the portal prints it too.
+  documents: [
+    {
+      key: 'quotation',
+      name: 'Quotation',
+      model: 'sale.order',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: '{{state}} {{name}}', level: 1 },
+          {
+            kind: 'columns',
+            id: 'parties',
+            left: [
+              {
+                kind: 'fields',
+                id: 'customer',
+                items: [
+                  { label: 'Customer', bind: 'partner.name' },
+                  { label: 'Customer reference', bind: 'clientReference' },
+                ],
+              },
+            ],
+            right: [
+              {
+                kind: 'fields',
+                id: 'dates',
+                items: [
+                  { label: 'Order date', bind: 'dateOrder' },
+                  { label: 'Valid until', bind: 'validityDate' },
+                  { label: 'Salesperson', bind: 'user.name' },
+                ],
+              },
+            ],
+          },
+          {
+            kind: 'table',
+            id: 'lines',
+            bind: 'lines',
+            columns: [
+              { label: 'Description', bind: 'name' },
+              { label: 'Quantity', bind: 'quantity', align: 'end' },
+              { label: 'Unit price', bind: 'priceUnit', align: 'end' },
+              { label: 'Discount %', bind: 'discount', align: 'end' },
+              { label: 'Tax', bind: 'tax.name' },
+              { label: 'Subtotal', bind: 'subtotal', align: 'end', sum: true },
+            ],
+          },
+          {
+            kind: 'fields',
+            id: 'totals',
+            columns: 3,
+            items: [
+              { label: 'Untaxed', bind: 'amountUntaxed' },
+              { label: 'Taxes', bind: 'amountTax' },
+              { label: 'Total', bind: 'amountTotal' },
+            ],
+          },
+          { kind: 'text', id: 'terms', text: '{{note}}' },
+        ],
+      },
+    },
+  ],
   actions: {
     'sales.action_quotations': action(SaleOrder, {
       label: 'Quotations',
