@@ -1,6 +1,6 @@
 /**
- * The Mushak documents (RFC 0016 §5.3), as document templates (RFC 0005): the tax invoice (Mushak 6.3) and the
- * credit note (Mushak 6.7) on invoices, and the certificate of VAT deducted at source (Mushak 6.6) on payments.
+ * The Mushak documents (RFC 0016 §5.3), as document templates (RFC 0005): the tax invoice (Mushak 6.3), the credit
+ * note (Mushak 6.7) and the debit note (Mushak 6.8) on invoices, and the certificate of VAT deducted at source (Mushak 6.6) on payments.
  * Seller and buyer with their BIN, each line's value, SD and VAT, the totals in words. Like every template, they are
  * the company's to change in the designer.
  */
@@ -116,6 +116,36 @@ export const MUSHAK_DOCUMENTS: readonly DocumentSpec[] = [
             { label: 'Credit note number', bind: 'name' },
             { label: 'Date of issue', bind: 'date' },
             { label: 'Tax invoice it corrects', bind: 'reversalOf.name' },
+          ],
+        },
+        { kind: 'field', id: 'reason', label: 'Reason', bind: 'ref' },
+        lines,
+        totals,
+        { kind: 'text', id: 'in_words', text: 'In words: {{amountTotal|words}}' },
+        signature,
+      ],
+    },
+  },
+  {
+    key: 'mushak_6_8',
+    name: 'Debit note (Mushak 6.8)',
+    model: 'account.move',
+    layout: {
+      paper: 'A4',
+      header: '{{company.name}} · BIN {{company.bin}}',
+      footer: 'Mushak 6.8 · Page {{page}} of {{pages}}',
+      blocks: [
+        { kind: 'heading', id: 'title', text: 'Debit note', level: 1 },
+        { kind: 'text', id: 'form', text: 'Mushak 6.8' },
+        parties('Seller', 'Buyer'),
+        {
+          kind: 'fields',
+          id: 'note',
+          columns: 3,
+          items: [
+            { label: 'Debit note number', bind: 'name' },
+            { label: 'Date of issue', bind: 'date' },
+            { label: 'Tax invoice it adds to', bind: 'debitOf.name' },
           ],
         },
         { kind: 'field', id: 'reason', label: 'Reason', bind: 'ref' },

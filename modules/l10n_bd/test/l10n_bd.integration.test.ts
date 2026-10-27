@@ -335,6 +335,7 @@ test('the Mushak 6.3 tax invoice: SD, then VAT on price plus SD, per line; both 
   expect((listed.json.templates as Json[]).map((t) => t.name)).toContain(
     'Credit note (Mushak 6.7)',
   );
+  expect((listed.json.templates as Json[]).map((t) => t.name)).toContain('Debit note (Mushak 6.8)');
   const payments = await call('GET', '/api/v1/models/account.payment/documents', 'maria');
   expect((payments.json.templates as Json[]).map((t) => t.name)).toContain(
     'Certificate of VAT deducted at source (Mushak 6.6)',

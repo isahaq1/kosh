@@ -75,8 +75,38 @@ export const MOVE_KINDS = {
   out_refund: 'Customer credit note',
   in_invoice: 'Vendor bill',
   in_refund: 'Vendor credit note',
+  out_debit: 'Customer debit note',
+  in_debit: 'Vendor debit note',
 } as const;
 export type MoveKind = keyof typeof MOVE_KINDS;
+
+/** Documents the partner owes the company for: customer invoices and debit notes, vendor credit notes. */
+export function owedToUs(kind: MoveKind): boolean {
+  return kind === 'out_invoice' || kind === 'out_debit' || kind === 'in_refund';
+}
+
+/** Credit notes (they post the other way round from the invoice they correct). */
+export function isRefund(kind: MoveKind): boolean {
+  return kind === 'out_refund' || kind === 'in_refund';
+}
+
+/** Within the state (`intra`) or between states and abroad (`inter`): which components of a tax post (RFC 0016). */
+export type SupplyScope = 'intra' | 'inter';
+
+/**
+ * The scope of a document: `inter` for a partner in another country, otherwise the place of supply against the
+ * company's state (`intra` when either is unknown: a country without states).
+ */
+export function supplyScope(
+  company: { readonly country: string | null; readonly state: string | null },
+  partnerCountry: string | null,
+  placeOfSupply: string | null,
+): SupplyScope {
+  if (partnerCountry !== null && company.country !== null && partnerCountry !== company.country)
+    return 'inter';
+  if (placeOfSupply === null || company.state === null) return 'intra';
+  return placeOfSupply === company.state ? 'intra' : 'inter';
+}
 
 /** The kind of the entry that reverses one of each kind. */
 export const REVERSED_KIND: Readonly<Record<MoveKind, MoveKind>> = {
@@ -85,6 +115,8 @@ export const REVERSED_KIND: Readonly<Record<MoveKind, MoveKind>> = {
   out_refund: 'out_invoice',
   in_invoice: 'in_refund',
   in_refund: 'in_invoice',
+  out_debit: 'out_refund',
+  in_debit: 'in_refund',
 };
 
 /**
@@ -313,6 +345,10 @@ export const CompanyAccounting = extendModel('res.company', {
     }),
     /** The installed chart: `generic` or a localization's key (`bd`). */
     chartTemplate: f.char({ size: 32, label: 'Chart of accounts' }),
+    /** Where the company is registered (ISO 3166): taxes split by place of supply compare against it. */
+    country: f.char({ size: 2, label: 'Country' }),
+    /** Its state or province (ISO 3166-2, `IN-MH`). */
+    state: f.char({ size: 6, label: 'State' }),
     /** Nothing is posted, reversed or reconciled on or before it (everyone). */
     lockDate: f.date({ label: 'Lock date' }),
     /** Tax returns filed up to this date: tax lines cannot change on or before it. */
@@ -337,6 +373,49 @@ export const TaxAccounts = extendModel('account.tax', {
     account: f.many2one('account.account', { label: 'Tax account' }),
     /** On credit notes, when different from the tax account. */
     refundAccount: f.many2one('account.account', { label: 'Tax account on credit notes' }),
+    /** Reverse charge: where the tax the company owes the state goes (the tax account takes what it may claim). */
+    reverseChargeAccount: f.many2one('account.account', {
+      label: 'Tax account for reverse charge (payable)',
+    }),
+    /** Its parts (CGST and SGST, or IGST): posted instead of the tax, by the document's scope. */
+    components: f.one2many('account.tax.component', 'tax'),
+  },
+});
+
+/**
+ * A part of a tax (RFC 0016 step 5): GST 18 % is CGST 9 % and SGST 9 % within a state, IGST 18 % between states.
+ * Lines and totals keep the tax; posting writes a tax line per component of the document's scope, each with its
+ * share of the amount, to its account. The shares of each scope add up to 1.
+ */
+export const AccountTaxComponent = defineModel('account.tax.component', {
+  label: 'Tax component',
+  order: ['sequence asc', 'id asc'],
+  access: { 'account.invoicing': READ, 'account.user': READ, 'account.manager': ALL },
+  fields: {
+    tax: f.many2one('account.tax', { required: true, ondelete: 'cascade' }),
+    sequence: f.integer({ required: true, default: 10 }),
+    name: f.char({ required: true, translate: true }),
+    /** Its part of the tax's amount: 0.5 for half. */
+    share: f.decimal({ scale: 4, required: true, default: '1' }),
+    scope: f.selection(
+      { always: 'Always', intra: 'Within the state', inter: 'Between states or abroad' },
+      { required: true, default: 'always' },
+    ),
+    /** What the returns call it: CGST, SGST, IGST, CESS. */
+    code: f.char({ size: 16 }),
+    account: f.many2one('account.account'),
+    refundAccount: f.many2one('account.account', { label: 'Account on credit notes' }),
+    reverseChargeAccount: f.many2one('account.account', {
+      label: 'Account for reverse charge (payable)',
+    }),
+  },
+  constraints: {
+    shareRange: {
+      ...check('account.tax.component', ['share'], (cs) =>
+        cs.filter((c) => c.share.lte(0) || c.share.gt(1)),
+      ),
+      message: "A component's share is above 0 and at most 1 (0.5 for half).",
+    },
   },
 });
 
@@ -391,7 +470,7 @@ const moveResidual = compute(
         continue;
       }
       // The counterpart is a debit on outgoing documents (receivable) and a credit on incoming ones.
-      const sign = m.kind === 'out_invoice' || m.kind === 'in_refund' ? 1 : -1;
+      const sign = owedToUs(m.kind) ? 1 : -1;
       let residual = orm.toDecimal(0);
       for (const l of m.lines)
         if (l.lineKind === 'counterpart')
@@ -606,6 +685,13 @@ export const AccountMove = defineModel('account.move', {
     /** The database transaction that posted the entry: the immutability checks let that one finish its writes. */
     postedTx: f.char({ size: 32 }),
     reversalOf: f.many2one('account.move', { label: 'Reversal of' }),
+    /** A debit note: the invoice or bill it adds to. */
+    debitOf: f.many2one('account.move', { label: 'Adds to' }),
+    /**
+     * The state where the supply takes place (ISO 3166-2, `IN-KA`): from the partner's state when posted, editable.
+     * Decides whether a tax's within-state or between-states components post.
+     */
+    placeOfSupply: f.char({ size: 6, label: 'Place of supply' }),
     reversedBy: f.many2one('account.move', { label: 'Reversed by' }),
   },
   constraints: {
@@ -795,6 +881,7 @@ export const AccountMoveLine = defineModel('account.move.line', {
           'taxes.fixedAmount',
           'taxes.affectsBase',
           'taxes.priceIncluded',
+          'taxes.reverseCharge',
         ],
         (lines) => {
           for (const l of lines)
@@ -821,6 +908,7 @@ export const AccountMoveLine = defineModel('account.move.line', {
           'taxes.fixedAmount',
           'taxes.affectsBase',
           'taxes.priceIncluded',
+          'taxes.reverseCharge',
         ],
         (lines) => {
           for (const l of lines)
@@ -830,6 +918,10 @@ export const AccountMoveLine = defineModel('account.move.line', {
     }),
     /** Set on the generated tax lines: the tax this line is the amount of. */
     taxLineOf: f.many2one('account.tax', { label: 'Tax line for' }),
+    /** On the generated tax lines of a tax with components: which one (CGST, SGST, IGST). */
+    taxComponent: f.many2one('account.tax.component', { label: 'Tax component' }),
+    /** On the generated lines of a reverse-charge tax: claimable and payable, net zero. */
+    taxReverseCharge: f.boolean({ required: true, default: false, label: 'Reverse charge' }),
     /** On the generated tax lines: what the tax was computed on, in the document currency (the tax reports). */
     taxBase: f.monetary({ currency: 'currency', label: 'Tax base' }),
     /** Debit minus credit, for the reports (trial balance, ledgers, P&L, balance sheet). */
@@ -963,7 +1055,8 @@ async function currentTx(env: Env): Promise<string> {
 async function postMoves(moves: Moves): Promise<void> {
   const env = moves.env;
   const loaded = await moves.load({
-    lines: { taxes: true },
+    lines: { taxes: { components: true } },
+    partner: true,
     journal: true,
     company: { currency: true },
     currency: true,
@@ -1009,18 +1102,28 @@ async function postMoves(moves: Moves): Promise<void> {
           'The document has no partner.',
           'Choose the customer or the vendor.',
         );
-      const outgoing = m.kind === 'out_invoice' || m.kind === 'in_refund';
+      const outgoing = owedToUs(m.kind);
       // Product and tax lines of an outgoing document are credits (income), the counterpart a debit.
       const sign = outgoing ? -1 : 1;
-      const refund = m.kind === 'out_refund' || m.kind === 'in_refund';
+      const refund = isRefund(m.kind);
+      const customer = m.kind.startsWith('out_');
       const unit = m.currency.rounding;
       const round = (d: Decimal) =>
         d.div(unit).toDecimalPlaces(0, orm.Decimal.ROUND_HALF_UP).times(unit);
+      const currency = orm.defineCurrency({
+        code: m.currency.name,
+        rounding: m.currency.rounding,
+        decimalPlaces: m.currency.decimalPlaces ?? 2,
+        id: m.currency.id,
+      });
+      // The place of supply: the partner's state unless set; it decides which components of a tax post.
+      const placeOfSupply = m.placeOfSupply ?? m.partner.state ?? null;
+      if (placeOfSupply !== m.placeOfSupply) await one.write({ placeOfSupply });
+      const scope = supplyScope(m.company, m.partner.country ?? null, placeOfSupply);
       let total = orm.toDecimal(0);
-      const byTax = new Map<
-        number,
-        { amount: Decimal; base: Decimal; account: number | null; name: string }
-      >();
+      type Item<T> = T extends Iterable<infer E> ? E : never;
+      type Tax = Item<Item<typeof products>['taxes']>;
+      const byTax = new Map<number, { amount: Decimal; base: Decimal; tax: Tax }>();
       for (const l of products) {
         const account = l.account?.id ?? m.journal.defaultAccount?.id ?? null;
         if (account === null)
@@ -1045,48 +1148,115 @@ async function postMoves(moves: Moves): Promise<void> {
           const entry = byTax.get(t.tax) ?? {
             amount: orm.toDecimal(0),
             base: orm.toDecimal(0),
-            account:
-              (refund ? (tax.refundAccount?.id ?? tax.account?.id) : tax.account?.id) ?? null,
-            name: tax.name,
+            tax,
           };
           entry.amount = entry.amount.plus(t.amount);
           entry.base = entry.base.plus(t.base);
           byTax.set(t.tax, entry);
         }
       }
-      for (const [taxId, t] of byTax) {
-        if (t.account === null)
+      for (const [taxId, { amount: exact, base, tax }] of byTax) {
+        // A reverse-charge tax is the buyer's to pay to the state: the seller posts nothing.
+        if (tax.reverseCharge && customer) continue;
+        const amount = round(exact);
+        if (amount.isZero()) continue;
+        // The tax itself, or its components of the document's scope, the amount allocated by share.
+        const components = [...tax.components].filter(
+          (c) => c.scope === 'always' || c.scope === scope,
+        );
+        const parts =
+          components.length === 0
+            ? [
+                {
+                  component: null,
+                  name: tax.name,
+                  account:
+                    (refund ? (tax.refundAccount?.id ?? tax.account?.id) : tax.account?.id) ?? null,
+                  payable: tax.reverseChargeAccount?.id ?? null,
+                  share: orm.toDecimal(1),
+                },
+              ]
+            : components.map((c) => ({
+                component: c.id,
+                name: c.name,
+                account: (refund ? (c.refundAccount?.id ?? c.account?.id) : c.account?.id) ?? null,
+                payable: c.reverseChargeAccount?.id ?? null,
+                share: c.share,
+              }));
+        const shares = parts.reduce((sum, p) => sum.plus(p.share), orm.toDecimal(0));
+        if (!shares.eq(1))
           throw fail(
             ['lines'],
-            `Tax ${t.name} has no account.`,
-            'Set the tax account on the tax (Accounting › Configuration › Taxes).',
+            `The components of ${tax.name} ${scope === 'intra' ? 'within the state' : 'between states'} add up to ${shares.toString()}, not 1.`,
+            'Fix their shares (Accounting › Configuration › Taxes).',
           );
-        const amount = round(t.amount);
-        if (amount.isZero()) continue;
-        total = total.plus(amount);
-        await linesOf.create([
-          {
+        const amounts =
+          parts.length === 1
+            ? [amount]
+            : orm.Money.of(amount, currency)
+                .allocate(parts.map((p) => p.share))
+                .map((money) => (money as Money).amount);
+        for (const [i, part] of parts.entries()) {
+          if (part.account === null)
+            throw fail(
+              ['lines'],
+              `Tax ${part.name} has no account.`,
+              'Set the tax account on the tax (Accounting › Configuration › Taxes).',
+            );
+          const value = amounts[i] as Decimal;
+          const line = {
             move: m.id,
-            lineKind: 'tax',
-            account: orm.asId(t.account, 'account.account'),
+            lineKind: 'tax' as const,
             partner: m.partner.id,
-            name: t.name,
+            name: part.name,
             taxLineOf: orm.asId(taxId, 'account.tax'),
-            taxBase: round(t.base),
-            amountCurrency: amount.times(sign),
+            ...(part.component === null
+              ? {}
+              : { taxComponent: orm.asId(part.component, 'account.tax.component') }),
+            taxBase: round(base),
             debit: '0',
             credit: '0',
-          },
-        ]);
+          };
+          if (!tax.reverseCharge) {
+            total = total.plus(value);
+            await linesOf.create([
+              {
+                ...line,
+                account: orm.asId(part.account, 'account.account'),
+                amountCurrency: value.times(sign),
+              },
+            ]);
+            continue;
+          }
+          // Reverse charge: what the company may claim, and what it owes the state; not in the total.
+          if (part.payable === null)
+            throw fail(
+              ['lines'],
+              `Tax ${part.name} is a reverse charge without a payable account.`,
+              'Set its reverse-charge account (Accounting › Configuration › Taxes).',
+            );
+          await linesOf.create([
+            {
+              ...line,
+              taxReverseCharge: true,
+              account: orm.asId(part.account, 'account.account'),
+              amountCurrency: value.times(sign),
+            },
+            {
+              ...line,
+              taxReverseCharge: true,
+              account: orm.asId(part.payable, 'account.account'),
+              amountCurrency: value.times(-sign),
+            },
+          ]);
+        }
       }
-      const counterpart =
-        outgoing || m.kind === 'out_refund'
-          ? m.company.accountReceivable
-          : m.company.accountPayable;
+      // Customers' documents settle on the receivable account, vendors' on the payable one.
+      const counterpart = customer ? m.company.accountReceivable : m.company.accountPayable;
       if (counterpart === null)
         throw fail(
           ['partner'],
-          `The company has no ${outgoing || m.kind === 'out_refund' ? 'receivable' : 'payable'} account.`,
+          `The company has no ${customer ? 'receivable' : 'payable'} account.`,
           'Install a chart of accounts (Accounting › Configuration), or set the account on the company.',
         );
       // One counterpart line per payment term part, the whole rounded total allocated between them.
@@ -1100,15 +1270,7 @@ async function postMoves(moves: Moves): Promise<void> {
               },
             ]
           : m.paymentTerm.lines.map((pl) => ({ days: pl.days, percent: pl.percent }));
-      const totalMoney = orm.Money.of(
-        total,
-        orm.defineCurrency({
-          code: m.currency.name,
-          rounding: m.currency.rounding,
-          decimalPlaces: m.currency.decimalPlaces ?? 2,
-          id: m.currency.id,
-        }),
-      );
+      const totalMoney = orm.Money.of(total, currency);
       const amounts =
         parts.length === 1 ? [totalMoney] : totalMoney.allocate(parts.map((pt) => pt.percent));
       let latest = m.date;
@@ -1372,7 +1534,7 @@ const sequence = (type: JournalType, prefix: string) =>
 
 export const accountingShutro = defineModule({
   name: 'accounting',
-  version: '0.2.0',
+  version: '0.3.0',
   migrations: [
     {
       version: '0.2.0',
@@ -1419,6 +1581,7 @@ export const accountingShutro = defineModule({
     AccountFullReconcile,
     AccountPayment,
     AccountPaymentWithholding,
+    AccountTaxComponent,
   ],
   permissions: [
     orm.definePermission({ code: 'account.post', label: 'Post entries', groups: ['account.user'] }),

@@ -78,6 +78,8 @@ export const AccountTax = defineModel('account.tax', {
     }),
     /** Included in the unit price (the price is gross). */
     priceIncluded: f.boolean({ required: true, default: false, label: 'Included in price' }),
+    /** Reverse charge (RFC 0016 step 5): the buyer pays the tax to the state; not in the document's total. */
+    reverseCharge: f.boolean({ required: true, default: false, label: 'Reverse charge' }),
   },
   constraints: {
     rateRange: {
@@ -144,7 +146,7 @@ const uom = (id: string, name: string, category: string, ratio: string, rounding
 
 export const productShutro = defineModule({
   name: 'product',
-  version: '0.2.0',
+  version: '0.3.0',
   migrations: [
     {
       version: '0.2.0',

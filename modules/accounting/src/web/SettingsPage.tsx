@@ -11,6 +11,8 @@ interface Settings {
   readonly chartTemplate: string | null;
   readonly lockDate: string | null;
   readonly taxLockDate: string | null;
+  readonly country: string | null;
+  readonly state: string | null;
 }
 
 export function SettingsPage({ api }: PageProps): ReactElement {
@@ -32,6 +34,8 @@ export function SettingsPage({ api }: PageProps): ReactElement {
   const [template, setTemplate] = useState<string | null>(null);
   const [lockDate, setLockDate] = useState<string | null>(null);
   const [taxLockDate, setTaxLockDate] = useState<string | null>(null);
+  const [country, setCountry] = useState<string | null>(null);
+  const [state, setState] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const install = useMutation({
@@ -55,6 +59,8 @@ export function SettingsPage({ api }: PageProps): ReactElement {
       api.call<Settings>('PUT', '/api/v1/accounting/settings', {
         lockDate: lockDate ?? settings.data?.lockDate ?? null,
         taxLockDate: taxLockDate ?? settings.data?.taxLockDate ?? null,
+        country: country ?? settings.data?.country ?? null,
+        state: state ?? settings.data?.state ?? null,
       }),
     onSuccess: async () => {
       setError(null);
@@ -123,6 +129,27 @@ export function SettingsPage({ api }: PageProps): ReactElement {
             onChange={(e) => setTaxLockDate(e.target.value === '' ? null : e.target.value)}
           />
           <p className="text-xs text-muted-foreground">{t('settings.taxLockDateHint')}</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-1">
+            <Label htmlFor={`${id}-country`}>{t('settings.country')}</Label>
+            <Input
+              id={`${id}-country`}
+              maxLength={2}
+              value={country ?? current?.country ?? ''}
+              onChange={(e) => setCountry(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-1">
+            <Label htmlFor={`${id}-state`}>{t('settings.state')}</Label>
+            <Input
+              id={`${id}-state`}
+              maxLength={6}
+              value={state ?? current?.state ?? ''}
+              onChange={(e) => setState(e.target.value)}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground sm:col-span-2">{t('settings.placeHint')}</p>
         </div>
         <div>
           <Button variant="primary" busy={save.isPending} onClick={() => save.mutate()}>

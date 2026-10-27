@@ -251,14 +251,14 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       label: 'Customer invoices',
       views: ['list', 'form'],
       viewIds: { list: 'account.move.invoice.list', form: 'account.move.invoice.form' },
-      domain: { kind: { in: ['out_invoice', 'out_refund'] } },
+      domain: { kind: { in: ['out_invoice', 'out_refund', 'out_debit'] } },
       defaults: { kind: 'out_invoice' },
     }),
     'accounting.action_vendor_bills': action(AccountMove, {
       label: 'Vendor bills',
       views: ['list', 'form'],
       viewIds: { list: 'account.move.invoice.list', form: 'account.move.invoice.form' },
-      domain: { kind: { in: ['in_invoice', 'in_refund'] } },
+      domain: { kind: { in: ['in_invoice', 'in_refund', 'in_debit'] } },
       defaults: { kind: 'in_invoice' },
     }),
     'accounting.action_moves': action(AccountMove, {
@@ -539,6 +539,40 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
   ],
   // Which withholdings apply to a contact (VDS, TDS), next to their roles (RFC 0016).
   viewExtensions: [
+    // A tax's accounts, reverse charge's payable account, and its components (CGST / SGST / IGST).
+    {
+      view: 'account.tax.form',
+      operations: [
+        {
+          insertAfter: 'amount',
+          nodes: [
+            {
+              kind: 'group',
+              id: 'tax_accounts',
+              children: [
+                field({ field: 'account', id: 'tax_account' }),
+                field({ field: 'refundAccount', id: 'tax_refund_account' }),
+                field({ field: 'reverseChargeAccount', id: 'tax_reverse_charge_account' }),
+              ],
+            },
+            {
+              kind: 'lines',
+              id: 'components',
+              field: 'components',
+              columns: [
+                field({ field: 'name', id: 'component_name' }),
+                field({ field: 'code', id: 'component_code' }),
+                field({ field: 'share', id: 'component_share' }),
+                field({ field: 'scope', id: 'component_scope' }),
+                field({ field: 'account', id: 'component_account' }),
+                field({ field: 'refundAccount', id: 'component_refund_account' }),
+                field({ field: 'reverseChargeAccount', id: 'component_reverse_charge_account' }),
+              ],
+            },
+          ],
+        },
+      ],
+    },
     {
       view: 'res.partner.form',
       operations: [
@@ -676,7 +710,7 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
         ],
       },
       sheet: [
-        k.group('party', ['partner', 'kind', 'invoiceOrigin', 'ref']),
+        k.group('party', ['partner', 'kind', 'invoiceOrigin', 'ref', 'debitOf', 'placeOfSupply']),
         k.group('dates', ['date', 'dateDue', 'paymentTerm', 'journal']),
         k.lines(
           'lines',
@@ -926,7 +960,11 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
         entries: { label: 'Journal entries', domain: { kind: 'entry' }, group: 'kind' },
         invoices: {
           label: 'Invoices and bills',
-          domain: { kind: { in: ['out_invoice', 'out_refund', 'in_invoice', 'in_refund'] } },
+          domain: {
+            kind: {
+              in: ['out_invoice', 'out_refund', 'out_debit', 'in_invoice', 'in_refund', 'in_debit'],
+            },
+          },
           group: 'kind',
         },
       },
@@ -1178,7 +1216,27 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       request.env((env) => readSettings(env as Env)),
     );
     context.app.put('/api/v1/accounting/settings', async (request) => {
-      const body = (request.body ?? {}) as { lockDate?: unknown; taxLockDate?: unknown };
+      const body = (request.body ?? {}) as {
+        lockDate?: unknown;
+        taxLockDate?: unknown;
+        country?: unknown;
+        state?: unknown;
+      };
+      const code = (v: unknown, name: string, pattern: RegExp, example: string) => {
+        if (v === undefined) return undefined;
+        if (v === null || v === '') return null;
+        const value = String(v).toUpperCase();
+        if (!pattern.test(value))
+          throw new HttpProblem(
+            400,
+            'invalid-body',
+            'Invalid request',
+            `${name} is like ${example}.`,
+          );
+        return value;
+      };
+      const country = code(body.country, 'country', /^[A-Z]{2}$/, 'IN');
+      const state = code(body.state, 'state', /^[A-Z]{2}-[A-Z0-9]{1,3}$/, 'IN-MH');
       const date = (v: unknown, name: string): string | null | undefined => {
         if (v === undefined) return undefined;
         if (v === null || v === '') return null;
@@ -1193,6 +1251,8 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
           updateSettings(env as Env, {
             ...(lockDate === undefined ? {} : { lockDate }),
             ...(taxLockDate === undefined ? {} : { taxLockDate }),
+            ...(country === undefined ? {} : { country }),
+            ...(state === undefined ? {} : { state }),
           }),
         { write: true },
       );

@@ -34,6 +34,8 @@ export const ResPartner = defineModel('res.partner', {
     zip: f.char({ label: 'Postal code' }),
     /** ISO 3166 country code (BD, IN, US, ...). */
     country: f.char({ size: 2 }),
+    /** State or province (ISO 3166-2: IN-MH, US-CA): the place of supply of taxes split by state. */
+    state: f.char({ size: 6, label: 'State / province' }),
     /** VAT / BIN / tax identification number. */
     taxId: f.char({ label: 'Tax ID' }),
     isCustomer: f.boolean({ default: false, label: 'Customer' }),
@@ -54,7 +56,7 @@ export const ResPartner = defineModel('res.partner', {
 
 export const contactsShutro = defineModule({
   name: 'contacts',
-  version: '0.1.0',
+  version: '0.2.0',
   depends: [baseShutro],
   groups: [
     orm.defineGroup({ code: 'contacts.user', label: 'Contacts user', implies: ['base.user'] }),

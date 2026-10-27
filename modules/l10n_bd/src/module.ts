@@ -87,6 +87,7 @@ const TAX_DEPENDS = [
   'taxes.fixedAmount',
   'taxes.affectsBase',
   'taxes.priceIncluded',
+  'taxes.reverseCharge',
   'taxes.mushak',
 ] as const;
 

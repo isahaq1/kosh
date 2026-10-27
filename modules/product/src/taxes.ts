@@ -2,7 +2,8 @@
  * The tax engine (RFC 0016 §5.1), shared by Sales, Purchase and Accounting: the taxes of a line, in order. A tax is
  * a percentage of its base or a fixed amount per unit; a tax that `affectsBase` adds its amount to the base of the
  * taxes after it (supplementary duty before VAT); taxes `priceIncluded` are inside the unit price, which is then
- * gross. Exact decimals throughout; rounding is the caller's (per document at posting).
+ * gross. A reverse-charge tax is computed like the others but not added to the total: the buyer pays it to the state,
+ * not to the supplier. Exact decimals throughout; rounding is the caller's (per document at posting).
  */
 import { orm } from '@kosh/server/orm';
 
@@ -19,10 +20,13 @@ export interface TaxRule {
   readonly fixedAmount: Decimal;
   readonly affectsBase: boolean;
   readonly priceIncluded: boolean;
+  /** Paid by the buyer to the state (reverse charge): not in the line's total. */
+  readonly reverseCharge: boolean;
 }
 
 export interface TaxLine {
   readonly tax: number;
+  readonly reverseCharge: boolean;
   /** What the tax was computed on (the untaxed amount, plus the taxes before it that affect the base). */
   readonly base: Decimal;
   readonly amount: Decimal;
@@ -31,8 +35,9 @@ export interface TaxLine {
 export interface TaxResult {
   /** The amount without taxes. */
   readonly untaxed: Decimal;
-  /** Each tax, in order. */
+  /** Each tax, in order (reverse-charge ones too). */
   readonly taxes: readonly TaxLine[];
+  /** The taxes the supplier charges (reverse-charge ones are not). */
   readonly taxTotal: Decimal;
   readonly total: Decimal;
 }
@@ -54,7 +59,7 @@ function apply(untaxed: Decimal, quantity: Decimal, rules: readonly TaxRule[]): 
   for (const rule of rules) {
     const amount =
       rule.amountType === 'fixed' ? quantity.times(rule.fixedAmount) : base.times(rule.rate);
-    out.push({ tax: rule.id, base, amount });
+    out.push({ tax: rule.id, reverseCharge: rule.reverseCharge, base, amount });
     if (rule.affectsBase) base = base.plus(amount);
   }
   return out;
@@ -82,7 +87,7 @@ export function computeTaxes(
     untaxed = k.isZero() ? amount : amount.minus(c).div(k);
   }
   const taxes = apply(untaxed, quantity, all);
-  const taxTotal = taxes.reduce((s, t) => s.plus(t.amount), ZERO);
+  const taxTotal = taxes.reduce((s, t) => (t.reverseCharge ? s : s.plus(t.amount)), ZERO);
   return { untaxed, taxes, taxTotal, total: untaxed.plus(taxTotal) };
 }
 
@@ -95,6 +100,7 @@ export function taxRule(tax: {
   readonly fixedAmount?: Decimal | null;
   readonly affectsBase?: boolean | null;
   readonly priceIncluded?: boolean | null;
+  readonly reverseCharge?: boolean | null;
 }): TaxRule {
   return {
     id: tax.id,
@@ -104,5 +110,6 @@ export function taxRule(tax: {
     fixedAmount: tax.fixedAmount ?? ZERO,
     affectsBase: tax.affectsBase === true,
     priceIncluded: tax.priceIncluded === true,
+    reverseCharge: tax.reverseCharge === true,
   };
 }

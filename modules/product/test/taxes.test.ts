@@ -15,6 +15,7 @@ const rule = (id: number, over: Partial<TaxRule> = {}): TaxRule => ({
   fixedAmount: d('0'),
   affectsBase: false,
   priceIncluded: false,
+  reverseCharge: false,
   ...over,
 });
 const show = (r: ReturnType<typeof computeTaxes>) => ({
@@ -82,4 +83,20 @@ test('taxes included in the price: the untaxed amount gives the price back', () 
 test('exact decimals: no float rounding', () => {
   const vat = rule(1, { rate: d('0.075') });
   expect(computeTaxes(d('0.1'), d('3'), [vat]).total.toFixed()).toBe('0.1075');
+});
+
+test('reverse charge: computed with its base, not in the total (the buyer pays it to the state)', () => {
+  const gst = rule(1, { rate: d('0.18'), reverseCharge: true });
+  const cess = rule(2, { rate: d('0.12'), sequence: 20 });
+  const r = computeTaxes(d('1000'), d('1'), [gst, cess]);
+  expect(show(r)).toEqual({
+    untaxed: '1000',
+    taxes: [
+      [1, '1000', '180'],
+      [2, '1000', '120'],
+    ],
+    total: '1120',
+  });
+  expect(r.taxTotal.toFixed()).toBe('120');
+  expect(r.taxes.map((t) => t.reverseCharge)).toEqual([true, false]);
 });

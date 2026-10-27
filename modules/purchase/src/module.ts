@@ -180,6 +180,7 @@ export const PurchaseOrderLine = defineModel('purchase.order.line', {
           'taxes.fixedAmount',
           'taxes.affectsBase',
           'taxes.priceIncluded',
+          'taxes.reverseCharge',
         ],
         (lines) => {
           for (const l of lines) l.subtotal = taxesOf(l).untaxed;
@@ -202,6 +203,7 @@ export const PurchaseOrderLine = defineModel('purchase.order.line', {
           'taxes.fixedAmount',
           'taxes.affectsBase',
           'taxes.priceIncluded',
+          'taxes.reverseCharge',
         ],
         (lines) => {
           for (const l of lines) l.taxAmount = taxesOf(l).taxTotal;

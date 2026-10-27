@@ -80,7 +80,9 @@ export const contacts: ReturnType<typeof defineModule> = defineModule({
         k.group('identity', ['name', 'isCompany', 'parent', 'taxId']),
         k.group('reach', ['email', 'phone', 'mobile', 'website']),
         k.notebook('more', [
-          k.page('address', 'Address', [k.group('where', ['street', 'city', 'zip', 'country'])]),
+          k.page('address', 'Address', [
+            k.group('where', ['street', 'city', 'zip', 'state', 'country']),
+          ]),
           k.page('sales', 'Sales & purchase', [
             k.group('roles', ['isCustomer', 'isVendor', 'currency']),
           ]),

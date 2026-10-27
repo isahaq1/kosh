@@ -201,6 +201,9 @@ export interface Settings {
   readonly chartTemplate: string | null;
   readonly lockDate: string | null;
   readonly taxLockDate: string | null;
+  /** Where the company is registered (ISO 3166 / 3166-2): taxes split by place of supply compare against it. */
+  readonly country: string | null;
+  readonly state: string | null;
   readonly accounts: Readonly<Record<string, number | null>>;
 }
 
@@ -210,6 +213,8 @@ export async function readSettings(env: Env): Promise<Settings> {
     chartTemplate: c?.chartTemplate ?? null,
     lockDate: c?.lockDate ?? null,
     taxLockDate: c?.taxLockDate ?? null,
+    country: c?.country ?? null,
+    state: c?.state ?? null,
     accounts: {
       receivable: c?.accountReceivable?.id ?? null,
       payable: c?.accountPayable?.id ?? null,
@@ -220,10 +225,15 @@ export async function readSettings(env: Env): Promise<Settings> {
   };
 }
 
-/** The lock dates (managers). */
+/** The lock dates, the company's country and state (managers). */
 export async function updateSettings(
   env: Env,
-  input: { readonly lockDate?: string | null; readonly taxLockDate?: string | null },
+  input: {
+    readonly lockDate?: string | null;
+    readonly taxLockDate?: string | null;
+    readonly country?: string | null;
+    readonly state?: string | null;
+  },
 ): Promise<Settings> {
   needs(env, 'account.settings', 'Changing the accounting settings');
   await env.asSuperuser({ reason: 'accounting settings' }, (su) =>
@@ -233,6 +243,8 @@ export async function updateSettings(
       .write({
         ...(input.lockDate === undefined ? {} : { lockDate: input.lockDate }),
         ...(input.taxLockDate === undefined ? {} : { taxLockDate: input.taxLockDate }),
+        ...(input.country === undefined ? {} : { country: input.country }),
+        ...(input.state === undefined ? {} : { state: input.state }),
       }),
   );
   return readSettings(env);

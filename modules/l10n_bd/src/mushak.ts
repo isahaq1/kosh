@@ -24,10 +24,19 @@ export const VAT_CATEGORIES: readonly VatCategory[] = [
   'unclassified',
 ];
 
-type MoveKind = 'out_invoice' | 'out_refund' | 'in_invoice' | 'in_refund';
-const KINDS: Record<Side, { readonly invoice: MoveKind; readonly refund: MoveKind }> = {
-  sales: { invoice: 'out_invoice', refund: 'out_refund' },
-  purchases: { invoice: 'in_invoice', refund: 'in_refund' },
+type MoveKind =
+  | 'out_invoice'
+  | 'out_refund'
+  | 'out_debit'
+  | 'in_invoice'
+  | 'in_refund'
+  | 'in_debit';
+const KINDS: Record<
+  Side,
+  { readonly invoice: MoveKind; readonly debit: MoveKind; readonly refund: MoveKind }
+> = {
+  sales: { invoice: 'out_invoice', debit: 'out_debit', refund: 'out_refund' },
+  purchases: { invoice: 'in_invoice', debit: 'in_debit', refund: 'in_refund' },
 };
 
 export interface RegisterRow {
@@ -65,7 +74,7 @@ async function documentsOf(env: Env, side: Side, month: string) {
   const kinds = KINDS[side];
   const moves = await env.model('account.move').search({
     where: {
-      kind: { in: [kinds.invoice, kinds.refund] },
+      kind: { in: [kinds.invoice, kinds.debit, kinds.refund] },
       state: 'posted',
       date: { gte: from, lte: to },
     },

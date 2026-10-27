@@ -290,7 +290,11 @@ export async function installLocalization(
     su
       .model('res.company')
       .browse([company])
-      .write({ fiscalYearStart: start, numberGrouping: localization.grouping ?? 'international' }),
+      .write({
+        fiscalYearStart: start,
+        numberGrouping: localization.grouping ?? 'international',
+        country: localization.country,
+      }),
   );
   let fiscalYear: string | null = null;
   const years = await env.model('account.fiscal.year').search({ where: { company }, limit: 1 });

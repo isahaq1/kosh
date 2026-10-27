@@ -113,7 +113,14 @@ export const product: ReturnType<typeof defineModule> = defineModule({
     'account.tax.form': form(AccountTax, (k) => ({
       sheet: [
         k.group('main', ['name', 'use', 'sequence']),
-        k.group('amount', ['amountType', 'rate', 'fixedAmount', 'affectsBase', 'priceIncluded']),
+        k.group('amount', [
+          'amountType',
+          'rate',
+          'fixedAmount',
+          'affectsBase',
+          'priceIncluded',
+          'reverseCharge',
+        ]),
       ],
     })),
   },

@@ -12,6 +12,10 @@ export const messages: Readonly<Record<string, object>> = {
       lockDateHint: 'Nothing is posted, reversed or matched on or before this date.',
       taxLockDate: 'Tax lock date',
       taxLockDateHint: 'Tax returns are filed up to this date.',
+      country: 'Country (ISO code, e.g. IN)',
+      state: 'State (e.g. IN-MH)',
+      placeHint:
+        'Where the company is registered: a tax split by state (GST) posts its within-state parts when the place of supply is this state.',
       save: 'Save',
       saved: 'Settings saved.',
     },
@@ -71,6 +75,10 @@ export const messages: Readonly<Record<string, object>> = {
       lockDateHint: 'এই তারিখ বা তার আগে কিছু পোস্ট, রিভার্স বা মেলানো যাবে না।',
       taxLockDate: 'কর লক তারিখ',
       taxLockDateHint: 'এই তারিখ পর্যন্ত কর রিটার্ন দাখিল হয়েছে।',
+      country: 'দেশ (ISO কোড, যেমন IN)',
+      state: 'রাজ্য (যেমন IN-MH)',
+      placeHint:
+        'প্রতিষ্ঠান যেখানে নিবন্ধিত: রাজ্যভেদে ভাগ হওয়া কর (GST) সরবরাহের স্থান এই রাজ্য হলে রাজ্যের ভেতরের অংশগুলো পোস্ট করে।',
       save: 'সংরক্ষণ',
       saved: 'সেটিংস সংরক্ষিত।',
     },

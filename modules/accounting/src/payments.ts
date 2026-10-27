@@ -10,6 +10,7 @@
 import { HttpProblem } from '@kosh/server';
 import { type Decimal, orm } from '@kosh/server/orm';
 import type { Env } from './.kosh/bindings.js';
+import { owedToUs } from './module.js';
 
 type Payments = Parameters<
   Parameters<typeof import('./.kosh/bindings.js').records<'account.payment'>>[1]
@@ -492,7 +493,7 @@ export async function postPayments(payments: Payments): Promise<void> {
           `${d.name} is in another currency.`,
           "Pay in the document's currency.",
         );
-      const incoming = d.kind === 'out_invoice' || d.kind === 'in_refund';
+      const incoming = owedToUs(d.kind);
       if (incoming !== (p.kind === 'inbound'))
         throw fail(
           'account.payment',
@@ -632,7 +633,7 @@ export async function proposeWithholdings(
       'No documents to pay.',
       'Choose a posted document.',
     );
-  const inbound = first.kind === 'out_invoice' || first.kind === 'in_refund';
+  const inbound = owedToUs(first.kind);
   const unit = first.currency.rounding;
   const round = (d: Decimal) =>
     d.div(unit).toDecimalPlaces(0, orm.Decimal.ROUND_HALF_UP).times(unit);
@@ -713,7 +714,7 @@ export async function registerPayment(
       );
     residual = residual.plus(d.amountResidual?.amount ?? 0);
   }
-  const kind = first.kind === 'out_invoice' || first.kind === 'in_refund' ? 'inbound' : 'outbound';
+  const kind = owedToUs(first.kind) ? 'inbound' : 'outbound';
   const withholdings = input.withholdings ?? [];
   const kept = withholdings.reduce((s, w) => s.plus(orm.toDecimal(w.amount)), orm.toDecimal(0));
   const amount = input.amount ?? residual.minus(kept).toString();
