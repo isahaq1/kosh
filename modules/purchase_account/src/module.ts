@@ -49,7 +49,7 @@ export const PurchaseOrderBilling = extendModel('purchase.order', {
           after: records('purchase.order', async (orders) => {
             const env = orders.env;
             const loaded = await orders.load({
-              lines: { product: true, tax: true },
+              lines: { product: true, taxes: true },
               partner: true,
               currency: true,
               company: true,
@@ -85,7 +85,7 @@ export const PurchaseOrderBilling = extendModel('purchase.order', {
                       name: l.name,
                       quantity: l.quantity,
                       priceUnit: l.priceUnit,
-                      tax: l.tax?.id ?? null,
+                      taxes: { set: [...l.taxes].map((t) => t.id) },
                       debit: '0',
                       credit: '0',
                     })),

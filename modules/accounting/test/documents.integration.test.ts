@@ -205,7 +205,7 @@ test('the payment terms are installed; a customer invoice posts with its tax lin
           name: 'Steel beams',
           quantity: '3',
           priceUnit: '1000.00',
-          tax: vat15,
+          taxes: { set: [vat15] },
         },
         {
           lineKind: 'product',
@@ -213,9 +213,15 @@ test('the payment terms are installed; a customer invoice posts with its tax lin
           quantity: '1',
           priceUnit: '333.33',
           discount: '10',
-          tax: vat15,
+          taxes: { set: [vat15] },
         },
-        { lineKind: 'product', name: 'Manual', quantity: '2', priceUnit: '10.005', tax: vat5 },
+        {
+          lineKind: 'product',
+          name: 'Manual',
+          quantity: '2',
+          priceUnit: '10.005',
+          taxes: { set: [vat5] },
+        },
       ],
     },
   });
@@ -299,7 +305,7 @@ test('a credit note posts the other way; a reversal of an invoice is a credit no
           name: 'Returned beam',
           quantity: '1',
           priceUnit: '1000.00',
-          tax: vat15,
+          taxes: { set: [vat15] },
         },
       ],
     },
@@ -355,7 +361,7 @@ test('a vendor bill above the threshold waits for the manager; a small one posts
           name: 'Raw jute',
           quantity: '2000',
           priceUnit: '100.00',
-          tax: purchaseVat,
+          taxes: { set: [purchaseVat] },
         },
       ],
     },
@@ -422,4 +428,51 @@ test('a document without lines, without a partner, or with a tax without account
   expect((await transition(noPartner.json.id, 'post', 'rahim')).json.detail).toContain(
     'no partner',
   );
+});
+
+test('supplementary duty before VAT (RFC 0016): VAT on price + SD, one tax line each with its base', async () => {
+  const sd = await call('POST', '/api/v1/models/account.tax', 'maria', {
+    name: 'SD 20 % (test)',
+    use: 'sale',
+    rate: '0.2',
+    sequence: 1,
+    affectsBase: true,
+    account: accounts['2220'],
+  });
+  expectStatus(sd, 201);
+  const created = await call('POST', '/api/v1/models/account.move', 'rahim', {
+    kind: 'out_invoice',
+    journal: journals['INV'],
+    partner: customer,
+    currency: bdt,
+    date: today,
+    lines: {
+      create: [
+        {
+          lineKind: 'product',
+          name: 'Cigarettes',
+          quantity: '1',
+          priceUnit: '1000',
+          // Given VAT first: the taxes apply by their sequence, SD first.
+          taxes: { set: [vat15, sd.json.id] },
+        },
+      ],
+    },
+  });
+  expectStatus(created, 201);
+  expect(created.json.amountUntaxed.amount).toBe('1000.00');
+  expect(created.json.amountTax.amount).toBe('380.00'); // 200 SD + 15 % of 1200
+  expect(created.json.amountTotal.amount).toBe('1380.00');
+  expectStatus(await transition(created.json.id, 'post', 'rahim'), 200);
+  const lines = await linesOf(created.json.id, 'lineKind,taxLineOf,credit,taxBase,account');
+  const taxes = lines.json.items.filter((l: Json) => l.lineKind === 'tax');
+  expect(
+    taxes.map((l: Json) => [l.taxLineOf, l.credit.amount, l.taxBase.amount, l.account]),
+  ).toEqual(
+    expect.arrayContaining([
+      [sd.json.id, '200.00', '1000.00', accounts['2220']],
+      [vat15, '180.00', '1200.00', accounts['2200']],
+    ]),
+  );
+  expect(taxes).toHaveLength(2);
 });

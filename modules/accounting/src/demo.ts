@@ -83,7 +83,7 @@ async function document(
       name: l.product,
       quantity: l.quantity,
       priceUnit: l.price,
-      tax: orm.asId(vat, 'account.tax'),
+      taxes: { set: [orm.asId(vat, 'account.tax')] },
     });
   const created = await env.model('account.move').create([
     {

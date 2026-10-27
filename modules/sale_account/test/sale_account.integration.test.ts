@@ -138,7 +138,7 @@ beforeAll(async () => {
       id: number;
     }>`SELECT id FROM account_tax WHERE use = 'sale' AND account_id IS NOT NULL ORDER BY id LIMIT 1`;
     const p = await model('product.product').create([
-      { name: 'Steel beam', listPrice: '1000', tax: vat?.id },
+      { name: 'Steel beam', listPrice: '1000', taxes: { set: [vat?.id] } },
     ]);
     const c = await model('res.partner').create([
       { name: 'Bengal Steel', isCompany: true, isCustomer: true },
@@ -178,7 +178,14 @@ test('the bridge is installed with the apps; a confirmed order is invoiced once,
     currency: bdt,
     lines: {
       create: [
-        { product, name: 'Steel beam', quantity: '3', priceUnit: '1000', discount: '10', tax },
+        {
+          product,
+          name: 'Steel beam',
+          quantity: '3',
+          priceUnit: '1000',
+          discount: '10',
+          taxes: { set: [tax] },
+        },
       ],
     },
   });

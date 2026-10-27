@@ -78,7 +78,7 @@ export async function purchaseDemo(context: DemoContext): Promise<string> {
           name: l.product,
           quantity: l.quantity,
           priceUnit: l.price,
-          tax: orm.asId(vat, 'account.tax'),
+          taxes: { set: [orm.asId(vat, 'account.tax')] },
           datePlanned: context.date(14 - o.daysAgo),
         });
       }

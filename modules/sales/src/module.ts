@@ -5,7 +5,7 @@
  */
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
-import { productShutro } from '@kosh/product';
+import { computeTaxes, productShutro, taxRule } from '@kosh/product';
 import { orm } from '@kosh/server/orm';
 import {
   check,
@@ -17,6 +17,17 @@ import {
   onchange,
   records,
 } from './.kosh/bindings.js';
+
+/** A line's taxes through the engine (RFC 0016): its amount after discount, its taxes in order. */
+function taxesOf(l: {
+  readonly quantity: ReturnType<typeof orm.toDecimal>;
+  readonly priceUnit: ReturnType<typeof orm.toDecimal>;
+  readonly discount: ReturnType<typeof orm.toDecimal>;
+  readonly taxes: Iterable<Parameters<typeof taxRule>[0]>;
+}) {
+  const amount = l.quantity.times(l.priceUnit).times(orm.toDecimal(100).minus(l.discount)).div(100);
+  return computeTaxes(amount, l.quantity, [...l.taxes].map(taxRule));
+}
 
 const amounts = compute(
   'sale.order',
@@ -140,7 +151,10 @@ export const SaleOrderLine = defineModel('sale.order.line', {
     priceUnit: f.decimal({ scale: 2, required: true, default: '0', label: 'Unit price' }),
     /** Percent off the unit price (0–100). */
     discount: f.decimal({ scale: 2, required: true, default: '0', label: 'Discount %' }),
-    tax: f.many2one('account.tax'),
+    /** The line's taxes, applied in order (RFC 0016). */
+    taxes: f.many2many('account.tax'),
+    /** Before 0.2.0, one tax per line: copied into `taxes` by the migration; dropped later. */
+    tax: f.many2one('account.tax', { label: 'Tax (before 0.2.0)', readonly: true }),
     /** The order's currency, so line amounts are Money in it. */
     currency: f.many2one('res.currency', {
       store: true,
@@ -151,32 +165,59 @@ export const SaleOrderLine = defineModel('sale.order.line', {
     subtotal: f.monetary({
       currency: 'currency',
       store: true,
-      ...compute('sale.order.line', 'subtotal', ['quantity', 'priceUnit', 'discount'], (lines) => {
-        for (const l of lines)
-          l.subtotal = l.quantity
-            .times(l.priceUnit)
-            .times(orm.toDecimal(100).minus(l.discount))
-            .div(100);
-      }),
+      ...compute(
+        'sale.order.line',
+        'subtotal',
+        [
+          'quantity',
+          'priceUnit',
+          'discount',
+          'taxes.rate',
+          'taxes.sequence',
+          'taxes.amountType',
+          'taxes.fixedAmount',
+          'taxes.affectsBase',
+          'taxes.priceIncluded',
+        ],
+        (lines) => {
+          for (const l of lines) l.subtotal = taxesOf(l).untaxed;
+        },
+      ),
     }),
     taxAmount: f.monetary({
       currency: 'currency',
       store: true,
       label: 'Tax',
-      ...compute('sale.order.line', 'taxAmount', ['subtotal', 'tax.rate'], (lines) => {
-        for (const l of lines)
-          l.taxAmount = (l.subtotal?.amount ?? orm.toDecimal(0)).times(l.tax?.rate ?? 0);
-      }),
+      ...compute(
+        'sale.order.line',
+        'taxAmount',
+        [
+          'quantity',
+          'priceUnit',
+          'discount',
+          'taxes.rate',
+          'taxes.sequence',
+          'taxes.amountType',
+          'taxes.fixedAmount',
+          'taxes.affectsBase',
+          'taxes.priceIncluded',
+        ],
+        (lines) => {
+          for (const l of lines) l.taxAmount = taxesOf(l).taxTotal;
+        },
+      ),
     }),
   },
   onchange: {
-    product: onchange('sale.order.line', async (d) => {
+    product: onchange('sale.order.line', async (d, env) => {
       const p = await d.record('product');
       if (p === null) return;
       d.set('name', p.name);
       d.set('priceUnit', p.listPrice);
       d.set('uom', p.uom?.id ?? null);
-      d.set('tax', p.tax?.id ?? null);
+      // The product's taxes, loaded (a draft's related record has its plain fields only).
+      const [taxed] = await env.model('product.product').browse([p.id]).load({ taxes: true });
+      d.set('taxes', { set: [...(taxed?.taxes.ids ?? [])] });
     }),
   },
   constraints: {
@@ -195,7 +236,17 @@ export const SaleOrderLine = defineModel('sale.order.line', {
 
 export const salesShutro = defineModule({
   name: 'sales',
-  version: '0.1.0',
+  version: '0.2.0',
+  migrations: [
+    {
+      version: '0.2.0',
+      description: 'Several taxes per line: the single tax of each line becomes its first',
+      up: async (ctx) => {
+        await ctx.sql`INSERT INTO sale_order_line_account_tax_rel (sale_order_line_id, account_tax_id)
+          SELECT id, tax_id FROM sale_order_line WHERE tax_id IS NOT NULL ON CONFLICT DO NOTHING`;
+      },
+    },
+  ],
   depends: [contactsShutro, productShutro, messagingShutro],
   groups: [
     orm.defineGroup({

@@ -111,7 +111,7 @@ beforeAll(async () => {
       }>`SELECT id FROM account_tax WHERE rate = 0.15 AND use = 'sale'`;
       const [bdt] = await env.sql<{ id: number }>`SELECT id FROM res_currency WHERE name = 'BDT'`;
       const created = await (env.model('product.product' as never) as unknown as Model).create([
-        { name: 'Jute bag', listPrice: '1000', standardPrice: '600', tax: vat?.id },
+        { name: 'Jute bag', listPrice: '1000', standardPrice: '600', taxes: { set: [vat?.id] } },
       ]);
       return { product: created.ids[0] as number, currency: bdt?.id as number };
     },
@@ -198,7 +198,7 @@ test('the product onchange fills the description, price and VAT', async () => {
   expect(res.status, JSON.stringify(res.json)).toBe(200);
   expect(res.json.values).toMatchObject({ name: 'Jute bag' });
   expect(Number(res.json.values.priceUnit)).toBe(1000);
-  expect(res.json.values.tax).toEqual(expect.any(Number));
+  expect(res.json.values.taxes).toEqual([expect.any(Number)]);
 });
 
 test('a blank new order: its defaults, no currency nor amounts yet; the customer brings the currency', async () => {

@@ -16,7 +16,7 @@
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
 import { approvalGuard, permissionsShutro, requestApprovals } from '@kosh/permissions';
-import { productShutro } from '@kosh/product';
+import { computeTaxes, productShutro, taxRule } from '@kosh/product';
 import { reportingShutro } from '@kosh/reporting';
 import { type Decimal, type Money, orm } from '@kosh/server/orm';
 import {
@@ -283,8 +283,6 @@ export const TaxAccounts = extendModel('account.tax', {
     account: f.many2one('account.account', { label: 'Tax account' }),
     /** On credit notes, when different from the tax account. */
     refundAccount: f.many2one('account.account', { label: 'Tax account on credit notes' }),
-    /** Taxes included in the unit price (the price is gross). */
-    priceIncluded: f.boolean({ default: false, label: 'Included in price' }),
   },
 });
 
@@ -682,7 +680,10 @@ export const AccountMoveLine = defineModel('account.move.line', {
     priceUnit: f.decimal({ scale: 2, default: '0', label: 'Unit price' }),
     /** Percent off the unit price (0–100). */
     discount: f.decimal({ scale: 2, default: '0', label: 'Discount %' }),
-    tax: f.many2one('account.tax'),
+    /** A product line's taxes, applied in order (RFC 0016): supplementary duty, then VAT on price + SD. */
+    taxes: f.many2many('account.tax'),
+    /** Before 0.2.0, one tax per line: copied into `taxes` by the migration; dropped later. */
+    tax: f.many2one('account.tax', { label: 'Tax (before 0.2.0)', readonly: true }),
     /** Tax-excluded amount of a product line in the document currency. */
     subtotal: f.monetary({
       currency: 'currency',
@@ -691,36 +692,54 @@ export const AccountMoveLine = defineModel('account.move.line', {
       ...compute(
         'account.move.line',
         'subtotal',
-        ['lineKind', 'quantity', 'priceUnit', 'discount', 'tax.rate', 'tax.priceIncluded'],
+        [
+          'lineKind',
+          'quantity',
+          'priceUnit',
+          'discount',
+          'taxes.rate',
+          'taxes.sequence',
+          'taxes.amountType',
+          'taxes.fixedAmount',
+          'taxes.affectsBase',
+          'taxes.priceIncluded',
+        ],
         (lines) => {
-          for (const l of lines) {
-            if (l.lineKind !== 'product') {
-              l.subtotal = null;
-              continue;
-            }
-            const gross = (l.quantity ?? orm.toDecimal(1))
-              .times(l.priceUnit ?? 0)
-              .times(orm.toDecimal(100).minus(l.discount ?? 0))
-              .div(100);
-            const rate = l.tax?.rate ?? orm.toDecimal(0);
-            l.subtotal = l.tax?.priceIncluded === true ? gross.div(rate.plus(1)) : gross;
-          }
+          for (const l of lines)
+            l.subtotal = l.lineKind === 'product' ? taxesOfLine(l).untaxed : null;
         },
       ),
     }),
-    /** The tax of a product line in the document currency (summed and rounded per tax at posting). */
+    /** The taxes of a product line in the document currency (summed and rounded per tax at posting). */
     taxAmount: f.monetary({
       currency: 'currency',
       store: true,
       label: 'Tax',
-      ...compute('account.move.line', 'taxAmount', ['subtotal', 'tax.rate'], (lines) => {
-        for (const l of lines)
-          l.taxAmount =
-            l.subtotal === null ? null : l.subtotal.amount.times(l.tax?.rate ?? orm.toDecimal(0));
-      }),
+      ...compute(
+        'account.move.line',
+        'taxAmount',
+        [
+          'lineKind',
+          'quantity',
+          'priceUnit',
+          'discount',
+          'taxes.rate',
+          'taxes.sequence',
+          'taxes.amountType',
+          'taxes.fixedAmount',
+          'taxes.affectsBase',
+          'taxes.priceIncluded',
+        ],
+        (lines) => {
+          for (const l of lines)
+            l.taxAmount = l.lineKind === 'product' ? taxesOfLine(l).taxTotal : null;
+        },
+      ),
     }),
     /** Set on the generated tax lines: the tax this line is the amount of. */
     taxLineOf: f.many2one('account.tax', { label: 'Tax line for' }),
+    /** On the generated tax lines: what the tax was computed on, in the document currency (the tax reports). */
+    taxBase: f.monetary({ currency: 'currency', label: 'Tax base' }),
     /** Debit minus credit, for the reports (trial balance, ledgers, P&L, balance sheet). */
     balance: f.monetary({
       currency: 'companyCurrency',
@@ -752,18 +771,13 @@ export const AccountMoveLine = defineModel('account.move.line', {
         for (const l of lines) l.accountType = l.account?.type ?? null;
       }),
     }),
-    /** The tax a line reports under: a product line's tax (its base), a tax line's tax (its amount). */
+    /** The tax a generated tax line reports under (its amount, with its base in `taxBase`). */
     taxReport: f.many2one('account.tax', {
       store: true,
       label: 'Tax (report)',
-      ...compute('account.move.line', 'taxReport', ['tax', 'taxLineOf', 'lineKind'], (lines) => {
+      ...compute('account.move.line', 'taxReport', ['taxLineOf', 'lineKind'], (lines) => {
         for (const l of lines)
-          l.taxReport =
-            l.lineKind === 'tax'
-              ? (l.taxLineOf?.id ?? null)
-              : l.lineKind === 'product'
-                ? (l.tax?.id ?? null)
-                : null;
+          l.taxReport = l.lineKind === 'tax' ? (l.taxLineOf?.id ?? null) : null;
       }),
     }),
     /** Partial matches this line takes part in, on its debit or its credit side (`payments.ts`). */
@@ -809,7 +823,7 @@ export const AccountMoveLine = defineModel('account.move.line', {
           'quantity',
           'priceUnit',
           'discount',
-          'tax',
+          'taxes',
         ],
         async (lines) => {
           const loaded = await lines.load({ move: true });
@@ -826,6 +840,24 @@ export const AccountMoveLine = defineModel('account.move.line', {
 
 type Moves = Parameters<Parameters<typeof records<'account.move'>>[1]>[0];
 
+/** What the tax engine needs of a product line. */
+interface TaxedLine {
+  readonly quantity: Decimal | null;
+  readonly priceUnit: Decimal | null;
+  readonly discount: Decimal | null;
+  readonly taxes: Iterable<Parameters<typeof taxRule>[0]>;
+}
+
+/** A product line's taxes (RFC 0016): its amount after discount through the engine. */
+function taxesOfLine(l: TaxedLine) {
+  const quantity = l.quantity ?? orm.toDecimal(1);
+  const amount = quantity
+    .times(l.priceUnit ?? 0)
+    .times(orm.toDecimal(100).minus(l.discount ?? 0))
+    .div(100);
+  return computeTaxes(amount, quantity, [...l.taxes].map(taxRule));
+}
+
 /** The current database transaction's id (assigned on first use; posting writes anyway). */
 async function currentTx(env: Env): Promise<string> {
   const [row] = await env.sql<{ tx: string }>`SELECT pg_current_xact_id()::text AS tx`;
@@ -839,7 +871,7 @@ async function currentTx(env: Env): Promise<string> {
 async function postMoves(moves: Moves): Promise<void> {
   const env = moves.env;
   const loaded = await moves.load({
-    lines: { tax: true },
+    lines: { taxes: true },
     journal: true,
     company: { currency: true },
     currency: true,
@@ -893,7 +925,10 @@ async function postMoves(moves: Moves): Promise<void> {
       const round = (d: Decimal) =>
         d.div(unit).toDecimalPlaces(0, orm.Decimal.ROUND_HALF_UP).times(unit);
       let total = orm.toDecimal(0);
-      const byTax = new Map<number, { amount: Decimal; account: number | null; name: string }>();
+      const byTax = new Map<
+        number,
+        { amount: Decimal; base: Decimal; account: number | null; name: string }
+      >();
       for (const l of products) {
         const account = l.account?.id ?? m.journal.defaultAccount?.id ?? null;
         if (account === null)
@@ -911,15 +946,20 @@ async function postMoves(moves: Moves): Promise<void> {
           debit: '0',
           credit: '0',
         });
-        if (l.tax !== null) {
-          const entry = byTax.get(l.tax.id) ?? {
+        // Each tax of the line, in order, with its own base (SD in the VAT's base).
+        for (const t of taxesOfLine(l).taxes) {
+          const tax = [...l.taxes].find((x) => x.id === t.tax);
+          if (tax === undefined) continue;
+          const entry = byTax.get(t.tax) ?? {
             amount: orm.toDecimal(0),
+            base: orm.toDecimal(0),
             account:
-              (refund ? (l.tax.refundAccount?.id ?? l.tax.account?.id) : l.tax.account?.id) ?? null,
-            name: l.tax.name,
+              (refund ? (tax.refundAccount?.id ?? tax.account?.id) : tax.account?.id) ?? null,
+            name: tax.name,
           };
-          entry.amount = entry.amount.plus(l.taxAmount?.amount ?? 0);
-          byTax.set(l.tax.id, entry);
+          entry.amount = entry.amount.plus(t.amount);
+          entry.base = entry.base.plus(t.base);
+          byTax.set(t.tax, entry);
         }
       }
       for (const [taxId, t] of byTax) {
@@ -940,6 +980,7 @@ async function postMoves(moves: Moves): Promise<void> {
             partner: m.partner.id,
             name: t.name,
             taxLineOf: orm.asId(taxId, 'account.tax'),
+            taxBase: round(t.base),
             amountCurrency: amount.times(sign),
             debit: '0',
             credit: '0',
@@ -1157,7 +1198,17 @@ const sequence = (type: JournalType, prefix: string) =>
 
 export const accountingShutro = defineModule({
   name: 'accounting',
-  version: '0.1.0',
+  version: '0.2.0',
+  migrations: [
+    {
+      version: '0.2.0',
+      description: 'Several taxes per line: the single tax of each line becomes its first',
+      up: async (ctx) => {
+        await ctx.sql`INSERT INTO account_move_line_account_tax_rel (account_move_line_id, account_tax_id)
+          SELECT id, tax_id FROM account_move_line WHERE tax_id IS NOT NULL ON CONFLICT DO NOTHING`;
+      },
+    },
+  ],
   depends: [contactsShutro, productShutro, messagingShutro, permissionsShutro, reportingShutro],
   groups: [
     orm.defineGroup({

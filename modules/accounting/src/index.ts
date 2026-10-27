@@ -120,7 +120,7 @@ export async function reverseMove(
 ): Promise<Reversed> {
   const moves = env.model('account.move');
   const [m] = await moves.browse([id]).load({
-    lines: { account: true, partner: true, product: true, tax: true },
+    lines: { account: true, partner: true, product: true, taxes: true },
     journal: true,
     partner: true,
     currency: true,
@@ -177,7 +177,7 @@ export async function reverseMove(
                   quantity: l.quantity,
                   priceUnit: l.priceUnit,
                   discount: l.discount,
-                  tax: l.tax?.id ?? null,
+                  taxes: { set: [...l.taxes].map((t) => t.id) },
                   debit: '0',
                   credit: '0',
                 })),
@@ -537,7 +537,7 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
               { label: 'Quantity', bind: 'quantity', align: 'end' },
               { label: 'Unit price', bind: 'priceUnit', align: 'end' },
               { label: 'Discount %', bind: 'discount', align: 'end' },
-              { label: 'Tax', bind: 'tax.name' },
+              { label: 'Tax', bind: 'taxAmount', align: 'end' },
               { label: 'Subtotal', bind: 'subtotal', align: 'end', sum: true },
             ],
           },
@@ -595,7 +595,7 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
             'quantity',
             'priceUnit',
             'discount',
-            'tax',
+            'taxes',
             'subtotal',
           ],
           { readonlyWhen: { state: { ne: 'draft' } } },
@@ -671,11 +671,11 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       measures: [{ sum: 'balance' }],
       comparison: { field: 'date', mode: 'yoy' },
     }),
+    // The tax lines of posted documents: each with the base its tax was computed on (SD in the VAT's base).
     'account.move.line.vat': pivot(AccountMoveLine, {
       rows: ['taxReport'],
-      cols: ['lineKind'],
       measures: [
-        { sum: 'subtotal', label: 'Base' },
+        { sum: 'taxBase', label: 'Base' },
         { sum: 'balance', label: 'Amount' },
       ],
     }),

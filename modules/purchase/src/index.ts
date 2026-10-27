@@ -150,7 +150,7 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
             'quantity',
             'uom',
             'priceUnit',
-            'tax',
+            'taxes',
             { field: 'datePlanned', id: 'line_date_planned' },
             'subtotal',
           ],

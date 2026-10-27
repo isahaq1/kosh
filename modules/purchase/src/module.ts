@@ -7,7 +7,7 @@
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
 import { approvalGuard, permissionsShutro, requestApprovals } from '@kosh/permissions';
-import { productShutro } from '@kosh/product';
+import { computeTaxes, productShutro, taxRule } from '@kosh/product';
 import { orm } from '@kosh/server/orm';
 import {
   check,
@@ -19,6 +19,15 @@ import {
   onchange,
   records,
 } from './.kosh/bindings.js';
+
+/** A line's taxes through the engine (RFC 0016): its amount, its taxes in order. */
+function taxesOf(l: {
+  readonly quantity: ReturnType<typeof orm.toDecimal>;
+  readonly priceUnit: ReturnType<typeof orm.toDecimal>;
+  readonly taxes: Iterable<Parameters<typeof taxRule>[0]>;
+}) {
+  return computeTaxes(l.quantity.times(l.priceUnit), l.quantity, [...l.taxes].map(taxRule));
+}
 
 const amounts = compute(
   'purchase.order',
@@ -145,7 +154,10 @@ export const PurchaseOrderLine = defineModel('purchase.order.line', {
     quantity: f.decimal({ scale: 3, required: true, default: '1' }),
     uom: f.many2one('uom.uom', { label: 'Unit' }),
     priceUnit: f.decimal({ scale: 2, required: true, default: '0', label: 'Unit price' }),
-    tax: f.many2one('account.tax'),
+    /** The line's taxes, applied in order (RFC 0016). */
+    taxes: f.many2many('account.tax'),
+    /** Before 0.2.0, one tax per line: copied into `taxes` by the migration; dropped later. */
+    tax: f.many2one('account.tax', { label: 'Tax (before 0.2.0)', readonly: true }),
     datePlanned: f.date({ label: 'Expected arrival' }),
     currency: f.many2one('res.currency', {
       store: true,
@@ -156,28 +168,60 @@ export const PurchaseOrderLine = defineModel('purchase.order.line', {
     subtotal: f.monetary({
       currency: 'currency',
       store: true,
-      ...compute('purchase.order.line', 'subtotal', ['quantity', 'priceUnit'], (lines) => {
-        for (const l of lines) l.subtotal = l.quantity.times(l.priceUnit);
-      }),
+      ...compute(
+        'purchase.order.line',
+        'subtotal',
+        [
+          'quantity',
+          'priceUnit',
+          'taxes.rate',
+          'taxes.sequence',
+          'taxes.amountType',
+          'taxes.fixedAmount',
+          'taxes.affectsBase',
+          'taxes.priceIncluded',
+        ],
+        (lines) => {
+          for (const l of lines) l.subtotal = taxesOf(l).untaxed;
+        },
+      ),
     }),
     taxAmount: f.monetary({
       currency: 'currency',
       store: true,
       label: 'Tax',
-      ...compute('purchase.order.line', 'taxAmount', ['subtotal', 'tax.rate'], (lines) => {
-        for (const l of lines)
-          l.taxAmount = (l.subtotal?.amount ?? orm.toDecimal(0)).times(l.tax?.rate ?? 0);
-      }),
+      ...compute(
+        'purchase.order.line',
+        'taxAmount',
+        [
+          'quantity',
+          'priceUnit',
+          'taxes.rate',
+          'taxes.sequence',
+          'taxes.amountType',
+          'taxes.fixedAmount',
+          'taxes.affectsBase',
+          'taxes.priceIncluded',
+        ],
+        (lines) => {
+          for (const l of lines) l.taxAmount = taxesOf(l).taxTotal;
+        },
+      ),
     }),
   },
   onchange: {
-    product: onchange('purchase.order.line', async (d) => {
+    product: onchange('purchase.order.line', async (d, env) => {
       const p = await d.record('product');
       if (p === null) return;
       d.set('name', p.name);
       d.set('priceUnit', p.standardPrice);
       d.set('uom', p.uom?.id ?? null);
-      d.set('tax', p.purchaseTax?.id ?? null);
+      // The product's taxes, loaded (a draft's related record has its plain fields only).
+      const [taxed] = await env
+        .model('product.product')
+        .browse([p.id])
+        .load({ purchaseTaxes: true });
+      d.set('taxes', { set: [...(taxed?.purchaseTaxes.ids ?? [])] });
     }),
   },
   constraints: {
@@ -192,7 +236,17 @@ export const PurchaseOrderLine = defineModel('purchase.order.line', {
 
 export const purchaseShutro = defineModule({
   name: 'purchase',
-  version: '0.1.0',
+  version: '0.2.0',
+  migrations: [
+    {
+      version: '0.2.0',
+      description: 'Several taxes per line: the single tax of each line becomes its first',
+      up: async (ctx) => {
+        await ctx.sql`INSERT INTO purchase_order_line_account_tax_rel (purchase_order_line_id, account_tax_id)
+          SELECT id, tax_id FROM purchase_order_line WHERE tax_id IS NOT NULL ON CONFLICT DO NOTHING`;
+      },
+    },
+  ],
   depends: [contactsShutro, productShutro, messagingShutro, permissionsShutro],
   groups: [
     orm.defineGroup({

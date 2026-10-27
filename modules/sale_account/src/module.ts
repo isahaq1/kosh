@@ -1,7 +1,7 @@
 /**
  * The data layer of the Sales ↔ Accounting bridge (RFC 0008 §5.1, RFC 0009 §5.8): a confirmed sales order is
  * invoiced with one transition (`invoice`), which creates a draft customer invoice from the order's lines
- * (product, description, quantity, price, discount, tax) in the company's sales journal; the order shows its
+ * (product, description, quantity, price, discount, taxes) in the company's sales journal; the order shows its
  * invoicing state and its invoices, the invoice its order.
  */
 import { accountingShutro } from '@kosh/accounting';
@@ -49,7 +49,7 @@ export const SaleOrderInvoicing = extendModel('sale.order', {
           after: records('sale.order', async (orders) => {
             const env = orders.env;
             const loaded = await orders.load({
-              lines: { product: true, tax: true },
+              lines: { product: true, taxes: true },
               partner: true,
               currency: true,
               company: true,
@@ -85,7 +85,7 @@ export const SaleOrderInvoicing = extendModel('sale.order', {
                       quantity: l.quantity,
                       priceUnit: l.priceUnit,
                       discount: l.discount,
-                      tax: l.tax?.id ?? null,
+                      taxes: { set: [...l.taxes].map((t) => t.id) },
                       debit: '0',
                       credit: '0',
                     })),
