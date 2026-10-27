@@ -180,6 +180,13 @@ const deal = async (as: string, values: Record<string, unknown>): Promise<number
   (await ok('POST', '/api/v1/models/crm.deal', as, values)).id as number;
 const read = (id: number, fields: string) =>
   ok('GET', `/api/v1/models/crm.deal/${id}?fields=${fields}`, 'dina');
+/** Drains the outbox feed (event rules and the change feed). */
+const pollFeed = async () => {
+  for (;;) {
+    const result = await pollOutbox(engine, { limit: 200 });
+    if (result === null || result.events === 0) return;
+  }
+};
 const poll = async () => {
   let total = 0;
   for (;;) {
@@ -303,7 +310,8 @@ test('created: a note and a field set as the actor, once; a second poll adds not
   await ok('PATCH', `/api/v1/models/automation.rule/${r.id}`, 'admin', { enabled: false });
 });
 
-test('updated: watched tracked fields, from / to values, a condition; an untracked field is refused', async () => {
+test('updated: watched tracked fields, from / to values, a condition; an untracked field through the change feed', async () => {
+  await pollFeed(); // the changes of the earlier tests
   const r = await rule({
     name: 'Big deals',
     trigger: 'updated',
@@ -311,11 +319,13 @@ test('updated: watched tracked fields, from / to values, a condition; an untrack
     condition: { amount: { gte: '5000' } },
     actions: [{ kind: 'set', values: { priority: 'high' } }],
   });
+  // `notes` is not tracked: the rule reads Shutro's change events (RFC 0011 step 4), "becomes" checked on the record.
   const untracked = await rule({
     name: 'Notes',
     trigger: 'updated',
     watchFields: ['notes'],
-    actions: [{ kind: 'set', values: { priority: 'high' } }],
+    toValues: { notes: 'x' },
+    actions: [{ kind: 'set', values: { closeDate: '2026-12-31' } }],
   });
   const won = await rule({
     name: 'Won',
@@ -334,6 +344,8 @@ test('updated: watched tracked fields, from / to values, a condition; an untrack
   await poll();
   await ok('PATCH', `/api/v1/models/crm.deal/${id}`, 'rahim', { amount: '200', notes: 'x' });
   await poll();
+  await pollFeed();
+  expect((await read(id, 'closeDate')).closeDate).toBe('2026-12-31');
   expect((await runsOf(r.id)).map((x: Json) => [x.state, x.reason])).toEqual([
     ['skipped', 'trigger'],
     ['skipped', 'condition'],
@@ -342,9 +354,14 @@ test('updated: watched tracked fields, from / to values, a condition; an untrack
   await ok('PATCH', `/api/v1/models/crm.deal/${id}`, 'rahim', { amount: '9000' });
   await poll();
   expect((await read(id, 'priority')).priority).toBe('high');
-  expect((await runsOf(untracked.id)).map((x: Json) => [x.state, x.reason])).toContainEqual([
-    'skipped',
-    'untracked',
+  await pollFeed();
+  // Once for the notes; its own write is the loop guard's; the amount-only change, and the "Big deals" rule's
+  // write of the priority, do not touch a watched field.
+  expect((await runsOf(untracked.id)).map((x: Json) => [x.state, x.reason])).toEqual([
+    ['done', null],
+    ['skipped', 'loop'],
+    ['skipped', 'fields'],
+    ['skipped', 'fields'],
   ]);
   await ok('POST', `/api/v1/models/crm.deal/${id}/transitions/win`, 'rahim');
   await poll();

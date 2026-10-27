@@ -19,10 +19,12 @@ export {
   type AutomationContext,
   applyChange,
   applyRule,
+  CHANGE_TOPIC,
   type Change,
   chainOf,
   changesOf,
   DATE_LOOKBACK_DAYS,
+  emitsChanges,
   loadRules,
   MAX_DEPTH,
   type Outcome,
@@ -39,6 +41,7 @@ export {
   testRule,
   trackedFields,
   triggerMismatch,
+  usesChangeFeed,
   WEBHOOK_JOB,
   webhookHosts,
   webhookProblem,
@@ -105,6 +108,8 @@ export function automationModule(options: AutomationOptions = {}): ReturnType<ty
       },
     },
     privateModels: ['automation.cursor'],
+    // Rules may watch any field (RFC 0011 step 4): every served model emits Shutro change events.
+    changeEvents: '*',
     hooks: {
       defaults: async (env, modules) => {
         const { created, updated, archived } = await installModuleRules(env as never, modules);

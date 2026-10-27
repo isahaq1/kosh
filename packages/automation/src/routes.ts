@@ -13,6 +13,7 @@ import { HttpProblem, type ModuleContext, publicApiModels } from '@kosh/server';
 import type { FastifyRequest } from 'fastify';
 import {
   type AutomationContext,
+  emitsChanges,
   pollAudit,
   pollOutbox,
   pollTimed,
@@ -55,6 +56,10 @@ export function registerAutomationRoutes(context: ModuleContext, engine: Automat
       return {
         model: name,
         tracked: trackedFields(engine, name),
+        // What an `updated` rule may watch: every stored field when the model emits change events (RFC 0011 step 4).
+        watchable: emitsChanges(engine, name)
+          ? model.fields.filter((f) => f.kind !== 'one2many').map((f) => f.key)
+          : trackedFields(engine, name),
         transitions: model.transitions,
         fields: model.fields.map((f) => ({
           key: f.key,

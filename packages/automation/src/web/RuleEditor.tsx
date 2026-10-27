@@ -26,6 +26,8 @@ type Row = Record<string, unknown>;
 interface ModelInfo {
   readonly model: string;
   readonly tracked: readonly string[];
+  /** What an `updated` rule may watch (every field when the model emits change events). */
+  readonly watchable?: readonly string[];
   readonly transitions: readonly string[];
   readonly fields: readonly { key: string; label: string; kind: string; target: string | null }[];
 }
@@ -634,7 +636,7 @@ export function RuleEditor({ recordId, onSaved, onBack, crumbs }: FormProps): Re
 
   if (!loaded) return <Spinner label={t('editor.title')} />;
   const fields = info.data?.fields ?? [];
-  const tracked = info.data?.tracked ?? [];
+  const tracked = info.data?.watchable ?? info.data?.tracked ?? [];
   const models = Object.keys(routes.data ?? {}).sort();
   const setActions = (actions: Row[]) => setRule({ ...rule, actions });
   return (

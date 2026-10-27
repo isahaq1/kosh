@@ -226,6 +226,12 @@ export interface ModuleInput {
    */
   readonly privateModels?: readonly string[];
   /**
+   * Models whose writes this module needs to hear about (Shutro change events, RFC 0018 §7.5): each create, write
+   * and unlink emits a `record.changed` outbox event per model and action. `'*'`: every model served, but the
+   * private ones. The automation builder asks for `'*'` (rules on any field, RFC 0011 step 4).
+   */
+  readonly changeEvents?: '*' | readonly string[];
+  /**
    * Private models whose records take attachments through the attachment routes all the same (a chat channel):
    * the record's rules decide who uploads, lists and downloads, as for a public model.
    */

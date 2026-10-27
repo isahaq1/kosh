@@ -188,6 +188,31 @@ export async function loadRules(context: AutomationContext): Promise<RuleRow[]> 
 }
 
 /** The fields the audit trail tracks for a model (what an `updated` rule may watch). */
+/** Whether a model emits Shutro change events here (RFC 0018 §7.5; the automation module asks for every model). */
+export function emitsChanges(context: AutomationContext, model: string): boolean {
+  const registered = context.registry.registry.models.get(model as never) as
+    | { readonly model: { readonly changeEvents?: boolean } }
+    | undefined;
+  return registered?.model.changeEvents === true;
+}
+
+/**
+ * Whether a rule reads the change feed (`record.changed` events, RFC 0011 step 4) rather than the audit trail: an
+ * `updated` rule that watches or matches a field the model does not track, on a model that emits change events,
+ * and has no "when it was" values (old values exist for tracked fields only, in the audit trail).
+ */
+export function usesChangeFeed(context: AutomationContext, rule: RuleRow): boolean {
+  if (rule.trigger !== 'updated' || !emitsChanges(context, rule.targetModel)) return false;
+  if (Object.keys(rule.fromValues ?? {}).length > 0) return false;
+  const tracked = trackedFields(context, rule.targetModel);
+  return [...rule.watchFields, ...Object.keys(rule.toValues ?? {})].some(
+    (k) => !tracked.includes(k),
+  );
+}
+
+/** The prefix of the transaction id of a change from the change feed (its event id follows). */
+const CHANGE_FEED = 'change:';
+
 export function trackedFields(context: AutomationContext, model: string): readonly string[] {
   const registered = context.registry.registry.models.get(model as never) as
     | {
@@ -237,8 +262,11 @@ export function triggerMismatch(rule: RuleRow, change: Change): string | null {
           ? ['state']
           : rule.watchFields;
       if (watched.length > 0 && !watched.some((f) => change.fields.has(f))) return 'fields';
-      for (const [key, value] of Object.entries(rule.toValues ?? {}))
-        if (!change.fields.has(key) || !sameValue(change.fields.get(key)?.new, value)) return 'to';
+      // From the change feed there are no values: "when it becomes" is checked on the record, with the condition.
+      if (!change.tx.startsWith(CHANGE_FEED))
+        for (const [key, value] of Object.entries(rule.toValues ?? {}))
+          if (!change.fields.has(key) || !sameValue(change.fields.get(key)?.new, value))
+            return 'to';
       for (const [key, value] of Object.entries(rule.fromValues ?? {}))
         if (!change.fields.has(key) || !sameValue(change.fields.get(key)?.old, value))
           return 'from';
@@ -255,7 +283,11 @@ async function conditionHolds(
   rule: RuleRow,
   change: Change,
 ): Promise<boolean> {
-  const condition = rule.condition;
+  const becomes = change.tx.startsWith(CHANGE_FEED) ? (rule.toValues ?? {}) : {};
+  const condition =
+    Object.keys(becomes).length === 0
+      ? rule.condition
+      : { and: [...(rule.condition === null ? [] : [rule.condition]), becomes] };
   if (condition === null || Object.keys(condition).length === 0 || change.action === 'unlink')
     return true;
   return context.shutro.bootstrap(
@@ -733,7 +765,11 @@ export async function applyRule(
         await ref(su, 'automation.rule').browse([rule.id]).write({ lastRunAt: new Date() });
     });
   // 2. Skips: the trigger, watched fields, the loop guard, the condition, the actor.
-  if ((rule.trigger === 'updated' || rule.trigger === 'transition') && change.action === 'write') {
+  if (
+    (rule.trigger === 'updated' || rule.trigger === 'transition') &&
+    change.action === 'write' &&
+    !change.tx.startsWith(CHANGE_FEED)
+  ) {
     const tracked = trackedFields(context, rule.targetModel);
     const untracked = rule.watchFields.filter((f) => !tracked.includes(f));
     if (untracked.length > 0) {
@@ -915,7 +951,8 @@ export async function pollAudit(
         models.has(r.targetModel) &&
         r.trigger !== 'event' &&
         r.trigger !== 'date' &&
-        r.trigger !== 'schedule',
+        r.trigger !== 'schedule' &&
+        !usesChangeFeed(context, r), // those read the change feed (pollOutbox)
     );
     let runs = 0;
     if (rules.length > 0)
@@ -957,10 +994,11 @@ export async function pollOutbox(
       params: [OUTBOX_CURSOR],
     });
     const from = Number(cursor?.position ?? 0);
-    const rules = (await loadRules(context)).filter(
-      (r) => r.trigger === 'event' && r.topic !== null,
-    );
+    const all = await loadRules(context);
+    const rules = all.filter((r) => r.trigger === 'event' && r.topic !== null);
     const topics = [...new Set(rules.map((r) => r.topic as string))];
+    // `updated` rules on fields the models do not track read Shutro's change events (RFC 0011 step 4).
+    const feed = all.filter((r) => usesChangeFeed(context, r));
     const events = await conn.query<Record<string, unknown>>({
       text: `SELECT id::text, topic, payload, uid::text, company_id::text FROM shutro_outbox WHERE id > $1 ORDER BY id LIMIT $2`,
       params: [from, limit],
@@ -969,6 +1007,10 @@ export async function pollOutbox(
     let runs = 0;
     for (const e of events) {
       const topic = String(e['topic']);
+      if (topic === CHANGE_TOPIC && feed.length > 0) {
+        runs += await applyChangeEvent(context, feed, e);
+        continue;
+      }
       if (!topics.includes(topic)) continue;
       const payload = (e['payload'] ?? {}) as Row;
       const model = String(payload['model'] ?? '');
@@ -1000,6 +1042,40 @@ export async function pollOutbox(
     });
     return { events: events.length, runs };
   });
+}
+
+/** Shutro's change event topic (RFC 0018 §7.5). */
+export const CHANGE_TOPIC = 'record.changed';
+
+/** One `record.changed` event: a change per record written, for the change-feed rules of its model. */
+async function applyChangeEvent(
+  context: AutomationContext,
+  rules: readonly RuleRow[],
+  event: Record<string, unknown>,
+): Promise<number> {
+  const payload = (event['payload'] ?? {}) as Row;
+  if (payload['action'] !== 'write') return 0;
+  const model = String(payload['model'] ?? '');
+  const mine = rules.filter((r) => r.targetModel === model);
+  if (mine.length === 0) return 0;
+  const keys = Array.isArray(payload['keys']) ? (payload['keys'] as string[]) : [];
+  const ids = Array.isArray(payload['ids']) ? (payload['ids'] as number[]) : [];
+  let runs = 0;
+  for (const id of ids) {
+    if (!Number.isSafeInteger(id)) continue;
+    runs += await applyChange(context, mine, {
+      tx: `${CHANGE_FEED}${String(event['id'])}`,
+      model,
+      id,
+      action: 'write',
+      uid: Number(event['uid']),
+      company: Number(event['company_id']),
+      su: false,
+      reason: typeof payload['reason'] === 'string' ? payload['reason'] : null,
+      fields: new Map(keys.map((k) => [k, { old: undefined, new: undefined }])),
+    });
+  }
+  return runs;
 }
 
 export const WEBHOOK_JOB = 'automation.webhook';
