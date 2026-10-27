@@ -14,7 +14,7 @@ import { modulesOf, runMigrate, runModule, runSeed, runUser } from './project.js
 import type { Terminal } from './ui.js';
 
 export { APPS_USAGE, type AppsIo, runApps } from './apps.js';
-export { INIT_USAGE, type InitIo, runInit } from './init.js';
+export { INIT_USAGE, type InitIo, releaseVersion, runInit } from './init.js';
 export {
   migrateProject,
   moduleFiles,

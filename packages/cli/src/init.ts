@@ -8,10 +8,11 @@
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer as createNetServer } from 'node:net';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import type { KoshModule } from '@kosh/modules-sdk';
 import {
@@ -32,6 +33,26 @@ import { defaultsPrompter, type Prompter, terminalPrompter } from './prompt.js';
 import * as templates from './templates.js';
 import { APPS, type AppName, bridgesFor, SELECTABLE_APPS } from './templates.js';
 import { type CardRow, createUi, PLAIN_TERMINAL, type Terminal, type Ui } from './ui.js';
+
+/**
+ * The version of the `shutro-erp` package this CLI runs from: new projects depend on it. In the workspace (no such
+ * package around the CLI) the framework version stands in.
+ */
+export function releaseVersion(from: string = dirname(fileURLToPath(import.meta.url))): string {
+  for (let dir = from, i = 0; i < 6; i++, dir = dirname(dir)) {
+    try {
+      const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
+        name?: unknown;
+        version?: unknown;
+      };
+      if (manifest.name === 'shutro-erp' && typeof manifest.version === 'string')
+        return manifest.version;
+    } catch {
+      // no package.json here: look further up
+    }
+  }
+  return KOSH_VERSION;
+}
 
 export const INIT_USAGE: string = `Usage: kosh init [folder] [options]
 
@@ -160,7 +181,7 @@ async function startDockerDb(
         name,
         apps: [],
         port: 3000,
-        koshVersion: KOSH_VERSION,
+        koshVersion: releaseVersion(),
         dockerDb: postgres.db,
       }),
     );
@@ -647,7 +668,7 @@ async function writeProject(a: Answers, ui: Ui): Promise<void> {
     name: a.name,
     apps: a.apps,
     port: a.port,
-    koshVersion: KOSH_VERSION,
+    koshVersion: releaseVersion(),
     dockerDb: a.postgres.db,
     fileStorage: a.storage.kind === 'dir',
   };
@@ -933,7 +954,7 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
   let server: KoshServer | undefined;
   const started = Date.now();
   try {
-    await ui.banner(`The ERP framework on Shutro · v${KOSH_VERSION}`);
+    await ui.banner(`The ERP framework on Shutro · v${releaseVersion()}`);
     ui.write(`  ${ui.style('gray', 'Kosh setup: press Enter to keep the value in [brackets].')}\n`);
     const answers = await ask(prompter, values, io.cwd, positionals[0], ui);
 
