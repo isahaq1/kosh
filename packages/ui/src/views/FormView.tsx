@@ -250,6 +250,7 @@ export function FormView({
   onBack,
   crumbs,
   pager,
+  proposed,
 }: FormProps): ReactElement {
   const { api, registry, uid, companyId, offline } = useKosh();
   const { t } = useTranslation();
@@ -263,21 +264,33 @@ export function FormView({
   const model = view.model;
   const fields = served.fields[model] ?? {};
   const isNew = recordId === 'new';
+  // The new record starts from its defaults; proposed values are not part of it, they are unsaved changes
+  // (so Discard takes them away).
+  const base: Values = Object.fromEntries(
+    Object.entries(defaults ?? {}).filter(([key]) => proposed?.includes(key) !== true),
+  );
 
   const loaded = useQuery({
-    queryKey: ['record', model, recordId],
+    // A new record's defaults are part of the key: a cached form must not hide them.
+    queryKey: ['record', model, recordId, ...(isNew ? [JSON.stringify(base)] : [])],
     queryFn: async () =>
       isNew
         ? {
             record: {
               id: 0,
-              ...(await api.onchange(model, { values: defaults ?? {}, changed: [] })).values,
+              ...(await api.onchange(model, { values: base, changed: [] })).values,
+              ...base, // what was asked for wins over the server's defaults
             } as Row,
             etag: null,
           }
         : api.get(model, recordId),
   });
-  const [changes, setChanges] = useState<Values>({});
+  // Proposed values (from a document) are unsaved changes: Save, Discard and the leave guard apply to them.
+  const proposedChanges = (): Values =>
+    isNew && proposed !== undefined
+      ? Object.fromEntries(proposed.map((key) => [key, defaults?.[key]]))
+      : {};
+  const [changes, setChanges] = useState<Values>(proposedChanges);
   const [lines, setLines] = useState<ReadonlyMap<string, LineState>>(new Map());
   const [problem, setProblem] = useState<ApiError | null>(null);
   const [warnings, setWarnings] = useState<readonly string[]>([]);
@@ -285,7 +298,7 @@ export function FormView({
   const [deleting, setDeleting] = useState(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new record id starts a clean form
   useEffect(() => {
-    setChanges({});
+    setChanges(proposedChanges());
     setLines(new Map());
     setProblem(null);
   }, [recordId]);
@@ -453,6 +466,11 @@ export function FormView({
             <span aria-hidden className="text-danger">
               {' '}
               *
+            </span>
+          ) : null}
+          {recordId === 'new' && proposed?.includes(node.field) === true ? (
+            <span className="ms-2 rounded bg-accent px-1.5 py-0.5 text-[10px] font-medium text-accent-foreground">
+              {t('views.proposed')}
             </span>
           ) : null}
         </Label>

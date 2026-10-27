@@ -51,6 +51,7 @@ export {
   type QueuedChange,
   type SyncResult,
 } from './offline/queue.js';
+export { type Prefill, setPrefill, takePrefill } from './prefill.js';
 export { registerServiceWorker } from './pwa/register.js';
 export { serviceWorkerSource, type WorkerConfig } from './pwa/worker.js';
 export {
@@ -62,6 +63,7 @@ export {
 } from './realtime.js';
 export {
   type ChatterAssistProps,
+  type CreateAssistProps,
   type FormProps,
   type HeaderItemProps,
   type NodeComponentProps,

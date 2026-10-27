@@ -56,6 +56,8 @@ export interface FormProps {
   readonly onBack: () => void;
   /** Where the record sits: app › list (each with a way back), shown before the title (RFC 0010 §3.4). */
   readonly crumbs?: readonly { readonly label: string; readonly onClick?: () => void }[];
+  /** Fields whose values are proposals (from a document): marked until the record is saved. */
+  readonly proposed?: readonly string[];
   /** Its position in the list it was opened from, and the way to its neighbours. */
   readonly pager?: {
     readonly position: number;
@@ -87,6 +89,17 @@ export interface ChatterAssistProps {
   readonly onDraft: (text: string) => void;
 }
 
+/** Props of a create assistant: a control next to "New" that proposes a new record's values. */
+export interface CreateAssistProps {
+  readonly api: KoshApi;
+  readonly model: string;
+  /** Opens a new record with these values, `proposed` marked as proposals. */
+  readonly onCreate: (
+    values: Readonly<Record<string, unknown>>,
+    proposed: readonly string[],
+  ) => void;
+}
+
 /** Props of a page: what a client action opens (`{ type: 'client', page: 'settings.Apps' }`). */
 export interface PageProps {
   readonly api: KoshApi;
@@ -101,7 +114,15 @@ export class RegistryError extends Error {
   }
 }
 
-type Kind = 'view' | 'widget' | 'component' | 'page' | 'header' | 'searchAssist' | 'chatterAssist';
+type Kind =
+  | 'view'
+  | 'widget'
+  | 'component'
+  | 'page'
+  | 'header'
+  | 'searchAssist'
+  | 'chatterAssist'
+  | 'createAssist';
 
 /** Renderers, widgets and components by name. */
 export class Registry {
@@ -113,6 +134,7 @@ export class Registry {
     header: new Map(),
     searchAssist: new Map(),
     chatterAssist: new Map(),
+    createAssist: new Map(),
   };
 
   #add(kind: Kind, name: string, component: ComponentType<never>, replace: boolean): this {
@@ -243,6 +265,25 @@ export class Registry {
     return [...this.#entries.chatterAssist.values()] as ComponentType<ChatterAssistProps>[];
   }
 
+  /** Controls next to every list's "New" (the AI assistant's "Fill from a document"). */
+  registerCreateAssist(
+    name: string,
+    component: ComponentType<CreateAssistProps>,
+    options: { readonly replace?: boolean } = {},
+  ): this {
+    return this.#add(
+      'createAssist',
+      name,
+      component as ComponentType<never>,
+      options.replace === true,
+    );
+  }
+
+  /** The create assistants, in registration order. */
+  createAssists(): readonly ComponentType<CreateAssistProps>[] {
+    return [...this.#entries.createAssist.values()] as ComponentType<CreateAssistProps>[];
+  }
+
   page(name: string): ComponentType<PageProps> | undefined {
     return this.#entries.page.get(name) as ComponentType<PageProps> | undefined;
   }
@@ -258,6 +299,7 @@ export class Registry {
       'header',
       'searchAssist',
       'chatterAssist',
+      'createAssist',
     ] as const)
       for (const [name, c] of this.#entries[kind]) copy.#entries[kind].set(name, c);
     return copy;

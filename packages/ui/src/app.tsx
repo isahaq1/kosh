@@ -90,6 +90,7 @@ import {
   offlinePersistOptions,
 } from './offline/persist.js';
 import { OfflineQueue } from './offline/queue.js';
+import { setPrefill, takePrefill } from './prefill.js';
 import { onAppUpdate, registerServiceWorker } from './pwa/register.js';
 import { createRealtimeClient, type RealtimeClient } from './realtime.js';
 import type { Registry } from './registry.js';
@@ -649,10 +650,24 @@ function WindowActionPage(): ReactElement {
             {action.data.label ?? served.data.view.label ?? model}
           </h1>
           {served.data.operations.create && action.data.views.includes('form') ? (
-            <Button variant="primary" size="sm" data-kosh-new onClick={() => open('new')}>
-              <Plus aria-hidden />
-              {t('views.new')}
-            </Button>
+            <>
+              <Button variant="primary" size="sm" data-kosh-new onClick={() => open('new')}>
+                <Plus aria-hidden />
+                {t('views.new')}
+              </Button>
+              {registry.createAssists().map((Assist, i) => (
+                <Assist
+                  // biome-ignore lint/suspicious/noArrayIndexKey: registered once at start, never reordered
+                  key={i}
+                  api={api}
+                  model={model}
+                  onCreate={(values, proposed) => {
+                    setPrefill(actionId, { values, proposed });
+                    open('new');
+                  }}
+                />
+              ))}
+            </>
           ) : null}
         </div>
         {types.length > 1 ? (
@@ -731,6 +746,8 @@ function RecordPage(): ReactElement {
   const { api, uid, apps } = useRecordContext();
   const model = action.data?.model;
   const recordId = id === 'new' ? 'new' : Number(id);
+  // Values proposed for this new record (Fill from a document), taken once.
+  const [prefill] = useState(() => (recordId === 'new' ? takePrefill(actionId) : undefined));
   const name = useQuery({
     queryKey: ['names', model, recordId],
     queryFn: () => api.names(model as string, { ids: [recordId as number] }),
@@ -761,7 +778,10 @@ function RecordPage(): ReactElement {
       key={id}
       served={served.data}
       recordId={recordId}
-      {...(action.data?.defaults === undefined ? {} : { defaults: action.data.defaults })}
+      {...(action.data?.defaults === undefined && prefill === undefined
+        ? {}
+        : { defaults: { ...(action.data?.defaults ?? {}), ...(prefill?.values ?? {}) } })}
+      {...(prefill === undefined ? {} : { proposed: prefill.proposed })}
       crumbs={[
         // The app, then the list; one crumb when they share a name (Contacts › Contacts says nothing more).
         ...(appLabel === undefined || appLabel === listLabel
