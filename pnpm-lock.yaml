@@ -274,6 +274,28 @@ importers:
         specifier: ^12.2.1
         version: 12.2.1
 
+  modules/portal:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/mail':
+        specifier: workspace:*
+        version: link:../../packages/mail
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      fastify:
+        specifier: ^5.12.7
+        version: 5.12.7
+    devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   modules/product:
     dependencies:
       '@kosh/modules-sdk':
