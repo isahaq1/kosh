@@ -87,6 +87,7 @@ modules/         # the business apps, all Kosh code (never in Shutro): contacts,
 apps/
   web/           # back-office SPA
   demo/          # demo ERP: base, contacts, product, purchase, inventory, sales
+  portal/        # the customer and vendor portal (RFC 0015)
 docs/
   rfcs/
 ```
@@ -246,7 +247,7 @@ export default defineModule({
 - [x] RFC 0012 Kosh Studio: accepted; steps 1–5 done (the spec, the deterministic generator, `kosh studio build`; the App manager's upgrade, `kosh apps upgrade`, the Apps page's Upgrade; the Studio API with review, apply in write mode and patches in propose mode; Studio mode in the back-office: Add field in form sections, Add column on lists, new models with a menu in the Studio app, the review with the diff and the SQL; approval policies and automation rules in Studio modules, "Move into module" for rules of the Automation app; proposals as GitHub pull requests or GitLab merge requests; docs/studio.md)
 - [x] RFC 0013 AI assistant: natural-language search ("Ask"), summaries and draft replies in the chatter (streamed), new records filled from a pasted text, a PDF or an image, with their lines ("Fill from a document"); as the user, proposals only, off per company, logged, budgeted (`@kosh/assistant`, docs/assistant.md)
 - [x] RFC 0014 Data import: the import screen on every list (CSV / XLSX, mapping, check with every error on its row, updates by key and external id, lines, skip errors with the rejected rows, undo for 7 days, background runs with progress and a notification, saved mappings, module templates and sample workbooks; `@kosh/import`, docs/import.md)
-- [ ] RFC 0015 Customer and vendor portal: accepted; steps 1–2 done (`@kosh/portal`: portal users of a contact, invitations and activation, revocation, the server's internal-only guard; documents declared in manifests with their record rule checked at start, the portal API with signatures, `sale_portal`, `account_portal`); next `apps/portal`
+- [ ] RFC 0015 Customer and vendor portal: accepted; steps 1–2 done (`@kosh/portal`: portal users of a contact, invitations and activation, revocation, the server's internal-only guard; documents declared in manifests with their record rule checked at start, the portal API with signatures, `sale_portal`, `account_portal`; step 3: `apps/portal`, Portal access on the contact form); next `purchase_portal`, `project_portal`, document emails, docs/portal.md
 
 ### Phase 1 — Server foundation
 

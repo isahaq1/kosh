@@ -2,8 +2,9 @@
 
 - **Status:** Accepted 2026-10-27 with the proposed answers (a Vite + React `apps/portal`, Next.js kept for the
   public website; a contact sees their company's documents; invitations only, payment details shown; a typed name
-  and a drawn signature); steps 1–2 implemented (`@kosh/portal`: portal identity, invitations, the
-  internal-only guard; documents declared in manifests, the portal API, `sale_portal`, `account_portal`)
+  and a drawn signature); steps 1–3 implemented (`@kosh/portal`: portal identity, invitations, the
+  internal-only guard; documents declared in manifests, the portal API, `sale_portal`, `account_portal`; the
+  `apps/portal` app and "Portal access" on the contact form)
 - **Depends on:** 0001 (manifests), 0002 (API), 0003 (permissions, record rules), 0005 (documents: PDFs), 0006
   (chatter, email), 0007 (frontend), 0008 (apps), 0009 (invoices), 0014 (external users read like any user)
 
@@ -249,6 +250,31 @@ user's language, with a link to the document's portal page.
   declared fields only, relations by name, actions that apply, the thread without notes, decline and accept with
   their records and a second accept refused, a real PDF), `account_portal` (2: posted invoices with what is due,
   bills, the ledger closed), and the start-up refusal of a document without a rule.
+
+## Implementation notes (2026-10-27): step 3 — the portal app
+
+- **`apps/portal`** (`@kosh/portal-web`): Vite + React on `@kosh/ui` (its primitives, i18n, formatter and theme;
+  `useTheme` is now exported), TanStack Router and Query, no back-office code. Pages: sign in (with the second
+  factor), activate (from the invitation: the password twice, then signed in — activation now answers with the
+  login), home (what needs the user, per document type), a document type's list (a table on wide screens, cards on
+  phones, search, "show more"), a document (fields, lines, the actions that apply, the PDF, the thread), profile
+  (language, theme, password). English and Bangla (namespace `portal`), light and dark, right-to-left ready.
+- **Signing**: a pad drawn with a finger, pen or mouse (pointer events) exported as PNG; people who cannot draw use
+  "Use my typed name as signature", which writes the typed name on the pad, so signing works by keyboard too.
+- **Values** are shown by kind (dates and amounts in the user's language, choices by label, relations by name);
+  message bodies are the server's escaped HTML (RFC 0006).
+- **Back-office**: "Portal access" (`portal.Access`) on the contact form through a view extension of the portal
+  module (Contacts does not know the portal): grant, send again, revoke, with the invitation link shown to share
+  (and whether it was emailed). Granting again after a revocation brings the same user back with a new invitation
+  (archived users are now found with `activeTest: false`); a login used by another user is 409.
+- **Not in this step**: emails when a new document is shared (a sent quotation, a posted invoice) — step 4 with the
+  remaining bridges; the portal as an installable PWA (the back-office's `koshPwa` plugin carries the back-office's
+  manifest); `kosh init` proposing the portal apps.
+- **E2E**: `apps/portal/e2e` on a phone (Pixel 7): staff invite a contact, the contact activates, sees the quotation
+  and the invoice on the home page, signs and accepts (the order is confirmed and the thread says so), writes a
+  message, downloads the invoice's PDF, switches to Bangla; and the back-office API answers 403 from the portal.
+  `apps/web/e2e-apps/portal-access.spec.ts`: no email refused, invite with the link shown, revoke. CI runs both
+  (`pnpm test:e2e`).
 
 ## Alignment with CLAUDE.md
 

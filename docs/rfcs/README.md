@@ -18,4 +18,4 @@ Design documents written before implementation. An RFC is implemented only after
 | 0012 | [Kosh Studio](0012-studio.md) | Accepted, implemented (the spec and generator, `kosh apps upgrade`, the API, Studio mode, approvals and rules, git proposals) |
 | 0013 | [AI assistant](0013-ai-assistant.md) | Accepted, implemented (natural-language search, summaries, draft replies, forms from documents) |
 | 0014 | [Data import](0014-data-import.md) | Accepted, implemented (the parsers and the import, keys, lines, skip errors, undo, background runs, saved mappings, templates, the screen) |
-| 0015 | [Customer and vendor portal](0015-customer-portal.md) | Accepted; steps 1–2 implemented (portal identity, invitations, the internal-only guard; documents in manifests, the portal API, Sales and Accounting in the portal) |
+| 0015 | [Customer and vendor portal](0015-customer-portal.md) | Accepted; steps 1–3 implemented (portal identity, invitations, the internal-only guard; documents in manifests, the portal API, Sales and Accounting in the portal; the portal app, Portal access on contacts) |
