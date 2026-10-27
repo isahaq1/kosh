@@ -174,6 +174,28 @@ declared identifier (`bin`, `tin`), shown when the contact's country matches, ch
 - **Next countries**: which after Bangladesh (India GST, for example), so the declaration is checked against a
   second one early?
 
+## Implementation notes (2026-10-27): step 1, part 1 — several taxes per line
+
+- **The engine** (`computeTaxes` in `@kosh/product`, where taxes live): taxes in `sequence` order, a percentage of
+  the base or a fixed amount per unit, `affectsBase` adding a tax to the base of the ones after it, and taxes
+  included in the price solved exactly (the included taxes are linear in their base). Decimals throughout; rounding
+  stays per document at posting.
+- **`account.tax`** gains `sequence`, `amountType`, `fixedAmount`, `affectsBase`; `priceIncluded` moves from
+  Accounting's extension to the tax itself, so sales and purchase lines honour it too (before, only invoices did).
+- **Lines**: `taxes` (many2many) on sales, purchase and invoice lines, and `taxes` / `purchaseTaxes` on products,
+  computed through the engine. The single `tax` / `purchaseTax` fields stay as read-only fields this version:
+  Shutro applies schema changes before data migrations, so the 0.2.0 migrations of Products, Sales, Purchase and
+  Accounting copy them into the lists first, and a later version drops them.
+- **Posting** makes one tax line per tax with `taxBase`, the base it was computed on (SD in the VAT's base); the
+  tax report pivots the tax lines (base and amount per tax) instead of product lines. The quotation and invoice
+  templates print each line's tax amount (documents do not print a list).
+- **Form line editors** send a line's many2many values as `{ set }`. Shutro request #29 (fixed): an onchange handler
+  can set a many2many, and the set comes back as ids.
+- **Still to do in step 1**: company bank accounts, the fiscal year's first month, amounts in words and lakh / crore
+  grouping.
+- **Tests**: the engine (5), an invoice with SD then VAT (the totals, one tax line each with its base and account),
+  and the existing Sales, Purchase, Accounting and bridge suites on the lists.
+
 ## Alignment with CLAUDE.md
 
 "Money is always `Decimal`": every tax and withholding amount, per currency. "Metadata-driven": a country is a

@@ -251,7 +251,7 @@ const beam = (await as('dina', 'POST', '/api/v1/models/product.product', {
   name: 'Steel beam',
   listPrice: '1000',
   standardPrice: '700',
-  tax: vat[0]?.id ?? null,
+  taxes: { set: vat[0] === undefined ? [] : [vat[0].id] },
 })) as { id: number };
 const order = (await as('rahim', 'POST', '/api/v1/models/sale.order', {
   partner: partners.id,
@@ -263,7 +263,7 @@ const order = (await as('rahim', 'POST', '/api/v1/models/sale.order', {
         name: 'Steel beam',
         quantity: '2',
         priceUnit: '1000',
-        tax: vat[0]?.id ?? null,
+        taxes: { set: vat[0] === undefined ? [] : [vat[0].id] },
       },
     ],
   },
@@ -291,7 +291,7 @@ const invoice = (await as('rahim', 'POST', '/api/v1/models/account.move', {
         name: 'Steel beam',
         quantity: '5',
         priceUnit: '1000',
-        tax: vat[0]?.id ?? null,
+        taxes: { set: vat[0] === undefined ? [] : [vat[0].id] },
       },
     ],
   },
