@@ -119,6 +119,21 @@ export interface DocumentSpec {
   readonly scope?: 'record' | 'list';
 }
 
+/**
+ * An import template a module ships (RFC 0014 §5.4): the columns of a file for one of its models, offered on the
+ * import screen and downloadable as a sample workbook. Read-only for users, who save their own mappings beside it.
+ */
+export interface ImportTemplateSpec {
+  /** Unique within the module (`customers`); the template's id is `module.key`. */
+  readonly key: string;
+  readonly model: string;
+  readonly label: string;
+  /** The columns in order: the header the file has, and the field path it fills (`name`, `lines.product`). */
+  readonly columns: readonly { readonly header: string; readonly field: string }[];
+  /** Conversion options and the mode (`mode`, `key`, `dateOrder`, `decimal`…), as an import takes them. */
+  readonly options?: Readonly<Record<string, unknown>>;
+}
+
 /** A user the demo data is made by: created on first use with these groups (added to an existing one). */
 export interface DemoUser {
   readonly login: string;
@@ -261,6 +276,8 @@ export interface ModuleInput {
   readonly automationRules?: Readonly<Record<string, AutomationRuleSpec>>;
   /** Default document templates (RFC 0005), installed as data (`key` = `module.name`) and editable by designers. */
   readonly documents?: readonly DocumentSpec[];
+  /** Import templates for the module's models (RFC 0014 §5.4), offered when `import` is installed. */
+  readonly importTemplates?: readonly ImportTemplateSpec[];
   /**
    * Server routes of this module (admin APIs, custom endpoints). Called once at startup with the server context
    * (`ModuleContext` of `@kosh/server`); typed by the server, so modules declare the parameter type they use.
@@ -375,6 +392,17 @@ export function defineModule(input: ModuleInput): KoshModule {
   for (const id of Object.keys(input.actions ?? {}))
     if (!ID.test(id))
       fail(`action id '${id}' is not '<module>.<name>'.`, `Use e.g. '${name}.action_list'.`);
+  const templateKeys = new Set<string>();
+  for (const template of input.importTemplates ?? []) {
+    if (!LEVEL.test(template.key) || templateKeys.has(template.key))
+      fail(
+        `import template key '${template.key}' is not a unique snake_case name.`,
+        "Use e.g. key: 'customers'.",
+      );
+    templateKeys.add(template.key);
+    if (template.columns.length === 0)
+      fail(`import template '${template.key}' has no columns.`, 'List the columns of the file.');
+  }
   return Object.freeze({
     ...input,
     name,
