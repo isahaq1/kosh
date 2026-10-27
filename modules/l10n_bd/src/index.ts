@@ -18,9 +18,21 @@ import {
 import { contacts } from '@kosh/contacts';
 import { defineModule, type KoshModule, type LocalizationSpec } from '@kosh/modules-sdk';
 import { field } from '@kosh/views';
+import { MUSHAK_DOCUMENTS } from './documents.js';
 import { l10nBdShutro } from './module.js';
 
-export { CompanyIdentifiers, l10nBdShutro, PartnerIdentifiers, TAXES } from './module.js';
+export { MUSHAK_DOCUMENTS } from './documents.js';
+export {
+  CompanyIdentifiers,
+  LineMushak,
+  l10nBdShutro,
+  MUSHAK_KINDS,
+  type MushakKind,
+  mushakAmounts,
+  PartnerIdentifiers,
+  TAXES,
+  TaxMushak,
+} from './module.js';
 
 /** Bangladesh, as Accounting installs it for a company. */
 export const BANGLADESH: LocalizationSpec = {
@@ -114,9 +126,16 @@ export const l10nBd: KoshModule = defineModule({
     manager: { label: 'Bangladesh localization', groups: ['account.manager'] },
   },
   localization: BANGLADESH,
+  // The tax invoice, the credit note and the VDS certificate (printed when Reporting is installed).
+  documents: MUSHAK_DOCUMENTS,
   hooks: { defaults: (env) => localize(env) },
   // The BIN and TIN with a contact's identity, for contacts in Bangladesh.
   viewExtensions: [
+    // Where a tax goes in the Mushak returns.
+    {
+      view: 'account.tax.form',
+      operations: [{ append: 'main', nodes: [field({ field: 'mushak', id: 'mushak' })] }],
+    },
     {
       view: 'res.partner.form',
       operations: [

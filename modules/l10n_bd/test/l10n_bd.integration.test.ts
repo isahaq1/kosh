@@ -246,3 +246,97 @@ async function accountingInstallGeneric(env: unknown): Promise<void> {
   const { installChart } = await import('@kosh/accounting');
   await installChart(env as Parameters<typeof installChart>[0], 'generic');
 }
+
+test('the Mushak 6.3 tax invoice: SD, then VAT on price plus SD, per line; both BINs', async () => {
+  const ids = await host.server.shutro.bootstrap(
+    { reason: 'test: invoice data', company },
+    async (env) => {
+      await env.asSuperuser({ reason: 'test: company BIN' }, async (su) => {
+        await su
+          .model('res.company' as never)
+          .browse([orm.asId(company, 'res.company')] as never)
+          .write({ bin: '0009876543210' } as never);
+        await su.flush();
+      });
+      const [journal] = await env.sql<{
+        id: number;
+      }>`SELECT id FROM account_journal WHERE code = 'INV'`;
+      const [bdt] = await env.sql<{ id: number }>`SELECT id FROM res_currency WHERE name = 'BDT'`;
+      return {
+        journal: journal?.id as number,
+        bdt: bdt?.id as number,
+        sd: Number(await env.refId('account.tax' as never, 'l10n_bd.tax_sale_sd20')),
+        vat: Number(await env.refId('account.tax' as never, 'l10n_bd.tax_sale_vat15')),
+      };
+    },
+  );
+  const buyer = await call('POST', '/api/v1/models/res.partner', 'maria', {
+    name: 'Karnaphuli Traders',
+    isCompany: true,
+    isCustomer: true,
+    bin: '0011122233344',
+    street: '12 Agrabad',
+    city: 'Chattogram',
+  });
+  expectStatus(buyer, 201);
+  const invoice = await call('POST', '/api/v1/models/account.move', 'maria', {
+    kind: 'out_invoice',
+    journal: ids.journal,
+    partner: buyer.json.id,
+    currency: ids.bdt,
+    lines: {
+      create: [
+        {
+          lineKind: 'product',
+          name: 'Soft drinks (crate)',
+          quantity: '2',
+          priceUnit: '500.00',
+          taxes: { set: [ids.sd, ids.vat] },
+        },
+      ],
+    },
+  });
+  expectStatus(invoice, 201);
+  const id = invoice.json.id as number;
+  expectStatus(
+    await call('POST', `/api/v1/models/account.move/${id}/transitions/post`, 'maria'),
+    200,
+  );
+  const lines = await call(
+    'GET',
+    `/api/v1/models/account.move.line?filter=${encodeURIComponent(JSON.stringify({ invoice: id }))}&fields=sdAmount,vatAmount,totalWithTaxes`,
+    'maria',
+  );
+  expectStatus(lines, 200);
+  const [line] = lines.json.items as Json[];
+  expect([line.sdAmount.amount, line.vatAmount.amount, line.totalWithTaxes.amount]).toEqual([
+    '200.00',
+    '180.00',
+    '1380.00',
+  ]);
+
+  const listed = await call('GET', '/api/v1/models/account.move/documents', 'maria');
+  expectStatus(listed, 200);
+  const template = (listed.json.templates as Json[]).find(
+    (t) => t.name === 'Tax invoice (Mushak 6.3)',
+  );
+  expect(template, JSON.stringify(listed.json).slice(0, 300)).toBeDefined();
+  const html = await host.server.app.inject({
+    method: 'POST',
+    url: `/api/v1/models/account.move/documents/${template.id}?format=html`,
+    headers: { authorization: `Bearer ${tokens.get('maria') ?? ''}` },
+    payload: { ids: [id] },
+  });
+  expect(html.statusCode, html.body.slice(0, 400)).toBe(200);
+  for (const text of ['Tax invoice', 'Mushak 6.3', '0009876543210', '0011122233344', 'Chattogram'])
+    expect(html.body).toContain(text);
+  for (const amount of ['200.00', '180.00', '1,380.00']) expect(html.body).toContain(amount);
+  // Every Mushak template is there: the credit note on invoices, the VDS certificate on payments.
+  expect((listed.json.templates as Json[]).map((t) => t.name)).toContain(
+    'Credit note (Mushak 6.7)',
+  );
+  const payments = await call('GET', '/api/v1/models/account.payment/documents', 'maria');
+  expect((payments.json.templates as Json[]).map((t) => t.name)).toContain(
+    'Certificate of VAT deducted at source (Mushak 6.6)',
+  );
+});
