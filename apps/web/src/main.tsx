@@ -11,6 +11,7 @@ import { mailMessages, registerMailWeb } from '@kosh/mail/web';
 import { messagingMessages, registerMessagingWeb } from '@kosh/messaging/web';
 import { notifyMessages, registerNotifyWeb } from '@kosh/notify/web';
 import { registerPermissionsWeb } from '@kosh/permissions/web';
+import { portalMessages, registerPortalWeb } from '@kosh/portal/web';
 import { registerReportingWeb, reportingMessages } from '@kosh/reporting/web';
 import { registerSettingsWeb, settingsMessages } from '@kosh/settings/web';
 import { registerStudioWeb, studioMessages } from '@kosh/studio/web';
@@ -30,6 +31,7 @@ registerAutomationWeb(registry);
 registerStudioWeb(registry);
 registerAssistantWeb(registry);
 registerImportWeb(registry);
+registerPortalWeb(registry);
 const messages = {
   accounting: accountingMessages,
   assistant: assistantMessages,
@@ -37,6 +39,7 @@ const messages = {
   import: importMessages,
   mail: mailMessages,
   notify: notifyMessages,
+  portal: portalMessages,
   reporting: reportingMessages,
   messaging: messagingMessages,
   settings: settingsMessages,

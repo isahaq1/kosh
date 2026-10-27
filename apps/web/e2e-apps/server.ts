@@ -13,6 +13,7 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { accountPortal } from '@kosh/account_portal';
 import { accounting } from '@kosh/accounting';
 import { createAssistant, fakeClient } from '@kosh/assistant';
 import { automation } from '@kosh/automation';
@@ -22,6 +23,7 @@ import { mail } from '@kosh/mail';
 import { installActivityTypes, messaging } from '@kosh/messaging';
 import { notify } from '@kosh/notify';
 import { installApprovalPolicies, permissions } from '@kosh/permissions';
+import { portal } from '@kosh/portal';
 import { product } from '@kosh/product';
 import { project } from '@kosh/project';
 import { purchase } from '@kosh/purchase';
@@ -29,6 +31,7 @@ import { purchaseAccount } from '@kosh/purchase_account';
 import { realtime } from '@kosh/realtime';
 import { installTemplates, reporting } from '@kosh/reporting';
 import { saleAccount } from '@kosh/sale_account';
+import { salePortal } from '@kosh/sale_portal';
 import { saleProject } from '@kosh/sale_project';
 import { sales } from '@kosh/sales';
 import {
@@ -104,6 +107,9 @@ const CATALOGUE = [
   saleProject,
   assistant,
   dataImport,
+  portal,
+  salePortal,
+  accountPortal,
 ];
 const migrations = mkdtempSync(join(tmpdir(), 'kosh-e2e-apps-migrations-'));
 const setup = pg.createDriver({ url: databaseUrl, max: 2, parseNumeric: orm.toDecimal });
@@ -125,6 +131,8 @@ await applyApps(
         'project',
         'assistant',
         'import',
+        'sale_portal',
+        'account_portal',
       ],
     },
     dir: migrations,
@@ -177,6 +185,7 @@ for (const [login, name, groups] of [
       'assistant.user',
       'import.user',
       'contacts.manager',
+      'portal.manager',
     ],
   ],
   [
