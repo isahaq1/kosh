@@ -27,9 +27,26 @@ export interface JsonAnswer {
   };
 }
 
+/** One text request (summaries, drafts): instructions (cached) and the input, the text streamed. */
+export interface TextRequest {
+  readonly system: string;
+  readonly user: string;
+  readonly effort?: 'low' | 'medium' | 'high';
+  readonly maxTokens?: number;
+}
+
+export interface TextAnswer {
+  readonly text: string;
+  readonly refused: boolean;
+  readonly model: string;
+  readonly usage: JsonAnswer['usage'];
+}
+
 export interface AssistantClient {
   readonly model: string;
   json(request: JsonRequest): Promise<JsonAnswer>;
+  /** Streams the answer's text to `onText` as it comes, then resolves with the whole answer. */
+  text(request: TextRequest, onText: (delta: string) => void): Promise<TextAnswer>;
 }
 
 /** The default model (RFC 0013 §5.1). */
@@ -72,6 +89,29 @@ export function anthropicClient(options: {
         .join('');
       return { data: JSON.parse(text), refused: false, model: message.model, usage };
     },
+    async text(request, onText) {
+      const stream = client.beta.messages.stream({
+        model,
+        max_tokens: request.maxTokens ?? 4096,
+        betas: ['server-side-fallback-2026-07-01'],
+        fallbacks: 'default',
+        system: [{ type: 'text', text: request.system, cache_control: { type: 'ephemeral' } }],
+        messages: [{ role: 'user', content: request.user }],
+        output_config: { effort: request.effort ?? 'low' },
+      });
+      stream.on('text', onText);
+      const message = await stream.finalMessage();
+      const usage = {
+        input: message.usage.input_tokens + (message.usage.cache_creation_input_tokens ?? 0),
+        output: message.usage.output_tokens,
+        cached: message.usage.cache_read_input_tokens ?? 0,
+      };
+      const text = message.content
+        .filter((b) => b.type === 'text')
+        .map((b) => b.text)
+        .join('');
+      return { text, refused: message.stop_reason === 'refusal', model: message.model, usage };
+    },
   };
 }
 
@@ -83,15 +123,27 @@ export function clientFromEnv(env: NodeJS.ProcessEnv = process.env): AssistantCl
   return anthropicClient({ apiKey, ...(model === undefined || model === '' ? {} : { model }) });
 }
 
-/** A client answering with `answer(request)` (tests, the end-to-end server). */
+/**
+ * A client answering with `answer(request)` (tests, the end-to-end server): JSON requests get its value, text
+ * requests its string, streamed word by word; `'refuse'` refuses.
+ */
 export function fakeClient(
-  answer: (request: JsonRequest) => unknown,
+  answer: (request: JsonRequest | TextRequest) => unknown,
   model = 'fake-model',
-): AssistantClient & { readonly requests: JsonRequest[] } {
-  const requests: JsonRequest[] = [];
+): AssistantClient & { readonly requests: (JsonRequest | TextRequest)[] } {
+  const requests: (JsonRequest | TextRequest)[] = [];
   return {
     model,
     requests,
+    async text(request, onText) {
+      requests.push(request);
+      const data = answer(request);
+      if (data === 'refuse')
+        return { text: '', refused: true, model, usage: { input: 100, output: 0, cached: 0 } };
+      const text = String(data);
+      for (const word of text.split(/(?<= )/)) onText(word);
+      return { text, refused: false, model, usage: { input: 100, output: 20, cached: 0 } };
+    },
     async json(request) {
       requests.push(request);
       const data = answer(request);

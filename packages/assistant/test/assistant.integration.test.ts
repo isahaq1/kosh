@@ -4,13 +4,15 @@
  * a field the user may not read is never described to the model; an invalid answer and a refusal are answers, not
  * errors; every call is logged without its content; the monthly budget stops it.
  */
+
+import { messaging } from '@kosh/messaging';
 import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
 import { base, baseShutro, createServer, installBase, type KoshServer, totp } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
 import { settings } from '@kosh/settings';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { createAssistant, fakeClient, type JsonRequest } from '../src/index.js';
+import { createAssistant, fakeClient } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
 const { defineGroup, defineModel, defineModule, f } = orm;
@@ -45,7 +47,14 @@ const shop = defineKoshModule({
 });
 
 /** Answers by the sentence: "big ones in dhaka", "refuse", or anything else as an invalid answer. */
-const client = fakeClient((request: JsonRequest) => {
+const client = fakeClient((request) => {
+  if (!('schema' in request)) {
+    // Summaries and drafts: text.
+    if (request.user.includes('refuse please')) return 'refuse';
+    return request.system.includes('summarize')
+      ? 'The invoice waits for delivery. Open points: the date.'
+      : 'Thank you, we will deliver on [date].';
+  }
   if (request.user === 'refuse') return 'refuse';
   if (request.user === 'big ones in dhaka')
     return {
@@ -116,7 +125,7 @@ beforeAll(async () => {
   container = await new PostgreSqlContainer('postgres:18').start();
   server = await createServer({
     databaseUrl: container.getConnectionUri(),
-    modules: [shop, settings, createAssistant({ client, monthlyTokens: 1000 })],
+    modules: [shop, settings, messaging, createAssistant({ client, monthlyTokens: 1000 })],
     auth: { secureCookies: false, cacheMs: 0, loginLimit: 0 },
     rateLimit: { max: 0, timeWindow: '1 minute' },
     logger: false,
@@ -130,9 +139,10 @@ beforeAll(async () => {
     admin: { login: 'admin', name: 'Administrator', password: PASSWORD },
   });
   for (const [login, groups] of [
-    ['ana', ['assistant.user', 'shop.user']],
-    ['mgr', ['assistant.user', 'shop.manager']],
+    ['ana', ['assistant.user', 'shop.user', 'messaging.user']],
+    ['mgr', ['assistant.user', 'shop.manager', 'messaging.user']],
     ['bob', ['shop.user']],
+    ['nomsg', ['assistant.user', 'shop.user']],
   ] as const)
     await auth.createUser({
       login,
@@ -217,6 +227,86 @@ test('an answer naming a field not offered is refused (422); a refusal is an ans
     ['search', 'claude-test', 'shop.invoice', false, false],
   ]);
   expect(Object.keys(calls[0])).not.toContain('text'); // never the content
+});
+
+test('a summary streams from the record and its chatter as the user sees them; a draft reply too', async () => {
+  const [invoice] = (
+    await server.driver.query<{ id: string }>({
+      text: "SELECT id::text FROM shop_invoice WHERE name = 'INV/1'",
+      params: [],
+    })
+  ).map((r) => Number(r.id));
+  const posted = await call('POST', `/api/v1/chatter/shop.invoice/${invoice}/messages`, 'mgr', {
+    kind: 'comment',
+    text: 'Please deliver by Friday.',
+  });
+  expect(posted.status).toBe(201);
+  const res = await server.app.inject({
+    method: 'POST',
+    url: '/api/v1/assistant/summary',
+    headers: { authorization: `Bearer ${await tokenOf('ana')}` },
+    payload: { model: 'shop.invoice', id: invoice },
+  });
+  expect(res.statusCode).toBe(200);
+  expect(res.headers['content-type']).toContain('text/event-stream');
+  const pieces = [...res.body.matchAll(/^data: (.*)$/gm)].map((m) => JSON.parse(m[1] as string));
+  expect(
+    pieces
+      .filter((p) => typeof p.text === 'string')
+      .map((p) => p.text)
+      .join(''),
+  ).toBe('The invoice waits for delivery. Open points: the date.');
+  expect(res.body).toContain('event: done\ndata: {"model":"claude-test","refused":false}');
+  // What the model was told: the readable fields and the chatter, as Ana sees them; never the margin.
+  const told = client.requests.at(-1);
+  expect(told?.user).toContain('Invoice: INV/1');
+  expect(told?.user).toContain('- Amount: 5000');
+  expect(told?.user).toContain('(message): Please deliver by Friday.');
+  expect(told?.user).not.toContain('Margin');
+  expect(told?.system).toContain('Write in English');
+
+  // A draft reply, with what the author wants; the assistant posts nothing.
+  const reply = await server.app.inject({
+    method: 'POST',
+    url: '/api/v1/assistant/reply',
+    headers: { authorization: `Bearer ${await tokenOf('ana')}` },
+    payload: { model: 'shop.invoice', id: invoice, instruction: 'confirm Friday' },
+  });
+  expect(reply.statusCode).toBe(200);
+  expect(reply.body).toContain('data: {"text":"Thank "}');
+  expect(client.requests.at(-1)?.user).toContain('The author asks: confirm Friday');
+  expect(client.requests.at(-1)?.system).toContain('for ana to edit and send');
+  const messages = await server.driver.query<{ n: string }>({
+    text: 'SELECT count(*)::text AS n FROM mail_message WHERE res_model = $1 AND res_id = $2',
+    params: ['shop.invoice', invoice],
+  });
+  expect(messages[0]?.n).toBe('1');
+
+  // A refusal is the end of the stream; no Messaging access: refused before anything is sent.
+  const refused = await server.app.inject({
+    method: 'POST',
+    url: '/api/v1/assistant/reply',
+    headers: { authorization: `Bearer ${await tokenOf('ana')}` },
+    payload: { model: 'shop.invoice', id: invoice, instruction: 'refuse please' },
+  });
+  expect(refused.body).toContain('"refused":true');
+  const before = client.requests.length;
+  const noChatter = await call('POST', '/api/v1/assistant/summary', 'nomsg', {
+    model: 'shop.invoice',
+    id: invoice,
+  });
+  expect(noChatter.status).toBe(403);
+  expect(client.requests.length).toBe(before);
+  expect(
+    (await call('POST', '/api/v1/assistant/summary', 'ana', { model: 'shop.invoice', id: 0 }))
+      .status,
+  ).toBe(400);
+  const calls = (await call('GET', '/api/v1/assistant/calls', 'admin')).json.calls as Json[];
+  expect(calls.slice(0, 3).map((c) => [c.feature, c.refused])).toEqual([
+    ['reply', true],
+    ['reply', false],
+    ['summary', false],
+  ]);
 });
 
 test('the monthly budget stops the assistant', async () => {

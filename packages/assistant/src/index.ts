@@ -4,6 +4,8 @@
  * first (step 1). It runs as the user, describes only what the user may read, is off for a company until an
  * administrator switches it on, logs every call without its content, and stays within a monthly token budget.
  */
+
+import { messaging } from '@kosh/messaging';
 import { defineModule, type KoshModule } from '@kosh/modules-sdk';
 import { base, type ModuleContext } from '@kosh/server';
 import { settings } from '@kosh/settings';
@@ -19,8 +21,18 @@ export {
   fakeClient,
   type JsonAnswer,
   type JsonRequest,
+  type TextAnswer,
+  type TextRequest,
 } from './client.js';
 export { assistantShutro } from './models.js';
+export {
+  languageName,
+  type RecordText,
+  recordText,
+  replyInstructions,
+  summaryInstructions,
+  TIMELINE_ITEMS,
+} from './record.js';
 export { registerAssistantRoutes, searchFieldsFor } from './routes.js';
 export {
   domainOf,
@@ -52,7 +64,7 @@ export function createAssistant(options: AssistantOptions = {}): KoshModule {
   return defineModule({
     shutro: assistantShutro,
     kosh: '^0.1.0',
-    depends: [base, settings],
+    depends: [base, settings, messaging],
     accessLevels: { user: { label: 'AI assistant', groups: ['assistant.user'] } },
     privateModels: ['assistant.config', 'assistant.call'],
     actions: {

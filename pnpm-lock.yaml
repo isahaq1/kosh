@@ -451,6 +451,9 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^1.3.0
         version: 1.3.0
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../messaging
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../modules-sdk

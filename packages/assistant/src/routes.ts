@@ -11,10 +11,13 @@
  * Everything is read as the user: only the fields they may read are described to the model, and the filters run
  * through the same search (record rules) as any typed filter.
  */
+
+import { chatterContext } from '@kosh/messaging';
 import { HttpProblem, type ModuleContext, publicApiModels } from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
-import type { FastifyRequest } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { AssistantClient } from './client.js';
+import { languageName, recordText, replyInstructions, summaryInstructions } from './record.js';
 import {
   domainOf,
   SearchAnswerError,
@@ -36,12 +39,6 @@ interface Ref {
   create(rows: readonly unknown[]): Promise<Rows>;
 }
 const ref = (env: Env, name: string): Ref => env.model(name as never) as unknown as Ref;
-
-/** What a search request ends with: filters, a refusal, or an answer that could not be used. */
-type SearchOutcome =
-  | { readonly refused: true }
-  | { readonly where: Readonly<Record<string, unknown>>; readonly unsupported: string }
-  | { readonly invalid: string; readonly entry: Row };
 
 export interface AssistantRoutesOptions {
   /** Null: no key, the assistant cannot answer (its UI stays hidden). */
@@ -195,6 +192,31 @@ export function registerAssistantRoutes(
     ),
   );
 
+  /** The checks every model call passes first, in the user's scope: switched on, the budget left. */
+  const ready = async (env: Env): Promise<AssistantClient> => {
+    if (client === null || !(await enabledFor(env)))
+      throw new HttpProblem(
+        409,
+        'assistant-off',
+        'The assistant is off',
+        client === null
+          ? 'No API key is configured on this server (ANTHROPIC_API_KEY).'
+          : 'An administrator has not switched the assistant on for this company.',
+      );
+    if ((await usedThisMonth(env.companyId)) >= options.monthlyTokens)
+      throw new HttpProblem(
+        429,
+        'assistant-budget',
+        "The month's assistant budget is used up",
+        `This company used its ${options.monthlyTokens} tokens of the month.`,
+        'An administrator can raise KOSH_ASSISTANT_MONTHLY_TOKENS.',
+      );
+    return client;
+  };
+  /** Logs a call in a transaction of its own (after the model answered: no transaction stays open meanwhile). */
+  const logCall = (request: FastifyRequest, values: Row) =>
+    request.env((env) => log(env, values), { write: true });
+
   app.post('/api/v1/assistant/search', async (request) => {
     await guard(request);
     const body = (request.body ?? {}) as { model?: unknown; text?: unknown };
@@ -207,27 +229,12 @@ export function registerAssistantRoutes(
         'Invalid request',
         `model, and text (1–${MAX_TEXT} characters).`,
       );
-    const outcome = await request.env(
-      async (env): Promise<SearchOutcome> => {
-        if (client === null || !(await enabledFor(env)))
-          throw new HttpProblem(
-            409,
-            'assistant-off',
-            'The assistant is off',
-            client === null
-              ? 'No API key is configured on this server (ANTHROPIC_API_KEY).'
-              : 'An administrator has not switched the assistant on for this company.',
-          );
+    // 1. In the user's scope: the checks and what the model may be told.
+    const prepared = await request.env(
+      async (env) => {
+        const assistant = await ready(env);
         if (!env.access.can(model as never, 'read'))
           throw new HttpProblem(403, 'access', 'Forbidden', `No read access to ${model}.`);
-        if ((await usedThisMonth(env.companyId)) >= options.monthlyTokens)
-          throw new HttpProblem(
-            429,
-            'assistant-budget',
-            "The month's assistant budget is used up",
-            `This company used its ${options.monthlyTokens} tokens of the month.`,
-            'An administrator can raise KOSH_ASSISTANT_MONTHLY_TOKENS.',
-          );
         const fields = searchFieldsFor(context, env, model);
         if (fields.length === 0)
           throw new HttpProblem(
@@ -237,8 +244,9 @@ export function registerAssistantRoutes(
             `No field of ${model} to filter.`,
           );
         const label = publicApiModels(context.registry).get(model)?.label ?? model;
-        const started = Date.now();
-        const answer = await client.json({
+        return {
+          assistant,
+          fields,
           system: searchInstructions({
             model,
             modelLabel: label,
@@ -246,50 +254,171 @@ export function registerAssistantRoutes(
             today: env.today(),
             timeZone: env.tz,
           }),
-          user: text,
-          schema: searchSchema(fields),
-          effort: 'low',
-          maxTokens: 2048,
-        });
-        const entry = {
-          feature: 'search',
-          llm: answer.model,
-          resModel: model,
-          inputTokens: answer.usage.input,
-          outputTokens: answer.usage.output,
-          cachedTokens: answer.usage.cached,
-          durationMs: Date.now() - started,
-          refused: answer.refused,
         };
-        if (answer.refused) {
-          await log(env, entry);
-          return { refused: true };
-        }
-        try {
-          const { where, unsupported } = domainOf(answer.data, fields);
-          // Run once as the user: a domain the search refuses is refused here, not in the list.
-          await ref(env, model).search({ where, limit: 1 });
-          await log(env, entry);
-          return { where, unsupported };
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          return {
-            invalid: error instanceof SearchAnswerError ? error.problems.join('; ') : message,
-            entry: { ...entry, error: message.slice(0, 500) },
-          };
-        }
       },
       { write: true },
     );
-    if (!('invalid' in outcome)) return outcome;
-    // The refusal is answered after the call is logged (the log commits; the 422 changes nothing else).
-    await request.env((env) => log(env, outcome.entry), { write: true });
-    throw new HttpProblem(
-      422,
-      'assistant-answer-invalid',
-      'The assistant could not make filters of this',
-      outcome.invalid,
-      'Rephrase the search, or use the filters.',
+    // 2. The model, outside any transaction.
+    const started = Date.now();
+    const answer = await prepared.assistant.json({
+      system: prepared.system,
+      user: text,
+      schema: searchSchema(prepared.fields),
+      effort: 'low',
+      maxTokens: 2048,
+    });
+    const entry: Row = {
+      feature: 'search',
+      llm: answer.model,
+      resModel: model,
+      inputTokens: answer.usage.input,
+      outputTokens: answer.usage.output,
+      cachedTokens: answer.usage.cached,
+      durationMs: Date.now() - started,
+      refused: answer.refused,
+    };
+    if (answer.refused) {
+      await logCall(request, entry);
+      return { refused: true };
+    }
+    // 3. The answer checked, and run once as the user (a domain the search refuses is refused here).
+    let invalid: string | null = null;
+    let found: { where: Readonly<Record<string, unknown>>; unsupported: string } | null = null;
+    try {
+      found = domainOf(answer.data, prepared.fields);
+      const where = found.where;
+      await request.env((env) => ref(env, model).search({ where, limit: 1 }));
+    } catch (error) {
+      invalid =
+        error instanceof SearchAnswerError
+          ? error.problems.join('; ')
+          : String((error as Error).message ?? error);
+    }
+    await logCall(request, invalid === null ? entry : { ...entry, error: invalid.slice(0, 500) });
+    if (invalid !== null || found === null)
+      throw new HttpProblem(
+        422,
+        'assistant-answer-invalid',
+        'The assistant could not make filters of this',
+        invalid ?? 'No filter.',
+        'Rephrase the search, or use the filters.',
+      );
+    return found;
+  });
+
+  /**
+   * Streams a text answer as server-sent events: `data: {"text": "…"}` per piece, then `event: done` with the model
+   * and whether it refused. Errors before the first byte are ordinary problems; after it, `event: error`.
+   */
+  const streamText = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    feature: 'summary' | 'reply',
+    build: (
+      env: Env,
+    ) => Promise<{ readonly system: string; readonly user: string; readonly resModel: string }>,
+  ): Promise<void> => {
+    await guard(request);
+    const prepared = await request.env(
+      async (env) => ({ assistant: await ready(env), ...(await build(env)) }),
+      { write: true },
     );
+    reply.hijack();
+    const raw = reply.raw;
+    raw.writeHead(200, {
+      'content-type': 'text/event-stream; charset=utf-8',
+      'cache-control': 'no-cache, no-transform',
+      'x-accel-buffering': 'no',
+    });
+    const send = (event: string | null, data: unknown) =>
+      raw.write(`${event === null ? '' : `event: ${event}\n`}data: ${JSON.stringify(data)}\n\n`);
+    const started = Date.now();
+    try {
+      const answer = await prepared.assistant.text(
+        { system: prepared.system, user: prepared.user, effort: 'medium', maxTokens: 2048 },
+        (delta) => send(null, { text: delta }),
+      );
+      await logCall(request, {
+        feature,
+        llm: answer.model,
+        resModel: prepared.resModel,
+        inputTokens: answer.usage.input,
+        outputTokens: answer.usage.output,
+        cachedTokens: answer.usage.cached,
+        durationMs: Date.now() - started,
+        refused: answer.refused,
+      });
+      send('done', { model: answer.model, refused: answer.refused });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await logCall(request, {
+        feature,
+        llm: prepared.assistant.model,
+        resModel: prepared.resModel,
+        durationMs: Date.now() - started,
+        error: message.slice(0, 500),
+      }).catch(() => undefined);
+      send('error', { detail: 'The assistant could not answer. Try again later.' });
+    } finally {
+      raw.end();
+    }
+  };
+  const target = (request: FastifyRequest): { model: string; id: number } => {
+    const body = (request.body ?? {}) as { model?: unknown; id?: unknown };
+    const model = typeof body.model === 'string' ? body.model : '';
+    const id = Number(body.id);
+    if (model === '' || !Number.isSafeInteger(id) || id <= 0)
+      throw new HttpProblem(400, 'invalid-body', 'Invalid request', 'model and id of a record.');
+    return { model, id };
+  };
+  const chatter = chatterContext(context);
+
+  app.post('/api/v1/assistant/summary', async (request, reply) => {
+    const { model, id } = target(request);
+    await streamText(request, reply, 'summary', async (env) => {
+      const record = await recordText(context, chatter, env, model, id);
+      return {
+        system: summaryInstructions(languageName(env.lang)),
+        user: record.text,
+        resModel: model,
+      };
+    });
+  });
+
+  app.post('/api/v1/assistant/reply', async (request, reply) => {
+    const { model, id } = target(request);
+    const instruction = (request.body as { instruction?: unknown }).instruction;
+    if (
+      instruction !== undefined &&
+      (typeof instruction !== 'string' || instruction.length > MAX_TEXT)
+    )
+      throw new HttpProblem(
+        400,
+        'invalid-body',
+        'Invalid request',
+        `instruction: up to ${MAX_TEXT} characters.`,
+      );
+    await streamText(request, reply, 'reply', async (env) => {
+      const record = await recordText(context, chatter, env, model, id);
+      const [me] = (
+        await (
+          env.model('res.users' as never) as unknown as {
+            browse(ids: number[]): { load(k: string[]): Promise<{ read(k: string[]): Row[] }> };
+          }
+        )
+          .browse([env.uid])
+          .load(['name'])
+      ).read(['name']);
+      return {
+        system: replyInstructions(languageName(env.lang), String(me?.['name'] ?? 'the author')),
+        user: [
+          record.text,
+          ...(typeof instruction === 'string' && instruction.trim() !== ''
+            ? ['', `The author asks: ${instruction.trim()}`]
+            : []),
+        ].join('\n'),
+        resModel: model,
+      };
+    });
   });
 }

@@ -55,7 +55,8 @@
     "lucide-react": "^1.59.0",
     "@kosh/views": "workspace:*",
     "@kosh/search": "workspace:*",
-    "radix-ui": "^1.8.1"
+    "radix-ui": "^1.8.1",
+    "@kosh/messaging": "workspace:*"
   },
   "peerDependencies": {
     "react": "^19.3.1",
