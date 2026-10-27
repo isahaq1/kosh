@@ -209,6 +209,34 @@ importers:
         specifier: ^7.1.0
         version: 7.3.7(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.1)
 
+  modules/account_portal:
+    dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../accounting
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/portal':
+        specifier: workspace:*
+        version: link:../portal
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+    devDependencies:
+      '@kosh/mail':
+        specifier: workspace:*
+        version: link:../../packages/mail
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   modules/accounting:
     dependencies:
       '@kosh/contacts':
@@ -282,9 +310,15 @@ importers:
       '@kosh/mail':
         specifier: workspace:*
         version: link:../../packages/mail
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
       '@kosh/server':
         specifier: workspace:*
         version: link:../../packages/server
@@ -414,6 +448,37 @@ importers:
         specifier: workspace:*
         version: link:../../packages/views
     devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/sale_portal:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/portal':
+        specifier: workspace:*
+        version: link:../portal
+      '@kosh/sales':
+        specifier: workspace:*
+        version: link:../sales
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+    devDependencies:
+      '@kosh/mail':
+        specifier: workspace:*
+        version: link:../../packages/mail
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
       '@testcontainers/postgresql':
         specifier: ^12.2.1
         version: 12.2.1
