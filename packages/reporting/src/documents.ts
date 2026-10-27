@@ -4,8 +4,10 @@
  * as the caller (rules and field security), values are formatted for the document's language, and every render is
  * audited. Modules ship default templates in their manifests; administrators edit copies as data.
  */
+
 import type { Env } from '@kosh/server/orm';
 import type { Block, Layout } from '@kosh/views';
+import { amountInWords } from './words.js';
 
 export type { Block, Layout };
 
@@ -174,14 +176,27 @@ function resolve(data: DocumentData, fields: DocumentFields, path: string): Reso
   return { value: optionLabel(current, options), kind, label };
 }
 
+/** `{{path}}`, or `{{path|words}}`: an amount in words, in the document's language (RFC 0016). */
 function text(data: DocumentData, fields: DocumentFields, template: string): string {
-  return esc(template).replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, path: string) => {
-    if (path === 'page' || path === 'pages') return `<span class="${path}"></span>`;
-    const r = resolve(data, fields, path);
-    return esc(
-      formatValue(r.value, r.kind, { locale: data.locale ?? 'en-US', tz: data.tz ?? 'UTC' }),
-    );
-  });
+  return esc(template).replace(
+    /\{\{\s*([\w.]+)\s*(?:\|\s*(\w+)\s*)?\}\}/g,
+    (_, path: string, filter?: string) => {
+      if (path === 'page' || path === 'pages') return `<span class="${path}"></span>`;
+      const r = resolve(data, fields, path);
+      if (filter === 'words') {
+        const json =
+          r.value !== null && typeof r.value === 'object' && 'toJSON' in r.value
+            ? (r.value as { toJSON(): unknown }).toJSON()
+            : r.value;
+        if (json === null || typeof json !== 'object' || !('amount' in json)) return '';
+        const money = json as { amount: string; currency: string };
+        return esc(amountInWords(String(money.amount), money.currency, data.locale ?? 'en'));
+      }
+      return esc(
+        formatValue(r.value, r.kind, { locale: data.locale ?? 'en-US', tz: data.tz ?? 'UTC' }),
+      );
+    },
+  );
 }
 
 function blockHtml(
@@ -366,13 +381,15 @@ export async function loadDocumentData(
         collect(b.left, prefix);
         collect(b.right, prefix);
       } else if (b.kind === 'heading' || b.kind === 'text')
-        for (const m of b.text.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)) paths.add(m[1] as string);
+        for (const m of b.text.matchAll(/\{\{\s*([\w.]+)\s*(?:\|\s*\w+\s*)?\}\}/g))
+          paths.add(m[1] as string);
     }
   };
   collect(layout.blocks);
   for (const t of [layout.header, layout.footer])
     if (t !== undefined)
-      for (const m of t.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)) paths.add(m[1] as string);
+      for (const m of t.matchAll(/\{\{\s*([\w.]+)\s*(?:\|\s*\w+\s*)?\}\}/g))
+        paths.add(m[1] as string);
 
   type Rows = {
     readonly length: number;

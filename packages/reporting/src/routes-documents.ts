@@ -93,7 +93,8 @@ export function layoutProblems(layout: Layout, model: string, fields: DocumentFi
     }
   };
   const texts = (t: string, from: string) => {
-    for (const m of t.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)) check(m[1] as string, from);
+    for (const m of t.matchAll(/\{\{\s*([\w.]+)\s*(?:\|\s*\w+\s*)?\}\}/g))
+      check(m[1] as string, from);
   };
   const walk = (blocks: Layout['blocks']) => {
     for (const b of blocks) {
@@ -182,7 +183,14 @@ export async function renderDocument(
     ).ids as number[];
   if (ids.length === 0) throw bad('No records to print.');
   const data = await loadDocumentData(env, model.name, ids, layout, fields);
-  const locale = env.lang.replace('_', '-');
+  // The company's number grouping (RFC 0016): lakh and crore print in the Indian English pattern.
+  const grouping = await env.asSuperuser({ reason: 'document number grouping' }, async (su) => {
+    const found = await ref(su, 'res.company').search({ where: { id: env.companyId }, limit: 1 });
+    const [row] = (await found.load(['numberGrouping'])).read(['numberGrouping']);
+    return row?.['numberGrouping'];
+  });
+  const lang = env.lang.replace('_', '-');
+  const locale = grouping === 'lakh' && lang.startsWith('en') ? 'en-IN' : lang;
   const dir = /^(ar|fa|he|ur)/.test(env.lang) ? 'rtl' : 'ltr';
   const parts: string[] = [];
   const base = {

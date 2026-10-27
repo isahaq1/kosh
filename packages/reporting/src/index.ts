@@ -59,6 +59,7 @@ export {
   type ScheduleRenderer,
   type ScheduleSpec,
 } from './schedules.js';
+export { amountInWords, banglaWords, englishWords } from './words.js';
 export { type Cell, moneyFormat, type Sheet, workbook, zip } from './xlsx.js';
 export { reportingShutro };
 
