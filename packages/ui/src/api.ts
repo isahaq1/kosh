@@ -205,6 +205,16 @@ export interface KoshApi {
   ): Promise<{ readonly blob: Blob; readonly filename: string }>;
   /** Sends a file as the raw body (`Content-Type` from the file, `X-Filename` URI-encoded); the JSON answer. */
   upload<T>(path: string, file: Blob, filename: string): Promise<T>;
+  /**
+   * POSTs `body` and reads the server-sent events of the answer (`event:` and JSON `data:` lines), calling
+   * `onEvent` for each (`message` when the event has no name) until the stream ends. @throws {ApiError} when the
+   * server answers with a problem instead of a stream
+   */
+  stream(
+    path: string,
+    body: unknown,
+    onEvent: (event: string, data: unknown) => void,
+  ): Promise<void>;
 }
 
 export interface ApiOptions {
@@ -378,6 +388,66 @@ export function createKoshApi(options: ApiOptions = {}): KoshApi {
           query: { q, ...(limit === undefined ? {} : { limit: String(limit) }) },
         })
       ).body.results,
+    async stream(path, body, onEvent) {
+      const headers: Record<string, string> = {
+        accept: 'text/event-stream',
+        'content-type': 'application/json',
+      };
+      if (csrf !== undefined) headers['x-csrf-token'] = csrf;
+      if (company !== undefined) headers['x-company'] = String(company);
+      if (language !== undefined) headers['accept-language'] = language.replace('_', '-');
+      const response = await reach(doFetch, `${base}${path}`, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify(body),
+      });
+      if (!response.ok || response.body === null) {
+        const text = await response.text();
+        let parsed: unknown = null;
+        try {
+          parsed = text === '' ? null : JSON.parse(text);
+        } catch {
+          parsed = null;
+        }
+        throw new ApiError(
+          (parsed as Problem | null) ?? {
+            type: 'about:blank',
+            title: response.statusText,
+            status: response.status,
+            detail: text.slice(0, 300),
+          },
+        );
+      }
+      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buffered = '';
+      const flush = (block: string) => {
+        let event = 'message';
+        const data: string[] = [];
+        for (const line of block.split('\n')) {
+          if (line.startsWith('event:')) event = line.slice(6).trim();
+          else if (line.startsWith('data:')) data.push(line.slice(5).trim());
+        }
+        if (data.length === 0) return;
+        try {
+          onEvent(event, JSON.parse(data.join('\n')));
+        } catch {
+          onEvent(event, data.join('\n'));
+        }
+      };
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffered += value;
+        let end = buffered.indexOf('\n\n');
+        while (end !== -1) {
+          flush(buffered.slice(0, end));
+          buffered = buffered.slice(end + 2);
+          end = buffered.indexOf('\n\n');
+        }
+      }
+      if (buffered.trim() !== '') flush(buffered);
+    },
     async upload<T>(path: string, file: Blob, filename: string): Promise<T> {
       const headers: Record<string, string> = {
         'content-type': file.type === '' ? 'application/octet-stream' : file.type,

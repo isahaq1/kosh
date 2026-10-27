@@ -78,6 +78,15 @@ export interface SearchAssistProps {
   readonly onDomain: (where: Condition, label: string) => void;
 }
 
+/** Props of a chatter assistant: controls in a record's chatter (the AI assistant's summary and draft reply). */
+export interface ChatterAssistProps {
+  readonly api: KoshApi;
+  readonly model: string;
+  readonly id: number;
+  /** Opens the message composer with this text, for the user to edit and send. */
+  readonly onDraft: (text: string) => void;
+}
+
 /** Props of a page: what a client action opens (`{ type: 'client', page: 'settings.Apps' }`). */
 export interface PageProps {
   readonly api: KoshApi;
@@ -92,7 +101,7 @@ export class RegistryError extends Error {
   }
 }
 
-type Kind = 'view' | 'widget' | 'component' | 'page' | 'header' | 'searchAssist';
+type Kind = 'view' | 'widget' | 'component' | 'page' | 'header' | 'searchAssist' | 'chatterAssist';
 
 /** Renderers, widgets and components by name. */
 export class Registry {
@@ -103,6 +112,7 @@ export class Registry {
     page: new Map(),
     header: new Map(),
     searchAssist: new Map(),
+    chatterAssist: new Map(),
   };
 
   #add(kind: Kind, name: string, component: ComponentType<never>, replace: boolean): this {
@@ -214,6 +224,25 @@ export class Registry {
     return [...this.#entries.searchAssist.values()] as ComponentType<SearchAssistProps>[];
   }
 
+  /** Controls in every record's chatter (the AI assistant's "Summarize" and "Draft reply"). */
+  registerChatterAssist(
+    name: string,
+    component: ComponentType<ChatterAssistProps>,
+    options: { readonly replace?: boolean } = {},
+  ): this {
+    return this.#add(
+      'chatterAssist',
+      name,
+      component as ComponentType<never>,
+      options.replace === true,
+    );
+  }
+
+  /** The chatter assistants, in registration order. */
+  chatterAssists(): readonly ComponentType<ChatterAssistProps>[] {
+    return [...this.#entries.chatterAssist.values()] as ComponentType<ChatterAssistProps>[];
+  }
+
   page(name: string): ComponentType<PageProps> | undefined {
     return this.#entries.page.get(name) as ComponentType<PageProps> | undefined;
   }
@@ -221,7 +250,15 @@ export class Registry {
   /** A copy, for an app that changes entries without touching the defaults. */
   clone(): Registry {
     const copy = new Registry();
-    for (const kind of ['view', 'widget', 'component', 'page', 'header', 'searchAssist'] as const)
+    for (const kind of [
+      'view',
+      'widget',
+      'component',
+      'page',
+      'header',
+      'searchAssist',
+      'chatterAssist',
+    ] as const)
       for (const [name, c] of this.#entries[kind]) copy.#entries[kind].set(name, c);
     return copy;
   }

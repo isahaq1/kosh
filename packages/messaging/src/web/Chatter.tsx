@@ -348,15 +348,18 @@ function Composer({
   id,
   kind,
   onDone,
+  initialText,
 }: {
   readonly api: KoshApi;
   readonly model: string;
   readonly id: number;
   readonly kind: 'comment' | 'note';
   readonly onDone: () => void;
+  /** A draft to start from (the AI assistant's reply, for the user to edit). */
+  readonly initialText?: string;
 }): ReactElement {
   const { t } = useTranslation('messaging');
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initialText ?? '');
   const [mentions, setMentions] = useState<UserRef[]>([]);
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [uploading, setUploading] = useState<string | null>(null);
@@ -1093,7 +1096,9 @@ export function Chatter({ record, model, api, version }: NodeComponentProps): Re
   const queryClient = useQueryClient();
   const id = typeof record?.id === 'number' ? record.id : null;
   const [mode, setMode] = useState<'comment' | 'note' | null>(null);
+  const [draft, setDraft] = useState<{ readonly text: string; readonly n: number } | null>(null);
   const [scheduling, setScheduling] = useState(false);
+  const { registry } = useKosh();
   const key = ['chatter', model, id, version];
   const page = useInfiniteQuery({
     queryKey: key,
@@ -1160,6 +1165,19 @@ export function Chatter({ record, model, api, version }: NodeComponentProps): Re
           <ListTodo aria-hidden />
           {t('scheduleActivity')}
         </Button>
+        {registry.chatterAssists().map((Assist, i) => (
+          <Assist
+            // biome-ignore lint/suspicious/noArrayIndexKey: registered once at start, never reordered
+            key={i}
+            api={api}
+            model={model}
+            id={id}
+            onDraft={(text) => {
+              setDraft({ text, n: (draft?.n ?? 0) + 1 });
+              setMode('comment');
+            }}
+          />
+        ))}
         <div className="ms-auto">
           {first === undefined ? null : (
             <Followers api={api} model={model} id={id} page={first} onChanged={refresh} />
@@ -1167,7 +1185,18 @@ export function Chatter({ record, model, api, version }: NodeComponentProps): Re
         </div>
       </div>
       {mode === null ? null : (
-        <Composer key={mode} api={api} model={model} id={id} kind={mode} onDone={refresh} />
+        <Composer
+          key={`${mode}-${draft?.n ?? 0}`}
+          api={api}
+          model={model}
+          id={id}
+          kind={mode}
+          onDone={() => {
+            setDraft(null);
+            refresh();
+          }}
+          {...(mode === 'comment' && draft !== null ? { initialText: draft.text } : {})}
+        />
       )}
       <ScheduleDialog
         api={api}

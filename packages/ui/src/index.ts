@@ -61,6 +61,7 @@ export {
   type RealtimeOptions,
 } from './realtime.js';
 export {
+  type ChatterAssistProps,
   type FormProps,
   type HeaderItemProps,
   type NodeComponentProps,
