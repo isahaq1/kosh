@@ -1,6 +1,6 @@
 # RFC 0011: Automation builder
 
-- **Status:** Accepted 2026-10-26 with the proposed answers (run as the actor by default, templates without logic, managers = administrators); step 1 implemented (`@kosh/automation`, `docs/automation.md`)
+- **Status:** Accepted 2026-10-26 with the proposed answers (run as the actor by default, templates without logic, managers = administrators); implemented (steps 1–4)
 - **Depends on:** 0001 (manifests), 0003 (permissions, approval policies), 0004 (search domains), 0006 (chatter,
   notifications, outbox and jobs), 0008 (apps); Shutro RFC 0013 (audit trail), 0018 (outbox events, jobs)
 
@@ -147,8 +147,9 @@ cannot read rules); E2E: a rule made in the app fires on a record and shows in t
    `note`, `create` and module `action`s, `runAs`, the loop guard, the run log, the API, tests.
 2. The Automation app: rules, the condition builder, the actions editor, runs with retry, dry run, E2E.
 3. `webhook` with the allow-list and signature; `date` and `schedule` triggers, with the scheduler job.
-4. Shutro request #26 adopted when it lands; Studio (RFC 0012) exports rules as a module (done 2026-10-26 with
-   RFC 0012 step 5: `automationRules` in manifests, rules owned by modules, "Move into module").
+4. Shutro request #26 adopted (done 2026-10-27: rules on any field through Shutro's change events); Studio
+   (RFC 0012) exports rules as a module (done 2026-10-26 with RFC 0012 step 5: `automationRules` in manifests,
+   rules owned by modules, "Move into module").
 
 ## 7. Open questions (answers wanted with the approval)
 
@@ -209,6 +210,23 @@ cannot read rules); E2E: a rule made in the app fires on a record and shows in t
 - Tests: `packages/automation/test/cron.test.ts` (parsing, the next slot, due or not, the webhook checks and the
   signature) and three integration cases (a date reached once per value and again when moved; a nightly slot
   once; a signed webhook through the job, retried after a 500, a host off the list refused).
+
+## Implementation notes (2026-10-27): step 4 — rules on any field (Shutro change events)
+
+- Shutro request #26 landed as Shutro RFC 0018 §7.5 (`changeEvents: true`: a `record.changed` outbox event per
+  model and action at each flush, with the ids, the stored keys written and the writing scope's `reason`).
+- A Kosh manifest may ask for change events (`changeEvents: '*' | [models]`); the registry adds one extension module
+  (`kosh_change_events`) turning them on. The automation module asks for `'*'`: every served model but the private
+  ones. Events are batched per model and flush, so a transaction adds at most one outbox row per model and action.
+- Two feeds, one per rule, so nothing fires twice: an `updated` rule that watches or matches a field the model does
+  not track (and has no "when it was" values: old values exist only in the audit trail, for tracked fields) reads
+  the change feed in `pollOutbox`; every other rule keeps the audit trail. On the change feed, "when it becomes" is
+  checked on the record as it is now, with the condition; the run is keyed by the event (`change:<id>`), and the
+  loop guard reads the event's `reason` as it reads the audit's.
+- The editor offers every stored field for "Only when one of these fields changed" (`watchable` from
+  `GET /api/v1/automation/models/:model`), not only the tracked ones.
+- Tests: on PostgreSQL, a rule on the untracked `notes` with "becomes x" runs once when notes become x, skips its own
+  write (loop), and skips writes of other fields; the full suite and the automation and Studio E2E.
 
 ## Alignment with CLAUDE.md
 

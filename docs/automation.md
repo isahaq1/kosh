@@ -97,6 +97,14 @@ defineModule({
 });
 ```
 
+## Rules on any field
+
+"Only when one of these fields changed" offers every stored field of the model. A rule on tracked fields reads the
+audit trail, with the old and new values ("when it was", "when it becomes"). A rule watching a field the model does
+not track reads Shutro's change events instead (every model emits them once the Automation app is installed): it
+fires once per change of that field, "when it becomes" is checked on the record as it is then, and "when it was"
+needs a tracked field (track it, e.g. with Studio). A rule never fires on its own changes.
+
 ## Rules shipped by modules
 
 A module can ship rules (`automationRules` in its manifest, by key). The Automation app installs them in every
