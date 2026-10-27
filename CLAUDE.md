@@ -248,7 +248,7 @@ export default defineModule({
 - [x] RFC 0013 AI assistant: natural-language search ("Ask"), summaries and draft replies in the chatter (streamed), new records filled from a pasted text, a PDF or an image, with their lines ("Fill from a document"); as the user, proposals only, off per company, logged, budgeted (`@kosh/assistant`, docs/assistant.md)
 - [x] RFC 0014 Data import: the import screen on every list (CSV / XLSX, mapping, check with every error on its row, updates by key and external id, lines, skip errors with the rejected rows, undo for 7 days, background runs with progress and a notification, saved mappings, module templates and sample workbooks; `@kosh/import`, docs/import.md)
 - [x] RFC 0015 Customer and vendor portal: portal users of a contact with invitations, the server's internal-only guard, documents declared in manifests (record rule checked at start), the portal API with signatures, `sale_portal` / `account_portal` / `purchase_portal` / `project_portal`, email announcements, `apps/portal` (docs/portal.md)
-- [ ] RFC 0016 Country localizations: accepted; step 1 done (several taxes per line with SD before VAT, bank accounts and payment details on invoices and in the portal, fiscal year start, amounts in words, lakh / crore grouping); next withholding at payment, `l10n_bd`, the Mushak documents and registers, then India
+- [ ] RFC 0016 Country localizations: accepted; step 1 done (several taxes per line with SD before VAT, bank accounts and payment details on invoices and in the portal, fiscal year start, amounts in words, lakh / crore grouping); step 2 done (withholding at payment: VDS / TDS proposed and posted, certificates); next `l10n_bd`, the Mushak documents and registers, then India
 
 ### Phase 1 — Server foundation
 

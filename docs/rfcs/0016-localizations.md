@@ -214,6 +214,27 @@ declared identifier (`bin`, `tin`), shown when the contact's country matches, ch
 - **Tests**: words (3), the formatter's grouping (1), payment details by currency with the reference and none on
   bills, fiscal year dates.
 
+## Implementation notes (2026-10-27): step 2 — withholding at payment
+
+- **`account.withholding`** (Accounting › Configuration › Withholdings): a rate on the documents' untaxed amount,
+  their tax or their total, a threshold on the document total, an account, and a direction. `vendor`: we keep it
+  back when paying a bill, and owe it to the state. `customer`: a customer keeps it back when paying our invoice,
+  and the state owes it to us. A contact lists the withholdings that apply to them (`withholdings`, on the contact
+  form through a view extension).
+- **The proposal** (`POST /api/v1/accounting/payments/propose { moves }`): the partner's withholdings in the payment's
+  direction, for documents reaching their threshold, on a base prorated to what is still due, rounded to the
+  currency, in their sequence. The cash to pay is the residual less them.
+- **The payment** (`withholdings` lines, `amountWithheld`): the register route takes `withholdings: [{ withholding,
+  amount }]` (none by default, as before). Posting settles the documents by the cash **plus** the withheld amounts:
+  the payable or receivable line takes the whole, the bank the cash, and each withholding's account its part. The
+  documents are paid in full and reconciled as before.
+- **The screen**: Register payment shows the proposed withholdings, each amount editable, and the cash due less
+  them, computed in exact decimals in the browser.
+- **The certificate**: a document template on payments (`accounting.withholding_certificate`): the payee, the
+  payment, each withholding's base and amount, the total in words. `l10n_bd` will add the Mushak 6.6 layout.
+- **Tests**: a bill paid with VDS (all the VAT) and TDS (5 % above a threshold) — the proposal, the entry's four
+  lines, the bill paid; a bill below the threshold with VDS only; a customer withholding from us.
+
 ## Alignment with CLAUDE.md
 
 "Money is always `Decimal`": every tax and withholding amount, per currency. "Metadata-driven": a country is a
