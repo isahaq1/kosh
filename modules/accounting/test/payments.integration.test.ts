@@ -345,3 +345,148 @@ test('a USD invoice paid at another rate posts the exchange difference; a write-
   expectStatus(written, 200);
   expect((await move(small)).json.paymentState).toBe('paid');
 });
+
+test('withholding at payment (RFC 0016): VDS on the VAT and TDS on the untaxed amount, the bill settled in full', async () => {
+  const created = async (model: string, values: Record<string, unknown>) => {
+    const res = await call('POST', `/api/v1/models/${model}`, 'maria', values);
+    expectStatus(res, 201);
+    return res.json.id as number;
+  };
+  const vat = await created('account.tax', {
+    name: 'VAT 15 % purchases (withholding test)',
+    use: 'purchase',
+    rate: '0.15',
+    account: accounts['1300'],
+  });
+  const vds = await created('account.withholding', {
+    name: 'VDS (all the VAT)',
+    direction: 'vendor',
+    base: 'tax',
+    rate: '1',
+    account: accounts['2100'],
+  });
+  const tds = await created('account.withholding', {
+    name: 'TDS 5 %',
+    direction: 'vendor',
+    base: 'untaxed',
+    rate: '0.05',
+    threshold: '10000',
+    account: accounts['2100'],
+  });
+  const vendor = await created('res.partner', {
+    name: 'Meghna Printers',
+    isCompany: true,
+    isVendor: true,
+    withholdings: { set: [vds, tds] },
+  });
+  const bill = async (price: string) => {
+    const res = await call('POST', '/api/v1/models/account.move', 'rahim', {
+      kind: 'in_invoice',
+      journal: journals['BILL'],
+      partner: vendor,
+      currency: bdt,
+      date: today,
+      lines: {
+        create: [
+          {
+            lineKind: 'product',
+            name: 'Printing',
+            quantity: '1',
+            priceUnit: price,
+            taxes: { set: [vat] },
+          },
+        ],
+      },
+    });
+    expectStatus(res, 201);
+    expectStatus(
+      await call('POST', `/api/v1/models/account.move/${res.json.id}/transitions/post`, 'rahim'),
+      200,
+    );
+    return res.json.id as number;
+  };
+  const big = await bill('10000');
+  const proposal = await call('POST', '/api/v1/accounting/payments/propose', 'rahim', {
+    moves: [big],
+  });
+  expect(proposal.json).toEqual({
+    residual: '11500',
+    currency: 'BDT',
+    withholdings: [
+      { withholding: vds, name: 'VDS (all the VAT)', base: '1500', amount: '1500' },
+      { withholding: tds, name: 'TDS 5 %', base: '10000', amount: '500' },
+    ],
+    amount: '9500',
+  });
+  const paid = await call('POST', '/api/v1/accounting/payments/register', 'rahim', {
+    moves: [big],
+    journal: journals['BNK'],
+    withholdings: proposal.json.withholdings.map((w: Json) => ({
+      withholding: w.withholding,
+      amount: w.amount,
+    })),
+  });
+  expectStatus(paid, 200);
+  expect(paid.json.amount).toBe('9500');
+  expect((await move(big)).json).toMatchObject({ paymentState: 'paid' });
+  const payment = await call(
+    'GET',
+    `/api/v1/models/account.payment/${paid.json.id}?fields=amount,amountWithheld,move`,
+    'rahim',
+  );
+  expect(payment.json.amountWithheld.amount).toBe('2000.00');
+  const lines = await call(
+    'GET',
+    `/api/v1/models/account.move.line?filter=${encodeURIComponent(JSON.stringify({ move: payment.json.move }))}&fields=account,debit,credit,name`,
+    'rahim',
+  );
+  expect(
+    lines.json.items
+      .map((l: Json) => [l.account, l.debit.amount, l.credit.amount])
+      .sort((a: Json, b: Json) => String(a).localeCompare(String(b))),
+  ).toEqual(
+    [
+      [accounts['2000'], '11500.00', '0.00'], // the payable, settled in full
+      [accounts['1010'], '0.00', '9500.00'], // the bank: what was paid
+      [accounts['2100'], '0.00', '1500.00'], // VDS owed to the state
+      [accounts['2100'], '0.00', '500.00'], // TDS owed to the state
+    ].sort((a, b) => String(a).localeCompare(String(b))),
+  );
+  // Below the TDS threshold: only VDS.
+  const small = await bill('5000');
+  const smallProposal = await call('POST', '/api/v1/accounting/payments/propose', 'rahim', {
+    moves: [small],
+  });
+  expect(smallProposal.json.withholdings.map((w: Json) => w.withholding)).toEqual([vds]);
+});
+
+test('a customer who withholds from us: the receivable settled, what they kept a receivable from the state', async () => {
+  const kept = await call('POST', '/api/v1/models/account.withholding', 'maria', {
+    name: 'Customer AIT 3 %',
+    direction: 'customer',
+    base: 'total',
+    rate: '0.03',
+    account: accounts['1150'],
+  });
+  expectStatus(kept, 201);
+  const write = await call('PATCH', `/api/v1/models/res.partner/${customer}`, 'maria', {
+    withholdings: { set: [kept.json.id] },
+  });
+  expectStatus(write, 200);
+  const inv = await invoice('1000');
+  const proposal = await call('POST', '/api/v1/accounting/payments/propose', 'rahim', {
+    moves: [inv],
+  });
+  expect(proposal.json).toMatchObject({ residual: '1000', amount: '970' });
+  const paid = await call('POST', '/api/v1/accounting/payments/register', 'rahim', {
+    moves: [inv],
+    journal: journals['BNK'],
+    withholdings: [{ withholding: kept.json.id, amount: '30' }],
+  });
+  expectStatus(paid, 200);
+  expect((await move(inv)).json).toMatchObject({ paymentState: 'paid' });
+  // Back to none for the other tests' customer.
+  await call('PATCH', `/api/v1/models/res.partner/${customer}`, 'maria', {
+    withholdings: { set: [] },
+  });
+});

@@ -1225,6 +1225,78 @@ export function addDays(date: string, days: number): string {
  * and posts its entry (the journal's account against the receivable / payable) and matches the receivable /
  * payable line with the documents it pays (`payments.ts`).
  */
+/**
+ * A withholding at payment (RFC 0016 §5.1): VAT or income tax that the payer keeps back and pays to the state, such as
+ * Bangladesh's VDS and TDS. `vendor`: we withhold when paying a vendor's bill (the account is a liability to the
+ * state). `customer`: a customer withholds from us when paying our invoice (the account is a receivable from the
+ * state). The base is the documents' untaxed amount, their tax or their total; it applies from a document total.
+ */
+export const AccountWithholding = defineModel('account.withholding', {
+  label: 'Withholding',
+  order: ['sequence asc', 'name asc'],
+  archivable: true,
+  companyScoped: { required: true },
+  access: { 'account.invoicing': READ, 'account.user': READ, 'account.manager': ALL },
+  fields: {
+    name: f.char({ required: true, translate: true }),
+    sequence: f.integer({ required: true, default: 10 }),
+    direction: f.selection(
+      { vendor: 'We withhold when paying vendors', customer: 'Customers withhold from us' },
+      { required: true, default: 'vendor' },
+    ),
+    base: f.selection(
+      { untaxed: 'Untaxed amount', tax: 'Tax amount', total: 'Total' },
+      { required: true, default: 'untaxed', label: 'Computed on' },
+    ),
+    /** 0.05 for 5 %. */
+    rate: f.decimal({ scale: 4, required: true, default: '0' }),
+    /** A document whose total is below it is not withheld from. */
+    threshold: f.decimal({
+      scale: 2,
+      required: true,
+      default: '0',
+      label: 'Applies from (document total)',
+    }),
+    account: f.many2one('account.account', { required: true, checkCompany: true }),
+  },
+  constraints: {
+    rateRange: {
+      ...check('account.withholding', ['rate'], (ws) =>
+        ws.filter((w) => w.rate.lte(0) || w.rate.gt(1)),
+      ),
+      message: 'A withholding rate is above 0 and at most 1 (0.05 for 5 %).',
+    },
+  },
+});
+
+/** The withholdings that apply to a partner (vendor or customer): what a payment of their documents proposes. */
+export const PartnerWithholdings = extendModel('res.partner', {
+  fields: {
+    withholdings: f.many2many('account.withholding', {
+      relation: 'res_partner_withholding_rel',
+      label: 'Withholdings',
+    }),
+  },
+});
+
+/** What a payment withheld: the withholding, the base and the amount, in the payment's currency. */
+export const AccountPaymentWithholding = defineModel('account.payment.withholding', {
+  label: 'Payment withholding',
+  access: { 'account.invoicing': WRITE, 'account.user': ALL, 'account.manager': ALL },
+  fields: {
+    payment: f.many2one('account.payment', { required: true, ondelete: 'cascade' }),
+    withholding: f.many2one('account.withholding', { required: true, ondelete: 'restrict' }),
+    currency: f.many2one('res.currency', {
+      store: true,
+      ...compute('account.payment.withholding', 'currency', ['payment.currency'], (lines) => {
+        for (const l of lines) l.currency = l.payment.currency.id;
+      }),
+    }),
+    base: f.monetary({ currency: 'currency', label: 'Base' }),
+    amount: f.monetary({ currency: 'currency', required: true }),
+  },
+});
+
 export const AccountPayment = defineModel('account.payment', {
   label: 'Payment',
   order: ['date desc', 'id desc'],
@@ -1260,6 +1332,16 @@ export const AccountPayment = defineModel('account.payment', {
     memo: f.char(),
     /** The documents this payment settles (oldest due first); none: an open payment to match later. */
     documents: f.many2many('account.move', { label: 'Pays' }),
+    /** Kept back from the documents (VDS, TDS): the documents are settled by `amount` plus these. */
+    withholdings: f.one2many('account.payment.withholding', 'payment'),
+    amountWithheld: f.monetary({
+      currency: 'currency',
+      store: true,
+      label: 'Withheld',
+      ...compute('account.payment', 'amountWithheld', ['withholdings.amount'], (payments) => {
+        for (const p of payments) p.amountWithheld = p.withholdings.sum('amount', p.currency);
+      }),
+    }),
     move: f.many2one('account.move', { label: 'Entry' }),
     state: f.state({
       states: { draft: 'Draft', posted: 'Posted', cancel: 'Cancelled' },
@@ -1327,6 +1409,7 @@ export const accountingShutro = defineModule({
   models: [
     ResCurrencyRate,
     ResBankAccount,
+    AccountWithholding,
     AccountAccount,
     AccountJournal,
     AccountFiscalYear,
@@ -1337,6 +1420,7 @@ export const accountingShutro = defineModule({
     AccountPartialReconcile,
     AccountFullReconcile,
     AccountPayment,
+    AccountPaymentWithholding,
   ],
   permissions: [
     orm.definePermission({ code: 'account.post', label: 'Post entries', groups: ['account.user'] }),
@@ -1403,5 +1487,5 @@ export const accountingShutro = defineModule({
       { noupdate: true },
     ),
   ],
-  extensions: [CompanyAccounting, TaxAccounts],
+  extensions: [CompanyAccounting, TaxAccounts, PartnerWithholdings],
 });

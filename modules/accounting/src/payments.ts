@@ -434,6 +434,7 @@ export async function postPayments(payments: Payments): Promise<void> {
     currency: true,
     company: { currency: true, accountReceivable: true, accountPayable: true },
     documents: { lines: { account: true } },
+    withholdings: { withholding: { account: true } },
   });
   for (const p of loaded) {
     if (p.journal.type !== 'cash' && p.journal.type !== 'bank')
@@ -503,6 +504,24 @@ export async function postPayments(payments: Payments): Promise<void> {
         if (l.lineKind === 'counterpart' && l.account?.id === counterpart.id) docLineIds.push(l.id);
     }
     const inbound = p.kind === 'inbound';
+    // Withheld (VDS, TDS): the documents are settled by the money plus what was kept back (RFC 0016).
+    let withheld = orm.toDecimal(0);
+    const withheldLines = [];
+    for (const w of p.withholdings) {
+      const kept = w.amount.amount;
+      if (kept.lte(0)) continue;
+      withheld = withheld.plus(kept);
+      withheldLines.push({
+        account: w.withholding.account.id,
+        partner: p.partner.id,
+        name: w.withholding.name,
+        // Paying a vendor: a liability to the state (credit). Paid by a customer: a receivable from it (debit).
+        amountCurrency: inbound ? kept : kept.neg(),
+        debit: '0',
+        credit: '0',
+      });
+    }
+    const settled = amount.plus(withheld);
     const created = await env.model('account.move').create([
       {
         journal: p.journal.id,
@@ -526,10 +545,11 @@ export async function postPayments(payments: Payments): Promise<void> {
               account: counterpart.id,
               partner: p.partner.id,
               name: p.memo ?? 'Payment',
-              amountCurrency: inbound ? amount.neg() : amount,
+              amountCurrency: inbound ? settled.neg() : settled,
               debit: '0',
               credit: '0',
             },
+            ...withheldLines,
           ],
         },
       },
@@ -568,8 +588,101 @@ export interface RegisterInput {
   readonly moves: readonly number[];
   readonly journal: number;
   readonly date?: string | undefined;
+  /** The money paid; by default what is due less what is withheld. */
   readonly amount?: string | undefined;
   readonly memo?: string | undefined;
+  /** What to withhold (see {@link proposeWithholdings}); none by default. */
+  readonly withholdings?:
+    | readonly { readonly withholding: number; readonly amount: string }[]
+    | undefined;
+}
+
+export interface WithholdingProposal {
+  /** What the documents still owe. */
+  readonly residual: string;
+  readonly currency: string;
+  readonly withholdings: readonly {
+    readonly withholding: number;
+    readonly name: string;
+    readonly base: string;
+    readonly amount: string;
+  }[];
+  /** The money to pay: the residual less the withholdings. */
+  readonly amount: string;
+}
+
+/**
+ * The withholdings a payment of `moves` should keep back (RFC 0016 §5.1): those of the partner in the payment's
+ * direction (vendor bills: `vendor`; our invoices: `customer`), for documents whose total reaches their threshold,
+ * on the documents' untaxed amount, tax or total — prorated to what is still due — rounded to the currency.
+ */
+export async function proposeWithholdings(
+  env: Env,
+  moves: readonly number[],
+): Promise<WithholdingProposal> {
+  const docs = await env
+    .model('account.move')
+    .browse(moves.map((id) => orm.asId(id, 'account.move')))
+    .load({ partner: { withholdings: true }, currency: true });
+  const first = docs.first();
+  if (docs.length === 0)
+    throw fail(
+      'account.payment',
+      ['documents'],
+      'No documents to pay.',
+      'Choose a posted document.',
+    );
+  const inbound = first.kind === 'out_invoice' || first.kind === 'in_refund';
+  const unit = first.currency.rounding;
+  const round = (d: Decimal) =>
+    d.div(unit).toDecimalPlaces(0, orm.Decimal.ROUND_HALF_UP).times(unit);
+  let residual = orm.toDecimal(0);
+  const byWithholding = new Map<
+    number,
+    { name: string; sequence: number; base: Decimal; amount: Decimal }
+  >();
+  for (const d of docs) {
+    const due = d.amountResidual?.amount ?? orm.toDecimal(0);
+    residual = residual.plus(due);
+    const total = d.amountTotal?.amount ?? orm.toDecimal(0);
+    if (total.isZero()) continue;
+    const share = due.div(total); // a partly paid document withholds on what is left
+    for (const w of d.partner?.withholdings ?? []) {
+      if (w.direction !== (inbound ? 'customer' : 'vendor') || total.lt(w.threshold)) continue;
+      const whole =
+        w.base === 'tax'
+          ? (d.amountTax?.amount ?? orm.toDecimal(0))
+          : w.base === 'total'
+            ? total
+            : (d.amountUntaxed?.amount ?? orm.toDecimal(0));
+      const base = whole.times(share);
+      const entry = byWithholding.get(w.id) ?? {
+        name: w.name,
+        sequence: w.sequence,
+        base: orm.toDecimal(0),
+        amount: orm.toDecimal(0),
+      };
+      entry.base = entry.base.plus(base);
+      entry.amount = entry.amount.plus(base.times(w.rate));
+      byWithholding.set(w.id, entry);
+    }
+  }
+  // In their order (sequence, then as created).
+  const withholdings = [...byWithholding]
+    .sort(([a, x], [b, y]) => x.sequence - y.sequence || a - b)
+    .map(([withholding, w]) => ({
+      withholding,
+      name: w.name,
+      base: round(w.base).toFixed(),
+      amount: round(w.amount).toFixed(),
+    }));
+  const kept = withholdings.reduce((s, w) => s.plus(w.amount), orm.toDecimal(0));
+  return {
+    residual: residual.toFixed(),
+    currency: first.currency.name,
+    withholdings,
+    amount: residual.minus(kept).toFixed(),
+  };
 }
 
 /** A payment for posted documents of one partner and currency, with their residual as the default amount. */
@@ -601,7 +714,9 @@ export async function registerPayment(
     residual = residual.plus(d.amountResidual?.amount ?? 0);
   }
   const kind = first.kind === 'out_invoice' || first.kind === 'in_refund' ? 'inbound' : 'outbound';
-  const amount = input.amount ?? residual.toString();
+  const withholdings = input.withholdings ?? [];
+  const kept = withholdings.reduce((s, w) => s.plus(orm.toDecimal(w.amount)), orm.toDecimal(0));
+  const amount = input.amount ?? residual.minus(kept).toString();
   const created = await env.model('account.payment').create([
     {
       kind,
@@ -613,6 +728,12 @@ export async function registerPayment(
       memo: input.memo ?? null,
       company: first.company.id,
       documents: { set: docs.ids },
+      withholdings: {
+        create: withholdings.map((w) => ({
+          withholding: orm.asId(w.withholding, 'account.withholding'),
+          amount: w.amount,
+        })),
+      },
     },
   ]);
   await created.post();

@@ -18,7 +18,7 @@ import { permissions } from '@kosh/permissions';
 import { product } from '@kosh/product';
 import { reporting } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
-import { action, form, list, pivot, search } from '@kosh/views';
+import { action, field, form, list, pivot, search } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import {
   CHARTS,
@@ -44,12 +44,19 @@ import {
   AccountMoveLine,
   AccountPayment,
   AccountPaymentTerm,
+  AccountWithholding,
   accountingShutro,
   REVERSED_KIND,
   ResBankAccount,
   ResCurrencyRate,
 } from './module.js';
-import { openLines, reconcile, registerPayment, unreconcile } from './payments.js';
+import {
+  openLines,
+  proposeWithholdings,
+  reconcile,
+  registerPayment,
+  unreconcile,
+} from './payments.js';
 
 export {
   CHARTS,
@@ -82,7 +89,9 @@ export {
   AccountPayment,
   AccountPaymentTerm,
   AccountPaymentTermLine,
+  AccountPaymentWithholding,
   type AccountType,
+  AccountWithholding,
   accountingShutro,
   addDays,
   CompanyAccounting,
@@ -92,6 +101,7 @@ export {
   MOVE_KINDS,
   type MoveKind,
   NUMBER_FIELD,
+  PartnerWithholdings,
   REVERSED_KIND,
   ResBankAccount,
   ResCurrencyRate,
@@ -99,11 +109,13 @@ export {
 } from './module.js';
 export {
   openLines,
+  proposeWithholdings,
   type ReconcileResult,
   type RegisterInput,
   reconcile,
   registerPayment,
   unreconcile,
+  type WithholdingProposal,
 } from './payments.js';
 
 export interface Reversed {
@@ -338,6 +350,10 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       label: 'Fiscal years',
       views: ['list', 'form'],
     }),
+    'accounting.action_withholdings': action(AccountWithholding, {
+      label: 'Withholdings',
+      views: ['list', 'form'],
+    }),
     'accounting.action_banks': action(ResBankAccount, {
       label: 'Bank accounts',
       views: ['list', 'form'],
@@ -469,6 +485,13 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       sequence: 3,
     },
     {
+      id: 'accounting.withholdings',
+      parent: 'accounting.configuration',
+      label: 'Withholdings',
+      action: 'accounting.action_withholdings',
+      sequence: 2.5,
+    },
+    {
       id: 'accounting.banks',
       parent: 'accounting.configuration',
       label: 'Bank accounts',
@@ -505,7 +528,51 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       ],
     },
   ],
+  // Which withholdings apply to a contact (VDS, TDS), next to their roles (RFC 0016).
+  viewExtensions: [
+    {
+      view: 'res.partner.form',
+      operations: [
+        { append: 'roles', nodes: [field({ field: 'withholdings', id: 'withholdings' })] },
+      ],
+    },
+  ],
   documents: [
+    {
+      key: 'withholding_certificate',
+      name: 'Withholding certificate',
+      model: 'account.payment',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Certificate of withholding at source', level: 1 },
+          {
+            kind: 'fields',
+            id: 'payment',
+            items: [
+              { label: 'Payment', bind: 'name' },
+              { label: 'Date', bind: 'date' },
+              { label: 'Paid to', bind: 'partner.name' },
+              { label: 'Amount paid', bind: 'amount' },
+              { label: 'Withheld', bind: 'amountWithheld' },
+            ],
+          },
+          {
+            kind: 'table',
+            id: 'withheld',
+            bind: 'withholdings',
+            columns: [
+              { label: 'Withholding', bind: 'withholding.name' },
+              { label: 'Base', bind: 'base', align: 'end' },
+              { label: 'Amount', bind: 'amount', align: 'end', sum: true },
+            ],
+          },
+          { kind: 'text', id: 'in_words', text: 'Withheld: {{amountWithheld|words}}' },
+        ],
+      },
+    },
     {
       key: 'invoice',
       name: 'Invoice',
@@ -718,8 +785,19 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       },
       sheet: [
         k.group('who', ['partner', 'kind', 'journal', 'date']),
-        k.group('how_much', ['currency', 'amount', 'memo', 'move']),
+        k.group('how_much', ['currency', 'amount', 'amountWithheld', 'memo', 'move']),
         k.group('what', ['documents'], { label: 'Pays', columns: 1 }),
+        k.lines(
+          'withholdings',
+          [
+            { field: 'withholding', id: 'withheld_by' },
+            { field: 'base', id: 'withheld_base' },
+            { field: 'amount', id: 'withheld_amount' },
+          ],
+          {
+            readonlyWhen: { state: { ne: 'draft' } },
+          },
+        ),
       ],
       readonlyWhen: { state: { ne: 'draft' } },
       chatter: true,
@@ -801,6 +879,15 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
     'account.fiscal.year.form': form(AccountFiscalYear, (k) => ({
       header: { buttons: [] },
       sheet: [k.group('main', ['name', 'dateFrom', 'dateTo', 'state', 'lockDate'])],
+    })),
+    'account.withholding.list': list(AccountWithholding, {
+      columns: ['name', 'direction', 'base', 'rate', 'threshold', 'account'],
+    }),
+    'account.withholding.form': form(AccountWithholding, (k) => ({
+      sheet: [
+        k.group('withholding', ['name', 'direction', 'sequence']),
+        k.group('amount', ['base', 'rate', 'threshold', 'account']),
+      ],
     })),
     'res.bank.account.list': list(ResBankAccount, {
       columns: ['bank', 'branch', 'number', 'routing', 'currency'],
@@ -923,6 +1010,37 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
         templates: TEMPLATES.map((t) => ({ code: t, label: CHARTS[t].label })),
       })),
     );
+    // What a payment of these documents should withhold (RFC 0016): the register-payment dialog shows it first.
+    const withholdingsOf = (input: unknown) => {
+      if (input === undefined) return undefined;
+      if (!Array.isArray(input))
+        throw new HttpProblem(400, 'invalid-body', 'Invalid request', 'withholdings is a list.');
+      return input.map((w) => {
+        const row = (w ?? {}) as { withholding?: unknown; amount?: unknown };
+        const withholding = Number(row.withholding);
+        const amount = String(row.amount ?? '');
+        if (!Number.isInteger(withholding) || withholding <= 0 || !/^\d+(\.\d+)?$/.test(amount))
+          throw new HttpProblem(
+            400,
+            'invalid-body',
+            'Invalid request',
+            'Each withholding is { withholding: id, amount: "decimal" }.',
+          );
+        return { withholding, amount };
+      });
+    };
+    context.app.post('/api/v1/accounting/payments/propose', async (request) => {
+      const moves = (request.body as { moves?: unknown } | null)?.moves;
+      const ids = Array.isArray(moves) ? moves.map(Number) : [];
+      if (ids.length === 0 || ids.some((id) => !Number.isInteger(id) || id <= 0))
+        throw new HttpProblem(
+          400,
+          'invalid-body',
+          'Invalid request',
+          'moves is a list of document ids.',
+        );
+      return request.env((env) => proposeWithholdings(env as Env, ids));
+    });
     context.app.post('/api/v1/accounting/payments/register', async (request) => {
       const body = (request.body ?? {}) as {
         moves?: unknown;
@@ -930,6 +1048,7 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
         date?: unknown;
         amount?: unknown;
         memo?: unknown;
+        withholdings?: unknown;
       };
       const moves = Array.isArray(body.moves) ? body.moves.map(Number) : [];
       if (moves.length === 0 || moves.some((m) => !Number.isInteger(m) || m <= 0))
@@ -964,6 +1083,7 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
             date: body.date === undefined ? undefined : String(body.date),
             amount: body.amount === undefined ? undefined : String(body.amount),
             memo: body.memo === undefined ? undefined : String(body.memo),
+            withholdings: withholdingsOf(body.withholdings),
           }),
         { write: true },
       );

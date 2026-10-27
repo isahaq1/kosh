@@ -55,6 +55,8 @@ export const messages: Readonly<Record<string, object>> = {
       memo: 'Memo',
       confirm: 'Pay',
       done: 'Payment {{name}} registered.',
+      withheld: 'Withheld at source',
+      due: 'Due {{amount}}; withheld {{withheld}}.',
     },
   },
   bn: {
@@ -112,6 +114,8 @@ export const messages: Readonly<Record<string, object>> = {
       memo: 'মন্তব্য',
       confirm: 'পরিশোধ',
       done: 'পেমেন্ট {{name}} নথিভুক্ত হয়েছে।',
+      withheld: 'উৎসে কর্তন',
+      due: 'বাকি {{amount}}; কর্তন {{withheld}}।',
     },
   },
 };
