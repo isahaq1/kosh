@@ -1,6 +1,7 @@
 # RFC 0016: Country localizations (Bangladesh first)
 
-- **Status:** Draft, 2026-10-27
+- **Status:** Accepted 2026-10-27 with the proposed answers (several taxes per line; the Bangladeshi taxes move to
+  `l10n_bd`; VDS / TDS and the Mushak forms in version 1; India (GST) as the second localization)
 - **Depends on:** 0001 (manifests), 0005 (documents, reports), 0008 (apps, `kosh init`), 0009 (accounting), 0015
   (portal: payment details on invoices)
 
@@ -156,6 +157,9 @@ declared identifier (`bin`, `tin`), shown when the contact's country matches, ch
 3. The `localization` declaration and its installer; Accounting's settings and `kosh init --country`; `l10n_bd`
    with its chart, taxes (moved from Products), withholdings, identifiers.
 4. `l10n_bd` documents and reports (Mushak 6.3, 6.6, 6.7/6.8, 6.1, 6.2, 9.1); E2E; `docs/localizations.md`.
+5. `l10n_in`, India (GST): CGST and SGST within a state, IGST between states (by place of supply), GSTIN on
+   companies and contacts, HSN / SAC codes, TDS; the tax invoice and the GSTR-1 / GSTR-3B summaries. It checks the
+   declaration against a very different tax shape.
 
 ## 7. Open questions (answers wanted with the approval)
 
