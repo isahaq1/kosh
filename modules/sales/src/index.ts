@@ -91,6 +91,7 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
               { label: 'Total', bind: 'amountTotal' },
             ],
           },
+          { kind: 'text', id: 'in_words', text: '{{amountTotal|words}}' },
           { kind: 'text', id: 'terms', text: '{{note}}' },
         ],
       },

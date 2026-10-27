@@ -191,10 +191,28 @@ declared identifier (`bin`, `tin`), shown when the contact's country matches, ch
   templates print each line's tax amount (documents do not print a list).
 - **Form line editors** send a line's many2many values as `{ set }`. Shutro request #29 (fixed): an onchange handler
   can set a many2many, and the set comes back as ids.
-- **Still to do in step 1**: company bank accounts, the fiscal year's first month, amounts in words and lakh / crore
-  grouping.
 - **Tests**: the engine (5), an invoice with SD then VAT (the totals, one tax line each with its base and account),
   and the existing Sales, Purchase, Accounting and bridge suites on the lists.
+
+## Implementation notes (2026-10-27): step 1, part 2 — bank accounts, fiscal years, words, grouping
+
+- **Bank accounts** (`res.bank.account`, Accounting › Configuration › Bank accounts): bank, branch, account number,
+  holder, routing number, SWIFT, and a currency (an account without one shows on every invoice). Every user may read
+  them (they are printed on invoices); accounting managers change them. A customer invoice's **`paymentDetails`**
+  (computed, not stored) lists the accounts in its currency and the reference to quote. It is printed on the invoice
+  template and shown in the portal (`account_portal`), which closes the gap RFC 0015 left.
+- **Fiscal years**: the company's `fiscalYearStart` (month 1–12, checked) and `fiscalYearOf(date, start)`. On the
+  fiscal year form, the first day fills the last day and the name (`2026–27`). The localization installer (step 3)
+  will create the first year from it.
+- **Amounts in words**: `{{amountTotal|words}}` in document templates (template checks accept the filter).
+  `amountInWords` writes English in lakh and crore for BDT, INR, PKR, NPR and LKR, and in thousands and millions
+  otherwise; Bangla always in lakh and crore (the 100 Bangla number words). Taka / paisa, rupees / paise, dollars /
+  cents, and "Only" / "মাত্র". The invoice and quotation templates print the total in words.
+- **Grouping**: the company's `numberGrouping` (`international`, `lakh`) on `res.company` (base). `GET
+  /api/v1/auth/me` gives the grouping of each of the user's companies; the back-office formatter and printed
+  documents then group English as `1,23,45,678` (`en-IN`). Bangla groups by lakh already.
+- **Tests**: words (3), the formatter's grouping (1), payment details by currency with the reference and none on
+  bills, fiscal year dates.
 
 ## Alignment with CLAUDE.md
 
