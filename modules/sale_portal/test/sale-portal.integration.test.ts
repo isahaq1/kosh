@@ -8,6 +8,8 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createMemoryMailer } from '@kosh/mail';
+import { portalAnnouncer } from '@kosh/portal';
 import { closeDocuments, installTemplates } from '@kosh/reporting';
 import {
   type AppHost,
@@ -32,6 +34,8 @@ let container: StartedPostgreSqlContainer;
 let driver: Driver;
 let dir: string;
 let host: AppHost;
+const mailer = createMemoryMailer();
+let announcer: ReturnType<typeof portalAnnouncer>;
 const tokens = new Map<string, string>();
 const orders: Record<string, number> = {};
 const partners: Record<string, number> = {};
@@ -149,6 +153,12 @@ beforeAll(async () => {
     Object.assign(orders, { a: created[0], b: created[1], c: created[2], d: created[3] });
     await env.flush(); // constraints run here, in the system scope (Shutro request #11)
   });
+  // The announcer (the module's own is off in tests: KOSH_SCHEDULES=off), its cursor set before the changes.
+  announcer = portalAnnouncer(
+    { app: host.server.app, shutro: host.server.shutro, registry: host.server.registry } as never,
+    { portalUrl: 'https://portal.test', mailer },
+  );
+  await announcer.drain();
   for (const id of [orders['a'], orders['b'], orders['c']])
     expect(
       (await call('POST', `/api/v1/models/sale.order/${id}/transitions/send`, 'maria')).status,
@@ -167,6 +177,30 @@ afterAll(async () => {
 
 const RINA = 'rina@acme.test';
 const BINA = 'bina@globex.test';
+
+test('sent quotations are announced to their customers by email, once', async () => {
+  await announcer.drain();
+  const sent = mailer.sent.map((m) => [m.to, m.subject]).sort();
+  expect(sent).toEqual(
+    [
+      [BINA, expect.stringMatching(/^Padma Traders: Quotations and orders /)],
+      [RINA, expect.stringMatching(/^Padma Traders: Quotations and orders /)],
+      [RINA, expect.stringMatching(/^Padma Traders: Quotations and orders /)],
+    ].sort(),
+  );
+  expect(mailer.sent.find((m) => m.to === BINA)?.html).toContain(
+    `https://portal.test/d/quotations/${orders['c']}`,
+  );
+  const count = mailer.sent.length;
+  await call('POST', `/api/v1/models/sale.order/${orders['d']}/transitions/send`, 'maria');
+  await announcer.drain();
+  expect(mailer.sent.slice(count).map((m) => m.to)).toEqual([RINA]);
+  // Back to a draft and sent again: announced once already, so no second email.
+  for (const step of ['cancel', 'redraft', 'send', 'cancel', 'redraft'])
+    await call('POST', `/api/v1/models/sale.order/${orders['d']}/transitions/${step}`, 'maria');
+  await announcer.drain();
+  expect(mailer.sent).toHaveLength(count + 1);
+});
 
 test('a customer sees the sent quotations of their contact and company, never drafts or another customer’s', async () => {
   const types = await call('GET', '/api/portal/v1/documents', RINA);

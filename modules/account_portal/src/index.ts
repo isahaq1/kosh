@@ -36,6 +36,8 @@ export const accountPortal: ReturnType<typeof defineModule> = defineModule({
   shutro: accountPortalShutro,
   kosh: '^0.1.0',
   depends: [accounting, portal],
+  // A posted invoice is announced to its customer by email (the portal reads the entries' changes).
+  changeEvents: ['account.move'],
   accessLevels: {
     manager: { label: 'Portal access (invoices)', groups: ['portal.manager'] },
   },
@@ -54,6 +56,7 @@ export const accountPortal: ReturnType<typeof defineModule> = defineModule({
         pdf: 'accounting.invoice',
         thread: true,
         attention: { kind: 'out_invoice', paymentState: { in: ['not_paid', 'partial'] } },
+        announce: { state: 'posted' },
       },
       {
         key: 'bills',

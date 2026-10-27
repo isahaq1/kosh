@@ -15,6 +15,8 @@ export const salePortal: ReturnType<typeof defineModule> = defineModule({
   shutro: salePortalShutro,
   kosh: '^0.1.0',
   depends: [sales, portal],
+  // A sent quotation is announced to its customer by email (the portal reads the order's changes).
+  changeEvents: ['sale.order'],
   accessLevels: {
     manager: { label: 'Portal access (sales documents)', groups: ['portal.manager'] },
   },
@@ -64,6 +66,7 @@ export const salePortal: ReturnType<typeof defineModule> = defineModule({
         ],
         thread: true,
         attention: { state: 'sent' },
+        announce: { state: 'sent' },
       },
     ],
   },
