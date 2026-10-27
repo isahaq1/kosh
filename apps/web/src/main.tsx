@@ -7,6 +7,7 @@ import { accountingMessages, registerAccountingWeb } from '@kosh/accounting/web'
 import { assistantMessages, registerAssistantWeb } from '@kosh/assistant/web';
 import { automationMessages, registerAutomationWeb } from '@kosh/automation/web';
 import { importMessages, registerImportWeb } from '@kosh/import/web';
+import { l10n_bdMessages, registerL10nBdWeb } from '@kosh/l10n_bd/web';
 import { mailMessages, registerMailWeb } from '@kosh/mail/web';
 import { messagingMessages, registerMessagingWeb } from '@kosh/messaging/web';
 import { notifyMessages, registerNotifyWeb } from '@kosh/notify/web';
@@ -32,11 +33,13 @@ registerStudioWeb(registry);
 registerAssistantWeb(registry);
 registerImportWeb(registry);
 registerPortalWeb(registry);
+registerL10nBdWeb(registry);
 const messages = {
   accounting: accountingMessages,
   assistant: assistantMessages,
   automation: automationMessages,
   import: importMessages,
+  l10n_bd: l10n_bdMessages,
   mail: mailMessages,
   notify: notifyMessages,
   portal: portalMessages,

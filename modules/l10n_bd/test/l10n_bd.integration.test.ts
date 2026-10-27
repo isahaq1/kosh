@@ -340,3 +340,177 @@ test('the Mushak 6.3 tax invoice: SD, then VAT on price plus SD, per line; both 
     'Certificate of VAT deducted at source (Mushak 6.6)',
   );
 });
+
+test('the registers (6.1, 6.2) and the monthly return (9.1): bands, credit notes, AT and VDS', async () => {
+  const ids = await host.server.shutro.bootstrap(
+    { reason: 'test: register data', company },
+    async (env) => {
+      const journal = async (code: string) =>
+        (await env.sql<{ id: number }>`SELECT id FROM account_journal WHERE code = ${code}`)[0]
+          ?.id as number;
+      const [bdt] = await env.sql<{ id: number }>`SELECT id FROM res_currency WHERE name = 'BDT'`;
+      const [vds] = await env.sql<{ id: number }>`
+      SELECT id FROM account_withholding WHERE name->>'en_US' = 'VDS (the full VAT)'`;
+      const tax = async (id: string) =>
+        Number(await env.refId('account.tax' as never, `l10n_bd.${id}`));
+      return {
+        inv: await journal('INV'),
+        bill: await journal('BILL'),
+        bank: await journal('BNK'),
+        bdt: bdt?.id as number,
+        vds: vds?.id as number,
+        vatSale: await tax('tax_sale_vat15'),
+        vatPurchase: await tax('tax_purchase_vat15'),
+        at: await tax('tax_purchase_at5'),
+      };
+    },
+  );
+  const partner = async (name: string, extra: Record<string, unknown>) => {
+    const created = await call('POST', '/api/v1/models/res.partner', 'maria', {
+      name,
+      isCompany: true,
+      ...extra,
+    });
+    expectStatus(created, 201);
+    return created.json.id as number;
+  };
+  const document = async (payload: Record<string, unknown>) => {
+    const created = await call('POST', '/api/v1/models/account.move', 'maria', {
+      currency: ids.bdt,
+      ...payload,
+    });
+    expectStatus(created, 201);
+    const id = created.json.id as number;
+    expectStatus(
+      await call('POST', `/api/v1/models/account.move/${id}/transitions/post`, 'maria'),
+      200,
+    );
+    return id;
+  };
+  const customer = await partner('Sylhet Tea House', { isCustomer: true });
+  await document({
+    kind: 'out_refund',
+    journal: ids.inv,
+    partner: customer,
+    ref: 'Returned goods',
+    lines: {
+      create: [
+        {
+          lineKind: 'product',
+          name: 'Tea (box)',
+          quantity: '1',
+          priceUnit: '500.00',
+          taxes: { set: [ids.vatSale] },
+        },
+      ],
+    },
+  });
+  const vendor = await partner('Mongla Imports', { isVendor: true, bin: '0055566677788' });
+  const bill = await document({
+    kind: 'in_invoice',
+    journal: ids.bill,
+    partner: vendor,
+    lines: {
+      create: [
+        {
+          lineKind: 'product',
+          name: 'Packaging film',
+          quantity: '2',
+          priceUnit: '1000.00',
+          taxes: { set: [ids.vatPurchase, ids.at] },
+        },
+      ],
+    },
+  });
+  expectStatus(
+    await call('POST', '/api/v1/accounting/payments/register', 'maria', {
+      moves: [bill],
+      journal: ids.bank,
+      withholdings: [{ withholding: ids.vds, amount: '300.00' }],
+    }),
+    200,
+  );
+  const month = new Date().toISOString().slice(0, 7);
+
+  const sales = await call('GET', `/api/v1/l10n_bd/mushak/6.2?month=${month}`, 'maria');
+  expectStatus(sales, 200);
+  expect(
+    (sales.json.rows as Json[]).map((r) => [
+      r.partner,
+      r.bin,
+      r.value,
+      r.sd,
+      r.vat,
+      r.total,
+      r.category,
+      r.refund,
+    ]),
+  ).toEqual([
+    [
+      'Karnaphuli Traders',
+      '0011122233344',
+      '1000.00',
+      '200.00',
+      '180.00',
+      '1380.00',
+      'standard',
+      false,
+    ],
+    ['Sylhet Tea House', null, '-500.00', '0.00', '-75.00', '-575.00', 'standard', true],
+  ]);
+  const purchases = await call('GET', `/api/v1/l10n_bd/mushak/6.1?month=${month}`, 'maria');
+  expect(
+    (purchases.json.rows as Json[]).map((r) => [r.partner, r.bin, r.value, r.vat, r.category]),
+  ).toEqual([['Mongla Imports', '0055566677788', '2000.00', '300.00', 'standard']]);
+
+  const ret = await call('GET', `/api/v1/l10n_bd/mushak/9.1?month=${month}`, 'maria');
+  expectStatus(ret, 200);
+  expect(ret.json.supplies.standard).toEqual({ value: '500.00', sd: '200.00', vat: '105.00' });
+  expect(ret.json.purchases.standard).toEqual({ value: '2000.00', sd: '0.00', vat: '300.00' });
+  expect(ret.json).toMatchObject({
+    outputVat: '105.00',
+    inputVat: '300.00',
+    sdPayable: '200.00',
+    advanceTax: '100.00',
+    vdsDeducted: '300.00',
+    vdsByCustomers: '0.00',
+    netVat: '5.00', // 105 − 300 + 300 (VDS we owe) − 100 (AT paid)
+  });
+
+  // The files: an XLSX workbook and a PDF, both in the audit log.
+  const file = (form: string, format: string) =>
+    host.server.app.inject({
+      method: 'GET',
+      url: `/api/v1/l10n_bd/mushak/${form}?month=${month}&format=${format}`,
+      headers: { authorization: `Bearer ${tokens.get('maria') ?? ''}` },
+    });
+  const xlsx = await file('6.2', 'xlsx');
+  expect(xlsx.statusCode, xlsx.body.slice(0, 300)).toBe(200);
+  expect(xlsx.rawPayload.subarray(0, 2).toString()).toBe('PK');
+  const pdf = await file('9.1', 'pdf');
+  expect(pdf.statusCode, pdf.body.slice(0, 300)).toBe(200);
+  expect(pdf.rawPayload.subarray(0, 4).toString()).toBe('%PDF');
+  const exports = await sql(
+    (env) => env.sql<{ summary: string }>`
+      SELECT summary FROM audit_event WHERE kind = 'data.export' ORDER BY id`,
+  );
+  expect(exports.map((e) => e.summary)).toEqual([
+    `Exported Mushak 6.2 for ${month} as xlsx.`,
+    `Exported Mushak 9.1 for ${month} as pdf.`,
+  ]);
+
+  // A bad month, an unknown form, a user without Accounting.
+  expect((await call('GET', '/api/v1/l10n_bd/mushak/9.1?month=2026-13', 'maria')).status).toBe(400);
+  expect((await call('GET', `/api/v1/l10n_bd/mushak/4.3?month=${month}`, 'maria')).status).toBe(
+    404,
+  );
+  await host.server.auth?.createUser({
+    login: 'omar',
+    name: 'Omar',
+    password: PASSWORD,
+    company,
+    companies: [company],
+    groups: ['contacts.user'],
+  });
+  expect((await call('GET', `/api/v1/l10n_bd/mushak/6.2?month=${month}`, 'omar')).status).toBe(403);
+});

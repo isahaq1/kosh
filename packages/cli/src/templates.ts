@@ -100,6 +100,7 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     label: 'Bangladesh: chart of accounts, VAT and SD, VDS and TDS, BIN and TIN, July–June year',
     icon: '🇧🇩',
     server: 'l10nBd',
+    web: 'registerL10nBdWeb',
     bridge: ['accounting'],
     country: 'BD',
   },

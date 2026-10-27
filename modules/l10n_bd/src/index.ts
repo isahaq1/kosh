@@ -20,6 +20,7 @@ import { defineModule, type KoshModule, type LocalizationSpec } from '@kosh/modu
 import { field } from '@kosh/views';
 import { MUSHAK_DOCUMENTS } from './documents.js';
 import { l10nBdShutro } from './module.js';
+import { registerMushakRoutes } from './routes.js';
 
 export { MUSHAK_DOCUMENTS } from './documents.js';
 export {
@@ -33,6 +34,19 @@ export {
   TAXES,
   TaxMushak,
 } from './module.js';
+export {
+  type Band,
+  MonthError,
+  monthRange,
+  type RegisterRow,
+  type Return91,
+  register,
+  return91,
+  type Side,
+  VAT_CATEGORIES,
+  type VatCategory,
+} from './mushak.js';
+export { type MushakForm, registerMushakRoutes } from './routes.js';
 
 /** Bangladesh, as Accounting installs it for a company. */
 export const BANGLADESH: LocalizationSpec = {
@@ -129,6 +143,25 @@ export const l10nBd: KoshModule = defineModule({
   // The tax invoice, the credit note and the VDS certificate (printed when Reporting is installed).
   documents: MUSHAK_DOCUMENTS,
   hooks: { defaults: (env) => localize(env) },
+  routes: registerMushakRoutes,
+  // Accounting › Reporting › Mushak returns: the registers and the monthly return.
+  actions: {
+    'l10n_bd.action_mushak': {
+      type: 'client',
+      page: 'l10n_bd.Mushak',
+      label: 'Mushak returns',
+      visibleTo: ['account.user'],
+    },
+  },
+  menus: [
+    {
+      id: 'l10n_bd.mushak',
+      parent: 'accounting.reporting',
+      label: 'Mushak returns',
+      action: 'l10n_bd.action_mushak',
+      sequence: 8,
+    },
+  ],
   // The BIN and TIN with a contact's identity, for contacts in Bangladesh.
   viewExtensions: [
     // Where a tax goes in the Mushak returns.
