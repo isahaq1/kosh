@@ -12,7 +12,7 @@
  *   kosh-erp/<package>/web   permissions, reporting, messaging (their React contributions)
  *   kosh-erp/ui/styles.css   the design tokens
  *
- * Usage: node scripts/pack-npm.ts [version] (default: the version being released, 0.1.3)
+ * Usage: node scripts/pack-npm.ts [version] (default: the version being released, 0.2.0)
  */
 import {
   cpSync,
@@ -60,9 +60,9 @@ const PACKAGES = [
   'cli',
 ];
 const SPECIFIER =
-  /(\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(['"])@kosh\/([a-z0-9-]+)(\/[a-z0-9./-]+)?\2/g;
+  /(\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(['"])@kosh\/([a-z0-9_-]+)(\/[a-z0-9./_-]+)?\2/g;
 /** `@kosh/<package>[/<sub>]` in comments and messages (not the `@kosh/source` build condition). */
-const MENTION = /@kosh\/(?!source\b)([a-z0-9-]+)((?:\/[a-z0-9.-]+)*)/g;
+const MENTION = /@kosh\/(?!source\b)([a-z0-9_-]+)((?:\/[a-z0-9._-]+)*)/g;
 
 interface Manifest {
   readonly version?: string;
@@ -110,7 +110,7 @@ function publicName(pkg: string, sub: string): string {
   return `${NAME}/${pkg}${sub}`;
 }
 
-const version = process.argv[2] ?? '0.1.3';
+const version = process.argv[2] ?? '0.2.0';
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });
 
