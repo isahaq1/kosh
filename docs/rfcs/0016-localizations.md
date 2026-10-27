@@ -284,6 +284,72 @@ declared identifier (`bin`, `tin`), shown when the contact's country matches, ch
   400 / 404 / 403. E2E: the page shows the month's invoice and downloads the return.
 - **Docs**: `docs/localizations.md`.
 
+## Step 5 design: India (`l10n_in`), proposed 2026-10-28 — awaiting approval
+
+Answers given: CGST / SGST or IGST are chosen **at posting** from one GST tax on the line (not by mapping taxes,
+Odoo's fiscal positions); version 1 also has **reverse charge**, **GST cess**, **e-invoicing (IRN, QR)** and
+**e-way bills**.
+
+### 5.a Accounting (country-neutral)
+
+- **Tax components**: a tax may have components (`account.tax.component`: name, share of the rate, account,
+  `scope`: `intra` | `inter` | `always`, and a report `kind`). `GST 18%` has CGST 9 % and SGST 9 % (intra) and IGST
+  18 % (inter). Lines, orders and invoice totals keep one tax and one amount — the engine is unchanged; posting
+  writes one tax line per component of the document's scope (the tax amount split by share, the rounding paisa on
+  the last), each to its account, with its base. A tax without components posts as today.
+- **Place of supply**: `state` (ISO 3166-2, `IN-MH`) on contacts, and `country` / `state` on companies (their
+  registered place). Invoices and bills get `placeOfSupply` (a state), from the partner's state, editable. Scope:
+  `intra` when the place of supply is the company's state, `inter` otherwise and for another country (exports).
+  Generic: any country with a federal tax split can use it.
+- **Reverse charge**: a tax flag `reverseCharge`. On a bill its amount is not added to the total (the supplier is
+  not paid it); posting writes the tax as payable (output) and as claimable (input) — two opposite lines, net zero.
+  The document shows it, and the returns read it.
+- Tests: the split and its rounding, intra / inter / export, reverse charge entries, totals unchanged.
+
+### 5.b `l10n_in`
+
+- **Chart** (Indian Accounting Standards headings): CGST, SGST, IGST and cess payable and input credit, GST under
+  reverse charge, TDS payable, TDS receivable; April–March year; lakh / crore grouping.
+- **Taxes**: GST 0 %, 0.25 %, 3 %, 5 %, 12 %, 18 %, 28 % for sales and purchases with their components; nil-rated,
+  exempt and non-GST; zero-rated exports (with and without IGST paid); reverse-charge variants for purchases;
+  compensation cess (percent; fixed per unit where the rate is so).
+- **Identifiers**: GSTIN (15 characters, its check digit verified, its state code matching the contact's state, its
+  PAN inside), PAN (10 characters) on contacts and companies.
+- **HSN / SAC** on products (`hsnCode`, 4–8 digits; a service flag), printed on lines.
+- **TDS** (income tax, by section): 194C contractors 1 % / 2 %, 194J professional fees 10 %, 194H commission, 194I
+  rent, with thresholds — as withholdings (step 2), rates to be checked each Finance Act.
+- **Documents**: the tax invoice (rule 46: both GSTINs, place of supply, HSN / SAC, taxable value and each tax per
+  line, reverse charge yes / no, total in words, the IRN and its QR once registered) and the credit note.
+- **Returns**: GSTR-1 (B2B by GSTIN, B2C large and small, exports, credit notes, nil / exempt, HSN summary) on
+  screen, as XLSX and as the GST portal's offline JSON; GSTR-3B (3.1 outward and reverse-charge inward supplies, 4
+  input credit, 5 exempt inward, the tax payable by head) on screen, XLSX and PDF.
+
+### 5.c E-invoicing and e-way bills
+
+- **Payloads** built from posted documents: the IRP e-invoice schema (version 1.1: transaction, document, seller,
+  buyer, items with HSN and each tax, totals) and the e-way bill (part A from the invoice, part B: transporter,
+  vehicle, distance — asked on a dialog).
+- **Providers** behind an adapter (`EInvoiceProvider`: generate, cancel; `EwayBillProvider`: generate, update part
+  B, cancel), like the `Messenger` of notifications: credentials per company from the environment / secret
+  manager, never in records. Registration runs as a job after posting (outbox), retried; the IRN, acknowledgement
+  and signed QR are stored on the invoice and printed; the 24-hour cancellation window is enforced.
+- Tests run against a fake provider that checks the payload. A real adapter is written for one provider once there
+  are sandbox credentials to test it (see the open question); until then the feature is off.
+
+### Delivery (each part reviewed)
+
+1. 5.a in Accounting (components, place of supply, reverse charge).
+2. `l10n_in`: chart, taxes, cess, identifiers, HSN / SAC, TDS, the tax invoice and credit note.
+3. GSTR-1 and GSTR-3B (screen, XLSX, PDF, GSTR-1 JSON); E2E.
+4. E-invoicing and e-way bills with the fake provider; then a real adapter.
+
+### Open questions
+
+- **E-invoice and e-way bill access**: direct NIC API access (a GSTIN's API credentials on the IRP / EWB sandbox),
+  or a GSP (which one)? Part 4's real adapter is written for that and tested on its sandbox.
+- **Debit notes**: GST needs them (supplementary invoices); Accounting has credit notes only. Add `out_debit` /
+  `in_debit` kinds in 5.a, or leave them for later?
+
 ## Alignment with CLAUDE.md
 
 "Money is always `Decimal`": every tax and withholding amount, per currency. "Metadata-driven": a country is a
