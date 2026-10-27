@@ -201,6 +201,25 @@ test('the product onchange fills the description, price and VAT', async () => {
   expect(res.json.values.tax).toEqual(expect.any(Number));
 });
 
+test('a blank new order: its defaults, no currency nor amounts yet; the customer brings the currency', async () => {
+  const blank = await call('POST', '/api/v1/models/sale.order/onchange', 'rahim', {
+    values: {},
+    changed: [],
+  });
+  expect(blank.status, JSON.stringify(blank.json)).toBe(200);
+  expect(blank.json.values.amountTotal ?? null).toBeNull();
+  // The defaults come back: a new form shows them.
+  expect(blank.json.values.user).toEqual(expect.any(Number));
+  expect(blank.json.values.dateOrder).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  const partners = await call('GET', '/api/v1/models/res.partner?fields=id&limit=1', 'rahim');
+  const res = await call('POST', '/api/v1/models/sale.order/onchange', 'rahim', {
+    values: { partner: partners.json.items[0].id },
+    changed: ['partner'],
+  });
+  expect(res.status, JSON.stringify(res.json)).toBe(200);
+  expect(res.json.values.currency).toEqual(expect.any(Number));
+});
+
 test('salespeople see their own orders, managers all, others none', async () => {
   const own = await call('GET', '/api/v1/models/sale.order', 'rahim');
   expect(own.json.items.length).toBe(2);

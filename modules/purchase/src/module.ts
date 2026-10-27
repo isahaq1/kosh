@@ -26,6 +26,13 @@ const amounts = compute(
   ['lines.subtotal', 'lines.taxAmount'],
   (orders) => {
     for (const o of orders) {
+      // A new order has no currency until its partner is chosen: no amounts yet.
+      if (o.currency === null) {
+        o.amountUntaxed = null;
+        o.amountTax = null;
+        o.amountTotal = null;
+        continue;
+      }
       const untaxed = o.lines.sum('subtotal', o.currency);
       const tax = o.lines.sum('taxAmount', o.currency);
       o.amountUntaxed = untaxed;
