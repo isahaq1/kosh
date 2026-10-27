@@ -23,6 +23,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: isahaq1/shutro
+          ref: feat/apps-lifecycle # until it is merged into Shutro main (change events, planMigration ignore, onchange defaults)
           path: shutro-src # checkout cannot write outside the workspace; linked to ../shutro below
       - run: ln -s "$GITHUB_WORKSPACE/shutro-src" "$GITHUB_WORKSPACE/../shutro"
       - run: cd ../shutro && pnpm install --frozen-lockfile && pnpm pack:npm && cd dist-npm/shutro && npm install --omit=dev
@@ -47,6 +48,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: isahaq1/shutro
+          ref: feat/apps-lifecycle # until it is merged into Shutro main (change events, planMigration ignore, onchange defaults)
           path: shutro-src # checkout cannot write outside the workspace; linked to ../shutro below
       - run: ln -s "$GITHUB_WORKSPACE/shutro-src" "$GITHUB_WORKSPACE/../shutro"
       - run: cd ../shutro && pnpm install --frozen-lockfile && pnpm pack:npm && cd dist-npm/shutro && npm install --omit=dev
@@ -76,6 +78,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: isahaq1/shutro
+          ref: feat/apps-lifecycle # until it is merged into Shutro main (change events, planMigration ignore, onchange defaults)
           path: shutro-src
       - run: ln -s "$GITHUB_WORKSPACE/shutro-src" "$GITHUB_WORKSPACE/../shutro"
       - run: cd ../shutro && pnpm install --frozen-lockfile && pnpm pack:npm && cd dist-npm/shutro && npm install --omit=dev
