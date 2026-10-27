@@ -168,10 +168,11 @@ import { notify } from 'shutro-erp/notify';
 import { realtime } from 'shutro-erp/realtime';
 import { settings } from 'shutro-erp/settings';
 import { assistant } from 'shutro-erp/assistant';
+import { dataImport } from 'shutro-erp/import';
 import { studio } from 'shutro-erp/studio';
 ${imports.join('\n')}
 
-export const modules = [base, settings, realtime, notify, mail, automation, studio, assistant${apps.map((a) => `, ${APPS[a].server}`).join('')}];
+export const modules = [base, settings, realtime, notify, mail, automation, studio, dataImport, assistant${apps.map((a) => `, ${APPS[a].server}`).join('')}];
 `;
 }
 
@@ -248,6 +249,7 @@ export function mainTsx(_options: StarterOptions): string {
     { name: 'automation', fn: 'registerAutomationWeb' },
     { name: 'studio', fn: 'registerStudioWeb' },
     { name: 'assistant', fn: 'registerAssistantWeb' },
+    { name: 'import', fn: 'registerImportWeb' },
   ].map(({ name, fn }) => {
     const messages = name === 'permissions' ? null : `${name}Messages`;
     return {

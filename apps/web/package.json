@@ -24,7 +24,8 @@
     "@kosh/notify": "workspace:*",
     "@kosh/accounting": "workspace:*",
     "@kosh/studio": "workspace:*",
-    "@kosh/assistant": "workspace:*"
+    "@kosh/assistant": "workspace:*",
+    "@kosh/import": "workspace:*"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

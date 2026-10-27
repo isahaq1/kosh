@@ -6,7 +6,8 @@
  *
  * Users (password: `correct horse battery`):
  * - `admin`: administrator with 2FA (the fixture's secret)
- * - `dina`: accounting, sales and purchase manager; uses the AI assistant (a fake client: no key, no network)
+ * - `dina`: accounting, sales, purchase and contacts manager; uses the AI assistant (a fake client: no key, no
+ *   network) and imports data
  * - `rahim`: salesperson who invoices (sale_account.user) and accountant
  */
 import { mkdtempSync } from 'node:fs';
@@ -16,6 +17,7 @@ import { accounting } from '@kosh/accounting';
 import { createAssistant, fakeClient } from '@kosh/assistant';
 import { automation } from '@kosh/automation';
 import { contacts } from '@kosh/contacts';
+import { dataImport } from '@kosh/import';
 import { mail } from '@kosh/mail';
 import { installActivityTypes, messaging } from '@kosh/messaging';
 import { notify } from '@kosh/notify';
@@ -101,6 +103,7 @@ const CATALOGUE = [
   purchaseAccount,
   saleProject,
   assistant,
+  dataImport,
 ];
 const migrations = mkdtempSync(join(tmpdir(), 'kosh-e2e-apps-migrations-'));
 const setup = pg.createDriver({ url: databaseUrl, max: 2, parseNumeric: orm.toDecimal });
@@ -121,6 +124,7 @@ await applyApps(
         'accounting',
         'project',
         'assistant',
+        'import',
       ],
     },
     dir: migrations,
@@ -171,6 +175,8 @@ for (const [login, name, groups] of [
       'messaging.user',
       'reporting.user',
       'assistant.user',
+      'import.user',
+      'contacts.manager',
     ],
   ],
   [

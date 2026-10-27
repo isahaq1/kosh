@@ -576,6 +576,7 @@ async function modulesFor(apps: readonly AppName[]): Promise<KoshModule[]> {
     (await import('@kosh/mail')).mail,
     (await import('@kosh/automation')).automation,
     (await import('@kosh/studio')).studio,
+    (await import('@kosh/import')).dataImport,
   ];
   for (const app of apps) {
     if (app === 'permissions') modules.push((await import('@kosh/permissions')).permissions);
@@ -1019,6 +1020,7 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
           'mail',
           'automation',
           'studio',
+          'import',
           ...answers.apps,
         ].join(', '),
       ],
