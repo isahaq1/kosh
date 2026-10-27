@@ -265,6 +265,25 @@ declared identifier (`bin`, `tin`), shown when the contact's country matches, ch
   installed; BIN and TIN checks; a second company on the generic chart untouched. `kosh init` with the defaults
   (BDT, every app) installs it.
 
+## Implementation notes (2026-10-27): step 4 — the Mushak documents, registers and return
+
+- **Mushak kinds**: `account.tax.mushak` (standard, reduced, zero-rated, exempt, SD, AT), set on the Bangladesh
+  taxes and editable on the tax form. Product lines store `sdAmount`, `vatAmount` and `totalWithTaxes`, from the
+  same tax engine as their totals.
+- **Documents** (templates of `l10n_bd`): the tax invoice (6.3) and the credit note (6.7) on invoices, the
+  certificate of VAT deducted at source (6.6) on payments. Debit notes (6.8) wait for debit notes in Accounting.
+- **Registers and return**: `GET /api/v1/l10n_bd/mushak/{6.1|6.2|9.1}?month=…[&format=xlsx|pdf]`, as the user
+  (read right on entries; export right and an audit event for files), and the Mushak returns page under Accounting ›
+  Reporting (English and Bangla). Rows are the posted product lines of the month, in taka through their posted
+  balance, credit notes negative, banded by the Mushak kind of their VAT tax. 9.1 adds AT from the posted AT tax
+  lines and VDS from withholdings on the VAT of posted payments: deducted by us (part 5) or by our customers
+  (part 6). The 9.1 here is the summary of its parts, not the NBR's note numbering; the registers have no stock
+  columns until Inventory.
+- **Tests**: the 6.3 amounts (SD 200, VAT 180 on price plus SD) and its HTML with both BINs; the registers with a
+  credit note, the 9.1 net VAT with AT and VDS (105 − 300 + 300 − 100 = 5), XLSX and PDF with their audit events,
+  400 / 404 / 403. E2E: the page shows the month's invoice and downloads the return.
+- **Docs**: `docs/localizations.md`.
+
 ## Alignment with CLAUDE.md
 
 "Money is always `Decimal`": every tax and withholding amount, per currency. "Metadata-driven": a country is a
