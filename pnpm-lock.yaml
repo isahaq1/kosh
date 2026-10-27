@@ -617,6 +617,25 @@ importers:
         specifier: ^12.2.1
         version: 12.2.1
 
+  packages/import:
+    dependencies:
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../modules-sdk
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../server
+      fastify:
+        specifier: ^5.12.7
+        version: 5.12.7
+    devDependencies:
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../reporting
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   packages/jobs: {}
 
   packages/mail:
