@@ -177,12 +177,83 @@ export interface ImportContext {
   readonly registry: KoshRegistry;
 }
 
-export type ImportService = ReturnType<typeof createImportService>;
+/** A session as the API shows it. */
+export interface SessionView {
+  readonly id: number;
+  readonly model: string;
+  readonly fileName: string;
+  readonly fileType: 'csv' | 'xlsx';
+  readonly sheet: string | null;
+  readonly sheets: readonly string[];
+  readonly state: string;
+  readonly rowCount: number;
+  /** Runs as a background job. */
+  readonly background: boolean;
+  readonly headers: readonly string[];
+  readonly sample: readonly (readonly unknown[])[];
+  readonly columns: readonly ColumnMapping[];
+  readonly options: ImportOptions;
+  readonly fields: readonly {
+    readonly key: string;
+    readonly kind: string;
+    readonly label: string;
+    readonly required: boolean;
+    readonly keyable: boolean;
+    readonly line?: string;
+    readonly target?: string;
+  }[];
+  readonly progress: { readonly done: number; readonly total: number } | null;
+  readonly result: unknown;
+  readonly resultDry: boolean;
+  readonly failure: string | null;
+  readonly importedAt: string | null;
+  readonly undoUntil: string | null;
+  /** Rows left out by the last import (the rejected-rows file). */
+  readonly rejected: number;
+}
+
+/** What the routes and the worker share. */
+export interface ImportService {
+  readonly inlineRows: number;
+  readonly catalog: ImportModels;
+  /** @throws {HttpProblem} 403 without the Import data access level */
+  guard(env: Env): void;
+  /** @throws {HttpProblem} 404 for an unknown model, 403 without its permissions */
+  modelFor(env: Env, name: string): ApiModel;
+  fieldsOf(env: Env, model: ApiModel): Map<string, ImportField>;
+  columnFields(fields: ReadonlyMap<string, ImportField>): ImportField[];
+  /** @throws {HttpProblem} 404 when the session is not the user's */
+  sessionOf(env: Env, id: number): Promise<Session>;
+  progressOf(env: Env, session: number): Promise<{ done: number; total: number } | null>;
+  startProgress(env: Env, session: number, total: number): Promise<void>;
+  reportProgress(company: number, session: number, done: number, total: number): Promise<void>;
+  describe(env: Env, session: Session, table: readonly (readonly Cell[])[]): Promise<SessionView>;
+  mappingsFor(env: Env, model: string): Promise<SavedMapping[]>;
+  fitting(mappings: readonly SavedMapping[], headers: readonly string[]): SavedMapping | null;
+  applyMapping(
+    mapping: SavedMapping,
+    headers: readonly string[],
+    fields: ReadonlyMap<string, ImportField>,
+  ): ColumnMapping[];
+  execute(
+    env: Env,
+    session: Session,
+    dryRun: boolean,
+    onProgress?: (done: number, total: number) => Promise<void>,
+  ): Promise<ImportResult>;
+  record(
+    env: Env,
+    session: Session,
+    result: ImportResult,
+    dryRun: boolean,
+    ip?: string,
+  ): Promise<void>;
+}
 
 export function createImportService(
   context: ImportContext,
   limits: { readonly inlineRows?: number } = {},
-) {
+): ImportService {
   const inlineRows = limits.inlineRows ?? INLINE_ROWS;
   const { driver, shutro } = context;
   const registry = context.registry.registry;
@@ -292,7 +363,11 @@ export function createImportService(
     );
 
   /** What the screen shows of a session. */
-  const describe = async (env: Env, session: Session, table: readonly (readonly Cell[])[]) => {
+  const describe = async (
+    env: Env,
+    session: Session,
+    table: readonly (readonly Cell[])[],
+  ): Promise<SessionView> => {
     const fields = fieldsOf(env, session.model);
     const header = session.options.headerRow === false ? [] : (table[0] ?? []);
     return {
