@@ -19,3 +19,4 @@ Design documents written before implementation. An RFC is implemented only after
 | 0013 | [AI assistant](0013-ai-assistant.md) | Accepted, implemented (natural-language search, summaries, draft replies, forms from documents) |
 | 0014 | [Data import](0014-data-import.md) | Accepted, implemented (the parsers and the import, keys, lines, skip errors, undo, background runs, saved mappings, templates, the screen) |
 | 0015 | [Customer and vendor portal](0015-customer-portal.md) | Accepted, implemented (portal users and invitations, the internal-only guard, documents declared in manifests, the portal API with signatures, Sales / Accounting / Purchase / Projects in the portal, announcements, the portal app) |
+| 0016 | [Country localizations (Bangladesh first)](0016-localizations.md) | Draft |
