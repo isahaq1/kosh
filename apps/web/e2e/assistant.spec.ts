@@ -62,6 +62,35 @@ test('the chatter: a summary streams in; a draft reply goes to the composer to e
   );
 });
 
+test('a new contact filled from a pasted email: the values are proposals, unsaved until the user saves', async ({
+  page,
+}) => {
+  await signIn(page, 'dina');
+  await page.goto(CONTACTS);
+  await page.getByRole('button', { name: 'Fill from a document' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Fill a new record from a document' });
+  await dialog
+    .getByLabel('Paste the text')
+    .fill(
+      [
+        'Hello, here are our details.',
+        'Name: Shapla Traders',
+        'Email: info@shapla.test',
+        'City: Rajshahi',
+      ].join('\n'),
+    );
+  await dialog.getByRole('button', { name: 'Read the document' }).click();
+  // Nothing unclear: the new record opens with the values, marked as proposals.
+  await expect(page.getByLabel(/^Name/)).toHaveValue('Shapla Traders');
+  await expect(page.getByLabel(/^Email/)).toHaveValue('info@shapla.test');
+  await expect(page.getByLabel(/^City/)).toHaveValue('Rajshahi');
+  await expect(page.getByText('Proposed', { exact: true })).toHaveCount(3);
+  // They are unsaved changes: Save is offered; discarding them leaves nothing behind (later specs count contacts).
+  await expect(page.getByRole('button', { name: 'Save' })).toBeVisible();
+  await page.getByRole('button', { name: 'Discard' }).click();
+  await expect(page.getByLabel(/^Name/)).toHaveValue('');
+});
+
 test('without the assistant access: no "Ask"', async ({ page }) => {
   await signIn(page, 'rahim');
   await page.goto(CONTACTS);

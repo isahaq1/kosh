@@ -59,6 +59,25 @@ const studio = createStudio({
 // The AI assistant with a fake client (no API key, no network): "… in <city>" filters contacts on their city.
 const assistant = createAssistant({
   client: fakeClient((request) => {
+    if ('schema' in request && request.system.includes('propose the values')) {
+      // "Name: …", "Email: …", "City: …" lines of the pasted text.
+      const line = (label: string) =>
+        request.user
+          .split(String.fromCharCode(10))
+          .find((l) => l.startsWith(`${label}:`))
+          ?.slice(label.length + 1)
+          .trim() ?? '';
+      const fields = Object.fromEntries(
+        Object.keys(
+          (request.schema as { properties: { fields: { properties: Record<string, unknown> } } })
+            .properties.fields.properties,
+        ).map((key) => [key, '']),
+      );
+      return {
+        fields: { ...fields, name: line('Name'), email: line('Email'), city: line('City') },
+        notes: '',
+      };
+    }
     if (!('schema' in request))
       return request.system.includes('summarize')
         ? 'The order waits for its approval.'
