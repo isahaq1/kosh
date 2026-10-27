@@ -375,6 +375,7 @@ function Shell(): ReactElement {
       companyId={current}
       lang={lang}
       tz={Intl.DateTimeFormat().resolvedOptions().timeZone}
+      grouping={user.groupings?.[String(current)] ?? 'international'}
       {...(realtime === undefined ? {} : { realtime })}
       {...(offline === undefined ? {} : { offline })}
     >

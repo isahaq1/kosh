@@ -20,13 +20,19 @@ export interface Formatter {
 export function createFormatter(
   lang: string,
   tz: string,
-  options: { readonly nativeDigits?: boolean } = {},
+  options: {
+    readonly nativeDigits?: boolean;
+    /** `lakh`: 12,34,567 (RFC 0016). Bangla groups so already; English takes the Indian English pattern. */
+    readonly grouping?: 'international' | 'lakh';
+  } = {},
 ): Formatter {
   const base = bcp47(lang);
   // Bangla defaults to Bengali digits in ICU; RFC 0007 makes them a choice (Latin digits unless asked).
   const locale = base.startsWith('bn')
     ? `${base}-u-nu-${options.nativeDigits === true ? 'beng' : 'latn'}`
-    : base;
+    : options.grouping === 'lakh' && base.startsWith('en')
+      ? 'en-IN'
+      : base;
   const integer = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
   const digits = new Intl.NumberFormat(locale, { useGrouping: false });
   const separator =

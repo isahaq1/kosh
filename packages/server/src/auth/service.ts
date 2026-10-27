@@ -52,6 +52,8 @@ export interface UserInfo {
   readonly name: string;
   readonly company: number | null;
   readonly companies: readonly number[];
+  /** The number grouping of each of the user's companies (RFC 0016): `lakh` or `international`. */
+  readonly groupings: Readonly<Record<string, 'international' | 'lakh'>>;
   readonly twoFactorEnabled: boolean;
   /** Holds an administrator role (in some company). */
   readonly administrator: boolean;
@@ -493,12 +495,21 @@ export class AuthService {
       );
       const administrator = await this.#holdsAdministrator(env, session.user);
       const twoFactorEnabled = credential?.['totpEnabled'] === true;
+      const companyIds = (user?.['companies'] as number[] | undefined) ?? [];
+      const groupings: Record<string, 'international' | 'lakh'> = {};
+      if (companyIds.length > 0)
+        for (const c of await fetch(
+          model(env, 'res.company').search({ where: { id: { in: companyIds } } }),
+          ['numberGrouping'],
+        ))
+          groupings[String(c['id'])] = c['numberGrouping'] === 'lakh' ? 'lakh' : 'international';
       return {
         id: session.user,
         login: String(user?.['login']),
         name: String(user?.['name']),
         company: typeof user?.['company'] === 'number' ? (user['company'] as number) : null,
-        companies: (user?.['companies'] as number[] | undefined) ?? [],
+        companies: companyIds,
+        groupings,
         twoFactorEnabled,
         administrator,
         administratorNeedsSecondFactor:

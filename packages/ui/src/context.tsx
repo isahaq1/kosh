@@ -82,6 +82,7 @@ export function KoshProvider({
   companyId,
   lang,
   tz,
+  grouping,
   realtime,
   offline,
   children,
@@ -92,12 +93,17 @@ export function KoshProvider({
   readonly companyId: number;
   readonly lang: string;
   readonly tz: string;
+  /** The company's number grouping (RFC 0016). */
+  readonly grouping?: 'international' | 'lakh';
   readonly realtime?: RealtimeClient;
   readonly offline?: OfflineQueue;
   readonly children: ReactNode;
 }): ReactElement {
   const [theme, setTheme] = useTheme();
-  const format = useMemo(() => createFormatter(lang, tz), [lang, tz]);
+  const format = useMemo(
+    () => createFormatter(lang, tz, grouping === undefined ? {} : { grouping }),
+    [lang, tz, grouping],
+  );
   const value = useMemo(
     () => ({
       api,

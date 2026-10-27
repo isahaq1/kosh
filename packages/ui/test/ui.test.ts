@@ -126,3 +126,12 @@ describe('api client', () => {
     expect(store.get('kosh.csrf')).toBe('csrf-1'); // survives reloads (sessionStorage)
   });
 });
+
+test('lakh and crore grouping for companies that ask for it (RFC 0016)', () => {
+  expect(createFormatter('en_US', 'UTC', { grouping: 'lakh' }).decimal('12345678.50')).toBe(
+    '1,23,45,678.5',
+  );
+  expect(createFormatter('en_US', 'UTC').decimal('12345678.50')).toBe('12,345,678.5');
+  // Bangla groups by lakh already.
+  expect(createFormatter('bn_BD', 'UTC').decimal('12345678')).toBe('1,23,45,678');
+});

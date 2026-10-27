@@ -86,6 +86,8 @@ export interface CurrentUser {
   readonly name: string;
   readonly company: number | null;
   readonly companies: readonly number[];
+  /** Number grouping per company (RFC 0016); older servers send none. */
+  readonly groupings?: Readonly<Record<string, 'international' | 'lakh'>>;
   readonly twoFactorEnabled: boolean;
   readonly administrator: boolean;
   readonly administratorNeedsSecondFactor: boolean;

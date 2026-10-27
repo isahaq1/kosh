@@ -24,6 +24,11 @@ const ResCompany = defineModel('res.company', {
   fields: {
     name: f.char({ required: true }),
     currency: f.many2one('res.currency', { required: true }),
+    /** How numbers are grouped on screen and in documents (RFC 0016): 1,234,567 or 12,34,567 (lakh and crore). */
+    numberGrouping: f.selection(
+      { international: 'International (1,234,567)', lakh: 'Lakh and crore (12,34,567)' },
+      { required: true, default: 'international', label: 'Number grouping' },
+    ),
   },
 });
 

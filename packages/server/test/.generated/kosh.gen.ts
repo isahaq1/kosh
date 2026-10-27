@@ -116,6 +116,8 @@ export interface ResCompany {
   name: string;
   /** Currency: Id of a res.currency record. */
   currency: number;
+  /** Number grouping */
+  numberGrouping: "international" | "lakh";
 }
 
 export interface ResCompanyCreate {
@@ -123,6 +125,8 @@ export interface ResCompanyCreate {
   name: string;
   /** Currency: Id of a res.currency record. */
   currency: number;
+  /** Number grouping */
+  numberGrouping?: "international" | "lakh";
 }
 
 export interface ResCompanyUpdate {
@@ -130,6 +134,8 @@ export interface ResCompanyUpdate {
   name?: string;
   /** Currency: Id of a res.currency record. */
   currency?: number;
+  /** Number grouping */
+  numberGrouping?: "international" | "lakh";
 }
 
 /** Res Currency */
