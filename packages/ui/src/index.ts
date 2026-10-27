@@ -31,7 +31,13 @@ export {
 export { KoshApp, type KoshAppProps } from './app.js';
 export { AppIcon } from './components/AppIcon.js';
 export * from './components/primitives.js';
-export { type KoshContextValue, KoshProvider, type ThemeChoice, useKosh } from './context.js';
+export {
+  type KoshContextValue,
+  KoshProvider,
+  type ThemeChoice,
+  useKosh,
+  useTheme,
+} from './context.js';
 export {
   type DesignContextValue,
   DesignProvider,
