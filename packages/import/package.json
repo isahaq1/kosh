@@ -42,11 +42,11 @@
   },
   "dependencies": {
     "@kosh/modules-sdk": "workspace:*",
+    "@kosh/reporting": "workspace:*",
     "@kosh/server": "workspace:*",
     "fastify": "^5.12.7"
   },
   "devDependencies": {
-    "@kosh/reporting": "workspace:*",
     "@testcontainers/postgresql": "^12.2.1"
   }
 }

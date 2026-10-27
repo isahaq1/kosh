@@ -114,6 +114,9 @@ export interface ImportField {
   readonly keyable: boolean;
 }
 
+/** Records written per savepoint (and per progress report). */
+export const WRITE_BATCH = 1000;
+
 /** Thrown to roll back a savepoint; never escapes `runImport`. */
 class Rollback extends Error {}
 
@@ -185,7 +188,11 @@ export async function runImport(
   fields: ReadonlyMap<string, ImportField>,
   table: readonly (readonly Cell[])[],
   columns: readonly ColumnMapping[],
-  options: ImportOptions & { readonly dryRun: boolean },
+  options: ImportOptions & {
+    readonly dryRun: boolean;
+    /** Called before the writes and after each batch: records written so far, of how many. */
+    readonly onProgress?: (done: number, total: number) => Promise<void>;
+  },
 ): Promise<ImportResult> {
   const first = options.headerRow === false ? 0 : 1;
   const mode = options.mode ?? 'create';
@@ -495,13 +502,15 @@ export async function runImport(
         updates: number[];
         before: Awaited<ReturnType<typeof beforeOf>>;
       }[] = [];
-      if (ready.length > 0)
+      // Batches of records, each in a savepoint; a failing batch again record by record, to find each failure.
+      await options.onProgress?.(0, ready.length);
+      for (let start = 0; start < ready.length; start += WRITE_BATCH) {
+        const batch = ready.slice(start, start + WRITE_BATCH);
         try {
-          done.push(await tx.transaction((batch) => write(batch, ready)));
+          done.push(await tx.transaction((b) => write(b, batch)));
         } catch (error) {
           if (problemOf(error).status >= 500) throw error;
-          // Row by row, to find each failing record.
-          for (const draft of ready)
+          for (const draft of batch)
             try {
               done.push(await tx.transaction((one) => write(one, [draft])));
             } catch (rowError) {
@@ -510,6 +519,8 @@ export async function runImport(
               errors.push(...writeErrors(rowError, draft.row, columnsByField));
             }
         }
+        await options.onProgress?.(Math.min(start + WRITE_BATCH, ready.length), ready.length);
+      }
       for (const d of done) {
         created.push(...d.made);
         updated.push(...d.updates);

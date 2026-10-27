@@ -1,125 +1,56 @@
 /**
- * The import API (RFC 0014 §5.7), for holders of `import.user` (and administrators) who also have the `import` and
- * `create` permissions on the model, checked on every call:
+ * The import API (RFC 0014 §5.7), for holders of `import.user` (and administrators) who also have the `import`
+ * permission and the create or write permission the mode needs on the model, checked on every call:
  *
- * - `POST /api/v1/imports?model=…[&sheet=…]`  the file as the body (`X-Filename`) → the session: headers, the first
- *                                              rows, the guessed mapping and the importable fields
- * - `GET  /api/v1/imports/:id`                 the same, later
- * - `PUT  /api/v1/imports/:id/mapping`         `{ columns: [{ index, field }], options }`
- * - `POST /api/v1/imports/:id/dry-run`         the whole import, rolled back: per-row errors and relation matches
- * - `POST /api/v1/imports/:id/commit`          the import, all-or-nothing (`Idempotency-Key`), audited
+ * - `POST   /api/v1/imports?model=…[&sheet=…]`  the file as the body (`X-Filename`) → the session: headers, the first
+ *                                                rows, the mapping (a fitting saved mapping or template, else guessed)
+ * - `GET    /api/v1/imports/:id`                 the same, later; with the progress of a background run
+ * - `PUT    /api/v1/imports/:id/mapping`         `{ columns: [{ index, field }], options }`
+ * - `POST   /api/v1/imports/:id/apply-mapping`   `{ mapping }`: a saved mapping's or template's columns and options
+ * - `POST   /api/v1/imports/:id/save-mapping`    `{ name, shared }`: the session's mapping, saved by header
+ * - `POST   /api/v1/imports/:id/dry-run`         the whole import, rolled back (a background job above 2,000 rows: 202)
+ * - `POST   /api/v1/imports/:id/commit`          the import (`Idempotency-Key`; a background job above 2,000 rows)
+ * - `POST   /api/v1/imports/:id/undo`            within 7 days, records nobody changed since
+ * - `GET    /api/v1/imports/:id/rejected`        the rows left out, as CSV with an Error column
+ * - `GET    /api/v1/import-mappings?model=…`     saved mappings (own and shared) and module templates
+ * - `DELETE /api/v1/import-mappings/:id`         one of the user's own
+ * - `GET    /api/v1/import-templates/:model[?mapping=…]`  a sample workbook: the headers, and a sheet describing them
  *
  * Sessions are the uploader's own (a record rule); files are read on the server, never evaluated.
  */
-import {
-  type ApiModel,
-  announceChange,
-  audit,
-  HttpProblem,
-  idempotent,
-  type ModuleContext,
-  publicApiModels,
-} from '@kosh/server';
+import { workbook } from '@kosh/reporting';
+import { announceChange, audit, HttpProblem, idempotent, type ModuleContext } from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Cell } from './convert.js';
-import { readCsv } from './csv.js';
 import { type ColumnMapping, guessMapping } from './mapping.js';
-import type { MatchTarget } from './match.js';
+import { EXTERNAL_ID_KEY, ID_KEY, type ImportField, undoImport } from './run.js';
 import {
-  type ImportField,
-  type ImportModels,
-  type ImportOptions,
-  type ImportResult,
-  importFields,
-  type RowError,
-  runImport,
-  type UndoData,
-  undoImport,
-} from './run.js';
-import { readXlsx, XlsxError, xlsxSheetNames } from './xlsx.js';
-
-type Row = Record<string, unknown>;
-interface Rows {
-  readonly ids: readonly number[];
-  readonly length: number;
-  load(keys: readonly string[]): Promise<{ read(keys: readonly string[]): Row[] }>;
-  write(values: unknown): Promise<void>;
-}
-interface Ref {
-  search(q: unknown): Promise<Rows>;
-  create(rows: readonly unknown[]): Promise<Rows>;
-}
-const ref = (env: Env, name: string): Ref => env.model(name as never) as unknown as Ref;
-
-/** Rows imported within a request (larger files run as jobs, RFC 0014 step 3). */
-export const IMPORT_ROWS = 10_000;
-/** The default file size limit (`KOSH_IMPORT_MAX_BYTES`). */
-export const IMPORT_MAX_BYTES = 50_000_000;
-/** Rows of the file shown with the mapping. */
-const SAMPLE_ROWS = 5;
+  createImportService,
+  dataRows,
+  IMPORT_MAX_BYTES,
+  IMPORT_ROWS,
+  type ImportService,
+  INLINE_ROWS,
+  isXlsx,
+  parseOptions,
+  RUN_JOB,
+  readTable,
+  ref,
+  type SavedMapping,
+  shown,
+  UNDO_DAYS,
+} from './service.js';
 
 export interface ImportRoutesOptions {
   /** Bytes per file. */
   readonly maxBytes?: number;
-  /** Rows per import. */
+  /** Rows per file. */
   readonly maxRows?: number;
-}
-
-const DATE_ORDERS = ['dmy', 'mdy', 'ymd'];
-const MODES = ['create', 'update', 'upsert'];
-/** How long an import can be undone (RFC 0014 §5.5). */
-export const UNDO_DAYS = 7;
-
-/** The options of a mapping request, checked. */
-function parseOptions(input: unknown): ImportOptions {
-  if (input === undefined) return {};
-  if (typeof input !== 'object' || input === null || Array.isArray(input))
-    throw new HttpProblem(400, 'invalid-options', 'Invalid options', 'options is an object.');
-  const o = input as Record<string, unknown>;
-  const out: { -readonly [K in keyof ImportOptions]: ImportOptions[K] } = {};
-  if (o['dateOrder'] !== undefined) {
-    if (!DATE_ORDERS.includes(String(o['dateOrder'])))
-      throw new HttpProblem(
-        400,
-        'invalid-options',
-        'Invalid options',
-        'dateOrder is dmy, mdy or ymd.',
-      );
-    out.dateOrder = o['dateOrder'] as 'dmy' | 'mdy' | 'ymd';
-  }
-  if (o['decimal'] !== undefined) {
-    if (o['decimal'] !== '.' && o['decimal'] !== ',')
-      throw new HttpProblem(400, 'invalid-options', 'Invalid options', 'decimal is "." or ",".');
-    out.decimal = o['decimal'];
-  }
-  if (o['timeZone'] !== undefined) {
-    const zone = String(o['timeZone']);
-    try {
-      new Intl.DateTimeFormat('en', { timeZone: zone });
-    } catch {
-      throw new HttpProblem(400, 'invalid-options', 'Invalid options', `No time zone '${zone}'.`);
-    }
-    out.timeZone = zone;
-  }
-  if (o['headerRow'] !== undefined) out.headerRow = o['headerRow'] === true;
-  if (o['mode'] !== undefined) {
-    if (!MODES.includes(String(o['mode'])))
-      throw new HttpProblem(
-        400,
-        'invalid-options',
-        'Invalid options',
-        'mode is create, update or upsert.',
-      );
-    out.mode = o['mode'] as 'create' | 'update' | 'upsert';
-  }
-  if (o['onError'] !== undefined) {
-    if (o['onError'] !== 'stop' && o['onError'] !== 'skip')
-      throw new HttpProblem(400, 'invalid-options', 'Invalid options', 'onError is stop or skip.');
-    out.onError = o['onError'];
-  }
-  if (o['key'] !== undefined && o['key'] !== null) out.key = String(o['key']);
-  return out;
+  /** Rows run in the request; above, a background job. */
+  readonly inlineRows?: number;
+  /** The service the worker shares (made from the context by default). */
+  readonly service?: ImportService;
 }
 
 /** A cell of the rejected-rows file: quoted when needed; formulas kept as text (never run by a spreadsheet). */
@@ -134,19 +65,43 @@ function csvCell(cell: Cell): string {
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-/** A result as the API shows it: undo data stays on the server. */
-const shown = ({ undo: _, ...result }: ImportResult) => result;
+const idOf = (params: unknown): number => {
+  const id = Number((params as { id?: unknown }).id);
+  if (!Number.isSafeInteger(id) || id <= 0)
+    throw new HttpProblem(400, 'invalid-id', 'Invalid id', 'The id is a positive integer.');
+  return id;
+};
 
-const isXlsx = (bytes: Uint8Array) =>
-  bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
-
-/** The cells of a file. @throws {HttpProblem} 422 when it cannot be read */
-function readTable(bytes: Uint8Array, type: 'csv' | 'xlsx', sheet: string | null): Cell[][] {
-  try {
-    return type === 'xlsx' ? readXlsx(bytes, sheet ?? undefined).rows : readCsv(bytes).rows;
-  } catch (error) {
-    if (!(error instanceof XlsxError)) throw error;
-    throw new HttpProblem(422, 'unreadable-file', 'The file cannot be read', error.message);
+/** What a column of a template expects, in words (the template's second sheet). */
+function expects(field: ImportField): string {
+  switch (field.kind) {
+    case ID_KEY:
+      return 'The record id (#42), to update records';
+    case EXTERNAL_ID_KEY:
+      return 'An external id (legacy.partner_42), to find the record again';
+    case 'boolean':
+      return 'Yes or No';
+    case 'date':
+      return 'A date: DD/MM/YYYY or YYYY-MM-DD';
+    case 'datetime':
+      return 'A date and time: DD/MM/YYYY HH:MM';
+    case 'integer':
+    case 'bigint':
+      return 'A whole number';
+    case 'float':
+    case 'decimal':
+    case 'monetary':
+    case 'quantity':
+      return 'A number: 1,250.50';
+    case 'selection':
+    case 'state':
+      return `One of: ${(field.options ?? []).map(([, label]) => label).join(', ')}`;
+    case 'many2one':
+      return `The name, code or external id of a record (${field.target?.model ?? ''})`;
+    case 'many2many':
+      return `Names, codes or external ids, separated by commas (${field.target?.model ?? ''})`;
+    default:
+      return 'Text';
   }
 }
 
@@ -155,169 +110,26 @@ export function registerImportRoutes(
   options: ImportRoutesOptions = {},
 ): void {
   const { app, driver } = context;
-  const registry = context.registry.registry;
-  const models = publicApiModels(context.registry);
+  const service =
+    options.service ??
+    createImportService(
+      context,
+      options.inlineRows === undefined ? {} : { inlineRows: options.inlineRows },
+    );
   const maxBytes = options.maxBytes ?? IMPORT_MAX_BYTES;
   const maxRows = options.maxRows ?? IMPORT_ROWS;
-
-  /** How records of `name` are found from text: its name field and its own unique char fields. */
-  const targets = (name: string): MatchTarget | null => {
-    if (!registry.models.has(name as never)) return null;
-    const description = registry.describe(name as never);
-    const keys = new Set<string>();
-    const unique = [
-      ...description.sqlConstraints.filter((c) => c.kind === 'unique').map((c) => c.fields),
-      ...description.indexes.filter((i) => i.unique && !i.partial).map((i) => i.fields),
-    ];
-    for (const fields of unique) {
-      const own = fields.filter((f) => f !== 'company');
-      const [only] = own;
-      if (own.length === 1 && only !== undefined && description.fields[only]?.kind === 'char')
-        keys.add(only);
-    }
-    return { model: name, recName: description.recName, keys: [...keys] };
+  const inlineRows = options.service?.inlineRows ?? options.inlineRows ?? INLINE_ROWS;
+  const { sessionOf, describe, fieldsOf, columnFields } = service;
+  const shownSession = async (env: Env, id: number) => {
+    const session = await sessionOf(env, id);
+    return describe(env, session, readTable(session.file, session.fileType, session.sheet));
   };
-
-  const guard = (env: Env): void => {
-    if (!env.administrator && !env.groups.has('import.user'))
-      throw new HttpProblem(
-        403,
-        'access',
-        'Import users only',
-        'Importing data needs the Import data access level.',
-      );
+  const draftOnly = (state: string) => {
+    if (state === 'running')
+      throw new HttpProblem(409, 'running', 'Running', 'This import is running in the background.');
+    if (state !== 'draft')
+      throw new HttpProblem(409, 'imported', 'Already imported', 'This file was imported.');
   };
-  /** The model a user may import into. */
-  const modelFor = (env: Env, name: string): ApiModel => {
-    const model = models.get(name);
-    if (model === undefined)
-      throw new HttpProblem(404, 'unknown-model', 'Unknown model', `No model is named '${name}'.`);
-    env.access.check(name as never, 'import');
-    // Creating or updating: one of them, checked again for the mode of the run.
-    if (!env.access.can(name as never, 'create')) env.access.check(name as never, 'write');
-    return model;
-  };
-  const idOf = (params: unknown): number => {
-    const id = Number((params as { id?: unknown }).id);
-    if (!Number.isSafeInteger(id) || id <= 0)
-      throw new HttpProblem(400, 'invalid-id', 'Invalid id', 'The id is a positive integer.');
-    return id;
-  };
-
-  const SESSION_FIELDS = [
-    'resModel',
-    'fileName',
-    'fileType',
-    'file',
-    'sheet',
-    'columns',
-    'options',
-    'state',
-    'rowCount',
-    'createdIds',
-    'undo',
-    'rejected',
-    'importedAt',
-  ];
-  interface Session {
-    readonly id: number;
-    readonly rows: Rows;
-    readonly model: ApiModel;
-    readonly fileName: string;
-    readonly fileType: 'csv' | 'xlsx';
-    readonly file: Uint8Array;
-    readonly sheet: string | null;
-    readonly columns: readonly ColumnMapping[];
-    readonly options: ImportOptions;
-    readonly state: string;
-    readonly rowCount: number;
-    readonly createdIds: readonly number[];
-    readonly undo: UndoData | null;
-    /** The errors and the file rows of the records left out. */
-    readonly rejected: { readonly errors: readonly RowError[]; readonly rows: readonly number[] };
-    readonly importedAt: Date | null;
-  }
-  /** The caller's session `id` (a record rule hides the others: 404). */
-  const sessionOf = async (env: Env, id: number): Promise<Session> => {
-    guard(env);
-    const rows = await ref(env, 'import.session').search({ where: { id }, limit: 1 });
-    const [row] = (await rows.load(SESSION_FIELDS)).read(SESSION_FIELDS);
-    if (rows.length === 0 || row === undefined)
-      throw new HttpProblem(404, 'not-found', 'No such import', `No import #${id} of yours.`);
-    const model = modelFor(env, String(row['resModel']));
-    return {
-      id,
-      rows,
-      model,
-      fileName: String(row['fileName']),
-      fileType: row['fileType'] === 'xlsx' ? 'xlsx' : 'csv',
-      file: row['file'] as Uint8Array,
-      sheet: typeof row['sheet'] === 'string' ? row['sheet'] : null,
-      columns: (row['columns'] as ColumnMapping[] | null) ?? [],
-      options: (row['options'] as ImportOptions | null) ?? {},
-      state: String(row['state']),
-      rowCount: Number(row['rowCount']),
-      createdIds: (row['createdIds'] as number[] | null) ?? [],
-      undo: (row['undo'] as UndoData | null) ?? null,
-      rejected: (row['rejected'] as Session['rejected'] | null) ?? { errors: [], rows: [] },
-      importedAt: typeof row['importedAt'] === 'string' ? new Date(row['importedAt']) : null,
-    };
-  };
-  const catalog: ImportModels = {
-    models,
-    targets,
-    inverseOf: (model, field) => {
-      const raw = registry.get(model as never).model.fields as unknown as Readonly<
-        Record<string, { readonly inverseField?: unknown }>
-      >;
-      const inverse = raw[field]?.inverseField;
-      return typeof inverse === 'string' ? inverse : null;
-    },
-  };
-  const fieldsOf = (env: Env, model: ApiModel): Map<string, ImportField> =>
-    importFields(env, model, catalog);
-  /** The fields a column may fill (not the one2many fields themselves: their lines' fields). */
-  const columnFields = (fields: ReadonlyMap<string, ImportField>) =>
-    [...fields.values()].filter((f) => f.kind !== 'one2many');
-
-  /** What the wizard shows of a session. */
-  const describe = (env: Env, session: Session, table: readonly (readonly Cell[])[]) => {
-    const fields = fieldsOf(env, session.model);
-    const header = session.options.headerRow === false ? [] : (table[0] ?? []);
-    return {
-      id: session.id,
-      model: session.model.name,
-      fileName: session.fileName,
-      fileType: session.fileType,
-      sheet: session.sheet,
-      sheets: session.fileType === 'xlsx' ? xlsxSheetNames(session.file) : [],
-      state: session.state,
-      rowCount: session.rowCount,
-      headers: header.map((c) => (c === null ? '' : String(c))),
-      sample: table
-        .slice(session.options.headerRow === false ? 0 : 1, SAMPLE_ROWS + 1)
-        .map((r) => r.map((c) => (c instanceof Date ? c.toISOString() : c))),
-      columns: session.columns,
-      options: session.options,
-      fields: columnFields(fields).map((f) => ({
-        key: f.key,
-        kind: f.kind,
-        label: f.label,
-        required: f.required,
-        keyable: f.keyable,
-        ...(f.line === null ? {} : { line: f.line }),
-        ...(f.target === null ? {} : { target: f.target.model }),
-      })),
-      importedAt: session.importedAt?.toISOString() ?? null,
-      undoUntil:
-        session.state === 'done' && session.importedAt !== null && session.undo !== null
-          ? new Date(session.importedAt.getTime() + UNDO_DAYS * 86_400_000).toISOString()
-          : null,
-      rejected: session.rejected.rows.length,
-    };
-  };
-  const dataRows = (table: readonly (readonly Cell[])[], options: ImportOptions) =>
-    Math.max(0, table.length - (options.headerRow === false ? 0 : 1));
 
   // Uploads: the body is the file. Own parser in an encapsulated context; the caller is checked before reading it.
   app.register(async (uploads: FastifyInstance) => {
@@ -355,8 +167,8 @@ export function registerImportRoutes(
       const table = readTable(file, fileType, sheet);
       const created = await request.env(
         async (env) => {
-          guard(env);
-          const model = modelFor(env, name);
+          service.guard(env);
+          const model = service.modelFor(env, name);
           const rowCount = dataRows(table, {});
           if (rowCount > maxRows)
             throw new HttpProblem(
@@ -366,10 +178,14 @@ export function registerImportRoutes(
               `The file has ${rowCount} rows; at most ${maxRows} are imported at once.`,
               'Split the file.',
             );
-          const columns = guessMapping(
-            (table[0] ?? []).map((c) => (c === null ? '' : String(c))),
-            columnFields(fieldsOf(env, model)),
-          );
+          const headers = (table[0] ?? []).map((c) => (c === null ? '' : String(c)));
+          const fields = fieldsOf(env, model);
+          // A saved mapping or a template whose every header the file has, else a guess.
+          const applied = service.fitting(await service.mappingsFor(env, model.name), headers);
+          const columns =
+            applied === null
+              ? guessMapping(headers, columnFields(fields))
+              : service.applyMapping(applied, headers, fields);
           const rows = await ref(env, 'import.session').create([
             {
               user: env.uid,
@@ -379,12 +195,15 @@ export function registerImportRoutes(
               file,
               sheet,
               columns,
-              options: {},
+              options: applied?.options ?? {},
               rowCount,
             },
           ]);
-          const id = rows.ids[0] as number;
-          return describe(env, await sessionOf(env, id), table);
+          const session = await sessionOf(env, rows.ids[0] as number);
+          return {
+            ...(await describe(env, session, table)),
+            applied: applied === null ? null : { id: applied.id, name: applied.name },
+          };
         },
         { write: true },
       );
@@ -393,150 +212,232 @@ export function registerImportRoutes(
   });
 
   app.get('/api/v1/imports/:id', async (request) =>
-    request.env(async (env) => {
-      const session = await sessionOf(env, idOf(request.params));
-      return describe(env, session, readTable(session.file, session.fileType, session.sheet));
-    }),
+    // Write: progress is read in a system scope (Shutro request #12).
+    request.env((env) => shownSession(env, idOf(request.params)), { write: true }),
   );
+
+  /** Checks and stores a mapping on a draft session. */
+  const storeMapping = async (
+    env: Env,
+    id: number,
+    input: readonly unknown[],
+    given: ReturnType<typeof parseOptions>,
+  ) => {
+    const session = await sessionOf(env, id);
+    draftOnly(session.state);
+    const table = readTable(session.file, session.fileType, session.sheet);
+    const headers = given.headerRow === false ? [] : (table[0] ?? []);
+    const width = Math.max(0, ...table.slice(0, 50).map((r) => r.length));
+    const fields = fieldsOf(env, session.model);
+    const seen = new Set<string>();
+    const columns: ColumnMapping[] = [];
+    for (const raw of input) {
+      const c = (raw ?? {}) as Record<string, unknown>;
+      const index = Number(c['index']);
+      const field = c['field'] === null || c['field'] === undefined ? null : String(c['field']);
+      if (!Number.isInteger(index) || index < 0 || index >= width)
+        throw new HttpProblem(400, 'invalid-columns', 'Invalid columns', `No column ${index}.`);
+      if (columns.some((m) => m.index === index))
+        throw new HttpProblem(
+          400,
+          'invalid-columns',
+          'Invalid columns',
+          `Column ${index} is given twice.`,
+        );
+      if (field !== null) {
+        if (!fields.has(field) || fields.get(field)?.kind === 'one2many')
+          throw new HttpProblem(
+            422,
+            'unknown-field',
+            'Field cannot be imported',
+            `'${field}' is not a field you may import into.`,
+          );
+        if (seen.has(field))
+          throw new HttpProblem(
+            422,
+            'duplicate-field',
+            'Field mapped twice',
+            `'${field}' is mapped twice.`,
+          );
+        seen.add(field);
+      }
+      const header = headers[index];
+      columns.push({
+        index,
+        header: header === null || header === undefined ? '' : String(header),
+        field,
+      });
+    }
+    if (given.key !== undefined && fields.get(given.key)?.keyable !== true)
+      throw new HttpProblem(
+        422,
+        'invalid-key',
+        'Not a key',
+        `'${given.key}' cannot find records: use the id, an external id or a unique field.`,
+      );
+    await session.rows.write({ columns, options: given, rowCount: dataRows(table, given) });
+    return describe(env, { ...session, columns, options: given }, table);
+  };
 
   app.put('/api/v1/imports/:id/mapping', async (request) => {
     const body = (request.body ?? {}) as Record<string, unknown>;
     const input = body['columns'];
     if (!Array.isArray(input))
       throw new HttpProblem(400, 'invalid-columns', 'Invalid columns', 'columns is an array.');
-    const options = parseOptions(body['options']);
+    const given = parseOptions(body['options']);
+    return request.env((env) => storeMapping(env, idOf(request.params), input, given), {
+      write: true,
+    });
+  });
+
+  app.post('/api/v1/imports/:id/apply-mapping', async (request) => {
+    const wanted = String(((request.body ?? {}) as Record<string, unknown>)['mapping'] ?? '');
     return request.env(
       async (env) => {
         const session = await sessionOf(env, idOf(request.params));
-        if (session.state !== 'draft')
-          throw new HttpProblem(409, 'imported', 'Already imported', 'This file was imported.');
+        const mapping = (await service.mappingsFor(env, session.model.name)).find(
+          (m) => m.id === wanted,
+        );
+        if (mapping === undefined)
+          throw new HttpProblem(404, 'not-found', 'No such mapping', `No mapping '${wanted}'.`);
         const table = readTable(session.file, session.fileType, session.sheet);
-        const headers = options.headerRow === false ? [] : (table[0] ?? []);
-        const width = Math.max(0, ...table.slice(0, 50).map((r) => r.length));
-        const fields = fieldsOf(env, session.model);
-        const seen = new Set<string>();
-        const columns: ColumnMapping[] = [];
-        for (const raw of input) {
-          const c = (raw ?? {}) as Record<string, unknown>;
-          const index = Number(c['index']);
-          const field = c['field'] === null || c['field'] === undefined ? null : String(c['field']);
-          if (!Number.isInteger(index) || index < 0 || index >= width)
-            throw new HttpProblem(400, 'invalid-columns', 'Invalid columns', `No column ${index}.`);
-          if (field !== null) {
-            if (!fields.has(field) || fields.get(field)?.kind === 'one2many')
-              throw new HttpProblem(
-                422,
-                'unknown-field',
-                'Field cannot be imported',
-                `'${field}' is not a field you may import into.`,
-              );
-            if (seen.has(field))
-              throw new HttpProblem(
-                422,
-                'duplicate-field',
-                'Field mapped twice',
-                `'${field}' is mapped twice.`,
-              );
-            seen.add(field);
-          }
-          const header = headers[index];
-          if (columns.some((m) => m.index === index))
-            throw new HttpProblem(
-              400,
-              'invalid-columns',
-              'Invalid columns',
-              `Column ${index} is given twice.`,
-            );
-          columns.push({
-            index,
-            header: header === null || header === undefined ? '' : String(header),
-            field,
-          });
-        }
-        if (options.key !== undefined && fields.get(options.key)?.keyable !== true)
-          throw new HttpProblem(
-            422,
-            'invalid-key',
-            'Not a key',
-            `'${options.key}' cannot find records: use the id, an external id or a unique field.`,
-          );
-        await session.rows.write({
-          columns,
-          options,
-          rowCount: dataRows(table, options),
-        });
-        return describe(env, { ...session, columns, options }, table);
+        const headers = (table[0] ?? []).map((c) => (c === null ? '' : String(c)));
+        const columns = service.applyMapping(mapping, headers, fieldsOf(env, session.model));
+        return storeMapping(env, session.id, columns, mapping.options);
       },
       { write: true },
     );
   });
 
-  const run = async (request: FastifyRequest, env: Env, dryRun: boolean) => {
+  app.post('/api/v1/imports/:id/save-mapping', async (request, reply) => {
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const name = typeof body['name'] === 'string' ? body['name'].trim() : '';
+    if (name === '' || name.length > 100)
+      throw new HttpProblem(400, 'invalid-name', 'Invalid name', 'name is 1–100 characters.');
+    const saved = await request.env(
+      async (env) => {
+        const session = await sessionOf(env, idOf(request.params));
+        const columns = session.columns.flatMap((c) =>
+          c.field === null || c.header === '' ? [] : [{ header: c.header, field: c.field }],
+        );
+        if (columns.length === 0)
+          throw new HttpProblem(422, 'empty-mapping', 'Nothing to save', 'Map a column first.');
+        const rows = await ref(env, 'import.mapping').create([
+          {
+            name,
+            resModel: session.model.name,
+            user: env.uid,
+            shared: body['shared'] === true,
+            columns,
+            options: session.options,
+          },
+        ]);
+        return { id: String(rows.ids[0]), name };
+      },
+      { write: true },
+    );
+    return reply.code(201).send(saved);
+  });
+
+  app.get('/api/v1/import-mappings', async (request) => {
+    const model = String(((request.query ?? {}) as Record<string, unknown>)['model'] ?? '');
+    return request.env(async (env) => {
+      service.guard(env);
+      service.modelFor(env, model);
+      return { mappings: await service.mappingsFor(env, model) };
+    });
+  });
+
+  app.delete('/api/v1/import-mappings/:id', async (request, reply) => {
+    const id = idOf(request.params);
+    await request.env(
+      async (env) => {
+        service.guard(env);
+        const found = await ref(env, 'import.mapping').search({ where: { id }, limit: 1 });
+        if (found.length === 0)
+          throw new HttpProblem(404, 'not-found', 'No such mapping', `No mapping #${id}.`);
+        await found.unlink(); // the record rule: owners only
+      },
+      { write: true },
+    );
+    return reply.code(204).send();
+  });
+
+  app.get('/api/v1/import-templates/:model', async (request, reply) => {
+    const name = String((request.params as { model?: unknown }).model ?? '');
+    const wanted = (request.query as Record<string, unknown> | undefined)?.['mapping'];
+    const { file, fileName } = await request.env(async (env) => {
+      service.guard(env);
+      const model = service.modelFor(env, name);
+      const fields = fieldsOf(env, model);
+      let mapping: SavedMapping | undefined;
+      if (typeof wanted === 'string' && wanted !== '') {
+        mapping = (await service.mappingsFor(env, name)).find((m) => m.id === wanted);
+        if (mapping === undefined)
+          throw new HttpProblem(404, 'not-found', 'No such mapping', `No mapping '${wanted}'.`);
+      }
+      // Without a mapping: every field of the record (lines aside), required ones first.
+      const columns =
+        mapping?.columns.filter((c) => fields.has(c.field)) ??
+        columnFields(fields)
+          .filter((f) => f.line === null && f.kind !== ID_KEY && f.kind !== EXTERNAL_ID_KEY)
+          .sort((a, b) => Number(b.required) - Number(a.required))
+          .map((f) => ({ header: f.label, field: f.key }));
+      const help = columns.map((c) => {
+        const field = fields.get(c.field) as ImportField;
+        return [c.header, field.key, field.required ? 'Yes' : '', expects(field)];
+      });
+      return {
+        file: workbook([
+          { name: 'Data', rows: [columns.map((c) => c.header)], widths: columns.map(() => 20) },
+          {
+            name: 'Columns',
+            rows: [['Column', 'Field', 'Required', 'What to write'], ...help],
+            widths: [24, 24, 10, 60],
+          },
+        ]),
+        fileName: `${(mapping?.name ?? model.label).replace(/[^\p{L}\p{N} _-]+/gu, '')} template.xlsx`,
+      };
+    });
+    return reply
+      .header('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      .header(
+        'content-disposition',
+        `attachment; filename="template.xlsx"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+      )
+      .send(file);
+  });
+
+  /** A run in the request, or, for a large file, a background job (202). */
+  const start = async (request: FastifyRequest, env: Env, dryRun: boolean) => {
     const session = await sessionOf(env, idOf(request.params));
-    if (session.state !== 'draft')
-      throw new HttpProblem(409, 'imported', 'Already imported', 'This file was imported.');
+    draftOnly(session.state);
+    if (session.rowCount <= inlineRows) {
+      const result = await service.execute(env, session, dryRun);
+      await service.record(env, session, result, dryRun, request.ip);
+      return { status: dryRun ? 200 : result.undo === null ? 422 : 201, body: shown(result) };
+    }
     const mode = session.options.mode ?? 'create';
     if (mode !== 'update') env.access.check(session.model.name as never, 'create');
     if (mode !== 'create') env.access.check(session.model.name as never, 'write');
-    const table = readTable(session.file, session.fileType, session.sheet);
-    const result = await runImport(
-      env,
-      session.model,
-      fieldsOf(env, session.model),
-      table,
-      session.columns,
-      {
-        ...session.options,
-        dryRun,
-      },
+    await session.rows.write({ state: 'running', result: null, failure: null });
+    await env.enqueue(
+      RUN_JOB,
+      { session: session.id, dryRun },
+      { key: `${RUN_JOB}:${session.id}` },
     );
-    return { session, result };
+    await service.startProgress(env, session.id, session.rowCount);
+    return { status: 202, body: await shownSession(env, session.id) };
   };
 
-  app.post('/api/v1/imports/:id/dry-run', async (request) =>
-    request.env(async (env) => shown((await run(request, env, true)).result), { write: true }),
-  );
+  app.post('/api/v1/imports/:id/dry-run', async (request, reply) => {
+    const outcome = await request.env((env) => start(request, env, true), { write: true });
+    return reply.status(outcome.status).send(outcome.body);
+  });
 
-  app.post('/api/v1/imports/:id/commit', async (request, reply: FastifyReply) => {
+  app.post('/api/v1/imports/:id/commit', async (request, reply) => {
     const outcome = await request.env(
-      (env) =>
-        idempotent(request, env, driver, async () => {
-          const { session, result } = await run(request, env, false);
-          if (result.undo === null) return { status: 422, body: shown(result) };
-          await session.rows.write({
-            state: 'done',
-            createdIds: [...result.created],
-            undo: result.undo,
-            rejected: { errors: [...result.errors], rows: [...result.rejectedRows] },
-            importedAt: new Date(),
-          });
-          if (result.created.length > 0)
-            announceChange(env, driver, {
-              model: session.model.name,
-              ids: [...result.created],
-              op: 'create',
-            });
-          if (result.updated.length > 0)
-            announceChange(env, driver, {
-              model: session.model.name,
-              ids: [...result.updated],
-              op: 'update',
-            });
-          await audit(env, {
-            kind: 'data.import',
-            summary: `Imported ${session.fileName} into ${session.model.name}: ${result.created.length} created, ${result.updated.length} updated, ${result.skipped} left out.`,
-            targetModel: session.model.name,
-            details: {
-              created: result.created.length,
-              updated: result.updated.length,
-              skipped: result.skipped,
-              file: session.fileName,
-              session: session.id,
-            },
-            ip: request.ip,
-          });
-          return { status: 201, body: shown(result) };
-        }),
+      (env) => idempotent(request, env, driver, () => start(request, env, false)),
       { write: true },
     );
     for (const [name, value] of Object.entries(outcome.headers ?? {})) reply.header(name, value);
