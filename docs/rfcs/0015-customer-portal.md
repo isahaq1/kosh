@@ -2,8 +2,8 @@
 
 - **Status:** Accepted 2026-10-27 with the proposed answers (a Vite + React `apps/portal`, Next.js kept for the
   public website; a contact sees their company's documents; invitations only, payment details shown; a typed name
-  and a drawn signature); step 1 implemented (`@kosh/portal`: portal identity, invitations, the internal-only
-  guard)
+  and a drawn signature); steps 1–2 implemented (`@kosh/portal`: portal identity, invitations, the
+  internal-only guard; documents declared in manifests, the portal API, `sale_portal`, `account_portal`)
 - **Depends on:** 0001 (manifests), 0002 (API), 0003 (permissions, record rules), 0005 (documents: PDFs), 0006
   (chatter, email), 0007 (frontend), 0008 (apps), 0009 (invoices), 0014 (external users read like any user)
 
@@ -213,6 +213,42 @@ user's language, with a link to the document's portal page.
 - **Tests**: 5 integration tests (who may grant, the email, single-use links, weak passwords, the guard on
   back-office routes with `me` and sign-in still open, staff out of the portal API, re-invitation, revocation with
   its sessions, the audit trail, and a leaky external group refused at start).
+
+## Implementation notes (2026-10-27): step 2 — documents and the portal API
+
+- **Declarations**: `portal.documents` in a module manifest (`PortalDocumentSpec`: key, model, label, the partner
+  field, a domain, list and page fields, lines, a PDF template, actions, thread, what needs attention, order). The
+  portal checks them all when the server starts (`portalDocuments`): the model, every field and line field, each
+  action's transition, the template, and that the model gives `portal.user` read access **with a record rule**. A
+  declaration without its rule stops the server (`ServerConfigError`).
+- **The rule** is shared: `portalRule('partner')` from `@kosh/portal`, which bridges add with `extendModel`. It
+  grants read on records whose partner is the user's contact, its company, the company's other people, or (for a
+  company's portal user) its people, through dotted paths and `any` on `portalUsers`, so it also runs as the
+  database's row-level security.
+- **Reads**: the portal API finds records by searching **as the portal user** (the rule decides; another
+  customer's document is 404), then reads only the declared fields as the system (relations as `{ id, name }`).
+  Portal users have no access to lines, products or contacts, and need none.
+- **Actions**: the API checks, as the user, that the record is theirs and that the action's `when` holds, then runs
+  the transition **in a system transaction** together with the signature, the thread entry and the audit event.
+  This replaces the RFC's "action permission for `portal.user`": Shutro's events carry the acting user's groups, and
+  a confirmation's reactions (Sales → Projects creates tasks) must not run with a customer's rights. The signature
+  (`portal.signature`: the typed name, the drawn PNG up to 300 KB, the IP, the user, and the SHA-256 of the declared
+  fields and lines the user saw) and the audit event (`portal.action`) name the portal user. Requests take an
+  `Idempotency-Key`; an action that no longer applies is 409.
+- **Thread**: comments only (`kind: comment`), never notes, activities or the change log; a portal user's message is
+  posted as an external comment (their name and login), so the followers hear of it as for an email reply.
+- **PDF**: the declared template, rendered by the reporting engine as the system for a record known to be the
+  user's (it is the document the company sends them). Sales now ships a `quotation` template.
+- **Bridges**: `sale_portal` (sent quotations and orders; accept with a signature → `confirm`, decline with a reason →
+  `cancel`) and `account_portal` (posted invoices and credit notes, with what is due and the unpaid ones on the home;
+  vendor bills). Both declare the "Portal access" level of their app.
+- **Not yet**: the payment details on an invoice (the company's bank account has no model yet; comes with
+  localizations or the integrations RFC); the bridges are not yet proposed by `kosh init` (step 3, with the portal
+  app).
+- **Tests**: `sale_portal` (5: visibility by contact and company, drafts and other customers 404, staff refused,
+  declared fields only, relations by name, actions that apply, the thread without notes, decline and accept with
+  their records and a second accept refused, a real PDF), `account_portal` (2: posted invoices with what is due,
+  bills, the ledger closed), and the start-up refusal of a document without a rule.
 
 ## Alignment with CLAUDE.md
 
