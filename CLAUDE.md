@@ -46,7 +46,8 @@ better than Odoo?"** If not, leave it out.
 - UI: shadcn/ui + Radix UI + Tailwind CSS (owned components, light/dark themes, RTL-ready)
 - Charts: Apache ECharts · Maps: MapLibre · Drag & drop: dnd-kit
 - i18n: i18next (English, Bangla and any other language)
-- PWA first; React Native (Expo) later. Public portal/website later in Next.js.
+- PWA first; React Native (Expo) later. The customer and vendor portal is a Vite + React app on the same design
+  system (`apps/portal`, RFC 0015, decided 2026-10-27); the public website later in Next.js.
 
 **Tooling**
 

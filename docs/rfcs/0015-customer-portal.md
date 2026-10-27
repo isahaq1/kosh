@@ -1,6 +1,8 @@
 # RFC 0015: Customer and vendor portal
 
-- **Status:** Draft, 2026-10-27
+- **Status:** Accepted 2026-10-27 with the proposed answers (a Vite + React `apps/portal`, Next.js kept for the
+  public website; a contact sees their company's documents; invitations only, payment details shown; a typed name
+  and a drawn signature)
 - **Depends on:** 0001 (manifests), 0002 (API), 0003 (permissions, record rules), 0005 (documents: PDFs), 0006
   (chatter, email), 0007 (frontend), 0008 (apps), 0009 (invoices), 0014 (external users read like any user)
 
