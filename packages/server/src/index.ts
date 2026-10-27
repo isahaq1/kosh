@@ -5,7 +5,12 @@
  */
 export { announceChange, CHANGES_CHANNEL, parseChange, type RecordChange } from './api/changes.js';
 export { generateClient, typeOf } from './api/client.js';
-export { IDEMPOTENCY_TABLE, idempotencyTableStatements, type Outcome } from './api/idempotency.js';
+export {
+  IDEMPOTENCY_TABLE,
+  idempotencyTableStatements,
+  idempotent,
+  type Outcome,
+} from './api/idempotency.js';
 export {
   type ApiField,
   type ApiModel,
