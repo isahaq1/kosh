@@ -1,0 +1,33 @@
+/** Messages of the portal's back-office parts (namespace `portal`). */
+export const messages: Readonly<Record<string, object>> = {
+  en: {
+    title: 'Portal access',
+    none: 'This contact has no portal access.',
+    grant: 'Grant portal access',
+    resend: 'Send the invitation again',
+    revoke: 'Revoke access',
+    active: 'Active: {{login}}',
+    pending: 'Invited: {{login}} has not chosen a password yet (the link works until {{until}}).',
+    expired: 'Invited: {{login}}; the link has expired.',
+    revoked: 'Access revoked: {{login}}',
+    emailed: 'The invitation was emailed. You can also share this link:',
+    share: 'Email is not set up on this server: share this link with the contact:',
+    copy: 'Copy the link',
+    copied: 'Copied.',
+  },
+  bn: {
+    title: 'পোর্টাল অ্যাক্সেস',
+    none: 'এই যোগাযোগের কোনো পোর্টাল অ্যাক্সেস নেই।',
+    grant: 'পোর্টাল অ্যাক্সেস দিন',
+    resend: 'আবার আমন্ত্রণ পাঠান',
+    revoke: 'অ্যাক্সেস প্রত্যাহার করুন',
+    active: 'সক্রিয়: {{login}}',
+    pending: 'আমন্ত্রিত: {{login}} এখনও পাসওয়ার্ড বেছে নেননি ({{until}} পর্যন্ত লিংকটি কাজ করবে)।',
+    expired: 'আমন্ত্রিত: {{login}}; লিংকের মেয়াদ শেষ।',
+    revoked: 'অ্যাক্সেস প্রত্যাহার করা হয়েছে: {{login}}',
+    emailed: 'আমন্ত্রণ ইমেইল করা হয়েছে। এই লিংকটিও শেয়ার করতে পারেন:',
+    share: 'এই সার্ভারে ইমেইল চালু নেই: লিংকটি যোগাযোগের সাথে শেয়ার করুন:',
+    copy: 'লিংক কপি করুন',
+    copied: 'কপি হয়েছে।',
+  },
+};

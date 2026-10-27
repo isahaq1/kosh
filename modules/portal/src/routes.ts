@@ -8,7 +8,8 @@
  * - `DELETE /api/v1/portal/access/:user`             revoke: the user is archived and their sessions end
  *
  * In the portal:
- * - `POST /api/portal/v1/activate`                   `{ token, password }`: the invited contact chooses a password
+ * - `POST /api/portal/v1/activate`                   `{ token, password }`: the invited contact chooses a password;
+ *                                                      their login comes back
  * - `GET  /api/portal/v1/me`                         who is signed in, for which contact and company
  *
  * Invitations are single use, valid 7 days and stored as SHA-256 digests; the link goes by email when a mailer is
@@ -122,8 +123,9 @@ export function registerPortalRoutes(context: ModuleContext, options: PortalRout
           throw new HttpProblem(404, 'not-found', 'No such contact', `No contact #${partner}.`);
         return env.asSuperuser({ reason: 'portal access' }, async (su) => {
           const keys = ['login', 'active'];
-          const users = await ref(su, 'res.users').search({
-            where: { portalPartner: partner, active: { in: [true, false] } },
+          // Revoked (archived) users too.
+          const users = await ref(su.withFlags({ activeTest: false }), 'res.users').search({
+            where: { portalPartner: partner },
           });
           const rows = (await users.load(keys)).read(keys);
           const out = [];
@@ -176,32 +178,42 @@ export function registerPortalRoutes(context: ModuleContext, options: PortalRout
           );
         const name = String(contact['name']);
         return env.asSuperuser({ reason: 'portal access' }, async (su) => {
-          const taken = await ref(su, 'res.users').search({
-            where: { login, active: { in: [true, false] } },
-            limit: 1,
-          });
-          if (taken.length > 0)
-            throw new HttpProblem(
-              409,
-              'login-taken',
-              'Already a user',
-              `A user with the login ${login} exists already.`,
-              'Re-invite or reactivate that user instead.',
-            );
-          const created = await ref(su, 'res.users').create([
-            {
-              login,
-              name,
-              email: login,
-              company: env.companyId,
-              companies: { set: [env.companyId] },
-              portalPartner: partner,
-            },
+          const all = su.withFlags({ activeTest: false });
+          const taken = await ref(all, 'res.users').search({ where: { login }, limit: 1 });
+          const [existing] = (await taken.load(['active', 'portalPartner'])).read([
+            'active',
+            'portalPartner',
           ]);
-          const user = created.ids[0] as number;
-          // No usable password until the invitation is used.
-          await auth.setPassword(su, user, randomBytes(32).toString('base64url'));
-          await ref(su, 'auth.user_group').create([{ user, group: PORTAL_USER }]);
+          let user: number;
+          if (existing !== undefined) {
+            // This contact's revoked portal user comes back; any other user keeps the login.
+            if (existing['portalPartner'] !== partner || existing['active'] === true)
+              throw new HttpProblem(
+                409,
+                'login-taken',
+                'Already a user',
+                `A user with the login ${login} exists already.`,
+                'Send the invitation again, or use another email for this contact.',
+              );
+            user = existing['id'] as number;
+            await taken.write({ active: true });
+            await auth.setPassword(su, user, randomBytes(32).toString('base64url'));
+          } else {
+            const created = await ref(su, 'res.users').create([
+              {
+                login,
+                name,
+                email: login,
+                company: env.companyId,
+                companies: { set: [env.companyId] },
+                portalPartner: partner,
+              },
+            ]);
+            user = created.ids[0] as number;
+            // No usable password until the invitation is used.
+            await auth.setPassword(su, user, randomBytes(32).toString('base64url'));
+            await ref(su, 'auth.user_group').create([{ user, group: PORTAL_USER }]);
+          }
           const { url, expiresAt } = await invite(su, user, env.uid);
           await audit(env, {
             kind: 'portal.invited',
@@ -312,7 +324,7 @@ export function registerPortalRoutes(context: ModuleContext, options: PortalRout
         'Ask for a new invitation.',
       );
     if (token === '') throw invalid();
-    await context.shutro.bootstrap({ reason: 'portal activation' }, async (su) => {
+    const login = await context.shutro.bootstrap({ reason: 'portal activation' }, async (su) => {
       const found = await ref(su, 'portal.invitation').search({
         where: { tokenHash: digest(token) },
         limit: 1,
@@ -330,8 +342,8 @@ export function registerPortalRoutes(context: ModuleContext, options: PortalRout
         throw invalid();
       const user = row['user'] as number;
       const [account] = (
-        await ref(su, 'res.users').browse([user]).load(['active', 'company'])
-      ).read(['active', 'company']);
+        await ref(su, 'res.users').browse([user]).load(['active', 'company', 'login'])
+      ).read(['active', 'company', 'login']);
       if (account?.['active'] !== true) throw invalid();
       await auth.setPassword(su, user, password);
       await found.write({ usedAt: new Date() });
@@ -344,8 +356,10 @@ export function registerPortalRoutes(context: ModuleContext, options: PortalRout
         targetId: user,
         ip: request.ip,
       });
+      return String(account['login']);
     });
-    return reply.code(204).send();
+    // The login: the portal signs the user in with the password they just chose.
+    return reply.send({ login });
   });
 
   app.get('/api/portal/v1/me', async (request) =>

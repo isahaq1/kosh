@@ -90,7 +90,7 @@ async function portalUser(partner: number): Promise<string> {
     url: '/api/portal/v1/activate',
     payload: { token, password: PASSWORD },
   });
-  expect(activated.statusCode).toBe(204);
+  expect(activated.statusCode).toBe(200);
   return granted.json.login as string;
 }
 

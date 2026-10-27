@@ -46,6 +46,18 @@ export function createPortal(options: Partial<PortalRoutesOptions> = {}): KoshMo
     accessLevels: { manager: { label: 'Portal access', groups: ['portal.manager'] } },
     externalGroups: ['portal.user'],
     privateModels: ['portal.invitation', 'portal.signature'],
+    // "Portal access" on the contact form, under the ways to reach them.
+    viewExtensions: [
+      {
+        view: 'res.partner.form',
+        operations: [
+          {
+            insertAfter: 'reach',
+            nodes: [{ kind: 'component', id: 'portal_access', component: 'portal.Access' }],
+          },
+        ],
+      },
+    ],
     routes: (context: ModuleContext) => {
       registerPortalRoutes(context, {
         portalUrl: options.portalUrl ?? process.env['KOSH_PORTAL_URL'] ?? 'http://localhost:5174',

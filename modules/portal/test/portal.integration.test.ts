@@ -162,7 +162,7 @@ test('activation: a wrong token or a weak password changes nothing; the link wor
     token: invitation,
     password: PASSWORD,
   });
-  expect(ok.status).toBe(204);
+  expect([ok.status, ok.json]).toEqual([200, { login: 'rina@acme.test' }]);
   expect(
     (await call('POST', '/api/portal/v1/activate', null, { token: invitation, password: PASSWORD }))
       .status,
@@ -219,6 +219,14 @@ test('a new invitation replaces the old one; revoking ends access and sessions; 
   ).toBe(403);
   expect((await call('DELETE', `/api/v1/portal/access/${portalUser}`, mgr)).status).toBe(204);
   expect((await call('GET', '/api/portal/v1/me', token)).status).toBe(401);
+  const listed = await call('GET', `/api/v1/portal/access?partner=${rina}`, mgr);
+  expect(listed.json.users).toMatchObject([{ id: portalUser, active: false, activated: true }]);
+  // Granting again brings the same user back, with a new invitation (the old password no longer works).
+  const again = await call('POST', '/api/v1/portal/access', mgr, { partner: rina });
+  expect([again.status, again.json.user]).toEqual([201, portalUser]);
+  expect(await login('rina@acme.test')).toBeNull();
+  // The login belongs to that contact's user: another contact with the same email cannot take it.
+  expect((await call('POST', '/api/v1/portal/access', mgr, { partner: nomail })).status).toBe(422);
   expect(await login('rina@acme.test')).toBeNull();
   expect(
     (
@@ -238,6 +246,7 @@ test('a new invitation replaces the old one; revoking ends access and sessions; 
     'portal.invited',
     'portal.invited',
     'portal.revoked',
+    'portal.invited',
   ]);
 });
 
