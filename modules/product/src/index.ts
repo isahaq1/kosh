@@ -10,6 +10,14 @@ import { productDemo } from './demo.js';
 import { AccountTax, ProductCategory, ProductProduct, productShutro, UomUom } from './module.js';
 
 export { AccountTax, ProductCategory, ProductProduct, productShutro, UomUom } from './module.js';
+export {
+  computeTaxes,
+  ordered,
+  type TaxLine,
+  type TaxResult,
+  type TaxRule,
+  taxRule,
+} from './taxes.js';
 
 export const product: ReturnType<typeof defineModule> = defineModule({
   shutro: productShutro,
