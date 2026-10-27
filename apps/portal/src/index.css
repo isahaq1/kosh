@@ -1,0 +1,6 @@
+@import "tailwindcss";
+@import "@kosh/ui/styles.css";
+
+/* Tailwind scans the design system's primitives and the portal's pages for class names. */
+@source "../../../packages/ui/src/components";
+@source "./";

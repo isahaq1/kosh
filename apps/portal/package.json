@@ -1,0 +1,44 @@
+{
+  "name": "@kosh/portal-web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The customer and vendor portal (RFC 0015): a Vite + React app on the Kosh design system",
+  "scripts": {
+    "dev": "vite --port 5174",
+    "build": "vite build",
+    "preview": "vite preview --port 5174 --strictPort",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@kosh/ui": "workspace:*",
+    "@tanstack/react-query": "^5.104.3",
+    "@tanstack/react-router": "^1.170.45",
+    "i18next": "^26.4.7",
+    "lucide-react": "^1.59.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-i18next": "^17.0.21"
+  },
+  "devDependencies": {
+    "@kosh/account_portal": "workspace:*",
+    "@kosh/accounting": "workspace:*",
+    "@kosh/contacts": "workspace:*",
+    "@kosh/mail": "workspace:*",
+    "@kosh/portal": "workspace:*",
+    "@kosh/product": "workspace:*",
+    "@kosh/reporting": "workspace:*",
+    "@kosh/sale_portal": "workspace:*",
+    "@kosh/sales": "workspace:*",
+    "@kosh/server": "workspace:*",
+    "@playwright/test": "^1.55.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@testcontainers/postgresql": "^12.2.1",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "tailwindcss": "^4.3.3",
+    "vite": "^7.1.0"
+  }
+}
