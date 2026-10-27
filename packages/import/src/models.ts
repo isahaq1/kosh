@@ -32,10 +32,18 @@ const Session = defineModel('import.session', {
     columns: f.json({ required: true, default: [] }),
     /** Conversion options and the mode (`ImportOptions`). */
     options: f.json({ required: true, default: {} }),
-    state: f.selection({ draft: 'Draft', done: 'Imported' }, { required: true, default: 'draft' }),
+    state: f.selection(
+      { draft: 'Draft', done: 'Imported', undone: 'Undone' },
+      { required: true, default: 'draft' },
+    ),
     rowCount: f.integer({ required: true, default: 0, label: 'Rows' }),
-    /** The ids the commit created (for undo, RFC 0014 §5.5). */
+    /** The ids the commit created. */
     createdIds: f.json({ label: 'Created records' }),
+    /** What undo needs (`UndoData`, RFC 0014 §5.5). */
+    undo: f.json(),
+    /** The errors and file rows of the records left out (`onError: 'skip'`), for the rejected-rows file. */
+    rejected: f.json(),
+    importedAt: f.datetime({ label: 'Imported on' }),
   },
 });
 

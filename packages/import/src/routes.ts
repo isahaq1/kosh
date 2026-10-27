@@ -26,7 +26,17 @@ import type { Cell } from './convert.js';
 import { readCsv } from './csv.js';
 import { type ColumnMapping, guessMapping } from './mapping.js';
 import type { MatchTarget } from './match.js';
-import { type ImportField, type ImportOptions, importFields, runImport } from './run.js';
+import {
+  type ImportField,
+  type ImportModels,
+  type ImportOptions,
+  type ImportResult,
+  importFields,
+  type RowError,
+  runImport,
+  type UndoData,
+  undoImport,
+} from './run.js';
 import { readXlsx, XlsxError, xlsxSheetNames } from './xlsx.js';
 
 type Row = Record<string, unknown>;
@@ -57,6 +67,9 @@ export interface ImportRoutesOptions {
 }
 
 const DATE_ORDERS = ['dmy', 'mdy', 'ymd'];
+const MODES = ['create', 'update', 'upsert'];
+/** How long an import can be undone (RFC 0014 §5.5). */
+export const UNDO_DAYS = 7;
 
 /** The options of a mapping request, checked. */
 function parseOptions(input: unknown): ImportOptions {
@@ -90,10 +103,39 @@ function parseOptions(input: unknown): ImportOptions {
     out.timeZone = zone;
   }
   if (o['headerRow'] !== undefined) out.headerRow = o['headerRow'] === true;
-  if (o['mode'] !== undefined && o['mode'] !== 'create')
-    throw new HttpProblem(400, 'invalid-options', 'Invalid options', 'mode is create.');
+  if (o['mode'] !== undefined) {
+    if (!MODES.includes(String(o['mode'])))
+      throw new HttpProblem(
+        400,
+        'invalid-options',
+        'Invalid options',
+        'mode is create, update or upsert.',
+      );
+    out.mode = o['mode'] as 'create' | 'update' | 'upsert';
+  }
+  if (o['onError'] !== undefined) {
+    if (o['onError'] !== 'stop' && o['onError'] !== 'skip')
+      throw new HttpProblem(400, 'invalid-options', 'Invalid options', 'onError is stop or skip.');
+    out.onError = o['onError'];
+  }
+  if (o['key'] !== undefined && o['key'] !== null) out.key = String(o['key']);
   return out;
 }
+
+/** A cell of the rejected-rows file: quoted when needed; formulas kept as text (never run by a spreadsheet). */
+function csvCell(cell: Cell): string {
+  let text =
+    cell === null
+      ? ''
+      : cell instanceof Date
+        ? cell.toISOString().replace(/T00:00:00\.000Z$/, '')
+        : String(cell);
+  if (/^[=+@\t\r]/.test(text) || /^-[^\d.]/.test(text)) text = `'${text}`;
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+/** A result as the API shows it: undo data stays on the server. */
+const shown = ({ undo: _, ...result }: ImportResult) => result;
 
 const isXlsx = (bytes: Uint8Array) =>
   bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
@@ -151,7 +193,8 @@ export function registerImportRoutes(
     if (model === undefined)
       throw new HttpProblem(404, 'unknown-model', 'Unknown model', `No model is named '${name}'.`);
     env.access.check(name as never, 'import');
-    env.access.check(name as never, 'create');
+    // Creating or updating: one of them, checked again for the mode of the run.
+    if (!env.access.can(name as never, 'create')) env.access.check(name as never, 'write');
     return model;
   };
   const idOf = (params: unknown): number => {
@@ -172,6 +215,9 @@ export function registerImportRoutes(
     'state',
     'rowCount',
     'createdIds',
+    'undo',
+    'rejected',
+    'importedAt',
   ];
   interface Session {
     readonly id: number;
@@ -186,6 +232,10 @@ export function registerImportRoutes(
     readonly state: string;
     readonly rowCount: number;
     readonly createdIds: readonly number[];
+    readonly undo: UndoData | null;
+    /** The errors and the file rows of the records left out. */
+    readonly rejected: { readonly errors: readonly RowError[]; readonly rows: readonly number[] };
+    readonly importedAt: Date | null;
   }
   /** The caller's session `id` (a record rule hides the others: 404). */
   const sessionOf = async (env: Env, id: number): Promise<Session> => {
@@ -208,10 +258,27 @@ export function registerImportRoutes(
       state: String(row['state']),
       rowCount: Number(row['rowCount']),
       createdIds: (row['createdIds'] as number[] | null) ?? [],
+      undo: (row['undo'] as UndoData | null) ?? null,
+      rejected: (row['rejected'] as Session['rejected'] | null) ?? { errors: [], rows: [] },
+      importedAt: typeof row['importedAt'] === 'string' ? new Date(row['importedAt']) : null,
     };
   };
+  const catalog: ImportModels = {
+    models,
+    targets,
+    inverseOf: (model, field) => {
+      const raw = registry.get(model as never).model.fields as unknown as Readonly<
+        Record<string, { readonly inverseField?: unknown }>
+      >;
+      const inverse = raw[field]?.inverseField;
+      return typeof inverse === 'string' ? inverse : null;
+    },
+  };
   const fieldsOf = (env: Env, model: ApiModel): Map<string, ImportField> =>
-    importFields(env, model, targets);
+    importFields(env, model, catalog);
+  /** The fields a column may fill (not the one2many fields themselves: their lines' fields). */
+  const columnFields = (fields: ReadonlyMap<string, ImportField>) =>
+    [...fields.values()].filter((f) => f.kind !== 'one2many');
 
   /** What the wizard shows of a session. */
   const describe = (env: Env, session: Session, table: readonly (readonly Cell[])[]) => {
@@ -232,13 +299,21 @@ export function registerImportRoutes(
         .map((r) => r.map((c) => (c instanceof Date ? c.toISOString() : c))),
       columns: session.columns,
       options: session.options,
-      fields: [...fields.values()].map((f) => ({
+      fields: columnFields(fields).map((f) => ({
         key: f.key,
         kind: f.kind,
         label: f.label,
         required: f.required,
+        keyable: f.keyable,
+        ...(f.line === null ? {} : { line: f.line }),
         ...(f.target === null ? {} : { target: f.target.model }),
       })),
+      importedAt: session.importedAt?.toISOString() ?? null,
+      undoUntil:
+        session.state === 'done' && session.importedAt !== null && session.undo !== null
+          ? new Date(session.importedAt.getTime() + UNDO_DAYS * 86_400_000).toISOString()
+          : null,
+      rejected: session.rejected.rows.length,
     };
   };
   const dataRows = (table: readonly (readonly Cell[])[], options: ImportOptions) =>
@@ -293,7 +368,7 @@ export function registerImportRoutes(
             );
           const columns = guessMapping(
             (table[0] ?? []).map((c) => (c === null ? '' : String(c))),
-            [...fieldsOf(env, model).values()],
+            columnFields(fieldsOf(env, model)),
           );
           const rows = await ref(env, 'import.session').create([
             {
@@ -348,7 +423,7 @@ export function registerImportRoutes(
           if (!Number.isInteger(index) || index < 0 || index >= width)
             throw new HttpProblem(400, 'invalid-columns', 'Invalid columns', `No column ${index}.`);
           if (field !== null) {
-            if (!fields.has(field))
+            if (!fields.has(field) || fields.get(field)?.kind === 'one2many')
               throw new HttpProblem(
                 422,
                 'unknown-field',
@@ -365,12 +440,26 @@ export function registerImportRoutes(
             seen.add(field);
           }
           const header = headers[index];
+          if (columns.some((m) => m.index === index))
+            throw new HttpProblem(
+              400,
+              'invalid-columns',
+              'Invalid columns',
+              `Column ${index} is given twice.`,
+            );
           columns.push({
             index,
             header: header === null || header === undefined ? '' : String(header),
             field,
           });
         }
+        if (options.key !== undefined && fields.get(options.key)?.keyable !== true)
+          throw new HttpProblem(
+            422,
+            'invalid-key',
+            'Not a key',
+            `'${options.key}' cannot find records: use the id, an external id or a unique field.`,
+          );
         await session.rows.write({
           columns,
           options,
@@ -386,6 +475,9 @@ export function registerImportRoutes(
     const session = await sessionOf(env, idOf(request.params));
     if (session.state !== 'draft')
       throw new HttpProblem(409, 'imported', 'Already imported', 'This file was imported.');
+    const mode = session.options.mode ?? 'create';
+    if (mode !== 'update') env.access.check(session.model.name as never, 'create');
+    if (mode !== 'create') env.access.check(session.model.name as never, 'write');
     const table = readTable(session.file, session.fileType, session.sheet);
     const result = await runImport(
       env,
@@ -402,7 +494,7 @@ export function registerImportRoutes(
   };
 
   app.post('/api/v1/imports/:id/dry-run', async (request) =>
-    request.env(async (env) => (await run(request, env, true)).result, { write: true }),
+    request.env(async (env) => shown((await run(request, env, true)).result), { write: true }),
   );
 
   app.post('/api/v1/imports/:id/commit', async (request, reply: FastifyReply) => {
@@ -410,26 +502,127 @@ export function registerImportRoutes(
       (env) =>
         idempotent(request, env, driver, async () => {
           const { session, result } = await run(request, env, false);
-          if (result.errors.length > 0) return { status: 422, body: result };
-          await session.rows.write({ state: 'done', createdIds: [...result.created] });
-          announceChange(env, driver, {
-            model: session.model.name,
-            ids: [...result.created],
-            op: 'create',
+          if (result.undo === null) return { status: 422, body: shown(result) };
+          await session.rows.write({
+            state: 'done',
+            createdIds: [...result.created],
+            undo: result.undo,
+            rejected: { errors: [...result.errors], rows: [...result.rejectedRows] },
+            importedAt: new Date(),
           });
+          if (result.created.length > 0)
+            announceChange(env, driver, {
+              model: session.model.name,
+              ids: [...result.created],
+              op: 'create',
+            });
+          if (result.updated.length > 0)
+            announceChange(env, driver, {
+              model: session.model.name,
+              ids: [...result.updated],
+              op: 'update',
+            });
           await audit(env, {
             kind: 'data.import',
-            summary: `Imported ${result.created.length} ${session.model.name} record(s) from ${session.fileName}.`,
+            summary: `Imported ${session.fileName} into ${session.model.name}: ${result.created.length} created, ${result.updated.length} updated, ${result.skipped} left out.`,
             targetModel: session.model.name,
-            details: { count: result.created.length, file: session.fileName, session: session.id },
+            details: {
+              created: result.created.length,
+              updated: result.updated.length,
+              skipped: result.skipped,
+              file: session.fileName,
+              session: session.id,
+            },
             ip: request.ip,
           });
-          return { status: 201, body: result };
+          return { status: 201, body: shown(result) };
         }),
       { write: true },
     );
     for (const [name, value] of Object.entries(outcome.headers ?? {})) reply.header(name, value);
     if (outcome.replayed === true) reply.header('idempotent-replayed', 'true');
     return reply.status(outcome.status).send(outcome.body);
+  });
+
+  app.post('/api/v1/imports/:id/undo', async (request) =>
+    request.env(
+      async (env) => {
+        const session = await sessionOf(env, idOf(request.params));
+        if (session.state !== 'done' || session.undo === null || session.importedAt === null)
+          throw new HttpProblem(
+            409,
+            'not-imported',
+            'Nothing to undo',
+            'This file was not imported, or was undone.',
+          );
+        if (Date.now() - session.importedAt.getTime() > UNDO_DAYS * 86_400_000)
+          throw new HttpProblem(
+            409,
+            'undo-expired',
+            'Too late to undo',
+            `An import can be undone for ${UNDO_DAYS} days.`,
+          );
+        if (session.undo.created.length > 0)
+          env.access.check(session.model.name as never, 'unlink');
+        if (session.undo.updated.length > 0) env.access.check(session.model.name as never, 'write');
+        const result = await undoImport(
+          env,
+          session.model,
+          fieldsOf(env, session.model),
+          session.undo,
+        );
+        await session.rows.write({ state: 'undone', undo: null });
+        if (session.undo.created.length > 0)
+          announceChange(env, driver, {
+            model: session.model.name,
+            ids: [...session.undo.created],
+            op: 'delete',
+          });
+        if (result.restored > 0)
+          announceChange(env, driver, {
+            model: session.model.name,
+            ids: session.undo.updated.map((u) => u.id),
+            op: 'update',
+          });
+        await audit(env, {
+          kind: 'data.import.undo',
+          summary: `Undid the import of ${session.fileName} into ${session.model.name}: ${result.deleted} deleted, ${result.restored} restored, ${result.changed.length} changed since.`,
+          targetModel: session.model.name,
+          details: { ...result, session: session.id },
+          ip: request.ip,
+        });
+        return result;
+      },
+      { write: true },
+    ),
+  );
+
+  // The rows left out, as CSV with an Error column: fix them and import the file again.
+  app.get('/api/v1/imports/:id/rejected', async (request, reply) => {
+    const { csv, name } = await request.env(async (env) => {
+      const session = await sessionOf(env, idOf(request.params));
+      const table = readTable(session.file, session.fileType, session.sheet);
+      const messages = new Map<number, string[]>();
+      for (const e of session.rejected.errors)
+        messages.set(e.row, [...(messages.get(e.row) ?? []), e.message]);
+      const width = Math.max(0, ...table.slice(0, 50).map((r) => r.length));
+      const pad = (cells: readonly Cell[]) => [
+        ...cells,
+        ...Array.from({ length: Math.max(0, width - cells.length) }, () => null),
+      ];
+      const header = session.options.headerRow === false ? [] : [[...pad(table[0] ?? []), 'Error']];
+      const body = session.rejected.rows.map((n) => [
+        ...pad(table[n - 1] ?? []),
+        (messages.get(n) ?? []).join(' '),
+      ]);
+      return {
+        csv: [...header, ...body].map((r) => r.map(csvCell).join(',')).join('\r\n'),
+        name: `rejected-${session.fileName.replace(/\.[^.]*$/, '')}.csv`.replace(/["\\\r\n]/g, '_'),
+      };
+    });
+    return reply
+      .header('content-type', 'text/csv; charset=utf-8')
+      .header('content-disposition', `attachment; filename="${name}"`)
+      .send(`﻿${csv}\r\n`); // the mark: Excel reads UTF-8 (Bangla) correctly
   });
 }

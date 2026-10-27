@@ -36,7 +36,11 @@ const Tag = defineModel('shop.tag', {
 const Order = defineModel('shop.order', {
   label: 'Order',
   companyScoped: { required: true },
-  access: { 'shop.user': ['read', 'write', 'create', 'import'], 'shop.reader': ['read', 'import'] },
+  access: {
+    'shop.user': ['read', 'write', 'create', 'import'],
+    'shop.manager': ['read', 'write', 'create', 'import', 'unlink'],
+    'shop.reader': ['read', 'import'],
+  },
   fields: {
     name: f.char({ required: true }),
     customer: f.many2one('shop.customer', { required: true }),
@@ -47,9 +51,21 @@ const Order = defineModel('shop.order', {
     tags: f.many2many('shop.tag'),
     /** Field security: managers only. */
     margin: f.decimal({ scale: 2, groups: ['shop.manager'] }),
+    lines: f.one2many('shop.order.line', 'order'),
   },
   sqlConstraints: {
+    nameUnique: { unique: ['company', 'name'], message: 'Order references are unique.' },
     amountPositive: { check: orm.sql`amount >= 0`, message: 'An amount is never negative.' },
+  },
+});
+const OrderLine = defineModel('shop.order.line', {
+  label: 'Order line',
+  access: { 'shop.user': ['read', 'write', 'create', 'unlink'] },
+  fields: {
+    order: f.many2one('shop.order', { required: true, ondelete: 'cascade' }),
+    product: f.char({ required: true }),
+    qty: f.integer({ default: 1, label: 'Quantity' }),
+    price: f.decimal({ scale: 2, default: '0' }),
   },
 });
 const shop = defineKoshModule({
@@ -62,7 +78,7 @@ const shop = defineKoshModule({
       defineGroup({ code: 'shop.user', label: 'Shop', implies: ['base.user'] }),
       defineGroup({ code: 'shop.manager', label: 'Shop manager', implies: ['shop.user'] }),
     ],
-    models: [Customer, Tag, Order],
+    models: [Customer, Tag, Order, OrderLine],
   }),
   kosh: '^0.1.0',
   depends: [base],
@@ -76,7 +92,7 @@ const tokens = new Map<string, string>();
 // biome-ignore lint/suspicious/noExplicitAny: test assertions read untyped JSON responses
 type Json = any;
 async function call(
-  method: 'GET' | 'POST' | 'PUT',
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH',
   url: string,
   as?: string,
   payload?: unknown,
@@ -381,7 +397,9 @@ test('a commit: every row or none, relations by name, code and external id, audi
     text: `SELECT summary FROM audit_event WHERE kind = 'data.import' ORDER BY id DESC LIMIT 1`,
     params: [],
   });
-  expect(event?.summary).toBe('Imported 3 shop.order record(s) from orders.csv.');
+  expect(event?.summary).toBe(
+    'Imported orders.csv into shop.order: 3 created, 0 updated, 0 left out.',
+  );
 });
 
 test('XLSX: typed cells, a remapped column and options; the row limit', async () => {
@@ -431,4 +449,210 @@ test('XLSX: typed cells, a remapped column and options; the row limit', async ()
   expect((await upload('ana', 'shop.order', 'PK\u0003\u0004garbage', 'broken.xlsx')).status).toBe(
     422,
   );
+});
+
+// Step 2: keys, lines, skipping errors, undo.
+
+async function importFile(
+  as: string,
+  csv: string,
+  options: Record<string, unknown>,
+  columns?: (string | null)[],
+) {
+  const session = (await upload(as, 'shop.order', csv)).json;
+  const fields: (string | null)[] = columns ?? session.columns.map((c: Json) => c.field);
+  const mapping = await call('PUT', `/api/v1/imports/${session.id}/mapping`, as, {
+    columns: fields.map((field, index) => ({ index, field })),
+    options,
+  });
+  expect(mapping.status).toBe(200);
+  return session.id as number;
+}
+async function linesOf(name: string) {
+  return server.driver.query<{ product: string; qty: number; price: string }>({
+    text: `SELECT l.product, l.qty, l.price::text AS price FROM shop_order_line l JOIN shop_order o ON o.id = l.order_id
+           WHERE o.name = $1 ORDER BY l.id`,
+    params: [name],
+  });
+}
+async function amountOf(name: string) {
+  const [row] = await server.driver.query<{ amount: string }>({
+    text: 'SELECT amount::text AS amount FROM shop_order WHERE name = $1',
+    params: [name],
+  });
+  return row?.amount;
+}
+
+test('lines: rows with empty own columns continue the record above', async () => {
+  const csv = [
+    'Name,Customer,Amount,Lines › Product,Lines › Quantity,Lines › Price',
+    'SO-50,C-001,100,Rice,2,50',
+    ',,,Lentils,1,"1,200.50"',
+    'SO-51,C-002,10,Salt,3,',
+  ].join('\n');
+  const session = (await upload('ana', 'shop.order', csv)).json;
+  expect(session.columns.map((c: Json) => c.field)).toEqual([
+    'name',
+    'customer',
+    'amount',
+    'lines.product',
+    'lines.qty',
+    'lines.price',
+  ]);
+  const keys = session.fields.map((f: Json) => f.key);
+  expect(keys).not.toContain('lines'); // the one2many itself is not a column
+  expect(keys).not.toContain('lines.order'); // nor the link back
+  expect(session.fields.find((f: Json) => f.key === 'name').keyable).toBe(true);
+  const commit = await call('POST', `/api/v1/imports/${session.id}/commit`, 'ana');
+  expect(commit.status).toBe(201);
+  expect(commit.json.rows).toBe(2);
+  expect(commit.json.undo).toBeUndefined(); // stays on the server
+  expect(await linesOf('SO-50')).toEqual([
+    { product: 'Rice', qty: 2, price: '50.00' },
+    { product: 'Lentils', qty: 1, price: '1200.50' },
+  ]);
+  expect(await linesOf('SO-51')).toEqual([{ product: 'Salt', qty: 3, price: '0.00' }]);
+});
+
+test('upsert by a unique field: existing records updated (their lines replaced), new ones created; undo', async () => {
+  const id = await importFile(
+    'mgr',
+    ['Name,Customer,Amount,Lines › Product', 'SO-50,C-001,175,Sugar', 'SO-52,C-003,5,'].join('\n'),
+    { mode: 'upsert', key: 'name' },
+  );
+  const dry = await call('POST', `/api/v1/imports/${id}/dry-run`, 'mgr');
+  expect([dry.json.wouldCreate, dry.json.wouldUpdate, dry.json.errors]).toEqual([1, 1, []]);
+  const commit = await call('POST', `/api/v1/imports/${id}/commit`, 'mgr');
+  expect([commit.json.created.length, commit.json.updated.length]).toEqual([1, 1]);
+  expect(await amountOf('SO-50')).toBe('175.00');
+  expect(await linesOf('SO-50')).toEqual([{ product: 'Sugar', qty: 1, price: '0.00' }]);
+  expect(await amountOf('SO-52')).toBe('5.00');
+  const session = await call('GET', `/api/v1/imports/${id}`, 'mgr');
+  expect(session.json.state).toBe('done');
+  expect(session.json.undoUntil).not.toBeNull();
+  // Undo: the created order goes, the updated one gets its values and lines back.
+  const undo = await call('POST', `/api/v1/imports/${id}/undo`, 'mgr');
+  expect(undo.status).toBe(200);
+  expect(undo.json).toEqual({ deleted: 1, restored: 1, changed: [] });
+  expect(await amountOf('SO-52')).toBeUndefined();
+  expect(await amountOf('SO-50')).toBe('100.00');
+  expect(await linesOf('SO-50')).toEqual([
+    { product: 'Rice', qty: 2, price: '50.00' },
+    { product: 'Lentils', qty: 1, price: '1200.50' },
+  ]);
+  expect((await call('POST', `/api/v1/imports/${id}/undo`, 'mgr')).status).toBe(409);
+  const [event] = await server.driver.query<{ summary: string }>({
+    text: `SELECT summary FROM audit_event WHERE kind = 'data.import.undo' ORDER BY id DESC LIMIT 1`,
+    params: [],
+  });
+  expect(event?.summary).toContain('1 deleted, 1 restored, 0 changed since');
+});
+
+test('keys: external ids given on create, found on update; unknown, duplicate and missing keys', async () => {
+  const created = await importFile(
+    'ana',
+    ['Ref,Name,Customer', 'ord_60,SO-60,C-001', 'legacy.ord_61,SO-61,C-002'].join('\n'),
+    { mode: 'create', key: 'externalId' },
+    ['externalId', 'name', 'customer'],
+  );
+  const made = await call('POST', `/api/v1/imports/${created}/commit`, 'ana');
+  expect(made.json.created).toHaveLength(2);
+  const ids = await server.driver.query<{ module: string; name: string }>({
+    text: `SELECT module, name FROM shutro_external_id WHERE model = 'shop.order' ORDER BY name`,
+    params: [],
+  });
+  expect(ids).toEqual([
+    { module: '__import__', name: 'ord_60' },
+    { module: 'legacy', name: 'ord_61' },
+  ]);
+  // The same id again in create mode: it exists.
+  const again = await importFile(
+    'ana',
+    'Ref,Name,Customer\nord_60,SO-62,C-001',
+    { key: 'externalId' },
+    ['externalId', 'name', 'customer'],
+  );
+  const exists = await call('POST', `/api/v1/imports/${again}/dry-run`, 'ana');
+  expect(exists.json.errors[0].code).toBe('exists');
+  const update = await importFile(
+    'ana',
+    ['Ref,Amount', 'ord_60,60', 'ord_nope,1', 'ord_60,61', ',3'].join('\n'),
+    { mode: 'update', key: 'externalId' },
+    ['externalId', 'amount'],
+  );
+  const dry = await call('POST', `/api/v1/imports/${update}/dry-run`, 'ana');
+  expect(dry.json.errors.map((e: Json) => [e.row, e.column, e.code])).toEqual([
+    [3, 0, 'no-match'],
+    [4, 0, 'duplicate-key'],
+    [5, 0, 'missing-key'],
+  ]);
+  expect(dry.json.wouldUpdate).toBe(1);
+  // Updating needs a key column.
+  const keyless = await importFile('ana', 'Amount\n5', { mode: 'update' }, ['amount']);
+  const noKey = await call('POST', `/api/v1/imports/${keyless}/dry-run`, 'ana');
+  expect(noKey.json.errors[0].code).toBe('missing-key');
+  // A key must find records: a plain field cannot.
+  const notKey = await upload('ana', 'shop.order', 'Amount\n5');
+  const refused = await call('PUT', `/api/v1/imports/${notKey.json.id}/mapping`, 'ana', {
+    columns: [{ index: 0, field: 'amount' }],
+    options: { mode: 'update', key: 'amount' },
+  });
+  expect(refused.status).toBe(422);
+});
+
+test('skip errors: the good records are kept, the others come back as a file; undo leaves changed records alone', async () => {
+  const id = await importFile(
+    'mgr',
+    [
+      'Name,Customer,Amount',
+      'SO-70,C-001,1',
+      'SO-71,Nobody,2',
+      'SO-72,C-002,=1+1',
+      'SO-73,C-003,-4',
+    ].join('\n'),
+    { onError: 'skip' },
+  );
+  const commit = await call('POST', `/api/v1/imports/${id}/commit`, 'mgr');
+  expect(commit.status).toBe(201);
+  expect(commit.json.created).toHaveLength(1);
+  expect(commit.json.skipped).toBe(3);
+  expect(commit.json.errors.map((e: Json) => [e.row, e.code])).toEqual([
+    [3, 'not-found'],
+    [4, 'not-a-number'],
+    [5, 'rejected'],
+  ]);
+  const rejected = await server.app.inject({
+    method: 'GET',
+    url: `/api/v1/imports/${id}/rejected`,
+    headers: { authorization: `Bearer ${await tokenOf('mgr')}` },
+  });
+  expect(rejected.headers['content-type']).toBe('text/csv; charset=utf-8');
+  expect(rejected.headers['content-disposition']).toBe(
+    'attachment; filename="rejected-orders.csv"',
+  );
+  const lines = rejected.body.replace(/^﻿/, '').trim().split('\r\n');
+  expect(lines[0]).toBe('Name,Customer,Amount,Error');
+  expect(lines[1]).toBe('SO-71,Nobody,2,"Customer: no record ""Nobody"" was found."');
+  expect(lines[2]?.startsWith("SO-72,C-002,'=1+1,")).toBe(true); // a formula stays text
+  expect(lines[3]).toContain('An amount is never negative.');
+  expect(lines).toHaveLength(4);
+  // Someone edits the imported order: undo leaves it.
+  const [order] = await server.driver.query<{ id: number }>({
+    text: `SELECT id FROM shop_order WHERE name = 'SO-70'`,
+    params: [],
+  });
+  const edit = await call('PATCH', `/api/v1/models/shop.order/${order?.id}`, 'mgr', {
+    amount: '9',
+  });
+  expect(edit.status).toBe(200);
+  const undo = await call('POST', `/api/v1/imports/${id}/undo`, 'mgr');
+  expect(undo.json).toEqual({ deleted: 0, restored: 0, changed: [order?.id] });
+  expect(await amountOf('SO-70')).toBe('9.00');
+});
+
+test('undo needs the permissions it uses: deleting the created records needs unlink', async () => {
+  const id = await importFile('ana', 'Name,Customer\nSO-80,C-001', {});
+  expect((await call('POST', `/api/v1/imports/${id}/commit`, 'ana')).status).toBe(201);
+  expect((await call('POST', `/api/v1/imports/${id}/undo`, 'ana')).status).toBe(403);
+  expect(await amountOf('SO-80')).toBe('0.00');
 });
