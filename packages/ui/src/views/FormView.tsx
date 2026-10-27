@@ -71,16 +71,28 @@ interface LineState {
   readonly deleted: readonly number[];
 }
 
-function commandsOf(lines: LineState): Values {
+/** A line's values as the server takes them: many2many as `{ set }` (a line's taxes). */
+function lineValues(values: Values, fields: Readonly<Record<string, ViewField>>): Values {
+  const out: Values = {};
+  for (const [key, value] of Object.entries(values))
+    out[key] = fields[key]?.kind === 'many2many' && Array.isArray(value) ? { set: value } : value;
+  return out;
+}
+
+function commandsOf(lines: LineState, fields: Readonly<Record<string, ViewField>>): Values {
   return {
     ...(lines.rows.some((r) => r.id === undefined)
-      ? { create: lines.rows.filter((r) => r.id === undefined).map((r) => r.values) }
+      ? {
+          create: lines.rows
+            .filter((r) => r.id === undefined)
+            .map((r) => lineValues(r.values, fields)),
+        }
       : {}),
     ...(lines.rows.some((r) => r.id !== undefined && r.dirty)
       ? {
           update: lines.rows
             .filter((r) => r.id !== undefined && r.dirty)
-            .map((r) => ({ id: r.id, values: r.values })),
+            .map((r) => ({ id: r.id, values: lineValues(r.values, fields) })),
         }
       : {}),
     ...(lines.deleted.length > 0 ? { delete: lines.deleted } : {}),
@@ -92,6 +104,8 @@ function payloadOf(
   changes: Values,
   fields: Readonly<Record<string, ViewField>>,
   lines: ReadonlyMap<string, LineState>,
+  /** The fields of a one2many's lines. */
+  lineFields: (key: string) => Readonly<Record<string, ViewField>>,
 ): Values {
   const out: Values = {};
   for (const [key, value] of Object.entries(changes)) {
@@ -99,7 +113,7 @@ function payloadOf(
     else out[key] = value;
   }
   for (const [key, state] of lines) {
-    const commands = commandsOf(state);
+    const commands = commandsOf(state, lineFields(key));
     if (Object.keys(commands).length > 0) out[key] = commands;
   }
   return out;
@@ -350,7 +364,12 @@ export function FormView({
   };
   const save = useMutation({
     mutationFn: async (): Promise<Versioned & { readonly queued?: true }> => {
-      const payload = payloadOf(changes, fields, lines);
+      const payload = payloadOf(
+        changes,
+        fields,
+        lines,
+        (key) => served.fields[fields[key]?.target ?? ''] ?? {},
+      );
       const etag = loaded.data?.etag ?? null;
       try {
         return isNew
