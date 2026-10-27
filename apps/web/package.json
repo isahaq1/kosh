@@ -10,8 +10,8 @@
     "preview": "vite preview --port 4173 --strictPort",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:e2e": "playwright test",
-    "api:generate": "kosh generate client --modules @kosh/server --out src/api/kosh.gen.ts",
-    "api:check": "kosh generate client --modules @kosh/server --out src/api/kosh.gen.ts --check"
+    "api:generate": "node ../../packages/cli/dist/bin.js generate client --modules @kosh/server --out src/api/kosh.gen.ts",
+    "api:check": "node ../../packages/cli/dist/bin.js generate client --modules @kosh/server --out src/api/kosh.gen.ts --check"
   },
   "dependencies": {
     "react": "^19.1.0",
