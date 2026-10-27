@@ -29,6 +29,27 @@ export const contacts: ReturnType<typeof defineModule> = defineModule({
     user: { label: 'User', groups: ['contacts.user'] },
     manager: { label: 'Manager', groups: ['contacts.manager'], implies: ['user'] },
   },
+  // A sample customer sheet for the import screen (RFC 0014 §5.4), when Data import is installed.
+  importTemplates: [
+    {
+      key: 'customers',
+      model: 'res.partner',
+      label: 'Customers',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'Company', field: 'isCompany' },
+        { header: 'Email', field: 'email' },
+        { header: 'Phone', field: 'phone' },
+        { header: 'Mobile', field: 'mobile' },
+        { header: 'Street', field: 'street' },
+        { header: 'City', field: 'city' },
+        { header: 'Postal code', field: 'zip' },
+        { header: 'Country', field: 'country' },
+        { header: 'Tax ID', field: 'taxId' },
+        { header: 'Customer', field: 'isCustomer' },
+      ],
+    },
+  ],
   actions: {
     'contacts.action_partners': action(ResPartner, {
       label: 'Contacts',
