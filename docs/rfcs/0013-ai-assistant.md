@@ -1,6 +1,6 @@
 # RFC 0013: AI assistant
 
-- **Status:** Accepted 2026-10-27 with the proposed answers (Claude Opus 5.5 by default, off per company, 2 million tokens per company and month, images and PDFs in version 1); step 1 implemented (`@kosh/assistant`, `docs/assistant.md`)
+- **Status:** Accepted 2026-10-27 with the proposed answers (Claude Opus 5.5 by default, off per company, 2 million tokens per company and month, images and PDFs in version 1); steps 1–2 implemented (`@kosh/assistant`, `docs/assistant.md`)
 - **Depends on:** 0002 (metadata), 0003 (permissions, field security), 0004 (search domains), 0006 (chatter),
   0007 (frontend), 0008 (apps); Claude through the Anthropic API
 
@@ -152,6 +152,25 @@ demo data with expected domains, three bills to fill.
   user may not read never described (the manager's request describes it), an unusable answer (422) and a refusal
   logged, the log without content, the budget (429); E2E: an administrator switches it on, "Ask" filters the
   contacts by city, the chip removes it, the call is in the log; no "Ask" without the access.
+
+## Implementation notes (2026-10-27): step 2 — summaries and draft replies
+
+- `POST /api/v1/assistant/summary` and `/reply` answer with server-sent events: a `data` line per piece of text (the
+  SDK's `stream()`, its `text` events, then `finalMessage()` for the usage and the stop reason), then `event: done`
+  with the model and whether it refused, or `event: error`. Errors before the stream (access, off, budget, a record
+  the user may not read, no Messaging access) are ordinary problems.
+- The input is the record's readable stored fields (selection labels, linked records' names when readable) and its
+  timeline from the chatter's own `chatterOf` as the user (change log with field security; others' messages from
+  their rendered HTML, the author's own from their text with mentions named), oldest first, after the instructions;
+  the instructions name the user's language and say the record is data. A draft may carry an instruction.
+- Every model call is now made **outside** a database transaction: prepared in the user's scope, answered, then
+  logged in a scope of its own (search was changed the same way).
+- `@kosh/ui`: `api.stream()` for server-sent events; a chatter slot (`registerChatterAssist`). Messaging's chatter
+  renders the slot and opens its composer with a draft (`initialText`).
+- Tests: on PostgreSQL, the summary's stream, what the model was told (fields, the message, never the margin the user
+  may not read), the language, a draft with an instruction and nothing posted, a refusal ending the stream, no
+  Messaging access refused before anything is sent, the log; E2E: Summarize on an order, Draft reply → Use this
+  draft → the composer holds it.
 
 ## Alignment with CLAUDE.md
 
