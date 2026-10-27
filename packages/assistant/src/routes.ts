@@ -17,7 +17,14 @@ import { HttpProblem, type ModuleContext, publicApiModels } from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { AssistantClient, Attachment } from './client.js';
-import { convert, type FormField, fillable, formInstructions, formSchema } from './form.js';
+import {
+  convert,
+  type FormField,
+  fillable,
+  formInstructions,
+  formSchema,
+  type LineSpec,
+} from './form.js';
 import { languageName, recordText, replyInstructions, summaryInstructions } from './record.js';
 import {
   domainOf,
@@ -115,6 +122,27 @@ export function formFieldsFor(context: ModuleContext, env: Env, model: string): 
       options: f.options,
       target: f.target,
     }));
+}
+
+/** The one2many fields of a new record the user may fill, with the fields of their lines (not the link back). */
+export function lineSpecsFor(context: ModuleContext, env: Env, model: string): LineSpec[] {
+  const own = publicApiModels(context.registry).get(model);
+  if (own === undefined) return [];
+  const out: LineSpec[] = [];
+  for (const f of own.fields) {
+    if (f.kind !== 'one2many' || f.readonly || f.target === null) continue;
+    if (
+      !env.access.canField(model as never, f.key, 'write') ||
+      !env.access.can(f.target as never, 'create')
+    )
+      continue;
+    const fields = formFieldsFor(context, env, f.target)
+      .filter((l) => !(l.kind === 'many2one' && l.target === model))
+      .slice(0, 12);
+    if (fields.length > 0) out.push({ key: f.key, label: f.label, target: f.target, fields });
+    if (out.length >= 3) break;
+  }
+  return out;
 }
 
 /** The one record of `model` the user may read whose name contains `name`; null when none or several. */
@@ -533,10 +561,12 @@ export function registerAssistantRoutes(
             `No field of ${model} to fill.`,
           );
         const label = publicApiModels(context.registry).get(model)?.label ?? model;
+        const lines = lineSpecsFor(context, env, model);
         return {
           assistant,
           fields,
-          system: formInstructions({ model, modelLabel: label, fields, today: env.today() }),
+          lines,
+          system: formInstructions({ model, modelLabel: label, fields, lines, today: env.today() }),
         };
       },
       { write: true },
@@ -546,7 +576,7 @@ export function registerAssistantRoutes(
       system: prepared.system,
       user: document === '' ? 'Read the attached document.' : document,
       ...(attachments.length === 0 ? {} : { attachments }),
-      schema: formSchema(prepared.fields),
+      schema: formSchema(prepared.fields, prepared.lines),
       effort: 'medium',
       maxTokens: 4096,
     });
@@ -564,7 +594,11 @@ export function registerAssistantRoutes(
       await logCall(request, entry);
       return { refused: true };
     }
-    const raw = (answer.data ?? {}) as { fields?: Record<string, unknown>; notes?: unknown };
+    const raw = (answer.data ?? {}) as {
+      fields?: Record<string, unknown>;
+      lines?: Record<string, unknown>;
+      notes?: unknown;
+    };
     const values: Record<string, unknown> = {};
     const skipped: string[] = [];
     await request.env(async (env) => {
@@ -580,6 +614,33 @@ export function registerAssistantRoutes(
         const converted = convert(field, given);
         if ('skip' in converted) skipped.push(converted.skip);
         else values[field.key] = converted.value;
+      }
+      // The lines: each value converted like a field's, empty lines left out.
+      for (const spec of prepared.lines) {
+        const given = raw.lines?.[spec.key];
+        if (!Array.isArray(given)) continue;
+        const rows: Record<string, unknown>[] = [];
+        for (const [n, line] of given.entries()) {
+          const row: Record<string, unknown> = {};
+          for (const field of spec.fields) {
+            const text = (line as Record<string, unknown> | null)?.[field.key];
+            if (typeof text !== 'string' || text.trim() === '') continue;
+            if (field.kind === 'many2one') {
+              const id = await matchByName(context, env, field.target ?? '', text.trim());
+              if (id === null)
+                skipped.push(
+                  `${spec.label} ${n + 1}: ${field.label}: no single "${text.trim()}" found`,
+                );
+              else row[field.key] = id;
+              continue;
+            }
+            const converted = convert(field, text);
+            if ('skip' in converted) skipped.push(`${spec.label} ${n + 1}: ${converted.skip}`);
+            else row[field.key] = converted.value;
+          }
+          if (Object.keys(row).length > 0) rows.push(row);
+        }
+        if (rows.length > 0) values[spec.key] = rows;
       }
     });
     await logCall(request, entry);

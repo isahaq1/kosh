@@ -286,12 +286,36 @@ export function FormView({
         : api.get(model, recordId),
   });
   // Proposed values (from a document) are unsaved changes: Save, Discard and the leave guard apply to them.
+  // Proposed lines of a one2many are new rows of its line editor.
+  const linesOf = (key: string): Values[] | null => {
+    const given = defaults?.[key];
+    return fields[key]?.kind === 'one2many' && Array.isArray(given) ? (given as Values[]) : null;
+  };
+  const isLines = (key: string) => linesOf(key) !== null;
   const proposedChanges = (): Values =>
     isNew && proposed !== undefined
-      ? Object.fromEntries(proposed.map((key) => [key, defaults?.[key]]))
+      ? Object.fromEntries(
+          proposed.filter((key) => !isLines(key)).map((key) => [key, defaults?.[key]]),
+        )
       : {};
+  const proposedLines = (): ReadonlyMap<string, LineState> =>
+    new Map(
+      isNew && proposed !== undefined
+        ? proposed.filter(isLines).map((key) => [
+            key,
+            {
+              rows: (linesOf(key) ?? []).map((values, i) => ({
+                key: `proposed-${i}`,
+                values,
+                dirty: true,
+              })),
+              deleted: [],
+            },
+          ])
+        : [],
+    );
   const [changes, setChanges] = useState<Values>(proposedChanges);
-  const [lines, setLines] = useState<ReadonlyMap<string, LineState>>(new Map());
+  const [lines, setLines] = useState<ReadonlyMap<string, LineState>>(proposedLines);
   const [problem, setProblem] = useState<ApiError | null>(null);
   const [warnings, setWarnings] = useState<readonly string[]>([]);
   const [confirming, setConfirming] = useState<ButtonNode | null>(null);
@@ -299,7 +323,7 @@ export function FormView({
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new record id starts a clean form
   useEffect(() => {
     setChanges(proposedChanges());
-    setLines(new Map());
+    setLines(proposedLines());
     setProblem(null);
   }, [recordId]);
 
@@ -405,29 +429,43 @@ export function FormView({
     onError: fail,
   });
 
-  const change = (key: string, value: unknown) => {
-    const next = { ...changes, [key]: value };
-    setChanges(next);
-    if (!served.onchange.includes(key)) return;
+  const runOnchange = (draft: Values, changed: readonly string[]) => {
     // The record's id travels on its own: it is not a field of the draft.
-    const { id: _id, ...plain } = values;
+    const { id: _id, ...plain } = draft;
     void api
       .onchange(model, {
         ...(isNew ? {} : { id: recordId }),
-        values: { ...plain, [key]: value },
-        changed: [key],
+        values: plain,
+        changed: [...changed],
       })
       .then((result) => {
         const assisted: Values = {};
         // Computed values (display name, totals) come back too: shown, never written.
         for (const [k, v] of Object.entries(result.values))
-          if (k !== key && k !== 'id' && fields[k]?.readonly !== true && values[k] !== v)
+          if (
+            !changed.includes(k) &&
+            k !== 'id' &&
+            fields[k]?.readonly !== true &&
+            JSON.stringify(draft[k] ?? null) !== JSON.stringify(v ?? null)
+          )
             assisted[k] = v;
         if (Object.keys(assisted).length > 0) setChanges((c) => ({ ...c, ...assisted }));
         setWarnings(result.warnings ?? []);
       })
       .catch(() => undefined);
   };
+  const change = (key: string, value: unknown) => {
+    setChanges({ ...changes, [key]: value });
+    if (served.onchange.includes(key)) runOnchange({ ...values, [key]: value }, [key]);
+  };
+  // Proposed values trigger their onchanges once the new record is there (the customer's currency): what follows
+  // from them is part of the proposal, unsaved like it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once per loaded new record
+  useEffect(() => {
+    if (!isNew || record === undefined || proposed === undefined) return;
+    const keys = proposed.filter((key) => served.onchange.includes(key) && !isLines(key));
+    if (keys.length > 0) runOnchange(values, keys);
+  }, [record]);
 
   const names = useRowNames(record === undefined ? [] : [values], Object.values(fields));
   if (loaded.isPending) return <Spinner label={t('app.loading')} />;

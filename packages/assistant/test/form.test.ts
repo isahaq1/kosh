@@ -39,6 +39,47 @@ test('the schema asks one string per field; the instructions say how', () => {
   expect(fillable('one2many')).toBe(false);
 });
 
+test('lines: an array per one2many, a string per line field; the instructions list them', () => {
+  const lines = [
+    {
+      key: 'lines',
+      label: 'Order lines',
+      target: 'sale.order.line',
+      fields: [
+        { key: 'product', label: 'Product', kind: 'many2one', target: 'product.product' },
+        { key: 'qty', label: 'Quantity', kind: 'decimal' },
+      ],
+    },
+  ];
+  const schema = formSchema(fields, lines) as {
+    required: string[];
+    properties: {
+      lines: {
+        required: string[];
+        properties: { lines: { type: string; items: { required: string[] } } };
+      };
+    };
+  };
+  expect(schema.required).toEqual(['fields', 'lines', 'notes']);
+  expect(schema.properties.lines.required).toEqual(['lines']);
+  expect(schema.properties.lines.properties.lines.type).toBe('array');
+  expect(schema.properties.lines.properties.lines.items.required).toEqual(['product', 'qty']);
+  const text = formInstructions({
+    model: 'sale.order',
+    modelLabel: 'Order',
+    fields,
+    lines,
+    today: '2026-10-27',
+  });
+  expect(text).toContain('- lines: Order lines, each with:');
+  expect(text).toContain('  - product: Product [many2one] (the name of the linked record)');
+  // Without lines, an empty object.
+  expect(
+    (formSchema(fields) as { properties: { lines: { required: string[] } } }).properties.lines
+      .required,
+  ).toEqual([]);
+});
+
 test('each value is converted by its kind, or left out with the reason', () => {
   const by = (key: string) => fields.find((f) => f.key === key) as (typeof fields)[number];
   expect(convert(by('amount'), '12,500.50')).toEqual({ value: '12500.50' });

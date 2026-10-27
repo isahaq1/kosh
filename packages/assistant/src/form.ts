@@ -15,6 +15,15 @@ export interface FormField {
   readonly target?: string | null;
 }
 
+/** Lines of a one2many the document may fill (order lines): their own fields. */
+export interface LineSpec {
+  readonly key: string;
+  readonly label: string;
+  /** The line model. */
+  readonly target: string;
+  readonly fields: readonly FormField[];
+}
+
 const FILLABLE = [
   'char',
   'text',
@@ -36,11 +45,34 @@ const FILLABLE = [
 /** Whether a field kind can be filled from a document. */
 export const fillable = (kind: string): boolean => FILLABLE.includes(kind);
 
-/** The answer's schema: a string per field, and notes on what the document did not settle. */
-export function formSchema(fields: readonly FormField[]): Record<string, unknown> {
+const stringsOf = (fields: readonly FormField[]) => ({
+  type: 'object',
+  properties: Object.fromEntries(
+    fields.map((f) => [f.key, { type: 'string', description: f.label }]),
+  ),
+  required: fields.map((f) => f.key),
+  additionalProperties: false,
+});
+
+/** The answer's schema: a string per field, the lines per one2many, and notes on what the document left open. */
+export function formSchema(
+  fields: readonly FormField[],
+  lines: readonly LineSpec[] = [],
+): Record<string, unknown> {
   return {
     type: 'object',
     properties: {
+      lines: {
+        type: 'object',
+        properties: Object.fromEntries(
+          lines.map((l) => [
+            l.key,
+            { type: 'array', description: l.label, items: stringsOf(l.fields) },
+          ]),
+        ),
+        required: lines.map((l) => l.key),
+        additionalProperties: false,
+      },
       fields: {
         type: 'object',
         properties: Object.fromEntries(
@@ -54,7 +86,7 @@ export function formSchema(fields: readonly FormField[]): Record<string, unknown
         description: 'What the document leaves unclear or contradicts (empty when nothing).',
       },
     },
-    required: ['fields', 'notes'],
+    required: ['fields', 'lines', 'notes'],
     additionalProperties: false,
   };
 }
@@ -64,20 +96,32 @@ export function formInstructions(input: {
   readonly model: string;
   readonly modelLabel: string;
   readonly fields: readonly FormField[];
+  readonly lines?: readonly LineSpec[];
   readonly today: string;
 }): string {
-  const lines = input.fields.map((f) => {
+  const describe = (f: FormField, indent = '') => {
     const options =
       f.options === undefined || f.options === null || f.options.length === 0
         ? ''
         : ` values: ${f.options.map(([v, l]) => `${v} (${l})`).join(', ')}`;
     const link = f.kind === 'many2one' ? ' (the name of the linked record)' : '';
-    return `- ${f.key}: ${f.label} [${f.kind}]${link}${options}`;
-  });
+    return `${indent}- ${f.key}: ${f.label} [${f.kind}]${link}${options}`;
+  };
+  const lineSpecs = input.lines ?? [];
   return [
     `You read a document and propose the values of a new "${input.modelLabel}" (${input.model}) in an ERP.`,
     'Fill these fields, one string each; leave a field empty when the document does not say it:',
-    ...lines,
+    ...input.fields.map((f) => describe(f)),
+    ...(lineSpecs.length === 0
+      ? []
+      : [
+          '',
+          'And these lists, one entry per line of the document (none when it has no such lines):',
+          ...lineSpecs.flatMap((l) => [
+            `- ${l.key}: ${l.label}, each with:`,
+            ...l.fields.map((f) => describe(f, '  ')),
+          ]),
+        ]),
     '',
     'Rules:',
     '- Copy what the document says; never guess or invent a value.',

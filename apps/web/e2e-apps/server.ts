@@ -6,13 +6,14 @@
  *
  * Users (password: `correct horse battery`):
  * - `admin`: administrator with 2FA (the fixture's secret)
- * - `dina`: accounting, sales and purchase manager
+ * - `dina`: accounting, sales and purchase manager; uses the AI assistant (a fake client: no key, no network)
  * - `rahim`: salesperson who invoices (sale_account.user) and accountant
  */
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { accounting } from '@kosh/accounting';
+import { createAssistant, fakeClient } from '@kosh/assistant';
 import { automation } from '@kosh/automation';
 import { contacts } from '@kosh/contacts';
 import { mail } from '@kosh/mail';
@@ -50,6 +51,36 @@ process.env['KOSH_STORAGE_DIR'] ??= mkdtempSync(join(tmpdir(), 'kosh-e2e-apps-fi
 process.env['KOSH_SCHEDULES'] ??= 'off';
 const container = await new PostgreSqlContainer('postgres:18').start();
 const databaseUrl = container.getConnectionUri();
+// The AI assistant with a fake client: "Customer: …" and "Line: <product>; <quantity>; <unit price>" lines of a
+// pasted text fill a new sales order and its lines.
+const NL = String.fromCharCode(10);
+const assistant = createAssistant({
+  client: fakeClient((request) => {
+    if (!('schema' in request) || !request.system.includes('propose the values'))
+      return { clauses: [], combine: 'and', unsupported: '' };
+    const text = request.user.split(NL);
+    const customer =
+      text
+        .find((l) => l.startsWith('Customer:'))
+        ?.slice('Customer:'.length)
+        .trim() ?? '';
+    const lines = text
+      .filter((l) => l.startsWith('Line:'))
+      .map((l) =>
+        l
+          .slice('Line:'.length)
+          .split(';')
+          .map((part) => part.trim()),
+      )
+      .map(([product = '', quantity = '', priceUnit = '']) => ({
+        product,
+        name: product,
+        quantity,
+        priceUnit,
+      }));
+    return { fields: { partner: customer }, lines: { lines }, notes: '' };
+  }, 'fake-claude'),
+});
 const CATALOGUE = [
   base,
   settings,
@@ -69,6 +100,7 @@ const CATALOGUE = [
   saleAccount,
   purchaseAccount,
   saleProject,
+  assistant,
 ];
 const migrations = mkdtempSync(join(tmpdir(), 'kosh-e2e-apps-migrations-'));
 const setup = pg.createDriver({ url: databaseUrl, max: 2, parseNumeric: orm.toDecimal });
@@ -88,6 +120,7 @@ await applyApps(
         'purchase',
         'accounting',
         'project',
+        'assistant',
       ],
     },
     dir: migrations,
@@ -120,6 +153,7 @@ await server.shutro.bootstrap({ reason: 'e2e seed', company }, async (env) => {
   await installApprovalPolicies(env, server.registry.loaded.modules);
   await installTemplates(env, server.registry.loaded.modules);
   await installActivityTypes(env);
+  await model('assistant.config').create([{ company, enabled: true }]);
   await (await model('auth.credential').search({ where: { user: admin } })).write({
     totpSecret: ADMIN_TOTP_SECRET,
     totpEnabled: true,
@@ -136,6 +170,7 @@ for (const [login, name, groups] of [
       'project.manager',
       'messaging.user',
       'reporting.user',
+      'assistant.user',
     ],
   ],
   [

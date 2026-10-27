@@ -30,6 +30,18 @@ const Invoice = defineModel('shop.invoice', {
     margin: f.decimal({ scale: 2, groups: ['shop.manager'] }),
     salesperson: f.many2one('res.users'),
     due: f.date(),
+    lines: f.one2many('shop.invoice.line', 'invoice'),
+  },
+});
+const InvoiceLine = defineModel('shop.invoice.line', {
+  label: 'Invoice line',
+  access: { 'shop.user': ['read', 'write', 'create', 'unlink'] },
+  fields: {
+    invoice: f.many2one('shop.invoice', { required: true, ondelete: 'cascade' }),
+    name: f.char({ required: true }),
+    qty: f.integer({ default: 1 }),
+    price: f.decimal({ scale: 2, default: '0' }),
+    seller: f.many2one('res.users'),
   },
 });
 const shop = defineKoshModule({
@@ -41,7 +53,7 @@ const shop = defineKoshModule({
       defineGroup({ code: 'shop.user', label: 'Shop', implies: ['base.user'] }),
       defineGroup({ code: 'shop.manager', label: 'Shop manager', implies: ['shop.user'] }),
     ],
-    models: [Invoice],
+    models: [Invoice, InvoiceLine],
   }),
   kosh: '^0.1.0',
   depends: [base],
@@ -54,6 +66,18 @@ const client = fakeClient((request) => {
     // A form from a document: what the "document" says, by a fixed reading.
     if (request.user.includes('refuse')) return 'refuse';
     const pdf = (request.attachments ?? []).length > 0;
+    if (request.user.includes('with lines'))
+      return {
+        fields: { name: 'INV/L' },
+        lines: {
+          lines: [
+            { name: 'Steel beam', qty: '4', price: '1,200.00', seller: 'mgr' },
+            { name: 'Bolts', qty: 'many', price: '', seller: 'nobody' },
+            { name: '', qty: '', price: '', seller: '' },
+          ],
+        },
+        notes: '',
+      };
     return {
       fields: {
         name: pdf ? 'INV/PDF' : 'INV/9',
@@ -401,6 +425,47 @@ test('a form from a document: values the user may write, converted, linked recor
   ).toEqual({
     refused: true,
   });
+});
+
+test('a form from a document: the lines of a one2many, converted like fields, the link back left out', async () => {
+  const read = await call('POST', '/api/v1/assistant/form', 'ana', {
+    model: 'shop.invoice',
+    text: 'Invoice INV/L with lines: 4 steel beams at 1,200.00 (mgr), bolts.',
+  });
+  expect(read.status).toBe(200);
+  const [mgr] = (
+    await server.driver.query<{ id: string }>({
+      text: "SELECT id::text FROM res_users WHERE login = 'mgr'",
+      params: [],
+    })
+  ).map((r) => Number(r.id));
+  expect(read.json.values).toEqual({
+    name: 'INV/L',
+    lines: [{ name: 'Steel beam', qty: 4, price: '1200.00', seller: mgr }, { name: 'Bolts' }],
+  });
+  expect(read.json.proposed).toEqual(['name', 'lines']);
+  expect(read.json.skipped).toEqual([
+    'Lines 2: Qty: "many" is not a whole number',
+    'Lines 2: Seller: no single "nobody" found',
+  ]);
+  const system = client.requests.at(-1)?.system ?? '';
+  expect(system).toContain('- lines: Lines, each with:');
+  expect(system).toContain('  - qty: Qty [integer]');
+  expect(system).not.toContain('  - invoice:');
+  // The proposal saves as it is: the lines are created with the invoice.
+  const saved = await call('POST', '/api/v1/models/shop.invoice', 'ana', {
+    ...read.json.values,
+    lines: { create: read.json.values.lines },
+  });
+  expect(saved.status).toBe(201);
+  const rows = await server.driver.query<{ name: string; qty: number }>({
+    text: 'SELECT name, qty FROM shop_invoice_line ORDER BY id',
+    params: [],
+  });
+  expect(rows).toEqual([
+    { name: 'Steel beam', qty: 4 },
+    { name: 'Bolts', qty: 1 },
+  ]);
 });
 
 test('the monthly budget stops the assistant', async () => {

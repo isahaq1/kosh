@@ -25,7 +25,14 @@ export {
   type TextAnswer,
   type TextRequest,
 } from './client.js';
-export { convert, type FormField, fillable, formInstructions, formSchema } from './form.js';
+export {
+  convert,
+  type FormField,
+  fillable,
+  formInstructions,
+  formSchema,
+  type LineSpec,
+} from './form.js';
 export { assistantShutro } from './models.js';
 export {
   languageName,
@@ -35,7 +42,7 @@ export {
   summaryInstructions,
   TIMELINE_ITEMS,
 } from './record.js';
-export { formFieldsFor, registerAssistantRoutes, searchFieldsFor } from './routes.js';
+export { formFieldsFor, lineSpecsFor, registerAssistantRoutes, searchFieldsFor } from './routes.js';
 export {
   domainOf,
   operatorsOf,
