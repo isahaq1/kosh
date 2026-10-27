@@ -10,10 +10,12 @@ import { messaging } from '@kosh/messaging';
 import { defineModule, type KoshModule } from '@kosh/modules-sdk';
 import { reporting } from '@kosh/reporting';
 import { base, type ModuleContext } from '@kosh/server';
+import { portalAnnouncer } from './announce.js';
 import { portalShutro } from './module.js';
 import { type PortalRoutesOptions, registerPortalRoutes } from './routes.js';
 import { registerPortalDocumentRoutes } from './routes-documents.js';
 
+export { CHANGE_TOPIC, portalAnnouncer } from './announce.js';
 export { type PortalDocument, portalDocuments } from './documents.js';
 export {
   PartnerPortalUsers,
@@ -38,7 +40,12 @@ export const PACKAGE: { readonly name: string; readonly rfc: string } = Object.f
 });
 
 /** The portal module with explicit options (tests): its URL and mailer. */
-export function createPortal(options: Partial<PortalRoutesOptions> = {}): KoshModule {
+export function createPortal(
+  options: Partial<PortalRoutesOptions> & {
+    /** Announce new documents in this process (default: unless `KOSH_SCHEDULES=off`). */
+    readonly workers?: boolean;
+  } = {},
+): KoshModule {
   return defineModule({
     shutro: portalShutro,
     kosh: '^0.1.0',
@@ -59,11 +66,16 @@ export function createPortal(options: Partial<PortalRoutesOptions> = {}): KoshMo
       },
     ],
     routes: (context: ModuleContext) => {
-      registerPortalRoutes(context, {
+      const delivery = {
         portalUrl: options.portalUrl ?? process.env['KOSH_PORTAL_URL'] ?? 'http://localhost:5174',
         mailer: 'mailer' in options ? options.mailer : mailerFromEnv(),
-      });
+      };
+      registerPortalRoutes(context, delivery);
       registerPortalDocumentRoutes(context);
+      if (!(options.workers ?? process.env['KOSH_SCHEDULES'] !== 'off')) return;
+      const announcer = portalAnnouncer(context, delivery);
+      announcer.start();
+      context.app.addHook('onClose', () => announcer.stop());
     },
   });
 }

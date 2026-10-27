@@ -49,13 +49,20 @@ export function portalDocuments(registry: KoshRegistry): ReadonlyMap<string, Por
           `${spec.model} gives portal.user no read access with a record rule.`,
           "Extend the model in the bridge: access { 'portal.user': ['read'] } and rules { portal: portalRule('partner') }.",
         );
-      const partner = m.byKey.get(spec.partner);
-      if (partner?.kind !== 'many2one' || partner.target !== 'res.partner')
-        fail(
-          key,
-          `'${spec.partner}' is not a many2one to res.partner.`,
-          'Name the customer field.',
-        );
+      // The customer: a many2one to res.partner, directly or through many2ones (`project.partner`).
+      let hop: ApiModel | undefined = m;
+      let target: string | null = null;
+      for (const segment of spec.partner.split('.')) {
+        const field = hop?.byKey.get(segment);
+        if (field?.kind !== 'many2one' || field.target === null) {
+          target = null;
+          break;
+        }
+        target = field.target;
+        hop = models.get(field.target);
+      }
+      if (target !== 'res.partner')
+        fail(key, `'${spec.partner}' does not lead to res.partner.`, 'Name the customer field.');
       for (const field of [...spec.list, ...spec.fields])
         if (!m.byKey.has(field))
           fail(key, `${spec.model} has no field '${field}'.`, 'Declare existing fields.');

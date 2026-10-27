@@ -57,6 +57,21 @@ export const PortalSignature = defineModel('portal.signature', {
   },
 });
 
+/** A document announced to its customer by email (RFC 0015 §5.7): once per record and document type. */
+export const PortalAnnouncement = defineModel('portal.announcement', {
+  label: 'Portal announcement',
+  access: {},
+  fields: {
+    resModel: f.char({ required: true, label: 'Model' }),
+    resId: f.integer({ required: true, label: 'Record' }),
+    document: f.char({ required: true, size: 64 }),
+    recipients: f.integer({ required: true, default: 0 }),
+  },
+  sqlConstraints: {
+    once: { unique: ['resModel', 'resId', 'document'], message: 'A document is announced once.' },
+  },
+});
+
 export const portalShutro = defineModule({
   name: 'portal',
   version: '0.1.0',
@@ -70,6 +85,6 @@ export const portalShutro = defineModule({
       implies: ['contacts.user'],
     }),
   ],
-  models: [PortalInvitation, PortalSignature],
+  models: [PortalInvitation, PortalSignature, PortalAnnouncement],
   extensions: [UserPortalPartner, PartnerPortalUsers],
 });

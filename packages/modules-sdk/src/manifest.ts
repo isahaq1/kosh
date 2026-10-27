@@ -159,7 +159,7 @@ export interface PortalDocumentSpec {
   readonly key: string;
   readonly model: string;
   readonly label: string;
-  /** The many2one to `res.partner` that says whose document it is. */
+  /** Whose document it is: a many2one to `res.partner`, or a path to one (`project.partner`). */
   readonly partner: string;
   /** Which records show (drafts stay internal): a domain. */
   readonly domain?: Readonly<Record<string, unknown>>;
@@ -178,6 +178,11 @@ export interface PortalDocumentSpec {
   readonly attention?: Readonly<Record<string, unknown>>;
   /** The list's order (default: the model's). */
   readonly order?: readonly string[];
+  /**
+   * When a record enters this domain (a quotation sent, an invoice posted), its customer's portal users get an
+   * email with a link, once. The model's writes must reach the portal: list it in the module's `changeEvents`.
+   */
+  readonly announce?: Readonly<Record<string, unknown>>;
 }
 
 /** A user the demo data is made by: created on first use with these groups (added to an existing one). */
