@@ -16,4 +16,4 @@ Design documents written before implementation. An RFC is implemented only after
 | 0010 | [A modern, fast, friendly back-office](0010-modern-ux.md) | Phase A accepted (within RFC 0007); Phase B implemented; C: its three subsystems get RFCs of their own, 0011 first |
 | 0011 | [Automation builder](0011-automation-builder.md) | Accepted, implemented (the engine, the API, the editor, webhooks, date and schedule triggers, rules shipped by modules, rules on any field) |
 | 0012 | [Kosh Studio](0012-studio.md) | Accepted, implemented (the spec and generator, `kosh apps upgrade`, the API, Studio mode, approvals and rules, git proposals) |
-| 0013 | [AI assistant](0013-ai-assistant.md) | Draft, waiting for approval |
+| 0013 | [AI assistant](0013-ai-assistant.md) | Accepted; step 1 implemented (natural-language search) |

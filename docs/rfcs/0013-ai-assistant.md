@@ -1,6 +1,6 @@
 # RFC 0013: AI assistant
 
-- **Status:** Draft 2026-10-27, waiting for approval (RFC 0010 §5, Phase C)
+- **Status:** Accepted 2026-10-27 with the proposed answers (Claude Opus 5.5 by default, off per company, 2 million tokens per company and month, images and PDFs in version 1); step 1 implemented (`@kosh/assistant`, `docs/assistant.md`)
 - **Depends on:** 0002 (metadata), 0003 (permissions, field security), 0004 (search domains), 0006 (chatter),
   0007 (frontend), 0008 (apps); Claude through the Anthropic API
 
@@ -130,6 +130,28 @@ demo data with expected domains, three bills to fill.
 - **Off by default per company** (proposed), or on once the key is set?
 - **The budget**: 2 million tokens per company per month (proposed), per user, or none?
 - **Images and PDFs** in version 1 (proposed), or text only at first?
+
+## Implementation notes (2026-10-27): step 1 — the module and natural-language search
+
+- `@kosh/assistant`: `assistant.config` (per company, off by default), `assistant.call` (the log, private), the group
+  `assistant.user`; Settings → AI assistant (switch on, the month's usage, the latest calls; administrators). The
+  client wraps the official SDK (`@anthropic-ai/sdk` 1.3): one `beta.messages.create` per call with
+  `output_config.format` (a JSON schema), `effort: low`, the instructions first with `cache_control`, the refusal
+  fallback (`fallbacks: "default"`); a refusal is `{ refused: true }`. `fakeClient` answers in tests and in the E2E
+  server: CI never calls the API.
+- Search: the fields offered are the model's stored fields the user may read and, one hop through readable many2one
+  fields, the target's readable fields (`partner.city`); clauses come back as strings (`field`, `operator`, `value`,
+  `values`) and Kosh converts and checks them per kind (numbers, decimals kept as strings, dates, booleans, selection
+  values, `ilike` with its wildcards escaped), then runs the domain once as the user. Every problem is named.
+- An answer Kosh cannot use is logged in a transaction of its own before the 422 (a failing request must not lose its
+  log line). The budget sums the month's tokens of the company (input, output, cached).
+- `@kosh/ui`: a registry slot for search assistants (`registerSearchAssist`) and the search's custom domain shown as
+  a chip with its label (`SearchState.customLabel`, in the URL).
+- Tests: the schema, the instructions, the conversion and every refusal; on PostgreSQL, the permissions (403,
+  401), off until an administrator switches it on (nothing sent meanwhile), the filters run as the user, a field the
+  user may not read never described (the manager's request describes it), an unusable answer (422) and a refusal
+  logged, the log without content, the budget (429); E2E: an administrator switches it on, "Ask" filters the
+  contacts by city, the chip removes it, the call is in the log; no "Ask" without the access.
 
 ## Alignment with CLAUDE.md
 
