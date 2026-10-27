@@ -26,6 +26,9 @@ export const TEXTS: Readonly<Record<string, Texts>> = {
       'chat.direct': '{{actor}}: {{preview}}',
       'email.bounced': 'The email to {{recipient}} ({{address}}) about {{record}} bounced',
       automation: '{{text}}',
+      'import.finished':
+        'Your import of {{file}} finished: {{created}} created, {{updated}} updated, {{errors}} errors',
+      'import.checked': 'The check of {{file}} finished: {{errors}} errors',
     },
     states: { approved: 'approved', rejected: 'rejected' },
     email: {
@@ -44,6 +47,9 @@ export const TEXTS: Readonly<Record<string, Texts>> = {
       'chat.direct': '{{actor}}: {{preview}}',
       'email.bounced': '{{record}} সম্পর্কে {{recipient}} ({{address}})-কে পাঠানো ইমেইল ফেরত এসেছে',
       automation: '{{text}}',
+      'import.finished':
+        '{{file}} ইমপোর্ট শেষ হয়েছে: {{created}}টি তৈরি, {{updated}}টি হালনাগাদ, {{errors}}টি ত্রুটি',
+      'import.checked': '{{file}} যাচাই শেষ হয়েছে: {{errors}}টি ত্রুটি',
     },
     states: { approved: 'অনুমোদন করেছেন', rejected: 'প্রত্যাখ্যান করেছেন' },
     email: {

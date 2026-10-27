@@ -214,6 +214,26 @@ async function draftsOf(
         })),
       };
     }
+    case 'import.finished': {
+      // A background import or check ended (RFC 0014 §5.3): its user hears how it went.
+      const dry = payload['dry'] === true;
+      return {
+        model,
+        id,
+        drafts: [
+          {
+            user: by,
+            kind: dry ? ('import.checked' as const) : ('import.finished' as const),
+            params: {
+              file: String(payload['file'] ?? ''),
+              created: Number(payload['created'] ?? 0),
+              updated: Number(payload['updated'] ?? 0),
+              errors: Number(payload['errors'] ?? 0),
+            },
+          },
+        ],
+      };
+    }
     case 'mail.activity.assigned': {
       const assignee = Number(payload['assignee']);
       if (!Number.isSafeInteger(assignee) || assignee === by) return { model, id, drafts: [] };
@@ -243,6 +263,7 @@ export const TOPICS: readonly string[] = [
   'approval.requested',
   'approval.decided',
   'mail.activity.assigned',
+  'import.finished',
 ];
 
 /**

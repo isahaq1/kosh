@@ -367,3 +367,33 @@ test('a bounce of an email we sent marks the delivery and tells the user whose a
     params: { recipient: 'Dina Rahman', address: 'dina@padma.test', record: 'Padma Nadir Majhi' },
   });
 });
+
+test('a background import tells its user how it went (RFC 0014 §5.3)', async () => {
+  const before = (await call('GET', '/api/v1/notifications/count', 'rahim')).json.unread as number;
+  await emit('rahim', 'import.finished', {
+    model: 'library.book',
+    id: book,
+    dry: false,
+    file: 'books.csv',
+    created: 3,
+    updated: 1,
+    errors: 0,
+  });
+  await emit('rahim', 'import.finished', {
+    model: 'library.book',
+    id: book,
+    dry: true,
+    file: 'books.csv',
+    created: 0,
+    updated: 0,
+    errors: 2,
+  });
+  const items = (await call('GET', '/api/v1/notifications?unread=true', 'rahim')).json.items;
+  expect(items.length).toBe(before + 2);
+  expect(
+    items.slice(0, 2).map((n: { kind: string; params: unknown }) => [n.kind, n.params]),
+  ).toEqual([
+    ['import.checked', { file: 'books.csv', created: 0, updated: 0, errors: 2 }],
+    ['import.finished', { file: 'books.csv', created: 3, updated: 1, errors: 0 }],
+  ]);
+});
