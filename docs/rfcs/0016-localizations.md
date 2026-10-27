@@ -284,7 +284,7 @@ declared identifier (`bin`, `tin`), shown when the contact's country matches, ch
   400 / 404 / 403. E2E: the page shows the month's invoice and downloads the return.
 - **Docs**: `docs/localizations.md`.
 
-## Step 5 design: India (`l10n_in`), proposed 2026-10-28 — awaiting approval
+## Step 5 design: India (`l10n_in`), approved 2026-10-28
 
 Answers given: CGST / SGST or IGST are chosen **at posting** from one GST tax on the line (not by mapping taxes,
 Odoo's fiscal positions); version 1 also has **reverse charge**, **GST cess**, **e-invoicing (IRN, QR)** and
@@ -343,12 +343,35 @@ Odoo's fiscal positions); version 1 also has **reverse charge**, **GST cess**, *
 3. GSTR-1 and GSTR-3B (screen, XLSX, PDF, GSTR-1 JSON); E2E.
 4. E-invoicing and e-way bills with the fake provider; then a real adapter.
 
-### Open questions
+### Decisions (2026-10-28)
 
-- **E-invoice and e-way bill access**: direct NIC API access (a GSTIN's API credentials on the IRP / EWB sandbox),
-  or a GSP (which one)? Part 4's real adapter is written for that and tested on its sandbox.
-- **Debit notes**: GST needs them (supplementary invoices); Accounting has credit notes only. Add `out_debit` /
-  `in_debit` kinds in 5.a, or leave them for later?
+- **E-invoice and e-way bill access**: decided at part 4, when sandbox credentials exist (NIC direct or a GSP);
+  parts 1–3 and part 4 with the fake provider come first.
+- **Debit notes** come in part 1: customer and vendor debit notes (`out_debit`, `in_debit`) post like invoices and
+  link to the invoice they add to; they also give Bangladesh its Mushak 6.8.
+
+## Implementation notes (2026-10-28): step 5, part 1 — components, place of supply, reverse charge, debit notes
+
+- **Tax components** (`account.tax.component`: name, code, share, scope `always` / `intra` / `inter`, accounts for
+  invoices, credit notes and reverse charge), on the tax form with the tax's own accounts. Posting allocates each
+  tax's rounded amount between the components of the document's scope by share (the odd paisa on the first), one
+  tax line per component (`taxComponent`), each with the tax's base. Shares of a scope not adding up to 1 are
+  refused at posting. Lines, orders and invoice totals keep the tax whole.
+- **Place of supply**: `state` (ISO 3166-2) on contacts; `country` and `state` on the company, in Accounting ›
+  Settings (the localization sets the country); `placeOfSupply` on documents, from the partner's state at posting
+  unless set. The scope is `inter` for a partner in another country, else the place of supply against the
+  company's state; `intra` when either is unknown.
+- **Reverse charge**: `reverseCharge` on taxes (Products: the engine computes it but leaves it out of the totals);
+  on bills, posting writes what may be claimed (the tax or component account) and what is owed (its reverse-charge
+  account), both marked `taxReverseCharge`, net zero; on customer documents it posts nothing.
+- **Debit notes**: `out_debit` and `in_debit`, posted like invoices, `debitOf` the invoice they add to; with
+  invoices and bills in the lists and the portal; Bangladesh's Mushak 6.8 and its registers count them.
+- **Fixed**: a vendor credit note's counterpart was the receivable account; it is now the payable one (documents
+  of customers settle on receivables, of vendors on payables). Posted entries are not rewritten.
+- Products 0.3.0, Accounting 0.3.0, Contacts 0.2.0 (new columns; no data migration).
+- **Tests**: within the state (9.01 + 9.00 of 18.01), between states, abroad, the place of supply set on the
+  document, reverse charge on a bill, shares refused, a debit note, a vendor credit note on payables; the engine
+  with reverse charge and cess.
 
 ## Alignment with CLAUDE.md
 
