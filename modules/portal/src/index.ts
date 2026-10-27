@@ -6,14 +6,19 @@
  */
 import { contacts } from '@kosh/contacts';
 import { mailerFromEnv } from '@kosh/mail';
+import { messaging } from '@kosh/messaging';
 import { defineModule, type KoshModule } from '@kosh/modules-sdk';
+import { reporting } from '@kosh/reporting';
 import { base, type ModuleContext } from '@kosh/server';
 import { portalShutro } from './module.js';
 import { type PortalRoutesOptions, registerPortalRoutes } from './routes.js';
+import { registerPortalDocumentRoutes } from './routes-documents.js';
 
+export { type PortalDocument, portalDocuments } from './documents.js';
 export {
   PartnerPortalUsers,
   PortalInvitation,
+  PortalSignature,
   portalShutro,
   UserPortalPartner,
 } from './module.js';
@@ -23,6 +28,8 @@ export {
   type PortalRoutesOptions,
   registerPortalRoutes,
 } from './routes.js';
+export { registerPortalDocumentRoutes } from './routes-documents.js';
+export { portalRule } from './rules.js';
 
 /** Package identity. */
 export const PACKAGE: { readonly name: string; readonly rfc: string } = Object.freeze({
@@ -35,15 +42,17 @@ export function createPortal(options: Partial<PortalRoutesOptions> = {}): KoshMo
   return defineModule({
     shutro: portalShutro,
     kosh: '^0.1.0',
-    depends: [base, contacts],
+    depends: [base, contacts, messaging, reporting],
     accessLevels: { manager: { label: 'Portal access', groups: ['portal.manager'] } },
     externalGroups: ['portal.user'],
-    privateModels: ['portal.invitation'],
-    routes: (context: ModuleContext) =>
+    privateModels: ['portal.invitation', 'portal.signature'],
+    routes: (context: ModuleContext) => {
       registerPortalRoutes(context, {
         portalUrl: options.portalUrl ?? process.env['KOSH_PORTAL_URL'] ?? 'http://localhost:5174',
         mailer: 'mailer' in options ? options.mailer : mailerFromEnv(),
-      }),
+      });
+      registerPortalDocumentRoutes(context);
+    },
   });
 }
 

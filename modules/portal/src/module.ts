@@ -35,6 +35,28 @@ export const PortalInvitation = defineModel('portal.invitation', {
   },
 });
 
+/**
+ * A signature given in the portal (RFC 0015 §5.3): who signed which document, under which name, the drawn image,
+ * when, from where, and the hash of what they saw. Private: written by the portal routes, read by staff.
+ */
+export const PortalSignature = defineModel('portal.signature', {
+  label: 'Portal signature',
+  order: ['id desc'],
+  companyScoped: { required: true },
+  access: { 'base.user': ['read'] },
+  fields: {
+    resModel: f.char({ required: true, label: 'Model' }),
+    resId: f.integer({ required: true, label: 'Record' }),
+    action: f.char({ required: true, size: 40 }),
+    user: f.many2one('res.users', { required: true, ondelete: 'restrict' }),
+    signedName: f.char({ required: true, size: 200, label: 'Name' }),
+    image: f.binary({ label: 'Signature' }),
+    /** SHA-256 of the declared fields and lines the user saw. */
+    documentHash: f.char({ required: true, size: 64 }),
+    ip: f.char({ size: 64 }),
+  },
+});
+
 export const portalShutro = defineModule({
   name: 'portal',
   version: '0.1.0',
@@ -48,6 +70,6 @@ export const portalShutro = defineModule({
       implies: ['contacts.user'],
     }),
   ],
-  models: [PortalInvitation],
+  models: [PortalInvitation, PortalSignature],
   extensions: [UserPortalPartner, PartnerPortalUsers],
 });

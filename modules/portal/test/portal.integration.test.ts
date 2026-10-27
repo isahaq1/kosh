@@ -259,3 +259,37 @@ test('an external group that implies base.user is refused at start', async () =>
     createServer({ databaseUrl: container.getConnectionUri(), modules: [leaky], logger: false }),
   ).rejects.toThrow(ServerConfigError);
 });
+
+test('a portal document whose model has no portal record rule is refused at start', async () => {
+  const careless = defineKoshModule({
+    shutro: orm.defineModule({
+      name: 'careless',
+      version: '1.0.0',
+      depends: [baseShutro],
+      groups: [orm.defineGroup({ code: 'careless.user', label: 'User', implies: ['base.user'] })],
+      models: [],
+    }),
+    kosh: '^0.1.0',
+    depends: [base, contacts, createPortal()],
+    accessLevels: { user: { label: 'User', groups: ['careless.user'] } },
+    portal: {
+      documents: [
+        {
+          key: 'everyone',
+          model: 'res.partner',
+          label: 'Every contact',
+          partner: 'parent',
+          list: ['name'],
+          fields: ['name', 'email'],
+        },
+      ],
+    },
+  });
+  await expect(
+    createServer({
+      databaseUrl: container.getConnectionUri(),
+      modules: [careless],
+      logger: false,
+    }),
+  ).rejects.toThrow(/no read access with a record rule/);
+});

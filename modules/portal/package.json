@@ -45,7 +45,9 @@
     "@kosh/server": "workspace:*",
     "@kosh/contacts": "workspace:*",
     "@kosh/mail": "workspace:*",
-    "fastify": "^5.12.7"
+    "fastify": "^5.12.7",
+    "@kosh/messaging": "workspace:*",
+    "@kosh/reporting": "workspace:*"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1"
