@@ -59,6 +59,10 @@ const studio = createStudio({
 // The AI assistant with a fake client (no API key, no network): "… in <city>" filters contacts on their city.
 const assistant = createAssistant({
   client: fakeClient((request) => {
+    if (!('schema' in request))
+      return request.system.includes('summarize')
+        ? 'The order waits for its approval.'
+        : 'Thank you, the order is confirmed for [date].';
     const city = /\bin ([A-Za-z]+)/.exec(request.user)?.[1];
     return city === undefined
       ? { clauses: [], combine: 'and', unsupported: request.user }

@@ -40,6 +40,28 @@ test('an administrator switches it on; "Ask" filters the contacts; the chip remo
   await other.close();
 });
 
+test('the chatter: a summary streams in; a draft reply goes to the composer to edit', async ({
+  page,
+}) => {
+  await signIn(page, 'dina');
+  await page.goto('/purchase/a/purchase.action_orders');
+  await page.getByRole('row', { name: /PO-R-002/ }).click();
+  const chatter = page.getByRole('region', { name: 'Chatter' });
+  await chatter.getByRole('button', { name: 'Summarize' }).click();
+  const summary = chatter.getByRole('region', { name: 'Summary' });
+  await expect(summary.getByText('The order waits for its approval.')).toBeVisible();
+  await expect(summary.getByText(/Written by an AI model \(fake-claude\)/)).toBeVisible();
+  await summary.getByRole('button', { name: 'Close' }).click();
+
+  await chatter.getByRole('button', { name: 'Draft reply' }).click();
+  const draft = chatter.getByRole('region', { name: 'Draft reply' });
+  await expect(draft.getByText('Thank you, the order is confirmed for [date].')).toBeVisible();
+  await draft.getByRole('button', { name: 'Use this draft' }).click();
+  await expect(chatter.getByRole('combobox', { name: 'Send message' })).toHaveValue(
+    'Thank you, the order is confirmed for [date].',
+  );
+});
+
 test('without the assistant access: no "Ask"', async ({ page }) => {
   await signIn(page, 'rahim');
   await page.goto(CONTACTS);
