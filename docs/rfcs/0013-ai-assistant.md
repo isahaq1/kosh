@@ -1,6 +1,6 @@
 # RFC 0013: AI assistant
 
-- **Status:** Accepted 2026-10-27 with the proposed answers (Claude Opus 5.5 by default, off per company, 2 million tokens per company and month, images and PDFs in version 1); steps 1–2 implemented (`@kosh/assistant`, `docs/assistant.md`)
+- **Status:** Accepted 2026-10-27 with the proposed answers (Claude Opus 5.5 by default, off per company, 2 million tokens per company and month, images and PDFs in version 1); implemented (steps 1–3; `@kosh/assistant`, `docs/assistant.md`); lines of a one2many are filled later
 - **Depends on:** 0002 (metadata), 0003 (permissions, field security), 0004 (search domains), 0006 (chatter),
   0007 (frontend), 0008 (apps); Claude through the Anthropic API
 
@@ -171,6 +171,28 @@ demo data with expected domains, three bills to fill.
   may not read), the language, a draft with an instruction and nothing posted, a refusal ending the stream, no
   Messaging access refused before anything is sent, the log; E2E: Summarize on an order, Draft reply → Use this
   draft → the composer holds it.
+
+## Implementation notes (2026-10-27): step 3 — a form from a document
+
+- `POST /api/v1/assistant/form` takes pasted text (up to 50 000 characters) and / or a file: a PDF goes as a
+  `document` block, an image as an `image` block (base64, up to 10 MB; the route's body limit raised), a text file as
+  text. The fields offered are the new record's stored, writable fields the user may write (not `company`); the
+  answer is one string per field and notes; Kosh converts by kind (`convert`) and matches many2one names to the one
+  record the user may read (exact name first, then containing it; none or several: left out, said why). The response
+  is `{ values, proposed, skipped, notes }`, or `{ refused: true }`. A user who may not create records is refused
+  before anything is sent.
+- `@kosh/ui`: a create slot next to "New" (`registerCreateAssist`); the values reach the new record's form in memory
+  (`setPrefill` / `takePrefill`), never in the URL; `FormProps.proposed` marks them "Proposed". Proposals are
+  **unsaved changes**, not the record's defaults: Save, Discard and the leave guard apply to them. Found on the way:
+  the new record's query was keyed without its defaults (a cached empty form could hide them), and the server's
+  onchange could drop given values; both fixed.
+- Not yet: the lines of a one2many (order lines of a bill): RFC 0013 §5.3 lists them; they need the form's line
+  editor to take proposed rows.
+- Tests: the conversion of every kind and its refusals, the schema and instructions; on PostgreSQL, a text filled
+  (a decimal with a thousands separator, a selection by its label, a linked user by name, an unparseable date left out
+  with the reason, the notes), a field the user may not write never asked for nor proposed, nothing saved, a PDF sent
+  as a document, a file type refused, a refusal; E2E: a pasted email fills a new contact, the values marked, Save
+  offered, Discard takes them away.
 
 ## Alignment with CLAUDE.md
 
