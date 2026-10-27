@@ -2,7 +2,8 @@
 
 - **Status:** Accepted 2026-10-27 with the proposed answers (a Vite + React `apps/portal`, Next.js kept for the
   public website; a contact sees their company's documents; invitations only, payment details shown; a typed name
-  and a drawn signature)
+  and a drawn signature); step 1 implemented (`@kosh/portal`: portal identity, invitations, the internal-only
+  guard)
 - **Depends on:** 0001 (manifests), 0002 (API), 0003 (permissions, record rules), 0005 (documents: PDFs), 0006
   (chatter, email), 0007 (frontend), 0008 (apps), 0009 (invoices), 0014 (external users read like any user)
 
@@ -187,6 +188,31 @@ user's language, with a link to the document's portal page.
   Nagad comes with the integrations RFC. Or should a payment provider come in this RFC?
 - **Signature**: typed name plus a drawn signature, with time, IP and the document's hash (proposed), or the typed
   name only?
+
+## Implementation notes (2026-10-27): step 1 — portal identity
+
+- **External groups**: a module manifest declares `externalGroups` (the portal declares `portal.user`). The server
+  refuses, when it starts, an external group that is undefined or implies `base.user`. On each request, a user whose
+  groups are **all** external gets 403 `internal-only` on every `/api/` route except `/api/portal/` and
+  `/api/v1/auth/` (sign-in, sign-out, `me`, 2FA, password). It is one check after authentication in
+  `@kosh/server`, so a new module's routes are closed to portal users without doing anything.
+- **The module** is `modules/portal` (`@kosh/portal`), a business-level module because it depends on Contacts:
+  `res.users.portalPartner` and `res.partner.portalUsers` (extensions), the private `portal.invitation`, the
+  groups `portal.user` (implies nothing) and `portal.manager` (implies `contacts.user`; the "Portal access" level).
+- **Granting** (`POST /api/v1/portal/access`): a portal access manager who can read the contact creates a user
+  whose login is the contact's email (lower case; an existing login is 409), with an unusable random password and
+  only `portal.user`, in the company of the request, plus an invitation. The link goes back to the inviter and, when
+  a mailer is configured, by email after the commit. A new invitation expires the open ones. **Revoking** archives
+  the user, revokes their sessions and expires their invitations.
+- **Activation** (`POST /api/portal/v1/activate`, no session): the token's SHA-256 digest finds the invitation; an
+  unknown, used, replaced or expired one, or an archived user, is 410. The password rules are the sign-in's
+  (a weak one is 422 and leaves the link usable). `GET /api/portal/v1/me` is for portal users only (staff get 403).
+- **Audit**: `portal.invited`, `portal.activated`, `portal.revoked`.
+- **Left for step 3**: the invitation email is in English (the portal user's language is chosen in the portal);
+  "Grant portal access" on the contact form comes with the portal app.
+- **Tests**: 5 integration tests (who may grant, the email, single-use links, weak passwords, the guard on
+  back-office routes with `me` and sign-in still open, staff out of the portal API, re-invitation, revocation with
+  its sessions, the audit trail, and a leaky external group refused at start).
 
 ## Alignment with CLAUDE.md
 
