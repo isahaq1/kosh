@@ -41,6 +41,9 @@ importers:
       '@kosh/contacts':
         specifier: workspace:*
         version: link:../../modules/contacts
+      '@kosh/l10n_bd':
+        specifier: workspace:*
+        version: link:../../modules/l10n_bd
       '@kosh/mail':
         specifier: workspace:*
         version: link:../../packages/mail
@@ -236,6 +239,9 @@ importers:
       '@kosh/contacts':
         specifier: workspace:*
         version: link:../../modules/contacts
+      '@kosh/l10n_bd':
+        specifier: workspace:*
+        version: link:../../modules/l10n_bd
       '@kosh/mail':
         specifier: workspace:*
         version: link:../../packages/mail
@@ -382,6 +388,31 @@ importers:
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/l10n_bd:
+    dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../accounting
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
       '@kosh/server':
         specifier: workspace:*
         version: link:../../packages/server
@@ -819,6 +850,9 @@ importers:
       '@kosh/import':
         specifier: workspace:*
         version: link:../import
+      '@kosh/l10n_bd':
+        specifier: workspace:*
+        version: link:../../modules/l10n_bd
       '@kosh/mail':
         specifier: workspace:*
         version: link:../mail

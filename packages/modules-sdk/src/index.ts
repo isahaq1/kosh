@@ -14,7 +14,7 @@ export {
   planApps,
   servedModules,
 } from './apps.js';
-export { idByName } from './demo.js';
+export { idByName, maybeIdByName } from './demo.js';
 export { ModuleDefinitionError, ModuleLoadError } from './errors.js';
 export { type LoadedModules, type LoadOptions, loadModules } from './loader.js';
 export {
@@ -31,6 +31,7 @@ export {
   type ImportTemplateSpec,
   type InboundAliasSpec,
   type KoshModule,
+  type LocalizationSpec,
   type MenuSpec,
   type ModuleHooks,
   type ModuleInput,

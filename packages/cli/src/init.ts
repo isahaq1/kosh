@@ -31,7 +31,13 @@ import {
 import { seed } from './project.js';
 import { defaultsPrompter, type Prompter, terminalPrompter } from './prompt.js';
 import * as templates from './templates.js';
-import { APPS, type AppName, bridgesFor, SELECTABLE_APPS } from './templates.js';
+import {
+  APPS,
+  type AppName,
+  bridgesFor,
+  LOCALIZED_COUNTRIES,
+  SELECTABLE_APPS,
+} from './templates.js';
 import { type CardRow, createUi, PLAIN_TERMINAL, type Terminal, type Ui } from './ui.js';
 
 /**
@@ -65,6 +71,8 @@ Options (each also answers its question; with --yes the rest take their defaults
   --docker-db               start PostgreSQL in Docker (compose.yaml) instead
   --create-database         create the database when it does not exist
   --company <name>          the first company        --currency <code>   its currency (ISO 4217)
+  --country <code>          the company's country (ISO 3166): ${LOCALIZED_COUNTRIES.join(', ')} install its localization
+                            with Accounting (default: BD for BDT, none otherwise; "none" for none)
   --lang <en|bn>            language                 --tz <zone>         time zone (IANA)
   --admin-login <login>     --admin-name <name>      --admin-email <email>
   --admin-password <pw>     (or KOSH_ADMIN_PASSWORD; at least 12 characters)
@@ -94,6 +102,8 @@ interface Answers {
   readonly databaseUrl: string;
   readonly company: string;
   readonly currency: string;
+  /** The company's country (ISO 3166), or '' (its localization comes with Accounting). */
+  readonly country: string;
   readonly lang: string;
   readonly tz: string;
   readonly admin: { login: string; name: string; email: string; password: string };
@@ -429,6 +439,17 @@ async function ask(
       validate: (v) => (/^[A-Za-z]{3}$/.test(v) ? null : 'Three letters, e.g. BDT, USD, EUR'),
     })
   ).toUpperCase();
+  const countryAnswer = (
+    await q(
+      'country',
+      `Country (ISO code; ${LOCALIZED_COUNTRIES.join(', ')} set up taxes and the chart; "none" for none)`,
+      currency === 'BDT' ? 'BD' : 'none',
+      {
+        validate: (v) => (/^([A-Za-z]{2}|none)$/i.test(v) ? null : 'Two letters, e.g. BD, or none'),
+      },
+    )
+  ).toUpperCase();
+  const country = countryAnswer === 'NONE' ? '' : countryAnswer;
   const lang = await q('lang', 'Language (en, bn)', 'en', {
     validate: (v) => (['en', 'bn'].includes(v) ? null : 'en or bn'),
   });
@@ -495,8 +516,8 @@ async function ask(
         .filter((s): s is AppName => s in APPS),
     ),
   ];
-  // The bridges of the chosen apps come along (RFC 0008 §5.1).
-  const apps = [...chosen, ...bridgesFor(chosen).filter((b) => !chosen.includes(b))];
+  // The bridges of the chosen apps come along (RFC 0008 §5.1), and the country's localization (RFC 0016).
+  const apps = [...chosen, ...bridgesFor(chosen, country).filter((b) => !chosen.includes(b))];
   const demo =
     flags['demo'] === true ||
     (await prompter.confirm(
@@ -549,6 +570,7 @@ async function ask(
     databaseUrl,
     company,
     currency,
+    country,
     lang,
     tz,
     admin: { login, name: adminName, email, password: password as string },
@@ -593,6 +615,7 @@ async function modulesFor(apps: readonly AppName[]): Promise<KoshModule[]> {
       modules.push((await import('@kosh/purchase_account')).purchaseAccount);
     if (app === 'project') modules.push((await import('@kosh/project')).project);
     if (app === 'sale_project') modules.push((await import('@kosh/sale_project')).saleProject);
+    if (app === 'l10n_bd') modules.push((await import('@kosh/l10n_bd')).l10nBd);
   }
   return modules;
 }
@@ -893,6 +916,7 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
       'create-database': { type: 'boolean' },
       company: { type: 'string' },
       currency: { type: 'string' },
+      country: { type: 'string' },
       lang: { type: 'string' },
       tz: { type: 'string' },
       'admin-login': { type: 'string' },
@@ -1005,7 +1029,10 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
       );
 
     const rows: CardRow[] = [
-      ['Company', `${answers.company} (${answers.currency})`],
+      [
+        'Company',
+        `${answers.company} (${answers.currency}${answers.country === '' ? '' : `, ${answers.country}`})`,
+      ],
       [
         'Administrator',
         `${answers.admin.login} ${ui.style(enrolled ? 'green' : 'yellow', enrolled ? '· 2FA on' : '· 2FA pending')}`,

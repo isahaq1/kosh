@@ -185,6 +185,58 @@ export interface PortalDocumentSpec {
   readonly announce?: Readonly<Record<string, unknown>>;
 }
 
+/**
+ * A country localization (RFC 0016 §5.2): what installing it sets up for a company, once — its chart of accounts,
+ * the accounts of the taxes it ships, its withholdings, its fiscal year and number grouping. The shapes are
+ * Accounting's (`account.account` types, `account.withholding` fields); Accounting installs them.
+ */
+export interface LocalizationSpec {
+  /** The chart's code (`bd`), stored on the company. */
+  readonly key: string;
+  /** ISO 3166 code (`BD`). */
+  readonly country: string;
+  readonly label: string;
+  readonly chart: {
+    readonly accounts: readonly {
+      readonly code: string;
+      readonly name: string;
+      readonly type: string;
+      readonly reconcile?: boolean;
+    }[];
+    /** The company's default accounts, by code. */
+    readonly defaults: Readonly<
+      Record<
+        | 'receivable'
+        | 'payable'
+        | 'exchangeGain'
+        | 'exchangeLoss'
+        | 'retainedEarnings'
+        | 'bank'
+        | 'cash'
+        | 'income'
+        | 'expense',
+        string
+      >
+    >;
+    /** The account of any tax without one, by use. */
+    readonly taxAccounts: { readonly sale: string; readonly purchase: string };
+  };
+  /** The account of each tax the module ships (`module.name` external id → account code). */
+  readonly taxes?: Readonly<Record<string, string>>;
+  readonly withholdings?: readonly {
+    readonly name: string;
+    readonly direction: 'vendor' | 'customer';
+    readonly base: 'untaxed' | 'tax' | 'total';
+    readonly rate: string;
+    readonly threshold?: string;
+    /** An account code of the chart. */
+    readonly account: string;
+  }[];
+  /** The first month of the fiscal year (1–12). */
+  readonly fiscalYearStart?: number;
+  readonly grouping?: 'international' | 'lakh';
+}
+
 /** A user the demo data is made by: created on first use with these groups (added to an existing one). */
 export interface DemoUser {
   readonly login: string;
@@ -333,6 +385,8 @@ export interface ModuleInput {
    * external group may not imply `base.user` (checked when the server starts).
    */
   readonly externalGroups?: readonly string[];
+  /** The country this module localizes (RFC 0016): set up for each company when the module is installed. */
+  readonly localization?: LocalizationSpec;
   /** What the module shows in the customer and vendor portal (RFC 0015), when `portal` is installed. */
   readonly portal?: { readonly documents: readonly PortalDocumentSpec[] };
   /** Import templates for the module's models (RFC 0014 §5.4), offered when `import` is installed. */

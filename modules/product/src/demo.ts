@@ -1,7 +1,7 @@
 /** Demo data of Products (RFC 0008 §5.8): construction goods, electronics and services, with Bangladesh VAT. */
 
 import type { DemoContext } from '@kosh/modules-sdk';
-import { idByName } from '@kosh/modules-sdk';
+import { idByName, maybeIdByName } from '@kosh/modules-sdk';
 import { orm } from '@kosh/server/orm';
 import type { Env } from './.kosh/bindings.js';
 
@@ -61,8 +61,9 @@ export async function productDemo(context: DemoContext): Promise<string> {
       .model('product.category')
       .create(CATEGORIES.map((name) => ({ name })));
     const category = new Map(CATEGORIES.map((name, i) => [name, categories.ids[i] as number]));
-    const vatSale = await idByName(env, 'account.tax', 'VAT 15%');
-    const vatPurchase = await idByName(env, 'account.tax', 'VAT 15% (purchases)');
+    // The VAT comes with the country's localization (l10n_bd); without one, products have no taxes.
+    const vatSale = await maybeIdByName(env, 'account.tax', 'VAT 15%');
+    const vatPurchase = await maybeIdByName(env, 'account.tax', 'VAT 15% (purchases)');
     const uoms = new Map<string, number>();
     for (const name of new Set(PRODUCTS.map((p) => p.uom)))
       uoms.set(name, await idByName(env, 'uom.uom', name));
@@ -74,8 +75,8 @@ export async function productDemo(context: DemoContext): Promise<string> {
         uom: orm.asId(uoms.get(p.uom) as number, 'uom.uom'),
         listPrice: p.list,
         standardPrice: p.cost,
-        taxes: { set: [orm.asId(vatSale, 'account.tax')] },
-        purchaseTaxes: { set: [orm.asId(vatPurchase, 'account.tax')] },
+        taxes: { set: vatSale === null ? [] : [orm.asId(vatSale, 'account.tax')] },
+        purchaseTaxes: { set: vatPurchase === null ? [] : [orm.asId(vatPurchase, 'account.tax')] },
       })),
     );
     return `${CATEGORIES.length} categories and ${PRODUCTS.length} products`;

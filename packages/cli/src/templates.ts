@@ -15,7 +15,8 @@ export type AppName =
   | 'sale_account'
   | 'purchase_account'
   | 'project'
-  | 'sale_project';
+  | 'sale_project'
+  | 'l10n_bd';
 export interface AppSpec {
   readonly label: string;
   /** Shown next to the app in the installer (where the terminal shows pictographs). */
@@ -26,6 +27,8 @@ export interface AppSpec {
   readonly web?: string;
   /** A bridge (RFC 0008 §5.1): not offered in the installer; proposed when the apps it connects are installed. */
   readonly bridge?: readonly AppName[];
+  /** A localization (RFC 0016): installed, with its bridged apps, for a company in this country (ISO 3166). */
+  readonly country?: string;
 }
 
 /** The apps `kosh init` can install (base and Settings are always there), in the order the installer lists them. */
@@ -92,6 +95,13 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'saleProject',
     bridge: ['sales', 'project'],
+  },
+  l10n_bd: {
+    label: 'Bangladesh: chart of accounts, VAT and SD, VDS and TDS, BIN and TIN, July–June year',
+    icon: '🇧🇩',
+    server: 'l10nBd',
+    bridge: ['accounting'],
+    country: 'BD',
   },
 };
 
@@ -507,9 +517,16 @@ export const SELECTABLE_APPS: readonly AppName[] = (Object.keys(APPS) as AppName
   (a) => APPS[a].bridge === undefined,
 );
 
-/** The bridges whose every connected app is in `apps`. */
-export function bridgesFor(apps: readonly AppName[]): AppName[] {
+/** The bridges whose every connected app is in `apps`, and the localization of `country` among them. */
+export function bridgesFor(apps: readonly AppName[], country = ''): AppName[] {
   return (Object.keys(APPS) as AppName[]).filter((a) => {
-    return APPS[a].bridge?.every((b) => apps.includes(b)) === true;
+    const spec = APPS[a];
+    if (spec.country !== undefined && spec.country !== country) return false;
+    return spec.bridge?.every((b) => apps.includes(b)) === true;
   });
 }
+
+/** The countries with a localization, for the installer's question. */
+export const LOCALIZED_COUNTRIES: readonly string[] = Object.values(APPS).flatMap((a) =>
+  a.country === undefined ? [] : [a.country],
+);

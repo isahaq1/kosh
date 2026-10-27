@@ -65,7 +65,8 @@
     "@kosh/mail": "workspace:*",
     "@kosh/automation": "workspace:*",
     "@kosh/studio": "workspace:*",
-    "@kosh/import": "workspace:*"
+    "@kosh/import": "workspace:*",
+    "@kosh/l10n_bd": "workspace:*"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1"

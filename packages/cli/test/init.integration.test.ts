@@ -114,7 +114,7 @@ test('a fresh installation: database created, project written, migrated, adminis
   // The catalogue lists every app; the database says which are installed (RFC 0008).
   expect(modules).toContain("import { reporting } from 'shutro-erp/reporting';");
   expect(modules).toContain(
-    'export const modules = [base, settings, realtime, notify, mail, automation, studio, dataImport, assistant, permissions, reporting, messaging, contacts, product, sales, purchase, accounting, project, saleAccount, purchaseAccount, saleProject];',
+    'export const modules = [base, settings, realtime, notify, mail, automation, studio, dataImport, assistant, permissions, reporting, messaging, contacts, product, sales, purchase, accounting, project, saleAccount, purchaseAccount, saleProject, l10nBd];',
   );
   const main = await readFile(join(project, 'src/web/main.tsx'), 'utf8');
   expect(main).toContain(
@@ -244,6 +244,8 @@ test('the database asked part by part: host, port, user, hidden password, databa
   // The demo data of every app (all are installed by default), made by the demo users.
   expect(text).toContain('contacts: 8 companies and 3 people');
   expect(text).toContain('sale_project: 2 service products create tasks or projects when sold');
+  // BDT: the company is in Bangladesh by default, and its localization came with Accounting.
+  expect(text).toMatch(/l10n_bd\s+the Bangladesh chart \(\d+ accounts\), 14 taxes, 4 withholdings/);
   expect(text).toContain('Demo users');
   expect(text).toContain('dina, rahim, karim, sumi');
   const env = await readFile(join(dir, 'parts', '.env'), 'utf8');

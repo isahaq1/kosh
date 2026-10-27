@@ -1,7 +1,7 @@
 /**
  * The data layer of Products (Shutro): units of measure (what Shutro's `quantity` fields are counted in), product
  * categories, taxes and products. Taxes live here rather than in Accounting, so Sales and Purchase work without the
- * Accounting app; Accounting extends them with their accounts.
+ * Accounting app; Accounting extends them with their accounts. A country's taxes come with its localization (l10n_bd).
  */
 import { baseShutro } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
@@ -141,8 +141,6 @@ const uom = (id: string, name: string, category: string, ratio: string, rounding
     { name, category: category as 'unit', ratio, rounding },
     { noupdate: true },
   );
-const tax = (id: string, name: string, use: 'sale' | 'purchase', rate: string) =>
-  record('account.tax', id, { name, use, rate }, { noupdate: true });
 
 export const productShutro = defineModule({
   name: 'product',
@@ -157,6 +155,10 @@ export const productShutro = defineModule({
           SELECT id, tax_id FROM product_product WHERE tax_id IS NOT NULL ON CONFLICT DO NOTHING`;
         await ctx.sql`INSERT INTO product_purchase_tax_rel (product_product_id, account_tax_id)
           SELECT id, purchase_tax_id FROM product_product WHERE purchase_tax_id IS NOT NULL ON CONFLICT DO NOTHING`;
+        // The Bangladeshi taxes move to the Bangladesh localization (RFC 0016): their records stay, and l10n_bd
+        // finds them as its own when installed (no duplicates, nothing deleted here).
+        await ctx.sql`UPDATE shutro_external_id SET module = 'l10n_bd'
+          WHERE module = 'product' AND model = 'account.tax'`;
       },
     },
   ],
@@ -184,14 +186,5 @@ export const productShutro = defineModule({
     uom('uom_meter', 'm', 'length', '1', '0.01'),
     uom('uom_litre', 'L', 'volume', '1', '0.001'),
     record('product.category', 'category_all', { name: 'All' }, { noupdate: true }),
-    // Bangladesh VAT (VAT and Supplementary Duty Act 2012): standard 15 %, reduced 10 %, 7.5 % and 5 %.
-    tax('tax_sale_vat15', 'VAT 15%', 'sale', '0.15'),
-    tax('tax_sale_vat10', 'VAT 10%', 'sale', '0.10'),
-    tax('tax_sale_vat7_5', 'VAT 7.5%', 'sale', '0.075'),
-    tax('tax_sale_vat5', 'VAT 5%', 'sale', '0.05'),
-    tax('tax_sale_exempt', 'VAT exempt', 'sale', '0'),
-    tax('tax_purchase_vat15', 'VAT 15% (purchases)', 'purchase', '0.15'),
-    tax('tax_purchase_vat5', 'VAT 5% (purchases)', 'purchase', '0.05'),
-    tax('tax_purchase_exempt', 'VAT exempt (purchases)', 'purchase', '0'),
   ],
 });

@@ -4,7 +4,7 @@
  */
 
 import type { DemoContext } from '@kosh/modules-sdk';
-import { idByName } from '@kosh/modules-sdk';
+import { idByName, maybeIdByName } from '@kosh/modules-sdk';
 import { decide, requestsOf } from '@kosh/permissions';
 import { orm } from '@kosh/server/orm';
 import type { Env } from './.kosh/bindings.js';
@@ -68,7 +68,7 @@ export async function purchaseDemo(context: DemoContext): Promise<string> {
       .browse([env.companyRef])
       .load({ currency: true });
     if (company === undefined) throw new Error('Demo data: no company.');
-    const vat = await idByName(env, 'account.tax', 'VAT 15% (purchases)');
+    const vat = await maybeIdByName(env, 'account.tax', 'VAT 15% (purchases)');
     for (const o of ORDERS) {
       const lines = [];
       for (const l of o.lines) {
@@ -78,7 +78,7 @@ export async function purchaseDemo(context: DemoContext): Promise<string> {
           name: l.product,
           quantity: l.quantity,
           priceUnit: l.price,
-          taxes: { set: [orm.asId(vat, 'account.tax')] },
+          taxes: { set: vat === null ? [] : [orm.asId(vat, 'account.tax')] },
           datePlanned: context.date(14 - o.daysAgo),
         });
       }

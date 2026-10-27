@@ -1,17 +1,20 @@
 /**
- * Charts of accounts (RFC 0009 §5.6): the generic template and the Bangladesh one (RFC 0008 decision 2; VAT accounts
- * follow the Mushak structure: output VAT, input VAT, VAT payable, AT, SD). Installing a template for a company
- * creates its accounts and journals, links the company's default accounts, and points the taxes at their accounts.
- * A template is applied once per company. Also here: the database triggers that keep posted entries immutable
- * below the ORM (raw SQL, deletes), created idempotently with the module's defaults.
+ * Charts of accounts (RFC 0009 §5.6) and localizations (RFC 0016 §5.2): the generic template lives here; a country's
+ * comes with its localization module (`l10n_bd`). Installing a template for a company creates its accounts and
+ * journals, links the company's default accounts, and points the taxes at their accounts; installing a
+ * localization also sets the accounts of its own taxes, its withholdings, the fiscal year and the number grouping.
+ * Each is applied once per company. Also here: the database triggers that keep posted entries immutable below the
+ * ORM (raw SQL, deletes), created idempotently with the module's defaults.
  */
+import type { KoshModule, LocalizationSpec } from '@kosh/modules-sdk';
 import { orm } from '@kosh/server/orm';
 import type { Env } from './.kosh/bindings.js';
-import type { AccountType, JournalType } from './module.js';
+import { type AccountType, fiscalYearOf, type JournalType } from './module.js';
 
-export type ChartTemplate = 'generic' | 'bd';
+/** A chart's code: `generic`, or a localization's key (`bd`). */
+export type ChartTemplate = string;
 
-interface AccountSpec {
+export interface AccountSpec {
   readonly code: string;
   readonly name: string;
   readonly type: AccountType;
@@ -19,7 +22,7 @@ interface AccountSpec {
 }
 
 /** Which accounts the company's defaults point to, by code. */
-interface Defaults {
+export interface Defaults {
   readonly receivable: string;
   readonly payable: string;
   readonly exchangeGain: string;
@@ -31,7 +34,7 @@ interface Defaults {
   readonly expense: string;
 }
 
-interface Chart {
+export interface Chart {
   readonly label: string;
   readonly accounts: readonly AccountSpec[];
   readonly defaults: Defaults;
@@ -39,7 +42,8 @@ interface Chart {
   readonly taxAccounts: { readonly sale: string; readonly purchase: string };
 }
 
-const COMMON: readonly AccountSpec[] = [
+/** The accounts every chart starts from (a localization adds its own). */
+export const COMMON_ACCOUNTS: readonly AccountSpec[] = [
   { code: '1000', name: 'Cash', type: 'asset_cash' },
   { code: '1010', name: 'Bank', type: 'asset_cash' },
   { code: '1100', name: 'Accounts receivable', type: 'asset_receivable', reconcile: true },
@@ -69,7 +73,8 @@ const COMMON: readonly AccountSpec[] = [
   { code: '9999', name: 'Suspense', type: 'asset_current', reconcile: true },
 ];
 
-const DEFAULTS: Defaults = {
+/** The default accounts of the common set, by code. */
+export const DEFAULT_ACCOUNTS: Defaults = {
   receivable: '1100',
   payable: '2000',
   exchangeGain: '4910',
@@ -81,32 +86,16 @@ const DEFAULTS: Defaults = {
   expense: '6300',
 };
 
-export const CHARTS: Readonly<Record<ChartTemplate, Chart>> = {
+/** The charts Accounting ships: the generic one. Countries bring theirs (`chartsOf`). */
+export const CHARTS: Readonly<Record<string, Chart>> = {
   generic: {
     label: 'Generic',
     accounts: [
-      ...COMMON,
+      ...COMMON_ACCOUNTS,
       { code: '2200', name: 'VAT collected', type: 'liability_current' },
       { code: '1300', name: 'VAT paid', type: 'asset_current' },
     ],
-    defaults: DEFAULTS,
-    taxAccounts: { sale: '2200', purchase: '1300' },
-  },
-  bd: {
-    label: 'Bangladesh',
-    accounts: [
-      ...COMMON,
-      // VAT and SD Act 2012 (Mushak): output and input VAT, the net payable, advance tax, supplementary duty.
-      { code: '2200', name: 'Output VAT (Mushak)', type: 'liability_current' },
-      { code: '1300', name: 'Input VAT (Mushak)', type: 'asset_current' },
-      { code: '2210', name: 'VAT payable', type: 'liability_current' },
-      { code: '1310', name: 'Advance tax (AT) receivable', type: 'asset_current' },
-      { code: '2220', name: 'Supplementary duty (SD) payable', type: 'liability_current' },
-      { code: '1320', name: 'Advance income tax (AIT) receivable', type: 'asset_current' },
-      { code: '2230', name: 'Tax deducted at source (TDS) payable', type: 'liability_current' },
-      { code: '2240', name: 'VAT deducted at source (VDS) payable', type: 'liability_current' },
-    ],
-    defaults: DEFAULTS,
+    defaults: DEFAULT_ACCOUNTS,
     taxAccounts: { sale: '2200', purchase: '1300' },
   },
 };
@@ -123,6 +112,28 @@ const JOURNALS: readonly {
   { code: 'BNK', name: 'Bank', type: 'bank', account: 'bank' },
   { code: 'MISC', name: 'Miscellaneous', type: 'general', account: null },
 ];
+
+/** Every chart the installed modules offer: the generic one and the localizations'. */
+export function chartsOf(modules: readonly KoshModule[]): ReadonlyMap<string, Chart> {
+  const out = new Map<string, Chart>(Object.entries(CHARTS));
+  for (const m of modules) {
+    const l = m.localization;
+    if (l !== undefined)
+      out.set(l.key, { ...(l.chart as unknown as Omit<Chart, 'label'>), label: l.label });
+  }
+  return out;
+}
+
+/** The localizations of the installed modules, by key. */
+export function localizationsOf(
+  modules: readonly KoshModule[],
+): ReadonlyMap<string, LocalizationSpec> {
+  return new Map(
+    modules.flatMap((m) =>
+      m.localization === undefined ? [] : [[m.localization.key, m.localization]],
+    ),
+  );
+}
 
 export interface ChartInstalled {
   readonly template: ChartTemplate;
@@ -142,8 +153,11 @@ export async function installedChart(env: Env): Promise<ChartTemplate | null> {
  * and the tax accounts of the product module's taxes.
  * @throws {Error} when the company already has a chart (the caller turns it into a 409)
  */
-export async function installChart(env: Env, template: ChartTemplate): Promise<ChartInstalled> {
-  const chart = CHARTS[template];
+export async function installChart(
+  env: Env,
+  template: ChartTemplate,
+  chart: Chart = CHARTS[template] as Chart,
+): Promise<ChartInstalled> {
   const company = env.companyRef;
   const existing = await installedChart(env);
   if (existing !== null) throw new ChartInstalledError(existing);
@@ -201,6 +215,95 @@ export async function installChart(env: Env, template: ChartTemplate): Promise<C
     linked += 1;
   }
   return { template, accounts: accounts.length, journals: journals.length, taxes: linked };
+}
+
+export interface LocalizationInstalled {
+  readonly localization: string;
+  /** The chart, when the company had none yet. */
+  readonly chart: ChartInstalled | null;
+  readonly taxes: number;
+  readonly withholdings: number;
+  readonly fiscalYear: string | null;
+}
+
+/**
+ * Sets a company up for a country (RFC 0016 §5.2), once and idempotently: its chart (unless it has one), the
+ * accounts of the localization's taxes, its withholdings (those it lacks, by name), the fiscal year's first month and
+ * the number grouping, and the current fiscal year when there is none. Everything is the company's data afterwards.
+ */
+export async function installLocalization(
+  env: Env,
+  localization: LocalizationSpec,
+): Promise<LocalizationInstalled> {
+  const company = env.companyRef;
+  const chartSpec = {
+    ...(localization.chart as unknown as Omit<Chart, 'label'>),
+    label: localization.label,
+  };
+  const chart =
+    (await installedChart(env)) === null
+      ? await installChart(env, localization.key, chartSpec)
+      : null;
+  const accountOf = async (code: string) => {
+    const found = await env.model('account.account').search({ where: { code, company }, limit: 1 });
+    const id = found.ids[0];
+    if (id === undefined)
+      throw new Error(`The ${localization.label} chart has no account ${code}.`);
+    return id;
+  };
+  let taxes = 0;
+  for (const [externalId, code] of Object.entries(localization.taxes ?? {})) {
+    let tax: number;
+    try {
+      tax = Number(await env.refId('account.tax', externalId));
+    } catch (error) {
+      if (error instanceof orm.UnknownExternalIdError) continue; // removed by the users
+      throw error;
+    }
+    await env
+      .model('account.tax')
+      .browse([orm.asId(tax, 'account.tax')])
+      .write({ account: await accountOf(code) });
+    taxes += 1;
+  }
+  let withholdings = 0;
+  for (const w of localization.withholdings ?? []) {
+    const exists = await env
+      .model('account.withholding')
+      .search({ where: { name: w.name, company }, limit: 1 });
+    if (exists.length > 0) continue;
+    await env.model('account.withholding').create([
+      {
+        name: w.name,
+        direction: w.direction,
+        base: w.base,
+        rate: w.rate,
+        threshold: w.threshold ?? '0',
+        account: await accountOf(w.account),
+        company,
+      },
+    ]);
+    withholdings += 1;
+  }
+  const start = localization.fiscalYearStart ?? 1;
+  await env.asSuperuser({ reason: `localize the company for ${localization.label}` }, (su) =>
+    su
+      .model('res.company')
+      .browse([company])
+      .write({ fiscalYearStart: start, numberGrouping: localization.grouping ?? 'international' }),
+  );
+  let fiscalYear: string | null = null;
+  const years = await env.model('account.fiscal.year').search({ where: { company }, limit: 1 });
+  if (years.length === 0) {
+    const { dateFrom, dateTo } = fiscalYearOf(env.today(), start);
+    const [y, m] = dateFrom.split('-').map(Number) as [number, number];
+    fiscalYear = m === 1 ? String(y) : `${y}–${String(y + 1).slice(2)}`;
+    await env
+      .model('account.fiscal.year')
+      .create([{ name: fiscalYear, dateFrom, dateTo, company }]);
+  }
+  await env.flush(); // the checks run in the caller's scope, not at commit (Shutro request #11)
+  return { localization: localization.key, chart, taxes, withholdings, fiscalYear };
 }
 
 export class ChartInstalledError extends Error {

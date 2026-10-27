@@ -311,10 +311,8 @@ export const CompanyAccounting = extendModel('res.company', {
       default: 1,
       label: 'Fiscal year starts in (month, 1–12)',
     }),
-    chartTemplate: f.selection(
-      { generic: 'Generic', bd: 'Bangladesh' },
-      { label: 'Chart of accounts' },
-    ),
+    /** The installed chart: `generic` or a localization's key (`bd`). */
+    chartTemplate: f.char({ size: 32, label: 'Chart of accounts' }),
     /** Nothing is posted, reversed or reconciled on or before it (everyone). */
     lockDate: f.date({ label: 'Lock date' }),
     /** Tax returns filed up to this date: tax lines cannot change on or before it. */

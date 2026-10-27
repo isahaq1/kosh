@@ -106,9 +106,11 @@ beforeAll(async () => {
   const ids = await host.server.shutro.bootstrap(
     { reason: 'test: product', company },
     async (env) => {
-      const [vat] = await env.sql<{
-        id: number;
-      }>`SELECT id FROM account_tax WHERE rate = 0.15 AND use = 'sale'`;
+      const [vat] = (
+        await (env.model('account.tax' as never) as unknown as Model).create([
+          { name: 'VAT 15% (test)', use: 'sale', rate: '0.15' },
+        ])
+      ).ids.map((id) => ({ id }));
       const [bdt] = await env.sql<{ id: number }>`SELECT id FROM res_currency WHERE name = 'BDT'`;
       const created = await (env.model('product.product' as never) as unknown as Model).create([
         { name: 'Jute bag', listPrice: '1000', standardPrice: '600', taxes: { set: [vat?.id] } },

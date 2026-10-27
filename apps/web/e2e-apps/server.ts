@@ -19,6 +19,7 @@ import { createAssistant, fakeClient } from '@kosh/assistant';
 import { automation } from '@kosh/automation';
 import { contacts } from '@kosh/contacts';
 import { dataImport } from '@kosh/import';
+import { l10nBd } from '@kosh/l10n_bd';
 import { mail } from '@kosh/mail';
 import { installActivityTypes, messaging } from '@kosh/messaging';
 import { notify } from '@kosh/notify';
@@ -107,6 +108,7 @@ const CATALOGUE = [
   saleProject,
   assistant,
   dataImport,
+  l10nBd,
   portal,
   salePortal,
   accountPortal,
@@ -131,6 +133,7 @@ await applyApps(
         'project',
         'assistant',
         'import',
+        'l10n_bd',
         'sale_portal',
         'account_portal',
       ],
@@ -222,7 +225,7 @@ const as = async (login: string, method: 'GET' | 'POST', url: string, payload?: 
   if (res.statusCode >= 400) throw new Error(`${method} ${url}: ${res.statusCode} ${res.body}`);
   return res.json() as Record<string, unknown>;
 };
-await as('dina', 'POST', '/api/v1/accounting/charts/install', { template: 'bd' });
+// The Bangladesh chart, taxes and withholdings came with l10n_bd (its defaults, on install).
 const [bdt] = (await server.shutro.bootstrap(
   { reason: 'e2e seed', company },
   async (env) => env.sql<{ id: number }>`SELECT id FROM res_currency WHERE name = 'BDT'`,
@@ -231,7 +234,7 @@ const vat = (
   await as(
     'dina',
     'GET',
-    '/api/v1/models/account.tax?fields=id&filter=%7B%22use%22%3A%22sale%22%7D&limit=1',
+    `/api/v1/models/account.tax?fields=id&filter=${encodeURIComponent(JSON.stringify({ use: 'sale', name: 'VAT 15%' }))}&limit=1`,
   )
 )['items'] as { id: number }[];
 const partners = (await as('dina', 'POST', '/api/v1/models/res.partner', {

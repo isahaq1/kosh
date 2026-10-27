@@ -173,30 +173,34 @@ test('installing Accounting brings its dependencies; the chart installs once, by
   const before = await call('GET', '/api/v1/accounting/charts', 'maria');
   expect(before.json).toEqual({
     installed: null,
-    templates: [
-      { code: 'generic', label: 'Generic' },
-      { code: 'bd', label: 'Bangladesh' },
-    ],
+    templates: [{ code: 'generic', label: 'Generic' }],
   });
   // An accountant may not create accounts, so cannot install a chart.
   expect(
-    (await call('POST', '/api/v1/accounting/charts/install', 'rahim', { template: 'bd' })).status,
+    (await call('POST', '/api/v1/accounting/charts/install', 'rahim', { template: 'generic' }))
+      .status,
   ).toBe(403);
+  // A tax without an account: the chart links it.
+  await host.server.shutro.bootstrap({ reason: 'test: a tax', company }, (env) =>
+    (
+      env.model('account.tax' as never) as unknown as { create(r: unknown[]): Promise<unknown> }
+    ).create([{ name: 'VAT 15 % (test)', use: 'sale', rate: '0.15' }]),
+  );
   expect(
     (await call('POST', '/api/v1/accounting/charts/install', 'maria', { template: 'nope' })).status,
   ).toBe(400);
   const result = await call('POST', '/api/v1/accounting/charts/install', 'maria', {
-    template: 'bd',
+    template: 'generic',
   });
   expectStatus(result, 200);
-  expect(result.json).toMatchObject({ template: 'bd', journals: 5 });
-  expect(result.json.accounts).toBeGreaterThan(30);
-  expect(result.json.taxes).toBeGreaterThan(0); // the product module's taxes now post somewhere
+  expect(result.json).toMatchObject({ template: 'generic', journals: 5 });
+  expect(result.json.accounts).toBeGreaterThan(25);
+  expect(result.json.taxes).toBe(1); // the tax without an account now posts somewhere
   const again = await call('POST', '/api/v1/accounting/charts/install', 'maria', {
     template: 'generic',
   });
   expectStatus(again, 409);
-  expect((await call('GET', '/api/v1/accounting/charts', 'maria')).json.installed).toBe('bd');
+  expect((await call('GET', '/api/v1/accounting/charts', 'maria')).json.installed).toBe('generic');
 
   const accountRows = await call(
     'GET',
@@ -204,8 +208,7 @@ test('installing Accounting brings its dependencies; the chart installs once, by
     'rahim',
   );
   for (const a of accountRows.json.items as { id: number; code: string }[]) accounts[a.code] = a.id;
-  expect(accounts['2200']).toBeDefined(); // Output VAT (Mushak)
-  expect(accounts['2240']).toBeDefined(); // VDS payable
+  expect(accounts['2200']).toBeDefined(); // output tax
   const journalRows = await call(
     'GET',
     '/api/v1/models/account.journal?fields=id,code,type',
@@ -218,7 +221,7 @@ test('installing Accounting brings its dependencies; the chart installs once, by
     text: 'SELECT account_receivable_id, chart_template FROM res_company WHERE id = $1',
     params: [company],
   });
-  expect(c?.chart_template).toBe('bd');
+  expect(c?.chart_template).toBe('generic');
   expect(c?.account_receivable_id).toBe(accounts['1100']);
 });
 

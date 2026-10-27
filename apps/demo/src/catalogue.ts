@@ -2,6 +2,7 @@
 import { accounting } from '@kosh/accounting';
 import { automation } from '@kosh/automation';
 import { contacts } from '@kosh/contacts';
+import { l10nBd } from '@kosh/l10n_bd';
 import { mail } from '@kosh/mail';
 import { messaging } from '@kosh/messaging';
 import type { KoshModule } from '@kosh/modules-sdk';
@@ -30,6 +31,7 @@ export const DEMO_APPS: readonly string[] = [
   'purchase',
   'accounting',
   'project',
+  'l10n_bd',
 ];
 
 export function demoCatalogue(): KoshModule[] {
@@ -52,5 +54,6 @@ export function demoCatalogue(): KoshModule[] {
     saleAccount,
     purchaseAccount,
     saleProject,
+    l10nBd,
   ];
 }

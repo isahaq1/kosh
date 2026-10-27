@@ -134,9 +134,14 @@ beforeAll(async () => {
     type Model = { create(rows: unknown[]): Promise<{ ids: number[] }> };
     const model = (name: string) => env.model(name as never) as unknown as Model;
     const [row] = await env.sql<{ id: number }>`SELECT id FROM res_currency WHERE name = 'BDT'`;
-    const [vat] = await env.sql<{
+    const [output] = await env.sql<{
       id: number;
-    }>`SELECT id FROM account_tax WHERE use = 'sale' AND account_id IS NOT NULL ORDER BY id LIMIT 1`;
+    }>`SELECT id FROM account_account WHERE code = '2200'`;
+    const [vat] = (
+      await model('account.tax').create([
+        { name: 'VAT 15% (test)', use: 'sale', rate: '0.15', account: output?.id },
+      ])
+    ).ids.map((id) => ({ id }));
     const p = await model('product.product').create([
       { name: 'Steel beam', listPrice: '1000', taxes: { set: [vat?.id] } },
     ]);

@@ -61,6 +61,7 @@ const PACKAGES = [
   'account_portal',
   'purchase_portal',
   'project_portal',
+  'l10n_bd',
   'ui',
   'reporting',
   'cli',

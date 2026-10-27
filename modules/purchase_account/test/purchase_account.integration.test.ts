@@ -117,7 +117,7 @@ beforeAll(async () => {
       groups: [...groups],
     });
   expectStatus(
-    await call('POST', '/api/v1/accounting/charts/install', 'maria', { template: 'bd' }),
+    await call('POST', '/api/v1/accounting/charts/install', 'maria', { template: 'generic' }),
     200,
   );
   const ids = await host.server.shutro.bootstrap({ reason: 'test: data', company }, async (env) => {

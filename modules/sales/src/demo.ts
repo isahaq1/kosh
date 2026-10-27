@@ -1,7 +1,7 @@
 /** Demo data of Sales (RFC 0008 §5.8): quotations and confirmed orders of a salesperson, with VAT. */
 
 import type { DemoContext } from '@kosh/modules-sdk';
-import { idByName } from '@kosh/modules-sdk';
+import { idByName, maybeIdByName } from '@kosh/modules-sdk';
 import { orm } from '@kosh/server/orm';
 import type { Env } from './.kosh/bindings.js';
 
@@ -66,7 +66,7 @@ export async function salesDemo(context: DemoContext): Promise<string> {
       .browse([env.companyRef])
       .load({ currency: true });
     if (company === undefined) throw new Error('Demo data: no company.');
-    const vat = await idByName(env, 'account.tax', 'VAT 15%');
+    const vat = await maybeIdByName(env, 'account.tax', 'VAT 15%');
     let confirmed = 0;
     for (const o of ORDERS) {
       const lines = [];
@@ -77,7 +77,7 @@ export async function salesDemo(context: DemoContext): Promise<string> {
           name: l.product,
           quantity: l.quantity,
           priceUnit: l.price,
-          taxes: { set: [orm.asId(vat, 'account.tax')] },
+          taxes: { set: vat === null ? [] : [orm.asId(vat, 'account.tax')] },
         });
       }
       const created = await env.model('sale.order').create([

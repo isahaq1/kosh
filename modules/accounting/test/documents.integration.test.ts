@@ -124,7 +124,7 @@ beforeAll(async () => {
       groups: [...groups],
     });
   expectStatus(
-    await call('POST', '/api/v1/accounting/charts/install', 'maria', { template: 'bd' }),
+    await call('POST', '/api/v1/accounting/charts/install', 'maria', { template: 'generic' }),
     200,
   );
   const ids = await host.server.shutro.bootstrap({ reason: 'test: data', company }, async (env) => {
@@ -431,6 +431,13 @@ test('a document without lines, without a partner, or with a tax without account
 });
 
 test('supplementary duty before VAT (RFC 0016): VAT on price + SD, one tax line each with its base', async () => {
+  const sdAccount = await call('POST', '/api/v1/models/account.account', 'maria', {
+    code: '2220',
+    name: 'Supplementary duty payable',
+    type: 'liability_current',
+  });
+  expectStatus(sdAccount, 201);
+  accounts['2220'] = sdAccount.json.id;
   const sd = await call('POST', '/api/v1/models/account.tax', 'maria', {
     name: 'SD 20 % (test)',
     use: 'sale',

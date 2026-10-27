@@ -21,12 +21,14 @@ import { HttpProblem, type ModuleContext } from '@kosh/server';
 import { action, field, form, list, pivot, search } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import {
-  CHARTS,
   ChartInstalledError,
   type ChartTemplate,
+  chartsOf,
   installChart,
   installedChart,
   installImmutability,
+  installLocalization,
+  localizationsOf,
 } from './chart.js';
 import {
   agingReport,
@@ -59,13 +61,22 @@ import {
 } from './payments.js';
 
 export {
+  type AccountSpec,
   CHARTS,
+  type Chart,
   type ChartInstalled,
   ChartInstalledError,
   type ChartTemplate,
+  COMMON_ACCOUNTS,
+  chartsOf,
+  DEFAULT_ACCOUNTS,
+  type Defaults,
   installChart,
   installedChart,
   installImmutability,
+  installLocalization,
+  type LocalizationInstalled,
+  localizationsOf,
 } from './chart.js';
 export {
   type AgingRow,
@@ -209,8 +220,6 @@ export async function reverseMove(
     state: reversal?.state ?? 'draft',
   };
 }
-
-const TEMPLATES = Object.keys(CHARTS) as ChartTemplate[];
 
 export const accounting: ReturnType<typeof defineModule> = defineModule({
   shutro: accountingShutro,
@@ -977,19 +986,29 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
     demo: accountingDemo,
   },
   routes: (context: ModuleContext) => {
+    // The charts: the generic one and the installed localizations' (RFC 0016).
+    const charts = chartsOf(context.registry.loaded.modules);
+    const localizations = localizationsOf(context.registry.loaded.modules);
     context.app.post('/api/v1/accounting/charts/install', async (request) => {
       const template = (request.body as { template?: unknown } | null)?.template;
-      if (typeof template !== 'string' || !TEMPLATES.includes(template as ChartTemplate))
+      if (typeof template !== 'string' || !charts.has(template))
         throw new HttpProblem(
           400,
           'invalid-template',
           'Unknown chart template',
-          `template must be one of ${TEMPLATES.join(', ')}.`,
+          `template must be one of ${[...charts.keys()].join(', ')}.`,
         );
       return request.env(
         async (env) => {
           try {
-            return await installChart(env as Env, template as ChartTemplate);
+            const localization = localizations.get(template);
+            if (localization === undefined)
+              return await installChart(env as Env, template, charts.get(template));
+            // A country's chart comes with the rest of its localization (taxes, withholdings, fiscal year).
+            if ((await installedChart(env as Env)) !== null)
+              throw new ChartInstalledError((await installedChart(env as Env)) as ChartTemplate);
+            const done = await installLocalization(env as Env, localization);
+            return { ...(done.chart as object), localization: done };
           } catch (error) {
             if (error instanceof ChartInstalledError)
               throw new HttpProblem(
@@ -1007,7 +1026,7 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
     context.app.get('/api/v1/accounting/charts', async (request) =>
       request.env(async (env) => ({
         installed: await installedChart(env as Env),
-        templates: TEMPLATES.map((t) => ({ code: t, label: CHARTS[t].label })),
+        templates: [...charts].map(([code, chart]) => ({ code, label: chart.label })),
       })),
     );
     // What a payment of these documents should withhold (RFC 0016): the register-payment dialog shows it first.

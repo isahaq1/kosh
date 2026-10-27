@@ -5,7 +5,7 @@
  */
 
 import type { DemoContext } from '@kosh/modules-sdk';
-import { idByName } from '@kosh/modules-sdk';
+import { idByName, maybeIdByName } from '@kosh/modules-sdk';
 import { orm } from '@kosh/server/orm';
 import type { Env } from './.kosh/bindings.js';
 import { installChart, installedChart } from './chart.js';
@@ -70,7 +70,7 @@ async function document(
   currency: number,
   doc: { partner: string; daysAgo: number; ref: string; lines: readonly Line[] },
 ): Promise<number> {
-  const vat = await idByName(
+  const vat = await maybeIdByName(
     env,
     'account.tax',
     kind === 'out_invoice' ? 'VAT 15%' : 'VAT 15% (purchases)',
@@ -83,7 +83,7 @@ async function document(
       name: l.product,
       quantity: l.quantity,
       priceUnit: l.price,
-      taxes: { set: [orm.asId(vat, 'account.tax')] },
+      taxes: { set: vat === null ? [] : [orm.asId(vat, 'account.tax')] },
     });
   const created = await env.model('account.move').create([
     {
@@ -103,9 +103,10 @@ async function document(
 export async function accountingDemo(context: DemoContext): Promise<string> {
   const chart = await context.system('chart of accounts', async (raw) => {
     const env = raw as Env;
+    // A localization (l10n_bd) installs its chart with the app; without one, the generic chart.
     if ((await installedChart(env)) !== null) return 'the installed chart';
-    await installChart(env, 'bd');
-    return 'the Bangladesh chart';
+    await installChart(env, 'generic');
+    return 'the generic chart';
   });
   const journal = async (env: Env, code: string): Promise<number> => {
     const found = await env.model('account.journal').search({ where: { code }, limit: 1 });
