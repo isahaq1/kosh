@@ -34,6 +34,8 @@ export {
   type MenuSpec,
   type ModuleHooks,
   type ModuleInput,
+  type PortalActionSpec,
+  type PortalDocumentSpec,
   type ShutroModuleShape,
 } from './manifest.js';
 export { compareVersions, satisfies } from './semver.js';

@@ -134,6 +134,52 @@ export interface ImportTemplateSpec {
   readonly options?: Readonly<Record<string, unknown>>;
 }
 
+/** An action a portal user may take on a document (RFC 0015 §5.3): accept a quotation, decline it. */
+export interface PortalActionSpec {
+  /** Unique within the document (`accept`). */
+  readonly key: string;
+  readonly label: string;
+  /** The state transition it runs, once the portal checked the record is the user's and `when` holds. */
+  readonly transition: string;
+  /** When it is offered: a domain on the record (`{ state: 'sent' }`). */
+  readonly when: Readonly<Record<string, unknown>>;
+  /** The user signs: a typed name and a drawn signature, kept with the document's hash. */
+  readonly signature?: boolean;
+  /** The user writes why (a reason to decline): posted on the document's thread. */
+  readonly message?: boolean;
+}
+
+/**
+ * A document type the portal shows its customers or vendors (RFC 0015 §5.3): which records (theirs by `partner`,
+ * narrowed by `domain`), which fields, its lines, its PDF, its actions and its thread. The model must give
+ * `portal.user` read access with a record rule (the portal checks at start); only the declared fields are ever read.
+ */
+export interface PortalDocumentSpec {
+  /** Unique across modules (`quotations`): the portal's path. */
+  readonly key: string;
+  readonly model: string;
+  readonly label: string;
+  /** The many2one to `res.partner` that says whose document it is. */
+  readonly partner: string;
+  /** Which records show (drafts stay internal): a domain. */
+  readonly domain?: Readonly<Record<string, unknown>>;
+  /** Fields of the list, in order. */
+  readonly list: readonly string[];
+  /** Fields of the document's page, in order. */
+  readonly fields: readonly string[];
+  /** Its lines: a one2many and the fields of each line. */
+  readonly lines?: { readonly field: string; readonly fields: readonly string[] };
+  /** A document template (`module.key`, RFC 0005) printed as the PDF. */
+  readonly pdf?: string;
+  readonly actions?: readonly PortalActionSpec[];
+  /** The document's comments, both ways. */
+  readonly thread?: boolean;
+  /** What needs the user, shown on the portal's home (`{ state: 'sent' }`). */
+  readonly attention?: Readonly<Record<string, unknown>>;
+  /** The list's order (default: the model's). */
+  readonly order?: readonly string[];
+}
+
 /** A user the demo data is made by: created on first use with these groups (added to an existing one). */
 export interface DemoUser {
   readonly login: string;
@@ -282,6 +328,8 @@ export interface ModuleInput {
    * external group may not imply `base.user` (checked when the server starts).
    */
   readonly externalGroups?: readonly string[];
+  /** What the module shows in the customer and vendor portal (RFC 0015), when `portal` is installed. */
+  readonly portal?: { readonly documents: readonly PortalDocumentSpec[] };
   /** Import templates for the module's models (RFC 0014 §5.4), offered when `import` is installed. */
   readonly importTemplates?: readonly ImportTemplateSpec[];
   /**
@@ -398,6 +446,29 @@ export function defineModule(input: ModuleInput): KoshModule {
   for (const id of Object.keys(input.actions ?? {}))
     if (!ID.test(id))
       fail(`action id '${id}' is not '<module>.<name>'.`, `Use e.g. '${name}.action_list'.`);
+  const documentKeys = new Set<string>();
+  for (const document of input.portal?.documents ?? []) {
+    if (!LEVEL.test(document.key) || documentKeys.has(document.key))
+      fail(
+        `portal document key '${document.key}' is not a unique snake_case name.`,
+        "Use e.g. key: 'quotations'.",
+      );
+    documentKeys.add(document.key);
+    if (document.fields.length === 0 || document.list.length === 0)
+      fail(
+        `portal document '${document.key}' shows no field.`,
+        'List its fields and list columns.',
+      );
+    const actionKeys = new Set<string>();
+    for (const action of document.actions ?? []) {
+      if (!LEVEL.test(action.key) || actionKeys.has(action.key))
+        fail(
+          `portal action '${action.key}' of '${document.key}' is not a unique snake_case name.`,
+          "Use e.g. key: 'accept'.",
+        );
+      actionKeys.add(action.key);
+    }
+  }
   const templateKeys = new Set<string>();
   for (const template of input.importTemplates ?? []) {
     if (!LEVEL.test(template.key) || templateKeys.has(template.key))
