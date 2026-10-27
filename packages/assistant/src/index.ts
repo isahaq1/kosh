@@ -15,6 +15,7 @@ import { registerAssistantRoutes } from './routes.js';
 
 export {
   type AssistantClient,
+  type Attachment,
   anthropicClient,
   clientFromEnv,
   DEFAULT_MODEL,
@@ -24,6 +25,7 @@ export {
   type TextAnswer,
   type TextRequest,
 } from './client.js';
+export { convert, type FormField, fillable, formInstructions, formSchema } from './form.js';
 export { assistantShutro } from './models.js';
 export {
   languageName,
@@ -33,7 +35,7 @@ export {
   summaryInstructions,
   TIMELINE_ITEMS,
 } from './record.js';
-export { registerAssistantRoutes, searchFieldsFor } from './routes.js';
+export { formFieldsFor, registerAssistantRoutes, searchFieldsFor } from './routes.js';
 export {
   domainOf,
   operatorsOf,

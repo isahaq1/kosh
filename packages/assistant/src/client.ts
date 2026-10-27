@@ -6,9 +6,17 @@
 import Anthropic from '@anthropic-ai/sdk';
 
 /** One request: instructions (cached), the user's input, the answer's JSON schema. */
+/** A file sent with a request: a PDF (as a document) or an image, base64-encoded. */
+export interface Attachment {
+  readonly mediaType: 'application/pdf' | 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
+  readonly data: string;
+}
+
 export interface JsonRequest {
   readonly system: string;
   readonly user: string;
+  /** Files the user gave (sent before the text). */
+  readonly attachments?: readonly Attachment[];
   readonly schema: Readonly<Record<string, unknown>>;
   readonly effort?: 'low' | 'medium' | 'high';
   readonly maxTokens?: number;
@@ -62,6 +70,17 @@ export function anthropicClient(options: {
   return {
     model,
     async json(request) {
+      const files = (request.attachments ?? []).map((a) =>
+        a.mediaType === 'application/pdf'
+          ? {
+              type: 'document' as const,
+              source: { type: 'base64' as const, media_type: a.mediaType, data: a.data },
+            }
+          : {
+              type: 'image' as const,
+              source: { type: 'base64' as const, media_type: a.mediaType, data: a.data },
+            },
+      );
       const response = await client.beta.messages.create({
         model,
         max_tokens: request.maxTokens ?? 4096,
@@ -69,7 +88,13 @@ export function anthropicClient(options: {
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
         system: [{ type: 'text', text: request.system, cache_control: { type: 'ephemeral' } }],
-        messages: [{ role: 'user', content: request.user }],
+        messages: [
+          {
+            role: 'user',
+            content:
+              files.length === 0 ? request.user : [...files, { type: 'text', text: request.user }],
+          },
+        ],
         output_config: {
           effort: request.effort ?? 'low',
           format: { type: 'json_schema', schema: request.schema as Record<string, unknown> },

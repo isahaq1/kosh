@@ -28,6 +28,8 @@ const Invoice = defineModel('shop.invoice', {
     state: f.selection({ draft: 'Draft', posted: 'Posted' }, { default: 'draft' }),
     /** Field security: managers only. */
     margin: f.decimal({ scale: 2, groups: ['shop.manager'] }),
+    salesperson: f.many2one('res.users'),
+    due: f.date(),
   },
 });
 const shop = defineKoshModule({
@@ -48,6 +50,23 @@ const shop = defineKoshModule({
 
 /** Answers by the sentence: "big ones in dhaka", "refuse", or anything else as an invalid answer. */
 const client = fakeClient((request) => {
+  if ('schema' in request && request.system.includes('propose the values')) {
+    // A form from a document: what the "document" says, by a fixed reading.
+    if (request.user.includes('refuse')) return 'refuse';
+    const pdf = (request.attachments ?? []).length > 0;
+    return {
+      fields: {
+        name: pdf ? 'INV/PDF' : 'INV/9',
+        amount: '12,500.50',
+        city: 'Khulna',
+        state: 'Posted',
+        margin: '99',
+        salesperson: 'mgr',
+        due: 'next week',
+      },
+      notes: 'The due date is not a date.',
+    };
+  }
   if (!('schema' in request)) {
     // Summaries and drafts: text.
     if (request.user.includes('refuse please')) return 'refuse';
@@ -125,7 +144,7 @@ beforeAll(async () => {
   container = await new PostgreSqlContainer('postgres:18').start();
   server = await createServer({
     databaseUrl: container.getConnectionUri(),
-    modules: [shop, settings, messaging, createAssistant({ client, monthlyTokens: 1000 })],
+    modules: [shop, settings, messaging, createAssistant({ client, monthlyTokens: 2500 })],
     auth: { secureCookies: false, cacheMs: 0, loginLimit: 0 },
     rateLimit: { max: 0, timeWindow: '1 minute' },
     logger: false,
@@ -177,7 +196,7 @@ test('only assistant users reach it; it is off until an administrator switches i
     available: true,
     enabled: false,
     model: 'claude-test',
-    usage: { tokens: 0, budget: 1000 },
+    usage: { tokens: 0, budget: 2500 },
   });
   const off = await search('ana', 'big ones in dhaka');
   expect(off.status).toBe(409);
@@ -309,9 +328,84 @@ test('a summary streams from the record and its chatter as the user sees them; a
   ]);
 });
 
+test('a form from a document: values the user may write, converted, linked records by name; nothing saved', async () => {
+  const before = Number(
+    (
+      await server.driver.query<{ n: string }>({
+        text: 'SELECT count(*)::text AS n FROM shop_invoice',
+        params: [],
+      })
+    )[0]?.n,
+  );
+  const read = await call('POST', '/api/v1/assistant/form', 'ana', {
+    model: 'shop.invoice',
+    text: 'Invoice INV/9 for 12,500.50, Khulna, posted; salesperson mgr; due next week.',
+  });
+  expect(read.status).toBe(200);
+  const [mgr] = (
+    await server.driver.query<{ id: string }>({
+      text: "SELECT id::text FROM res_users WHERE login = 'mgr'",
+      params: [],
+    })
+  ).map((r) => Number(r.id));
+  expect(read.json).toEqual({
+    values: {
+      name: 'INV/9',
+      amount: '12500.50',
+      city: 'Khulna',
+      state: 'posted',
+      salesperson: mgr,
+    },
+    proposed: ['name', 'amount', 'city', 'state', 'salesperson'],
+    skipped: ['Due: "next week" is not a date'],
+    notes: 'The due date is not a date.',
+  });
+  // Ana may not write the margin: not asked for, not proposed even when the model gives it.
+  expect(client.requests.at(-1)?.system).not.toContain('margin');
+  // Nothing saved.
+  const after = Number(
+    (
+      await server.driver.query<{ n: string }>({
+        text: 'SELECT count(*)::text AS n FROM shop_invoice',
+        params: [],
+      })
+    )[0]?.n,
+  );
+  expect(after).toBe(before);
+
+  // A PDF goes as a document; a type that is not allowed, or nothing at all, is refused.
+  const pdf = await call('POST', '/api/v1/assistant/form', 'ana', {
+    model: 'shop.invoice',
+    file: {
+      name: 'bill.pdf',
+      mediaType: 'application/pdf',
+      data: Buffer.from('%PDF-1.4 fake').toString('base64'),
+    },
+  });
+  expect(pdf.json.values.name).toBe('INV/PDF');
+  expect((client.requests.at(-1) as { attachments?: { mediaType: string }[] }).attachments).toEqual(
+    [{ mediaType: 'application/pdf', data: Buffer.from('%PDF-1.4 fake').toString('base64') }],
+  );
+  const exe = await call('POST', '/api/v1/assistant/form', 'ana', {
+    model: 'shop.invoice',
+    file: { name: 'x.exe', mediaType: 'application/x-msdownload', data: 'AAAA' },
+  });
+  expect(exe.status).toBe(400);
+  expect(
+    (await call('POST', '/api/v1/assistant/form', 'ana', { model: 'shop.invoice' })).status,
+  ).toBe(400);
+  // A refusal is an answer; no create right: refused before anything is sent.
+  expect(
+    (await call('POST', '/api/v1/assistant/form', 'ana', { model: 'shop.invoice', text: 'refuse' }))
+      .json,
+  ).toEqual({
+    refused: true,
+  });
+});
+
 test('the monthly budget stops the assistant', async () => {
   let status = 200;
-  for (let i = 0; i < 10 && status === 200; i++)
+  for (let i = 0; i < 30 && status === 200; i++)
     status = (await search('ana', 'big ones in dhaka')).status;
   expect(status).toBe(429);
   expect((await call('GET', '/api/v1/assistant', 'ana')).json.usage.tokens).toBeGreaterThanOrEqual(
