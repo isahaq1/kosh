@@ -170,6 +170,7 @@ rule). Managers see every order of their companies.
 | App | Models | Workflow and rules |
 | --- | --- | --- |
 | Contacts | `res.partner` (companies and people, customers and vendors, addresses, tax ID) | email format check |
-| Products | `product.product` (numbered P00001…), `product.category`, `uom.uom`, `account.tax` | Bangladesh VAT rates and units as editable seed data |
+| Products | `product.product` (numbered P00001…), `product.category`, `uom.uom`, `account.tax` | units as editable seed data; several taxes per line, in sequence (a country's come with its localization) |
 | Sales | `sale.order` (SO/2026/00001…), `sale.order.line` | quotation → sent → order → locked; lines required to confirm; discount and VAT per line; totals in the order's currency |
 | Purchase | `purchase.order` (PO/2026/00001…), `purchase.order.line` | RFQ → submit → approvals (manager > 100,000, director > 1,000,000, editable) → order; the last approval confirms |
+| Bangladesh (`l10n_bd`) | BIN and TIN on `res.partner` and `res.company`; the Bangladesh chart, VAT / SD / AT taxes, VDS and TDS withholdings | installed with Accounting for a company in Bangladesh (`kosh init --country BD`): sets up each company without a chart, July–June year, lakh grouping; BIN 13 and TIN 12 digits checked (RFC 0016) |

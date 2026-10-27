@@ -235,6 +235,36 @@ declared identifier (`bin`, `tin`), shown when the contact's country matches, ch
 - **Tests**: a bill paid with VDS (all the VAT) and TDS (5 % above a threshold) — the proposal, the entry's four
   lines, the bill paid; a bill below the threshold with VDS only; a customer withholding from us.
 
+## Implementation notes (2026-10-27): step 3 — the declaration, its installer and `l10n_bd`
+
+- **`localization`** in a Kosh manifest (`LocalizationSpec`, `@kosh/modules-sdk`): a key (the chart's code, `bd`),
+  the country, a label, the chart (accounts, default accounts, the accounts taxes without one get), the accounts
+  of the module's own taxes by external id, withholdings, the fiscal year's first month and the grouping. The
+  identifiers, documents and reports of §5.2 are not in it: identifiers are ordinary fields of the module's
+  `extendModel` (with their checks), and documents and reports are templates and report definitions like any
+  other (step 4). A declaration carries only what an installer has to apply once per company.
+- **The installer** (`installLocalization`, Accounting): the chart when the company has none, the accounts of the
+  localization's taxes (a tax the users deleted is skipped), the withholdings it lacks (by name), the fiscal year's
+  start and the grouping, and the current fiscal year when there is none. Running it again changes nothing.
+- **Accounting** keeps only the generic chart. `GET /api/v1/accounting/charts` lists it and the installed
+  localizations' charts; installing a localization's key runs the installer. `res.company.chartTemplate` is now a
+  short text, not a fixed selection.
+- **`l10n_bd`**: the Bangladesh chart (moved from Accounting), the 14 VAT, SD and AT taxes (moved from Products:
+  their external ids move from `product.*` to `l10n_bd.*` in Products' 0.2.0 migration, so existing databases keep
+  the records and every line pointing at them), VDS (all the VAT) and TDS 5 % / 10 % on vendors, AIT 3 % kept back
+  by customers, a July–June year and lakh grouping; BIN (13 digits) and TIN (12 digits) on contacts and companies,
+  checked, shown on the contact form for contacts in Bangladesh. Its `defaults` hook sets up each company without a
+  chart (or with the Bangladesh one); a company on another chart is left alone. The BIN's check digit waits for the
+  NBR's algorithm to be confirmed.
+- **Without a localization** the demo data and the apps' tests have no country taxes: demos look the VAT up by
+  name and leave lines untaxed when there is none, and tests create the taxes they use.
+- **`kosh init`** asks for the country (`--country`; BD by default for BDT): a localization is installed with the
+  apps it bridges (Accounting), like a bridge. The demo catalogue and the apps' E2E server install `l10n_bd`.
+- **Tests**: `l10n_bd` installed with Accounting — the chart, every tax with its account, the four withholdings, the
+  company's fiscal year start, grouping and fiscal year; the defaults run twice; the chart install refused once
+  installed; BIN and TIN checks; a second company on the generic chart untouched. `kosh init` with the defaults
+  (BDT, every app) installs it.
+
 ## Alignment with CLAUDE.md
 
 "Money is always `Decimal`": every tax and withholding amount, per currency. "Metadata-driven": a country is a
