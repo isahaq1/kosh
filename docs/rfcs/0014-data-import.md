@@ -1,6 +1,7 @@
 # RFC 0014: Data import
 
-- **Status:** Draft, 2026-10-27
+- **Status:** Accepted 2026-10-27 with the proposed answers (external ids for imported records through a Shutro
+  request, all-or-nothing by default, 50 MB and 1 million rows, a 7-day undo); step 1 implemented (`@kosh/import`)
 - **Depends on:** 0002 (metadata, the import route), 0003 (permissions, field security), 0004 (list views),
   0006 (jobs, notifications), 0007 (frontend), 0008 (apps); Shutro external ids (Shutro RFC 0017)
 
@@ -155,6 +156,37 @@ in file" downloading the rejected rows). Keyboard-first, works on mobile, all te
 - **All-or-nothing by default** (proposed), or skip errors by default?
 - **The limits**: 50 MB and 1 million rows (proposed)?
 - **Undo window**: 7 days (proposed)?
+
+## Implementation notes (2026-10-27): step 1 — parsers, conversion, matching, dry run and commit
+
+`@kosh/import` is a Kosh module with the `import.user` access level ("Import data"): every module declares what
+administrators grant (RFC 0001). A user needs that level **and** the model's `import` and `create` permissions;
+administrators pass.
+
+- **Reading files**: `readCsv` (byte-order marks, else UTF-8 when the bytes are valid, else Windows-1252; the
+  separator counted the same way on most of the first lines; RFC 4180 quoting) and `readXlsx` (`node:zlib` and a
+  tag scanner: shared, inline and rich strings, booleans, numbers, dates from built-in and custom date formats,
+  formulas read as their cached values, a sheet by name). The reader lives in `@kosh/import`, not next to the writer
+  in `@kosh/reporting`: the import module stays free of the reporting stack. The writer builds the test files.
+- **Conversion** (`convertCell`): decimals stay exact text (from `1,234.50`, `1.234,50`, `(1,200.00)`, `৳ ১২,৫০০`;
+  `1,5` with a `.` decimal is an error, not 15), dates in the file's day order with impossible days refused,
+  date-times with an offset as given or else as wall-clock times in the file's time zone (`Intl`, no library),
+  booleans in English and Bangla, selections by value or label. Errors carry a stable code for the UI's messages.
+- **Matching** (`matchOne`): `#42` (an id), an external id (`env.refId`), each char field the target keeps unique on
+  its own (a unique constraint or index, the company aside), then the display name exactly and as the one name
+  containing the text. Each distinct text once per import; several matches are `ambiguous`.
+- **The run** (`runImport`): cells converted, relations matched, then one `create` of every valid row in a savepoint;
+  when it fails, row by row in savepoints, so each failing row gets Shutro's message on the column of the field it
+  names. A dry run, or any error, rolls the savepoint back. A required field without a column is reported once and
+  nothing is written. (Shutro describes x2many fields as required, as they are never null: an empty set. The import
+  counts them as optional.)
+- **The session**: `import.session`, the uploader's own through a record rule, holds the file in a binary field (an
+  import works without object storage configured), the mapping, the options, the state and the created ids.
+- **API**: as in §5.7 for upload, read, mapping, dry run and commit (`Idempotency-Key`; 422 with the errors, 409 once
+  imported; audited as `data.import`). Until jobs (step 3), a file of more than 10,000 rows is refused with 413.
+- **Tests**: parsers and conversions (13 unit tests) and the API on PostgreSQL (access, the guessed mapping, field
+  security, every error kind with its row and column, a constraint failing in the database, all-or-nothing,
+  relations by name, code and external id, XLSX with a remapped column, idempotent replays, the row limit).
 
 ## Alignment with CLAUDE.md
 
