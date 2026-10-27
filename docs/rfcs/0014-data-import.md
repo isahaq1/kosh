@@ -1,7 +1,7 @@
 # RFC 0014: Data import
 
 - **Status:** Accepted 2026-10-27 with the proposed answers (external ids for imported records through a Shutro
-  request, all-or-nothing by default, 50 MB and 1 million rows, a 7-day undo); steps 1–3 implemented (`@kosh/import`)
+  request, all-or-nothing by default, 50 MB and 1 million rows, a 7-day undo); implemented (`@kosh/import`, `docs/import.md`)
 - **Depends on:** 0002 (metadata, the import route), 0003 (permissions, field security), 0004 (list views),
   0006 (jobs, notifications), 0007 (frontend), 0008 (apps); Shutro external ids (Shutro RFC 0017)
 
@@ -251,6 +251,27 @@ administrators pass.
 - **Tests**: 4 more integration tests (a background dry run and commit with progress, the outcome and the events; a
   background import that stops on an error; templates applied and downloaded; saved mappings by header, own and
   shared, applied, deleted by their owner only) and a notification test in `@kosh/notify`.
+
+## Implementation notes (2026-10-27): step 4 — the screen
+
+- **Where**: **Import** next to every list's **New** (a create assist, `import.Import`), shown when the user has the
+  model's `import` permission and the import module answers (`GET /api/v1/import-mappings`): hidden when the module
+  is not installed or the user lacks Import data. It opens a wide dialog rather than a page of its own: the list
+  stays behind it and refreshes when the import ends.
+- **Steps**: the file (with the sample workbook and the templates' workbooks); the columns (each header, its first
+  values and a field picker with the lines' fields and the key columns; the mode, the key, errors, dates, decimals;
+  apply and save mappings); the result (counts, the errors filterable by column, the rejected rows, undo). A
+  background run is followed by polling the session every second.
+- **Messages**: every label in English and Bangla (namespace `import`). The errors themselves are the server's
+  sentences (field label, cell, Shutro's declared message), like any refused save; they carry a stable `code` for a
+  later translation on the screen.
+- **Not done**: headers are guessed from the labels in the server's language only (the RFC says every installed
+  language: field labels have no per-language text on the server yet); notifications of background runs do not
+  open the import (the bell opens records that have a page; the import is a dialog).
+- **Also**: the import module is installed by `kosh init` and listed in generated projects; Contacts managers have
+  the `import` permission on contacts (Contacts users do not).
+- **E2E** (`apps/web/e2e-apps/import.spec.ts`): a CSV of contacts with an invalid email is checked (the error on
+  its row), the fixed file imported, the contacts in the list, a third import undone.
 
 ## Alignment with CLAUDE.md
 

@@ -20,6 +20,7 @@ ahead. "Today" means code on `main` with tests; planned work is in the last sect
 | Jobs and events | Cron on `ir.cron`; side effects in the request | Transactional outbox and jobs in PostgreSQL: an event or job exists iff the transaction committed; handlers run as the user who caused them, under their rules |
 | Front end | OWL (proprietary), XML views, patches on prototypes | React 19, TanStack, Radix, Tailwind; views as typed data extended by anchors with recorded origins; light / dark, RTL by construction, i18n with ICU; axe-checked |
 | API contract | JSON-RPC `call_kw`, no OpenAPI, no versioning | REST with RFC 9457 problems, OpenAPI 3.1 generated from the registry, a typed client generated and checked in CI, idempotency keys on unsafe calls |
+| Data import | `base_import`: errors often one at a time, as raw messages; updates only by the `/id` of an earlier export; relations by ambiguous name; large files time out in the request; no undo | Every error at once on its row and column; updates by id, external id or any unique field (a code, an email); relations by external id, code or name, never a guess between several; lines from continuation rows that round-trip with exports; skip errors with a rejected-rows file; files of up to 1 million rows in the background with progress; undo for 7 days that leaves records changed since alone; saved and shared mappings, module templates and sample workbooks (RFC 0014) |
 
 ## At parity today
 
@@ -30,14 +31,14 @@ ahead. "Today" means code on `main` with tests; planned work is in the last sect
 
 ## Odoo is still ahead
 
-- **Breadth of business apps**: Kosh has the framework and demo modules; Odoo has accounting, inventory, HR, CRM,
-  manufacturing, e-commerce, point of sale, localizations, and thousands of community modules.
-- **Notifications, realtime, chat, email** (RFC 0006 parts 2–5): not built yet (the chatter and attachments are).
+- **Breadth of business apps**: Kosh has Contacts, Products, Sales, Purchase, Accounting and Projects with their
+  bridges; Odoo has inventory, HR, CRM, manufacturing, e-commerce, point of sale, localizations, and thousands of
+  community modules.
 - **Documents on records**: a document management app, OCR, digital signatures.
 - **Spreadsheet** depth (Odoo Enterprise: pivot insertion, charts, collaborative editing). Kosh's is formulas and
   live report totals.
-- **Reporting** extras: Odoo's accounting reports, cash flow, aged balances are app-level work.
-- **Mobile apps**, offline, PWA; barcode scanning.
+- **Mobile apps** (Kosh is a PWA with offline forms; no native app yet); barcode scanning.
+- **Customer portal** (RFC to come): customers and vendors seeing their own orders and invoices.
 - **Ecosystem**: partners, hosting (odoo.sh), marketplace, certifications, documentation volume.
 - **Materialized aggregates** for dashboards (Kosh dashboards are live queries, client-cached briefly).
 
@@ -54,5 +55,5 @@ ahead. "Today" means code on `main` with tests; planned work is in the last sect
 
 ## Next
 
-RFC 0006 (chatter, realtime, notifications, chat, inbound email) and the demo apps with feedback and benchmarks
-close most of the "Odoo is still ahead" rows that are framework work; the business apps are a separate roadmap.
+The customer portal, country localizations (Bangladesh first) and an integrations platform (API keys, OAuth apps,
+inbound webhooks) are the next framework RFCs; the business apps are a separate roadmap.

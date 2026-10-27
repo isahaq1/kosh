@@ -17,4 +17,4 @@ Design documents written before implementation. An RFC is implemented only after
 | 0011 | [Automation builder](0011-automation-builder.md) | Accepted, implemented (the engine, the API, the editor, webhooks, date and schedule triggers, rules shipped by modules, rules on any field) |
 | 0012 | [Kosh Studio](0012-studio.md) | Accepted, implemented (the spec and generator, `kosh apps upgrade`, the API, Studio mode, approvals and rules, git proposals) |
 | 0013 | [AI assistant](0013-ai-assistant.md) | Accepted, implemented (natural-language search, summaries, draft replies, forms from documents) |
-| 0014 | [Data import](0014-data-import.md) | Accepted; steps 1–3 implemented (parsers, conversion, matching, dry run and commit; keys, lines, skip errors, undo; background runs, saved mappings, templates) |
+| 0014 | [Data import](0014-data-import.md) | Accepted, implemented (the parsers and the import, keys, lines, skip errors, undo, background runs, saved mappings, templates, the screen) |
