@@ -1,6 +1,6 @@
 # RFC 0013: AI assistant
 
-- **Status:** Accepted 2026-10-27 with the proposed answers (Claude Opus 5.5 by default, off per company, 2 million tokens per company and month, images and PDFs in version 1); implemented (steps 1–3; `@kosh/assistant`, `docs/assistant.md`); lines of a one2many are filled later
+- **Status:** Accepted 2026-10-27 with the proposed answers (Claude Opus 5.5 by default, off per company, 2 million tokens per company and month, images and PDFs in version 1); implemented (steps 1–3 with the lines of a one2many; `@kosh/assistant`, `docs/assistant.md`)
 - **Depends on:** 0002 (metadata), 0003 (permissions, field security), 0004 (search domains), 0006 (chatter),
   0007 (frontend), 0008 (apps); Claude through the Anthropic API
 
@@ -186,8 +186,18 @@ demo data with expected domains, three bills to fill.
   **unsaved changes**, not the record's defaults: Save, Discard and the leave guard apply to them. Found on the way:
   the new record's query was keyed without its defaults (a cached empty form could hide them), and the server's
   onchange could drop given values; both fixed.
-- Not yet: the lines of a one2many (order lines of a bill): RFC 0013 §5.3 lists them; they need the form's line
-  editor to take proposed rows.
+- Lines (2026-10-27): the one2many fields the user may write and whose line model they may create in (`lineSpecsFor`,
+  up to 3, each with up to 12 fields of the line, not the many2one back to the record) go into the schema as arrays
+  of strings per line; each line value is converted like a field's, a misfit left out as `<lines> <n>: …`, empty lines
+  dropped. The response puts them under the one2many's key; the form seeds its line editor with them as new rows
+  (unsaved, removed by Discard) and runs the onchanges of the proposed fields once the new record is loaded (the
+  customer's currency). Found on the way: a new sales or purchase order crashed its onchange before a partner was
+  chosen (the totals summed in a null currency: now no amounts until there is one), and a new form never showed the
+  model's defaults, because Shutro's onchange compared a new draft with its defaults (Shutro request #27, fixed
+  there). Tests: the schema and instructions with lines; on PostgreSQL, lines converted (a product-like many2one by
+  name, a whole number refused with the line's number, an empty line dropped), the link back never asked for, the
+  proposal saved as it is with its lines; a blank sales order's onchange gives its defaults and no amounts; E2E
+  (business apps): a pasted order fills a new sales order with its customer, currency and line, and saves.
 - Tests: the conversion of every kind and its refusals, the schema and instructions; on PostgreSQL, a text filled
   (a decimal with a thousands separator, a selection by its label, a linked user by name, an unparseable date left out
   with the reason, the notes), a field the user may not write never asked for nor proposed, nothing saved, a PDF sent

@@ -80,7 +80,17 @@ POST /api/v1/assistant/form
   "proposed": ["name", "email", "city"], "skipped": [], "notes": "" }
 ```
 
-Order lines (one2many) are not filled yet: the header fields are.
+**Lines** are filled too: for each one2many of the new record the user may write and whose line model they may
+create in (up to three, such as order lines), the model answers one entry per line of the document with the line's
+fields (not the link back to the record, at most twelve). Each value is converted like a field's — the product by
+name, the quantity and the price as decimals — and a value that does not fit is left out with the line's number
+(`Order lines 2: Product: no single "Steel rod" found`). The lines open as new rows of the form's line editor, marked
+like the other proposals; the record's onchanges run for the proposed fields (a customer brings its currency).
+
+```http
+{ "values": { "partner": 7, "lines": [{ "product": 3, "name": "Steel beam", "quantity": "3", "priceUnit": "950" }] },
+  "proposed": ["partner", "lines"], "skipped": [], "notes": "" }
+```
 
 ## The log and the budget
 
