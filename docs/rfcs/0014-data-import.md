@@ -1,7 +1,7 @@
 # RFC 0014: Data import
 
 - **Status:** Accepted 2026-10-27 with the proposed answers (external ids for imported records through a Shutro
-  request, all-or-nothing by default, 50 MB and 1 million rows, a 7-day undo); step 1 implemented (`@kosh/import`)
+  request, all-or-nothing by default, 50 MB and 1 million rows, a 7-day undo); steps 1–2 implemented (`@kosh/import`)
 - **Depends on:** 0002 (metadata, the import route), 0003 (permissions, field security), 0004 (list views),
   0006 (jobs, notifications), 0007 (frontend), 0008 (apps); Shutro external ids (Shutro RFC 0017)
 
@@ -187,6 +187,33 @@ administrators pass.
 - **Tests**: parsers and conversions (13 unit tests) and the API on PostgreSQL (access, the guessed mapping, field
   security, every error kind with its row and column, a constraint failing in the database, all-or-nothing,
   relations by name, code and external id, XLSX with a remapped column, idempotent replays, the row limit).
+
+## Implementation notes (2026-10-27): step 2 — keys, lines, skipping errors, undo
+
+- **Keys** (`options.key`): the `id` column (`#42` or `42`), the `externalId` column, or a field the model keeps
+  unique (the catalogue marks them `keyable`; anything else is refused at mapping). `mode` is `create`, `update` or
+  `upsert`. Records are found as the user, in one query per file for ids and unique fields. Errors: `no-match`
+  (update), `exists` (create, the key names a record), `duplicate-key` (a later row repeats a key), `missing-key`
+  (no key column, or an empty key cell), `ambiguous`. An upsert by id cannot create: ids are not chosen.
+- **External ids**: a create with an `externalId` column names each new record (a bare `partner_42` becomes
+  `__import__.partner_42`) through Shutro's new `env.setExternalId` (request #28), so a later file updates it.
+  An installed module's ids are refused (they are its data).
+- **Lines**: each writable one2many whose lines the user may create offers its lines' fields as columns
+  (`lines.product`, labelled `Lines › Product`), without the link back. A row whose own columns are all empty
+  continues the record above. Lines of an updated record **replace** its lines (`delete` + `create`), so a file
+  exported with its lines re-imports to the same records instead of doubling them.
+- **Skip errors** (`onError: 'skip'`): the records without errors are kept (row by row in savepoints once a batch
+  fails); the session keeps the errors and the file rows of the records left out, continuation rows included.
+  `GET /api/v1/imports/:id/rejected` gives them as CSV with an Error column (UTF-8 with a mark, so Excel reads
+  Bangla; formulas prefixed with `'`, never run).
+- **Undo** (`POST /api/v1/imports/:id/undo`, 7 days, the `unlink` permission when records were created and `write`
+  when they were updated): the commit keeps the created ids, the previous values of the written fields, the previous
+  lines of replaced one2many fields and each record's `updatedAt` after the import. Undo deletes and restores the
+  records whose `updatedAt` is unchanged and lists the others (`changed`); it is audited as `data.import.undo`.
+  Undo data never leaves the server (the responses drop it).
+- **Tests**: 5 more integration tests — lines from continuation rows, an upsert by a unique field that replaces
+  lines then its undo, external ids given and found with every key error, skip errors with the rejected-rows file
+  and an undo that leaves an edited record alone, and undo refused without `unlink`.
 
 ## Alignment with CLAUDE.md
 
