@@ -2,9 +2,7 @@
 
 - **Status:** Accepted 2026-10-27 with the proposed answers (a Vite + React `apps/portal`, Next.js kept for the
   public website; a contact sees their company's documents; invitations only, payment details shown; a typed name
-  and a drawn signature); steps 1–3 implemented (`@kosh/portal`: portal identity, invitations, the
-  internal-only guard; documents declared in manifests, the portal API, `sale_portal`, `account_portal`; the
-  `apps/portal` app and "Portal access" on the contact form)
+  and a drawn signature); implemented (`@kosh/portal`, the four bridges, `apps/portal`, `docs/portal.md`)
 - **Depends on:** 0001 (manifests), 0002 (API), 0003 (permissions, record rules), 0005 (documents: PDFs), 0006
   (chatter, email), 0007 (frontend), 0008 (apps), 0009 (invoices), 0014 (external users read like any user)
 
@@ -275,6 +273,26 @@ user's language, with a link to the document's portal page.
   message, downloads the invoice's PDF, switches to Bangla; and the back-office API answers 403 from the portal.
   `apps/web/e2e-apps/portal-access.spec.ts`: no email refused, invite with the link shown, revoke. CI runs both
   (`pnpm test:e2e`).
+
+## Implementation notes (2026-10-27): step 4 — vendors, projects, announcements
+
+- **`purchase_portal`**: requests for quotation sent to the vendor and purchase orders (drafts, orders waiting for
+  approval and cancelled ones stay internal), with their lines and a thread. The RFC's "acknowledge an order" is not
+  built: Purchase has no transition for it, and a portal action is a transition. Vendors answer on the thread.
+- **`project_portal`**: the customer's projects and their open tasks. A task belongs to the customer of its
+  **project** (`partner: 'project.partner'`, `portalRule('project.partner')`): a document's partner may now be a
+  path of many2ones, checked at start like the rest.
+- **Announcements**: a declaration's `announce` domain says when a record is shared (a quotation sent, an invoice
+  posted, a request sent). The portal subscribes to Shutro's `record.changed` events (the bridges list their models
+  in `changeEvents`). When a record enters the domain, the portal users who see it (the contact, its company and
+  the company's people, active only) get an email in their language with a link to the document in the portal, once
+  per record and document type (`portal.announcement`; a second sending of the same quotation emails nobody). Sent
+  after the commit; without a mailer the announcement is recorded and no email goes.
+- **Not done**: `kosh init` does not offer the portal and its bridges, and generated projects get no portal app
+  (it needs a template of `apps/portal` in the starter); the portal as an installable PWA; online payment and the
+  company's bank details (integrations RFC).
+- **Tests**: `purchase_portal` (2), `project_portal` (1), the announcement test in `sale_portal` (emails to
+  both customers, the link, once only).
 
 ## Alignment with CLAUDE.md
 
