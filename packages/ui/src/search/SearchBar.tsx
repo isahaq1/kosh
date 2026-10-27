@@ -51,7 +51,7 @@ export function SearchBar({
   labels,
 }: SearchBarProps): ReactElement {
   const { t } = useTranslation();
-  const { api } = useKosh();
+  const { api, registry } = useKosh();
   const queryClient = useQueryClient();
   const [text, setText] = useState('');
   const [active, setActive] = useState(0);
@@ -164,6 +164,21 @@ export function SearchBar({
             </button>
           </span>
         ))}
+        {state.custom === undefined || Object.keys(state.custom).length === 0 ? null : (
+          <span className="inline-flex items-center gap-1 rounded bg-accent px-2 py-0.5 text-xs text-accent-foreground">
+            {state.customLabel ?? t('search.custom')}
+            <button
+              type="button"
+              aria-label={t('search.remove', { facet: state.customLabel ?? t('search.custom') })}
+              onClick={() => {
+                const { custom: _custom, customLabel: _label, ...rest } = state;
+                onChange(rest);
+              }}
+            >
+              <X className="size-3" aria-hidden />
+            </button>
+          </span>
+        )}
         <input
           data-kosh-search
           role="combobox"
@@ -210,6 +225,15 @@ export function SearchBar({
         )}
       </div>
 
+      {registry.searchAssists().map((Assist, i) => (
+        <Assist
+          // biome-ignore lint/suspicious/noArrayIndexKey: registered once at start, never reordered
+          key={i}
+          api={api}
+          model={model}
+          onDomain={(where, text) => onChange({ ...state, custom: where, customLabel: text })}
+        />
+      ))}
       {filterGroups.size === 0 ? null : (
         <Menu>
           <MenuTrigger asChild>

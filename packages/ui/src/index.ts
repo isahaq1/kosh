@@ -67,6 +67,7 @@ export {
   type PageProps,
   Registry,
   RegistryError,
+  type SearchAssistProps,
   type ViewProps,
   type WidgetProps,
 } from './registry.js';

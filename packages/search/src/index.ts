@@ -16,8 +16,10 @@ export interface SearchState {
   /** Group-by options of the spec, outermost first (`partner`, `dateOrder:month`). */
   readonly groupBy?: readonly string[];
   readonly order?: readonly string[];
-  /** A domain built in the custom filter editor (validated by the server). */
+  /** A domain built in the custom filter editor or by the assistant (validated by the server). */
   readonly custom?: Condition;
+  /** What the custom domain means, shown on its chip ("unpaid invoices from Dhaka"). */
+  readonly customLabel?: string;
 }
 
 /** The compiled search. */
@@ -132,8 +134,11 @@ export function encodeSearch(state: SearchState): string {
   if ((state.filters ?? []).length > 0) compact['x'] = state.filters;
   if ((state.groupBy ?? []).length > 0) compact['g'] = state.groupBy;
   if ((state.order ?? []).length > 0) compact['o'] = state.order;
-  if (state.custom !== undefined && Object.keys(state.custom).length > 0)
+  if (state.custom !== undefined && Object.keys(state.custom).length > 0) {
     compact['c'] = state.custom;
+    if (state.customLabel !== undefined && state.customLabel !== '')
+      compact['cl'] = state.customLabel;
+  }
   return Object.keys(compact).length === 0 ? '' : JSON.stringify(compact);
 }
 
@@ -162,7 +167,10 @@ export function decodeSearch(text: string | null | undefined): SearchState {
     ...(strings(r['g']).length > 0 ? { groupBy: strings(r['g']) } : {}),
     ...(strings(r['o']).length > 0 ? { order: strings(r['o']) } : {}),
     ...(typeof custom === 'object' && custom !== null && !Array.isArray(custom)
-      ? { custom: custom as Condition }
+      ? {
+          custom: custom as Condition,
+          ...(typeof r['cl'] === 'string' && r['cl'] !== '' ? { customLabel: r['cl'] } : {}),
+        }
       : {}),
   };
 }

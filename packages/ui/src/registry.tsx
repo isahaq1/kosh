@@ -70,6 +70,14 @@ export interface HeaderItemProps {
   readonly api: KoshApi;
 }
 
+/** Props of a search assistant: a control next to the search box that proposes a domain (`assistant.Ask`). */
+export interface SearchAssistProps {
+  readonly api: KoshApi;
+  readonly model: string;
+  /** Sets the search's custom domain, with what it means. */
+  readonly onDomain: (where: Condition, label: string) => void;
+}
+
 /** Props of a page: what a client action opens (`{ type: 'client', page: 'settings.Apps' }`). */
 export interface PageProps {
   readonly api: KoshApi;
@@ -84,7 +92,7 @@ export class RegistryError extends Error {
   }
 }
 
-type Kind = 'view' | 'widget' | 'component' | 'page' | 'header';
+type Kind = 'view' | 'widget' | 'component' | 'page' | 'header' | 'searchAssist';
 
 /** Renderers, widgets and components by name. */
 export class Registry {
@@ -94,6 +102,7 @@ export class Registry {
     component: new Map(),
     page: new Map(),
     header: new Map(),
+    searchAssist: new Map(),
   };
 
   #add(kind: Kind, name: string, component: ComponentType<never>, replace: boolean): this {
@@ -186,6 +195,25 @@ export class Registry {
     }));
   }
 
+  /** A control next to every search box (the AI assistant's "Ask"). */
+  registerSearchAssist(
+    name: string,
+    component: ComponentType<SearchAssistProps>,
+    options: { readonly replace?: boolean } = {},
+  ): this {
+    return this.#add(
+      'searchAssist',
+      name,
+      component as ComponentType<never>,
+      options.replace === true,
+    );
+  }
+
+  /** The search assistants, in registration order. */
+  searchAssists(): readonly ComponentType<SearchAssistProps>[] {
+    return [...this.#entries.searchAssist.values()] as ComponentType<SearchAssistProps>[];
+  }
+
   page(name: string): ComponentType<PageProps> | undefined {
     return this.#entries.page.get(name) as ComponentType<PageProps> | undefined;
   }
@@ -193,7 +221,7 @@ export class Registry {
   /** A copy, for an app that changes entries without touching the defaults. */
   clone(): Registry {
     const copy = new Registry();
-    for (const kind of ['view', 'widget', 'component', 'page', 'header'] as const)
+    for (const kind of ['view', 'widget', 'component', 'page', 'header', 'searchAssist'] as const)
       for (const [name, c] of this.#entries[kind]) copy.#entries[kind].set(name, c);
     return copy;
   }
