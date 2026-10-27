@@ -110,6 +110,8 @@ export interface StarterOptions {
   readonly name: string;
   readonly apps: readonly AppName[];
   readonly port: number;
+  /** The back-office's port in development (default 5173). */
+  readonly webPort?: number;
   readonly koshVersion: string;
   /** The database name of the Docker PostgreSQL service (compose.yaml). */
   readonly dockerDb?: string;
@@ -221,8 +223,8 @@ const api = process.env['KOSH_API'] ?? 'http://localhost:${options.port}';
 export default defineConfig({
   // koshPwa: the service worker (the app opens offline and gets web push)
   plugins: [react(), tailwindcss(), koshPwa()],
-  server: { proxy: { '/api': { target: api, ws: true } } },
-  preview: { proxy: { '/api': { target: api, ws: true } } },
+  server: { port: ${options.webPort ?? 5173}, proxy: { '/api': { target: api, ws: true } } },
+  preview: { port: ${options.webPort ?? 5173}, proxy: { '/api': { target: api, ws: true } } },
 });
 `;
 }
@@ -497,7 +499,7 @@ A [Kosh](https://www.npmjs.com/package/shutro-erp) installation, created with \`
 \`\`\`sh
 npm install
 npm start          # the API on http://localhost:${options.port}
-npm run web        # the back-office on http://localhost:5173 (sign in as the administrator)
+npm run web        # the back-office on http://localhost:${options.webPort ?? 5173} (sign in as the administrator)
 npx kosh migrate   # after changing modules: plan and apply database migrations, load seed data
 npx kosh seed      # load seed data again
 # Settings → Apps in the back-office installs, enables and disables apps (or, in the terminal:)
@@ -526,6 +528,9 @@ export function bridgesFor(apps: readonly AppName[], country = ''): AppName[] {
     return spec.bridge?.every((b) => apps.includes(b)) === true;
   });
 }
+
+/** The names of the countries with a localization (the installer's list). */
+export const COUNTRY_NAMES: Readonly<Record<string, string>> = { BD: 'Bangladesh', IN: 'India' };
 
 /** The countries with a localization, for the installer's question. */
 export const LOCALIZED_COUNTRIES: readonly string[] = Object.values(APPS).flatMap((a) =>

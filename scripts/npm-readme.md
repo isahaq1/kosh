@@ -40,30 +40,37 @@ npm install shutro-erp      # Shutro, the ORM, comes with it
 npx kosh init
 ```
 
-The setup asks for what the installation needs. Press **Enter** to keep the value in `[brackets]`:
+The setup asks for what the installation needs, one question at a time: type an answer or press **Enter** for
+the default shown, pick from lists with **↑ ↓** and **Enter**, tick apps with **Space**, stop with **Ctrl+C**
+(piped or scripted, the same questions are asked line by line):
 
 | Question | Example | Notes |
 |---|---|---|
-| PostgreSQL | `1` your server, `2` start one in Docker | `2` needs Docker Desktop running; it writes `compose.yaml` and starts the `db` service |
+| PostgreSQL | your server, or start one in Docker | Docker needs Docker Desktop running; it writes `compose.yaml` and starts the `db` service |
 | Username, password, port, host, database name | `postgres`, (hidden), `5432`, `localhost`, `my_erp` | for `1`; a missing database is created after you confirm; if nothing answers, it offers Docker instead |
-| Company name, currency | `Padma Traders`, `BDT` | the first company; more companies later |
+| Company name, currency, country | `Padma Traders`, `BDT`, Bangladesh | the first company; a country with a localization gets its taxes, chart and returns |
 | Language, time zone | `bn`, `Asia/Dhaka` | the administrator's |
 | Administrator login, name, email, password | `admin`, …, 12+ characters | the password is typed hidden and stored only as a hash |
-| Apps | `permissions,reporting,messaging` | roles and approvals, reports and documents, chatter and attachments |
-| File storage | `1` a folder, `2` S3-compatible | S3, SeaweedFS, MinIO; the bucket is created |
+| Apps | all ticked; untick what you do not need | roles and approvals, reports, chatter, the business apps |
+| File storage | a folder, or S3-compatible | S3, SeaweedFS, MinIO; the bucket is created |
 | Valkey/Redis URL | empty | optional: rate limits and caches shared by several servers |
-| API port | `3000` | |
+| API port, back-office (web) port | `3000`, `5173` | the next free ones are proposed |
 | Authenticator code | `123456` | scan the printed secret, type a code; **keep the recovery codes** it prints |
 
 Then it writes the project, creates the database tables (`migrations/0001_init.sql`), the company and the
-administrator, and loads the apps' default data. Run `npm install` once in the project, then start it:
+administrator, and loads the apps' default data. **Then it starts Kosh for you**: it installs the project's
+dependencies (with the package manager you ran it with: npm, pnpm, yarn or bun), starts the API and the
+back-office, waits until both answer, and opens the back-office in your browser on the web port. Both keep
+running in that terminal; **Ctrl+C** stops them. Sign in with the administrator's login, password and a code from
+the authenticator app.
+
+To start it again later (or after `--no-start`, which only sets up):
 
 ```sh
+cd my-erp
 npm start            # the API on http://localhost:3000
 npm run web          # the back-office on http://localhost:5173, in a second terminal
 ```
-
-Sign in with the administrator's login, password and a code from the authenticator app.
 
 **Without questions** (scripts, CI): pass the answers as flags.
 
@@ -74,7 +81,7 @@ npx kosh init --yes \
   --database-url postgres://postgres:postgres@localhost:5432/my_erp --create-database \
   --company "Padma Traders" --currency BDT --lang bn --tz Asia/Dhaka \
   --admin-login admin --admin-password "a long passphrase here" \
-  --apps permissions,reporting,messaging --storage-dir ./var/attachments --port 3000
+  --apps permissions,reporting,messaging --storage-dir ./var/attachments --port 3000 --web-port 5173
 ```
 
 With `--yes` nothing is asked, so the authenticator is not enrolled: run `npx kosh init` again in a terminal to

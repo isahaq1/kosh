@@ -28,17 +28,20 @@ import {
   pg,
   recordInstalledApps,
 } from '@kosh/server';
+import { launch } from './launch.js';
 import { seed } from './project.js';
-import { defaultsPrompter, type Prompter, terminalPrompter } from './prompt.js';
+import { choose, chooseMany, defaultsPrompter, type Prompter, terminalPrompter } from './prompt.js';
 import * as templates from './templates.js';
 import {
   APPS,
   type AppName,
   bridgesFor,
+  COUNTRY_NAMES,
   LOCALIZED_COUNTRIES,
   SELECTABLE_APPS,
 } from './templates.js';
-import { type CardRow, createUi, PLAIN_TERMINAL, type Terminal, type Ui } from './ui.js';
+import { CancelledError, interactivePrompter } from './tui.js';
+import { type CardRow, createUi, PLAIN_TERMINAL, railed, type Terminal, type Ui } from './ui.js';
 
 /**
  * The version of the `shutro-erp` package this CLI runs from: new projects depend on it. In the workspace (no such
@@ -80,10 +83,13 @@ Options (each also answers its question; with --yes the rest take their defaults
   --storage-dir <dir>       attachments in a folder (default ./var/attachments)
   --s3-endpoint <url> --s3-bucket <name> --s3-access-key <key> --s3-secret-key <secret> [--s3-region <r>]
   --valkey-url <url>        optional: rate limits and caches shared across servers
-  --port <port>             the API's port (default 3000)
+  --port <port>             the API's port (default 3000, or the next free one)
+  --web-port <port>         the back-office's port in development (default 5173, or the next free one)
   --demo                    load demo data: a sample company with contacts, products, orders, invoices and
                             projects, made by demo users (dina, rahim, karim, sumi; one shared password)
   --no-2fa                  skip the authenticator enrolment (administrator rights wait for it)
+  --no-start                do not install, start and open the installation at the end (in a terminal it
+                            installs the dependencies, starts the API and the back-office, opens the browser)
   --yes                     do not ask; use flags and defaults
 `;
 
@@ -122,6 +128,8 @@ interface Answers {
       };
   readonly valkeyUrl: string;
   readonly port: number;
+  /** The back-office's port in development (Vite). */
+  readonly webPort: number;
   /** The Docker PostgreSQL service's settings (compose.yaml reads them from .env). */
   readonly postgres: {
     readonly user: string;
@@ -342,14 +350,19 @@ async function ask(
     const docker =
       flags['docker-db'] === true ||
       (dockerAvailable() && flags['yes'] !== true
-        ? (await q(
-            null,
-            'PostgreSQL: (1) a server I already have, or (2) start one in Docker for me',
-            '2',
-            {
-              validate: (v) => (v === '1' || v === '2' ? null : '1 or 2'),
-            },
-          )) === '2'
+        ? (await choose(prompter, {
+            message: 'Which PostgreSQL?',
+            fallback: 'PostgreSQL: (1) a server I already have, or (2) start one in Docker for me',
+            choices: [
+              { value: 'server', label: 'A server I already have', hint: 'host, port, user' },
+              {
+                value: 'docker',
+                label: 'Start one in Docker for me',
+                hint: 'PostgreSQL 18, its own volume',
+              },
+            ],
+            default: 'docker',
+          })) === 'docker'
         : false);
     if (docker) {
       if (!dockerAvailable()) throw new Error('Docker is not running (docker version failed).');
@@ -439,20 +452,44 @@ async function ask(
       validate: (v) => (/^[A-Za-z]{3}$/.test(v) ? null : 'Three letters, e.g. BDT, USD, EUR'),
     })
   ).toUpperCase();
+  const countryFlag = flag('country');
+  if (countryFlag !== undefined && !/^([A-Za-z]{2}|none)$/i.test(countryFlag))
+    throw new Error('--country: Two letters, e.g. BD, or none');
   const countryAnswer = (
-    await q(
-      'country',
-      `Country (ISO code; ${LOCALIZED_COUNTRIES.join(', ')} set up taxes and the chart; "none" for none)`,
-      currency === 'BDT' ? 'BD' : 'none',
-      {
-        validate: (v) => (/^([A-Za-z]{2}|none)$/i.test(v) ? null : 'Two letters, e.g. BD, or none'),
-      },
-    )
+    countryFlag ??
+    (await choose(prompter, {
+      message: 'Country (taxes, chart of accounts, fiscal year)',
+      fallback: `Country (ISO code; ${LOCALIZED_COUNTRIES.join(', ')} set up taxes and the chart; "none" for none)`,
+      choices: [
+        ...LOCALIZED_COUNTRIES.map((c) => ({
+          value: c,
+          label: COUNTRY_NAMES[c] ?? c,
+          hint: 'its taxes, chart and returns',
+        })),
+        {
+          value: 'none',
+          label: 'Another country',
+          hint: 'the generic chart; taxes are yours to add',
+        },
+      ],
+      default: currency === 'BDT' ? 'BD' : 'none',
+    }))
   ).toUpperCase();
   const country = countryAnswer === 'NONE' ? '' : countryAnswer;
-  const lang = await q('lang', 'Language (en, bn)', 'en', {
-    validate: (v) => (['en', 'bn'].includes(v) ? null : 'en or bn'),
-  });
+  const langFlag = flag('lang');
+  if (langFlag !== undefined && !['en', 'bn'].includes(langFlag))
+    throw new Error('--lang: en or bn');
+  const lang =
+    langFlag ??
+    (await choose(prompter, {
+      message: 'Language',
+      fallback: 'Language (en, bn)',
+      choices: [
+        { value: 'en', label: 'English' },
+        { value: 'bn', label: 'বাংলা', hint: 'Bangla' },
+      ],
+      default: 'en',
+    }));
   const tz = await q('tz', 'Time zone', Intl.DateTimeFormat().resolvedOptions().timeZone, {
     validate: (v) => {
       try {
@@ -493,29 +530,28 @@ async function ask(
     }
 
   ui.step('apps', 'Apps', 'All are selected; remove the ones you do not need');
-  for (const key of SELECTABLE_APPS) {
-    const app = APPS[key];
-    ui.write(
-      `  ${ui.terminal.emoji ? app.icon : ui.style('cyan', '•')}  ${ui.style('bold', key.padEnd(12))} ${ui.style('gray', app.label)}\n`,
-    );
-  }
-  const appList = await q('apps', 'Apps to install (comma-separated)', SELECTABLE_APPS.join(','), {
-    validate: (v) => {
-      const unknown = v
-        .split(',')
-        .map((s) => s.trim())
-        .filter((s) => s !== '' && !(s in APPS));
-      return unknown.length === 0 ? null : `Unknown: ${unknown.join(', ')}`;
-    },
-  });
-  const chosen = [
-    ...new Set(
-      appList
-        .split(',')
-        .map((s) => s.trim())
-        .filter((s): s is AppName => s in APPS),
-    ),
-  ];
+  const appsFlag = flag('apps');
+  if (appsFlag === undefined && prompter.multiselect === undefined)
+    for (const key of SELECTABLE_APPS) {
+      const app = APPS[key];
+      ui.write(
+        `  ${ui.terminal.emoji ? app.icon : ui.style('cyan', '•')}  ${ui.style('bold', key.padEnd(12))} ${ui.style('gray', app.label)}\n`,
+      );
+    }
+  const unknownApps = (appsFlag ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s !== '' && !(s in APPS));
+  if (unknownApps.length > 0) throw new Error(`--apps: Unknown: ${unknownApps.join(', ')}`);
+  const appList =
+    appsFlag?.split(',').map((s) => s.trim()) ??
+    (await chooseMany(prompter, {
+      message: 'Apps to install',
+      fallback: 'Apps to install (comma-separated)',
+      choices: SELECTABLE_APPS.map((key) => ({ value: key, label: key, hint: APPS[key].label })),
+      defaults: SELECTABLE_APPS,
+    }));
+  const chosen = [...new Set(appList.filter((s): s is AppName => s in APPS))];
   // The bridges of the chosen apps come along (RFC 0008 §5.1), and the country's localization (RFC 0016).
   const apps = [...chosen, ...bridgesFor(chosen, country).filter((b) => !chosen.includes(b))];
   const demo =
@@ -530,9 +566,15 @@ async function ask(
   const s3 =
     flag('s3-endpoint') !== undefined ||
     (flag('storage-dir') === undefined &&
-      (await q(null, 'Store files in (1) a folder or (2) S3-compatible storage', '1', {
-        validate: (v) => (v === '1' || v === '2' ? null : '1 or 2'),
-      })) === '2');
+      (await choose(prompter, {
+        message: 'Where are files kept?',
+        fallback: 'Store files in (1) a folder or (2) S3-compatible storage',
+        choices: [
+          { value: 'dir', label: 'A folder on this server', hint: './var/attachments' },
+          { value: 's3', label: 'S3-compatible storage', hint: 'AWS S3, MinIO, SeaweedFS, R2' },
+        ],
+        default: 'dir',
+      })) === 's3');
   if (s3)
     storage = {
       kind: 's3',
@@ -556,14 +598,27 @@ async function ask(
     };
   else storage = { kind: 'dir', dir: await q('storage-dir', 'Folder', './var/attachments') };
 
-  ui.step('server', 'Server', 'The API port and an optional shared cache');
-  const valkeyUrl = await q('valkey-url', 'Valkey/Redis URL (optional, Enter to skip)', '');
-  const port = Number(
-    await q('port', 'API port', '3000', {
-      validate: (v) =>
-        /^\d+$/.test(v) && Number(v) > 0 && Number(v) < 65536 ? null : 'A port number',
-    }),
+  ui.step(
+    'server',
+    'Server',
+    'The ports of the API and the back-office, and an optional shared cache',
   );
+  const portNumber = (v: string) =>
+    /^\d+$/.test(v) && Number(v) > 0 && Number(v) < 65536 ? null : 'A port number (1–65535)';
+  const port = Number(
+    await q('port', 'API port', String(await freePort(3000)), { validate: portNumber }),
+  );
+  const webPort = Number(
+    await q(
+      'web-port',
+      'Back-office (web) port',
+      String(await freePort(port === 5173 ? 5174 : 5173)),
+      {
+        validate: (v) => portNumber(v) ?? (Number(v) === port ? 'Another port than the API' : null),
+      },
+    ),
+  );
+  const valkeyUrl = await q('valkey-url', 'Valkey/Redis URL (optional, Enter to skip)', '');
   return {
     dir,
     name,
@@ -579,6 +634,7 @@ async function ask(
     storage,
     valkeyUrl,
     port,
+    webPort,
     postgres,
     dockerDb,
     vapid: (await import('@kosh/notify')).generateVapidKeys(),
@@ -639,7 +695,7 @@ function envFile(a: Answers): string {
   lines.push(
     '',
     '# Where users open the back-office (links in emails and notifications).',
-    'KOSH_BASE_URL=http://localhost:5173',
+    `KOSH_BASE_URL=http://localhost:${a.webPort}`,
     '# Email notifications: an SMTP server (Mailpit in development: smtp://localhost:1025, inbox on :8025).',
     '# SMTP_URL=smtp://user:password@smtp.example.com:587',
     '# MAIL_FROM=Kosh <no-reply@example.com>',
@@ -692,6 +748,7 @@ async function writeProject(a: Answers, ui: Ui): Promise<void> {
     name: a.name,
     apps: a.apps,
     port: a.port,
+    webPort: a.webPort,
     koshVersion: releaseVersion(),
     dockerDb: a.postgres.db,
     fileStorage: a.storage.kind === 'dir',
@@ -932,7 +989,9 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
       's3-region': { type: 'string' },
       'valkey-url': { type: 'string' },
       port: { type: 'string' },
+      'web-port': { type: 'string' },
       'no-2fa': { type: 'boolean' },
+      'no-start': { type: 'boolean' },
       demo: { type: 'boolean' },
       'docker-db': { type: 'boolean' },
       yes: { type: 'boolean', short: 'y' },
@@ -946,16 +1005,36 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
   const terminal = io.terminal ?? PLAIN_TERMINAL;
   const interactive2fa = values['no-2fa'] !== true && values.yes !== true;
   // Six question steps, then the project files and the database, then (interactively) the second factor.
-  const ui = createUi(io.write, terminal, { steps: interactive2fa ? 9 : 8 });
+  // At the end, in a terminal: install, start and open the installation (not for scripts, CI and tests).
+  const autoStart =
+    values['no-start'] !== true && io.prompter === undefined && process.stdout.isTTY === true;
+  const ui = createUi(io.write, terminal, {
+    steps: (interactive2fa ? 9 : 8) + (autoStart ? 1 : 0),
+  });
+  const interactive =
+    io.prompter === undefined &&
+    values.yes !== true &&
+    process.stdin.isTTY === true &&
+    railed(terminal);
   const asked =
     io.prompter ??
     (values.yes === true
       ? defaultsPrompter()
-      : terminalPrompter(process.stdin, process.stdout, {
-          marker: ui.style('cyan', '? '),
-          fallback: (t) => ui.style('gray', t),
-          problem: (t) => ui.style('yellow', `${terminal.unicode ? '▲' : '!'} ${t}`),
-        }));
+      : interactive
+        ? interactivePrompter(process.stdin, process.stdout, terminal)
+        : terminalPrompter(process.stdin, process.stdout, {
+            marker: ui.style('cyan', '? '),
+            fallback: (t) => ui.style('gray', t),
+            problem: (t) => ui.style('yellow', `${terminal.unicode ? '▲' : '!'} ${t}`),
+          }));
+  const paused = async <T>(work: () => Promise<T>): Promise<T> => {
+    ui.pause();
+    try {
+      return await work();
+    } finally {
+      ui.resume();
+    }
+  };
   // A question stops the spinner while it is asked (the prompter writes to the terminal itself).
   const prompter: Prompter = {
     async ask(q) {
@@ -974,13 +1053,27 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
         ui.resume();
       }
     },
+    ...(asked.select === undefined
+      ? {}
+      : { select: (q) => paused(() => (asked.select as NonNullable<Prompter['select']>)(q)) }),
+    ...(asked.multiselect === undefined
+      ? {}
+      : {
+          multiselect: (q) =>
+            paused(() => (asked.multiselect as NonNullable<Prompter['multiselect']>)(q)),
+        }),
     close: () => asked.close(),
   };
   let server: KoshServer | undefined;
   const started = Date.now();
   try {
     await ui.banner(`The ERP framework on Shutro · v${releaseVersion()}`);
-    ui.write(`  ${ui.style('gray', 'Kosh setup: press Enter to keep the value in [brackets].')}\n`);
+    ui.intro(
+      'Kosh setup',
+      interactive
+        ? 'Enter keeps the default · ↑ ↓ choose · Space ticks · Ctrl+C quits'
+        : 'Kosh setup: press Enter to keep the value in [brackets].',
+    );
     const answers = await ask(prompter, values, io.cwd, positionals[0], ui);
 
     ui.step('files', 'Project files', answers.dir);
@@ -1055,21 +1148,47 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
         ? [['Demo users', `dina, rahim, karim, sumi · password "${DEMO_PASSWORD}"`] as CardRow]
         : []),
       ['Database', answers.dockerDb ? `Docker (port ${answers.postgres.port})` : 'your server'],
+      ['Back-office', `http://localhost:${answers.webPort}`],
       ['API', `http://localhost:${answers.port}`],
       ['Took', `${((Date.now() - started) / 1000).toFixed(1)}s`],
     ];
+    if (!autoStart) ui.outro(ui.style('green', 'Kosh is set up'));
     ui.card(
       `${terminal.emoji ? '🚀 ' : ''}Kosh is set up`,
       rows,
       enrolled || values['no-2fa'] === true ? 'green' : 'yellow',
     );
 
+    if (autoStart) {
+      if (!enrolled)
+        ui.warn(
+          'Administrator rights need a second factor: run `kosh init` again to enrol the authenticator app.',
+        );
+      ui.step(
+        'rocket',
+        'Starting Kosh',
+        'Dependencies, the API, the back-office, then your browser',
+      );
+      // The installer's own connection is not needed any more: the API has its own.
+      await server?.close();
+      server = undefined;
+      await launch(
+        {
+          dir: answers.dir,
+          port: answers.port,
+          webPort: answers.webPort,
+          login: answers.admin.login,
+        },
+        ui,
+      );
+      return 0;
+    }
     const relative =
       answers.dir === resolve(io.cwd) ? '' : `cd ${positionals[0] ?? answers.dir}\n  `;
     const cmd = (c: string) => ui.style('cyan', c);
     ui.write(
       `\n  ${ui.style('bold', 'Next')}\n  ${relative}${cmd('npm install')}\n  ${cmd('npm start')}          ${ui.style('gray', `# the API on http://localhost:${answers.port}`)}\n` +
-        `  ${cmd('npm run web')}        ${ui.style('gray', '# the back-office on http://localhost:5173')}\n\n` +
+        `  ${cmd('npm run web')}        ${ui.style('gray', `# the back-office on http://localhost:${answers.webPort}`)}\n\n` +
         `  Sign in as "${answers.admin.login}"${enrolled ? ' with your password and a code from the authenticator app' : ''}.\n`,
     );
     if (!enrolled)
@@ -1078,6 +1197,10 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
       );
     return 0;
   } catch (error) {
+    if (error instanceof CancelledError) {
+      ui.outro(ui.style('red', 'Setup cancelled: nothing more was done.'));
+      return 130;
+    }
     ui.write('\n');
     ui.fail(`kosh init stopped: ${error instanceof Error ? error.message : String(error)}`);
     return 1;

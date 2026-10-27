@@ -1,8 +1,9 @@
 /**
- * The installer's look in the terminal, without dependencies: a logo, numbered steps with icons, spinners for long
- * work, status lines (✔ ▲ ✖) and a summary card. Colour, Unicode and animation are detected from the terminal
- * (NO_COLOR, FORCE_COLOR, KOSH_ASCII=1, TERM=dumb, Windows consoles without Unicode); output that is not a terminal
- * (tests, logs, CI) gets plain lines with the same words and no escape codes.
+ * The installer's look in the terminal, without dependencies: a logo, numbered steps, spinners for long work,
+ * status lines (✔ ▲ ✖) and a summary card. On a Unicode terminal everything hangs on one rail down the left (│),
+ * the questions of the interactive prompter included (`tui.ts`). Colour, Unicode and animation are detected from
+ * the terminal (NO_COLOR, FORCE_COLOR, KOSH_ASCII=1, TERM=dumb, Windows consoles without Unicode); output that is not
+ * a terminal (tests, logs, CI) gets plain lines with the same words and no escape codes.
  */
 
 /** What the terminal can show. */
@@ -55,7 +56,7 @@ export function detectTerminal(
   };
 }
 
-const ESC = '\u001b[';
+export const ESC = '\u001b[';
 type Paint = (enabled: boolean) => (text: string) => string;
 const paint =
   (open: string, close: string): Paint =>
@@ -64,10 +65,22 @@ const paint =
     enabled ? `${ESC}${open}m${text}${ESC}${close}m` : text;
 
 /** The colours and weights the installer uses. */
-export type Style = 'bold' | 'dim' | 'green' | 'yellow' | 'red' | 'cyan' | 'magenta' | 'gray';
+export type Style =
+  | 'bold'
+  | 'dim'
+  | 'inverse'
+  | 'underline'
+  | 'green'
+  | 'yellow'
+  | 'red'
+  | 'cyan'
+  | 'magenta'
+  | 'gray';
 const styles: Readonly<Record<Style, Paint>> = {
   bold: paint('1', '22'),
   dim: paint('2', '22'),
+  inverse: paint('7', '27'),
+  underline: paint('4', '24'),
   green: paint('32', '39'),
   yellow: paint('33', '39'),
   red: paint('31', '39'),
@@ -75,6 +88,25 @@ const styles: Readonly<Record<Style, Paint>> = {
   magenta: paint('35', '39'),
   gray: paint('90', '39'),
 };
+
+/** Styles text for `terminal` (no escape codes without colour). */
+export function stylerFor(terminal: Terminal): (name: Style, text: string) => string {
+  return (name, text) => styles[name](terminal.color)(text);
+}
+
+/** The rail and its marks (Unicode terminals that animate), shared with the interactive prompter. */
+export const RAIL = {
+  bar: '│',
+  start: '┌',
+  end: '└',
+  active: '◆',
+  done: '◇',
+  error: '▲',
+  cancel: '■',
+} as const;
+
+/** Whether `terminal` gets the rail look (a TTY that shows Unicode). */
+export const railed = (terminal: Terminal): boolean => terminal.unicode && terminal.animate;
 
 /** Columns a string takes: escape codes take none, pictographs two. */
 export function width(text: string): number {
@@ -138,6 +170,10 @@ export interface Ui {
   style(name: Style, text: string): string;
   icon(name: IconName): string;
   banner(subtitle: string): Promise<void>;
+  /** Opens the rail (┌ title) under the banner, with a hint line. */
+  intro(title: string, hint: string): void;
+  /** Closes the rail (└ text). */
+  outro(text: string): void;
   /** A numbered step title: "🗄️  Step 1/6 · Database". */
   step(icon: IconName, title: string, hint?: string): void;
   ok(text: string): void;
@@ -170,7 +206,9 @@ export function createUi(
   terminal: Terminal = PLAIN_TERMINAL,
   options: UiOptions = {},
 ): Ui {
-  const s = (name: Style, text: string) => styles[name](terminal.color)(text);
+  const s = stylerFor(terminal);
+  const rail = railed(terminal);
+  const bar = s('gray', RAIL.bar);
   const sym = terminal.unicode
     ? { ok: '✔', info: 'ℹ', warn: '▲', fail: '✖', dot: '•', bar: '█', rest: '░' }
     : { ok: '[ok]', info: '[i]', warn: '[!]', fail: '[x]', dot: '-', bar: '#', rest: '.' };
@@ -187,14 +225,15 @@ export function createUi(
     if (spin === null || paused || !terminal.animate) return;
     const f = s('cyan', frames[spin.frame % frames.length] ?? '');
     const extra = spin.extra === '' ? '' : s('gray', `  ${spin.extra}`);
-    out(`\r${ESC}2K  ${f} ${spin.label}${extra}`);
+    out(rail ? `\r${ESC}2K${f}  ${spin.label}${extra}` : `\r${ESC}2K  ${f} ${spin.label}${extra}`);
   };
   const write = (text: string) => {
     clear();
     out(text);
     draw();
   };
-  const line = (mark: string, text: string) => write(`  ${mark} ${text}\n`);
+  const line = (mark: string, text: string) =>
+    write(rail ? `${bar}  ${mark} ${text}\n` : `  ${mark} ${text}\n`);
 
   const icon = (name: IconName) => (terminal.emoji ? ICONS[name][0] : s('cyan', ICONS[name][1]));
 
@@ -216,8 +255,26 @@ export function createUi(
       }
       write(`  ${s('bold', subtitle)}\n`);
     },
+    intro(title, hint) {
+      if (!rail) {
+        write(`  ${s('gray', hint)}\n`);
+        return;
+      }
+      write(
+        `\n${s('gray', RAIL.start)}  ${s('inverse', ` ${title} `)}\n${bar}  ${s('gray', hint)}\n`,
+      );
+    },
+    outro(text) {
+      write(rail ? `${bar}\n${s('gray', RAIL.end)}  ${text}\n` : `\n  ${text}\n`);
+    },
     step(name, title, hint) {
       stepNo += 1;
+      if (rail) {
+        const n = options.steps === undefined ? '' : s('gray', `  ${stepNo}/${options.steps}`);
+        write(`${bar}\n${s('cyan', RAIL.active)}  ${s('bold', title)}${n}\n`);
+        if (hint !== undefined) write(`${bar}  ${s('gray', hint)}\n`);
+        return;
+      }
       const n = options.steps === undefined ? '' : s('gray', `Step ${stepNo}/${options.steps} · `);
       const rule = terminal.unicode ? '─' : '-';
       const head = `${icon(name)}  ${n}${s('bold', title)}`;
@@ -229,7 +286,12 @@ export function createUi(
     info: (text) => line(s('cyan', sym.info), text),
     warn: (text) => line(s('yellow', sym.warn), text),
     fail: (text) => line(s('red', sym.fail), text),
-    detail: (text) => write(`    ${s('gray', `${sym.dot} ${text}`)}\n`),
+    detail: (text) =>
+      write(
+        rail
+          ? `${bar}    ${s('gray', `${sym.dot} ${text}`)}\n`
+          : `    ${s('gray', `${sym.dot} ${text}`)}\n`,
+      ),
     async task(label, work) {
       const started = Date.now();
       const previous = spin;
