@@ -1,7 +1,7 @@
 # RFC 0014: Data import
 
 - **Status:** Accepted 2026-10-27 with the proposed answers (external ids for imported records through a Shutro
-  request, all-or-nothing by default, 50 MB and 1 million rows, a 7-day undo); steps 1–2 implemented (`@kosh/import`)
+  request, all-or-nothing by default, 50 MB and 1 million rows, a 7-day undo); steps 1–3 implemented (`@kosh/import`)
 - **Depends on:** 0002 (metadata, the import route), 0003 (permissions, field security), 0004 (list views),
   0006 (jobs, notifications), 0007 (frontend), 0008 (apps); Shutro external ids (Shutro RFC 0017)
 
@@ -214,6 +214,43 @@ administrators pass.
 - **Tests**: 5 more integration tests — lines from continuation rows, an upsert by a unique field that replaces
   lines then its undo, external ids given and found with every key error, skip errors with the rejected-rows file
   and an undo that leaves an edited record alone, and undo refused without `unlink`.
+
+## Implementation notes (2026-10-27): step 3 — background runs, saved mappings, templates
+
+- **Background runs**: a dry run or commit of a session of more than 2,000 rows (`inlineRows`) answers 202 and
+  enqueues the `import.run` job (Shutro jobs, as the user, keyed by the session so a second request cannot enqueue
+  it twice). The session is `running` meanwhile: no mapping change, dry run or commit (409). Files may now have up
+  to 1 million rows (`KOSH_IMPORT_MAX_ROWS`). Writes go in savepoints of 1,000 records (`WRITE_BATCH`) in both
+  modes.
+- **One transaction per run**: the job does its work in its own transaction, so all-or-nothing stays all-or-nothing
+  for 1 million rows, and so does "skip errors". The RFC's "each batch commits on its own and a stopped job resumes"
+  is **not** built: a job that dies is retried from the start by Shutro (its earlier attempts left nothing). That
+  keeps undo whole (one set of created ids and before values) at the cost of a long transaction.
+- **Progress**: `import.progress` (a row per session) is written after each batch in a short system transaction of
+  its own (`shutro.bootstrap`), because the job's own writes are invisible until it commits; `GET` of the session
+  shows `progress` while it runs. The screen polls it: the realtime gateway announces record changes, not job
+  progress.
+- **The end**: the outcome is on the session (`result`, `resultDry`), and the job emits `import.finished`; the
+  notification inbox (`@kosh/notify`) turns it into a notification for the user, of kind `import.finished` or
+  `import.checked` (a dry run), each with its own preference, in English and Bangla. A fault is retried; on the last
+  attempt, or when the user lost a permission, the session returns to draft with `failure`.
+- **Saved mappings** (`import.mapping`): columns stored **by header**, so a file with the columns in another order
+  or with more columns still fits; options with them. Own or `shared` with every import user of the company (record
+  rules: read own or shared, change own only). Saved from a session (`save-mapping`), applied to one
+  (`apply-mapping`), listed with the templates (`GET /api/v1/import-mappings?model=`). Sharing with a role, as the
+  RFC says, is left for later: a shared mapping is the company's.
+- **Templates**: a module manifest declares `importTemplates` (key, model, label, columns, options), so a business
+  app ships them without depending on the import module. Contacts ships "Customers". An upload whose headers include
+  every column of a template or saved mapping gets it applied (the one with the most columns), and the response says
+  which (`applied`).
+- **Sample workbooks**: `GET /api/v1/import-templates/:model[?mapping=]` writes an XLSX (the `@kosh/reporting`
+  writer, now a dependency) with a Data sheet of headers and a Columns sheet saying for each column its field,
+  whether it is required and what to write (the formats, the options of a selection, what a relation accepts).
+  Without a mapping, every field of the record, required ones first. Descriptions live on their own sheet so the
+  Data sheet imports as it is.
+- **Tests**: 4 more integration tests (a background dry run and commit with progress, the outcome and the events; a
+  background import that stops on an error; templates applied and downloaded; saved mappings by header, own and
+  shared, applied, deleted by their owner only) and a notification test in `@kosh/notify`.
 
 ## Alignment with CLAUDE.md
 
