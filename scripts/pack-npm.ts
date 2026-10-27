@@ -44,6 +44,7 @@ const PACKAGES = [
   'mail',
   'automation',
   'studio',
+  'assistant',
   'mail',
   'contacts',
   'product',

@@ -15,6 +15,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createAssistant, fakeClient } from '@kosh/assistant';
 import { installActivityTypes } from '@kosh/messaging';
 import { installApprovalPolicies } from '@kosh/permissions';
 import { installTemplates } from '@kosh/reporting';
@@ -55,7 +56,20 @@ const studio = createStudio({
     moduleImport: (name) => (name === 'contacts' ? '../../../../fixture/modules.ts' : undefined),
   },
 });
-const CATALOGUE = [...MODULES, settings, studio, library];
+// The AI assistant with a fake client (no API key, no network): "… in <city>" filters contacts on their city.
+const assistant = createAssistant({
+  client: fakeClient((request) => {
+    const city = /\bin ([A-Za-z]+)/.exec(request.user)?.[1];
+    return city === undefined
+      ? { clauses: [], combine: 'and', unsupported: request.user }
+      : {
+          clauses: [{ field: 'city', operator: 'ilike', value: city, values: [] }],
+          combine: 'and',
+          unsupported: '',
+        };
+  }, 'fake-claude'),
+});
+const CATALOGUE = [...MODULES, settings, studio, assistant, library];
 const migrations = mkdtempSync(join(tmpdir(), 'kosh-e2e-migrations-'));
 // A fresh installation: the e2e modules and Settings, installed like any app (Library stays available).
 const setup = pg.createDriver({ url: databaseUrl, max: 2, parseNumeric: orm.toDecimal });
@@ -64,7 +78,7 @@ await applyApps(
   await prepareApps({
     driver: setup,
     catalogue: CATALOGUE,
-    change: { install: [...MODULES.map((m) => m.name), 'settings', 'studio'] },
+    change: { install: [...MODULES.map((m) => m.name), 'settings', 'studio', 'assistant'] },
     dir: migrations,
   }),
   { driver: setup, dir: migrations, actor: 'e2e' },
@@ -185,6 +199,7 @@ for (const [login, name, groups] of [
       'messaging.user',
       'automation.manager',
       'studio.manager',
+      'assistant.user',
     ],
   ],
   ['maria', 'Maria Das', ['contacts.user', 'purchase.manager', 'reporting.user', 'messaging.user']],

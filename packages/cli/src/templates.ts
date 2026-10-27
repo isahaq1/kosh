@@ -167,10 +167,11 @@ import { mail } from 'kosh-erp/mail';
 import { notify } from 'kosh-erp/notify';
 import { realtime } from 'kosh-erp/realtime';
 import { settings } from 'kosh-erp/settings';
+import { assistant } from 'kosh-erp/assistant';
 import { studio } from 'kosh-erp/studio';
 ${imports.join('\n')}
 
-export const modules = [base, settings, realtime, notify, mail, automation, studio${apps.map((a) => `, ${APPS[a].server}`).join('')}];
+export const modules = [base, settings, realtime, notify, mail, automation, studio, assistant${apps.map((a) => `, ${APPS[a].server}`).join('')}];
 `;
 }
 
@@ -246,6 +247,7 @@ export function mainTsx(_options: StarterOptions): string {
     { name: 'mail', fn: 'registerMailWeb' },
     { name: 'automation', fn: 'registerAutomationWeb' },
     { name: 'studio', fn: 'registerStudioWeb' },
+    { name: 'assistant', fn: 'registerAssistantWeb' },
   ].map(({ name, fn }) => {
     const messages = name === 'permissions' ? null : `${name}Messages`;
     return {
