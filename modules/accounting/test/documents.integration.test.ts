@@ -21,7 +21,7 @@ import {
 import { type Driver, orm, pg } from '@kosh/server/orm';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { accounting, addDays } from '../src/index.js';
+import { accounting, addDays, fiscalYearOf } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
 const catalogue = [base, accounting];
@@ -475,4 +475,68 @@ test('supplementary duty before VAT (RFC 0016): VAT on price + SD, one tax line 
     ]),
   );
   expect(taxes).toHaveLength(2);
+});
+
+test('bank accounts give an invoice its payment details, in its currency, with the reference (RFC 0016)', async () => {
+  for (const values of [
+    {
+      bank: 'Sonali Bank',
+      branch: 'Motijheel',
+      number: '0001-234567',
+      routing: '200270522',
+      currency: bdt,
+    },
+    { bank: 'City Bank', number: 'USD-99', swift: 'CIBLBDDH', currency: null },
+  ])
+    expectStatus(await call('POST', '/api/v1/models/res.bank.account', 'maria', values), 201);
+  const created = await call('POST', '/api/v1/models/account.move', 'rahim', {
+    kind: 'out_invoice',
+    journal: journals['INV'],
+    partner: customer,
+    currency: bdt,
+    date: today,
+    lines: { create: [{ lineKind: 'product', name: 'Bags', quantity: '1', priceUnit: '100' }] },
+  });
+  const posted = await transition(created.json.id, 'post', 'rahim');
+  const details = (
+    await call(
+      'GET',
+      `/api/v1/models/account.move/${created.json.id}?fields=paymentDetails`,
+      'rahim',
+    )
+  ).json.paymentDetails as string;
+  expect(details.split('\n')).toEqual([
+    'Sonali Bank, Motijheel · A/C 0001-234567 · Routing 200270522',
+    'City Bank · A/C USD-99 · SWIFT CIBLBDDH',
+    `Reference: ${posted.json.name}`,
+  ]);
+  // Bills have none.
+  const bill = await call('POST', '/api/v1/models/account.move', 'rahim', {
+    kind: 'in_invoice',
+    journal: journals['BILL'],
+    partner: vendor,
+    currency: bdt,
+    date: today,
+    lines: { create: [{ lineKind: 'product', name: 'Jute', quantity: '1', priceUnit: '10' }] },
+  });
+  expect(
+    (
+      await call(
+        'GET',
+        `/api/v1/models/account.move/${bill.json.id}?fields=paymentDetails`,
+        'rahim',
+      )
+    ).json.paymentDetails,
+  ).toBe('');
+});
+
+test('fiscal years: one starting in July ends in June; the year a date falls in', async () => {
+  const draft = await call('POST', '/api/v1/models/account.fiscal.year/onchange', 'maria', {
+    values: { dateFrom: '2026-07-01' },
+    changed: ['dateFrom'],
+  });
+  expect(draft.json.values).toMatchObject({ dateTo: '2027-06-30', name: '2026–27' });
+  expect(fiscalYearOf('2026-03-15', 7)).toEqual({ dateFrom: '2025-07-01', dateTo: '2026-06-30' });
+  expect(fiscalYearOf('2026-07-01', 7)).toEqual({ dateFrom: '2026-07-01', dateTo: '2027-06-30' });
+  expect(fiscalYearOf('2026-12-31', 1)).toEqual({ dateFrom: '2026-01-01', dateTo: '2026-12-31' });
 });

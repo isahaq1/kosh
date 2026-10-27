@@ -46,6 +46,7 @@ import {
   AccountPaymentTerm,
   accountingShutro,
   REVERSED_KIND,
+  ResBankAccount,
   ResCurrencyRate,
 } from './module.js';
 import { openLines, reconcile, registerPayment, unreconcile } from './payments.js';
@@ -85,12 +86,14 @@ export {
   accountingShutro,
   addDays,
   CompanyAccounting,
+  fiscalYearOf,
   JOURNAL_TYPES,
   type JournalType,
   MOVE_KINDS,
   type MoveKind,
   NUMBER_FIELD,
   REVERSED_KIND,
+  ResBankAccount,
   ResCurrencyRate,
   TaxAccounts,
 } from './module.js';
@@ -335,6 +338,10 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       label: 'Fiscal years',
       views: ['list', 'form'],
     }),
+    'accounting.action_banks': action(ResBankAccount, {
+      label: 'Bank accounts',
+      views: ['list', 'form'],
+    }),
     'accounting.action_rates': action(ResCurrencyRate, {
       label: 'Currency rates',
       views: ['list', 'form'],
@@ -462,6 +469,13 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       sequence: 3,
     },
     {
+      id: 'accounting.banks',
+      parent: 'accounting.configuration',
+      label: 'Bank accounts',
+      action: 'accounting.action_banks',
+      sequence: 3.5,
+    },
+    {
       id: 'accounting.rates',
       parent: 'accounting.configuration',
       label: 'Currency rates',
@@ -551,7 +565,9 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
               { label: 'Total', bind: 'amountTotal' },
             ],
           },
+          { kind: 'text', id: 'in_words', text: '{{amountTotal|words}}' },
           { kind: 'text', id: 'terms', text: '{{paymentTerm.note}}' },
+          { kind: 'text', id: 'payment', text: '{{paymentDetails}}' },
           { kind: 'text', id: 'notes', text: '{{narration}}' },
         ],
       },
@@ -785,6 +801,15 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
     'account.fiscal.year.form': form(AccountFiscalYear, (k) => ({
       header: { buttons: [] },
       sheet: [k.group('main', ['name', 'dateFrom', 'dateTo', 'state', 'lockDate'])],
+    })),
+    'res.bank.account.list': list(ResBankAccount, {
+      columns: ['bank', 'branch', 'number', 'routing', 'currency'],
+    }),
+    'res.bank.account.form': form(ResBankAccount, (k) => ({
+      sheet: [
+        k.group('bank_details', ['bank', 'branch', 'routing', 'swift']),
+        k.group('account_details', ['number', 'holder', 'currency', 'sequence']),
+      ],
     })),
     'res.currency.rate.list': list(ResCurrencyRate, {
       columns: ['date', 'currency', 'rate', 'company'],

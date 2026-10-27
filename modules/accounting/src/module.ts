@@ -27,6 +27,7 @@ import {
   type Env,
   extendModel,
   f,
+  onchange,
   record,
   records,
   ref,
@@ -178,6 +179,29 @@ export const AccountJournal = defineModel('account.journal', {
   },
 });
 
+/** A bank account of the company: shown on its invoices and in the portal, where customers pay (RFC 0016 §5.1). */
+export const ResBankAccount = defineModel('res.bank.account', {
+  label: 'Bank account',
+  order: ['sequence asc', 'id asc'],
+  recName: 'number',
+  archivable: true,
+  companyScoped: { required: true },
+  // The company's payment details are not secret: every user (and the portal, through it) may read them.
+  access: { 'base.user': READ, 'account.manager': ALL },
+  fields: {
+    sequence: f.integer({ required: true, default: 10 }),
+    bank: f.char({ required: true, label: 'Bank' }),
+    branch: f.char(),
+    number: f.char({ required: true, label: 'Account number' }),
+    holder: f.char({ label: 'Account holder' }),
+    /** Routing number (Bangladesh), IFSC (India), sort code… */
+    routing: f.char({ label: 'Routing number' }),
+    swift: f.char({ label: 'SWIFT / BIC' }),
+    /** Shown on invoices in this currency; on every invoice when empty. */
+    currency: f.many2one('res.currency'),
+  },
+});
+
 export const AccountFiscalYear = defineModel('account.fiscal.year', {
   label: 'Fiscal year',
   order: ['dateFrom desc'],
@@ -193,6 +217,17 @@ export const AccountFiscalYear = defineModel('account.fiscal.year', {
     /** The entry that moved the year's result to retained earnings (closing.ts). */
     closingMove: f.many2one('account.move', { label: 'Closing entry' }),
     reopenReason: f.char({ label: 'Reopened because' }),
+  },
+  onchange: {
+    // A year that starts on a date ends the day before the same date a year later.
+    dateFrom: onchange('account.fiscal.year', (d) => {
+      const from = d.get('dateFrom');
+      if (typeof from !== 'string') return;
+      const [y, m, day] = from.split('-').map(Number) as [number, number, number];
+      d.set('dateTo', new Date(Date.UTC(y + 1, m - 1, day - 1)).toISOString().slice(0, 10));
+      if (d.get('name') === null || d.get('name') === '')
+        d.set('name', m === 1 && day === 1 ? String(y) : `${y}–${String(y + 1).slice(2)}`);
+    }),
   },
   sqlConstraints: {
     datesOrdered: {
@@ -258,9 +293,24 @@ export const AccountPaymentTermLine = defineModel('account.payment.term.line', {
   },
 });
 
+/** The fiscal year that `date` (ISO) falls in, for years starting in month `start` (1–12): its first and last day. */
+export function fiscalYearOf(date: string, start: number): { dateFrom: string; dateTo: string } {
+  const [y, m] = date.split('-').map(Number) as [number, number];
+  const year = m >= start ? y : y - 1;
+  const from = new Date(Date.UTC(year, start - 1, 1));
+  const to = new Date(Date.UTC(year + 1, start - 1, 0)); // the day before the next year starts
+  return { dateFrom: from.toISOString().slice(0, 10), dateTo: to.toISOString().slice(0, 10) };
+}
+
 /** The company's accounting settings: lock dates and the accounts its documents post to. */
 export const CompanyAccounting = extendModel('res.company', {
   fields: {
+    /** The first month of its fiscal years (July in Bangladesh: July–June). */
+    fiscalYearStart: f.integer({
+      required: true,
+      default: 1,
+      label: 'Fiscal year starts in (month, 1–12)',
+    }),
     chartTemplate: f.selection(
       { generic: 'Generic', bd: 'Bangladesh' },
       { label: 'Chart of accounts' },
@@ -274,6 +324,12 @@ export const CompanyAccounting = extendModel('res.company', {
     accountExchangeGain: f.many2one('account.account', { label: 'Exchange gain account' }),
     accountExchangeLoss: f.many2one('account.account', { label: 'Exchange loss account' }),
     accountRetainedEarnings: f.many2one('account.account', { label: 'Retained earnings account' }),
+  },
+  sqlConstraints: {
+    fiscalYearMonth: {
+      check: orm.sql`fiscal_year_start BETWEEN 1 AND 12`,
+      message: 'A fiscal year starts in a month from 1 (January) to 12 (December).',
+    },
   },
 });
 
@@ -448,6 +504,44 @@ export const AccountMove = defineModel('account.move', {
     }),
     // Documents
     dateDue: f.date({ label: 'Due date' }),
+    /** Where to pay a customer invoice: the company's bank accounts in its currency, and the reference to quote. */
+    paymentDetails: f.text({
+      label: 'Payment details',
+      ...compute(
+        'account.move',
+        'paymentDetails',
+        ['kind', 'name', 'currency', 'company'],
+        async (moves) => {
+          for (const m of moves) {
+            if (m.kind !== 'out_invoice') {
+              m.paymentDetails = '';
+              continue;
+            }
+            const banks = await moves.env.model('res.bank.account').search({
+              where: {
+                company: m.company.id,
+                or: [{ currency: { isNull: true } }, { currency: m.currency.id }],
+              },
+            });
+            const rows = await banks.load({});
+            const lines = [...rows].map((b) =>
+              [
+                [b.bank, b.branch].filter((x) => x !== null && x !== '').join(', '),
+                `A/C ${b.number}${b.holder === null ? '' : ` (${b.holder})`}`,
+                b.routing === null ? null : `Routing ${b.routing}`,
+                b.swift === null ? null : `SWIFT ${b.swift}`,
+              ]
+                .filter((x) => x !== null && x !== '')
+                .join(' · '),
+            );
+            m.paymentDetails =
+              lines.length === 0
+                ? ''
+                : [...lines, ...(m.name === '/' ? [] : [`Reference: ${m.name}`])].join('\n');
+          }
+        },
+      ),
+    }),
     paymentTerm: f.many2one('account.payment.term', { label: 'Payment terms' }),
     invoiceOrigin: f.char({ label: 'Source document' }),
     amountUntaxed: f.monetary({
@@ -1232,6 +1326,7 @@ export const accountingShutro = defineModule({
   ],
   models: [
     ResCurrencyRate,
+    ResBankAccount,
     AccountAccount,
     AccountJournal,
     AccountFiscalYear,

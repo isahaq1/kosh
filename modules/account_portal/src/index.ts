@@ -28,6 +28,7 @@ const FIELDS = [
   'amountTax',
   'amountTotal',
   'amountResidual',
+  'paymentDetails',
   'narration',
 ];
 const LIST = ['name', 'kind', 'date', 'dateDue', 'paymentState', 'amountTotal', 'amountResidual'];
