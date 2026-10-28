@@ -393,6 +393,26 @@ Odoo's fiscal positions); version 1 also has **reverse charge**, **GST cess**, *
   9,000) with their line heads and the tax invoice; a bill under reverse charge (input 1,800, payable 1,800, the
   vendor owed 10,000).
 
+## Implementation notes (2026-10-28): step 5, part 3 — GSTR-1 and GSTR-3B
+
+- **GSTR-1** (`gstr1`): the month's posted customer invoices, debit and credit notes, by section — B2B (registered
+  recipient), B2CL (unregistered, between states, above ₹1,00,000), EXP (another country; WPAY when IGST is charged,
+  WOPAY under LUT), B2CS (other B2C, summed by supply type, place of supply and rate; B2C notes net into it), CDNR /
+  CDNUR, NIL (nil-rated, exempt, non-GST by inter / intra and B2B / B2C) and HSN (taxable lines by code and rate).
+  Items are summed by rate per document. `gstr1PortalJson` writes the offline tool's JSON (`gstin`, `fp`, b2b with
+  `ctin` / `inv` / `itms` / `itm_det`, b2cl, b2cs, exp, cdnr / cdnur with `nt`, nil, hsn).
+- **GSTR-3B** (`gstr3b`): 3.1 (a) domestic taxable outward, (b) zero-rated (exports), (c) nil-rated and exempt, (d)
+  inward under reverse charge, (e) non-GST; 4 (A)(3) and (A)(5); 5 by inter / intra; 6.1 by head: the tax (3.1 a,
+  b, d), the credit (4 A) and the difference. Credit notes count negative.
+- **Classification**: a line's band is the `gstTreatment` of its GST tax (cess aside); its heads are the line's
+  stored CGST / SGST / IGST / cess, converted through the posted balance like its taxable value.
+- **HTTP and screen**: `GET /api/v1/l10n_in/gstr/{1|3b}?month=…[&format=xlsx|pdf|portal]` (read right; export right
+  and an audit event for files), and the GST returns page under Accounting › Reporting (English and Bangla).
+- **Tests**: a month with an intra-state B2C sale, a B2B sale to another state, an export with IGST and one under LUT,
+  a B2C large sale, a credit note to a registered customer, a nil-rated sale, a bill under reverse charge and an
+  intra-state purchase — each section, the portal JSON, every 3B table and 6.1 (IGST 46,800 − 1,800 = 45,000; CGST
+  and SGST 4,500 − 1,800 = 2,700); the files; 404 and 403. E2E: the page, the switch, the portal JSON download.
+
 ## Alignment with CLAUDE.md
 
 "Money is always `Decimal`": every tax and withholding amount, per currency. "Metadata-driven": a country is a

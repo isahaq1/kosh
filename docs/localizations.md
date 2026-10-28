@@ -130,6 +130,29 @@ charge.
 **Documents**: the tax invoice (supplier and recipient with their GSTIN, the place of supply, each line's HSN / SAC,
 taxable value, GST rate, CGST, SGST, IGST and cess, the total in words), the credit note and the debit note.
 
-**Next** (RFC 0016 step 5, parts 3–4): GSTR-1 and GSTR-3B on screen, as XLSX and as the portal's JSON; e-invoicing
-(IRN and QR) and e-way bills through a provider. Rates and TDS thresholds change with the GST Council and each
-Finance Act: check them in Accounting › Configuration.
+### GST returns
+
+Accounting › Reporting › **GST returns** (accountants), for a month:
+
+- **GSTR-1** by section: B2B invoices by the recipient's GSTIN (4A), B2C large invoices — unregistered, between
+  states, above ₹1,00,000 (5), exports with IGST paid or under LUT (6A), other B2C summed by place of supply and rate
+  (7), credit and debit notes to registered and unregistered recipients (9B), nil-rated / exempt / non-GST supplies
+  and the HSN summary. As XLSX (a sheet per section), PDF, and the **GST portal's offline JSON** (check it against
+  the current offline tool's schema before uploading: the portal changes it).
+- **GSTR-3B**: 3.1 (a)–(e) outward supplies and inward supplies under reverse charge, 4 (A)(3) and (A)(5) input tax
+  credit, 5 exempt inward supplies from another state and within it, and 6.1 the tax payable, the credit and what
+  is left to pay by head (negative: carried forward). As XLSX and PDF.
+
+```http
+GET /api/v1/l10n_in/gstr/1?month=2026-10                  # JSON (with the summary by section)
+GET /api/v1/l10n_in/gstr/1?month=2026-10&format=portal    # the portal's JSON; or format=xlsx | pdf
+GET /api/v1/l10n_in/gstr/3b?month=2026-10&format=pdf
+```
+
+Reading needs the right to read journal entries; a file the right to export them, recorded in the audit log.
+Amounts are in rupees through the posted balances. A line whose GST tax has no GST treatment is in no section (the
+screen counts them). Not yet: amendments, advances (11A / 11B), the documents issued table (13), the credit
+utilisation order of 6.1, and filing (the portal has no API for this; a GSP's would be part 4's adapter).
+
+**Next** (RFC 0016 step 5, part 4): e-invoicing (IRN and QR) and e-way bills through a provider. Rates and TDS
+thresholds change with the GST Council and each Finance Act: check them in Accounting › Configuration.
