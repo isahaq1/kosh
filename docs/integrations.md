@@ -1,7 +1,8 @@
 # Integrations
 
 How other systems work with Shutro ERP (RFC 0017): they call its API with **API keys** ([server.md](server.md#api-keys-and-service-accounts)),
-and it tells them what happens with **webhooks**. Inbound webhooks, online payments and OAuth apps come next.
+it tells them what happens with **webhooks**, and they tell it with **inbound webhooks**. Online payments and OAuth
+apps come next.
 
 ## Webhooks
 
@@ -74,3 +75,62 @@ is checked when a webhook is made through `POST /api/v1/webhooks/subscriptions` 
 
 Webhooks and deliveries are also models of the generated API (`webhook.subscription`, `webhook.delivery`), so they
 can be listed, filtered and exported like any other.
+
+## Inbound webhooks
+
+Other systems — a web shop, a payment provider, a form on the website — tell Shutro ERP what happened by calling an
+**inbound webhook**. A module declares the endpoints it handles; a company switches one on in **Integrations ›
+Inbound webhooks**, which gives the URL to paste into the provider and the secret calls are checked with.
+
+```ts
+import { hmacVerifier } from '@kosh/integrations';
+
+export const shop = defineModule({
+  // …
+  inboundWebhooks: [
+    {
+      key: 'orders',
+      label: 'Orders from the web shop',
+      // The provider signs the raw body: X-Shop-Signature: sha256=<hex HMAC-SHA256>. The event id makes calls idempotent.
+      verify: hmacVerifier({
+        header: 'X-Shop-Signature',
+        prefix: 'sha256=',
+        eventId: (call) => (call.json as { id?: string } | null)?.id,
+      }),
+      // Runs as the system in the endpoint's company, in a job; a throw is retried.
+      handle: async (env, call) => {
+        const order = call.json as { ref: string; total: string };
+        const made = await (env as Env).model('shop.order').create([{ ref: order.ref, total: order.total }]);
+        return `shop.order ${made.ids[0]}`; // shown in the log
+      },
+    },
+  ],
+});
+```
+
+A `verify` of its own receives the call (`headers` in lower case, `query`, the raw `body`, its `json`) and the
+endpoint's secret, and returns the provider's event id — or `null` to refuse the call.
+
+**A call** to `POST /api/v1/hooks/<token>` needs no sign-in (it is rate limited per address):
+
+| Answer | When |
+|---|---|
+| `202 { received: true, eventId }` | verified; stored and queued for the module |
+| `200 { duplicate: true, eventId }` | an event id this endpoint already received: not handled again |
+| `401` | `verify` refused it; stored as *Refused* for the log |
+| `404` | no active endpoint has this token |
+
+**Inbound calls** lists every call with its state (*Received*, *Handled*, *Failed*, *Refused*), attempts, the
+handler's result or error, the headers kept (`content-type`, `user-agent` and `x-…`, never credentials) and the body.
+A failing handler is retried with back-off, six attempts in all; **Handle again** runs a verified call once more,
+after the cause is fixed. **New secret** on an endpoint refuses calls signed with the old one.
+
+| Route | |
+|---|---|
+| `POST /api/v1/hooks/:token` | the provider's call |
+| `GET /api/v1/webhooks/hooks` | the endpoints the installed modules offer |
+| `POST /api/v1/webhooks/endpoints` `{ name?, hook }` | an endpoint (`hook` is `<module>.<key>`); the answer has its `path` and `secret` |
+| `POST /api/v1/webhooks/endpoints/:id/rotate-secret` | a new secret |
+| `POST /api/v1/webhooks/inbound/:id/replay` | a verified call, handled again |
+
+Endpoints and calls are models of the generated API too (`webhook.endpoint`, `webhook.inbound`).

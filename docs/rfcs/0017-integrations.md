@@ -210,6 +210,32 @@ permissions, the audit log, the transactional outbox and jobs.
   E2E: a webhook made on its form, the events offered, a test event in Deliveries; no Integrations without access.
 - Automation's webhook action keeps its own log for now (RFC §5.3 planned one log for both).
 
+## Implementation notes (2026-10-28): step 3 — inbound webhooks
+
+- **Declaration**: `inboundWebhooks: [{ key, label, verify(call, secret), handle(env, call) }]` in the manifest
+  (`@kosh/modules-sdk`: `InboundCall` = headers, query, raw body, parsed JSON). `verify` returns the provider's
+  event id, or `null` to refuse; `hmacVerifier({ header, prefix?, algorithm?, encoding?, eventId })` covers providers
+  that sign the raw body with an HMAC.
+- **Switched on per company**, not per module path (a change from §5.4): `webhook.endpoint` (name, `<module>.<key>`,
+  a random URL token, the secret, active). The URL is `POST /api/v1/hooks/<token>` — two companies, two URLs and two
+  secrets for the same provider. The token is looked up across companies (superuser with `checkCompany: false`); the
+  rest runs in the endpoint's company.
+- **The route** has no sign-in (`auth: false`, so still rate limited per address) and its own raw body parser (1 MB);
+  a refused call is stored (`refused`, 401), a repeated event id answers 200 `{ duplicate }` without a second
+  handling, a new one is stored (`received`) and queued (202). Only `content-type`, `user-agent` and `x-…` headers are
+  kept, never credentials or cookies.
+- **Handling**: a job (6 attempts, Shutro's back-off) runs `handle` as the system in the endpoint's company (the
+  manifest is the module's declaration of what it does — RFC §5.4's per-module service account was not needed);
+  each attempt's outcome is written in its own transaction; the last failure marks the call `failed`. Replay (verified
+  calls only) queues it again.
+- **Routes**: the endpoints offered, creation (the declared endpoint checked; the answer has the path and the secret),
+  new secret, replay. Screens: Inbound webhooks (with the URL to give the provider, a new secret, the endpoints
+  offered) and Inbound calls (handle again), English and Bangla.
+- **Tests**: endpoints offered, managers only, unknown endpoint refused, unknown token 404; a signed call handled into
+  a record of the endpoint's company; a duplicate ignored; a forged call refused and logged (and not replayable); a
+  failing handler recorded and retried, then replayed; a new secret refuses the old one. E2E: an endpoint made on its
+  form with its URL, a signed call handled and a forged one refused in Inbound calls.
+
 ## Alignment with CLAUDE.md
 
 "Secure by default": scopes narrow and never widen the user's rights; server-side checks on every call; hashed
