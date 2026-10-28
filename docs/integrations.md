@@ -174,7 +174,14 @@ differs from the transaction's is refused (*Failed*, with both amounts).
   the live store, *Live* ones. Its IPN is never trusted as sent: a paid one is confirmed with SSLCommerz's order
   validation API (`val_id`), which must agree on the transaction, amount and currency; a failed one with its
   transaction query; the same query answers when the customer is back before the IPN.
-- bKash (direct), Razorpay and Stripe come next.
+- **bKash** (`bkash`, direct: the customer pays from their bKash wallet with OTP and PIN; BDT only): set
+  `SHUTRO_ERP_BKASH_USERNAME`, `…_PASSWORD`, `…_APP_KEY`, `…_APP_SECRET` and `…_SANDBOX` (`true` unless `false`);
+  `…_BASE_URL` overrides the API's address (default: bKash's tokenized checkout v2, sandbox or live). bKash has no
+  server-to-server callback in this flow: it sends the customer back with `status=success|failure|cancel`, and the
+  payment completes only when Shutro ERP **executes** it — which it does on that return, for the transaction's own
+  bKash payment id, believing only bKash's answer (completed, for this invoice and amount). A forged "success" makes
+  bKash refuse; a payment left on bKash's page stays pending and costs the customer nothing.
+- Razorpay and Stripe come next.
 
 A provider is offered in the portal only when its adapter has credentials for the provider's mode. An adapter
 implements:
@@ -186,7 +193,8 @@ interface PaymentAdapter {
   createPayment(request: PaymentRequest): Promise<{ redirectUrl: string }>; // reference, amount, customer, URLs
   verifyCallback(call: InboundCall, secret: string): string | null | Promise<string | null>; // event id, or null
   readCallback(call: InboundCall): PaymentResult | null; // reference, status, provider's reference, amount
-  status(reference: string, mode: 'test' | 'live'): Promise<PaymentResult | null>;
+  status(reference: string, mode: 'test' | 'live', providerReference: string | null): Promise<PaymentResult | null>;
+  returned?(input: { reference; providerReference; mode; query }): Promise<PaymentResult | null>; // on the return
 }
 ```
 

@@ -291,3 +291,22 @@ transitions and the modules' declared events; OpenAPI describes the new security
   adapter has credentials for the provider's mode, and starting one without them is refused (409).
 - **Tests**: the session fields, an IPN confirmed and paid once (its duplicate ignored), a forged `val_id` and a
   changed amount refused, a failure then a successful retry, the return before the IPN; configuration.
+
+## Implementation notes (2026-10-28): step 4, part 2b — bKash
+
+- **The adapter** (`bkash`), written from bKash's Tokenized Checkout v2 documentation (grant token, create, execute,
+  query) and tested against a simulated API; to be checked on the real sandbox. Two points to confirm there: the live
+  base URL (not on the documentation's pages; `SHUTRO_ERP_BKASH_BASE_URL` overrides the default) and the form of the
+  `Authorization` header (sent as `Bearer <id_token>`). Credentials from the environment only; the token is kept for
+  its hour less five minutes.
+- **No callback**: bKash returns the customer to the return URL with `paymentID` and `status`. The adapter interface
+  gained `returned(...)`, called by the return route before it forwards the customer: bKash's adapter executes the
+  transaction's own `paymentId` (kept as the provider reference at creation — `createPayment` may now return one) and
+  settles on bKash's answer only — `Completed` for this invoice number (and amount), else the query's word; a
+  failure or cancellation is confirmed with the query (a completed payment wins). `status(...)` gets the provider
+  reference too.
+- **Starting fails cleanly**: an adapter's error when creating a payment is a 502 with its message (BDT only for
+  bKash).
+- **Tests**: created and executed on the return, once (a reload pays nothing more), the token kept; a forged
+  "success" before the customer paid — bKash refuses to execute, the transaction fails, nothing is paid; a
+  cancellation; not offered without credentials; BDT only.
