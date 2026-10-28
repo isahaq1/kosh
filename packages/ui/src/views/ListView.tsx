@@ -941,7 +941,7 @@ function Totals({
         return (
           <div key={c.id} className="flex gap-2">
             <dt className="text-muted-foreground">
-              {t('views.total')} {c.label ?? fields[c.field]?.label ?? c.field}
+              {totalLabel(t('views.total'), c.label ?? fields[c.field]?.label ?? c.field)}
             </dt>
             <dd className="font-medium tabular-nums">{format.decimal(amount)}</dd>
           </div>
@@ -1054,6 +1054,13 @@ function saveFile(blob: Blob, filename: string): void {
 }
 
 /** The default list renderer. */
+/** A sum's label: "Total Credit limit", but "Total" alone for a column already called "Total" (no "Total Total"). */
+export function totalLabel(word: string, label: string): string {
+  return label.toLocaleLowerCase().startsWith(word.toLocaleLowerCase())
+    ? label
+    : `${word} ${label}`;
+}
+
 export function ListView(props: ViewProps): ReactElement {
   const { api, uid } = useKosh();
   const { t } = useTranslation();
