@@ -413,6 +413,28 @@ Odoo's fiscal positions); version 1 also has **reverse charge**, **GST cess**, *
   intra-state purchase — each section, the portal JSON, every 3B table and 6.1 (IGST 46,800 − 1,800 = 45,000; CGST
   and SGST 4,500 − 1,800 = 2,700); the files; 404 and 403. E2E: the page, the switch, the portal JSON download.
 
+## Implementation notes (2026-10-28): step 5, part 4 — e-invoicing and e-way bills (fake provider)
+
+- **`GstProvider`** (register / cancel an invoice, generate / cancel an e-way bill) with **`createFakeGstProvider`**:
+  the IRN computed as the IRP does (SHA-256 of GSTIN, financial year, type, number), duplicates refused (2150),
+  acknowledgements in IST, an e-way bill valid one day per 200 km. `l10nInModule({ provider })`, or
+  `KOSH_GST_PROVIDER=fake`; none: 409 "not set up".
+- **Payloads**: the IRP schema 1.1 (TranDtls with B2B / EXPWP / EXPWOP and reverse charge, DocDtls INV / CRN / DBN,
+  seller and buyer with state codes and PIN, items with HSN and each head, ValDtls) and the e-way bill (part A from
+  it, part B the transport); what the IRP would refuse is listed first and kept on the document.
+- **Records**: the answers live in `l10n_in.einvoice` (users read; the system writes as superuser) and show on the
+  document through stored computed fields (IRN, acknowledgement, signed QR, e-way bill), read-only to everyone.
+- **Accounting** emits `account.move.posted` after posting (through the outbox); the `l10n_in.einvoice` subscriber
+  registers customer documents of companies with e-invoicing on, to registered customers and abroad.
+- **Routes**: `GET` / `POST /api/v1/l10n_in/einvoice/:id`, `…/cancel`, `POST /api/v1/l10n_in/ewaybill/:id`,
+  `…/cancel` (the right to change entries), `GET` / `PUT /api/v1/l10n_in/settings` (managers). **Screens**: the
+  E-invoice panel on posted customer documents of Indian companies, the company GST settings on the GST page.
+- **Tests**: the settings (GSTIN against the state, managers only); registration by the subscriber with the IRN and
+  the signed QR's content; once only; read-only fields; the IRN on the tax invoice; cancellation, once, not after 24
+  hours; refusals said beforehand (no GSTIN, no HSN) and kept; an e-way bill with the vehicle checked, its validity,
+  cancelled; 403 without the right. E2E: the settings section.
+- **Next**: a real adapter (NIC or a GSP) with sandbox credentials; the QR code as an image on the tax invoice.
+
 ## Alignment with CLAUDE.md
 
 "Money is always `Decimal`": every tax and withholding amount, per currency. "Metadata-driven": a country is a

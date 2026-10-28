@@ -154,5 +154,30 @@ Amounts are in rupees through the posted balances. A line whose GST tax has no G
 screen counts them). Not yet: amendments, advances (11A / 11B), the documents issued table (13), the credit
 utilisation order of 6.1, and filing (the portal has no API for this; a GSP's would be part 4's adapter).
 
-**Next** (RFC 0016 step 5, part 4): e-invoicing (IRN and QR) and e-way bills through a provider. Rates and TDS
-thresholds change with the GST Council and each Finance Act: check them in Accounting › Configuration.
+### E-invoicing and e-way bills
+
+Set the company up on the GST returns page (**Company GST settings**: GSTIN — checked against the company's state —,
+PAN, address and PIN code) and switch e-invoicing on. Then every posted customer invoice, credit or debit note to a
+registered customer or abroad is registered with the IRP: the IRN, the acknowledgement and the signed QR code come
+back onto the document, and the tax invoice prints them. What the IRP would refuse (no GSTIN, no PIN code, a line
+without HSN / SAC…) is said on the document first, in words, to fix and register again from the **E-invoice** panel
+of the invoice. An IRN is cancelled within 24 hours (after that, issue a credit note). From the same panel, an
+invoice's **e-way bill** is generated with its transport (mode, distance, vehicle, transporter), valid one day per
+200 km by road, and cancelled within 24 hours.
+
+```http
+POST /api/v1/l10n_in/einvoice/42                   # register (the subscriber does it when posted)
+POST /api/v1/l10n_in/einvoice/42/cancel            # { "reason": "2", "remark": "Wrong rate" }
+POST /api/v1/l10n_in/ewaybill/42                   # { "mode": "road", "distanceKm": 450, "vehicleNo": "MH12AB1234" }
+GET  /api/v1/l10n_in/einvoice/42                   # the document's e-invoice and e-way bill
+```
+
+The IRP and the e-way bill system are reached through a **provider** (`GstProvider`: NIC's APIs directly, or a GST
+Suvidha Provider), given to the module (`l10nInModule({ provider })`) or named by the environment. For now there is
+the fake provider (`KOSH_GST_PROVIDER=fake`, for demonstrations: it answers as the IRP does, the IRN being the SHA-256
+of the seller's GSTIN, the financial year, the document type and number); a real adapter comes with sandbox
+credentials. Without a provider the screens say e-invoicing is not set up. The IRN fields are written by the system
+only. Not yet: the QR code printed as an image (the signed content is stored), part B updates of an e-way bill, and
+e-way bills for deliveries without an invoice.
+
+Rates and TDS thresholds change with the GST Council and each Finance Act: check them in Accounting › Configuration.
