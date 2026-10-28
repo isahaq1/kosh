@@ -66,7 +66,14 @@ export function useShortcuts(handlers: {
         return;
       }
       if (mod || e.altKey || typing(e.target)) return;
-      if (document.querySelector('[role="dialog"]') !== null) return; // dialogs own their keys
+      // Dialogs, popovers, menus and lists own their keys (Escape closes them, not the page). Checked while the key
+      // is captured, before they handle it and close.
+      if (
+        document.querySelector(
+          '[role="dialog"], [role="menu"], [role="listbox"], [data-radix-popper-content-wrapper]',
+        ) !== null
+      )
+        return;
       if (e.key === '?') {
         e.preventDefault();
         handlers.help();
@@ -82,8 +89,8 @@ export function useShortcuts(handlers: {
         if (click('[data-kosh-back]')) e.preventDefault();
       }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [handlers]);
 }
 
