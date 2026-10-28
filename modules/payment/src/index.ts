@@ -28,6 +28,7 @@ import type { Env } from './.kosh/bindings.js';
 import { bkashFromEnvironment } from './bkash.js';
 import { PaymentProvider, PaymentTransaction, paymentShutro } from './module.js';
 import { ADAPTERS, FAKE_SIGNATURE, fakeAdapter, type PaymentAdapter } from './providers.js';
+import { razorpayFromEnvironment } from './razorpay.js';
 import { settle } from './settle.js';
 import { sslcommerzFromEnvironment } from './sslcommerz.js';
 
@@ -48,6 +49,13 @@ export {
   type PaymentResult,
   type PaymentStatus,
 } from './providers.js';
+export {
+  fromSubunits,
+  type RazorpayOptions,
+  razorpayAdapter,
+  razorpayFromEnvironment,
+  toSubunits,
+} from './razorpay.js';
 export { type Settled, settle } from './settle.js';
 export {
   type SslcommerzOptions,
@@ -504,6 +512,7 @@ export function paymentModule(options: PaymentOptions = {}): KoshModule {
       ...ADAPTERS,
       ['sslcommerz', sslcommerzFromEnvironment()],
       ['bkash', bkashFromEnvironment()],
+      ['razorpay', razorpayFromEnvironment()],
     ]);
   return defineModule({
     shutro: paymentShutro,

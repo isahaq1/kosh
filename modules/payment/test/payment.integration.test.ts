@@ -6,7 +6,11 @@
  * SSLCommerz with its sandbox simulated: the session, IPNs confirmed with its validation API (forged and changed
  * ones refused), a failure then a retry, and the transaction query when the customer is back first. bKash with its
  * API simulated: executed on the customer's return (once), a forged return refused by bKash, a cancellation.
+ * Razorpay with Payment Links simulated: its signed webhook (checked with the endpoint's secret, deduplicated by event
+ * id), the return answered by fetching the link, an expired link.
  */
+
+import { createHmac } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -24,7 +28,15 @@ import {
 import { type Driver, orm, pg } from '@kosh/server/orm';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
-import { ADAPTERS, bkashAdapter, paymentModule, sslcommerzAdapter } from '../src/index.js';
+import {
+  ADAPTERS,
+  bkashAdapter,
+  fromSubunits,
+  paymentModule,
+  razorpayAdapter,
+  sslcommerzAdapter,
+  toSubunits,
+} from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
 const PORTAL = 'https://portal.example.test';
@@ -187,6 +199,46 @@ const bkFetch = (async (input: string | URL | Request, init?: RequestInit) => {
     );
   throw new Error(`unexpected ${url}`);
 }) as typeof fetch;
+/** Razorpay's Payment Links, simulated. */
+const rzp = new Map<string, Record<string, unknown>>();
+const rzpFetch = (async (input: string | URL | Request, init?: RequestInit) => {
+  const url = new URL(String(input));
+  const json = (b: unknown, status = 200) =>
+    new Response(JSON.stringify(b), { status, headers: { 'content-type': 'application/json' } });
+  expect(new Headers(init?.headers).get('authorization')).toBe(
+    `Basic ${Buffer.from('rzp_test_padma:rzp-secret').toString('base64')}`,
+  );
+  if (url.pathname === '/v1/payment_links' && init?.method === 'POST') {
+    const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+    const id = `plink_${rzp.size + 1}`;
+    const link = {
+      ...body,
+      id,
+      short_url: `https://rzp.io/i/${id}`,
+      status: 'created',
+      amount_paid: 0,
+      payments: null,
+    };
+    rzp.set(id, link);
+    return json(link);
+  }
+  const link = rzp.get(decodeURIComponent(url.pathname.replace('/v1/payment_links/', '')));
+  if (link === undefined)
+    return json({ error: { description: 'The id provided does not exist' } }, 400);
+  return json(link);
+}) as typeof fetch;
+/** The customer pays the link on Razorpay. */
+function rzpPay(id: string): Record<string, unknown> {
+  const link = rzp.get(id) as Record<string, unknown>;
+  Object.assign(link, {
+    status: 'paid',
+    amount_paid: link['amount'],
+    payments: [
+      { payment_id: `pay_${id}`, amount: link['amount'], status: 'captured', plink_id: id },
+    ],
+  });
+  return link;
+}
 const catalogue = [
   base,
   paymentModule({
@@ -197,6 +249,10 @@ const catalogue = [
       [
         'sslcommerz',
         sslcommerzAdapter({ storeId: 'padma', storePassword: 'store-secret', fetch: sslFetch }),
+      ],
+      [
+        'razorpay',
+        razorpayAdapter({ keyId: 'rzp_test_padma', keySecret: 'rzp-secret', fetch: rzpFetch }),
       ],
       [
         'bkash',
@@ -741,5 +797,129 @@ describe('bKash (its API simulated)', () => {
         mode: 'test',
       }),
     ).rejects.toThrow('BDT only');
+  });
+});
+
+describe('Razorpay (Payment Links simulated)', () => {
+  let razorpayProvider = 0;
+  const start = async (amount: string) => {
+    const id = await invoice(partners['acme'] as number, amount);
+    const res = await call('POST', '/api/portal/v1/payments', RINA, {
+      document: 'invoices',
+      id,
+      provider: razorpayProvider,
+    });
+    expect(res.status, JSON.stringify(res.json)).toBe(201);
+    return { id, ...(res.json as { reference: string; redirectUrl: string }) };
+  };
+  /** Razorpay's webhook, signed with the secret set in its dashboard (the endpoint's). */
+  const webhook = async (
+    event: string,
+    link: Record<string, unknown>,
+    eventId: string,
+    secret?: string,
+  ) => {
+    const endpoint = (
+      (await call('GET', '/api/v1/models/webhook.endpoint?fields=hook,token,secret', 'maria')).json
+        .items as Json[]
+    ).find((e) => e.hook === 'payment.razorpay');
+    const body = JSON.stringify({
+      entity: 'event',
+      event,
+      payload: {
+        payment_link: { entity: link },
+        payment: {
+          entity: {
+            id: `pay_${String(link['id'])}`,
+            amount: link['amount_paid'],
+            status: 'captured',
+          },
+        },
+      },
+    });
+    const res = await host.server.app.inject({
+      method: 'POST',
+      url: `/api/v1/hooks/${endpoint.token}`,
+      headers: {
+        'content-type': 'application/json',
+        'x-razorpay-signature': createHmac('sha256', secret ?? endpoint.secret)
+          .update(body)
+          .digest('hex'),
+        'x-razorpay-event-id': eventId,
+      },
+      payload: body,
+    });
+    return res.statusCode;
+  };
+
+  test('a payment link; its signed webhook pays the invoice once', async () => {
+    const made = await call('POST', '/api/v1/models/payment.provider', 'maria', {
+      name: 'Razorpay',
+      code: 'razorpay',
+      journal: bank,
+    });
+    expect(made.status).toBe(201);
+    razorpayProvider = made.json.id;
+    const { id, reference, redirectUrl } = await start('1500');
+    const link = [...rzp.values()].find((l) => l['reference_id'] === reference) as Record<
+      string,
+      unknown
+    >;
+    expect(redirectUrl).toBe(`https://rzp.io/i/${String(link['id'])}`);
+    expect(link).toMatchObject({
+      amount: 150000,
+      currency: 'BDT',
+      callback_url: `${API_URL}/api/v1/payment/return/${reference}`,
+      callback_method: 'get',
+      notify: { sms: false, email: false },
+    });
+    expect(await tx(reference)).toMatchObject({ providerReference: link['id'] });
+
+    const paid = rzpPay(String(link['id']));
+    expect(await webhook('payment_link.paid', paid, 'evt_rzp_1', 'not the secret')).toBe(401);
+    expect(await webhook('payment_link.paid', paid, 'evt_rzp_1')).toBe(202);
+    expect(await webhook('payment_link.paid', paid, 'evt_rzp_1')).toBe(200); // redelivered: a duplicate
+    await drain();
+    expect(await tx(reference)).toMatchObject({
+      state: 'done',
+      providerReference: `pay_${String(link['id'])}`,
+    });
+    expect((await move(id)).amountResidual.amount).toBe('0.00');
+    expect(await paymentsFor(id)).toHaveLength(1);
+  });
+
+  test('back before the webhook: the link fetched from Razorpay; an expired link', async () => {
+    const first = await start('400');
+    const link = [...rzp.values()].find((l) => l['reference_id'] === first.reference) as Record<
+      string,
+      unknown
+    >;
+    rzpPay(String(link['id']));
+    // The browser's query is not used: the link is fetched.
+    await host.server.app.inject({
+      method: 'GET',
+      url: `/api/v1/payment/return/${first.reference}?razorpay_payment_link_status=failed`,
+    });
+    expect(await tx(first.reference)).toMatchObject({ state: 'done' });
+    expect(await paymentsFor(first.id)).toHaveLength(1);
+
+    const second = await start('90');
+    const other = [...rzp.values()].find((l) => l['reference_id'] === second.reference) as Record<
+      string,
+      unknown
+    >;
+    other['status'] = 'expired';
+    expect(
+      (await call('GET', `/api/portal/v1/payments/${second.reference}`, RINA)).json.state,
+    ).toBe('cancelled');
+  });
+
+  test('subunits; test keys serve test providers', () => {
+    expect(toSubunits('1500.00', 'INR')).toBe(150000);
+    expect(toSubunits('12.5', 'KWD')).toBe(12500);
+    expect(fromSubunits(150000, 'INR')).toBe('1500.00');
+    expect(razorpayAdapter({ keyId: 'rzp_test_x', keySecret: 's' }).configured('test')).toBe(true);
+    expect(razorpayAdapter({ keyId: 'rzp_test_x', keySecret: 's' }).configured('live')).toBe(false);
+    expect(razorpayAdapter({}).configured('test')).toBe(false);
   });
 });

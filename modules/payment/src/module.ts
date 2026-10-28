@@ -20,6 +20,7 @@ export const PROVIDERS = {
   fake: 'Test provider (no money moves)',
   sslcommerz: 'SSLCommerz',
   bkash: 'bKash',
+  razorpay: 'Razorpay',
 } as const;
 
 export const PaymentProvider = defineModel('payment.provider', {
