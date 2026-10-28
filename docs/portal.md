@@ -13,6 +13,7 @@ signature, decline it with a reason, and write on a document's thread. The porta
 | `account_portal` | posted invoices and credit notes, with what is still due (unpaid ones on the home page); vendor bills | — |
 | `purchase_portal` | requests for quotation sent to the vendor, and purchase orders | — |
 | `project_portal` | the customer's projects and their open tasks | — |
+| `payment` | — | **Pay now** on open invoices, with the company's payment providers ([integrations.md](integrations.md#online-payments)) |
 
 Each needs its app and `portal`. Documents have a thread when the app declares one. New quotations, invoices and
 requests are announced by email.
@@ -81,6 +82,7 @@ export const salePortal = defineModule({
         thread: true,
         attention: { state: 'sent' }, // on the portal's home
         announce: { state: 'sent' }, // emailed once when a record enters this domain
+        // payment: { when: { … } }, // payable online in this domain (account_portal's invoices; needs `payment`)
       },
     ],
   },
@@ -104,6 +106,9 @@ GET  /api/portal/v1/documents/:key/:id/pdf
 POST /api/portal/v1/documents/:key/:id/actions/:action     { signature?: { name, image }, message? }
 GET  /api/portal/v1/documents/:key/:id/thread
 POST /api/portal/v1/documents/:key/:id/thread              { body }
+GET  /api/portal/v1/payments/providers                     with `payment`: the providers offered
+POST /api/portal/v1/payments                               { document, id, provider } → { reference, redirectUrl }
+GET  /api/portal/v1/payments/:reference                    the payment's state
 ```
 
 Staff manage access with `GET/POST /api/v1/portal/access`, `POST /api/v1/portal/access/:user/invitation` and
@@ -118,6 +123,6 @@ Shutro ERP server, and set `SHUTRO_ERP_PORTAL_URL` to that domain.
 
 ## Not yet
 
-- Paying invoices online (card, bKash, Nagad) and showing the company's bank details: with the integrations RFC.
+- Real payment providers (SSLCommerz, bKash, Razorpay, Stripe): the test provider works end to end today.
 - `shutro-erp init` does not offer the portal yet, and generated projects do not include the portal app.
 - Installing the portal as an app on the home screen (PWA).

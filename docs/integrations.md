@@ -1,8 +1,8 @@
 # Integrations
 
 How other systems work with Shutro ERP (RFC 0017): they call its API with **API keys** ([server.md](server.md#api-keys-and-service-accounts)),
-it tells them what happens with **webhooks**, and they tell it with **inbound webhooks**. Online payments and OAuth
-apps come next.
+it tells them what happens with **webhooks**, they tell it with **inbound webhooks**, and customers pay invoices
+**online** through payment providers. OAuth apps come next.
 
 ## Webhooks
 
@@ -134,3 +134,48 @@ after the cause is fixed. **New secret** on an endpoint refuses calls signed wit
 | `POST /api/v1/webhooks/inbound/:id/replay` | a verified call, handled again |
 
 Endpoints and calls are models of the generated API too (`webhook.endpoint`, `webhook.inbound`).
+
+## Online payments
+
+The `payment` module (with Accounting, the portal's `account_portal` and Integrations) lets customers pay their
+invoices from the portal. A company sets up its **payment providers** in **Accounting › Configuration › Payment
+providers**: the provider, its mode (*Test*, *Live* or *Disabled*) and the bank journal the money arrives in.
+Credentials are never stored in records: each adapter reads its own from the environment.
+
+**The customer's way**: an open invoice in the portal has **Pay now** (one button per provider when there are
+several) → the provider's page → back to the invoice, which shows *Thank you: your payment of … is received* (or why
+it failed). Behind it:
+
+1. `POST /api/portal/v1/payments` checks that the invoice is the customer's and open, makes a **transaction**
+   (`payment.transaction`: the invoice, what is due, a reference `PAY-…`) and asks the provider for its page.
+2. The provider calls back the provider's **inbound webhook** (made with its first payment: Integrations › Inbound
+   webhooks shows it, with its URL and secret), checked by the adapter and logged in Inbound calls, with retries and
+   replay.
+3. Paid: Accounting registers an `account.payment` for the invoice in the provider's journal — posted and reconciled,
+   memo `<provider> <provider's reference>` — and the transaction is *Paid*. Declined or cancelled: the transaction
+   says so and the invoice stays open.
+4. Back before the callback: the portal asks for the payment (`GET /api/portal/v1/payments/:reference`) and the server
+   asks the provider, settling it then.
+
+**Once only**: a repeated callback, a replay from the log, or a callback after the return never pays twice — the
+transaction is settled under a lock on its reference, and a settled one stays as it is. An amount or currency that
+differs from the transaction's is refused (*Failed*, with both amounts).
+
+**Online payments** (Accounting) lists the transactions with their state, the provider's reference and the payment.
+
+**Providers**: the **test provider** (`fake`) moves no money — its own checkout page lets you pay or decline — for
+trying the flow and for tests; it cannot be *Live*. SSLCommerz, bKash, Razorpay and Stripe come next, each with its
+sandbox. An adapter implements:
+
+```ts
+interface PaymentAdapter {
+  readonly code: string;
+  createPayment(request: PaymentRequest): Promise<{ redirectUrl: string }>; // reference, amount, currency, URLs
+  verifyCallback(call: InboundCall, secret: string): string | null; // the event id, or null to refuse
+  readCallback(call: InboundCall): PaymentResult | null; // reference, status, provider's reference, amount
+  status(reference: string, mode: 'test' | 'live'): Promise<PaymentResult | null>;
+}
+```
+
+**Addresses**: providers send customers back to `SHUTRO_ERP_PORTAL_URL` (`/d/invoices/<id>?payment=<reference>`) and
+call back at `SHUTRO_ERP_API_URL` + `/api/v1/hooks/<token>`; both must be the public addresses in production.

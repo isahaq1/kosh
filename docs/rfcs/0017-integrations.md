@@ -242,3 +242,32 @@ permissions, the audit log, the transactional outbox and jobs.
 secrets; audit. "Explicit over magic": inbound webhooks are declared by modules. "Kosh never reimplements ORM
 features": the outbox, jobs, audit and record rules are Shutro's. "Metadata-driven": events come from the models'
 transitions and the modules' declared events; OpenAPI describes the new security schemes.
+
+## Implementation notes (2026-10-28): step 4, part 1 — payments with the test provider
+
+- **`modules/payment`** (`@kosh/payment`, on Accounting, `account_portal` and Integrations): `payment.provider` (name,
+  adapter, mode test / live / disabled, the journal, the callback endpoint) managed by `account.manager`;
+  `payment.transaction` (reference, provider, invoice, customer, amount and currency, state pending → paid / failed /
+  cancelled, provider's reference, the `account.payment`, error, paid at), read by Accounting.
+- **Portal**: a document declares `payment: { when }` (`account_portal`'s customer invoices while not paid or
+  partly paid); its page gets `payable` and shows Pay now when providers are offered. The portal stays generic: the
+  payment routes are the module's (`/api/portal/v1/payments…`); the document is checked as the portal user (the
+  record rule and the declaration), the transaction is made by the system, as the portal's actions are.
+- **Adapters** (`PaymentAdapter`: create, verify and read a callback, status) are code, not records; the callbacks
+  come through **step 3's inbound webhooks** — one endpoint per provider, made with its first payment — so they are
+  logged, idempotent by event id, retried and replayable. RFC §5.5's `verifyCallback(request) → event` is split in
+  two (verify with the endpoint's secret; read), since a module's handler does not get the secret.
+- **Settling** (`settle`): under a transaction-scoped advisory lock on the reference, a pending transaction becomes
+  paid — `registerPayment` in the provider's journal for the amount, posted and reconciled — or failed / cancelled;
+  a settled one is never settled again; a different amount or currency fails it. The customer's return asks the
+  provider (`status`) and settles before the callback when it can.
+- **The test provider** (`fake`): a checkout page served by the module (pay / decline), a signed callback through the
+  provider's endpoint (in process), and `status` from what it knows; refused as *Live*.
+- Shutro request #11 again: writes made in a system scope are flushed in that scope (`env.flush()`), since company
+  checks at commit run outside it.
+- `scripts/generate-models.ts` now maps modules whose names have underscores (`account_portal`) to their package.
+- **Tests**: Pay now end to end with the payment registered and reconciled once (a replayed callback pays nothing
+  more), the return before the callback, a declined payment, another customer refused, employees refused on the
+  portal's routes, documents not payable online refused. E2E (portal): pay the invoice with the test provider.
+- **Next (part 2)**: the SSLCommerz, bKash, Razorpay and Stripe adapters, each on its sandbox; a payment link in the
+  invoice email (without signing in); fees.
