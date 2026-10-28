@@ -1,6 +1,7 @@
 /**
  * India end to end (RFC 0016 step 5, part 3): an accountant opens Accounting › Reporting › GST returns, sees GSTR-1
- * by section, switches to GSTR-3B and its tax payable, and downloads GSTR-1 as the GST portal's JSON.
+ * by section, switches to GSTR-3B and its tax payable, downloads GSTR-1 as the GST portal's JSON, and finds the
+ * company's GST settings (without an IRP provider here).
  */
 import { expect, type Page, test } from '@playwright/test';
 
@@ -32,4 +33,7 @@ test('GSTR-1 by section, GSTR-3B with the tax payable, the portal JSON', async (
   ).toBeVisible();
   await expect(page.getByRole('columnheader', { name: '6.1 Payment of tax' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'JSON for the GST portal' })).toHaveCount(0);
+  // The company's GST settings: no IRP provider in this installation.
+  await expect(page.getByRole('heading', { name: 'Company GST settings' })).toBeVisible();
+  await expect(page.getByText(/No IRP provider is set up/)).toBeVisible();
 });

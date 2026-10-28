@@ -1365,6 +1365,8 @@ async function postMoves(moves: Moves): Promise<void> {
       );
     await one.assignNumber(NUMBER_FIELD[m.journal.type], { date: m.date });
     await one.write({ postedAt: env.now(), postedTx: await currentTx(env) });
+    // For whoever acts on posted documents (e-invoicing, automation), through the outbox: after the commit.
+    await env.emit('account.move.posted', { id: m.id, kind: m.kind });
   }
 }
 

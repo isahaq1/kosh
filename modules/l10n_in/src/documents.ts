@@ -88,6 +88,17 @@ const document = (
     footer: `${title} · Page {{page}} of {{pages}}`,
     blocks: [
       { kind: 'heading', id: 'title', text: title, level: 1 },
+      // Once registered with the IRP (e-invoicing): the IRN and its acknowledgement.
+      {
+        kind: 'fields',
+        id: 'irn',
+        columns: 3,
+        items: [
+          { label: 'IRN', bind: 'irn' },
+          { label: 'Ack. no.', bind: 'irnAckNo' },
+          { label: 'Ack. date', bind: 'irnAckDate' },
+        ],
+      },
       parties,
       {
         kind: 'fields',

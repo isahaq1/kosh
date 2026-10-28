@@ -10,7 +10,16 @@ import { accountingShutro, supplyScope } from '@kosh/accounting';
 import { contactsShutro } from '@kosh/contacts';
 import { computeTaxes, productShutro, taxRule } from '@kosh/product';
 import { orm } from '@kosh/server/orm';
-import { check, compute, defineModule, extendModel, f, record, ref } from './.kosh/bindings.js';
+import {
+  check,
+  compute,
+  defineModel,
+  defineModule,
+  extendModel,
+  f,
+  record,
+  ref,
+} from './.kosh/bindings.js';
 
 const CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const GSTIN = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
@@ -110,6 +119,12 @@ export const CompanyGst = extendModel('res.company', {
   fields: {
     gstin: f.char({ size: 15, label: 'GSTIN' }),
     pan: f.char({ size: 10, label: 'PAN' }),
+    /** Its principal place of business: the seller's address on e-invoices and e-way bills. */
+    street: f.char({ label: 'Address' }),
+    city: f.char({ label: 'City' }),
+    zip: f.char({ size: 6, label: 'PIN code' }),
+    /** Customer invoices and notes are registered with the IRP when posted (turnover above the threshold). */
+    einvoiceEnabled: f.boolean({ required: true, default: false, label: 'E-invoicing' }),
   },
   constraints: {
     companyGstinValid: {
@@ -301,8 +316,131 @@ export const LineGst = extendModel('account.move.line', {
   },
 });
 
+const EINVOICE_STATES = {
+  registered: 'Registered (IRN)',
+  failed: 'Not registered: see the error',
+  cancelled: 'Cancelled at the IRP',
+} as const;
+
+/**
+ * The IRP's and the e-way bill system's answers for a document (RFC 0016 step 5, part 4): written by the system only
+ * (users read them), shown on the document through its computed fields.
+ */
+export const GstEinvoice = defineModel('l10n_in.einvoice', {
+  label: 'E-invoice',
+  access: { 'account.invoicing': ['read'], 'account.user': ['read'], 'account.manager': ['read'] },
+  fields: {
+    move: f.many2one('account.move', { required: true, ondelete: 'cascade' }),
+    /** E-invoicing (RFC 0016 step 5, part 4): the IRP's answer, written only by the registration. */
+    einvoiceStatus: f.selection(EINVOICE_STATES, { label: 'E-invoice' }),
+    irn: f.char({ size: 64, label: 'IRN' }),
+    irnAckNo: f.char({ size: 20, label: 'Acknowledgement number' }),
+    irnAckDate: f.datetime({ label: 'Acknowledged at' }),
+    /** The IRP's signed QR code content (a JWT), printed as a QR code. */
+    irnSignedQr: f.text({ label: 'Signed QR code' }),
+    irnCancelledAt: f.datetime({ label: 'IRN cancelled at' }),
+    einvoiceError: f.text({ label: 'E-invoice error' }),
+    /** The e-way bill for moving the goods (above ₹50,000): part A from the invoice, part B the transport. */
+    ewbNo: f.char({ size: 12, label: 'E-way bill' }),
+    ewbDate: f.datetime({ label: 'E-way bill generated at' }),
+    ewbValidUntil: f.datetime({ label: 'E-way bill valid until' }),
+    ewbStatus: f.selection(
+      { generated: 'Generated', failed: 'Not generated: see the error', cancelled: 'Cancelled' },
+      { label: 'E-way bill status' },
+    ),
+    ewbError: f.text({ label: 'E-way bill error' }),
+    ewbMode: f.selection(
+      { road: 'Road', rail: 'Rail', air: 'Air', ship: 'Ship' },
+      { label: 'Transport mode' },
+    ),
+    ewbVehicleNo: f.char({ size: 15, label: 'Vehicle number' }),
+    ewbTransporterId: f.char({ size: 15, label: 'Transporter ID' }),
+    ewbDistanceKm: f.integer({ label: 'Distance (km)' }),
+  },
+});
+
+const EINVOICE_FIELDS = [
+  'einvoiceStatus',
+  'irn',
+  'irnAckNo',
+  'irnAckDate',
+  'irnSignedQr',
+  'irnCancelledAt',
+  'einvoiceError',
+  'ewbNo',
+  'ewbDate',
+  'ewbValidUntil',
+  'ewbStatus',
+  'ewbError',
+  'ewbMode',
+  'ewbVehicleNo',
+  'ewbTransporterId',
+  'ewbDistanceKm',
+] as const;
+
+/** The document's view of its e-invoice: computed from its record, read-only to everyone. */
+const fromEinvoice = compute(
+  'account.move',
+  [...EINVOICE_FIELDS],
+  [
+    'einvoices.einvoiceStatus',
+    'einvoices.irn',
+    'einvoices.irnAckNo',
+    'einvoices.irnAckDate',
+    'einvoices.irnSignedQr',
+    'einvoices.irnCancelledAt',
+    'einvoices.einvoiceError',
+    'einvoices.ewbNo',
+    'einvoices.ewbDate',
+    'einvoices.ewbValidUntil',
+    'einvoices.ewbStatus',
+    'einvoices.ewbError',
+    'einvoices.ewbMode',
+    'einvoices.ewbVehicleNo',
+    'einvoices.ewbTransporterId',
+    'einvoices.ewbDistanceKm',
+  ],
+  (moves) => {
+    for (const m of moves) {
+      const e = [...m.einvoices][0];
+      const target = m as unknown as Record<string, unknown>;
+      for (const k of EINVOICE_FIELDS) target[k] = e === undefined ? null : e[k];
+    }
+  },
+);
+
 export const MoveGst = extendModel('account.move', {
   fields: {
+    einvoices: f.one2many('l10n_in.einvoice', 'move'),
+    /** E-invoicing (RFC 0016 step 5, part 4): the IRP's answer (its record's). */
+    einvoiceStatus: f.selection(EINVOICE_STATES, {
+      label: 'E-invoice',
+      store: true,
+      ...fromEinvoice,
+    }),
+    irn: f.char({ size: 64, label: 'IRN', store: true, ...fromEinvoice }),
+    irnAckNo: f.char({ size: 20, label: 'Acknowledgement number', store: true, ...fromEinvoice }),
+    irnAckDate: f.datetime({ label: 'Acknowledged at', store: true, ...fromEinvoice }),
+    /** The IRP's signed QR code content (a JWT), printed as a QR code. */
+    irnSignedQr: f.text({ label: 'Signed QR code', store: true, ...fromEinvoice }),
+    irnCancelledAt: f.datetime({ label: 'IRN cancelled at', store: true, ...fromEinvoice }),
+    einvoiceError: f.text({ label: 'E-invoice error', store: true, ...fromEinvoice }),
+    /** The e-way bill for moving the goods (above ₹50,000): part A from the invoice, part B the transport. */
+    ewbNo: f.char({ size: 12, label: 'E-way bill', store: true, ...fromEinvoice }),
+    ewbDate: f.datetime({ label: 'E-way bill generated at', store: true, ...fromEinvoice }),
+    ewbValidUntil: f.datetime({ label: 'E-way bill valid until', store: true, ...fromEinvoice }),
+    ewbStatus: f.selection(
+      { generated: 'Generated', failed: 'Not generated: see the error', cancelled: 'Cancelled' },
+      { label: 'E-way bill status', store: true, ...fromEinvoice },
+    ),
+    ewbError: f.text({ label: 'E-way bill error', store: true, ...fromEinvoice }),
+    ewbMode: f.selection(
+      { road: 'Road', rail: 'Rail', air: 'Air', ship: 'Ship' },
+      { label: 'Transport mode', store: true, ...fromEinvoice },
+    ),
+    ewbVehicleNo: f.char({ size: 15, label: 'Vehicle number', store: true, ...fromEinvoice }),
+    ewbTransporterId: f.char({ size: 15, label: 'Transporter ID', store: true, ...fromEinvoice }),
+    ewbDistanceKm: f.integer({ label: 'Distance (km)', store: true, ...fromEinvoice }),
     /** A tax of the document is paid by the recipient (reverse charge): printed on the tax invoice. */
     gstReverseCharge: f.boolean({
       store: true,
@@ -415,7 +553,7 @@ export const l10nInShutro = defineModule({
   name: 'l10n_in',
   version: '0.1.0',
   depends: [accountingShutro, contactsShutro, productShutro],
-  models: [],
+  models: [GstEinvoice],
   extensions: [PartnerGst, CompanyGst, ProductHsn, TaxGst, LineGst, MoveGst],
   data: TAXES,
 });

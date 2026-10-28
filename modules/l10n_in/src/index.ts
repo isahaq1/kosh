@@ -18,12 +18,32 @@ import {
 } from '@kosh/accounting';
 import { contacts } from '@kosh/contacts';
 import { defineModule, type KoshModule, type LocalizationSpec } from '@kosh/modules-sdk';
+import type { ModuleContext } from '@kosh/server';
 import { field } from '@kosh/views';
 import { GST_DOCUMENTS } from './documents.js';
+import { type GstProvider, gstProviderFromEnv } from './einvoice.js';
 import { CESS_RATES, GST_RATES, l10nInShutro } from './module.js';
 import { registerGstRoutes } from './routes.js';
+import { einvoiceWorker, registerEInvoiceRoutes } from './routes-einvoice.js';
 
 export { GST_DOCUMENTS } from './documents.js';
+export {
+  CANCEL_REASONS,
+  cancelEInvoice,
+  cancelEwayBill,
+  createFakeGstProvider,
+  type EInvoicePayload,
+  type EwayBillPayload,
+  einvoicePayload,
+  einvoiceState,
+  financialYear,
+  type GstProvider,
+  GstProviderError,
+  generateEwayBill,
+  gstProviderFromEnv,
+  irnOf,
+  registerEInvoice,
+} from './einvoice.js';
 export {
   B2CL_THRESHOLD,
   type Gstr1,
@@ -55,6 +75,7 @@ export {
   TaxGst,
 } from './module.js';
 export { registerGstRoutes } from './routes.js';
+export { einvoiceWorker, registerEInvoiceRoutes } from './routes-einvoice.js';
 
 const id = (rate: string) => rate.replace('.', '_');
 
@@ -183,61 +204,95 @@ async function localize(raw: unknown): Promise<string | undefined> {
     : `the India chart (${done.chart.accounts} accounts), ${done.taxes} taxes, ${done.withholdings} withholdings`;
 }
 
-export const l10nIn: KoshModule = defineModule({
-  shutro: l10nInShutro,
-  kosh: '^0.1.0',
-  depends: [accounting, contacts],
-  accessLevels: {
-    manager: { label: 'India localization', groups: ['account.manager'] },
-  },
-  localization: INDIA,
-  hooks: { defaults: (env) => localize(env) },
-  routes: registerGstRoutes,
-  // Accounting › Reporting › GST returns: GSTR-1 and GSTR-3B.
-  actions: {
-    'l10n_in.action_gst': {
-      type: 'client',
-      page: 'l10n_in.Gst',
-      label: 'GST returns',
-      visibleTo: ['account.user'],
+/** What an installation may set instead of the environment (`KOSH_GST_PROVIDER`). */
+export interface L10nInOptions {
+  /** The IRP / e-way bill provider; default: the environment's, or none (e-invoicing unavailable). */
+  readonly provider?: GstProvider | undefined;
+  /** Start the subscriber registering posted documents (default: unless `KOSH_SCHEDULES=off`). */
+  readonly workers?: boolean | undefined;
+}
+
+/** The India localization with an explicit provider (tests, installations wiring their own). */
+export function l10nInModule(options: L10nInOptions = {}): KoshModule {
+  return defineModule({
+    shutro: l10nInShutro,
+    kosh: '^0.1.0',
+    depends: [accounting, contacts],
+    accessLevels: {
+      manager: { label: 'India localization', groups: ['account.manager'] },
     },
-  },
-  menus: [
-    {
-      id: 'l10n_in.gst',
-      parent: 'accounting.reporting',
-      label: 'GST returns',
-      action: 'l10n_in.action_gst',
-      sequence: 8,
+    localization: INDIA,
+    hooks: { defaults: (env) => localize(env) },
+    routes: (context: ModuleContext) => {
+      registerGstRoutes(context);
+      const provider = options.provider ?? gstProviderFromEnv();
+      registerEInvoiceRoutes(context, provider);
+      if (provider === undefined || !(options.workers ?? process.env['KOSH_SCHEDULES'] !== 'off'))
+        return;
+      const worker = einvoiceWorker(context, provider);
+      worker.start();
+      context.app.addHook('onClose', async () => {
+        await worker.stop();
+      });
     },
-  ],
-  // The tax invoice, the credit and debit notes (printed when Reporting is installed).
-  documents: GST_DOCUMENTS,
-  viewExtensions: [
-    // The GSTIN and PAN with a contact's identity, for contacts in India.
-    {
-      view: 'res.partner.form',
-      operations: [
-        {
-          append: 'identity',
-          nodes: [
-            field({ field: 'gstin', id: 'gstin', visibleWhen: { country: 'IN' } }),
-            field({ field: 'pan', id: 'pan', visibleWhen: { country: 'IN' } }),
-          ],
-        },
-      ],
+    // Accounting › Reporting › GST returns: GSTR-1 and GSTR-3B.
+    actions: {
+      'l10n_in.action_gst': {
+        type: 'client',
+        page: 'l10n_in.Gst',
+        label: 'GST returns',
+        visibleTo: ['account.user'],
+      },
     },
-    // A product's HSN / SAC code.
-    {
-      view: 'product.product.form',
-      operations: [{ append: 'identity', nodes: [field({ field: 'hsnCode', id: 'hsn_code' })] }],
-    },
-    // Where a tax goes in the GST returns.
-    {
-      view: 'account.tax.form',
-      operations: [
-        { append: 'main', nodes: [field({ field: 'gstTreatment', id: 'gst_treatment' })] },
-      ],
-    },
-  ],
-});
+    menus: [
+      {
+        id: 'l10n_in.gst',
+        parent: 'accounting.reporting',
+        label: 'GST returns',
+        action: 'l10n_in.action_gst',
+        sequence: 8,
+      },
+    ],
+    // The tax invoice, the credit and debit notes (printed when Reporting is installed).
+    documents: GST_DOCUMENTS,
+    viewExtensions: [
+      // The GSTIN and PAN with a contact's identity, for contacts in India.
+      {
+        view: 'res.partner.form',
+        operations: [
+          {
+            append: 'identity',
+            nodes: [
+              field({ field: 'gstin', id: 'gstin', visibleWhen: { country: 'IN' } }),
+              field({ field: 'pan', id: 'pan', visibleWhen: { country: 'IN' } }),
+            ],
+          },
+        ],
+      },
+      // On posted customer invoices and notes: the e-invoice and the e-way bill.
+      {
+        view: 'account.move.invoice.form',
+        operations: [
+          {
+            insertAfter: 'register_payment',
+            nodes: [{ kind: 'component', id: 'einvoice', component: 'l10n_in.EInvoice' }],
+          },
+        ],
+      },
+      // A product's HSN / SAC code.
+      {
+        view: 'product.product.form',
+        operations: [{ append: 'identity', nodes: [field({ field: 'hsnCode', id: 'hsn_code' })] }],
+      },
+      // Where a tax goes in the GST returns.
+      {
+        view: 'account.tax.form',
+        operations: [
+          { append: 'main', nodes: [field({ field: 'gstTreatment', id: 'gst_treatment' })] },
+        ],
+      },
+    ],
+  });
+}
+
+export const l10nIn: KoshModule = l10nInModule();

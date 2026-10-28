@@ -6,6 +6,7 @@ import { ApiError, Button, Input, Label, type PageProps, useKosh } from '@kosh/u
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { type ReactElement, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { GstSettings } from './GstSettings.js';
 
 type Form = '1' | '3b';
 interface Heads {
@@ -183,6 +184,7 @@ export function GstPage({ api }: PageProps): ReactElement {
       ) : (
         <Gstr3bTables data={data.data} />
       )}
+      <GstSettings api={api} />
     </div>
   );
 
