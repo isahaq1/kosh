@@ -20,6 +20,7 @@ import { automation } from '@kosh/automation';
 import { contacts } from '@kosh/contacts';
 import { dataImport } from '@kosh/import';
 import { l10nBd } from '@kosh/l10n_bd';
+import { l10nIn } from '@kosh/l10n_in';
 import { mail } from '@kosh/mail';
 import { installActivityTypes, messaging } from '@kosh/messaging';
 import { notify } from '@kosh/notify';
@@ -109,6 +110,7 @@ const CATALOGUE = [
   assistant,
   dataImport,
   l10nBd,
+  l10nIn,
   portal,
   salePortal,
   accountPortal,
@@ -134,6 +136,7 @@ await applyApps(
         'assistant',
         'import',
         'l10n_bd',
+        'l10n_in',
         'sale_portal',
         'account_portal',
       ],

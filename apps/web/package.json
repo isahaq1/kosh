@@ -55,6 +55,7 @@
     "@kosh/automation": "workspace:*",
     "@kosh/sale_portal": "workspace:*",
     "@kosh/account_portal": "workspace:*",
-    "@kosh/l10n_bd": "workspace:*"
+    "@kosh/l10n_bd": "workspace:*",
+    "@kosh/l10n_in": "workspace:*"
   }
 }

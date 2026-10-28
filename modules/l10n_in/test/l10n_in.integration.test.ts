@@ -367,3 +367,196 @@ test('reverse charge on a bill: input credit and the liability, the vendor paid 
     { code: '2322', debit: '0.00', credit: '1800.00' },
   ]);
 });
+
+test('the month in GSTR-1 (by section, the portal JSON) and GSTR-3B (by table, the tax payable)', async () => {
+  const ids = await sql(async (env) => {
+    const journal = async (code: string) =>
+      (await env.sql<{ id: number }>`SELECT id FROM account_journal WHERE code = ${code}`)[0]
+        ?.id as number;
+    const [inr] = await env.sql<{ id: number }>`SELECT id FROM res_currency WHERE name = 'INR'`;
+    return { inr: inr?.id as number, inv: await journal('INV'), bill: await journal('BILL') };
+  });
+  const tax = async (externalId: string) => taxId(externalId);
+  const [gst18, gstPurchase18, lut, nilRated] = await Promise.all([
+    tax('gst_sale_18'),
+    tax('gst_purchase_18'),
+    tax('gst_sale_lut'),
+    tax('gst_sale_nil'),
+  ]);
+  const partner = async (payload: Record<string, unknown>) => {
+    const created = await call('POST', '/api/v1/models/res.partner', 'maria', {
+      isCompany: true,
+      ...payload,
+    });
+    expectStatus(created, 201);
+    return created.json.id as number;
+  };
+  const post = async (
+    kind: string,
+    partnerId: number,
+    price: string,
+    taxes: number[],
+    extra = {},
+  ) => {
+    const created = await call('POST', '/api/v1/models/account.move', 'maria', {
+      kind,
+      journal: kind.startsWith('out_') ? ids.inv : ids.bill,
+      partner: partnerId,
+      currency: ids.inr,
+      ...extra,
+      lines: {
+        create: [
+          {
+            lineKind: 'product',
+            name: 'Goods',
+            quantity: '1',
+            priceUnit: price,
+            taxes: { set: taxes },
+          },
+        ],
+      },
+    });
+    expectStatus(created, 201);
+    const id = created.json.id as number;
+    expectStatus(
+      await call('POST', `/api/v1/models/account.move/${id}/transitions/post`, 'maria'),
+      200,
+    );
+    return id;
+  };
+  // Already posted this month: Pune (unregistered, Maharashtra) 50,000 and Bengaluru Labs (registered, Karnataka)
+  // 50,000 at 18 %, and a bill under reverse charge from Delhi of 10,000.
+  const boston = await partner({ name: 'Boston Imports', isCustomer: true, country: 'US' });
+  await post('out_invoice', boston, '10000', [gst18]); // export with IGST paid
+  await post('out_invoice', boston, '20000', [lut]); // export under LUT
+  const kolkata = await partner({
+    name: 'Kolkata Retail',
+    isCustomer: true,
+    country: 'IN',
+    state: 'IN-WB',
+  });
+  await post('out_invoice', kolkata, '200000', [gst18]); // B2C large, between states
+  const [bengaluru] = (
+    await call(
+      'GET',
+      `/api/v1/models/res.partner?filter=${encodeURIComponent(JSON.stringify({ name: 'Bengaluru Labs' }))}&fields=id`,
+      'maria',
+    )
+  ).json.items as Json[];
+  await post('out_refund', bengaluru.id, '10000', [gst18], { ref: 'Returned' });
+  const thane = await partner({
+    name: 'Thane Kirana',
+    isCustomer: true,
+    country: 'IN',
+    state: 'IN-MH',
+  });
+  await post('out_invoice', thane, '5000', [nilRated]);
+  const vendor = await partner({
+    name: 'Mumbai Supplies',
+    isVendor: true,
+    country: 'IN',
+    state: 'IN-MH',
+  });
+  await post('in_invoice', vendor, '20000', [gstPurchase18]);
+  const month = new Date().toISOString().slice(0, 7);
+
+  const one = await call('GET', `/api/v1/l10n_in/gstr/1?month=${month}`, 'maria');
+  expectStatus(one, 200);
+  const r1 = one.json;
+  expect(r1.gstin).toBe('27AAPFU0939F1ZV');
+  expect(r1.b2b.map((d: Json) => [d.gstin, d.pos, d.items[0].txval, d.items[0].iamt])).toEqual([
+    ['29AAGCB7383J1Z4', '29', '50000.00', '9000.00'],
+  ]);
+  expect(r1.b2cl.map((d: Json) => [d.partner, d.pos, d.value, d.items[0].iamt])).toEqual([
+    ['Kolkata Retail', '19', '236000.00', '36000.00'],
+  ]);
+  expect(r1.b2cs).toEqual([
+    {
+      txval: '50000.00',
+      iamt: '0.00',
+      camt: '4500.00',
+      samt: '4500.00',
+      csamt: '0.00',
+      supply: 'INTRA',
+      pos: '27',
+      rate: '18',
+    },
+  ]);
+  expect(r1.exp.map((d: Json) => [d.exportType, d.pos, d.items[0].txval, d.items[0].iamt])).toEqual(
+    [
+      ['WPAY', '96', '10000.00', '1800.00'],
+      ['WOPAY', '96', '20000.00', '0.00'],
+    ],
+  );
+  expect(
+    r1.cdnr.map((d: Json) => [d.noteType, d.gstin, d.items[0].txval, d.items[0].iamt]),
+  ).toEqual([['C', '29AAGCB7383J1Z4', '10000.00', '1800.00']]);
+  expect(r1.nil).toEqual([{ supply: 'INTRAB2C', nil: '5000.00', exempt: '0.00', nonGst: '0.00' }]);
+  expect(r1.unclassified).toBe(0);
+
+  const portal = await host.server.app.inject({
+    method: 'GET',
+    url: `/api/v1/l10n_in/gstr/1?month=${month}&format=portal`,
+    headers: { authorization: `Bearer ${tokens.get('maria') ?? ''}` },
+  });
+  expect(portal.statusCode, portal.body.slice(0, 300)).toBe(200);
+  const json = JSON.parse(portal.body);
+  expect(json.fp).toBe(`${month.slice(5)}${month.slice(0, 4)}`);
+  expect(json.b2b[0]).toMatchObject({
+    ctin: '29AAGCB7383J1Z4',
+    inv: [{ pos: '29', rchrg: 'N', inv_typ: 'R' }],
+  });
+  expect(json.b2b[0].inv[0].itms[0]).toEqual({
+    num: 1,
+    itm_det: { txval: 50000, rt: 18, iamt: 9000, camt: 0, samt: 0, csamt: 0 },
+  });
+  expect(json.exp.map((e: Json) => e.exp_typ)).toEqual(['WPAY', 'WOPAY']);
+  expect(json.cdnr[0].nt[0]).toMatchObject({ ntty: 'C', val: 11800 });
+
+  const three = await call('GET', `/api/v1/l10n_in/gstr/3b?month=${month}`, 'maria');
+  expectStatus(three, 200);
+  const r3 = three.json;
+  // 50,000 + 50,000 + 2,00,000 − 10,000 (the credit note).
+  expect(r3.outwardTaxable).toEqual({
+    txval: '290000.00',
+    iamt: '43200.00',
+    camt: '4500.00',
+    samt: '4500.00',
+    csamt: '0.00',
+  });
+  expect(r3.outwardZeroRated).toMatchObject({ txval: '30000.00', iamt: '1800.00' });
+  expect(r3.outwardNilExempt.txval).toBe('5000.00');
+  expect(r3.inwardReverseCharge).toMatchObject({ txval: '10000.00', iamt: '1800.00' });
+  expect(r3.itcReverseCharge.iamt).toBe('1800.00');
+  expect(r3.itcOther).toMatchObject({ camt: '1800.00', samt: '1800.00' });
+  expect(r3.payable).toEqual({
+    igst: { tax: '46800.00', credit: '1800.00', net: '45000.00' },
+    cgst: { tax: '4500.00', credit: '1800.00', net: '2700.00' },
+    sgst: { tax: '4500.00', credit: '1800.00', net: '2700.00' },
+    cess: { tax: '0.00', credit: '0.00', net: '0.00' },
+  });
+
+  // The files, an unknown return, a user without Accounting.
+  for (const [form, format, magic] of [
+    ['1', 'xlsx', 'PK'],
+    ['3b', 'pdf', '%PDF'],
+  ] as const) {
+    const file = await host.server.app.inject({
+      method: 'GET',
+      url: `/api/v1/l10n_in/gstr/${form}?month=${month}&format=${format}`,
+      headers: { authorization: `Bearer ${tokens.get('maria') ?? ''}` },
+    });
+    expect(file.statusCode, file.body.slice(0, 300)).toBe(200);
+    expect(file.rawPayload.subarray(0, magic.length).toString()).toBe(magic);
+  }
+  expect((await call('GET', `/api/v1/l10n_in/gstr/2a?month=${month}`, 'maria')).status).toBe(404);
+  await host.server.auth?.createUser({
+    login: 'omar',
+    name: 'Omar',
+    password: PASSWORD,
+    company,
+    companies: [company],
+    groups: ['contacts.user'],
+  });
+  expect((await call('GET', `/api/v1/l10n_in/gstr/3b?month=${month}`, 'omar')).status).toBe(403);
+});

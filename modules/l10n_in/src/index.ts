@@ -21,8 +21,21 @@ import { defineModule, type KoshModule, type LocalizationSpec } from '@kosh/modu
 import { field } from '@kosh/views';
 import { GST_DOCUMENTS } from './documents.js';
 import { CESS_RATES, GST_RATES, l10nInShutro } from './module.js';
+import { registerGstRoutes } from './routes.js';
 
 export { GST_DOCUMENTS } from './documents.js';
+export {
+  B2CL_THRESHOLD,
+  type Gstr1,
+  type Gstr1Document,
+  type Gstr3b,
+  gstr1,
+  gstr1PortalJson,
+  gstr3b,
+  type Heads,
+  MonthError,
+  monthRange,
+} from './gstr.js';
 export {
   CESS_RATES,
   CompanyGst,
@@ -41,6 +54,7 @@ export {
   TAXES,
   TaxGst,
 } from './module.js';
+export { registerGstRoutes } from './routes.js';
 
 const id = (rate: string) => rate.replace('.', '_');
 
@@ -178,6 +192,25 @@ export const l10nIn: KoshModule = defineModule({
   },
   localization: INDIA,
   hooks: { defaults: (env) => localize(env) },
+  routes: registerGstRoutes,
+  // Accounting › Reporting › GST returns: GSTR-1 and GSTR-3B.
+  actions: {
+    'l10n_in.action_gst': {
+      type: 'client',
+      page: 'l10n_in.Gst',
+      label: 'GST returns',
+      visibleTo: ['account.user'],
+    },
+  },
+  menus: [
+    {
+      id: 'l10n_in.gst',
+      parent: 'accounting.reporting',
+      label: 'GST returns',
+      action: 'l10n_in.action_gst',
+      sequence: 8,
+    },
+  ],
   // The tax invoice, the credit and debit notes (printed when Reporting is installed).
   documents: GST_DOCUMENTS,
   viewExtensions: [

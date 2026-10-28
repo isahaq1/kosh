@@ -110,6 +110,7 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
       'India: GST (CGST / SGST / IGST), cess, reverse charge, GSTIN, HSN / SAC, TDS, April–March year',
     icon: '🇮🇳',
     server: 'l10nIn',
+    web: 'registerL10nInWeb',
     bridge: ['accounting'],
     country: 'IN',
   },
