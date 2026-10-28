@@ -253,7 +253,7 @@ function MenuLinks({
 
 function ThemeMenu(): ReactElement {
   const { t } = useTranslation();
-  const { theme, setTheme } = useKosh();
+  const { theme, setTheme, density, setDensity } = useKosh();
   const icons = { light: Sun, dark: Moon, system: Monitor } as const;
   const Icon = icons[theme];
   return (
@@ -272,6 +272,17 @@ function ThemeMenu(): ReactElement {
             onCheckedChange={() => setTheme(choice)}
           >
             {t(`shell.${choice}`)}
+          </MenuCheckboxItem>
+        ))}
+        <MenuSeparator />
+        <MenuLabel>{t('shell.density')}</MenuLabel>
+        {(['comfortable', 'compact'] as const).map((choice) => (
+          <MenuCheckboxItem
+            key={choice}
+            checked={density === choice}
+            onCheckedChange={() => setDensity(choice)}
+          >
+            {t(`views.${choice}`)}
           </MenuCheckboxItem>
         ))}
       </MenuContent>
@@ -376,6 +387,7 @@ function Shell(): ReactElement {
       lang={lang}
       tz={Intl.DateTimeFormat().resolvedOptions().timeZone}
       grouping={user.groupings?.[String(current)] ?? 'international'}
+      accent={user.accents?.[String(current)] ?? null}
       {...(realtime === undefined ? {} : { realtime })}
       {...(offline === undefined ? {} : { offline })}
     >

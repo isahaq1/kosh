@@ -19,6 +19,7 @@ import { Badge, Checkbox, Input, Select, Textarea } from '../components/primitiv
 import { useKosh } from '../context.js';
 import { cn } from '../lib/cn.js';
 import type { Registry, WidgetProps } from '../registry.js';
+import { DateField } from './DateField.js';
 
 const text = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
 
@@ -110,16 +111,19 @@ function BooleanWidget({ id, value, readonly, onChange, field }: WidgetProps): R
   );
 }
 
-function DateWidget({ id, value, readonly, onChange }: WidgetProps): ReactElement {
+function DateWidget({ id, value, readonly, onChange, field, invalid }: WidgetProps): ReactElement {
   const { format } = useKosh();
   if (onChange === undefined || readonly)
     return <span>{format.date(value === null || value === undefined ? null : String(value))}</span>;
   return (
-    <Input
+    <DateField
       id={id}
-      type="date"
-      value={text(value).slice(0, 10)}
-      onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
+      value={
+        value === null || value === undefined || value === '' ? null : text(value).slice(0, 10)
+      }
+      onChange={onChange}
+      required={field.required}
+      {...(invalid === undefined ? {} : { invalid })}
     />
   );
 }
@@ -304,7 +308,7 @@ function Many2oneWidget({
           aria-expanded={open}
           aria-controls={listId}
           aria-invalid={invalid === true ? true : undefined}
-          className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-surface px-3 text-start text-sm aria-invalid:border-danger"
+          className="flex h-[var(--control-h)] w-full items-center justify-between rounded-md border border-input bg-surface px-3 text-start text-sm aria-invalid:border-danger"
         >
           <span className={cn(current === null && 'text-muted-foreground')}>
             {current === null ? t('views.choose') : label}

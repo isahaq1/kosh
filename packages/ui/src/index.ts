@@ -46,6 +46,7 @@ export {
 } from './design.js';
 export { addMessages, createI18n, directionOf, NAMESPACE } from './i18n/index.js';
 export { LANGUAGES } from './i18n/messages.js';
+export { accentVariables, hexToOklch } from './lib/accent.js';
 export { cn } from './lib/cn.js';
 export { bcp47, createFormatter, type Formatter } from './lib/format.js';
 export { type LiveRecord, useLiveModel, useLiveRecord } from './live.js';

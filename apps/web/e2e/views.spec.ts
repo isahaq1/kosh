@@ -80,10 +80,14 @@ test('form: create, edit, transitions the user may run; locked when lost', async
   await expect(page.getByRole('button', { name: 'Mark lost' })).toHaveCount(0);
   await expect(page.getByLabel('Credit Limit')).toHaveCount(0);
   await page.getByRole('button', { name: 'Qualify' }).click();
-  await expect(page.getByRole('list', { name: 'Stage' }).getByText('Customer')).toHaveAttribute(
+  // The state chip names the current stage; its workflow shows it as the current step.
+  await page.getByRole('button', { name: 'Stage: Customer' }).click();
+  await expect(page.getByRole('listitem').filter({ hasText: 'Customer' })).toHaveAttribute(
     'aria-current',
     'step',
   );
+  await page.keyboard.press('Escape'); // closes the workflow, stays on the record
+  await expect(page.getByRole('heading', { name: 'Nusrat Jahan' })).toBeVisible();
 
   // The manager marks it lost (with confirmation): the form becomes read-only.
   const url = page.url();
@@ -93,10 +97,7 @@ test('form: create, edit, transitions the user may run; locked when lost', async
   await page.goto(url);
   await page.getByRole('button', { name: 'Mark lost' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Yes' }).click();
-  await expect(page.getByRole('list', { name: 'Stage' }).getByText('Lost')).toHaveAttribute(
-    'aria-current',
-    'step',
-  );
+  await expect(page.getByRole('button', { name: 'Stage: Lost' })).toBeVisible();
   await expect(page.getByText('Read-only')).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Name' })).toHaveCount(0);
 });

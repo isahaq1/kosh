@@ -12,6 +12,7 @@ import {
   useState,
 } from 'react';
 import type { KoshApi } from './api.js';
+import { accentVariables } from './lib/accent.js';
 import { createFormatter, type Formatter } from './lib/format.js';
 import type { OfflineQueue } from './offline/queue.js';
 import type { RealtimeClient } from './realtime.js';
@@ -27,6 +28,9 @@ export interface KoshContextValue {
   readonly format: Formatter;
   readonly theme: ThemeChoice;
   setTheme(theme: ThemeChoice): void;
+  /** Comfortable or compact (RFC 0018): lists, forms and controls. */
+  readonly density: Density;
+  setDensity(density: Density): void;
   /** The realtime gateway's client, when the app has one: live lists, records and presence. */
   readonly realtime?: RealtimeClient;
   /** Changes saved offline, when the app keeps them: a form that cannot reach the server saves here. */
@@ -43,6 +47,46 @@ export function useKosh(): KoshContextValue {
 }
 
 const THEME_KEY = 'kosh.theme';
+const DENSITY_KEY = 'kosh.density';
+
+export type Density = 'comfortable' | 'compact';
+
+function readDensity(): Density {
+  try {
+    return JSON.parse(localStorage.getItem(DENSITY_KEY) ?? 'null') === 'compact'
+      ? 'compact'
+      : 'comfortable';
+  } catch {
+    return 'comfortable';
+  }
+}
+
+/** Applies the density to `<html>` (`data-density`), remembered per browser. */
+function useDensity(): [Density, (d: Density) => void] {
+  const [density, setDensity] = useState<Density>(readDensity);
+  useEffect(() => {
+    document.documentElement.dataset['density'] = density;
+    try {
+      localStorage.setItem(DENSITY_KEY, JSON.stringify(density));
+    } catch {
+      // storage unavailable: the choice lasts for this page only
+    }
+  }, [density]);
+  return [density, setDensity];
+}
+
+/** Sets the company's brand colour as the accent (RFC 0018), or the default when it has none. */
+function useAccent(accent: string | null | undefined): void {
+  useEffect(() => {
+    const root = document.documentElement.style;
+    const variables = accentVariables(accent);
+    for (const key of ['--accent-h', '--accent-c']) {
+      const value = variables[key];
+      if (value === undefined) root.removeProperty(key);
+      else root.setProperty(key, value);
+    }
+  }, [accent]);
+}
 
 function readTheme(): ThemeChoice {
   try {
@@ -83,6 +127,7 @@ export function KoshProvider({
   lang,
   tz,
   grouping,
+  accent,
   realtime,
   offline,
   children,
@@ -95,11 +140,15 @@ export function KoshProvider({
   readonly tz: string;
   /** The company's number grouping (RFC 0016). */
   readonly grouping?: 'international' | 'lakh';
+  /** The company's brand colour (`#rrggbb`, RFC 0018). */
+  readonly accent?: string | null;
   readonly realtime?: RealtimeClient;
   readonly offline?: OfflineQueue;
   readonly children: ReactNode;
 }): ReactElement {
   const [theme, setTheme] = useTheme();
+  const [density, setDensity] = useDensity();
+  useAccent(accent);
   const format = useMemo(
     () => createFormatter(lang, tz, grouping === undefined ? {} : { grouping }),
     [lang, tz, grouping],
@@ -113,10 +162,24 @@ export function KoshProvider({
       format,
       theme,
       setTheme,
+      density,
+      setDensity,
       ...(realtime === undefined ? {} : { realtime }),
       ...(offline === undefined ? {} : { offline }),
     }),
-    [api, registry, uid, companyId, format, theme, setTheme, realtime, offline],
+    [
+      api,
+      registry,
+      uid,
+      companyId,
+      format,
+      theme,
+      setTheme,
+      density,
+      setDensity,
+      realtime,
+      offline,
+    ],
   );
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }

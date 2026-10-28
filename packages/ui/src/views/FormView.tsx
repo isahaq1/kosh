@@ -56,6 +56,7 @@ import { cn } from '../lib/cn.js';
 import { useLiveRecord } from '../live.js';
 import type { FormProps } from '../registry.js';
 import { useToast } from '../shell/toast.js';
+import { StatusChip } from './StatusChip.js';
 import { PrefetchedNames, useRowNames } from './widgets.js';
 
 type Values = Record<string, unknown>;
@@ -768,7 +769,16 @@ export function FormView({
                   </ol>
                 </nav>
               )}
-              <h1 className="truncate text-lg font-semibold">{title}</h1>
+              <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+                <h1 className="truncate text-xl font-semibold">{title}</h1>
+                {statusbar === undefined || fields[statusbar] === undefined || isNew ? null : (
+                  <StatusChip
+                    field={fields[statusbar]}
+                    value={state}
+                    transitions={served.transitions.filter((tr) => tr.field === statusbar)}
+                  />
+                )}
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -925,9 +935,13 @@ export function FormView({
           </Alert>
         ))}
 
-        {statusbar === undefined && buttons.length === 0 ? null : (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-surface px-3 py-2">
-            <div className="flex flex-wrap gap-2">
+        {buttons.length === 0 ? null : (
+          <div
+            role="toolbar"
+            aria-label={t('views.recordActions')}
+            className="flex flex-wrap gap-2"
+          >
+            <div className="contents">
               {buttons.map((b) => (
                 <Button
                   key={b.id}
@@ -943,27 +957,6 @@ export function FormView({
                 </Button>
               ))}
             </div>
-            {statusbar === undefined ? null : (
-              <ol
-                aria-label={fields[statusbar]?.label ?? statusbar}
-                className="flex flex-wrap items-center gap-1 text-xs"
-              >
-                {(fields[statusbar]?.options ?? []).map((o) => (
-                  <li
-                    key={o.value}
-                    aria-current={o.value === state ? 'step' : undefined}
-                    className={cn(
-                      'rounded-full px-2.5 py-1',
-                      o.value === state
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-muted-foreground',
-                    )}
-                  >
-                    {o.label}
-                  </li>
-                ))}
-              </ol>
-            )}
           </div>
         )}
 

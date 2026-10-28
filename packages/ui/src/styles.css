@@ -1,5 +1,6 @@
 /*
- * Kosh design tokens (RFC 0007): colors, radius and typography as CSS variables, light and dark themes, Tailwind v4
+ * Kosh design tokens (RFC 0007, refreshed by RFC 0018): colors, radius, typography and density as CSS variables, light
+ * and dark themes with the company's accent, Tailwind v4
  * utilities mapped onto them. Components use logical properties only (ms/me, ps/pe, start/end), so RTL needs no
  * overrides. Import once from the app: `@import '@kosh/ui/styles.css';` after `@import 'tailwindcss';`.
  */
@@ -30,23 +31,33 @@
   --font-sans: var(--font-family);
 }
 
-:root {
-  --radius: 0.5rem;
+/* `.light` (and `.dark`) re-declare the tokens on a part of the page: a preview in the other theme, or with another
+   accent — custom properties are computed where they are declared, so the accent recomputes there. */
+:root,
+.light {
+  /* 6 px controls; cards and popovers use --radius-lg (10 px). */
+  --radius: 0.375rem;
   --font-family: "Inter", "Noto Sans Bengali", "Noto Sans Arabic", system-ui, sans-serif;
-  /* Light: contrast ratios ≥ 4.5:1 for text on background and surface (WCAG AA). */
-  --background: oklch(0.985 0.002 250);
-  --foreground: oklch(0.21 0.02 260);
+  /* The accent (RFC 0018): a company's brand hue and chroma, indigo by default; each theme fixes its lightness. */
+  --accent-h: 277;
+  --accent-c: 0.2;
+  /* Density (RFC 0018): comfortable by default, compact as a user setting. */
+  --control-h: 2.25rem;
+  --cell-py: 0.375rem;
+  /* Light: neutral (zinc) surfaces; text contrast ≥ 4.5:1 on background and surface (WCAG AA). */
+  --background: oklch(0.985 0.002 286);
+  --foreground: oklch(0.21 0.006 286);
   --surface: oklch(1 0 0);
-  --surface-foreground: oklch(0.21 0.02 260);
-  --muted: oklch(0.955 0.005 250);
-  --muted-foreground: oklch(0.45 0.02 260);
-  --border: oklch(0.9 0.008 250);
-  --input: oklch(0.86 0.01 250);
-  --ring: oklch(0.55 0.17 255);
-  --primary: oklch(0.5 0.17 255);
+  --surface-foreground: oklch(0.21 0.006 286);
+  --muted: oklch(0.965 0.003 286);
+  --muted-foreground: oklch(0.47 0.014 286);
+  --border: oklch(0.92 0.004 286);
+  --input: oklch(0.87 0.007 286);
+  --ring: oklch(0.55 var(--accent-c) var(--accent-h));
+  --primary: oklch(0.5 var(--accent-c) var(--accent-h));
   --primary-foreground: oklch(0.99 0 0);
-  --accent: oklch(0.94 0.03 255);
-  --accent-foreground: oklch(0.3 0.1 255);
+  --accent: oklch(0.96 calc(var(--accent-c) * 0.16) var(--accent-h));
+  --accent-foreground: oklch(0.38 var(--accent-c) var(--accent-h));
   --danger: oklch(0.52 0.2 25);
   --danger-foreground: oklch(0.99 0 0);
   --success: oklch(0.5 0.13 150);
@@ -56,20 +67,25 @@
   color-scheme: light;
 }
 
+[data-density="compact"] {
+  --control-h: 2rem;
+  --cell-py: 0.125rem;
+}
+
 .dark {
-  --background: oklch(0.17 0.015 260);
-  --foreground: oklch(0.94 0.01 250);
-  --surface: oklch(0.21 0.017 260);
-  --surface-foreground: oklch(0.94 0.01 250);
-  --muted: oklch(0.25 0.017 260);
-  --muted-foreground: oklch(0.72 0.02 255);
-  --border: oklch(0.3 0.02 260);
-  --input: oklch(0.36 0.02 260);
-  --ring: oklch(0.7 0.14 255);
-  --primary: oklch(0.68 0.15 255);
-  --primary-foreground: oklch(0.16 0.02 260);
-  --accent: oklch(0.3 0.05 255);
-  --accent-foreground: oklch(0.92 0.04 255);
+  --background: oklch(0.145 0.004 286);
+  --foreground: oklch(0.95 0.003 286);
+  --surface: oklch(0.185 0.005 286);
+  --surface-foreground: oklch(0.95 0.003 286);
+  --muted: oklch(0.24 0.006 286);
+  --muted-foreground: oklch(0.72 0.012 286);
+  --border: oklch(0.29 0.006 286);
+  --input: oklch(0.35 0.008 286);
+  --ring: oklch(0.7 min(var(--accent-c), 0.16) var(--accent-h));
+  --primary: oklch(0.7 min(var(--accent-c), 0.16) var(--accent-h));
+  --primary-foreground: oklch(0.16 0.01 var(--accent-h));
+  --accent: oklch(0.28 calc(var(--accent-c) * 0.3) var(--accent-h));
+  --accent-foreground: oklch(0.9 calc(var(--accent-c) * 0.35) var(--accent-h));
   --danger: oklch(0.65 0.19 25);
   --danger-foreground: oklch(0.16 0.02 260);
   --success: oklch(0.7 0.14 150);
@@ -87,6 +103,21 @@
     background: var(--background);
     color: var(--foreground);
     font-family: var(--font-family);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    /* Inter: the single-storey a and open digits; numbers line up in columns. */
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.011em;
+  }
+  td,
+  .tabular-nums,
+  input[inputmode="decimal"] {
+    font-variant-numeric: tabular-nums;
   }
   :focus-visible {
     outline: 2px solid var(--ring);

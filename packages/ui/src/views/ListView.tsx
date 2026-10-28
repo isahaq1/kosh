@@ -68,7 +68,7 @@ import { PrefetchedNames, useRowNames } from './widgets.js';
 
 const features = tableFeatures({});
 const helper = createColumnHelper<typeof features, Row>();
-type Density = 'comfortable' | 'compact';
+type Density = import('../context.js').Density;
 const HEIGHTS: Record<Density, number> = { comfortable: 40, compact: 32 };
 /** Requests a bulk action sends at once. */
 const PARALLEL = 6;
@@ -1078,9 +1078,7 @@ export function ListView(props: ViewProps): ReactElement {
   const [hidden, setHidden] = useState<ReadonlySet<string>>(
     () => new Set(stored.get<string[]>(columnsKey, [])),
   );
-  const [density, setDensity] = useState<Density>(() =>
-    stored.get<Density>('kosh.density', 'comfortable'),
-  );
+  const { density, setDensity } = useKosh();
   const height = HEIGHTS[density];
   const columns = allColumns.filter((c) => !hidden.has(c.id));
   const design = useDesign();
@@ -1318,7 +1316,6 @@ export function ListView(props: ViewProps): ReactElement {
           onClick={() => {
             const next: Density = density === 'compact' ? 'comfortable' : 'compact';
             setDensity(next);
-            stored.set('kosh.density', next);
           }}
         >
           <Rows3 aria-hidden />

@@ -9,6 +9,7 @@ import {
   Checkbox as RCheckbox,
   Dialog as RDialog,
   DropdownMenu as RMenu,
+  Popover as RPopover,
   Select as RSelect,
   Tabs as RTabs,
   Slot,
@@ -27,7 +28,7 @@ const buttonVariants = cva(
         danger: 'bg-danger text-danger-foreground hover:bg-danger/90',
         link: 'text-primary underline-offset-4 hover:underline',
       },
-      size: { sm: 'h-8 px-3', md: 'h-9 px-4', icon: 'size-9' },
+      size: { sm: 'h-8 px-3', md: 'h-[var(--control-h)] px-4', icon: 'size-[var(--control-h)]' },
     },
     defaultVariants: { variant: 'secondary', size: 'md' },
   },
@@ -68,7 +69,7 @@ const field =
   'w-full rounded-md border border-input bg-surface px-3 text-sm text-surface-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60 read-only:bg-muted aria-invalid:border-danger';
 
 export function Input({ className, ...props }: ComponentProps<'input'>): ReactElement {
-  return <input className={cn(field, 'h-9', className)} {...props} />;
+  return <input className={cn(field, 'h-[var(--control-h)]', className)} {...props} />;
 }
 
 export function Textarea({ className, ...props }: ComponentProps<'textarea'>): ReactElement {
@@ -94,6 +95,11 @@ const badge = cva('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-
   },
   defaultVariants: { tone: 'neutral' },
 });
+
+/** The badge's classes, for elements that look like one (the status chip). */
+export const badgeVariants: (props?: {
+  readonly tone?: 'neutral' | 'info' | 'success' | 'warning' | 'danger' | null;
+}) => string = badge;
 
 export function Badge({
   className,
@@ -153,7 +159,11 @@ export function Select({
       <RSelect.Trigger
         {...(id === undefined ? {} : { id })}
         aria-label={label}
-        className={cn(field, 'flex h-9 items-center justify-between gap-2 text-start', className)}
+        className={cn(
+          field,
+          'flex h-[var(--control-h)] items-center justify-between gap-2 text-start',
+          className,
+        )}
       >
         <RSelect.Value placeholder={placeholder} />
         <RSelect.Icon>
@@ -259,6 +269,30 @@ export function MenuSeparator(): ReactElement {
 }
 
 /** A modal dialog with a title (required for screen readers) and a close button. */
+/** A popover (Radix): focus moves in and back, Escape closes, positioned beside its trigger. */
+export const Popover: typeof RPopover.Root = RPopover.Root;
+export const PopoverTrigger: typeof RPopover.Trigger = RPopover.Trigger;
+export function PopoverContent({
+  className,
+  align = 'start',
+  sideOffset = 6,
+  ...props
+}: ComponentProps<typeof RPopover.Content>): ReactElement {
+  return (
+    <RPopover.Portal>
+      <RPopover.Content
+        align={align}
+        sideOffset={sideOffset}
+        className={cn(
+          'z-50 rounded-lg border bg-surface p-3 text-surface-foreground shadow-lg outline-none',
+          className,
+        )}
+        {...props}
+      />
+    </RPopover.Portal>
+  );
+}
+
 export function Dialog({
   open,
   onOpenChange,

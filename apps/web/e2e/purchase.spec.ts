@@ -48,10 +48,7 @@ test('a 750 000 order: two approval levels, then approved', async ({ page }) => 
   await signIn(page, 'maria');
   await page.goto(url);
   await panel.getByRole('button', { name: 'Approve Finance director' }).click();
-  await expect(page.getByRole('list', { name: 'State' }).getByText('Approved')).toHaveAttribute(
-    'aria-current',
-    'step',
-  );
+  await expect(page.getByRole('button', { name: 'State: Approved' })).toBeVisible();
 
   // The list shows it approved, with the total.
   await page.goto(ORDERS);

@@ -88,6 +88,8 @@ export interface CurrentUser {
   readonly companies: readonly number[];
   /** Number grouping per company (RFC 0016); older servers send none. */
   readonly groupings?: Readonly<Record<string, 'international' | 'lakh'>>;
+  /** Each company's brand colour (`#rrggbb`), when it has one (RFC 0018). */
+  readonly accents?: Readonly<Record<string, string>>;
   readonly twoFactorEnabled: boolean;
   readonly administrator: boolean;
   readonly administratorNeedsSecondFactor: boolean;
