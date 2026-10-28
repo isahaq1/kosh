@@ -37,6 +37,7 @@ const FRAMEWORK: Readonly<Record<string, string>> = {
   'packages/messaging/src/models.ts': '@kosh/messaging',
   'packages/permissions/src/models.ts': '@kosh/permissions',
   'packages/reporting/src/models.ts': '@kosh/reporting',
+  'packages/integrations/src/models.ts': '@kosh/integrations',
 };
 const apps = existsSync(join(root, 'modules'))
   ? readdirSync(join(root, 'modules'))
@@ -75,7 +76,7 @@ for (const file of apps) {
 function packageOf(file: string): string | undefined {
   const framework = FRAMEWORK[file];
   if (framework !== undefined) return framework;
-  const app = /^modules\/([a-z0-9-]+)\/src\/module\.ts$/.exec(file);
+  const app = /^modules\/([a-z0-9_-]+)\/src\/module\.ts$/.exec(file);
   return app === null ? undefined : `@kosh/${app[1]}`;
 }
 
