@@ -187,7 +187,14 @@ differs from the transaction's is refused (*Failed*, with both amounts).
   `payment_link.expired` / `payment_link.cancelled`) with the provider's endpoint URL and **the endpoint's secret**
   (Integrations › Inbound webhooks, made with the first payment): `X-Razorpay-Signature` is checked with it and
   `x-razorpay-event-id` makes redeliveries harmless. On the customer's return the link is fetched from Razorpay.
-- Stripe comes next.
+- **Stripe** (`stripe`, cards and local methods worldwide through Checkout): set `SHUTRO_ERP_STRIPE_SECRET_KEY`
+  (a secret or restricted key; `sk_test_…` serves *Test* providers, `sk_live_…` *Live* ones). In Stripe's dashboard,
+  add a webhook endpoint with the provider's endpoint URL for `checkout.session.completed`,
+  `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed` and
+  `checkout.session.expired`; Stripe shows its signing secret (`whsec_…`): paste it into **the endpoint's Secret**
+  (Integrations › Inbound webhooks). `Stripe-Signature` is checked with it, events older than five minutes are
+  refused, and the event id makes redeliveries harmless. On the customer's return the session is fetched from
+  Stripe.
 
 A provider is offered in the portal only when its adapter has credentials for the provider's mode. An adapter
 implements:

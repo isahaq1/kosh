@@ -123,6 +123,5 @@ Shutro ERP server, and set `SHUTRO_ERP_PORTAL_URL` to that domain.
 
 ## Not yet
 
-- Stripe: the test provider, SSLCommerz, bKash and Razorpay work today.
 - `shutro-erp init` does not offer the portal yet, and generated projects do not include the portal app.
 - Installing the portal as an app on the home screen (PWA).

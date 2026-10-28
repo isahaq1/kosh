@@ -325,3 +325,21 @@ transitions and the modules' declared events; OpenAPI describes the new security
   fetched by its id; `paid` settles it, `expired` / `cancelled` cancel it. Test or live follows the key's prefix.
 - **Tests**: the link's fields, a signed webhook paying once (a wrong secret refused, a redelivery a duplicate),
   the return before the webhook answered by Razorpay, an expired link; subunits; keys and modes.
+
+## Implementation notes (2026-10-28): step 4, part 2d — Stripe
+
+- **The adapter** (`stripe`), on Checkout Sessions, tested against a simulated API; to be checked with test keys. A
+  session per transaction (`client_reference_id`, `metadata.reference` and the payment intent's metadata carry the
+  reference; one line of the amount in subunits; success and cancel URLs = the return route); its id is the provider
+  reference, and the payment intent's id the payment's once paid.
+- **Webhooks**: the merchant adds the provider's endpoint in Stripe's dashboard and pastes Stripe's signing secret
+  into the endpoint's Secret (the other direction from Razorpay, whose secret the merchant chooses).
+  `Stripe-Signature` is verified (`v1` HMAC of `"<t>.<body>"`, any of several `v1`, five minutes' tolerance) and the
+  event id deduplicates. `checkout.session.completed` / `async_payment_succeeded` with `payment_status: paid` pay;
+  `async_payment_failed` fails; `expired` cancels; a completed session not yet paid (a delayed method) waits.
+- **Returns** fetch the session. Keys: `sk_` or `rk_`, test or live by their prefix; publishable keys refused.
+- Subunit conversion is shared (`money.ts`) with Razorpay, with Stripe's zero- and three-decimal currencies.
+- **Tests**: the session's fields, the secret pasted into the endpoint, a signed event paying once (a wrong secret, an
+  old timestamp refused; a redelivery a duplicate), the return before the event, an expired session; keys and modes.
+- **Step 4 is complete** in code: the test provider, SSLCommerz, bKash, Razorpay and Stripe. Each real adapter is to
+  be checked on its sandbox; a payment link in the invoice email and provider fees remain.
