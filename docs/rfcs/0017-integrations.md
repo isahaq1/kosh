@@ -185,6 +185,31 @@ permissions, the audit log, the transactional outbox and jobs.
   audit; service accounts (administrators only, no sign-in, keys for them). E2E: create, use, refuse, revoke.
 - Not in this step: `export` and `act:<permission>` scopes (RFC §5.1) — exports and actions follow read / write.
 
+## Implementation notes (2026-10-28): step 2 — outbound webhooks
+
+- **`@kosh/integrations`**, the Integrations app (`integrations.manager`): `webhook.subscription` (URL, events, signing
+  secret, acting user, failures in a row, last delivery) and `webhook.delivery` (event, payload, state, attempts,
+  response status and body, duration, error, replay of).
+- **Events**: Shutro's change events of every served model (`<model>.created|updated|deleted`; the module turns
+  them on with `changeEvents: '*'`), and the events modules declare in their manifests (`events: [{ topic, model,
+  label }]` — `account.move.posted`, `sale.order.confirmed`), each read by an outbox subscriber. Events of no
+  company (installation work) are skipped.
+- **Payloads**: `{ id, event, occurredAt, data: { model, id, record, …the event's own fields } }`; the record is what
+  `GET /api/v1/models/<model>/<id>` gives the webhook's user (`readApiRecord`, now exported by the server); a record
+  they may not read is not sent; one deleted since is sent without its record.
+- **Delivery**: a job per delivery (8 attempts, Shutro's back-off), each attempt recorded in its own transaction so
+  retries keep it; headers `X-Shutro-Event`, `X-Shutro-Delivery` (the event id, kept by replays) and
+  `X-Shutro-Signature: t=…,v1=…` (HMAC-SHA256 of `"<t>.<body>"`); no redirects followed; the allow-list
+  (`SHUTRO_ERP_WEBHOOK_HOSTS`) checked at creation and before each delivery.
+- **Routes** for the events, creation with checks, ping, new secret and replay; the screens are generated list and
+  form views with two components (test event and new secret with the events offered; send again), English and
+  Bangla. Installed by default with `shutro-erp init`; in the npm bundle.
+- **Tests**: events offered, URL and events checked, managers only; created / updated / deleted deliveries with the
+  signature checked as a receiver would; a failing endpoint recorded and retried; replay with the same event id;
+  ping; new secret; a webhook acting as a user who cannot read the model sends nothing; a declared module event.
+  E2E: a webhook made on its form, the events offered, a test event in Deliveries; no Integrations without access.
+- Automation's webhook action keeps its own log for now (RFC §5.3 planned one log for both).
+
 ## Alignment with CLAUDE.md
 
 "Secure by default": scopes narrow and never widen the user's rights; server-side checks on every call; hashed
