@@ -118,7 +118,7 @@ function publicName(pkg: string, sub: string): string {
   return `${NAME}/${pkg}${sub}`;
 }
 
-const version = process.argv[2] ?? '0.3.0';
+const version = process.argv[2] ?? '0.3.1';
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });
 
