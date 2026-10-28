@@ -373,6 +373,26 @@ Odoo's fiscal positions); version 1 also has **reverse charge**, **GST cess**, *
   document, reverse charge on a bill, shares refused, a debit note, a vendor credit note on payables; the engine
   with reverse charge and cess.
 
+## Implementation notes (2026-10-28): step 5, part 2 — `l10n_in`
+
+- **Chart, taxes, components**: the India chart (CGST / SGST / IGST / cess payable and input credit, reverse-charge
+  payables, TDS); GST per slab for sales and purchases, each with CGST and SGST (`intra`, half each) and IGST
+  (`inter`) as data records; purchases under reverse charge; cess; nil-rated, exempt, non-GST, zero-rated (LUT).
+  The localization declaration gained `components` (external id → account, and the reverse-charge account); the
+  installer sets them per company. `gstTreatment` on taxes says where the returns (part 3) put them.
+- **Identifiers**: GSTIN checked for its format, its check digit (Luhn mod 36) and its state code against the
+  contact's or company's state (old and new ISO 3166-2 codes of the renamed states); PAN; HSN / SAC on products.
+- **Lines** store `cgstAmount`, `sgstAmount`, `igstAmount`, `cessAmount`, `gstRate` and `totalWithGst`, split by the
+  document's place of supply as posting splits them; documents store `gstReverseCharge`.
+- **Documents**: the tax invoice (rule 46 fields), the credit note and the debit note.
+- **TDS** withholdings by section; their thresholds are annual or per payment and are not applied per document:
+  to check, like the rates.
+- **`kosh init`**: India for INR (`--country IN`).
+- **Tests**: the installed setup (every component's account, cess, withholdings, April year, lakh); GSTIN check
+  digit and state, PAN, HSN; an invoice within Maharashtra (CGST 4,500 + SGST 4,500) and one to Karnataka (IGST
+  9,000) with their line heads and the tax invoice; a bill under reverse charge (input 1,800, payable 1,800, the
+  vendor owed 10,000).
+
 ## Alignment with CLAUDE.md
 
 "Money is always `Decimal`": every tax and withholding amount, per currency. "Metadata-driven": a country is a

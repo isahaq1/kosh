@@ -1,6 +1,6 @@
 # Country localizations
 
-A country is a module (`l10n_bd`, Bangladesh; India next). It declares what a company in that country starts
+A country is a module (`l10n_bd` Bangladesh, `l10n_in` India). It declares what a company in that country starts
 with — the chart of accounts, the accounts of its taxes, the withholdings, the fiscal year and how numbers are
 grouped — and ships the country's taxes, tax identifiers, documents and returns. Accounting itself is
 country-neutral: several taxes per line in sequence (supplementary duty before VAT), withholding at payment,
@@ -11,7 +11,7 @@ Accounting › Configuration and the document designer, and upgrades never overw
 
 ## Installing
 
-- A new installation: `npx kosh init --country BD` (the default when the currency is BDT). The localization comes
+- A new installation: `npx kosh init --country BD` or `--country IN` (the defaults for BDT and INR). The localization comes
   with Accounting, like a bridge.
 - An existing one: install `l10n_bd` in Settings › Apps (or `kosh apps install l10n_bd`). Its defaults set up each
   company that has no chart yet; a company already on another chart is left alone.
@@ -105,3 +105,31 @@ audit log. Amounts are in taka: a line in another currency converts at its docum
 prepares what is entered there. The registers have no stock columns until Inventory exists. The BIN's check digit
 is not verified (only its 13 digits) until the NBR's algorithm is confirmed. Debit notes (Mushak 6.8) wait for
 debit notes in Accounting.
+
+## India (`l10n_in`)
+
+| | |
+| --- | --- |
+| Chart | the generic accounts plus CGST, SGST / UTGST, IGST and cess payable and input credit, GST payable under reverse charge, TDS payable and receivable |
+| GST | one tax per slab — 0.25 %, 3 %, 5 %, 12 %, 18 %, 28 % — for sales and for purchases, each with its components: CGST and SGST (half each) within the state, IGST between states and abroad |
+| Other taxes | nil-rated, exempt, non-GST, zero-rated exports under LUT; compensation cess 1 %, 3 %, 12 %, 15 %, 22 %; purchases under reverse charge at 5 %, 12 %, 18 %, 28 % |
+| TDS | 194C 1 % / 2 %, 194J 10 % / 2 %, 194H 2 %, 194-I 10 % when paying vendors; 2 % kept back by customers |
+| Year and numbers | April–March fiscal year; 1,00,000.00 grouping |
+| Identifiers | GSTIN (format, check digit, its state code against the contact's state) and PAN on companies and contacts; HSN / SAC on products |
+
+**Within the state or not.** Set the company's state in Accounting › Configuration › Settings (`IN-MH`), and the
+contacts' states. A document's place of supply is the customer's state unless set on the document; posting writes
+CGST and SGST when it is the company's state, IGST otherwise and for customers abroad. The tax on the line stays
+`GST 18%` either way, and totals do not change; only the posted tax lines differ. Each product line also stores its
+CGST, SGST, IGST and cess, its GST rate and its total for the tax invoice.
+
+**Reverse charge.** A bill with a reverse-charge GST is paid to the supplier without the tax; posting writes the
+input credit and the GST payable by the company, net zero. The tax invoice says whether tax is payable on reverse
+charge.
+
+**Documents**: the tax invoice (supplier and recipient with their GSTIN, the place of supply, each line's HSN / SAC,
+taxable value, GST rate, CGST, SGST, IGST and cess, the total in words), the credit note and the debit note.
+
+**Next** (RFC 0016 step 5, parts 3–4): GSTR-1 and GSTR-3B on screen, as XLSX and as the portal's JSON; e-invoicing
+(IRN and QR) and e-way bills through a provider. Rates and TDS thresholds change with the GST Council and each
+Finance Act: check them in Accounting › Configuration.
