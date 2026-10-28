@@ -33,6 +33,8 @@ test('a confirmed sales order is invoiced from its form; the invoice is a draft 
     .click();
   await expect(page.getByRole('heading', { level: 1 })).toContainText('SO/');
   await expect(page.getByText('To invoice')).toBeVisible();
+  // A saved order shows its lines (and their taxes).
+  await expect(page.getByRole('cell', { name: 'Steel beam' }).first()).toBeVisible();
   await page.getByRole('button', { name: 'Create invoice' }).click();
   await expect(page.getByText('Invoiced', { exact: true })).toBeVisible();
   await page.goto('/accounting/a/accounting.action_customer_invoices');

@@ -60,6 +60,9 @@ import { PrefetchedNames, useRowNames } from './widgets.js';
 
 type Values = Record<string, unknown>;
 
+const pick = (row: Values, keys: readonly string[]): Values =>
+  Object.fromEntries(keys.filter((k) => k in row).map((k) => [k, row[k]]));
+
 /** Edits of a one2many, sent as Shutro commands with the parent. */
 interface LineState {
   readonly rows: readonly {
@@ -77,6 +80,29 @@ function lineValues(values: Values, fields: Readonly<Record<string, ViewField>>)
   for (const [key, value] of Object.entries(values))
     out[key] = fields[key]?.kind === 'many2many' && Array.isArray(value) ? { set: value } : value;
   return out;
+}
+
+/**
+ * The one2many and many2many fields a form shows (its lines, its tags): a record's default fields leave them out,
+ * so the form asks for them by name.
+ */
+function relationFieldsOf(
+  sheet: readonly FormNode[],
+  fields: Readonly<Record<string, ViewField>>,
+): string[] {
+  const out = new Set<string>();
+  const walk = (nodes: readonly FormNode[]): void => {
+    for (const node of nodes) {
+      if (node.kind === 'lines') out.add(node.field);
+      else if (node.kind === 'field') {
+        const kind = fields[node.field]?.kind;
+        if (kind === 'one2many' || kind === 'many2many') out.add(node.field);
+      } else if (node.kind === 'group') walk(node.children);
+      else if (node.kind === 'notebook') for (const page of node.pages) walk(page.children);
+    }
+  };
+  walk(sheet);
+  return [...out];
 }
 
 function commandsOf(lines: LineState, fields: Readonly<Record<string, ViewField>>): Values {
@@ -297,7 +323,24 @@ export function FormView({
             } as Row,
             etag: null,
           }
-        : api.get(model, recordId),
+        : (async () => {
+            // The defaults (what conditions and the header read), then the lines and tags the form shows.
+            const relations = relationFieldsOf(view.sheet, fields);
+            const [record, related] = await Promise.all([
+              api.get(model, recordId),
+              relations.length === 0 ? null : api.get(model, recordId, relations),
+            ]);
+            return related === null
+              ? record
+              : {
+                  ...record,
+                  record: {
+                    ...related.record,
+                    ...record.record,
+                    ...pick(related.record, relations),
+                  },
+                };
+          })(),
   });
   // Proposed values (from a document) are unsaved changes: Save, Discard and the leave guard apply to them.
   // Proposed lines of a one2many are new rows of its line editor.
