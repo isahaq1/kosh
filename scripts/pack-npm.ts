@@ -62,6 +62,7 @@ const PACKAGES = [
   'account_portal',
   'purchase_portal',
   'project_portal',
+  'payment',
   'l10n_bd',
   'l10n_in',
   'ui',

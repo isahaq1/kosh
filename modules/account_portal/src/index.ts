@@ -2,8 +2,8 @@
  * @packageDocumentation
  * `@kosh/account_portal`: Accounting in the portal (RFC 0015 §5.4). Proposed whenever Accounting and the portal
  * are installed. Customers see their posted invoices and credit notes, what is still due, print them and write on
- * them; vendors see the bills recorded for them. Payment is by the details on the invoice (online payment comes
- * with the integrations RFC).
+ * them; vendors see the bills recorded for them. Open invoices are payable online when the `payment` module and
+ * a provider are installed (RFC 0017 §5.5); otherwise by the payment details on the invoice.
  */
 import { accounting } from '@kosh/accounting';
 import { defineModule } from '@kosh/modules-sdk';
@@ -58,6 +58,7 @@ export const accountPortal: ReturnType<typeof defineModule> = defineModule({
         thread: true,
         attention: { kind: 'out_invoice', paymentState: { in: ['not_paid', 'partial'] } },
         announce: { state: 'posted' },
+        payment: { when: { kind: 'out_invoice', paymentState: { in: ['not_paid', 'partial'] } } },
       },
       {
         key: 'bills',

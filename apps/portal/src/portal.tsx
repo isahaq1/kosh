@@ -46,6 +46,8 @@ export interface DocumentView {
   readonly lineFields?: readonly FieldMeta[];
   readonly lines?: readonly Row[];
   readonly actions: readonly PortalAction[];
+  /** Open for payment online (RFC 0017 §5.5): Pay now, when a provider is there. */
+  readonly payable?: boolean;
   readonly pdf: boolean;
   readonly thread: boolean;
 }

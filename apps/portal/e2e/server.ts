@@ -1,6 +1,6 @@
 /**
- * The portal's end-to-end server (RFC 0015 step 3): Sales and Accounting with their portal bridges, a customer
- * company with a contact, a sent quotation and a posted invoice. Started by Playwright's `webServer`. The tests
+ * The portal's end-to-end server (RFC 0015 step 3): Sales and Accounting with their portal bridges and online
+ * payments (the test provider), a customer company with a contact, a sent quotation and a posted invoice. Started by Playwright's `webServer`. The tests
  * grant the portal access themselves, as staff, through the API.
  *
  * Users (password: `correct horse battery`):
@@ -10,6 +10,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { accountPortal } from '@kosh/account_portal';
+import { payment } from '@kosh/payment';
 import { installTemplates } from '@kosh/reporting';
 import { salePortal } from '@kosh/sale_portal';
 import {
@@ -32,7 +33,7 @@ process.env['KOSH_PORTAL_URL'] ??= 'http://localhost:5175';
 
 const container = await new PostgreSqlContainer('postgres:18').start();
 const databaseUrl = container.getConnectionUri();
-const catalogue = [base, salePortal, accountPortal];
+const catalogue = [base, salePortal, accountPortal, payment];
 const migrations = mkdtempSync(join(tmpdir(), 'kosh-e2e-portal-migrations-'));
 const setup = pg.createDriver({ url: databaseUrl, max: 2, parseNumeric: orm.toDecimal });
 await recordInstalledApps(setup, [], [], 'e2e');
@@ -40,7 +41,7 @@ await applyApps(
   await prepareApps({
     driver: setup,
     catalogue,
-    change: { install: ['sale_portal', 'account_portal'] },
+    change: { install: ['sale_portal', 'account_portal', 'payment'] },
     dir: migrations,
   }),
   { driver: setup, dir: migrations, actor: 'e2e' },
@@ -118,10 +119,19 @@ const quotation = (await as('POST', '/api/v1/models/sale.order', {
   lines: { create: [{ product: bag.id, name: 'Jute bag', quantity: '50', priceUnit: '1200' }] },
 })) as { id: number };
 await as('POST', `/api/v1/models/sale.order/${quotation.id}/transitions/send`);
-const journals = (await as('GET', '/api/v1/models/account.journal?fields=id,code'))['items'] as {
+const journals = (await as('GET', '/api/v1/models/account.journal?fields=id,code,type'))[
+  'items'
+] as {
   id: number;
   code: string;
+  type: string;
 }[];
+// Online payments with the test provider, into the bank journal.
+await as('POST', '/api/v1/models/payment.provider', {
+  name: 'Test payments',
+  code: 'fake',
+  journal: journals.find((j) => j.type === 'bank')?.id,
+});
 const invoice = (await as('POST', '/api/v1/models/account.move', {
   kind: 'out_invoice',
   journal: journals.find((j) => j.code === 'INV')?.id,

@@ -1,6 +1,6 @@
 /**
- * One document: its fields, lines and totals, the PDF, the actions that apply now (signing in a dialog), and its
- * thread. The server decides what applies; the page shows what it says.
+ * One document: its fields, lines and totals, the PDF, the actions that apply now (signing in a dialog), Pay now
+ * when it is open for payment online (and the outcome on the way back), and its thread. The server decides what applies; the page shows what it says.
  */
 import { Alert, Button, Card, Dialog, Input, Label, Skeleton, Textarea } from '@kosh/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -8,6 +8,7 @@ import { Link, useParams } from '@tanstack/react-router';
 import { ArrowLeft, Download, Send } from 'lucide-react';
 import { type ReactElement, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PayButtons, PaymentOutcome } from '../Pay.js';
 import {
   type DocumentView,
   type Message,
@@ -171,6 +172,8 @@ export function Document(): ReactElement {
   const path = `/api/portal/v1/documents/${encodeURIComponent(key)}/${encodeURIComponent(id)}`;
   const [acting, setActing] = useState<PortalAction | null>(null);
   const [done, setDone] = useState(false);
+  // Back from a payment provider: `?payment=<reference>`.
+  const [payment] = useState(() => new URLSearchParams(window.location.search).get('payment'));
   const view = useQuery({
     queryKey: ['portal', 'document', path],
     queryFn: () => api.call<DocumentView>('GET', path),
@@ -200,6 +203,7 @@ export function Document(): ReactElement {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">{title}</h1>
         <div className="flex flex-wrap gap-2">
+          {view.data.payable === true ? <PayButtons document={key} id={id} /> : null}
           {actions.map((a) => (
             <Button
               key={a.key}
@@ -218,6 +222,7 @@ export function Document(): ReactElement {
         </div>
       </div>
       {done ? <Alert tone="info">{t('done')}</Alert> : null}
+      {payment === null || payment === '' ? null : <PaymentOutcome reference={payment} />}
       {pdf.error === null ? null : <Alert>{pdf.error.message}</Alert>}
       <Card className="p-4">
         <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">

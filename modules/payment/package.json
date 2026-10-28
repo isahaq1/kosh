@@ -1,0 +1,57 @@
+{
+  "name": "@kosh/payment",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Online payments: providers, transactions, Pay now in the portal, payments registered in Accounting (RFC 0017 §5.5)",
+  "keywords": [
+    "kosh",
+    "erp",
+    "typescript",
+    "postgresql",
+    "shutro"
+  ],
+  "author": "Isahaq <hmisahaq01@gmail.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/isahaq1/kosh/tree/main/modules/payment#readme",
+  "bugs": {
+    "url": "https://github.com/isahaq1/kosh/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isahaq1/kosh.git",
+    "directory": "modules/payment"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "@kosh/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node ../../scripts/copy-views.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@kosh/modules-sdk": "workspace:*",
+    "@kosh/server": "workspace:*",
+    "@kosh/views": "workspace:*",
+    "@kosh/accounting": "workspace:*",
+    "@kosh/account_portal": "workspace:*",
+    "@kosh/portal": "workspace:*",
+    "@kosh/contacts": "workspace:*",
+    "@kosh/integrations": "workspace:*",
+    "fastify": "^5.12.7"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^12.2.1"
+  }
+}

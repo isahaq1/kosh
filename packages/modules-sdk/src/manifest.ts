@@ -223,6 +223,11 @@ export interface PortalDocumentSpec {
    * email with a link, once. The model's writes must reach the portal: list it in the module's `changeEvents`.
    */
   readonly announce?: Readonly<Record<string, unknown>>;
+  /**
+   * The customer may pay it online (RFC 0017 §5.5) while it is in this domain (`{ paymentState: 'not_paid' }`):
+   * the document's page offers Pay now when a payment module and a provider are there.
+   */
+  readonly payment?: { readonly when: Readonly<Record<string, unknown>> };
 }
 
 /**

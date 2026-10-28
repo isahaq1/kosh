@@ -252,6 +252,14 @@ export function registerPortalDocumentRoutes(context: ModuleContext): void {
           ? {}
           : { lineFields: meta(d.lineModel, d.spec.lines.fields), lines }),
         actions: await available(su, d, id),
+        payable:
+          d.spec.payment !== undefined &&
+          (
+            await ref(su, d.model.name).search({
+              where: { and: [{ id }, d.spec.payment.when] },
+              limit: 1,
+            })
+          ).length > 0,
         pdf: d.spec.pdf !== undefined,
         thread: d.spec.thread === true,
       };

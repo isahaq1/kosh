@@ -1,7 +1,7 @@
 /**
  * The portal on a phone (RFC 0015 step 3): staff invite a customer's contact; the contact opens the invitation,
  * chooses a password and lands on the home page with the quotation to sign and the invoice due; signs and accepts
- * the quotation, writes on it, downloads the invoice, and reads the portal in Bangla.
+ * the quotation, writes on it, downloads the invoice, pays it online, and reads the portal in Bangla.
  */
 import { expect, type Page, test } from '@playwright/test';
 
@@ -36,7 +36,7 @@ async function openDocument(page: Page, nav: string, name: RegExp): Promise<void
   await page.getByRole('link', { name }).first().click();
 }
 
-test('invited, activated, signs the quotation, writes, downloads the invoice, reads Bangla', async ({
+test('invited, activated, signs the quotation, writes, downloads and pays the invoice, reads Bangla', async ({
   page,
 }) => {
   const link = new URL(await invite());
@@ -78,6 +78,13 @@ test('invited, activated, signs the quotation, writes, downloads the invoice, re
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download the PDF' }).click();
   expect((await download).suggestedFilename()).toMatch(/\.pdf$/);
+
+  // Pay it online: the (test) provider's page, and back.
+  await page.getByRole('button', { name: 'Pay now' }).click();
+  await expect(page.getByRole('heading', { name: 'Test payment' })).toBeVisible();
+  await page.getByRole('button', { name: 'Pay', exact: true }).click();
+  await expect(page.getByText(/Thank you: your payment of [\d.]+ BDT is received\./)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Pay now' })).toHaveCount(0);
 
   // Bangla.
   await page.getByRole('link', { name: 'Rina Akter' }).click();
