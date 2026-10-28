@@ -271,3 +271,23 @@ transitions and the modules' declared events; OpenAPI describes the new security
   portal's routes, documents not payable online refused. E2E (portal): pay the invoice with the test provider.
 - **Next (part 2)**: the SSLCommerz, bKash, Razorpay and Stripe adapters, each on its sandbox; a payment link in the
   invoice email (without signing in); fees.
+
+## Implementation notes (2026-10-28): step 4, part 2a — SSLCommerz
+
+- **The adapter** (`sslcommerz`), written from SSLCommerz's v4 developer documentation and tested against a simulated
+  sandbox (its session, order validation and transaction query APIs); to be checked on the real sandbox with a store
+  account. Credentials from the environment only (`SHUTRO_ERP_SSLCOMMERZ_STORE_ID`, `…_STORE_PASSWORD`,
+  `…_SANDBOX`): one store per installation, sandbox for *Test* providers, live for *Live* ones.
+- **The IPN is not trusted as sent** (the documentation gives no hash algorithm for `verify_sign`): a paid IPN is
+  confirmed with the order validation API — status `VALID` / `VALIDATED`, the same `tran_id`, amount and currency —
+  and its `val_id` is the event id; a failed or cancelled one must be known to the transaction query with no
+  successful attempt. Forged and altered IPNs are refused (401) and logged.
+- **Returns**: the documentation does not say whether the success / fail / cancel URLs are called by GET or POST, so
+  every provider now returns to `GET|POST /api/v1/payment/return/<reference>`, which forwards the customer to the
+  invoice in the portal; the browser's data is ignored.
+- **Settling**: a failed or cancelled transaction becomes paid when the provider later confirms a payment (a retry
+  after a failure, or a failure reported first); paid stays final.
+- **Offered only when configured**: `PaymentAdapter.configured(mode)`; the portal lists a provider only when its
+  adapter has credentials for the provider's mode, and starting one without them is refused (409).
+- **Tests**: the session fields, an IPN confirmed and paid once (its duplicate ignored), a forged `val_id` and a
+  changed amount refused, a failure then a successful retry, the return before the IPN; configuration.

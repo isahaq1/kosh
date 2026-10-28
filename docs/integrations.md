@@ -158,24 +158,38 @@ it failed). Behind it:
    asks the provider, settling it then.
 
 **Once only**: a repeated callback, a replay from the log, or a callback after the return never pays twice — the
-transaction is settled under a lock on its reference, and a settled one stays as it is. An amount or currency that
+transaction is settled under a lock on its reference, and a paid one stays as it is (a failed or cancelled one
+becomes paid if the provider confirms the payment later). An amount or currency that
 differs from the transaction's is refused (*Failed*, with both amounts).
 
 **Online payments** (Accounting) lists the transactions with their state, the provider's reference and the payment.
 
-**Providers**: the **test provider** (`fake`) moves no money — its own checkout page lets you pay or decline — for
-trying the flow and for tests; it cannot be *Live*. SSLCommerz, bKash, Razorpay and Stripe come next, each with its
-sandbox. An adapter implements:
+**Providers**:
+
+- **Test provider** (`fake`): moves no money — its own checkout page lets you pay or decline — for trying the flow
+  and for tests; it cannot be *Live*.
+- **SSLCommerz** (`sslcommerz`, Bangladesh: cards, bKash, Nagad, Rocket and banks through its checkout): set
+  `SHUTRO_ERP_SSLCOMMERZ_STORE_ID`, `SHUTRO_ERP_SSLCOMMERZ_STORE_PASSWORD` and `SHUTRO_ERP_SSLCOMMERZ_SANDBOX`
+  (`true` unless `false`). One store per installation: with the sandbox, providers in *Test* mode are offered; with
+  the live store, *Live* ones. Its IPN is never trusted as sent: a paid one is confirmed with SSLCommerz's order
+  validation API (`val_id`), which must agree on the transaction, amount and currency; a failed one with its
+  transaction query; the same query answers when the customer is back before the IPN.
+- bKash (direct), Razorpay and Stripe come next.
+
+A provider is offered in the portal only when its adapter has credentials for the provider's mode. An adapter
+implements:
 
 ```ts
 interface PaymentAdapter {
   readonly code: string;
-  createPayment(request: PaymentRequest): Promise<{ redirectUrl: string }>; // reference, amount, currency, URLs
-  verifyCallback(call: InboundCall, secret: string): string | null; // the event id, or null to refuse
+  configured(mode: 'test' | 'live'): boolean; // its credentials are set for this mode
+  createPayment(request: PaymentRequest): Promise<{ redirectUrl: string }>; // reference, amount, customer, URLs
+  verifyCallback(call: InboundCall, secret: string): string | null | Promise<string | null>; // event id, or null
   readCallback(call: InboundCall): PaymentResult | null; // reference, status, provider's reference, amount
   status(reference: string, mode: 'test' | 'live'): Promise<PaymentResult | null>;
 }
 ```
 
-**Addresses**: providers send customers back to `SHUTRO_ERP_PORTAL_URL` (`/d/invoices/<id>?payment=<reference>`) and
-call back at `SHUTRO_ERP_API_URL` + `/api/v1/hooks/<token>`; both must be the public addresses in production.
+**Addresses**: providers send customers back (GET or POST) to `SHUTRO_ERP_API_URL` + `/api/v1/payment/return/<reference>`,
+which forwards them to the invoice in the portal (`SHUTRO_ERP_PORTAL_URL` + `/d/invoices/<id>?payment=<reference>`),
+and call back at `SHUTRO_ERP_API_URL` + `/api/v1/hooks/<token>`; both must be the public addresses in production.
