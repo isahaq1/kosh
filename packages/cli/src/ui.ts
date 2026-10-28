@@ -353,7 +353,27 @@ export function createUi(
     },
     card(title, rows, tone = 'green') {
       const labelWidth = Math.max(0, ...rows.map(([l]) => width(l)));
-      const body = rows.map(([l, v]) => `${s('gray', l.padEnd(labelWidth))}  ${v}`);
+      // Long values wrap at the terminal's width, aligned after their label.
+      const room = Math.max(20, Math.min(terminal.columns, 100) - labelWidth - 10);
+      const wrap = (value: string): string[] => {
+        const lines: string[] = [];
+        let current = '';
+        for (const word of value.split(' ')) {
+          const next = current === '' ? word : `${current} ${word}`;
+          if (current !== '' && width(next) > room) {
+            lines.push(current);
+            current = word;
+          } else current = next;
+        }
+        return [...lines, current];
+      };
+      const body = rows.flatMap(([l, v]) =>
+        wrap(v).map((part, i) =>
+          i === 0
+            ? `${s('gray', l.padEnd(labelWidth))}  ${part}`
+            : `${' '.repeat(labelWidth)}  ${part}`,
+        ),
+      );
       const inner = Math.max(width(title), ...body.map(width)) + 2;
       const [tl, tr, bl, br, h, v] = terminal.unicode
         ? ['╭', '╮', '╰', '╯', '─', '│']

@@ -30,14 +30,17 @@ const windows = process.platform === 'win32';
 
 /** A child process running `pm args` in `cwd`, its output kept (the last 200 lines). */
 function start(pm: PackageManager, args: readonly string[], cwd: string) {
-  const child = spawn(pm, args, {
+  const options = {
     cwd,
     env: { ...process.env, FORCE_COLOR: '0' },
-    stdio: ['ignore', 'pipe', 'pipe'],
-    // npm, pnpm… are .cmd scripts on Windows; elsewhere a process group, stopped as a whole.
-    shell: windows,
-    detached: !windows,
-  });
+    stdio: ['ignore', 'pipe', 'pipe'] as ['ignore', 'pipe', 'pipe'],
+    detached: !windows, // elsewhere a process group, stopped as a whole
+  };
+  // npm, pnpm… are .cmd scripts on Windows: run through the shell as one command line (the arguments are this
+  // module's own words, never input), which Node prefers to separate arguments with `shell: true`.
+  const child = windows
+    ? spawn([pm, ...args].join(' '), { ...options, shell: true })
+    : spawn(pm, args, options);
   const lines: string[] = [];
   const keep = (chunk: Buffer) => {
     lines.push(

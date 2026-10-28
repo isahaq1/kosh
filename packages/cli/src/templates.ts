@@ -133,6 +133,7 @@ const REACT = {
   react: '^19.1.0',
   'react-dom': '^19.1.0',
   '@tanstack/react-query': '^5.90.0',
+  '@tanstack/react-router': '^1.170.0',
   i18next: '^25.0.0 || ^26.0.0',
   'react-i18next': '^16.0.0 || ^17.0.0',
 };

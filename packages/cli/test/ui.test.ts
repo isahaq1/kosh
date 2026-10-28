@@ -111,3 +111,21 @@ test('width counts columns', () => {
   expect(width('\u001b[32m✔\u001b[39m ok')).toBe(4);
   expect(width('🚀 go')).toBe(5);
 });
+
+test('a long card row wraps at the terminal width, aligned after its label', () => {
+  const lines: string[] = [];
+  const ui = createUi((t) => lines.push(t), { ...PLAIN_TERMINAL, columns: 60 });
+  const apps = Array.from({ length: 20 }, (_, i) => `app${i},`).join(' ');
+  ui.card('Shutro ERP is set up', [
+    ['Company', 'Paragon (BDT, BD)'],
+    ['Apps', apps],
+  ]);
+  const rows = lines
+    .join('')
+    .split('\n')
+    .filter((l) => l.trim() !== '');
+  expect(Math.max(...rows.map((r) => width(r)))).toBeLessThanOrEqual(64);
+  expect(new Set(rows.map((r) => width(r))).size).toBe(1); // a box
+  expect(rows.filter((r) => r.includes('app')).length).toBeGreaterThan(1);
+  expect(rows.find((r) => r.includes('app19'))).toMatch(/│ {10}app/);
+});
