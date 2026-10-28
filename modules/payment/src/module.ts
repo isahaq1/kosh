@@ -19,6 +19,7 @@ export const newReference = (): string => `PAY-${randomBytes(9).toString('base64
 export const PROVIDERS = {
   fake: 'Test provider (no money moves)',
   sslcommerz: 'SSLCommerz',
+  bkash: 'bKash',
 } as const;
 
 export const PaymentProvider = defineModel('payment.provider', {

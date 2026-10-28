@@ -50,14 +50,30 @@ export interface PaymentAdapter {
   readonly code: string;
   /** Whether its credentials are set (the portal offers only providers whose adapter can work). */
   configured(mode: 'test' | 'live'): boolean;
-  /** Starts a payment; returns the page to send the customer to. */
-  createPayment(request: PaymentRequest): Promise<{ readonly redirectUrl: string }>;
+  /** Starts a payment; returns the page to send the customer to (and the provider's id of it, when it has one). */
+  createPayment(
+    request: PaymentRequest,
+  ): Promise<{ readonly redirectUrl: string; readonly providerReference?: string }>;
   /** A callback's event id, or `null` when it is not genuine (checked with the endpoint's secret). */
   verifyCallback(call: InboundCall, secret: string): string | null | Promise<string | null>;
   /** What a verified callback says. */
   readCallback(call: InboundCall): PaymentResult | null;
   /** The provider's word on a payment (null: unknown to it). */
-  status(reference: string, mode: 'test' | 'live'): Promise<PaymentResult | null>;
+  status(
+    reference: string,
+    mode: 'test' | 'live',
+    providerReference: string | null,
+  ): Promise<PaymentResult | null>;
+  /**
+   * The customer is back (`query`: what the provider put in the return URL — a hint, never proof). Providers that
+   * complete a payment only when the merchant asks (bKash's execute) do it here; the result is settled at once.
+   */
+  returned?(input: {
+    readonly reference: string;
+    readonly providerReference: string | null;
+    readonly mode: 'test' | 'live';
+    readonly query: Readonly<Record<string, string>>;
+  }): Promise<PaymentResult | null>;
 }
 
 /** The fake adapter's header: HMAC-SHA256 (hex) of the raw body with the endpoint's secret. */

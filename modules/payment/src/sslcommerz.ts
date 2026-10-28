@@ -208,6 +208,7 @@ export function sslcommerzFromEnvironment(env: NodeJS.ProcessEnv = process.env):
     createPayment: (request) => real().createPayment(request),
     verifyCallback: (call, secret) => real().verifyCallback(call, secret),
     readCallback: (call) => real().readCallback(call),
-    status: (reference, mode) => real().status(reference, mode),
+    status: (reference, mode, providerReference) =>
+      real().status(reference, mode, providerReference),
   };
 }

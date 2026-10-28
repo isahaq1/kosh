@@ -4,7 +4,8 @@
  * the payment, reconciled, once — a repeated callback and a return before the callback do not pay twice; a declined
  * payment leaves the invoice open; another customer cannot pay or see it; employees do not use the portal's routes.
  * SSLCommerz with its sandbox simulated: the session, IPNs confirmed with its validation API (forged and changed
- * ones refused), a failure then a retry, and the transaction query when the customer is back first.
+ * ones refused), a failure then a retry, and the transaction query when the customer is back first. bKash with its
+ * API simulated: executed on the customer's return (once), a forged return refused by bKash, a cancellation.
  */
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -23,7 +24,7 @@ import {
 import { type Driver, orm, pg } from '@kosh/server/orm';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
-import { ADAPTERS, paymentModule, sslcommerzAdapter } from '../src/index.js';
+import { ADAPTERS, bkashAdapter, paymentModule, sslcommerzAdapter } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
 const PORTAL = 'https://portal.example.test';
@@ -108,6 +109,84 @@ function sslAttempt(reference: string, status: 'VALID' | 'FAILED', amount?: stri
     tran_date: '2026-10-28 12:00:00',
   }).toString();
 }
+/** bKash's tokenized checkout (v2), simulated: grant, create, execute, query. */
+interface BkPayment {
+  paymentId: string;
+  amount: string;
+  invoice: string;
+  callbackURL: string;
+  authorized: boolean;
+  executed: boolean;
+  trxId?: string;
+}
+const bk = new Map<string, BkPayment>();
+let bkGrants = 0;
+const bkFetch = (async (input: string | URL | Request, init?: RequestInit) => {
+  const url = new URL(String(input));
+  const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, string>;
+  const headers = new Headers(init?.headers);
+  const json = (b: unknown) =>
+    new Response(JSON.stringify(b), { headers: { 'content-type': 'application/json' } });
+  expect(url.origin).toBe('https://tokenized.sandbox.bka.sh');
+  const path = url.pathname.replace('/v2/tokenized-checkout', '');
+  if (path === '/auth/grant-token') {
+    bkGrants++;
+    if (headers.get('username') !== 'padma' || body['app_secret'] !== 'app-secret')
+      return json({ statusCode: '9999', statusMessage: 'Invalid credentials' });
+    return json({ id_token: 'tok-1', expires_in: 3600, token_type: 'Bearer', statusCode: '0000' });
+  }
+  expect(headers.get('authorization')).toBe('Bearer tok-1');
+  expect(headers.get('x-app-key')).toBe('app-key');
+  if (path === '/payment/create') {
+    const paymentId = `TR00${bk.size + 1}`;
+    bk.set(paymentId, {
+      paymentId,
+      amount: body['amount'] as string,
+      invoice: body['merchantInvoiceNumber'] as string,
+      callbackURL: body['callbackURL'] as string,
+      authorized: false,
+      executed: false,
+    });
+    return json({
+      paymentId,
+      bkashURL: `https://sandbox.payment.bkash.com/?paymentId=${paymentId}&mode=0011`,
+      transactionStatus: 'Initiated',
+      amount: body['amount'],
+      currency: 'BDT',
+      merchantInvoiceNumber: body['merchantInvoiceNumber'],
+    });
+  }
+  const payment = bk.get(body['paymentId'] ?? '');
+  if (payment === undefined)
+    return json({ externalCode: '2002', errorMessageEn: 'Invalid Payment ID' });
+  const completed = {
+    paymentId: payment.paymentId,
+    transactionStatus: 'Completed',
+    amount: payment.amount,
+    currency: 'BDT',
+  };
+  if (path === '/payment/execute') {
+    if (payment.trxId !== undefined)
+      return json({
+        externalCode: '2062',
+        errorMessageEn: 'The payment has already been completed',
+      });
+    if (payment.executed || !payment.authorized) {
+      payment.executed = true; // a paymentId is executed once, whatever the result
+      return json({ externalCode: '2056', errorMessageEn: 'Invalid Payment State' });
+    }
+    payment.executed = true;
+    payment.trxId = `TRX${payment.paymentId}`;
+    return json({ ...completed, trxId: payment.trxId, merchantInvoiceNumber: payment.invoice });
+  }
+  if (path === '/query/payment')
+    return json(
+      payment.trxId === undefined
+        ? { paymentId: payment.paymentId, transactionStatus: 'Initiated', amount: payment.amount }
+        : { ...completed, trxId: payment.trxId, merchantInvoice: payment.invoice },
+    );
+  throw new Error(`unexpected ${url}`);
+}) as typeof fetch;
 const catalogue = [
   base,
   paymentModule({
@@ -118,6 +197,16 @@ const catalogue = [
       [
         'sslcommerz',
         sslcommerzAdapter({ storeId: 'padma', storePassword: 'store-secret', fetch: sslFetch }),
+      ],
+      [
+        'bkash',
+        bkashAdapter({
+          username: 'padma',
+          password: 'pw',
+          appKey: 'app-key',
+          appSecret: 'app-secret',
+          fetch: bkFetch,
+        }),
       ],
     ]),
   }),
@@ -473,7 +562,7 @@ describe('SSLCommerz (its sandbox simulated)', () => {
     expect(made.status).toBe(201);
     sslProvider = made.json.id;
     const offered = (await call('GET', '/api/portal/v1/payments/providers', RINA)).json.providers;
-    expect(offered.map((p: Json) => p.name)).toEqual(['Test payments', 'SSLCommerz']);
+    expect(offered.map((p: Json) => p.name)).toEqual(['Test payments', 'SSLCommerz']); // bKash not yet set up
 
     const { id, reference, redirectUrl } = await start('1200');
     expect(redirectUrl).toBe(`https://sandbox.sslcommerz.com/EasyCheckOut/${reference}`);
@@ -546,5 +635,111 @@ describe('SSLCommerz (its sandbox simulated)', () => {
     expect(
       sslcommerzAdapter({ storeId: 'a', storePassword: 'b', sandbox: false }).configured('live'),
     ).toBe(true);
+  });
+});
+
+describe('bKash (its API simulated)', () => {
+  let bkashProvider = 0;
+  const start = async (amount: string) => {
+    const id = await invoice(partners['acme'] as number, amount);
+    const res = await call('POST', '/api/portal/v1/payments', RINA, {
+      document: 'invoices',
+      id,
+      provider: bkashProvider,
+    });
+    expect(res.status, JSON.stringify(res.json)).toBe(201);
+    return { id, ...(res.json as { reference: string; redirectUrl: string }) };
+  };
+  /** bKash sends the customer back: `<callbackURL>?paymentID=…&status=…`. */
+  const back = async (reference: string, query: string) => {
+    const res = await host.server.app.inject({
+      method: 'GET',
+      url: `/api/v1/payment/return/${reference}?${query}`,
+    });
+    expect(res.statusCode).toBe(303);
+    return String(res.headers.location);
+  };
+
+  test('created on bKash; executed when the customer is back with success; once', async () => {
+    const made = await call('POST', '/api/v1/models/payment.provider', 'maria', {
+      name: 'bKash',
+      code: 'bkash',
+      journal: bank,
+    });
+    expect(made.status).toBe(201);
+    bkashProvider = made.json.id;
+    const { id, reference, redirectUrl } = await start('1500');
+    expect(redirectUrl).toMatch(/^https:\/\/sandbox\.payment\.bkash\.com\/\?paymentId=TR00\d+/);
+    const payment = [...bk.values()].find((p) => p.invoice === reference);
+    expect(payment).toMatchObject({ amount: '1500.00' });
+    expect(payment?.callbackURL).toBe(`${API_URL}/api/v1/payment/return/${reference}`);
+    expect(await tx(reference)).toMatchObject({
+      state: 'pending',
+      providerReference: payment?.paymentId,
+    });
+    // Still on bKash's page: pending.
+    expect((await call('GET', `/api/portal/v1/payments/${reference}`, RINA)).json.state).toBe(
+      'pending',
+    );
+
+    if (payment !== undefined) payment.authorized = true; // PIN and OTP entered
+    const location = await back(
+      reference,
+      `paymentID=${payment?.paymentId}&status=success&signature=x`,
+    );
+    expect(location).toBe(`${PORTAL}/d/invoices/${id}?payment=${reference}`);
+    expect(await tx(reference)).toMatchObject({
+      state: 'done',
+      providerReference: `TRX${payment?.paymentId}`,
+    });
+    expect((await move(id)).amountResidual.amount).toBe('0.00');
+    await back(reference, `paymentID=${payment?.paymentId}&status=success`); // reloaded: nothing more
+    expect(await paymentsFor(id)).toHaveLength(1);
+    expect(bkGrants).toBe(1); // the token is kept for its hour
+  });
+
+  test('a forged "success" is not proof: bKash refuses to execute; a cancellation', async () => {
+    const first = await start('700');
+    // Someone opens the return URL with status=success and another payment's id before the customer paid.
+    await back(first.reference, 'paymentID=TR001&status=success');
+    expect(await tx(first.reference)).toMatchObject({ state: 'failed', payment: null });
+    expect((await tx(first.reference)).error).toContain('Invalid Payment State');
+    expect(await paymentsFor(first.id)).toHaveLength(0);
+
+    const second = await start('300');
+    const payment = [...bk.values()].find((p) => p.invoice === second.reference);
+    await back(second.reference, `paymentID=${payment?.paymentId}&status=cancel`);
+    expect(await tx(second.reference)).toMatchObject({ state: 'cancelled' });
+    expect((await move(second.id)).amountResidual.amount).toBe('300.00');
+  });
+
+  test('without credentials bKash is not offered; BDT only', async () => {
+    expect(bkashAdapter({}).configured('test')).toBe(false);
+    await expect(
+      bkashAdapter({
+        username: 'a',
+        password: 'b',
+        appKey: 'c',
+        appSecret: 'd',
+        fetch: bkFetch,
+      }).createPayment({
+        reference: 'PAY-X',
+        amount: '10.00',
+        currency: 'USD',
+        description: 'Invoice',
+        customer: {
+          name: '',
+          email: null,
+          phone: null,
+          street: null,
+          city: null,
+          zip: null,
+          country: null,
+        },
+        returnUrl: 'https://x',
+        callbackUrl: 'https://y',
+        mode: 'test',
+      }),
+    ).rejects.toThrow('BDT only');
   });
 });

@@ -25,11 +25,13 @@ import { type Env as CoreEnv, orm } from '@kosh/server/orm';
 import { action, form, list } from '@kosh/views';
 import type { FastifyInstance } from 'fastify';
 import type { Env } from './.kosh/bindings.js';
+import { bkashFromEnvironment } from './bkash.js';
 import { PaymentProvider, PaymentTransaction, paymentShutro } from './module.js';
 import { ADAPTERS, FAKE_SIGNATURE, fakeAdapter, type PaymentAdapter } from './providers.js';
 import { settle } from './settle.js';
 import { sslcommerzFromEnvironment } from './sslcommerz.js';
 
+export { type BkashOptions, bkashAdapter, bkashFromEnvironment } from './bkash.js';
 export {
   newReference,
   PaymentProvider,
@@ -249,25 +251,38 @@ function registerPaymentRoutes(
         await su.flush(); // company checks run in this superuser scope, not at commit (Shutro request #11)
         const [tx] = await created.load({});
         const reference = tx?.reference ?? '';
-        const { redirectUrl } = await adapter.createPayment({
-          reference,
-          amount: due.toFixed(move.currency.decimalPlaces ?? 2),
-          currency: move.currency.name,
-          description: `${d.spec.label} ${move.name}`,
-          customer: {
-            name: move.partner?.name ?? '',
-            email: move.partner?.email ?? null,
-            phone: move.partner?.phone ?? move.partner?.mobile ?? null,
-            street: move.partner?.street ?? null,
-            city: move.partner?.city ?? null,
-            zip: move.partner?.zip ?? null,
-            country: move.partner?.country ?? null,
-          },
-          returnUrl: `${urls.api}/api/v1/payment/return/${encodeURIComponent(reference)}`,
-          callbackUrl: `${urls.api}/api/v1/hooks/${token}`,
-          mode: provider.state === 'live' ? 'live' : 'test',
-        });
-        return { reference, redirectUrl };
+        let started: Awaited<ReturnType<PaymentAdapter['createPayment']>>;
+        try {
+          started = await adapter.createPayment({
+            reference,
+            amount: due.toFixed(move.currency.decimalPlaces ?? 2),
+            currency: move.currency.name,
+            description: `${d.spec.label} ${move.name}`,
+            customer: {
+              name: move.partner?.name ?? '',
+              email: move.partner?.email ?? null,
+              phone: move.partner?.phone ?? move.partner?.mobile ?? null,
+              street: move.partner?.street ?? null,
+              city: move.partner?.city ?? null,
+              zip: move.partner?.zip ?? null,
+              country: move.partner?.country ?? null,
+            },
+            returnUrl: `${urls.api}/api/v1/payment/return/${encodeURIComponent(reference)}`,
+            callbackUrl: `${urls.api}/api/v1/hooks/${token}`,
+            mode: provider.state === 'live' ? 'live' : 'test',
+          });
+        } catch (error) {
+          throw new HttpProblem(
+            502,
+            'provider-error',
+            'The payment could not start',
+            error instanceof Error ? error.message : String(error),
+          );
+        }
+        if (started.providerReference !== undefined)
+          await created.write({ providerReference: started.providerReference });
+        await su.flush();
+        return { reference, redirectUrl: started.redirectUrl };
       },
     );
     return reply.status(201).send(started);
@@ -296,6 +311,7 @@ function registerPaymentRoutes(
                 currency: t.currency.name,
                 code: t.provider.code,
                 mode: t.provider.state === 'live' ? ('live' as const) : ('test' as const),
+                providerReference: t.providerReference,
                 error: t.error,
               };
         });
@@ -317,7 +333,10 @@ function registerPaymentRoutes(
     let error = found.error;
     // Back before the callback: the provider's word settles it now (once; the callback then finds it settled).
     if (state === 'pending') {
-      const result = await adapters.get(found.code)?.status(reference, found.mode);
+      const result = await adapters
+        .get(found.code)
+        ?.status(reference, found.mode, found.providerReference)
+        .catch(() => null);
       if (result !== null && result !== undefined && result.status !== 'pending') {
         const settled = await context.shutro.bootstrap(
           { reason: `payment ${reference}: the customer returned`, company: found.company },
@@ -393,16 +412,52 @@ function registerPaymentRoutes(
       config: { auth: false },
       handler: async (request, reply) => {
         const reference = String((request.params as Row)['reference'] ?? '');
-        const move = await context.shutro.bootstrap({ reason: 'payment return' }, (raw) =>
+        const tx = await context.shutro.bootstrap({ reason: 'payment return' }, (raw) =>
           raw.asSuperuser({ reason: 'payment return: which invoice' }, async (su) => {
             const [t] = await (
               await typed(su.withFlags({ checkCompany: false }))
                 .model('payment.transaction')
                 .search({ where: { reference }, limit: 1 })
-            ).load({});
-            return t?.move.id ?? null;
+            ).load({ provider: true });
+            return t === undefined
+              ? null
+              : {
+                  move: t.move.id,
+                  company: t.company.id,
+                  state: t.state,
+                  code: t.provider.code,
+                  mode: t.provider.state === 'live' ? ('live' as const) : ('test' as const),
+                  providerReference: t.providerReference,
+                };
           }),
         );
+        // Providers that complete a payment on the merchant's request (bKash) do it now; the adapter asks the
+        // provider itself — what the browser brings is only a hint.
+        const adapter = tx === null ? undefined : adapters.get(tx.code);
+        if (tx !== null && tx.state !== 'done' && adapter?.returned !== undefined) {
+          const query = Object.fromEntries(
+            Object.entries((request.query ?? {}) as Row).map(([k, v]) => [k, String(v)]),
+          );
+          try {
+            const result = await adapter.returned({
+              reference,
+              providerReference: tx.providerReference,
+              mode: tx.mode,
+              query,
+            });
+            if (result !== null)
+              await context.shutro.bootstrap(
+                { reason: `payment ${reference}: the customer returned`, company: tx.company },
+                (env) => settle(typed(env), result),
+              );
+          } catch (error) {
+            request.log.warn(
+              { err: error, reference },
+              'payment return: the provider did not answer',
+            );
+          }
+        }
+        const move = tx?.move ?? null;
         return reply.redirect(
           move === null
             ? `${urls.portal}/`
@@ -444,7 +499,12 @@ function registerPaymentRoutes(
 /** Online payments with explicit options (tests, installations wiring their own adapters). */
 export function paymentModule(options: PaymentOptions = {}): KoshModule {
   const adapters =
-    options.adapters ?? new Map([...ADAPTERS, ['sslcommerz', sslcommerzFromEnvironment()]]);
+    options.adapters ??
+    new Map([
+      ...ADAPTERS,
+      ['sslcommerz', sslcommerzFromEnvironment()],
+      ['bkash', bkashFromEnvironment()],
+    ]);
   return defineModule({
     shutro: paymentShutro,
     kosh: '^0.1.0',
