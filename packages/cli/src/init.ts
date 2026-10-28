@@ -1,5 +1,5 @@
 /**
- * `kosh init`: sets up an installation in a folder. It asks for (or takes as flags) the database, the first company,
+ * `shutro-erp init`: sets up an installation in a folder. It asks for (or takes as flags) the database, the first company,
  * the administrator, the apps, file storage, Valkey and the port; checks the database (and creates it when it does
  * not exist yet); writes the starter project and `.env`; plans and applies the first migration; installs the company,
  * the administrator and each app's default data; and enrols the administrator's authenticator app (administrator
@@ -63,14 +63,14 @@ export function releaseVersion(from: string = dirname(fileURLToPath(import.meta.
   return KOSH_VERSION;
 }
 
-export const INIT_USAGE: string = `Usage: kosh init [folder] [options]
+export const INIT_USAGE: string = `Usage: shutro-erp init [folder] [options]
 
-Sets up a Kosh installation: asks for the database, the first company, the administrator, the apps,
+Sets up a Shutro ERP installation: asks for the database, the first company, the administrator, the apps,
 file storage and the port (Enter keeps the default), then writes the project, creates the database
 tables and the administrator, and enrols the administrator's authenticator app.
 
 Options (each also answers its question; with --yes the rest take their defaults):
-  --database-url <url>      PostgreSQL, e.g. postgres://user:pass@localhost:5432/kosh
+  --database-url <url>      PostgreSQL, e.g. postgres://user:pass@localhost:5432/my_erp
   --docker-db               start PostgreSQL in Docker (compose.yaml) instead
   --create-database         create the database when it does not exist
   --company <name>          the first company        --currency <code>   its currency (ISO 4217)
@@ -78,7 +78,7 @@ Options (each also answers its question; with --yes the rest take their defaults
                             with Accounting (default: BD for BDT, IN for INR, none otherwise; "none" for none)
   --lang <en|bn>            language                 --tz <zone>         time zone (IANA)
   --admin-login <login>     --admin-name <name>      --admin-email <email>
-  --admin-password <pw>     (or KOSH_ADMIN_PASSWORD; at least 12 characters)
+  --admin-password <pw>     (or SHUTRO_ERP_ADMIN_PASSWORD; at least 12 characters)
   --apps <list>             comma-separated: ${SELECTABLE_APPS.join(', ')} (default: all; bridges come with the apps they connect)
   --storage-dir <dir>       attachments in a folder (default ./var/attachments)
   --s3-endpoint <url> --s3-bucket <name> --s3-access-key <key> --s3-secret-key <secret> [--s3-region <r>]
@@ -243,7 +243,7 @@ async function checkDatabase(
   create: () => Promise<boolean>,
 ): Promise<{ ok: true; version: string } | { ok: false; problem: string }> {
   const probe = async (target: string) => {
-    const driver = pg.createDriver({ url: target, max: 1, applicationName: 'kosh init' });
+    const driver = pg.createDriver({ url: target, max: 1, applicationName: 'shutro-erp init' });
     try {
       const [row] = await driver.query<{ server_version: string }>({
         text: 'SHOW server_version',
@@ -272,7 +272,7 @@ async function checkDatabase(
       const admin = pg.createDriver({
         url: parsed.toString(),
         max: 1,
-        applicationName: 'kosh init',
+        applicationName: 'shutro-erp init',
       });
       try {
         await admin.query({ text: `CREATE DATABASE "${name}"`, params: [] });
@@ -332,11 +332,11 @@ async function ask(
   const name =
     basename(dir)
       .toLowerCase()
-      .replace(/[^a-z0-9-]+/g, '-') || 'kosh-app';
+      .replace(/[^a-z0-9-]+/g, '-') || 'shutro-erp-app';
 
   ui.step('database', 'Database', 'PostgreSQL 16 or later: a server you have, or one in Docker');
   const postgres = {
-    user: 'kosh',
+    user: 'shutro',
     password: randomBytes(18)
       .toString('base64url')
       .replace(/[^A-Za-z0-9]/g, '')
@@ -679,11 +679,11 @@ async function modulesFor(apps: readonly AppName[]): Promise<KoshModule[]> {
 
 function envFile(a: Answers): string {
   const lines = [
-    '# Kosh settings (kosh init). Keep this file out of version control: it holds credentials.',
+    '# Shutro ERP settings (shutro-erp init). Keep this file out of version control: it holds credentials.',
     `DATABASE_URL=${a.databaseUrl}`,
     `PORT=${a.port}`,
   ];
-  if (a.storage.kind === 'dir') lines.push(`KOSH_STORAGE_DIR=${a.storage.dir}`);
+  if (a.storage.kind === 'dir') lines.push(`SHUTRO_ERP_STORAGE_DIR=${a.storage.dir}`);
   else
     lines.push(
       `S3_ENDPOINT=${a.storage.endpoint}`,
@@ -696,10 +696,10 @@ function envFile(a: Answers): string {
   lines.push(
     '',
     '# Where users open the back-office (links in emails and notifications).',
-    `KOSH_BASE_URL=http://localhost:${a.webPort}`,
+    `SHUTRO_ERP_BASE_URL=http://localhost:${a.webPort}`,
     '# Email notifications: an SMTP server (Mailpit in development: smtp://localhost:1025, inbox on :8025).',
     '# SMTP_URL=smtp://user:password@smtp.example.com:587',
-    '# MAIL_FROM=Kosh <no-reply@example.com>',
+    '# MAIL_FROM=Shutro ERP <no-reply@example.com>',
     '# Replies by email (RFC 0006 part 7): the inbound mailbox domain, and the webhook secret your provider sends.',
     `MAIL_INBOUND_SECRET=${a.inboundSecret}`,
     '# MAIL_INBOUND_DOMAIN=mail.example.com',
@@ -707,19 +707,19 @@ function envFile(a: Answers): string {
     `MAIL_INBOUND_WEBHOOK_SECRET=${a.inboundWebhookSecret}`,
     '# Without a webhook provider, a mailbox read every 30 s: IMAP_URL=imaps://user:password@host:993/INBOX',
     '',
-    '# Kosh Studio (RFC 0012): propose (default: changes become patches) or write (development, one server: Studio',
-    '# writes src/modules/<name>/ and applies at once). KOSH_STUDIO_DIR: the project folder (default: the working one).',
-    '# KOSH_STUDIO=write',
+    '# Shutro ERP Studio (RFC 0012): propose (default: changes become patches) or write (development, one server: Studio',
+    '# writes src/modules/<name>/ and applies at once). SHUTRO_ERP_STUDIO_DIR: the project folder (default: the working one).',
+    '# SHUTRO_ERP_STUDIO=write',
     '# Proposals as pull requests (GitHub) or merge requests (GitLab): the repository and a token with the rights',
     '# to push branches and open them. Without them, proposals are patches to download.',
-    '# KOSH_STUDIO_GIT_URL=https://github.com/acme/erp',
-    '# KOSH_STUDIO_GIT_TOKEN=',
-    '# KOSH_STUDIO_GIT_BASE=main',
+    '# SHUTRO_ERP_STUDIO_GIT_URL=https://github.com/acme/erp',
+    '# SHUTRO_ERP_STUDIO_GIT_TOKEN=',
+    '# SHUTRO_ERP_STUDIO_GIT_BASE=main',
     '',
     '# The AI assistant (RFC 0013): off until an administrator switches it on in Settings → AI assistant.',
     '# ANTHROPIC_API_KEY=',
-    '# KOSH_ASSISTANT_MODEL=claude-opus-5-5',
-    '# KOSH_ASSISTANT_MONTHLY_TOKENS=2000000',
+    '# SHUTRO_ERP_ASSISTANT_MODEL=claude-opus-5-5',
+    '# SHUTRO_ERP_ASSISTANT_MONTHLY_TOKENS=2000000',
     '',
     '# SMS and WhatsApp through Twilio (opt-in per user; a phone number on the user).',
     '# TWILIO_ACCOUNT_SID=',
@@ -727,7 +727,7 @@ function envFile(a: Answers): string {
     '# TWILIO_SMS_FROM=+1...',
     '# TWILIO_WHATSAPP_FROM=+1...',
     '',
-    '# Web push (generated by kosh init; keep them, browsers subscribed with the public key stay subscribed).',
+    '# Web push (generated by shutro-erp init; keep them, browsers subscribed with the public key stay subscribed).',
     `VAPID_PUBLIC_KEY=${a.vapid.publicKey}`,
     `VAPID_PRIVATE_KEY=${a.vapid.privateKey}`,
     `VAPID_SUBJECT=${a.admin.email === '' ? 'mailto:admin@localhost' : `mailto:${a.admin.email}`}`,
@@ -824,12 +824,12 @@ async function setUp(server: KoshServer, a: Answers, ui: Ui): Promise<number | n
       dir,
       registry: server.registry.registry,
     });
-    // The installed set (RFC 0008): what `kosh apps` changes later.
+    // The installed set (RFC 0008): what `shutro-erp apps` changes later.
     await recordInstalledApps(
       server.driver,
       server.registry.loaded.modules,
       ['base', 'settings', 'realtime', 'notify', ...a.apps],
-      `kosh init (${a.admin.login})`,
+      `shutro-erp init (${a.admin.login})`,
     );
     task.finish(
       `Database tables ready ${ui.style('gray', `(applied ${result.applied.length} migration(s))`)}`,
@@ -854,7 +854,7 @@ async function setUp(server: KoshServer, a: Answers, ui: Ui): Promise<number | n
     type Model = {
       browse(ids: number[]): { write(values: unknown): Promise<void> };
     };
-    await server.shutro.bootstrap({ reason: 'kosh init', company }, async (env) => {
+    await server.shutro.bootstrap({ reason: 'shutro-erp init', company }, async (env) => {
       const model = (name: string) => env.model(name as never) as unknown as Model;
       const lang = a.lang === 'bn' ? 'bn_BD' : 'en_US';
       await model('res.users')
@@ -959,12 +959,12 @@ async function enrol(server: KoshServer, a: Answers, prompter: Prompter, ui: Ui)
     }
   }
   ui.warn(
-    'Not enrolled: run kosh init again later, or enrol from the API (POST /api/v1/auth/2fa/setup).',
+    'Not enrolled: run shutro-erp init again later, or enrol from the API (POST /api/v1/auth/2fa/setup).',
   );
   return false;
 }
 
-/** Runs `kosh init`. Returns the exit code. */
+/** Runs `shutro-erp init`. Returns the exit code. */
 export async function runInit(argv: readonly string[], io: InitIo): Promise<number> {
   const { values, positionals } = parseArgs({
     args: [...argv],
@@ -1068,12 +1068,12 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
   let server: KoshServer | undefined;
   const started = Date.now();
   try {
-    await ui.banner(`The ERP framework on Shutro · v${releaseVersion()}`);
+    await ui.banner(`ERP · business software on the Shutro ORM · v${releaseVersion()}`);
     ui.intro(
-      'Kosh setup',
+      'Shutro ERP setup',
       interactive
         ? 'Enter keeps the default · ↑ ↓ choose · Space ticks · Ctrl+C quits'
-        : 'Kosh setup: press Enter to keep the value in [brackets].',
+        : 'Shutro ERP setup: press Enter to keep the value in [brackets].',
     );
     const answers = await ask(prompter, values, io.cwd, positionals[0], ui);
 
@@ -1119,7 +1119,7 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
       enrolled = await enrol(live, answers, prompter, ui);
     } else if (values.yes === true && values['no-2fa'] !== true)
       ui.info(
-        'The authenticator app is enrolled interactively: run npx kosh init again (without --yes).',
+        'The authenticator app is enrolled interactively: run npx shutro-erp init again (without --yes).',
       );
 
     const rows: CardRow[] = [
@@ -1153,9 +1153,9 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
       ['API', `http://localhost:${answers.port}`],
       ['Took', `${((Date.now() - started) / 1000).toFixed(1)}s`],
     ];
-    if (!autoStart) ui.outro(ui.style('green', 'Kosh is set up'));
+    if (!autoStart) ui.outro(ui.style('green', 'Shutro ERP is set up'));
     ui.card(
-      `${terminal.emoji ? '🚀 ' : ''}Kosh is set up`,
+      `${terminal.emoji ? '🚀 ' : ''}Shutro ERP is set up`,
       rows,
       enrolled || values['no-2fa'] === true ? 'green' : 'yellow',
     );
@@ -1163,11 +1163,11 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
     if (autoStart) {
       if (!enrolled)
         ui.warn(
-          'Administrator rights need a second factor: run `kosh init` again to enrol the authenticator app.',
+          'Administrator rights need a second factor: run `shutro-erp init` again to enrol the authenticator app.',
         );
       ui.step(
         'rocket',
-        'Starting Kosh',
+        'Starting Shutro ERP',
         'Dependencies, the API, the back-office, then your browser',
       );
       // The installer's own connection is not needed any more: the API has its own.
@@ -1194,7 +1194,7 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
     );
     if (!enrolled)
       ui.warn(
-        'Administrator rights need a second factor: run `kosh init` again to enrol the authenticator app.',
+        'Administrator rights need a second factor: run `shutro-erp init` again to enrol the authenticator app.',
       );
     return 0;
   } catch (error) {
@@ -1203,7 +1203,7 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
       return 130;
     }
     ui.write('\n');
-    ui.fail(`kosh init stopped: ${error instanceof Error ? error.message : String(error)}`);
+    ui.fail(`shutro-erp init stopped: ${error instanceof Error ? error.message : String(error)}`);
     return 1;
   } finally {
     await server?.close();

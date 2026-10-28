@@ -1,6 +1,6 @@
 /**
- * Commands that work on an installation (a folder made by `kosh init`): `kosh migrate`, `kosh seed`,
- * `kosh module create`. They read `.env` (DATABASE_URL, storage, ...) and the module list in `src/modules.ts`.
+ * Commands that work on an installation (a folder made by `shutro-erp init`): `shutro-erp migrate`, `shutro-erp seed`,
+ * `shutro-erp module create`. They read `.env` (DATABASE_URL, storage, ...) and the module list in `src/modules.ts`.
  *
  * - Schema migrations are versioned SQL files in `migrations/`, planned from the modules against the live database
  *   (Shutro migrate) and applied in order; each module's data migrations (`migrations` in its Shutro module) run
@@ -36,7 +36,7 @@ function isModule(value: unknown): value is KoshModule {
   );
 }
 
-/** The Kosh modules a file or package exports: `modules`, the default export, or every module export. */
+/** The Shutro ERP modules a file or package exports: `modules`, the default export, or every module export. */
 export async function modulesOf(specifier: string, cwd: string): Promise<KoshModule[]> {
   const target =
     specifier.startsWith('.') ||
@@ -54,7 +54,7 @@ export async function modulesOf(specifier: string, cwd: string): Promise<KoshMod
   const all = Object.values(exported).filter(isModule);
   if (all.length === 0)
     throw new Error(
-      `${specifier} exports no Kosh modules (defineModule from shutro-erp/modules-sdk).`,
+      `${specifier} exports no Shutro ERP modules (defineModule from shutro-erp/modules-sdk).`,
     );
   return all;
 }
@@ -72,9 +72,11 @@ export async function openProject(
   if (existsSync(envFile)) process.loadEnvFile(envFile);
   const databaseUrl = process.env['DATABASE_URL'];
   if (databaseUrl === undefined || databaseUrl === '')
-    throw new Error('DATABASE_URL is not set: run kosh init, or add it to .env.');
+    throw new Error('DATABASE_URL is not set: run shutro-erp init, or add it to .env.');
   if (!existsSync(resolve(cwd, modulesFile)))
-    throw new Error(`${modulesFile} does not exist: run kosh init, or pass --modules <file>.`);
+    throw new Error(
+      `${modulesFile} does not exist: run shutro-erp init, or pass --modules <file>.`,
+    );
   process.env['KOSH_SCHEDULES'] = 'off';
   // The module list is the catalogue; the database says which of them are installed (RFC 0008).
   const modules = await installedModules(
@@ -85,7 +87,7 @@ export async function openProject(
   return createServer({ databaseUrl, modules, logger: false });
 }
 
-/** What seed data is loaded with: a server's, or an app change's transaction (`kosh apps`). */
+/** What seed data is loaded with: a server's, or an app change's transaction (`shutro-erp apps`). */
 export interface SeedContext {
   readonly shutro: KoshServer['shutro'];
   readonly driver: Pick<KoshServer['driver'], 'query'>;
@@ -145,7 +147,7 @@ export async function seedWith(
       : context.modules.filter((m) => only.includes(m.name));
   for (const d of await installDefaults(context.shutro, context.modules, {
     company: companyId,
-    reason: 'kosh seed',
+    reason: 'shutro-erp seed',
   }))
     if (wanted.some((m) => m.name === d.module))
       write(`  ${d.module.padEnd(16)} ${d.summary}
@@ -174,7 +176,7 @@ async function apply(
     return 0;
   } catch (error) {
     if (error instanceof Error && error.name === 'DestructiveMigrationError') {
-      write(`${error.message}\nReview it, then run kosh migrate --allow-destructive.\n`);
+      write(`${error.message}\nReview it, then run shutro-erp migrate --allow-destructive.\n`);
       return 1;
     }
     throw error;
@@ -211,7 +213,7 @@ export async function migrateProject(
   if (options.planOnly === true) return 0;
   if (plan.destructive.length > 0 && options.allowDestructive !== true) {
     write(
-      'It drops or changes existing data: review the file, then run kosh migrate --allow-destructive.\n',
+      'It drops or changes existing data: review the file, then run shutro-erp migrate --allow-destructive.\n',
     );
     return 1;
   }
@@ -230,12 +232,12 @@ export async function migrateProject(
       const rows = await readInstalledApps(server.driver);
       const served = rows?.filter((r) => r.state === 'installed').map((r) => r.name);
       await seed(server, write, served !== undefined && served.length > 0 ? served : undefined);
-    } else write('No company yet: seed data waits for kosh init.\n');
+    } else write('No company yet: seed data waits for shutro-erp init.\n');
   }
   return 0;
 }
 
-/** `kosh migrate [status] …` */
+/** `shutro-erp migrate [status] …` */
 export async function runMigrate(
   argv: readonly string[],
   write: (t: string) => void,
@@ -283,7 +285,7 @@ export async function runMigrate(
   }
 }
 
-/** `kosh seed [module …]` */
+/** `shutro-erp seed [module …]` */
 export async function runSeed(
   argv: readonly string[],
   write: (t: string) => void,
@@ -312,7 +314,7 @@ const title = (name: string) =>
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
 
-/** The files of a new module (`kosh module create <name>`). */
+/** The files of a new module (`shutro-erp module create <name>`). */
 export function moduleFiles(name: string): Record<string, string> {
   const id = camel(name);
   const label = title(name);
@@ -338,7 +340,7 @@ export const Item = defineModel('${model}', {
 });
 `,
     'data.ts': `/**
- * Seed data of the ${label} module: \`kosh seed\` (and \`kosh migrate\`) create these records, update them when they
+ * Seed data of the ${label} module: \`shutro-erp seed\` (and \`shutro-erp migrate\`) create these records, update them when they
  * change here, and delete records removed from this list. \`noupdate\` records are created once, then left to the users.
  * Refer to other records by external id: orm.ref('res.currency', 'base.currency_bdt').
  */
@@ -350,7 +352,7 @@ export const data = [
 `,
     'migrations.ts': `/**
  * Data migrations of the ${label} module: each runs once, when an installed module is upgraded past its version
- * (raise \`version\` in index.ts, then \`kosh migrate\`). Schema changes need none: \`kosh migrate\` plans them.
+ * (raise \`version\` in index.ts, then \`shutro-erp migrate\`). Schema changes need none: \`shutro-erp migrate\` plans them.
  */
 import type { DataMigration } from 'shutro-erp/orm';
 
@@ -366,7 +368,7 @@ export const migrations: DataMigration[] = [
 `,
     'index.ts': `/**
  * The ${label} module: its Shutro models, groups, seed data and data migrations, plus access levels, an app,
- * menus, actions and views. Installed by listing it in src/modules.ts, then \`kosh migrate\`.
+ * menus, actions and views. Installed by listing it in src/modules.ts, then \`shutro-erp migrate\`.
  */
 import { base, baseShutro } from 'shutro-erp';
 import { defineModule } from 'shutro-erp/modules-sdk';
@@ -414,7 +416,7 @@ export const ${id} = defineModule({
   };
 }
 
-/** `kosh module create <name>`: scaffolds src/modules/<name>/ and lists it in src/modules.ts. */
+/** `shutro-erp module create <name>`: scaffolds src/modules/<name>/ and lists it in src/modules.ts. */
 export async function runModule(
   argv: readonly string[],
   write: (t: string) => void,
@@ -422,7 +424,9 @@ export async function runModule(
 ): Promise<number> {
   const [action, name] = argv;
   if (action !== 'create' || name === undefined) {
-    write('Usage: kosh module create <name>   (lower-case letters, digits and -, e.g. library)\n');
+    write(
+      'Usage: shutro-erp module create <name>   (lower-case letters, digits and -, e.g. library)\n',
+    );
     return 2;
   }
   if (
@@ -463,7 +467,7 @@ export async function runModule(
     } else write(`  add ${id} to the modules list in src/modules.ts\n`);
   }
   write(
-    `\nNext: kosh apps install ${name}   (creates its tables and loads its seed data, in one transaction)\n`,
+    `\nNext: shutro-erp apps install ${name}   (creates its tables and loads its seed data, in one transaction)\n`,
   );
   return 0;
 }
@@ -489,7 +493,7 @@ function groupsOf(server: KoshServer, roles: string): string[] {
   return list;
 }
 
-/** `kosh user create <login> …` and `kosh user password <login>`. */
+/** `shutro-erp user create <login> …` and `shutro-erp user password <login>`. */
 export async function runUser(
   argv: readonly string[],
   write: (t: string) => void,
@@ -510,8 +514,8 @@ export async function runUser(
   const [action, login] = positionals;
   if ((action !== 'create' && action !== 'password') || login === undefined) {
     write(
-      'Usage: kosh user create <login> [--name <name>] [--email <email>] [--roles a.user,b.manager] [--password <pw>]\n' +
-        '       kosh user password <login> [--password <pw>]\n',
+      'Usage: shutro-erp user create <login> [--name <name>] [--email <email>] [--roles a.user,b.manager] [--password <pw>]\n' +
+        '       shutro-erp user password <login> [--password <pw>]\n',
     );
     return 2;
   }
@@ -534,14 +538,14 @@ export async function runUser(
       text: 'SELECT id::text AS id FROM res_company ORDER BY id LIMIT 1',
       params: [],
     });
-    if (company === undefined) throw new Error('No company yet: run kosh init first.');
+    if (company === undefined) throw new Error('No company yet: run shutro-erp init first.');
     const [user] = await server.driver.query<{ id: string }>({
       text: 'SELECT id::text AS id FROM res_users WHERE login = $1',
       params: [login],
     });
     if (action === 'password') {
       if (user === undefined) throw new Error(`No user "${login}".`);
-      await server.shutro.bootstrap({ reason: `kosh user password ${login}` }, (env) =>
+      await server.shutro.bootstrap({ reason: `shutro-erp user password ${login}` }, (env) =>
         auth.setPassword(env, Number(user.id), password),
       );
       write(`Password of "${login}" changed.\n`);
@@ -557,7 +561,7 @@ export async function runUser(
       groups: groupsOf(server, values.roles),
     });
     if (values.email !== undefined)
-      await server.shutro.bootstrap({ reason: `kosh user create ${login}` }, async (env) => {
+      await server.shutro.bootstrap({ reason: `shutro-erp user create ${login}` }, async (env) => {
         await (
           env.model('res.users' as never) as unknown as {
             browse(ids: number[]): { write(v: unknown): Promise<void> };

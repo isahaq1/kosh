@@ -9,7 +9,7 @@ const server = await createServer({
   databaseUrl: process.env.DATABASE_URL!,
   valkeyUrl: process.env.VALKEY_URL,       // shared rate limits (and later caches, pub/sub)
   modules: [contacts],                      // dependencies are loaded and checked (docs/modules.md)
-  // authenticate: defaults to Kosh sessions (below) when `base` is installed; without base, nobody
+  // authenticate: defaults to Shutro ERP sessions (below) when `base` is installed; without base, nobody
 });
 server.app.get('/api/v1/hello', async (request) => request.env(async (env) => ({ uid: env.uid })));
 await startServer(server, { port: 3000, onShutdown: () => telemetry.shutdown() });
@@ -23,7 +23,7 @@ and groups from the authenticator, narrowed by headers (`X-Company`, `X-Companie
 
 ## Authentication
 
-Kosh-native, on Shutro (no external auth service): the framework module `base` (`import { base } from
+Shutro ERP-native, on Shutro (no external auth service): the framework module `base` (`import { base } from
 '@kosh/server'`, a dependency of every app) holds users, companies and currencies, and three **private** models
 (`auth.credential`, `auth.session`, `auth.user_group`) that the generated API never serves. Every auth read and write
 runs in an audited Shutro system scope.
@@ -57,12 +57,12 @@ OAuth/SSO and passkeys come later, on the same models. Roles and the admin UI fo
 
 ## Typed client
 
-`kosh generate client` writes one self-contained TypeScript module (no imports; runs in browsers and Node) from the
+`shutro-erp generate client` writes one self-contained TypeScript module (no imports; runs in browsers and Node) from the
 module set, without a database or a running server:
 
 ```sh
-kosh generate client --modules ./src/modules.ts --out src/api/kosh.gen.ts   # or --from openapi.json | URL --token T
-kosh generate client --modules ./src/modules.ts --out src/api/kosh.gen.ts --check   # CI: fails when out of date
+shutro-erp generate client --modules ./src/modules.ts --out src/api/shutro-erp.gen.ts   # or --from openapi.json | URL --token T
+shutro-erp generate client --modules ./src/modules.ts --out src/api/shutro-erp.gen.ts --check   # CI: fails when out of date
 ```
 
 It contains an interface per model (`ResPartner`, `ResPartnerCreate`, `ResPartnerUpdate`), the `Models` map, and
@@ -81,7 +81,7 @@ await partners.transition(record.id, 'qualify');                          // onl
 ```
 
 Unknown models (and private ones), fields, transitions and value types are compile errors. Refused requests throw
-`KoshApiError` with the RFC 9457 `problem`. The web app's client (`apps/web/src/api/kosh.gen.ts`) is regenerated
+`KoshApiError` with the RFC 9457 `problem`. The web app's client (`apps/web/src/api/shutro-erp.gen.ts`) is regenerated
 with `pnpm --filter @kosh/web api:generate`; CI runs `api:check`. Generated files (`*.gen.ts`) are not linted.
 
 ## Navigation, exports and audit

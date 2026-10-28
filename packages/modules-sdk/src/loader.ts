@@ -93,15 +93,15 @@ export function loadModules(roots: readonly KoshModule[], options: LoadOptions):
   for (const m of modules) {
     if (!satisfies(options.koshVersion, m.kosh))
       fail(
-        `Module '${m.name}' needs Kosh ${m.kosh}; this is Kosh ${options.koshVersion}.`,
+        `Module '${m.name}' needs Shutro ERP ${m.kosh}; this is Shutro ERP ${options.koshVersion}.`,
         'Upgrade the module or the framework.',
       );
     const deps = closure(m);
     for (const sd of m.shutro.depends)
       if (!deps.has(sd.name))
         fail(
-          `Module '${m.name}' uses the Shutro module '${sd.name}' but no Kosh module it depends on provides it.`,
-          `Add the Kosh module '${sd.name}' to depends.`,
+          `Module '${m.name}' uses the Shutro module '${sd.name}' but no Shutro ERP module it depends on provides it.`,
+          `Add the Shutro ERP module '${sd.name}' to depends.`,
         );
     // Groups an access level may grant: this module's and its dependencies'.
     const groups = new Set<string>(m.shutro.groups.map((g) => g.code));

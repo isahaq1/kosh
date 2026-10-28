@@ -12,7 +12,7 @@ export const messages: Readonly<Record<string, object>> = {
     push: {
       off: 'Push notifications on this device are off',
       on: 'Push notifications on this device are on',
-      denied: 'This browser blocks notifications from Kosh',
+      denied: 'This browser blocks notifications from Shutro ERP',
       busy: 'One moment…',
       turnOn: 'Turn on',
       turnOff: 'Turn off',

@@ -43,7 +43,7 @@ export function storageOf(app: object): Storage {
         'storage-unavailable',
         'File storage is not configured',
         'No object store is configured for attachments.',
-        'Set KOSH_STORAGE_DIR, or S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY and S3_SECRET_KEY.',
+        'Set SHUTRO_ERP_STORAGE_DIR, or S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY and S3_SECRET_KEY.',
       );
     storage = configured;
     stores.set(app, storage);

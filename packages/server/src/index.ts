@@ -3,6 +3,7 @@
  * `@kosh/server`: the Fastify server, module loading, the per-request Shutro environment, health checks, rate
  * limiting, logging and telemetry (RFC 0002). Shutro is reached only through `./orm.ts` (`@kosh/server/orm`).
  */
+
 export { announceChange, CHANGES_CHANNEL, parseChange, type RecordChange } from './api/changes.js';
 export { generateClient, typeOf } from './api/client.js';
 export {
@@ -74,6 +75,7 @@ export {
   type UserInfo,
 } from './auth/service.js';
 export { DEMO_PASSWORD, type DemoResult, installDemo } from './demo.js';
+export { applyEnvironmentNames } from './env-names.js';
 export { HttpProblem, type Problem, problemOf, ServerConfigError } from './errors.js';
 export { type AppHost, type AppHostOptions, createAppHost, startAppHost } from './host.js';
 export {

@@ -419,7 +419,7 @@ const unavailable = () =>
     409,
     'no-gst-provider',
     'E-invoicing is not set up',
-    'No IRP / e-way bill provider is configured for this installation (KOSH_GST_PROVIDER).',
+    'No IRP / e-way bill provider is configured for this installation (SHUTRO_ERP_GST_PROVIDER).',
   );
 
 /**

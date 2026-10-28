@@ -67,7 +67,7 @@ export function mailerFromEnv(
 ): Mailer | undefined {
   const url = env['SMTP_URL'];
   if (url === undefined || url === '') return undefined;
-  return createSmtpMailer({ url, from: env['MAIL_FROM'] ?? 'Kosh <kosh@localhost>' });
+  return createSmtpMailer({ url, from: env['MAIL_FROM'] ?? 'Shutro ERP <shutro-erp@localhost>' });
 }
 
 /** A mailer that keeps what it is given (tests, dry runs). */
@@ -75,7 +75,7 @@ export function createMemoryMailer(): Mailer & { readonly sent: OutboundMail[] }
   const sent: OutboundMail[] = [];
   return {
     name: 'memory',
-    from: 'Kosh <kosh@localhost>',
+    from: 'Shutro ERP <shutro-erp@localhost>',
     sent,
     async send(mail) {
       sent.push(mail);

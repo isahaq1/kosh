@@ -13,8 +13,8 @@ It does four things: **search in plain language**, **summaries** of a record, **
 
    ```sh
    ANTHROPIC_API_KEY=sk-ant-...
-   # KOSH_ASSISTANT_MODEL=claude-opus-5-5        # the default; claude-sonnet-5-5 costs half
-   # KOSH_ASSISTANT_MONTHLY_TOKENS=2000000       # per company and month
+   # SHUTRO_ERP_ASSISTANT_MODEL=claude-opus-5-5        # the default; claude-sonnet-5-5 costs half
+   # SHUTRO_ERP_ASSISTANT_MONTHLY_TOKENS=2000000       # per company and month
    ```
 
 2. Install the **assistant** module (Settings → Apps; it is in the starter's catalogue).
@@ -26,9 +26,9 @@ It does four things: **search in plain language**, **summaries** of a record, **
 
 Lists have **Ask** next to the search box. "customers in Dhaka with a credit limit over 100 000" becomes filters —
 the model gets the fields of the list's model the user may read (and the readable fields of the records they link
-to, one hop: `partner.city`), answers in a strict JSON schema, and Kosh checks every field, operator and value before
+to, one hop: `partner.city`), answers in a strict JSON schema, and Shutro ERP checks every field, operator and value before
 the search runs as usual (record rules apply). The filters show as one chip, removed like any other; what could not be
-expressed is said under the box. A refusal says the assistant cannot help; an answer Kosh cannot use is refused with
+expressed is said under the box. A refusal says the assistant cannot help; an answer Shutro ERP cannot use is refused with
 what was wrong, and the user rephrases or filters by hand.
 
 ```http
@@ -65,7 +65,7 @@ writes: the request is prepared in the user's scope, answered outside it, and lo
 
 Lists have **Fill from a document** next to **New** (for users who may create records there). Paste an email or a text,
 or choose a PDF, an image (PNG, JPEG, WebP, GIF) or a text file, up to 10 MB. The model is told the fields of a new
-record the user may write and answers one value per field (empty when the document does not say); Kosh converts each
+record the user may write and answers one value per field (empty when the document does not say); Shutro ERP converts each
 by its kind — amounts as decimals, dates, yes / no, choices by value or label, linked records by name (one record the
 user may read whose name matches) — and leaves out what does not fit, saying why. The new record opens with the
 values marked **Proposed**: they are unsaved changes, so the user checks them, then saves or discards. Nothing is

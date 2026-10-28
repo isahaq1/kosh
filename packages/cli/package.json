@@ -24,6 +24,7 @@
   "type": "module",
   "sideEffects": false,
   "bin": {
+    "shutro-erp": "./dist/bin.js",
     "kosh": "./dist/bin.js"
   },
   "exports": {

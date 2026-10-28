@@ -137,7 +137,7 @@ export function registerAppRoutes(context: ModuleContext): void {
         'app-manager-unavailable',
         'App manager unavailable',
         'This server does not run in an app host, so it cannot change the installed apps.',
-        'Start the server with createAppHost (the starter project does), or use npx kosh apps.',
+        'Start the server with createAppHost (the starter project does), or use npx shutro-erp apps.',
       );
     return context.apps;
   };

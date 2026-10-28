@@ -10,7 +10,7 @@ import type { AuthService } from './auth/service.js';
 import type { Driver, Env, Shutro } from './orm.js';
 
 /** The demo users' password (every demo user; printed by `kosh init --demo`). */
-export const DEMO_PASSWORD = 'kosh demo 2026';
+export const DEMO_PASSWORD = 'shutro demo 2026';
 
 /** What one module's seeder did. */
 export interface DemoResult {

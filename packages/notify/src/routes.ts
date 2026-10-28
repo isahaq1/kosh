@@ -92,7 +92,7 @@ export function registerNotifyRoutes(
         'push-not-configured',
         'Push is not set up',
         'This installation has no VAPID keys.',
-        'Set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT (kosh init writes them).',
+        'Set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT (shutro-erp init writes them).',
       );
     return { publicKey: options.pusher.publicKey };
   });

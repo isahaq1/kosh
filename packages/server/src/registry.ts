@@ -71,7 +71,7 @@ export function buildKoshRegistry(
   for (const name of registry.loadOrder)
     if (!loaded.byName.has(name) && name !== CHANGE_EVENTS_MODULE)
       throw new ServerConfigError(
-        `The Shutro module '${name}' has no Kosh manifest.`,
+        `The Shutro module '${name}' has no Shutro ERP manifest.`,
         'Wrap it with defineModule() from @kosh/modules-sdk (its access levels are required) and depend on it.',
       );
   return { loaded, registry };

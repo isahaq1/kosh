@@ -369,7 +369,7 @@ test('propose mode: a pull request on the configured repository, nothing written
   ]);
   const pull = githubCalls.find((c) => c.path.endsWith('/pulls'));
   expect(pull?.body['title']).toBe('Studio: Acme customizations 0.1.0');
-  expect(String(pull?.body['body'])).toContain('npx kosh apps install fleet');
+  expect(String(pull?.body['body'])).toContain('npx shutro-erp apps install fleet');
   expect(String(pull?.body['body'])).toMatch(/ADD COLUMN "x_fleet_gst_number"/);
   // The server wrote nothing.
   expect(await entries(join(production, 'src'))).toEqual(['modules.ts']);

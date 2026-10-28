@@ -1109,7 +1109,7 @@ export function webhookProblem(
     return 'Webhooks call https URLs (http only for localhost).';
   const allowed = hosts.some((h) => (h.startsWith('*.') ? host.endsWith(h.slice(1)) : host === h));
   if (!allowed)
-    return `The host ${host} is not on the webhook allow-list (KOSH_AUTOMATION_WEBHOOK_HOSTS).`;
+    return `The host ${host} is not on the webhook allow-list (SHUTRO_ERP_AUTOMATION_WEBHOOK_HOSTS).`;
   return null;
 }
 

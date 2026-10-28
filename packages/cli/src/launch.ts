@@ -1,5 +1,5 @@
 /**
- * After `kosh init`: the project's dependencies installed with the package manager that ran the installer, the API
+ * After `shutro-erp init`: the project's dependencies installed with the package manager that ran the installer, the API
  * and the back-office started, each waited for until it answers, and the back-office opened in the default browser.
  * Both keep running in this terminal until Ctrl+C, which stops them together. Their output is kept, and shown when
  * one of them fails to start.
@@ -131,7 +131,7 @@ export async function launch(o: LaunchOptions, ui: Ui): Promise<void> {
   opened.unref();
   ui.ok(`Opened ${ui.style('cyan', webUrl)} in your browser · sign in as "${o.login}"`);
   ui.outro(
-    `${ui.style('green', 'Kosh is running')}  ${ui.style('gray', `back-office ${webUrl} · API ${apiUrl} · Ctrl+C stops both`)}`,
+    `${ui.style('green', 'Shutro ERP is running')}  ${ui.style('gray', `back-office ${webUrl} · API ${apiUrl} · Ctrl+C stops both`)}`,
   );
   // Until Ctrl+C, or until one of them stops by itself (its last lines are shown).
   const which = await Promise.race([

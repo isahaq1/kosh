@@ -48,7 +48,7 @@ renderers are in `@kosh/reporting/web` (`registerReportingWeb(registry)`), with 
 | `POST /api/v1/models/:model/report/export { ...report query, format: xlsx\|csv, title? }` | a pivot as a workbook (indented levels, totals, money formats) or CSV |
 
 All need the `export` permission (RFC 0003) and write a `data.export` audit event. CSV cells that look like formulas
-are neutralized. The XLSX writer is Kosh's own (`node:zlib`), no dependency.
+are neutralized. The XLSX writer is Shutro ERP's own (`node:zlib`), no dependency.
 
 ## Documents
 
@@ -82,7 +82,7 @@ recipients. The engine:
   field) visible to the owner and recipients, records `lastRunAt` / `lastError`, and hands the output to the
   **delivery adapters** (`engineOf(app).use({ name, deliver })`: the notification channels of RFC 0006 plug in here);
 - `POST /api/v1/reports/schedules/:id/run` runs one now as the caller; outputs download from
-  `GET /api/v1/reports/outputs/:id/download`. `KOSH_SCHEDULES=off` disables the ticker (tests, one-off scripts).
+  `GET /api/v1/reports/outputs/:id/download`. `SHUTRO_ERP_SCHEDULES=off` disables the ticker (tests, one-off scripts).
 
 The queue is behind a one-method `JobQueue` interface in `schedules.ts`: switching to another backend touches that
 file only (the Shutro-jobs-vs-pg-boss decision of RFC 0006 is still open).

@@ -3,6 +3,7 @@
  * authentication through an {@link Authenticator}, one Shutro transaction per request (`request.env`), RFC 9457
  * errors, rate limiting on Valkey, OpenTelemetry spans, health checks, and graceful shutdown.
  */
+
 import rateLimit from '@fastify/rate-limit';
 import type { KoshModule } from '@kosh/modules-sdk';
 import type { Span } from '@opentelemetry/api';
@@ -20,6 +21,7 @@ import { registerRestApi } from './api/rest.js';
 import { ViewRegistry } from './api/views.js';
 import { registerAuthRoutes } from './auth/routes.js';
 import { type AuthOptions, AuthService } from './auth/service.js';
+import { applyEnvironmentNames } from './env-names.js';
 import { HttpProblem, problemOf, ServerConfigError } from './errors.js';
 import { type Authenticator, denyAll, type RequestIdentity, runOptionsOf } from './identity.js';
 import { type Driver, type Env, orm, pg, type Shutro } from './orm.js';
@@ -154,6 +156,7 @@ function externalGroupsOf(registry: KoshRegistry): ReadonlySet<string> {
 
 /** Creates the server (not listening yet). @throws {ServerConfigError} for modules that cannot load together */
 export async function createServer(options: ServerOptions): Promise<KoshServer> {
+  applyEnvironmentNames(); // SHUTRO_ERP_* settings, read under their KOSH_* names
   const registry = buildKoshRegistry(options.modules, {
     ...(options.security === undefined ? {} : { security: options.security }),
   });
@@ -321,7 +324,10 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
     models,
     driver,
     openapi: () => {
-      openapi ??= openApiDocument(models.values(), { title: 'Kosh API', version: KOSH_VERSION });
+      openapi ??= openApiDocument(models.values(), {
+        title: 'Shutro ERP API',
+        version: KOSH_VERSION,
+      });
       return openapi;
     },
   });

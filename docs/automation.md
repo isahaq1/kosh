@@ -37,7 +37,7 @@ syntax, the one approval policies use), e.g. `{ amountTotal: { gte: '50000' }, p
 | `note`, `comment` | `text` | posts on the record's chatter |
 | `create` | `model`, `values` | creates a record (its rules fire too, up to a depth of 5) |
 | `action` | `key`, `params` | runs an action a module declares (`automationActions` in its manifest: typed TypeScript) |
-| `webhook` | `url`, `fields` | a signed JSON POST through a job (`automation.webhook`, 4 attempts with backoff, 10 s timeout): `{ rule, trigger, model, id, record, at }`, `X-Kosh-Signature: sha256=<HMAC of the body with the rule's webhookSecret>` (made on first use), `X-Kosh-Rule`; https only (http for localhost), and the host on `KOSH_AUTOMATION_WEBHOOK_HOSTS` (comma-separated, `*.example.com` allowed) |
+| `webhook` | `url`, `fields` | a signed JSON POST through a job (`automation.webhook`, 4 attempts with backoff, 10 s timeout): `{ rule, trigger, model, id, record, at }`, `X-Kosh-Signature: sha256=<HMAC of the body with the rule's webhookSecret>` (made on first use), `X-Kosh-Rule`; https only (http for localhost), and the host on `SHUTRO_ERP_AUTOMATION_WEBHOOK_HOSTS` (comma-separated, `*.example.com` allowed) |
 
 **Users** (`assignee`, `users`) are ids, `field:<key>` (a user field of the record, `field:user`), or `role:<code>`
 (every holder of the role in the company). **Templates** in `values`, `summary`, `note`, `text`: `{{field}}`,
@@ -110,7 +110,7 @@ needs a tracked field (track it, e.g. with Studio). A rule never fires on its ow
 A module can ship rules (`automationRules` in its manifest, by key). The Automation app installs them in every
 company after each app change, as rules owned by the module (**From module**, **Key in the module** on the rule):
 an upgrade of the module rewrites them but keeps their on/off switch, and a rule the module no longer declares is
-archived (its runs stay). Kosh Studio moves a rule made here into a Studio module (Studio → Modules → "Move into
+archived (its runs stay). Shutro ERP Studio moves a rule made here into a Studio module (Studio → Modules → "Move into
 module"); the original is archived once the module's copy is installed.
 
 ```ts
@@ -130,11 +130,11 @@ export const crmExtras = defineModule({
 ```
 
 The Automation app's version is 0.2.0 (the rules' `module` and `moduleKey` columns): existing installations run
-`kosh apps upgrade automation`. Companies created later get the rules at the next app change.
+`shutro-erp apps upgrade automation`. Companies created later get the rules at the next app change.
 
 ## Settings
 
-`KOSH_AUTOMATION_POLL_MS` (5 000): how often a node reads the trail and the outbox and checks the timed rules
-(one node at a time for the feeds, an advisory lock). `KOSH_AUTOMATION_WEBHOOK_HOSTS`: the webhook allow-list.
-`KOSH_SCHEDULES=off` keeps the engine off (the CLI). A `date` or `schedule` rule has no actor: it runs as
+`SHUTRO_ERP_AUTOMATION_POLL_MS` (5 000): how often a node reads the trail and the outbox and checks the timed rules
+(one node at a time for the feeds, an advisory lock). `SHUTRO_ERP_AUTOMATION_WEBHOOK_HOSTS`: the webhook allow-list.
+`SHUTRO_ERP_SCHEDULES=off` keeps the engine off (the CLI). A `date` or `schedule` rule has no actor: it runs as
 `runAsUser` when set, else as the system.

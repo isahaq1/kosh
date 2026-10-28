@@ -4,7 +4,7 @@
  */
 export const en = {
   app: {
-    name: 'Kosh',
+    name: 'Shutro ERP',
     loading: 'Loading…',
     error: 'Something went wrong.',
     retry: 'Retry',
@@ -173,7 +173,7 @@ export const en = {
     synced_other: '{{count}} changes saved on this device were sent',
     needsAttention_one: '{{count}} change could not be sent. Open the cloud in the header.',
     needsAttention_other: '{{count}} changes could not be sent. Open the cloud in the header.',
-    newVersion: 'A new version of Kosh is ready.',
+    newVersion: 'A new version of Shutro ERP is ready.',
     reload: 'Reload',
   },
   home: {

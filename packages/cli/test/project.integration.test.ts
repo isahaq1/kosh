@@ -215,7 +215,7 @@ test('migrate, seed, upgrade with a data migration, status, and the destructive 
     const refused = await run('migrate', '--modules', './src/v3.ts');
     expect(refused.code).toBe(1);
     expect(refused.text).toContain('destructive:');
-    expect(refused.text).toContain('kosh migrate --allow-destructive');
+    expect(refused.text).toContain('shutro-erp migrate --allow-destructive');
     const allowed = await run('migrate', '--modules', './src/v3.ts', '--allow-destructive');
     expect(allowed.code, allowed.text).toBe(0);
     expect(allowed.text).toContain('0003_update.sql');

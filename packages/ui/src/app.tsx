@@ -180,7 +180,7 @@ const ServicesContext = createContext<Services | null>(null);
 
 function useServices(): Services {
   const value = useContext(ServicesContext);
-  if (value === null) throw new Error('Kosh routes render inside <KoshApp>.');
+  if (value === null) throw new Error('Shutro ERP routes render inside <KoshApp>.');
   return value;
 }
 

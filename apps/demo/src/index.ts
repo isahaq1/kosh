@@ -3,7 +3,7 @@
  * `DATABASE_URL`, or from a Testcontainers container that goes with the process. The API listens on
  * `KOSH_DEMO_PORT` (3000); the back-office is `pnpm --filter @kosh/web dev` with `KOSH_API` pointing at it.
  *
- * Sign in as a demo user (password `kosh demo 2026`): `dina` (manager of every app), `rahim` (sales, invoicing),
+ * Sign in as a demo user (password `shutro demo 2026`): `dina` (manager of every app), `rahim` (sales, invoicing),
  * `karim` (purchasing), `sumi` (projects). `admin` has the same password and enrols its authenticator at first use.
  */
 import { mkdtempSync } from 'node:fs';
@@ -74,6 +74,6 @@ await installDemo({
 await startAppHost(host, { port: PORT, host: '127.0.0.1', onShutdown: stop });
 process.stdout.write(
   `\nKosh demo API on http://127.0.0.1:${PORT}\n` +
-    `  back-office: KOSH_API=http://127.0.0.1:${PORT} pnpm --filter @kosh/web dev\n` +
+    `  back-office: SHUTRO_ERP_API=http://127.0.0.1:${PORT} pnpm --filter @kosh/web dev\n` +
     `  sign in as dina, rahim, karim or sumi with the password "${DEMO_PASSWORD}"\n`,
 );

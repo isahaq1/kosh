@@ -2,7 +2,7 @@
  * The installer's look in the terminal, without dependencies: a logo, numbered steps, spinners for long work,
  * status lines (✔ ▲ ✖) and a summary card. On a Unicode terminal everything hangs on one rail down the left (│),
  * the questions of the interactive prompter included (`tui.ts`). Colour, Unicode and animation are detected from
- * the terminal (NO_COLOR, FORCE_COLOR, KOSH_ASCII=1, TERM=dumb, Windows consoles without Unicode); output that is not
+ * the terminal (NO_COLOR, FORCE_COLOR, SHUTRO_ERP_ASCII=1, TERM=dumb, Windows consoles without Unicode); output that is not
  * a terminal (tests, logs, CI) gets plain lines with the same words and no escape codes.
  */
 
@@ -139,12 +139,12 @@ export const ICONS = {
 export type IconName = keyof typeof ICONS;
 
 const LOGO = [
-  '██╗  ██╗ ██████╗ ███████╗██╗  ██╗',
-  '██║ ██╔╝██╔═══██╗██╔════╝██║  ██║',
-  '█████╔╝ ██║   ██║███████╗███████║',
-  '██╔═██╗ ██║   ██║╚════██║██╔══██║',
-  '██║  ██╗╚██████╔╝███████║██║  ██║',
-  '╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝',
+  '███████╗██╗  ██╗██╗   ██╗████████╗██████╗  ██████╗',
+  '██╔════╝██║  ██║██║   ██║╚══██╔══╝██╔══██╗██╔═══██╗',
+  '███████╗███████║██║   ██║   ██║   ██████╔╝██║   ██║',
+  '╚════██║██╔══██║██║   ██║   ██║   ██╔══██╗██║   ██║',
+  '███████║██║  ██║╚██████╔╝   ██║   ██║  ██║╚██████╔╝',
+  '╚══════╝╚═╝  ╚═╝ ╚═════╝    ╚═╝   ╚═╝  ╚═╝ ╚═════╝',
 ];
 /** Cyan to violet, one 256-colour step per logo line. */
 const GRADIENT = [51, 45, 39, 33, 63, 99];
@@ -244,7 +244,7 @@ export function createUi(
     icon,
     async banner(subtitle) {
       if (!terminal.unicode) {
-        write(`\n  ${s('bold', 'K O S H')}  ${subtitle}\n`);
+        write(`\n  ${s('bold', 'S H U T R O   E R P')}  ${subtitle}\n`);
         return;
       }
       write('\n');

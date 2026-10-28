@@ -36,7 +36,7 @@ export const messages: Readonly<Record<string, object>> = {
     openMergeRequest: 'Open a merge request',
     proposalOpened: 'Opened on {{repository}}:',
     proposeNote:
-      'This server proposes changes: download the patch, commit it, and deploy it (then kosh apps upgrade).',
+      'This server proposes changes: download the patch, commit it, and deploy it (then shutro-erp apps upgrade).',
     modulesTitle: 'Studio modules',
     modulesIntro:
       'Each Studio change is saved in a module of your project: reviewed as code, versioned, and upgraded like any app.',
@@ -113,7 +113,7 @@ export const messages: Readonly<Record<string, object>> = {
     openMergeRequest: 'মার্জ রিকোয়েস্ট খুলুন',
     proposalOpened: '{{repository}}-এ খোলা হয়েছে:',
     proposeNote:
-      'এই সার্ভার পরিবর্তন প্রস্তাব করে: প্যাচ ডাউনলোড করে কমিট ও ডিপ্লয় করুন (তারপর kosh apps upgrade)।',
+      'এই সার্ভার পরিবর্তন প্রস্তাব করে: প্যাচ ডাউনলোড করে কমিট ও ডিপ্লয় করুন (তারপর shutro-erp apps upgrade)।',
     modulesTitle: 'স্টুডিও মডিউল',
     modulesIntro:
       'স্টুডিওর প্রতিটি পরিবর্তন আপনার প্রজেক্টের একটি মডিউলে সংরক্ষিত হয়: কোডের মতো পর্যালোচিত, সংস্করণযুক্ত এবং যেকোনো অ্যাপের মতো আপগ্রেডযোগ্য।',

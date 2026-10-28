@@ -1,5 +1,5 @@
 /**
- * `kosh apps` (RFC 0008): the App manager in the terminal. Lists the catalogue with each app's state, and installs,
+ * `shutro-erp apps` (RFC 0008): the App manager in the terminal. Lists the catalogue with each app's state, and installs,
  * enables or disables apps: the plan is shown first (modules, dependencies, cascades, schema statements), then
  * applied in one transaction by `@kosh/server` (`prepareApps` / `applyApps`).
  */
@@ -22,14 +22,14 @@ import { modulesOf, seedWith } from './project.js';
 import { defaultsPrompter, type Prompter, terminalPrompter } from './prompt.js';
 import { createUi, PLAIN_TERMINAL, type Terminal, type Ui } from './ui.js';
 
-export const APPS_USAGE: string = `Usage: kosh apps [command] [app …] [options]
+export const APPS_USAGE: string = `Usage: shutro-erp apps [command] [app …] [options]
 
-  kosh apps                     the catalogue: installed, disabled and available apps
-  kosh apps install <app …>     install apps and what they need, in one transaction
-  kosh apps enable <app …>      serve disabled apps again (their data is still there)
-  kosh apps disable <app …>     switch apps off: menus, API and access go, tables and data stay
+  shutro-erp apps                     the catalogue: installed, disabled and available apps
+  shutro-erp apps install <app …>     install apps and what they need, in one transaction
+  shutro-erp apps enable <app …>      serve disabled apps again (their data is still there)
+  shutro-erp apps disable <app …>     switch apps off: menus, API and access go, tables and data stay
                                 (apps that depend on them are disabled too)
-  kosh apps upgrade [app …]     move installed apps to their code's version: schema, data migrations,
+  shutro-erp apps upgrade [app …]     move installed apps to their code's version: schema, data migrations,
                                 seed data (default: every app whose code is newer)
 
 Options:
@@ -42,7 +42,7 @@ Options:
 After a change, restart the API (npm start) so it serves the new set.
 `;
 
-/** Pictographs for the apps Kosh ships; other modules get a puzzle piece. */
+/** Pictographs for the apps Shutro ERP ships; other modules get a puzzle piece. */
 const APP_ICONS: Readonly<Record<string, string>> = {
   base: '🏠',
   settings: '⚙️',
@@ -105,7 +105,7 @@ async function list(
     const why = row?.reason === 'dependency' ? ui.style('gray', ' (needed by another app)') : '';
     const behind =
       row !== undefined && row.version !== m.version
-        ? ui.style('cyan', ` (installed ${row.version}: kosh apps upgrade ${m.name})`)
+        ? ui.style('cyan', ` (installed ${row.version}: shutro-erp apps upgrade ${m.name})`)
         : '';
     ui.write(
       `  ${marks[s]} ${iconOf(ui, m.name)}  ${ui.style('bold', m.name.padEnd(width))}  ${ui.style('gray', m.version.padEnd(8))} ${s.padEnd(9)} ${label}${why}${behind}\n`,
@@ -146,7 +146,7 @@ function showPlan(ui: Ui, prepared: PreparedApps, catalogue: readonly KoshModule
   if (plan.disable.length > 0) ui.detail('tables and data stay; enable brings everything back');
 }
 
-/** Runs `kosh apps …`. Returns the exit code. */
+/** Runs `shutro-erp apps …`. Returns the exit code. */
 export async function runApps(argv: readonly string[], io: AppsIo): Promise<number> {
   const { values, positionals } = parseArgs({
     args: [...argv],
@@ -175,12 +175,12 @@ export async function runApps(argv: readonly string[], io: AppsIo): Promise<numb
   if (command === 'uninstall') {
     ui.warn('Removing an app and its data comes with a later step of RFC 0008.');
     ui.info(
-      `Meanwhile: kosh apps disable ${names.join(' ') || '<app>'} (reversible, keeps the data).`,
+      `Meanwhile: shutro-erp apps disable ${names.join(' ') || '<app>'} (reversible, keeps the data).`,
     );
     return 2;
   }
   if (command !== 'list' && command !== 'upgrade' && names.length === 0) {
-    ui.fail(`Name the app(s): kosh apps ${command} <app …>`);
+    ui.fail(`Name the app(s): shutro-erp apps ${command} <app …>`);
     return 2;
   }
 
@@ -188,14 +188,14 @@ export async function runApps(argv: readonly string[], io: AppsIo): Promise<numb
   if (existsSync(envFile)) process.loadEnvFile(envFile);
   const databaseUrl = process.env['DATABASE_URL'];
   if (databaseUrl === undefined || databaseUrl === '') {
-    ui.fail('DATABASE_URL is not set: run kosh init, or add it to .env.');
+    ui.fail('DATABASE_URL is not set: run shutro-erp init, or add it to .env.');
     return 1;
   }
   const driver = pg.createDriver({
     url: databaseUrl,
     max: 2,
     parseNumeric: orm.toDecimal,
-    applicationName: 'kosh apps',
+    applicationName: 'shutro-erp apps',
   });
   const prompter =
     io.prompter ??

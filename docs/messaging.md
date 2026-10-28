@@ -35,7 +35,7 @@ Upload document); administrators add or archive types.
 - **Send message** (`comment`, for the followers; notifications arrive with RFC 0006 part 3) and **Log note**
   (`note`, internal). Text with a small markdown subset (paragraphs, `- ` lists, `**bold**`, `_italic_`, `` `code` ``,
   links) and **@mentions** picked from a suggestion list (keyboard: arrows, Enter / Tab, Escape). The server renders
-  the HTML: everything typed is escaped and only Kosh's markup is emitted, so a stored body is safe by construction;
+  the HTML: everything typed is escaped and only Shutro ERP's markup is emitted, so a stored body is safe by construction;
   mentions show the user's current name, never the typed label. Authors edit or delete their own messages.
 - **Files**: attached in the composer (uploaded at once, removable before sending), downloaded from the message;
   images show a preview. Deleting a message deletes its files.
@@ -61,7 +61,7 @@ Upload document); administrators add or archive types.
 | `POST /api/v1/chatter/:model/:id/activities { type, deadline, assignee?, summary?, note? }` | |
 | `PATCH /api/v1/activities/:id`, `POST /api/v1/activities/:id/done { feedback? }`, `DELETE /api/v1/activities/:id` | its creator or assignee |
 | `GET /api/v1/activities/types`, `GET /api/v1/activities/mine` | |
-| `POST /api/v1/attachments/:model/:id` | the raw file as the body (`Content-Type`, `X-Filename` URI-encoded), up to `KOSH_ATTACHMENT_MAX_BYTES` (25 MB) |
+| `POST /api/v1/attachments/:model/:id` | the raw file as the body (`Content-Type`, `X-Filename` URI-encoded), up to `SHUTRO_ERP_ATTACHMENT_MAX_BYTES` (25 MB) |
 | `GET /api/v1/attachments/:model/:id`, `GET /api/v1/attachments/:id/download[?inline=true]`, `DELETE /api/v1/attachments/:id` | the uploader deletes |
 
 A record outside the caller's rules is a 403 and an unknown one a 404, as in the REST API. The chatter's models
@@ -133,7 +133,7 @@ HTML from outside is reduced to a small allow-list (`sanitize-html`); the chatte
 **Email** app (`mail.manager`) lists the log by state: a quarantined message is attached to a record by hand
 (posted as the system naming the sender, on a record the manager can read), tried again, or discarded.
 Routes: `GET /api/v1/mail/inbound?state=`, `POST /api/v1/mail/inbound/:id/attach { model, id }`, `…/discard`,
-`…/retry`. The webhook answers 404 until `MAIL_INBOUND_WEBHOOK_SECRET` is set; `kosh init` writes both secrets
+`…/retry`. The webhook answers 404 until `MAIL_INBOUND_WEBHOOK_SECRET` is set; `shutro-erp init` writes both secrets
 into `.env` (the domain stays to fill in).
 
 ## Storage
@@ -143,7 +143,7 @@ Bytes live in an object store, metadata in `storage.attachment` (name, type, siz
 - `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` (and `S3_REGION`): any S3-compatible store (AWS S3,
   SeaweedFS as in `docker-compose.yml`, MinIO), path-style, signed with SigV4 (`@kosh/storage` signs on
   `node:crypto`; no SDK).
-- `KOSH_STORAGE_DIR`: a directory (development, tests, single-node installs with a backed-up volume).
+- `SHUTRO_ERP_STORAGE_DIR`: a directory (development, tests, single-node installs with a backed-up volume).
 - `useStorage(app, storage)` sets any `Storage` implementation (`put`, `read`, `delete`).
 
 Without a store, uploads answer 503. The object is written before its row: a failed transaction leaves an orphan

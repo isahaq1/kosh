@@ -16,7 +16,7 @@ plus `create` (to create) or `write` (to update). Administrators pass. The **Imp
    workbook. **Download a sample file** gives a workbook with the headers to fill and a second sheet that says what
    each column takes.
 2. **Columns**: each column of the file with its first values and the field it fills, guessed from the headers
-   (the field labels and keys; an export from Kosh re-imports as it is). Choose:
+   (the field labels and keys; an export from Shutro ERP re-imports as it is). Choose:
    - **What to do**: create new records, update existing ones, or both. Updates find records by a **key** column:
      the record id, an external id, or a field the model keeps unique (a product code, an email).
    - **Rows with errors**: import nothing if any row has an error (the default), or import the others and download
@@ -107,5 +107,5 @@ ids out.
 
 ## Limits
 
-50 MB and 1 million rows per file (`KOSH_IMPORT_MAX_BYTES`, `KOSH_IMPORT_MAX_ROWS`). Every check, import and undo
+50 MB and 1 million rows per file (`SHUTRO_ERP_IMPORT_MAX_BYTES`, `SHUTRO_ERP_IMPORT_MAX_ROWS`). Every check, import and undo
 is in the audit log (`data.import`, `data.import.undo`).

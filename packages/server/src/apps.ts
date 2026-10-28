@@ -166,7 +166,7 @@ export async function installedModules(
 ): Promise<KoshModule[]> {
   const driver =
     typeof source === 'string'
-      ? pg.createDriver({ url: source, max: 1, applicationName: 'kosh apps' })
+      ? pg.createDriver({ url: source, max: 1, applicationName: 'shutro-erp apps' })
       : source;
   try {
     const rows = await readInstalledApps(driver);
@@ -261,7 +261,7 @@ export async function prepareApps(options: PrepareAppsOptions): Promise<Prepared
   if (pending.length > 0)
     throw new AppPlanError(
       `${pending.length} migration file(s) are not applied yet (${pending.map((f) => `${f.version}_${f.name}`).join(', ')}).`,
-      'Run kosh migrate first.',
+      'Run shutro-erp migrate first.',
     );
   const current = await installedApps(driver, catalogue);
   const plan = planApps(catalogue, current, options.change, options.protect ?? ['base']);
@@ -279,7 +279,7 @@ export async function prepareApps(options: PrepareAppsOptions): Promise<Prepared
   if (drift.statements.length > 0 && plan.upgrade.length === 0)
     throw new AppPlanError(
       `The database does not match the installed modules (${drift.statements.length} change(s) not migrated).`,
-      'Run kosh migrate first.',
+      'Run shutro-erp migrate first.',
     );
 
   const runtime = registryOf(plan.after, ['installed']);
@@ -294,8 +294,8 @@ export async function prepareApps(options: PrepareAppsOptions): Promise<Prepared
     throw new AppPlanError(
       `The change would drop or alter data: ${migration.destructive.map((op) => migrate.renderOperation(op)).join('; ')}.`,
       plan.upgrade.length > 0
-        ? 'Upgrade with "remove data" (kosh apps upgrade --remove-data) to drop them, or keep the fields in the code.'
-        : 'App changes never destroy data; review the modules, or use kosh migrate --plan.',
+        ? 'Upgrade with "remove data" (shutro-erp apps upgrade --remove-data) to drop them, or keep the fields in the code.'
+        : 'App changes never destroy data; review the modules, or use shutro-erp migrate --plan.',
     );
   // A disabled module's columns stay in other modules' tables: a NOT NULL one without a database default (a function
   // default or a compute lives in the ORM) would make every insert there fail.

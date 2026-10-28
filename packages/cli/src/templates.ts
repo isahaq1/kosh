@@ -1,5 +1,5 @@
 /**
- * The starter project `kosh init` writes: an API server and the back-office app, both importing `shutro-erp`.
+ * The starter project `shutro-erp init` writes: an API server and the back-office app, both importing `shutro-erp`.
  * Server files run on Node.js directly (type stripping); the back-office is a Vite app proxying `/api` to the server.
  */
 
@@ -32,7 +32,7 @@ export interface AppSpec {
   readonly country?: string;
 }
 
-/** The apps `kosh init` can install (base and Settings are always there), in the order the installer lists them. */
+/** The apps `shutro-erp init` can install (base and Settings are always there), in the order the installer lists them. */
 export const APPS: Readonly<Record<AppName, AppSpec>> = {
   permissions: {
     label: 'Roles, field security and approvals',
@@ -125,7 +125,7 @@ export interface StarterOptions {
   readonly koshVersion: string;
   /** The database name of the Docker PostgreSQL service (compose.yaml). */
   readonly dockerDb?: string;
-  /** Attachments in a folder (KOSH_STORAGE_DIR) rather than S3. */
+  /** Attachments in a folder (SHUTRO_ERP_STORAGE_DIR) rather than S3. */
   readonly fileStorage?: boolean;
 }
 
@@ -154,8 +154,8 @@ export function packageJson(
       start: 'node --env-file=.env src/server.ts',
       web: 'vite',
       'build:web': 'vite build',
-      migrate: 'kosh migrate',
-      seed: 'kosh seed',
+      migrate: 'shutro-erp migrate',
+      seed: 'shutro-erp seed',
       'docker:up': 'docker compose up -d --build',
     }),
     engines: { node: '>=24', ...((base['engines'] as Record<string, string> | undefined) ?? {}) },
@@ -180,7 +180,7 @@ export function modulesTs(_options: StarterOptions): string {
   const imports = apps.map((a) => `import { ${APPS[a].server} } from 'shutro-erp/${a}';`);
   return `/**
  * The apps this installation can install (the catalogue). The database records which are installed: Settings → Apps
- * in the back-office, or \`npx kosh apps\`, installs, disables and enables them. \`base\` (users, companies, sign-in)
+ * in the back-office, or \`npx shutro-erp apps\`, installs, disables and enables them. \`base\` (users, companies, sign-in)
  * and Settings are always installed. Add your own modules here (\`defineModule\` from \`shutro-erp/modules-sdk\`),
  * then install them from Settings → Apps.
  */
@@ -201,7 +201,7 @@ export const modules = [base, settings, realtime, notify, mail, automation, stud
 
 export function serverTs(): string {
   return `/**
- * The Kosh API server: \`npm start\` (reads .env). It serves the installed apps of src/modules.ts, and switches to
+ * The Shutro ERP API server: \`npm start\` (reads .env). It serves the installed apps of src/modules.ts, and switches to
  * the new set without a restart when apps are installed or disabled (here or on another server).
  */
 import { createAppHost, startAppHost } from 'shutro-erp';
@@ -213,11 +213,11 @@ const host = await createAppHost({
   catalogue: modules,
   migrationsDir: 'migrations',
   ...(env['VALKEY_URL'] ? { valkeyUrl: env['VALKEY_URL'] } : {}),
-  // Secure cookies need HTTPS: on by default in production (KOSH_SECURE_COOKIES=false for plain HTTP).
-  auth: { secureCookies: (env['KOSH_SECURE_COOKIES'] ?? String(env['NODE_ENV'] === 'production')) === 'true' },
+  // Secure cookies need HTTPS: on by default in production (SHUTRO_ERP_SECURE_COOKIES=false for plain HTTP).
+  auth: { secureCookies: (env['SHUTRO_ERP_SECURE_COOKIES'] ?? env['KOSH_SECURE_COOKIES'] ?? String(env['NODE_ENV'] === 'production')) === 'true' },
 });
 const address = await startAppHost(host, { port: Number(env['PORT'] ?? 3000), host: env['HOST'] ?? '127.0.0.1' });
-process.stdout.write(\`Kosh API on \${address}\\n\`);
+process.stdout.write(\`Shutro ERP API on \${address}\\n\`);
 `;
 }
 
@@ -228,7 +228,7 @@ import react from '@vitejs/plugin-react';
 import { koshPwa } from 'shutro-erp/ui/vite';
 import { defineConfig } from 'vite';
 
-const api = process.env['KOSH_API'] ?? 'http://localhost:${options.port}';
+const api = process.env['SHUTRO_ERP_API'] ?? process.env['KOSH_API'] ?? 'http://localhost:${options.port}';
 
 export default defineConfig({
   // koshPwa: the service worker (the app opens offline and gets web push)
@@ -323,7 +323,7 @@ export function manifest(options: StarterOptions): string {
 
 /** The app icon (replace it with the company's). */
 export function icon(): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Kosh">
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Shutro ERP">
   <rect width="512" height="512" rx="112" fill="#1d4ed8"/>
   <path d="M156 128h56v112l108-112h72L270 258l128 126h-74L220 282v102h-64z" fill="#fff"/>
 </svg>
@@ -334,7 +334,7 @@ export function indexCss(): string {
   return `@import "tailwindcss";
 @import "shutro-erp/ui/styles.css";
 
-/* Tailwind scans Kosh's components for the classes they use. */
+/* Tailwind scans Shutro ERP's components for the classes they use. */
 @source "../../node_modules/shutro-erp/dist";
 `;
 }
@@ -349,7 +349,7 @@ var/
 
 /** Three images from one build: the API (migrates, then serves) and nginx with the back-office. */
 export function dockerfile(): string {
-  return `# Kosh images (kosh init). Built by compose.yaml: docker compose up -d --build
+  return `# Shutro ERP images (shutro-erp init). Built by compose.yaml: docker compose up -d --build
 FROM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json* ./
@@ -369,7 +369,7 @@ COPY --from=build /app/migrations ./migrations
 RUN mkdir -p /app/var/attachments && chown -R node:node /app/var
 USER node
 EXPOSE 3000
-CMD ["sh", "-c", "npx kosh migrate && node src/server.ts"]
+CMD ["sh", "-c", "npx shutro-erp migrate && node src/server.ts"]
 
 # The back-office: static files, /api proxied to the API.
 FROM nginx:1.27-alpine AS web
@@ -379,7 +379,7 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 }
 
 export function nginxConf(): string {
-  return `# The back-office (kosh init): the built app, /api proxied to the API service.
+  return `# The back-office (shutro-erp init): the built app, /api proxied to the API service.
 server {
   listen 80;
   root /usr/share/nginx/html;
@@ -412,9 +412,9 @@ export function composeYaml(options: StarterOptions): string {
   /** A compose variable: `${NAME}` or `${NAME:-default}` (plain strings: nothing to escape). */
   const v = (name: string, fallback?: string) =>
     ['$', '{', name, fallback === undefined ? '' : fallback, '}'].join('');
-  const user = v('POSTGRES_USER', ':-kosh');
+  const user = v('POSTGRES_USER', ':-shutro');
   const lines = [
-    '# Kosh in Docker (kosh init).',
+    '# Shutro ERP in Docker (shutro-erp init).',
     '#   docker compose up -d db          only PostgreSQL (the API runs with npm start)',
     '#   docker compose up -d --build     everything: the back-office on http://localhost:8080',
     `name: ${options.name}`,
@@ -433,7 +433,7 @@ export function composeYaml(options: StarterOptions): string {
     '      - db:/var/lib/postgresql',
     '    healthcheck:',
     // $$ is a literal $ for compose: the shell in the container expands the variable.
-    `      test: ["CMD-SHELL", "pg_isready -U $${v('POSTGRES_USER', ':-kosh')}"]`,
+    `      test: ["CMD-SHELL", "pg_isready -U $${v('POSTGRES_USER', ':-shutro')}"]`,
     '      interval: 5s',
     '      retries: 30',
     '',
@@ -445,9 +445,11 @@ export function composeYaml(options: StarterOptions): string {
     '    env_file: .env',
     '    environment:',
     `      DATABASE_URL: ${v('DOCKER_DATABASE_URL', `:-postgres://${user}:${v('POSTGRES_PASSWORD')}@db:5432/${v('POSTGRES_DB', `:-${db}`)}`)}`,
-    ...(options.fileStorage === false ? [] : ['      KOSH_STORAGE_DIR: /app/var/attachments']),
+    ...(options.fileStorage === false
+      ? []
+      : ['      SHUTRO_ERP_STORAGE_DIR: /app/var/attachments']),
     '      # Plain HTTP on localhost; set "true" when the site is served over HTTPS.',
-    '      KOSH_SECURE_COOKIES: "false"',
+    '      SHUTRO_ERP_SECURE_COOKIES: "false"',
     '    depends_on:',
     '      db:',
     '        condition: service_healthy',
@@ -504,19 +506,19 @@ export function tsconfig(): string {
 export function readme(options: StarterOptions): string {
   return `# ${options.name}
 
-A [Kosh](https://www.npmjs.com/package/shutro-erp) installation, created with \`kosh init\`.
+A [Shutro ERP](https://www.npmjs.com/package/shutro-erp) installation, created with \`shutro-erp init\`.
 
 \`\`\`sh
 npm install
 npm start          # the API on http://localhost:${options.port}
 npm run web        # the back-office on http://localhost:${options.webPort ?? 5173} (sign in as the administrator)
-npx kosh migrate   # after changing modules: plan and apply database migrations, load seed data
-npx kosh seed      # load seed data again
+npx shutro-erp migrate   # after changing modules: plan and apply database migrations, load seed data
+npx shutro-erp seed      # load seed data again
 # Settings → Apps in the back-office installs, enables and disables apps (or, in the terminal:)
-npx kosh apps                   # the apps: installed, disabled, available
-npx kosh apps install <name>    # install an app (and what it needs) in one transaction
-npx kosh apps disable <name>    # switch an app off; its data stays (npx kosh apps enable <name>)
-npx kosh module create <name>   # a new module in src/modules/<name>/
+npx shutro-erp apps                   # the apps: installed, disabled, available
+npx shutro-erp apps install <name>    # install an app (and what it needs) in one transaction
+npx shutro-erp apps disable <name>    # switch an app off; its data stays (npx shutro-erp apps enable <name>)
+npx shutro-erp module create <name>   # a new module in src/modules/<name>/
 docker compose up -d --build    # everything in Docker: http://localhost:8080
 \`\`\`
 

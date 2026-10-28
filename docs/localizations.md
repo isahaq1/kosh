@@ -11,9 +11,9 @@ Accounting › Configuration and the document designer, and upgrades never overw
 
 ## Installing
 
-- A new installation: `npx kosh init --country BD` or `--country IN` (the defaults for BDT and INR). The localization comes
+- A new installation: `npx shutro-erp init --country BD` or `--country IN` (the defaults for BDT and INR). The localization comes
   with Accounting, like a bridge.
-- An existing one: install `l10n_bd` in Settings › Apps (or `kosh apps install l10n_bd`). Its defaults set up each
+- An existing one: install `l10n_bd` in Settings › Apps (or `shutro-erp apps install l10n_bd`). Its defaults set up each
   company that has no chart yet; a company already on another chart is left alone.
 - A company created later: Accounting › Configuration › Settings lists the installed localizations' charts beside
   the generic one; installing `Bangladesh` there applies the whole localization to that company.
@@ -101,7 +101,7 @@ GET /api/v1/l10n_bd/mushak/6.2?month=2026-10&format=xlsx     # or format=pdf
 Reading needs the right to read journal entries; a file needs the right to export them and is recorded in the
 audit log. Amounts are in taka: a line in another currency converts at its document's rate.
 
-**Limits**, for now: the return is filed on the NBR's online system (it has no API for third parties) — Kosh
+**Limits**, for now: the return is filed on the NBR's online system (it has no API for third parties) — Shutro ERP
 prepares what is entered there. The registers have no stock columns until Inventory exists. The BIN's check digit
 is not verified (only its 13 digits) until the NBR's algorithm is confirmed. Debit notes (Mushak 6.8) wait for
 debit notes in Accounting.
@@ -174,7 +174,7 @@ GET  /api/v1/l10n_in/einvoice/42                   # the document's e-invoice an
 
 The IRP and the e-way bill system are reached through a **provider** (`GstProvider`: NIC's APIs directly, or a GST
 Suvidha Provider), given to the module (`l10nInModule({ provider })`) or named by the environment. For now there is
-the fake provider (`KOSH_GST_PROVIDER=fake`, for demonstrations: it answers as the IRP does, the IRN being the SHA-256
+the fake provider (`SHUTRO_ERP_GST_PROVIDER=fake`, for demonstrations: it answers as the IRP does, the IRN being the SHA-256
 of the seller's GSTIN, the financial year, the document type and number); a real adapter comes with sandbox
 credentials. Without a provider the screens say e-invoicing is not set up. The IRN fields are written by the system
 only. Not yet: the QR code printed as an image (the signed content is stored), part B updates of an e-way bill, and

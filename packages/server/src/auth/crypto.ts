@@ -135,6 +135,6 @@ export function verifyTotp(secret: string, code: string, time: number = Date.now
 }
 
 /** The `otpauth://` URI authenticator apps scan. */
-export function otpauthUri(secret: string, account: string, issuer = 'Kosh'): string {
+export function otpauthUri(secret: string, account: string, issuer = 'Shutro ERP'): string {
   return `otpauth://totp/${encodeURIComponent(`${issuer}:${account}`)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
 }

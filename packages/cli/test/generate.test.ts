@@ -5,7 +5,7 @@ import { afterAll, beforeAll, expect, test } from 'vitest';
 import { runCli } from '../src/index.js';
 
 let dir: string;
-const out = () => join(dir, 'src/api/kosh.gen.ts');
+const out = () => join(dir, 'src/api/shutro-erp.gen.ts');
 const cli = async (...argv: string[]) => {
   const lines: string[] = [];
   const code = await runCli(argv, (t) => lines.push(t), { cwd: dir });
@@ -58,5 +58,5 @@ test('usage errors', async () => {
   expect((await cli('generate', 'client', '--modules', 'x', '--from', 'y')).code).toBe(2);
   const missing = await cli('generate', 'client', '--modules', './missing.ts');
   expect(missing.code).toBe(1);
-  expect(missing.text).toMatch(/^kosh generate client: /);
+  expect(missing.text).toMatch(/^shutro-erp generate client: /);
 });

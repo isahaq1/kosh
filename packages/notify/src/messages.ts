@@ -32,9 +32,9 @@ export const TEXTS: Readonly<Record<string, Texts>> = {
     },
     states: { approved: 'approved', rejected: 'rejected' },
     email: {
-      open: 'Open in Kosh',
-      why: 'You receive this email because of your notification settings in Kosh.',
-      digestSubject: 'Your Kosh summary: {{count}} notifications',
+      open: 'Open in Shutro ERP',
+      why: 'You receive this email because of your notification settings in Shutro ERP.',
+      digestSubject: 'Your Shutro ERP summary: {{count}} notifications',
       digestIntro: 'What happened since your last summary, by record.',
     },
   },

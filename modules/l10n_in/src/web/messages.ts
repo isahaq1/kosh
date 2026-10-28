@@ -43,7 +43,8 @@ export const messages: Readonly<Record<string, object>> = {
       save: 'Save',
       saved: 'Saved.',
       provider: 'IRP provider: {{provider}}',
-      noProvider: 'No IRP provider is set up (KOSH_GST_PROVIDER): e-invoicing is unavailable.',
+      noProvider:
+        'No IRP provider is set up (SHUTRO_ERP_GST_PROVIDER): e-invoicing is unavailable.',
     },
     gst: {
       title: 'GST returns',
@@ -124,7 +125,7 @@ export const messages: Readonly<Record<string, object>> = {
       save: 'সংরক্ষণ',
       saved: 'সংরক্ষিত।',
       provider: 'IRP প্রদানকারী: {{provider}}',
-      noProvider: 'কোনো IRP প্রদানকারী নেই (KOSH_GST_PROVIDER): ই-চালান অনুপলব্ধ।',
+      noProvider: 'কোনো IRP প্রদানকারী নেই (SHUTRO_ERP_GST_PROVIDER): ই-চালান অনুপলব্ধ।',
     },
     gst: {
       title: 'জিএসটি রিটার্ন',

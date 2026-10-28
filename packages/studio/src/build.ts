@@ -59,7 +59,9 @@ export async function runStudio(
 ): Promise<number> {
   const [action, ...folders] = argv;
   if (action !== 'build') {
-    write('Usage: kosh studio build [folder …]   (default: every src/modules/*/studio.json)\n');
+    write(
+      'Usage: shutro-erp studio build [folder …]   (default: every src/modules/*/studio.json)\n',
+    );
     return 2;
   }
   const dirs = folders.length > 0 ? folders.map((f) => resolve(cwd, f)) : await studioModules(cwd);

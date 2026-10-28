@@ -28,7 +28,7 @@ On a contact's form, **Portal access** (for users with the "Portal access" level
    the access and every session at once; granting again brings the same user back with a new invitation.
 
 A contact sees the documents of their own contact and of **their company** (the contact's parent), including those
-addressed to colleagues at the same company. Portal links point to `KOSH_PORTAL_URL` (e.g.
+addressed to colleagues at the same company. Portal links point to `SHUTRO_ERP_PORTAL_URL` (e.g.
 `https://portal.example.com`).
 
 ## Security
@@ -111,13 +111,13 @@ Staff manage access with `GET/POST /api/v1/portal/access`, `POST /api/v1/portal/
 
 ## Running the portal app
 
-`apps/portal` is a Vite + React app on the Kosh design system, in English and Bangla, with light and dark themes,
-built for phones first. `pnpm --filter @kosh/portal-web dev` serves it on port 5174, proxying `/api` to `KOSH_API`
+`apps/portal` is a Vite + React app on the Shutro ERP design system, in English and Bangla, with light and dark themes,
+built for phones first. `pnpm --filter @kosh/portal-web dev` serves it on port 5174, proxying `/api` to `SHUTRO_ERP_API`
 (default `http://localhost:3000`). In production, serve its build on the portal's domain with `/api` going to the
-Kosh server, and set `KOSH_PORTAL_URL` to that domain.
+Shutro ERP server, and set `SHUTRO_ERP_PORTAL_URL` to that domain.
 
 ## Not yet
 
 - Paying invoices online (card, bKash, Nagad) and showing the company's bank details: with the integrations RFC.
-- `kosh init` does not offer the portal yet, and generated projects do not include the portal app.
+- `shutro-erp init` does not offer the portal yet, and generated projects do not include the portal app.
 - Installing the portal as an app on the home screen (PWA).

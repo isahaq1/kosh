@@ -114,7 +114,7 @@ createRoot(root).render(<KoshApp api={createKoshApi()} registry={registry} />);
 - Tokens in `@kosh/ui/styles.css` (CSS variables mapped to Tailwind v4 utilities), light and dark themes (system
   default, remembered per browser), logical properties only (`ms`/`me`, `start`/`end`), so right-to-left needs no
   overrides. Components are owned code on Radix primitives (focus, keyboard, ARIA).
-- i18next with the `kosh` namespace in English, Bangla and Arabic (Arabic verifies RTL); modules add namespaces
+- i18next with the `shutro-erp` namespace in English, Bangla and Arabic (Arabic verifies RTL); modules add namespaces
   with `addMessages()`. The language goes to the server as `Accept-Language`, so model labels come translated.
   Numbers, exact decimals (strings, never floats; South Asian grouping for Bangla, Bengali digits optional), dates
   and datetimes (user time zone) are formatted with `Intl`.
@@ -224,10 +224,10 @@ or phone number, the email bounced, or the last retry failed — and no other ch
 channel (email by default; `none` switches it off) takes over, once: a fallback never falls back again.
 
 The `notify` module's version is 0.2.0 (the settings, the email mode, held, digest and fallback deliveries):
-existing installations run `kosh apps upgrade notify`.
+existing installations run `shutro-erp apps upgrade notify`.
 
-Push notifications reach a device even with Kosh closed: the bell's footer has "Turn on" when the installation
-has VAPID keys (`kosh init` writes them to `.env`) and the browser supports push; it asks the browser's
+Push notifications reach a device even with Shutro ERP closed: the bell's footer has "Turn on" when the installation
+has VAPID keys (`shutro-erp init` writes them to `.env`) and the browser supports push; it asks the browser's
 permission, registers the service worker (`/sw.js`, built by `koshPwa()`) and saves the device's subscription for the user.
 Clicking a push notification opens the record. "Turn off" removes the subscription on both sides, and the
 server drops subscriptions the push service reports gone.

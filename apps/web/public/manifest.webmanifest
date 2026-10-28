@@ -1,7 +1,7 @@
 {
-  "name": "Kosh",
-  "short_name": "Kosh",
-  "description": "The Kosh back-office",
+  "name": "Shutro ERP",
+  "short_name": "Shutro ERP",
+  "description": "The Shutro ERP back-office",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

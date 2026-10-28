@@ -163,11 +163,11 @@ describe('loadModules', () => {
   test('framework versions are checked', () => {
     // Dependencies are checked first: base (^0.1.0) is the first that cannot run on 1.0.0.
     expect(() => loadModules([purchase], { koshVersion: '1.0.0' })).toThrow(
-      /'base' needs Kosh \^0.1.0; this is Kosh 1.0.0/,
+      /'base' needs Shutro ERP \^0.1.0; this is Shutro ERP 1.0.0/,
     );
     const onlyPurchaseRange = defineModule({ ...purchaseInput, kosh: '>=0.2.0 <1.0.0' });
     expect(() => loadModules([onlyPurchaseRange], { koshVersion: '0.1.5' })).toThrow(
-      /'purchase' needs Kosh >=0.2.0 <1.0.0/,
+      /'purchase' needs Shutro ERP >=0.2.0 <1.0.0/,
     );
   });
 

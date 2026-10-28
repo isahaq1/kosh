@@ -1,5 +1,5 @@
 /**
- * Terminal questions for `kosh init`, on `node:readline` (no dependency). Answers can be scripted for tests and
+ * Terminal questions for `shutro-erp init`, on `node:readline` (no dependency). Answers can be scripted for tests and
  * non-interactive installs (`--yes` with flags): every question goes through {@link Prompter}.
  */
 import { createInterface, type Interface } from 'node:readline';
@@ -205,7 +205,9 @@ export function defaultsPrompter(): Prompter {
   return {
     async ask(q) {
       if (q.default === undefined)
-        throw new Error(`"${q.message}" has no default: pass it as a flag (kosh init --help).`);
+        throw new Error(
+          `"${q.message}" has no default: pass it as a flag (shutro-erp init --help).`,
+        );
       const problem = q.validate?.(q.default) ?? null;
       if (problem !== null) throw new Error(`${q.message}: ${problem}`);
       return q.default;

@@ -1,6 +1,6 @@
 # Permissions
 
-Kosh is permission-based end to end (RFC 0003). Enforcement lives in Shutro, on every query, so the REST API,
+Shutro ERP is permission-based end to end (RFC 0003). Enforcement lives in Shutro, on every query, so the REST API,
 exports, aggregates, onchange and module code all obey the same rules; the server adds sessions, 2FA, navigation
 and audit. The UI only hides what the server would refuse anyway.
 

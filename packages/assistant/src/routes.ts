@@ -295,7 +295,7 @@ export function registerAssistantRoutes(
         'assistant-budget',
         "The month's assistant budget is used up",
         `This company used its ${options.monthlyTokens} tokens of the month.`,
-        'An administrator can raise KOSH_ASSISTANT_MONTHLY_TOKENS.',
+        'An administrator can raise SHUTRO_ERP_ASSISTANT_MONTHLY_TOKENS.',
       );
     return client;
   };

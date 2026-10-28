@@ -203,7 +203,11 @@ export async function createAppHost(options: AppHostOptions): Promise<AppHost> {
     current.server.app.server.emit('upgrade', req, socket, head);
   });
   const listener = listen
-    ? pg.createDriver({ url: options.databaseUrl, max: 1, applicationName: 'kosh apps listener' })
+    ? pg.createDriver({
+        url: options.databaseUrl,
+        max: 1,
+        applicationName: 'shutro-erp apps listener',
+      })
     : undefined;
   const stopListening = await listener?.listen(APPS_CHANNEL, (digest) => {
     if (digest !== current.digest) void host.reload();

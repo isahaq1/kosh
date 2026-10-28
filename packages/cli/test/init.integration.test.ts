@@ -107,7 +107,7 @@ test('a fresh installation: database created, project written, migrated, adminis
     expect(existsSync(join(project, file)), file).toBe(true);
   const env = await readFile(join(project, '.env'), 'utf8');
   expect(env).toContain(`DATABASE_URL=${url}`);
-  expect(env).toContain('KOSH_STORAGE_DIR=./var/attachments');
+  expect(env).toContain('SHUTRO_ERP_STORAGE_DIR=./var/attachments');
   expect(env).not.toContain(PASSWORD);
   expect(env).toMatch(/^POSTGRES_PASSWORD=[A-Za-z0-9]{20,}$/m); // for compose.yaml
   const modules = await readFile(join(project, 'src/modules.ts'), 'utf8');
@@ -129,7 +129,7 @@ test('a fresh installation: database created, project written, migrated, adminis
     dependencies: Record<string, string>;
   };
   expect(pkg.scripts['start']).toBe('node --env-file=.env src/server.ts');
-  expect(pkg.scripts).toMatchObject({ migrate: 'kosh migrate', seed: 'kosh seed' });
+  expect(pkg.scripts).toMatchObject({ migrate: 'shutro-erp migrate', seed: 'shutro-erp seed' });
   expect(pkg.dependencies).toMatchObject({ 'shutro-erp': '^0.1.0' });
   expect(pkg.dependencies).not.toHaveProperty('shutro'); // it comes with shutro-erp
   expect(await readdir(join(project, 'migrations'))).toEqual(['0001_init.sql']);

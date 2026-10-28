@@ -52,11 +52,11 @@ export const PACKAGE: { readonly name: string; readonly rfc: string } = Object.f
   rfc: 'RFC 0001',
 });
 
-const USAGE = `Usage: kosh <command>
+const USAGE = `Usage: shutro-erp <command>
 
 Commands (run in the installation's folder; they read .env and src/modules.ts):
-  init [folder]          Set up an installation: database, company, administrator, apps (kosh init --help)
-  apps                   The apps: installed, disabled, available (kosh apps --help)
+  init [folder]          Set up an installation: database, company, administrator, apps (shutro-erp init --help)
+  apps                   The apps: installed, disabled, available (shutro-erp apps --help)
   apps install <app …>   Install apps and what they need, in one transaction
   apps disable <app …>   Switch apps off (their data stays); apps enable <app …> brings them back
   migrate                Plan schema changes into migrations/NNNN_*.sql, apply pending files, run the modules'
@@ -72,10 +72,10 @@ Commands (run in the installation's folder; they read .env and src/modules.ts):
   user create <login>    Create a user: --name, --email, --roles reporting.user,messaging.user, --password
   user password <login>  Set a new password
   generate client   Typed API client from the module set or an OpenAPI document
-      --modules <file|package>   a module (or file) exporting Kosh modules (\`modules\`, default, or each export)
+      --modules <file|package>   a module (or file) exporting Shutro ERP modules (\`modules\`, default, or each export)
       --from <file|url>          an OpenAPI document instead (a URL needs --token)
       --token <token>            Bearer token for --from <url>
-      --out <file>               where to write (default: src/api/kosh.gen.ts)
+      --out <file>               where to write (default: src/api/shutro-erp.gen.ts)
       --check                    fail if the file is out of date (CI)
 
 Every command takes --modules <file> (default src/modules.ts).
@@ -124,7 +124,7 @@ async function generate(
   });
   const cwd = options.cwd ?? process.cwd();
   if ((values.modules === undefined) === (values.from === undefined)) {
-    write('kosh generate client: pass exactly one of --modules or --from.\n');
+    write('shutro-erp generate client: pass exactly one of --modules or --from.\n');
     return 2;
   }
   const document =
@@ -137,14 +137,14 @@ async function generate(
         )
       : openApiOf(await modulesOf(values.modules, cwd));
   const code = generateClient(document);
-  const out = resolve(cwd, values.out ?? 'src/api/kosh.gen.ts');
+  const out = resolve(cwd, values.out ?? 'src/api/shutro-erp.gen.ts');
   if (values.check === true) {
     const current = await readFile(out, 'utf8').catch(() => '');
     if (current.replaceAll('\r\n', '\n') === code) {
       write(`${out} is up to date.\n`);
       return 0;
     }
-    write(`${out} is out of date: run kosh generate client.\n`);
+    write(`${out} is out of date: run shutro-erp generate client.\n`);
     return 1;
   }
   await mkdir(dirname(out), { recursive: true });
@@ -188,17 +188,19 @@ export async function runCli(
     try {
       return await command(argv.slice(1), write, cwd);
     } catch (error) {
-      write(`kosh ${argv[0]}: ${error instanceof Error ? error.message : String(error)}\n`);
+      write(`shutro-erp ${argv[0]}: ${error instanceof Error ? error.message : String(error)}\n`);
       return 1;
     }
   if (argv[0] === 'generate' && argv[1] === 'client') {
     try {
       return await generate(argv.slice(2), write, options);
     } catch (error) {
-      write(`kosh generate client: ${error instanceof Error ? error.message : String(error)}\n`);
+      write(
+        `shutro-erp generate client: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
       return 1;
     }
   }
-  write(`Unknown command '${argv.join(' ')}'. Run kosh --help.\n`);
+  write(`Unknown command '${argv.join(' ')}'. Run shutro-erp --help.\n`);
   return 2;
 }

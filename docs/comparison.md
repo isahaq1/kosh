@@ -1,16 +1,16 @@
-# Kosh against Odoo
+# Shutro ERP against Odoo
 
-An honest ledger, kept current as parts land: where Kosh is ahead today, where it matches, and where Odoo is still
+An honest ledger, kept current as parts land: where Shutro ERP is ahead today, where it matches, and where Odoo is still
 ahead. "Today" means code on `main` with tests; planned work is in the last section, not in the ledger.
 
 ## Ahead today
 
-| Area | Odoo | Kosh |
+| Area | Odoo | Shutro ERP |
 |---|---|---|
 | Types | Python classes, untyped field access; renamed fields break at runtime | TypeScript end to end: model → generated views → REST → OpenAPI → generated client → UI. A wrong field in a view, a query or a client call is a compile error; views are also checked against the models when the server starts |
 | Security enforcement | ACL and rules in Python; any public method is an RPC entry point; `sudo()` anywhere; field `groups=` on views is UI-only in places | One engine (Shutro) in SQL for every read and write, including aggregates, exports and reports; the generated API exposes operations, not methods; a generated test matrix proves forbidden users get 403 on every endpoint type of every model |
 | Administrator | `base.group_system` bypasses ACL; no 2FA requirement; the last admin can be locked out | One explicit bypass (Shutro administrator mode), rights withheld until a second factor, the last active 2FA administrator cannot be archived, stripped or lose 2FA; integrity rules still apply |
-| Roles | Groups are global; configuration is XML / CSV in modules | Roles built from access levels in the admin API, assigned **per company** (manager in one company, user in another), field security per role without code, special grants with expiry, every change audited twice (Kosh and Shutro) |
+| Roles | Groups are global; configuration is XML / CSV in modules | Roles built from access levels in the admin API, assigned **per company** (manager in one company, user in another), field security per role without code, special grants with expiry, every change audited twice (Shutro ERP and Shutro) |
 | Approvals | Per-module (purchase double validation, Approvals app), different models | One engine: ordered levels with domain conditions, approver role per company, separation of duties (administrators included), policies shipped by modules and edited as data, every decision audited |
 | Pivots | `read_group` per header level; totals recomputed client-side; cross-currency sums | One statement for every level and total (the leaf grouping, rolled up exactly on the server; expand / collapse without a query; 1M rows in ~0.5 s); amounts stay per currency at every level; drill-down domains on every header; period comparisons aligned on buckets; `asOf` for models with history |
 | Exports | Load into memory; some field restrictions bypassed | Streamed CSV of millions of rows in one consistent transaction with bounded memory; XLSX with real types and formats; the `export` permission and an audit event on every export; formula-safe CSV |
@@ -32,15 +32,15 @@ ahead. "Today" means code on `main` with tests; planned work is in the last sect
 
 ## Odoo is still ahead
 
-- **Breadth of business apps**: Kosh has Contacts, Products, Sales, Purchase, Accounting and Projects with their
+- **Breadth of business apps**: Shutro ERP has Contacts, Products, Sales, Purchase, Accounting and Projects with their
   bridges; Odoo has inventory, HR, CRM, manufacturing, e-commerce, point of sale, localizations, and thousands of
   community modules.
 - **Documents on records**: a document management app, OCR, digital signatures.
-- **Spreadsheet** depth (Odoo Enterprise: pivot insertion, charts, collaborative editing). Kosh's is formulas and
+- **Spreadsheet** depth (Odoo Enterprise: pivot insertion, charts, collaborative editing). Shutro ERP's is formulas and
   live report totals.
-- **Mobile apps** (Kosh is a PWA with offline forms; no native app yet); barcode scanning.
+- **Mobile apps** (Shutro ERP is a PWA with offline forms; no native app yet); barcode scanning.
 - **Ecosystem**: partners, hosting (odoo.sh), marketplace, certifications, documentation volume.
-- **Materialized aggregates** for dashboards (Kosh dashboards are live queries, client-cached briefly).
+- **Materialized aggregates** for dashboards (Shutro ERP dashboards are live queries, client-cached briefly).
 
 ## What makes the "more flexible" claim true in practice
 
@@ -50,7 +50,7 @@ ahead. "Today" means code on `main` with tests; planned work is in the last sect
   component when metadata is not enough.
 - Conditions are domains, evaluated in SQL on the server and (where possible) in the browser, never strings in a
   mini-language.
-- The framework never reimplements the ORM: when Kosh needed something (grouping sets, runtime field security,
+- The framework never reimplements the ORM: when Shutro ERP needed something (grouping sets, runtime field security,
   cache release, binary batches), Shutro gained it with tests, and `docs/shutro-requests.md` records every request.
 
 ## Next

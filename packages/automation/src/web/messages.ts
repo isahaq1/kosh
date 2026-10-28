@@ -66,7 +66,7 @@ export const messages: Readonly<Record<string, object>> = {
       url: 'URL',
       webhookFields: 'Fields to send',
       webhookHint:
-        "A signed JSON POST (X-Kosh-Signature: sha256 HMAC with the rule's webhook secret), retried on failure; the host must be on the allow-list (KOSH_AUTOMATION_WEBHOOK_HOSTS).",
+        "A signed JSON POST (X-Kosh-Signature: sha256 HMAC with the rule's webhook secret), retried on failure; the host must be on the allow-list (SHUTRO_ERP_AUTOMATION_WEBHOOK_HOSTS).",
       condition: 'And the record matches',
       conditionJson: 'Condition (domain)',
       field: 'Field',
@@ -178,7 +178,7 @@ export const messages: Readonly<Record<string, object>> = {
       url: 'URL',
       webhookFields: 'যে ফিল্ড পাঠাবে',
       webhookHint:
-        'স্বাক্ষরিত JSON POST (X-Kosh-Signature: নিয়মের ওয়েবহুক সিক্রেট দিয়ে sha256 HMAC), ব্যর্থ হলে আবার চেষ্টা; হোস্ট অনুমোদিত তালিকায় থাকতে হবে (KOSH_AUTOMATION_WEBHOOK_HOSTS)।',
+        'স্বাক্ষরিত JSON POST (X-Kosh-Signature: নিয়মের ওয়েবহুক সিক্রেট দিয়ে sha256 HMAC), ব্যর্থ হলে আবার চেষ্টা; হোস্ট অনুমোদিত তালিকায় থাকতে হবে (SHUTRO_ERP_AUTOMATION_WEBHOOK_HOSTS)।',
       condition: 'এবং রেকর্ড মেলে',
       conditionJson: 'শর্ত (ডোমেইন)',
       field: 'ফিল্ড',

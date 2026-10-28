@@ -199,7 +199,7 @@ test('daily emails wait for one digest at the user’s hour, by record; read one
   const sent = mailer.sent.slice(before);
   expect(sent).toHaveLength(1);
   expect(sent[0]?.to).toBe('dina@example.com');
-  expect(sent[0]?.subject).toBe('Your Kosh summary: 2 notifications');
+  expect(sent[0]?.subject).toBe('Your Shutro ERP summary: 2 notifications');
   expect(sent[0]?.text).toContain(
     `Padma Nadir Majhi (https://erp.example.com/open/library.book/${a})\n- Rahim Uddin mentioned you on Padma Nadir Majhi\n- Rahim Uddin mentioned you on Padma Nadir Majhi`,
   );

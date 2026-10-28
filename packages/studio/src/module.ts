@@ -532,7 +532,7 @@ export function registerStudioRoutes(context: ModuleContext, options: StudioOpti
         409,
         'studio-git-unconfigured',
         'No repository for proposals',
-        'Set KOSH_STUDIO_GIT_URL and KOSH_STUDIO_GIT_TOKEN to open pull requests; download the patch meanwhile.',
+        'Set SHUTRO_ERP_STUDIO_GIT_URL and SHUTRO_ERP_STUDIO_GIT_TOKEN to open pull requests; download the patch meanwhile.',
       );
     const { review, files, modulesTs } = await prepare(specOf(request.body));
     const patch = review.diff.map((d) => d.diff).join('');
@@ -550,7 +550,7 @@ export function registerStudioRoutes(context: ModuleContext, options: StudioOpti
     });
     const command = review.change === 'install' ? 'install' : 'upgrade';
     const body = [
-      `A Kosh Studio change: **${review.spec.label}** (\`${name}\` ${review.spec.version}).`,
+      `A Shutro ERP Studio change: **${review.spec.label}** (\`${name}\` ${review.spec.version}).`,
       '',
       review.change === 'install'
         ? `Installs the module \`${name}\`.`
@@ -559,7 +559,7 @@ export function registerStudioRoutes(context: ModuleContext, options: StudioOpti
       'After deploying:',
       '',
       '```sh',
-      `npx kosh apps ${command} ${name}`,
+      `npx shutro-erp apps ${command} ${name}`,
       '```',
       '',
       ...(review.statements.length === 0
@@ -587,7 +587,7 @@ export function registerStudioRoutes(context: ModuleContext, options: StudioOpti
           'studio-git-failed',
           'The repository refused the proposal',
           error.message,
-          'Check KOSH_STUDIO_GIT_URL, the token and its rights (contents and pull requests); the patch can be downloaded meanwhile.',
+          'Check SHUTRO_ERP_STUDIO_GIT_URL, the token and its rights (contents and pull requests); the patch can be downloaded meanwhile.',
         );
       throw error;
     }
@@ -601,7 +601,7 @@ export function registerStudioRoutes(context: ModuleContext, options: StudioOpti
         'studio-propose-only',
         'Studio proposes changes here',
         'This server runs Studio in propose mode: it never writes code. Download the patch and deploy it.',
-        'KOSH_STUDIO=write is for development and single-server installations.',
+        'SHUTRO_ERP_STUDIO=write is for development and single-server installations.',
       );
     const planId = (request.body as { planId?: unknown } | null)?.planId;
     if (typeof planId !== 'string') return invalid('planId (from /preview) is required.');

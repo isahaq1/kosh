@@ -1,11 +1,11 @@
-# Kosh Studio (RFC 0012)
+# Shutro ERP Studio (RFC 0012)
 
 Studio changes an installation without code and without database customizations: every change is a **module**
 in `src/modules/<name>/`, made of `studio.json` (the specification, the only file Studio reads and writes) and the
 TypeScript generated from it. It is reviewed, versioned and installed like any module.
 
 RFC 0012 is implemented: the specification, the generator, the App manager's upgrade (a changed Studio module is
-applied with `kosh apps upgrade <name>`), the Studio API (review, apply, propose), Studio mode in the back-office,
+applied with `shutro-erp apps upgrade <name>`), the Studio API (review, apply, propose), Studio mode in the back-office,
 and approval policies and automation rules in Studio modules. Proposals are patches, or pull requests on GitHub and
 merge requests on GitLab when a repository is configured.
 
@@ -77,18 +77,18 @@ dependencies, merges the view change, and checks everything again on apply.
 ## Building
 
 ```sh
-npx kosh studio build            # every src/modules/*/studio.json
-npx kosh studio build src/modules/acme
+npx shutro-erp studio build            # every src/modules/*/studio.json
+npx shutro-erp studio build src/modules/acme
 ```
 
 The generator is deterministic (the same spec gives the same bytes) and writes only the files that changed:
 `models.ts` (the Shutro side), `index.ts` (the manifest), `README.md` (what the module changes, for reviewers).
-Then list the module in `src/modules.ts` and install it (`kosh apps install acme`). To take a module over as
+Then list the module in `src/modules.ts` and install it (`shutro-erp apps install acme`). To take a module over as
 code, delete `studio.json`: Studio stops managing it and the TypeScript is yours.
 
 ## The Studio API
 
-Studio is the `studio` module (in the starter's `src/modules.ts`, installed by `kosh init`). Only Administrators
+Studio is the `studio` module (in the starter's `src/modules.ts`, installed by `shutro-erp init`). Only Administrators
 and holders of **Studio** (`studio.manager`) reach it; it changes the schema.
 
 | Route | Does |
@@ -111,27 +111,27 @@ the server serves the new module at once.
 Refused: an invalid spec (400, every problem with where it is), a dependency that is not in the catalogue (400),
 the name of a module Studio does not manage (409), a disabled module (409), a view change whose anchor the view
 does not have (422), a change that would drop data (409: removing data stays a deliberate
-`kosh apps upgrade <name> --remove-data`).
+`shutro-erp apps upgrade <name> --remove-data`).
 
 **Modes** (`.env`):
 
 ```sh
-KOSH_STUDIO=propose   # the default: Studio returns patches, never writes code (production)
-KOSH_STUDIO=write     # development or one server: Studio writes src/modules/<name>/ and applies at once
-KOSH_STUDIO_DIR=.     # the project folder (default: the working directory)
+SHUTRO_ERP_STUDIO=propose   # the default: Studio returns patches, never writes code (production)
+SHUTRO_ERP_STUDIO=write     # development or one server: Studio writes src/modules/<name>/ and applies at once
+SHUTRO_ERP_STUDIO_DIR=.     # the project folder (default: the working directory)
 ```
 
-In propose mode the patch (`git apply`) goes through review, CI and deploy, then `kosh apps upgrade <name>` (or
+In propose mode the patch (`git apply`) goes through review, CI and deploy, then `shutro-erp apps upgrade <name>` (or
 `install`). With a repository configured, "Open a pull request" (GitHub) or "Open a merge request" (GitLab) pushes
 the change on a branch of its own (`studio/<name>-<version>`, a fresh one if it exists) from the base branch and
 opens the request, its description naming the command to run after deploying and the database changes
 (`POST /api/v1/studio/propose` with `pullRequest: true`):
 
 ```sh
-KOSH_STUDIO_GIT_URL=https://github.com/acme/erp   # or https://gitlab.example.com/group/erp
-KOSH_STUDIO_GIT_TOKEN=...                         # from the environment or the secret manager; never stored
-KOSH_STUDIO_GIT_BASE=main
-# KOSH_STUDIO_GIT_PROVIDER=github|gitlab           # when the host does not say; KOSH_STUDIO_GIT_API for self-hosted
+SHUTRO_ERP_STUDIO_GIT_URL=https://github.com/acme/erp   # or https://gitlab.example.com/group/erp
+SHUTRO_ERP_STUDIO_GIT_TOKEN=...                         # from the environment or the secret manager; never stored
+SHUTRO_ERP_STUDIO_GIT_BASE=main
+# SHUTRO_ERP_STUDIO_GIT_PROVIDER=github|gitlab           # when the host does not say; SHUTRO_ERP_STUDIO_GIT_API for self-hosted
 ```
 
 The token needs the rights to push branches and open requests (GitHub: contents and pull requests; GitLab: `api`).

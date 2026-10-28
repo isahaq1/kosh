@@ -370,5 +370,5 @@ export function openApiDocument(
  */
 export function openApiOf(modules: readonly KoshModule[]): Schema {
   const models = publicApiModels(buildKoshRegistry(modules));
-  return openApiDocument(models.values(), { title: 'Kosh API', version: KOSH_VERSION });
+  return openApiDocument(models.values(), { title: 'Shutro ERP API', version: KOSH_VERSION });
 }
