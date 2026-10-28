@@ -119,6 +119,23 @@ createRoot(root).render(<KoshApp api={createKoshApi()} registry={registry} />);
   Numbers, exact decimals (strings, never floats; South Asian grouping for Bangla, Bengali digits optional), dates
   and datetimes (user time zone) are formatted with `Intl`.
 
+### The Workspace visual language (RFC 0018 step 1)
+
+- **Palette**: neutral surfaces and one accent. The accent is the company's **brand colour** (Settings › Company:
+  swatches, any hex colour, a live preview in light and dark; indigo by default). Only its hue and chroma are used —
+  each theme fixes the lightness, so text on buttons and links stays readable whatever colour is chosen. A part of a
+  page can show another theme or accent with the `light` / `dark` classes and `accentVariables(hex)`.
+- **Density**: comfortable (default) or compact, in the display menu next to the theme (and the list toolbar);
+  `data-density` on `<html>` sets `--control-h` and `--cell-py`, which controls and list cells use.
+- **Type**: 14 px body, Inter's open digits; numbers in tables, amounts and decimal inputs use tabular figures.
+- **States** are badges in the tone of what they mean, not of their position: done / paid / posted green, waiting /
+  partial / to approve amber, cancelled / failed red, sent / in progress blue, draft neutral (`toneOf(value)`). A
+  form's state is **one chip** beside the title that opens the workflow (states passed, the current one, the next
+  ones the server's transitions allow) instead of a row of every state.
+- **Dates** use the app's date field: shown as the language writes them, typed as ISO or day / month / year in the
+  language's order (Bengali digits too), or picked on a calendar (arrows, Page Up / Down, Home / End, Enter; the week
+  starts as the language says).
+
 ## Tests
 
 `apps/web/e2e` (Playwright) runs against a real server (`e2e/server.ts`: PostgreSQL via Testcontainers, a contacts

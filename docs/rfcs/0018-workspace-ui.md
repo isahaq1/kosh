@@ -1,6 +1,6 @@
 # RFC 0018: The Workspace back-office
 
-- **Status:** Proposed (2026-10-28)
+- **Status:** Accepted (2026-10-28)
 - **Depends on:** 0004 (views), 0006 (chatter), 0007 (frontend architecture), 0010 (modern back-office)
 - **Chosen direction:** "Workspace" (asked 2026-10-28, over "split view" and "refine the current layout")
 
@@ -157,9 +157,37 @@ Bengal Steel · 28 Oct 2026 · Rahim Uddin · 2,300.00 BDT
 2. **Default density**: comfortable or compact?
 3. **The right rail**: open by default on wide screens (proposed), or collapsed until opened?
 
+## Decisions (2026-10-28)
+
+1. **Accent**: each company's brand colour (indigo by default), contrast-checked for light and dark.
+2. **Density**: comfortable by default; compact as a user setting.
+3. **Right rail**: open by default on wide screens, collapsible and remembered per user.
+
 ## Alignment with CLAUDE.md
 
 Every component works in light and dark mode, in English and Bangla, by keyboard and screen reader (landmarks for
 the sidebar, the page and the rail; a skip link; focus management in popovers); no business logic moves into React —
 the workflow popover reads the transitions the server serves, the summary reads fields the server returns.
 "Customizable without forking": the hints are optional and the renderers stay replaceable per view.
+
+## Implementation notes (2026-10-28): step 1 — the visual language
+
+- **Defects fixed first**: forms now ask for the one2many and many2many fields their layout shows (saved orders and
+  invoices showed no lines); sums no longer say "Total Total"; state badges take the tone of what the state means.
+- **Tokens**: neutral (zinc) surfaces; the accent from `--accent-h` / `--accent-c` with a lightness fixed per theme
+  (light 0.5 with white text, dark 0.7 with dark text), so any brand colour keeps AA contrast; radius 6 px for
+  controls and 10 px for cards; 14 px body; tabular figures for numbers. `:root, .light` and `.dark` both declare the
+  tokens, so a part of a page can preview the other theme or another accent.
+- **Brand colour**: `res.company.accentColor` (`#rrggbb`), served with the user's details (`accents`, like
+  `groupings`); the shell sets the two variables for the current company. **Settings › Company** (Administrator or
+  the new *Company settings* access level, `settings.company`): name, number grouping, brand colour with swatches, a
+  hex field, the system picker and previews in light and dark; `GET / PATCH /api/v1/settings/company`.
+- **Density** is one setting for the whole app (`data-density`), in the display menu and the list toolbar.
+- **Status chip** beside the title with the workflow popover (`StatusChip`), replacing the row of state pills; the
+  transition buttons stay as a toolbar.
+- **Date field** (`DateField`) replacing the browser's date input: formatted per language, typed (ISO or the
+  language's order, Bengali digits), a calendar in a table with keyboard moves; `Popover` added to the primitives
+  (from the Radix package already used).
+- **Tests**: typed dates, accents, tones and sum labels (unit); the company settings API with its checks and the
+  accents in the user's details (integration); E2E: the brand colour applied, the state chip's workflow, a date
+  typed and picked by keyboard, lines shown on a saved order.
