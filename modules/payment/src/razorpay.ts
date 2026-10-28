@@ -11,6 +11,7 @@
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { InboundCall } from '@kosh/modules-sdk';
+import { fromSubunits, toSubunits } from './money.js';
 import type { PaymentAdapter, PaymentResult } from './providers.js';
 
 export interface RazorpayOptions {
@@ -24,24 +25,6 @@ export interface RazorpayOptions {
 
 type Answer = Record<string, unknown>;
 const text = (v: unknown) => (v === undefined || v === null ? '' : String(v));
-
-/** Decimal places of a currency's subunit (Razorpay's amounts are integers of it). */
-function decimalsOf(currency: string): number {
-  if (['JPY', 'KRW', 'VND', 'CLP', 'PYG', 'UGX', 'XAF', 'XOF'].includes(currency)) return 0;
-  if (['KWD', 'BHD', 'OMR', 'JOD', 'TND'].includes(currency)) return 3;
-  return 2;
-}
-/** `'1500.00'` INR → 150000. */
-export function toSubunits(amount: string, currency: string): number {
-  const d = decimalsOf(currency);
-  const [whole = '0', fraction = ''] = amount.split('.');
-  return Number(`${whole}${fraction.padEnd(d, '0').slice(0, d)}`);
-}
-/** 150000 INR → `'1500.00'`. */
-export function fromSubunits(subunits: number, currency: string): string {
-  const d = decimalsOf(currency);
-  return (subunits / 10 ** d).toFixed(d);
-}
 
 /** What a payment link says of its payment. */
 function linkResult(reference: string, link: Answer): PaymentResult | null {

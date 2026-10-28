@@ -21,6 +21,7 @@ export const PROVIDERS = {
   sslcommerz: 'SSLCommerz',
   bkash: 'bKash',
   razorpay: 'Razorpay',
+  stripe: 'Stripe',
 } as const;
 
 export const PaymentProvider = defineModel('payment.provider', {

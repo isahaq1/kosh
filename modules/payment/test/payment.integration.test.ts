@@ -7,7 +7,9 @@
  * ones refused), a failure then a retry, and the transaction query when the customer is back first. bKash with its
  * API simulated: executed on the customer's return (once), a forged return refused by bKash, a cancellation.
  * Razorpay with Payment Links simulated: its signed webhook (checked with the endpoint's secret, deduplicated by event
- * id), the return answered by fetching the link, an expired link.
+ * id), the return answered by fetching the link, an expired link. Stripe with Checkout Sessions simulated: events
+ * signed with the secret Stripe gives (pasted into the endpoint), old or wrong signatures refused, the return
+ * answered by fetching the session.
  */
 
 import { createHmac } from 'node:crypto';
@@ -35,6 +37,7 @@ import {
   paymentModule,
   razorpayAdapter,
   sslcommerzAdapter,
+  stripeAdapter,
   toSubunits,
 } from '../src/index.js';
 
@@ -239,6 +242,35 @@ function rzpPay(id: string): Record<string, unknown> {
   });
   return link;
 }
+/** Stripe's Checkout Sessions, simulated. */
+const stripeSessions = new Map<string, Record<string, unknown>>();
+const stripeFetch = (async (input: string | URL | Request, init?: RequestInit) => {
+  const url = new URL(String(input));
+  const json = (b: unknown) =>
+    new Response(JSON.stringify(b), { headers: { 'content-type': 'application/json' } });
+  expect(new Headers(init?.headers).get('authorization')).toBe('Bearer sk_test_padma');
+  if (url.pathname === '/v1/checkout/sessions' && init?.method === 'POST') {
+    const f = Object.fromEntries(new URLSearchParams(String(init.body)));
+    const id = `cs_test_${stripeSessions.size + 1}`;
+    const made = {
+      id,
+      object: 'checkout.session',
+      url: `https://checkout.stripe.com/c/pay/${id}`,
+      status: 'open',
+      payment_status: 'unpaid',
+      client_reference_id: f['client_reference_id'],
+      metadata: { reference: f['metadata[reference]'] },
+      amount_total: Number(f['line_items[0][price_data][unit_amount]']),
+      currency: f['line_items[0][price_data][currency]'],
+      payment_intent: null,
+      form: f,
+    };
+    stripeSessions.set(id, made);
+    return json(made);
+  }
+  const found = stripeSessions.get(url.pathname.replace('/v1/checkout/sessions/', ''));
+  return found === undefined ? new Response('{}', { status: 404 }) : json(found);
+}) as typeof fetch;
 const catalogue = [
   base,
   paymentModule({
@@ -250,6 +282,7 @@ const catalogue = [
         'sslcommerz',
         sslcommerzAdapter({ storeId: 'padma', storePassword: 'store-secret', fetch: sslFetch }),
       ],
+      ['stripe', stripeAdapter({ secretKey: 'sk_test_padma', fetch: stripeFetch })],
       [
         'razorpay',
         razorpayAdapter({ keyId: 'rzp_test_padma', keySecret: 'rzp-secret', fetch: rzpFetch }),
@@ -293,7 +326,7 @@ async function tokenOf(login: string): Promise<string> {
   tokens.set(login, token);
   return token;
 }
-async function call(method: 'GET' | 'POST', url: string, as: string, payload?: unknown) {
+async function call(method: 'GET' | 'POST' | 'PATCH', url: string, as: string, payload?: unknown) {
   const res = await host.server.app.inject({
     method,
     url,
@@ -921,5 +954,129 @@ describe('Razorpay (Payment Links simulated)', () => {
     expect(razorpayAdapter({ keyId: 'rzp_test_x', keySecret: 's' }).configured('test')).toBe(true);
     expect(razorpayAdapter({ keyId: 'rzp_test_x', keySecret: 's' }).configured('live')).toBe(false);
     expect(razorpayAdapter({}).configured('test')).toBe(false);
+  });
+});
+
+describe('Stripe (Checkout Sessions simulated)', () => {
+  let stripeProvider = 0;
+  const STRIPE_SECRET = 'whsec_from_stripe';
+  const start = async (amount: string) => {
+    const id = await invoice(partners['acme'] as number, amount);
+    const res = await call('POST', '/api/portal/v1/payments', RINA, {
+      document: 'invoices',
+      id,
+      provider: stripeProvider,
+    });
+    expect(res.status, JSON.stringify(res.json)).toBe(201);
+    return { id, ...(res.json as { reference: string; redirectUrl: string }) };
+  };
+  const endpoint = async () =>
+    (
+      (await call('GET', '/api/v1/models/webhook.endpoint?fields=hook,token,secret', 'maria')).json
+        .items as Json[]
+    ).find((e) => e.hook === 'payment.stripe');
+  /** Stripe's webhook: `Stripe-Signature: t=…,v1=HMAC("<t>.<body>")`. */
+  const event = async (
+    type: string,
+    object: Record<string, unknown>,
+    id: string,
+    sign: { secret?: string; age?: number } = {},
+  ) => {
+    const body = JSON.stringify({ id, object: 'event', type, data: { object } });
+    const t = Math.floor(Date.now() / 1000) - (sign.age ?? 0);
+    const v1 = createHmac('sha256', sign.secret ?? STRIPE_SECRET)
+      .update(`${t}.${body}`)
+      .digest('hex');
+    const res = await host.server.app.inject({
+      method: 'POST',
+      url: `/api/v1/hooks/${(await endpoint()).token}`,
+      headers: { 'content-type': 'application/json', 'stripe-signature': `t=${t},v1=${v1}` },
+      payload: body,
+    });
+    return res.statusCode;
+  };
+  const pay = (session: Record<string, unknown>) =>
+    Object.assign(session, {
+      status: 'complete',
+      payment_status: 'paid',
+      payment_intent: `pi_${String(session['id'])}`,
+    });
+
+  test('a Checkout Session; Stripe’s signed event pays the invoice once', async () => {
+    const made = await call('POST', '/api/v1/models/payment.provider', 'maria', {
+      name: 'Stripe',
+      code: 'stripe',
+      journal: bank,
+    });
+    expect(made.status).toBe(201);
+    stripeProvider = made.json.id;
+    const { id, reference, redirectUrl } = await start('1500');
+    const session = [...stripeSessions.values()].find(
+      (x) => x['client_reference_id'] === reference,
+    ) as Record<string, unknown>;
+    expect(redirectUrl).toBe(`https://checkout.stripe.com/c/pay/${String(session['id'])}`);
+    expect(session['form']).toMatchObject({
+      mode: 'payment',
+      success_url: `${API_URL}/api/v1/payment/return/${reference}`,
+      'line_items[0][quantity]': '1',
+      'line_items[0][price_data][currency]': 'bdt',
+      'line_items[0][price_data][unit_amount]': '150000',
+      'metadata[reference]': reference,
+    });
+    // Stripe's signing secret goes into the endpoint made with the first payment.
+    const ep = await endpoint();
+    expect(
+      (
+        await call('PATCH', `/api/v1/models/webhook.endpoint/${ep.id}`, 'maria', {
+          secret: STRIPE_SECRET,
+        })
+      ).status,
+    ).toBe(200);
+
+    pay(session);
+    expect(
+      await event('checkout.session.completed', session, 'evt_1', { secret: 'whsec_wrong' }),
+    ).toBe(401);
+    expect(await event('checkout.session.completed', session, 'evt_1', { age: 3600 })).toBe(401); // replayed later
+    expect(await event('checkout.session.completed', session, 'evt_1')).toBe(202);
+    expect(await event('checkout.session.completed', session, 'evt_1')).toBe(200); // redelivered
+    await drain();
+    expect(await tx(reference)).toMatchObject({
+      state: 'done',
+      providerReference: `pi_${String(session['id'])}`,
+    });
+    expect((await move(id)).amountResidual.amount).toBe('0.00');
+    expect(await paymentsFor(id)).toHaveLength(1);
+  });
+
+  test('back before the event: the session fetched; an expired session', async () => {
+    const first = await start('640');
+    const session = [...stripeSessions.values()].find(
+      (x) => x['client_reference_id'] === first.reference,
+    ) as Record<string, unknown>;
+    pay(session);
+    await host.server.app.inject({
+      method: 'GET',
+      url: `/api/v1/payment/return/${first.reference}`,
+    });
+    expect(await tx(first.reference)).toMatchObject({ state: 'done' });
+    expect(await paymentsFor(first.id)).toHaveLength(1);
+
+    const second = await start('75');
+    const other = [...stripeSessions.values()].find(
+      (x) => x['client_reference_id'] === second.reference,
+    ) as Record<string, unknown>;
+    other['status'] = 'expired';
+    expect(
+      (await call('GET', `/api/portal/v1/payments/${second.reference}`, RINA)).json.state,
+    ).toBe('cancelled');
+  });
+
+  test('keys and modes', () => {
+    expect(stripeAdapter({ secretKey: 'sk_test_x' }).configured('test')).toBe(true);
+    expect(stripeAdapter({ secretKey: 'sk_test_x' }).configured('live')).toBe(false);
+    expect(stripeAdapter({ secretKey: 'rk_live_x' }).configured('live')).toBe(true);
+    expect(stripeAdapter({ secretKey: 'pk_test_x' }).configured('test')).toBe(false); // a publishable key
+    expect(stripeAdapter({}).configured('test')).toBe(false);
   });
 });

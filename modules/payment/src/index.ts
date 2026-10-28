@@ -31,6 +31,7 @@ import { ADAPTERS, FAKE_SIGNATURE, fakeAdapter, type PaymentAdapter } from './pr
 import { razorpayFromEnvironment } from './razorpay.js';
 import { settle } from './settle.js';
 import { sslcommerzFromEnvironment } from './sslcommerz.js';
+import { stripeFromEnvironment } from './stripe.js';
 
 export { type BkashOptions, bkashAdapter, bkashFromEnvironment } from './bkash.js';
 export {
@@ -40,6 +41,7 @@ export {
   PROVIDERS,
   paymentShutro,
 } from './module.js';
+export { decimalsOf, fromSubunits, toSubunits } from './money.js';
 export {
   ADAPTERS,
   FAKE_SIGNATURE,
@@ -49,19 +51,14 @@ export {
   type PaymentResult,
   type PaymentStatus,
 } from './providers.js';
-export {
-  fromSubunits,
-  type RazorpayOptions,
-  razorpayAdapter,
-  razorpayFromEnvironment,
-  toSubunits,
-} from './razorpay.js';
+export { type RazorpayOptions, razorpayAdapter, razorpayFromEnvironment } from './razorpay.js';
 export { type Settled, settle } from './settle.js';
 export {
   type SslcommerzOptions,
   sslcommerzAdapter,
   sslcommerzFromEnvironment,
 } from './sslcommerz.js';
+export { type StripeOptions, stripeAdapter, stripeFromEnvironment } from './stripe.js';
 
 type Row = Record<string, unknown>;
 const typed = (env: CoreEnv): Env => env as unknown as Env;
@@ -513,6 +510,7 @@ export function paymentModule(options: PaymentOptions = {}): KoshModule {
       ['sslcommerz', sslcommerzFromEnvironment()],
       ['bkash', bkashFromEnvironment()],
       ['razorpay', razorpayFromEnvironment()],
+      ['stripe', stripeFromEnvironment()],
     ]);
   return defineModule({
     shutro: paymentShutro,
