@@ -55,6 +55,33 @@ runs in an audited Shutro system scope.
 
 OAuth/SSO and passkeys come later, on the same models. Roles and the admin UI for them are `@kosh/permissions`.
 
+### API keys and service accounts
+
+Scripts and other systems call the API with a **key** instead of a session (RFC 0017): `X-Api-Key: sk_…` (or
+`Authorization: Bearer sk_…`). A key acts as its user — a person, or a **service account** — within its **scopes**:
+`*` (everything the user may do), `read:<app>`, `write:<app>` (read and change; per installed app). Scopes only
+narrow: the user's roles, field security and record rules still apply, and administrator rights never come through a
+key. A route belongs to the app whose module registered it, or whose model it serves; a route of no app needs `*`.
+Keys cannot manage credentials (sign-in, 2FA, passwords, keys).
+
+```http
+POST /api/v1/auth/api-keys     { "name": "Nightly export", "scopes": ["read:contacts", "write:sales"], "expiresInDays": 90 }
+→ 201 { "id": 3, "prefix": "sk_Ab12Cd34", "token": "sk_Ab12Cd34…", "scopes": [...], "expiresAt": "…" }   # token shown once
+
+GET  /api/v1/models/res.partner   X-Api-Key: sk_Ab12Cd34…
+```
+
+| Route (with a session) | |
+|---|---|
+| `GET /api/v1/auth/api-keys` | your keys (administrators also see service accounts'), never their secrets |
+| `POST /api/v1/auth/api-keys` `{ name, scopes, expiresInDays?, user? }` | a key; `user`: a service account's (administrators) |
+| `POST /api/v1/auth/api-keys/:id/revoke` | at once |
+| `POST /api/v1/auth/service-accounts` `{ login, name, groups }` | a user without a password that acts only through keys (administrators, never an administrator itself) |
+| `GET /api/v1/auth/scopes` | the scopes keys may have here |
+
+Keys are stored as SHA-256 digests, expire (1–730 days, 365 by default), record their last use, are rate-limited
+per key, and their creation and revocation are audited. In the back-office: the user menu › API keys.
+
 ## Typed client
 
 `shutro-erp generate client` writes one self-contained TypeScript module (no imports; runs in browsers and Node) from the

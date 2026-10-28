@@ -186,7 +186,9 @@ With the `notify` module installed (every installation has it), the header shows
 live through the gateway. It lists mentions, approvals waiting for the user, decisions on their requests and
 activities assigned to them; opening one marks it read and goes to the record. Each kind can be switched off per
 user (`PUT /api/v1/notifications/preferences`). Modules add their own header items with
-`registry.registerHeaderItem('module.Name', Component)`; the component receives the API.
+`registry.registerHeaderItem('module.Name', Component)`; the component receives the API. A **personal page** every signed-in user
+opens from the user menu, outside any app (API keys): `registry.registerUserPage('module.Name', Page, { label:
+'namespace:key' })`, served at `/me/module.Name` with the page props of client actions.
 
 Users with an email address also get each notification by email when `SMTP_URL` is set (`MAIL_FROM` names the
 sender; Mailpit in development), in their language, with a link that opens the record (`/open/<model>/<id>`,

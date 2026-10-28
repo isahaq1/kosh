@@ -1,6 +1,6 @@
 # RFC 0017: Integrations platform
 
-- Status: proposed (2026-10-28), awaiting approval
+- Status: accepted (2026-10-28)
 - Scope: API keys and service accounts, OAuth 2.0 apps (Shutro ERP as the provider), outbound webhook
   subscriptions, inbound webhooks, online payments with provider adapters (the fourth gap chosen with RFC 0014)
 
@@ -154,6 +154,36 @@ permissions, the audit log, the transactional outbox and jobs.
    order? Each needs a sandbox account to test the real adapter.
 2. **OAuth in this RFC** (step 5), or later on demand?
 3. **Service accounts**: count as users for any future licensing / seat count, or not?
+
+## Decisions (2026-10-28)
+
+1. **Payment providers**: real adapters for SSLCommerz, bKash, Razorpay and Stripe, after the fake provider; each
+   tested on its sandbox when an account is available.
+2. **OAuth 2.0 apps** are in this RFC, as step 5.
+3. **Service accounts** do not count as seats (nothing counts seats today); to revisit if licensing comes.
+
+## Implementation notes (2026-10-28): step 1 — API keys and service accounts
+
+- **`auth.api_key`** (private): name, user, the secret's SHA-256 digest and its prefix, scopes, expiry (1–730 days),
+  last use (time, address), revoked, issued by. `res.users.isService`: service accounts have no credential, so they
+  never sign in; they are never administrators.
+- **Authentication**: `X-Api-Key` or `Authorization: Bearer sk_…`, looked up (cached `cacheMs`) before sessions; the
+  identity is the user's, with the key's scopes; administrator groups never count through a key (they need a session
+  with a second factor). An unknown `X-Api-Key` is 401; a bearer `sk_…` that is no key is tried as a session.
+- **Scopes** are enforced in the server's request hook, not in the ORM (Shutro can add rights to a unit of work, not
+  remove them): the route's app is the module that registered it (routes are tagged while each module registers
+  them) or the owner of its `:model`; no app → `*` only. GET / HEAD read; everything else writes. Credential routes
+  refuse keys. The ORM still applies the user's ACL, field security and record rules.
+- **Routes**: keys (list, create — the secret once —, revoke), service accounts (administrators with their second
+  factor), the scopes of the installation. OpenAPI declares the `session`, `apiKey` and `cookie` security schemes.
+  Rate limits per key.
+- **Screen**: API keys in the user menu, for every signed-in user, outside any app — a new kind of page the shell
+  serves at `/me/<name>` (`registry.registerUserPage`), so the Settings app stays with the App manager and users
+  without roles still see no apps. English and Bangla.
+- **Tests**: scopes on model and module routes (read refused on write, another app refused, `*`), listing without
+  secrets and with last use, invalid scopes and expiry, no key management with a key, unknown / revoked / expired keys,
+  audit; service accounts (administrators only, no sign-in, keys for them). E2E: create, use, refuse, revoke.
+- Not in this step: `export` and `act:<permission>` scopes (RFC §5.1) — exports and actions follow read / write.
 
 ## Alignment with CLAUDE.md
 
