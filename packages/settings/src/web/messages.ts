@@ -1,6 +1,29 @@
 /** Messages of the Settings app (namespace `settings`). */
 export const messages: Readonly<Record<string, object>> = {
   en: {
+    company: {
+      title: 'Company',
+      intro: 'How the company appears to everyone who works in it here.',
+      identity: 'Identity',
+      name: 'Name',
+      grouping: 'Number grouping',
+      international: 'International (1,234,567)',
+      lakh: 'Lakh and crore (12,34,567)',
+      brand: 'Brand colour',
+      brandHint:
+        'The accent of buttons, links and selections for everyone in this company. Text stays readable whatever the colour.',
+      hex: 'Colour',
+      picker: 'Pick a colour',
+      default: 'Use the default',
+      light: 'Light',
+      dark: 'Dark',
+      sampleAction: 'Confirm',
+      sampleBadge: 'Sent',
+      sampleLink: 'A link',
+      sampleSelected: 'A selected row',
+      save: 'Save',
+      saved: 'Saved: everyone sees the change when they next load a page.',
+    },
     apiKeys: {
       title: 'API keys',
       intro:
@@ -90,6 +113,28 @@ export const messages: Readonly<Record<string, object>> = {
     version: 'Version {{version}}',
   },
   bn: {
+    company: {
+      title: 'প্রতিষ্ঠান',
+      intro: 'এখানে কাজ করা সবার কাছে প্রতিষ্ঠানটি যেভাবে দেখায়।',
+      identity: 'পরিচয়',
+      name: 'নাম',
+      grouping: 'সংখ্যার বিভাজন',
+      international: 'আন্তর্জাতিক (1,234,567)',
+      lakh: 'লাখ ও কোটি (12,34,567)',
+      brand: 'ব্র্যান্ডের রং',
+      brandHint: 'এই প্রতিষ্ঠানের সবার জন্য বোতাম, লিংক ও নির্বাচনের রং। যে রংই হোক, লেখা পড়া যায়।',
+      hex: 'রং',
+      picker: 'রং বাছুন',
+      default: 'ডিফল্ট রং',
+      light: 'হালকা',
+      dark: 'গাঢ়',
+      sampleAction: 'নিশ্চিত করুন',
+      sampleBadge: 'পাঠানো',
+      sampleLink: 'একটি লিংক',
+      sampleSelected: 'একটি নির্বাচিত সারি',
+      save: 'সংরক্ষণ করুন',
+      saved: 'সংরক্ষিত: পরের বার পাতা খুললে সবাই পরিবর্তন দেখবেন।',
+    },
     apiKeys: {
       title: 'এপিআই কী',
       intro:

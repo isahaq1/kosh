@@ -29,6 +29,8 @@ const ResCompany = defineModel('res.company', {
       { international: 'International (1,234,567)', lakh: 'Lakh and crore (12,34,567)' },
       { required: true, default: 'international', label: 'Number grouping' },
     ),
+    /** The company's brand colour (`#4f46e5`), the back-office's accent (RFC 0018); the default when empty. */
+    accentColor: f.char({ size: 7, label: 'Brand colour' }),
   },
 });
 

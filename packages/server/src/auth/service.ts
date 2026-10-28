@@ -54,6 +54,8 @@ export interface UserInfo {
   readonly companies: readonly number[];
   /** The number grouping of each of the user's companies (RFC 0016): `lakh` or `international`. */
   readonly groupings: Readonly<Record<string, 'international' | 'lakh'>>;
+  /** The brand colour of each of the user's companies that has one (RFC 0018): `#rrggbb`. */
+  readonly accents: Readonly<Record<string, string>>;
   readonly twoFactorEnabled: boolean;
   /** Holds an administrator role (in some company). */
   readonly administrator: boolean;
@@ -804,12 +806,16 @@ export class AuthService {
       const twoFactorEnabled = credential?.['totpEnabled'] === true;
       const companyIds = (user?.['companies'] as number[] | undefined) ?? [];
       const groupings: Record<string, 'international' | 'lakh'> = {};
+      const accents: Record<string, string> = {};
       if (companyIds.length > 0)
         for (const c of await fetch(
           model(env, 'res.company').search({ where: { id: { in: companyIds } } }),
-          ['numberGrouping'],
-        ))
+          ['numberGrouping', 'accentColor'],
+        )) {
           groupings[String(c['id'])] = c['numberGrouping'] === 'lakh' ? 'lakh' : 'international';
+          if (typeof c['accentColor'] === 'string' && /^#[0-9a-f]{6}$/i.test(c['accentColor']))
+            accents[String(c['id'])] = c['accentColor'];
+        }
       return {
         id: session.user,
         login: String(user?.['login']),
@@ -817,6 +823,7 @@ export class AuthService {
         company: typeof user?.['company'] === 'number' ? (user['company'] as number) : null,
         companies: companyIds,
         groupings,
+        accents,
         twoFactorEnabled,
         administrator,
         administratorNeedsSecondFactor:
