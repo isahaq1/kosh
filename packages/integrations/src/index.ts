@@ -9,6 +9,14 @@
  * - `POST /api/v1/webhooks/subscriptions/:id/rotate-secret` a new signing secret
  * - `POST /api/v1/webhooks/deliveries/:id/replay`          the same payload, delivered again
  *
+ * Step 3: inbound webhooks — endpoints modules declare (`inboundWebhooks`), switched on per company:
+ *
+ * - `POST /api/v1/hooks/:token`                            the provider's call (no sign-in; verified by the module)
+ * - `GET  /api/v1/webhooks/hooks`                          the endpoints modules offer
+ * - `POST /api/v1/webhooks/endpoints`                      `{ name, hook }`: an endpoint, with its path and secret
+ * - `POST /api/v1/webhooks/endpoints/:id/rotate-secret`    a new secret
+ * - `POST /api/v1/webhooks/inbound/:id/replay`             a received call, handled again
+ *
  * Subscriptions are also edited through the generated API (`webhook.subscription`); deliveries are read there.
  */
 import { randomUUID } from 'node:crypto';
@@ -16,6 +24,8 @@ import { defineModule, type KoshModule } from '@kosh/modules-sdk';
 import { base, HttpProblem, type ModuleContext } from '@kosh/server';
 import type { Env, Worker } from '@kosh/server/orm';
 import { action, form, list } from '@kosh/views';
+import type { FastifyInstance } from 'fastify';
+import { handleInbound, INBOUND_JOB, inboundHooks, receive } from './inbound.js';
 import { integrationsShutro, newSecret } from './models.js';
 import {
   CHANGE_EVENTS,
@@ -31,7 +41,15 @@ import {
   webhookEvents,
 } from './webhooks.js';
 
-export { integrationsShutro, newSecret } from './models.js';
+export {
+  handleInbound,
+  hmacVerifier,
+  INBOUND_JOB,
+  inboundHooks,
+  type ReceiveResult,
+  receive,
+} from './inbound.js';
+export { integrationsShutro, newSecret, newToken } from './models.js';
 export {
   CHANGE_EVENTS,
   DELIVER_JOB,
@@ -172,6 +190,144 @@ function registerWebhookRoutes(context: ModuleContext, integrations: Integration
   });
 }
 
+const MAX_INBOUND = 1024 * 1024;
+
+/** The inbound endpoint `id` the caller may change. */
+async function endpointOf(env: Env, id: number): Promise<number> {
+  env.access.check('webhook.endpoint' as never, 'write');
+  const set = await ref(env, 'webhook.endpoint').search({ where: { id }, limit: 1 });
+  if (set.length === 0)
+    throw new HttpProblem(404, 'missing-record', 'Not found', `There is no inbound webhook ${id}.`);
+  return id;
+}
+
+function registerInboundRoutes(context: ModuleContext, integrations: IntegrationsContext): void {
+  const { app } = context;
+
+  // The providers' calls: no session (the module's check decides), rate limited per address; the body kept raw.
+  app.register(async (hook: FastifyInstance) => {
+    hook.removeAllContentTypeParsers();
+    hook.addContentTypeParser(
+      '*',
+      { parseAs: 'string', bodyLimit: MAX_INBOUND },
+      (_req, body, done) => done(null, body),
+    );
+    hook.post('/api/v1/hooks/:token', { config: { auth: false } }, async (request, reply) => {
+      const token = String((request.params as { token?: string }).token ?? '');
+      const body = typeof request.body === 'string' ? request.body : '';
+      let json: unknown = null;
+      try {
+        json = body === '' ? null : JSON.parse(body);
+      } catch {
+        json = null;
+      }
+      const outcome = await receive(integrations, token, {
+        headers: Object.fromEntries(
+          Object.entries(request.headers).map(([k, v]) => [k, Array.isArray(v) ? v.join(', ') : v]),
+        ) as Record<string, string>,
+        query: Object.fromEntries(
+          Object.entries((request.query ?? {}) as Record<string, unknown>).map(([k, v]) => [
+            k,
+            String(v),
+          ]),
+        ),
+        body,
+        json,
+      });
+      return reply.status(outcome.status).send(outcome.body);
+    });
+  });
+
+  app.get('/api/v1/webhooks/hooks', async (request) =>
+    request.env(async (env) => {
+      env.access.check('webhook.endpoint' as never, 'read');
+      return {
+        hooks: [...inboundHooks(context.registry)].map(([hook, spec]) => ({
+          hook,
+          module: spec.module,
+          label: spec.label,
+        })),
+      };
+    }),
+  );
+
+  app.post('/api/v1/webhooks/endpoints', async (request, reply) => {
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const hook = String(body['hook'] ?? '').trim();
+    const spec = inboundHooks(context.registry).get(hook);
+    if (spec === undefined)
+      throw new HttpProblem(
+        422,
+        'invalid-hook',
+        'Unknown endpoint',
+        `No module offers the endpoint '${hook}'.`,
+      );
+    const created = await request.env(
+      async (env) => {
+        const rows = await ref(env, 'webhook.endpoint').create([
+          { name: String(body['name'] ?? '').trim() || spec.label, hook },
+        ]);
+        const id = rows.ids[0] as number;
+        const [row] = (
+          await ref(env, 'webhook.endpoint').browse([id]).load(['name', 'hook', 'token', 'secret'])
+        ).read(['id', 'name', 'hook', 'token', 'secret']);
+        return row ?? {};
+      },
+      { write: true },
+    );
+    return reply
+      .status(201)
+      .send({ ...created, path: `/api/v1/hooks/${String(created['token'])}` });
+  });
+
+  app.post('/api/v1/webhooks/endpoints/:id/rotate-secret', async (request) => {
+    const id = idOf(request.params);
+    return request.env(
+      async (env) => {
+        await endpointOf(env, id);
+        const secret = newSecret();
+        await ref(env, 'webhook.endpoint').browse([id]).write({ secret });
+        return { secret };
+      },
+      { write: true },
+    );
+  });
+
+  app.post('/api/v1/webhooks/inbound/:id/replay', async (request, reply) => {
+    const id = idOf(request.params);
+    await request.env(
+      async (env) => {
+        env.access.check('webhook.endpoint' as never, 'write');
+        const set = await ref(env, 'webhook.inbound').search({ where: { id }, limit: 1 });
+        const [row] =
+          set.length === 0
+            ? []
+            : (await set.load(['verified', 'company'])).read(['verified', 'company']);
+        if (row === undefined)
+          throw new HttpProblem(
+            404,
+            'missing-record',
+            'Not found',
+            `There is no inbound call ${id}.`,
+          );
+        if (row['verified'] !== true)
+          throw new HttpProblem(
+            409,
+            'not-verified',
+            'Not verified',
+            'A refused call is not handled.',
+          );
+        await env.asSuperuser({ reason: 'inbound webhook: replay' }, async (su) => {
+          await ref(su, 'webhook.inbound').browse([id]).write({ state: 'received', error: null });
+          await su.enqueue(INBOUND_JOB, { call: id, company: row['company'] }, { attempts: 6 });
+        });
+      },
+      { write: true },
+    );
+    return reply.status(202).send({ call: id });
+  });
+}
+
 /** The workers: events to deliveries (change events and the modules' events), and the delivery jobs. */
 export function webhookWorkers(integrations: IntegrationsContext): Worker[] {
   const { shutro, registry } = integrations;
@@ -224,6 +380,15 @@ export function webhookWorkers(integrations: IntegrationsContext): Worker[] {
           last: job.attempt >= job.maxAttempts,
         });
       },
+      [INBOUND_JOB]: async (payload, _env, job) => {
+        const p = (payload ?? {}) as { call?: number; company?: number };
+        await handleInbound(
+          integrations,
+          Number(p.call),
+          Number(p.company),
+          job.attempt >= job.maxAttempts,
+        );
+      },
     },
     { pollMs: 2000 },
   );
@@ -249,7 +414,7 @@ export function integrationsModule(options: IntegrationsOptions = {}): KoshModul
       icon: 'plug',
       sequence: 900,
       category: 'Administration',
-      summary: 'Webhooks: tell other systems what happens here',
+      summary: 'Webhooks: tell other systems what happens here, and hear from them',
     },
     accessLevels: {
       manager: { label: 'Integrations manager', groups: ['integrations.manager'] },
@@ -263,6 +428,14 @@ export function integrationsModule(options: IntegrationsOptions = {}): KoshModul
       }),
       'integrations.action_deliveries': action('webhook.delivery', {
         label: 'Deliveries',
+        views: ['list', 'form'],
+      }),
+      'integrations.action_endpoints': action('webhook.endpoint', {
+        label: 'Inbound webhooks',
+        views: ['list', 'form'],
+      }),
+      'integrations.action_inbound': action('webhook.inbound', {
+        label: 'Inbound calls',
         views: ['list', 'form'],
       }),
     },
@@ -281,6 +454,20 @@ export function integrationsModule(options: IntegrationsOptions = {}): KoshModul
         label: 'Deliveries',
         action: 'integrations.action_deliveries',
         sequence: 2,
+      },
+      {
+        id: 'integrations.endpoints',
+        parent: 'integrations.root',
+        label: 'Inbound webhooks',
+        action: 'integrations.action_endpoints',
+        sequence: 3,
+      },
+      {
+        id: 'integrations.inbound',
+        parent: 'integrations.root',
+        label: 'Inbound calls',
+        action: 'integrations.action_inbound',
+        sequence: 4,
       },
     ],
     views: {
@@ -307,6 +494,26 @@ export function integrationsModule(options: IntegrationsOptions = {}): KoshModul
         ],
         readonlyWhen: { id: { ne: 0 } },
       })),
+      'webhook.endpoint.list': list('webhook.endpoint', { columns: ['name', 'hook', 'active'] }),
+      'webhook.endpoint.form': form('webhook.endpoint', (k) => ({
+        sheet: [
+          k.group('main', ['name', 'hook', 'active']),
+          k.group('access', ['token', 'secret']),
+          k.component('endpoint_tools', 'integrations.EndpointTools'),
+        ],
+      })),
+      'webhook.inbound.list': list('webhook.inbound', {
+        columns: ['endpoint', 'eventId', 'state', 'attempts', 'handledAt'],
+      }),
+      'webhook.inbound.form': form('webhook.inbound', (k) => ({
+        sheet: [
+          k.group('main', ['endpoint', 'eventId', 'verified', 'state']),
+          k.group('outcome', ['attempts', 'handledAt', 'result', 'error']),
+          k.group('content', ['headers', 'body']),
+          k.component('inbound_tools', 'integrations.InboundTools'),
+        ],
+        readonlyWhen: { id: { ne: 0 } },
+      })),
     },
     routes: (context: ModuleContext) => {
       const integrations: IntegrationsContext = {
@@ -316,6 +523,7 @@ export function integrationsModule(options: IntegrationsOptions = {}): KoshModul
         ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
       };
       registerWebhookRoutes(context, integrations);
+      registerInboundRoutes(context, integrations);
       if (!(options.workers ?? process.env['KOSH_SCHEDULES'] !== 'off')) return;
       const workers = webhookWorkers(integrations);
       for (const w of workers) w.start();

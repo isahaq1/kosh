@@ -5,7 +5,7 @@
  */
 
 import { automation } from '@kosh/automation';
-import { integrations } from '@kosh/integrations';
+import { hmacVerifier, integrations } from '@kosh/integrations';
 import { mail } from '@kosh/mail';
 import { messaging, messagingShutro } from '@kosh/messaging';
 import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
@@ -14,7 +14,7 @@ import { approvalGuard, permissions, permissionsShutro, requestApprovals } from 
 import { realtime } from '@kosh/realtime';
 import { reporting, reportingShutro } from '@kosh/reporting';
 import { base, baseShutro } from '@kosh/server';
-import { orm } from '@kosh/server/orm';
+import { type Env, orm } from '@kosh/server/orm';
 import {
   action,
   calendar,
@@ -93,6 +93,22 @@ export const contacts = defineKoshModule({
     user: { label: 'User', groups: ['contacts.user'] },
     manager: { label: 'Manager', groups: ['contacts.manager'], implies: ['user'] },
   },
+  // A web form's sign-ups as contacts (RFC 0017 §5.4): an HMAC of the body in `X-Signature`.
+  inboundWebhooks: [
+    {
+      key: 'signups',
+      label: 'Sign-ups from the website',
+      verify: hmacVerifier({
+        header: 'X-Signature',
+        eventId: (call) => (call.json as { id?: string } | null)?.id,
+      }),
+      handle: async (env, call) => {
+        const { name } = call.json as { name: string };
+        const made = await (env as Env).model('res.partner' as never).create([{ name } as never]);
+        return `res.partner ${made.ids[0]}`;
+      },
+    },
+  ],
   actions: {
     'contacts.action_partners': action(Partner, {
       label: 'Contacts',

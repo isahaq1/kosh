@@ -31,6 +31,8 @@ export {
   type EventSpec,
   type ImportTemplateSpec,
   type InboundAliasSpec,
+  type InboundCall,
+  type InboundWebhookSpec,
   type KoshModule,
   type LocalizationSpec,
   type MenuSpec,

@@ -12,6 +12,19 @@ export const messages: Readonly<Record<string, object>> = {
       replay: 'Send again',
       replayed: 'Sent again: a new delivery is in Deliveries.',
     },
+    endpoint: {
+      title: 'Inbound webhook',
+      url: 'URL to give the provider',
+      urlHint: 'Calls are checked with the secret; refused ones stay in Inbound calls.',
+      rotate: 'New secret',
+      hooks: 'Endpoints the installed apps offer',
+      hooksHint: 'Put one of them in the Endpoint field.',
+      none: 'No installed app offers an inbound webhook.',
+    },
+    inbound: {
+      replay: 'Handle again',
+      replayed: 'Queued: the outcome appears here shortly.',
+    },
   },
   bn: {
     tools: {
@@ -24,6 +37,19 @@ export const messages: Readonly<Record<string, object>> = {
         'ইভেন্টগুলো ইভেন্ট ঘরে ফাঁকা জায়গা দিয়ে আলাদা করে লিখুন। রেকর্ডের তথ্য ওয়েবহুকের ব্যবহারকারী যা পড়তে পারেন ততটুকুই।',
       replay: 'আবার পাঠান',
       replayed: 'আবার পাঠানো হয়েছে: ডেলিভারিতে নতুন একটি আছে।',
+    },
+    endpoint: {
+      title: 'ইনবাউন্ড ওয়েবহুক',
+      url: 'প্রোভাইডারকে দেওয়ার URL',
+      urlHint: 'প্রতিটি কল গোপন কী দিয়ে যাচাই হয়; প্রত্যাখ্যাত কল ইনবাউন্ড কলে থাকে।',
+      rotate: 'নতুন গোপন কী',
+      hooks: 'ইনস্টল করা অ্যাপগুলোর এন্ডপয়েন্ট',
+      hooksHint: 'এর একটি এন্ডপয়েন্ট ঘরে লিখুন।',
+      none: 'কোনো ইনস্টল করা অ্যাপ ইনবাউন্ড ওয়েবহুক দেয় না।',
+    },
+    inbound: {
+      replay: 'আবার প্রক্রিয়া করুন',
+      replayed: 'সারিতে আছে: ফলাফল শীঘ্রই এখানে দেখা যাবে।',
     },
   },
 };

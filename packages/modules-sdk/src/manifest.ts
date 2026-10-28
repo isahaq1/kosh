@@ -118,6 +118,36 @@ export interface EventSpec {
   readonly label: string;
 }
 
+/** A call received by an inbound webhook (RFC 0017 §5.4): the raw body (what signatures cover) and its JSON. */
+export interface InboundCall {
+  readonly headers: Readonly<Record<string, string | undefined>>;
+  readonly query: Readonly<Record<string, string | undefined>>;
+  /** The body as received. */
+  readonly body: string;
+  /** The body parsed as JSON, or null. */
+  readonly json: unknown;
+}
+
+/**
+ * An endpoint a module receives calls on from outside (RFC 0017 §5.4): a payment provider's callback, a shipping
+ * status. Companies switch it on in Integrations › Inbound webhooks (a URL and a secret each).
+ */
+export interface InboundWebhookSpec {
+  /** Unique within the module (`ipn`); the endpoint is `<module>.<key>`. */
+  readonly key: string;
+  readonly label: string;
+  /**
+   * Whether the call is genuine — the provider's signature, or an HMAC with the endpoint's secret — and its event
+   * id, by which repeated calls are recognised: the id, or null to refuse the call.
+   */
+  readonly verify: (call: InboundCall, secret: string) => string | null | Promise<string | null>;
+  /**
+   * Handles a verified call, once per event id, in a job (retried on failure): `env` is a system environment in
+   * the endpoint's company. Returns a short note for the log (a string; anything else is not kept).
+   */
+  readonly handle: (env: unknown, call: InboundCall) => Promise<unknown>;
+}
+
 /** A default document template of a module. */
 export interface DocumentSpec {
   /** Unique within the module (`purchase_order`); stored as `module.key`. */
@@ -406,6 +436,8 @@ export interface ModuleInput {
   readonly localization?: LocalizationSpec;
   /** Events the module emits that webhooks may subscribe to (RFC 0017 §5.3). */
   readonly events?: readonly EventSpec[];
+  /** Endpoints the module receives calls on from outside (RFC 0017 §5.4). */
+  readonly inboundWebhooks?: readonly InboundWebhookSpec[];
   /** What the module shows in the customer and vendor portal (RFC 0015), when `portal` is installed. */
   readonly portal?: { readonly documents: readonly PortalDocumentSpec[] };
   /** Import templates for the module's models (RFC 0014 §5.4), offered when `import` is installed. */

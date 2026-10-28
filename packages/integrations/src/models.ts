@@ -67,6 +67,58 @@ const Delivery = defineModel('webhook.delivery', {
   },
 });
 
+/** A new endpoint token (the URL's last part: who knows it may call; the signature decides what is genuine). */
+export const newToken = (): string => randomBytes(18).toString('base64url');
+
+/** A company's inbound webhook (RFC 0017 §5.4): a module's endpoint, its URL token and the secret calls are checked with. */
+const Endpoint = defineModel('webhook.endpoint', {
+  label: 'Inbound webhook',
+  recName: 'name',
+  companyScoped: { required: true },
+  order: ['name asc', 'id asc'],
+  tracking: ['active'],
+  access: { 'integrations.manager': ALL },
+  fields: {
+    name: f.char({ required: true }),
+    /** `<module>.<key>` of a declared inbound webhook. */
+    hook: f.char({ required: true, label: 'Endpoint' }),
+    token: f.char({ required: true, index: 'unique', default: newToken }),
+    /** What the module's check uses: the HMAC key, or the provider's signing secret. */
+    secret: f.char({ required: true, default: newSecret, label: 'Secret' }),
+    active: f.boolean({ default: true }),
+    calls: f.one2many('webhook.inbound', 'endpoint'),
+  },
+});
+
+/** A call an inbound webhook received: verified or not, handled once per event id, with the outcome. */
+const Inbound = defineModel('webhook.inbound', {
+  label: 'Inbound call',
+  companyScoped: { required: true },
+  order: ['id desc'],
+  access: { 'integrations.manager': ['read', 'export'] },
+  fields: {
+    endpoint: f.many2one('webhook.endpoint', { required: true, ondelete: 'cascade' }),
+    /** The provider's event id (null when the call was refused). */
+    eventId: f.char({ label: 'Event id' }),
+    headers: f.json({ required: true }),
+    body: f.text({ required: true }),
+    verified: f.boolean({ required: true, default: false }),
+    state: f.selection(
+      {
+        refused: 'Refused (not verified)',
+        received: 'Received',
+        done: 'Handled',
+        failed: 'Failed',
+      },
+      { required: true, default: 'received' },
+    ),
+    attempts: f.integer({ required: true, default: 0 }),
+    result: f.text(),
+    error: f.text(),
+    handledAt: f.datetime({ label: 'Handled at' }),
+  },
+});
+
 export const integrationsShutro: ReturnType<typeof orm.defineModule> = defineModule({
   name: 'integrations',
   version: '0.1.0',
@@ -78,5 +130,5 @@ export const integrationsShutro: ReturnType<typeof orm.defineModule> = defineMod
       implies: ['base.user'],
     }),
   ],
-  models: [Subscription, Delivery],
+  models: [Subscription, Delivery, Endpoint, Inbound],
 });
