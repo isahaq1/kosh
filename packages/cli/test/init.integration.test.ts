@@ -209,6 +209,58 @@ test('a fresh installation: database created, project written, migrated, adminis
   expect(text2).toContain('"owner" already signs in with an authenticator app.');
 }, 240_000);
 
+test('the same project with more apps gets their tables first; another project’s database is refused', async () => {
+  // The first test's project (base and two apps) runs again with Products, Sales and Accounting: their tables are
+  // planned before their data migrations run (product_sale_tax_rel…).
+  const output: string[] = [];
+  const code = await runInit(
+    [
+      join(dir, 'shop'),
+      '--yes',
+      '--no-2fa',
+      '--no-start',
+      '--database-url',
+      url,
+      '--admin-password',
+      PASSWORD,
+      '--apps',
+      'reporting,messaging,contacts,product,sales,accounting',
+    ],
+    { write: (t) => output.push(t), cwd: dir },
+  );
+  const text = output.join('');
+  expect(code, text).toBe(0);
+  expect(text).toContain('(the database had an earlier version)');
+  const server = await createServer({ databaseUrl: url, modules: [base], logger: false });
+  try {
+    const [rel] = await server.driver.query<{ found: string | null }>({
+      text: "SELECT to_regclass('public.product_sale_tax_rel')::text AS found",
+      params: [],
+    });
+    expect(rel?.found).toBe('product_sale_tax_rel');
+  } finally {
+    await server.close();
+  }
+
+  // A new folder on that database: its history is the other project's; said plainly, nothing changed.
+  const other: string[] = [];
+  const refused = await runInit(
+    [
+      join(dir, 'elsewhere'),
+      '--yes',
+      '--no-2fa',
+      '--no-start',
+      '--database-url',
+      url,
+      '--admin-password',
+      PASSWORD,
+    ],
+    { write: (t) => other.push(t), cwd: dir },
+  );
+  expect(refused).toBe(1);
+  expect(other.join('')).toContain('belongs to another installation');
+}, 240_000);
+
 test('--yes needs the administrator password; a weak one is refused', async () => {
   const output: string[] = [];
   const code = await runInit(

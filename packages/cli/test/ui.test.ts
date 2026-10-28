@@ -92,8 +92,17 @@ test('detectTerminal', () => {
     animate: false,
     emoji: false,
   });
-  expect(detectTerminal(tty, {}, 'win32').unicode).toBe(false); // the old console host
-  expect(detectTerminal(tty, { WT_SESSION: 'x' }, 'win32').unicode).toBe(true);
+  expect(detectTerminal(tty, {}, 'win32', '6.3.9600').unicode).toBe(false); // Windows 8.1's console host
+  // Windows 10 and 11: the console host shows box drawing (no pictographs); Windows Terminal shows both.
+  expect(detectTerminal(tty, {}, 'win32', '10.0.26300')).toMatchObject({
+    unicode: true,
+    emoji: false,
+  });
+  expect(detectTerminal(tty, { WT_SESSION: 'x' }, 'win32', '10.0.26300')).toMatchObject({
+    unicode: true,
+    emoji: true,
+  });
+  expect(detectTerminal(tty, { SHUTRO_ERP_ASCII: '1' }, 'win32', '10.0.26300').unicode).toBe(false);
   expect(detectTerminal(tty, { KOSH_ASCII: '1' }, 'linux').unicode).toBe(false);
 });
 

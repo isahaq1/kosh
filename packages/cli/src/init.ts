@@ -9,7 +9,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer as createNetServer } from 'node:net';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -806,16 +806,44 @@ async function setUp(server: KoshServer, a: Answers, ui: Ui): Promise<number | n
       text: "SELECT to_regclass('public.res_users')::text AS found",
       params: [],
     });
-    if (installed?.found === null || installed?.found === undefined) {
-      task.update('planning');
-      const plan = await migrate.planMigration({
-        driver: server.driver,
-        registry: server.registry.registry,
-        ignore: FRAMEWORK_TABLES, // the framework's own tables, not a model's: never dropped
+    // A database another project set up keeps that project's migration history: this folder cannot continue it.
+    const status = await migrate.migrationStatus({ driver: server.driver, dir });
+    const here = new Set(
+      (await readdir(dir).catch(() => [] as string[]))
+        .map((f) => /^(\d+)_/.exec(f)?.[1])
+        .filter(Boolean),
+    );
+    const foreign = status.applied.filter((m) => !here.has(m.version));
+    if (foreign.length > 0)
+      throw new Error(
+        `The database "${new URL(a.databaseUrl).pathname.slice(1)}" belongs to another installation: its migrations ` +
+          `(${foreign.map((m) => `${m.version}_${m.name}`).join(', ')}) are not in this project's migrations folder. ` +
+          'Choose a new database for this project, or run shutro-erp init (or migrate) in the folder of the ' +
+          'project that created it.',
+      );
+    // Always what the database lacks: a new one gets every table; one made by an earlier version (or another
+    // project's choice of apps) gets the tables and columns these apps add, before their data migrations run.
+    const fresh = installed?.found === null || installed?.found === undefined;
+    task.update('planning');
+    const plan = await migrate.planMigration({
+      driver: server.driver,
+      registry: server.registry.registry,
+      ignore: FRAMEWORK_TABLES, // the framework's own tables, not a model's: never dropped
+    });
+    if (plan.destructive.length > 0)
+      throw new Error(
+        `The database "${new URL(a.databaseUrl).pathname.slice(1)}" has data these apps would drop or change ` +
+          `(${plan.destructive.map((op) => migrate.renderOperation(op)).join('; ')}). Use a new database, or ` +
+          'review the change and run shutro-erp migrate --allow-destructive in the project first.',
+      );
+    if (plan.statements.length > 0) {
+      const file = await migrate.writeMigrationFile({
+        dir,
+        name: fresh ? 'init' : 'update',
+        plan,
       });
-      const file = await migrate.writeMigrationFile({ dir, name: 'init', plan });
       ui.detail(
-        `planned ${plan.statements.length} statements in migrations/${basename(file.path)}`,
+        `planned ${plan.statements.length} statements in migrations/${basename(file.path)}${fresh ? '' : ' (the database had an earlier version)'}`,
       );
     }
     task.update('applying');

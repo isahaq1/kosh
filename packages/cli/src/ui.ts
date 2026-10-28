@@ -5,6 +5,7 @@
  * the terminal (NO_COLOR, FORCE_COLOR, SHUTRO_ERP_ASCII=1, TERM=dumb, Windows consoles without Unicode); output that is not
  * a terminal (tests, logs, CI) gets plain lines with the same words and no escape codes.
  */
+import { release as osRelease } from 'node:os';
 
 /** What the terminal can show. */
 export interface Terminal {
@@ -34,6 +35,7 @@ export function detectTerminal(
   stream: { readonly isTTY?: boolean; readonly columns?: number },
   env: Env = process.env,
   platform: string = process.platform,
+  release: string = osRelease(),
 ): Terminal {
   const tty = stream.isTTY === true && env['TERM'] !== 'dumb' && env['CI'] === undefined;
   const forced = env['FORCE_COLOR'] !== undefined && env['FORCE_COLOR'] !== '0';
@@ -45,12 +47,17 @@ export function detectTerminal(
     env['ConEmuTask'] === '{cmd::Cmder}' ||
     env['TERM'] === 'xterm-256color' ||
     env['TERM'] === 'alacritty';
+  // Windows 10 and later: the console host shows box drawing and colours too (UTF-8, virtual terminal); pictographs
+  // only in the modern terminals. Older Windows keeps ASCII.
+  const windows10 = Number(release.split('.')[0]) >= 10;
   const unicode =
-    env['KOSH_ASCII'] !== '1' && (platform === 'win32' ? modernWindows : env['TERM'] !== 'linux');
+    env['KOSH_ASCII'] !== '1' &&
+    env['SHUTRO_ERP_ASCII'] !== '1' &&
+    (platform === 'win32' ? modernWindows || windows10 : env['TERM'] !== 'linux');
   return {
     color,
     unicode,
-    emoji: unicode && tty,
+    emoji: unicode && tty && (platform !== 'win32' || modernWindows),
     animate: tty,
     columns: Math.max(40, Math.min(stream.columns ?? 80, 120)),
   };
