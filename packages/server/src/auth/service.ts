@@ -61,6 +61,21 @@ export interface UserInfo {
   readonly administratorNeedsSecondFactor: boolean;
 }
 
+/** An API key as listed (never its secret). */
+export interface ApiKeyInfo {
+  readonly id: number;
+  readonly name: string;
+  readonly user: number;
+  /** The user's name (yours, or a service account's). */
+  readonly userName: string;
+  readonly prefix: string;
+  readonly scopes: readonly string[];
+  readonly expiresAt: string;
+  readonly lastUsedAt: string | null;
+  readonly lastUsedIp: string | null;
+  readonly revoked: boolean;
+}
+
 export const SESSION_COOKIE = 'kosh_session';
 const MIN_PASSWORD = 12;
 
@@ -114,6 +129,10 @@ export class AuthService {
   readonly #shutro: () => Shutro;
   readonly #options: Required<AuthOptions>;
   readonly #cache = new Map<string, { at: number; session: SessionInfo & { csrfHash: string } }>();
+  readonly #keyCache = new Map<
+    string,
+    { at: number; key: { id: number; user: number; scopes: string[] } }
+  >();
   readonly #dummy: Promise<string> = hashPassword(randomToken());
 
   constructor(shutro: () => Shutro, options: AuthOptions = {}) {
@@ -349,8 +368,18 @@ export class AuthService {
     return session;
   }
 
-  /** Authenticator for the server (RFC 0002 §6.2): the session's user, company from `X-Company`, groups for it. */
+  /**
+   * Authenticator for the server (RFC 0002 §6.2): the session's user — or the API key's (RFC 0017 §5.1), with its
+   * scopes —, company from `X-Company`, groups for it.
+   */
   async authenticate(request: FastifyRequest): Promise<RequestIdentity | null> {
+    const key = await this.apiKeyOf(request);
+    if (key !== null)
+      return this.#identity(request, key.user, {
+        elevated: false,
+        scopes: key.scopes,
+        apiKey: key.id,
+      });
     const session = await this.session(request);
     if (session === null) return null;
     if (session.twoFactorRequired)
@@ -359,7 +388,19 @@ export class AuthService {
         'Enter the code from your authenticator app first.',
         'POST /api/v1/auth/2fa/verify.',
       );
-    const info = await this.#identityOf(session.user);
+    return this.#identity(request, session.user, { elevated: session.secondFactor });
+  }
+
+  async #identity(
+    request: FastifyRequest,
+    user: number,
+    options: {
+      readonly elevated: boolean;
+      readonly scopes?: readonly string[];
+      readonly apiKey?: number;
+    },
+  ): Promise<RequestIdentity | null> {
+    const info = await this.#identityOf(user);
     if (info === null) return null;
     const asked = Number(request.headers['x-company']);
     const company =
@@ -375,8 +416,8 @@ export class AuthService {
         'An administrator assigns the companies of the user.',
       );
     // Mandatory 2FA for administrators (RFC 0003 §5.2): their administrator groups count only in sessions that
-    // entered a second factor, while 2FA is on. The user keeps every other group.
-    const elevated = session.secondFactor && info.twoFactorEnabled;
+    // entered a second factor, while 2FA is on — never through an API key. The user keeps every other group.
+    const elevated = options.elevated && info.twoFactorEnabled;
     const groups = info.assignments
       .filter((a) => a.company === null || a.company === company)
       .map((a) => a.group)
@@ -390,14 +431,280 @@ export class AuthService {
       )
       .map((g) => g.grant);
     return {
-      user: session.user,
+      user,
       company,
       companies: info.companies,
       groups: [...new Set(groups)],
       grants: [...new Set(grants)],
       lang: info.lang,
       tz: info.tz,
+      ...(options.scopes === undefined ? {} : { scopes: options.scopes }),
+      ...(options.apiKey === undefined ? {} : { apiKey: options.apiKey }),
     };
+  }
+
+  /**
+   * The request's API key (RFC 0017 §5.1): `X-Api-Key: sk_…` or `Authorization: Bearer sk_…`; null without one.
+   * @throws {HttpProblem} 401 for an `X-Api-Key` that is unknown, revoked or expired
+   */
+  async apiKeyOf(
+    request: FastifyRequest,
+  ): Promise<{ id: number; user: number; scopes: string[] } | null> {
+    const header = request.headers['x-api-key'];
+    const explicit = typeof header === 'string' && header !== '' ? header : undefined;
+    const bearer = /^Bearer\s+(sk_\S+)$/i.exec(String(request.headers.authorization ?? ''))?.[1];
+    const token = explicit ?? bearer;
+    if (token === undefined) return null;
+    const tokenHash = digest(token);
+    const cached = this.#keyCache.get(tokenHash);
+    if (cached !== undefined && Date.now() - cached.at < this.#options.cacheMs) return cached.key;
+    const key = await this.#system('api key', async (env) => {
+      const row = one(
+        await fetch(model(env, 'auth.api_key').search({ where: { tokenHash, revoked: false } }), [
+          'user',
+          'scopes',
+          'expiresAt',
+          'lastUsedAt',
+        ]),
+      );
+      if (row === undefined) return null;
+      const now = Date.now();
+      if ((timeOf(row['expiresAt']) ?? 0) <= now) return null;
+      // Archived users' keys stop working with them.
+      if ((await model(env, 'res.users').search({ where: { id: row['user'] } })).length === 0)
+        return null;
+      if ((timeOf(row['lastUsedAt']) ?? 0) + 5 * 60_000 < now)
+        await model(env, 'auth.api_key')
+          .browse([row['id'] as number])
+          .write({ lastUsedAt: new Date(now), lastUsedIp: request.ip });
+      return {
+        id: row['id'] as number,
+        user: row['user'] as number,
+        scopes: String(row['scopes'])
+          .split(' ')
+          .filter((x) => x !== ''),
+      };
+    });
+    if (key === null) {
+      this.#keyCache.delete(tokenHash);
+      // A bearer token that is no key may still be a session's.
+      if (explicit === undefined) return null;
+      throw unauthenticated(
+        'invalid-api-key',
+        'The API key is unknown, revoked or expired.',
+        'Create a new key (Settings › API keys).',
+      );
+    }
+    this.#keyCache.set(tokenHash, { at: Date.now(), key });
+    return key;
+  }
+
+  /** May `actor` manage `user`'s keys: their own, or a service account's when the actor is an administrator. */
+  async #mayManageKeysOf(env: Env, session: SessionInfo, user: number): Promise<boolean> {
+    if (user === session.user) return true;
+    const [target] = await fetch(model(env, 'res.users').search({ where: { id: user } }), [
+      'isService',
+    ]);
+    return (
+      target?.['isService'] === true &&
+      session.secondFactor &&
+      (await this.#holdsAdministrator(env, session.user))
+    );
+  }
+
+  /**
+   * A new API key for `user` (the session's own, or a service account's for administrators), with `scopes` already
+   * checked against the installed apps. The secret is returned once.
+   */
+  async createApiKey(
+    session: SessionInfo,
+    input: {
+      readonly user?: number;
+      readonly name: string;
+      readonly scopes: readonly string[];
+      readonly expiresInDays?: number;
+    },
+    ip?: string,
+  ): Promise<ApiKeyInfo & { token: string }> {
+    const days = input.expiresInDays ?? 365;
+    if (!Number.isInteger(days) || days < 1 || days > 730)
+      throw new HttpProblem(400, 'invalid-body', 'Invalid body', 'expiresInDays is 1 to 730.');
+    const name = input.name.trim();
+    if (name === '' || name.length > 100)
+      throw new HttpProblem(
+        400,
+        'invalid-body',
+        'Invalid body',
+        'A key has a name of up to 100 characters.',
+      );
+    const user = input.user ?? session.user;
+    return this.#system('create api key', async (env) => {
+      if (!(await this.#mayManageKeysOf(env, session, user)))
+        throw new HttpProblem(
+          403,
+          'access',
+          'Forbidden',
+          'Keys are made for yourself, or by an administrator for a service account.',
+        );
+      const token = `sk_${randomToken(30)
+        .replace(/[^A-Za-z0-9]/g, '')
+        .slice(0, 40)}`;
+      const prefix = token.slice(0, 11);
+      const created = await model(env, 'auth.api_key').create([
+        {
+          name,
+          user,
+          tokenHash: digest(token),
+          prefix,
+          scopes: input.scopes.join(' '),
+          expiresAt: new Date(Date.now() + days * 86_400_000),
+          issuedBy: session.user,
+        },
+      ]);
+      const id = created.ids[0] as number;
+      await audit(env, {
+        kind: 'auth.api_key_created',
+        summary: `API key "${name}" (${prefix}…) created for user ${user}: ${input.scopes.join(' ')}.`,
+        actor: session.user,
+        company: null,
+        details: { key: id, user, scopes: [...input.scopes], expiresInDays: days },
+        ...(ip === undefined ? {} : { ip }),
+      });
+      const [info] = await this.#keys(env, [id]);
+      return { ...(info as ApiKeyInfo), token };
+    });
+  }
+
+  async #keys(env: Env, ids?: readonly number[], users?: readonly number[]): Promise<ApiKeyInfo[]> {
+    const where =
+      ids !== undefined ? { id: { in: [...ids] } } : { user: { in: [...(users ?? [])] } };
+    const rows = await fetch(model(env, 'auth.api_key').search({ where, order: ['id desc'] }), [
+      'name',
+      'user',
+      'prefix',
+      'scopes',
+      'expiresAt',
+      'lastUsedAt',
+      'lastUsedIp',
+      'revoked',
+      'createdAt',
+    ]);
+    const userIds = [...new Set(rows.map((r) => r['user'] as number))];
+    const names = new Map(
+      (userIds.length === 0
+        ? []
+        : await fetch(model(env, 'res.users').search({ where: { id: { in: userIds } } }), ['name'])
+      ).map((u) => [u['id'] as number, String(u['name'])]),
+    );
+    return rows.map((r) => ({
+      id: r['id'] as number,
+      name: String(r['name']),
+      user: r['user'] as number,
+      userName: names.get(r['user'] as number) ?? '',
+      prefix: String(r['prefix']),
+      scopes: String(r['scopes'])
+        .split(' ')
+        .filter((x) => x !== ''),
+      expiresAt: new Date(timeOf(r['expiresAt']) ?? 0).toISOString(),
+      lastUsedAt:
+        timeOf(r['lastUsedAt']) === null
+          ? null
+          : new Date(timeOf(r['lastUsedAt']) ?? 0).toISOString(),
+      lastUsedIp: typeof r['lastUsedIp'] === 'string' ? r['lastUsedIp'] : null,
+      revoked: r['revoked'] === true,
+    }));
+  }
+
+  /** The session user's keys, and every service account's for administrators. */
+  async listApiKeys(session: SessionInfo): Promise<ApiKeyInfo[]> {
+    return this.#system('list api keys', async (env) => {
+      const users = [session.user];
+      if (session.secondFactor && (await this.#holdsAdministrator(env, session.user)))
+        users.push(...(await model(env, 'res.users').search({ where: { isService: true } })).ids);
+      return this.#keys(env, undefined, users);
+    });
+  }
+
+  /** Revokes a key at once (the session's own, or a service account's for administrators). */
+  async revokeApiKey(session: SessionInfo, id: number, ip?: string): Promise<void> {
+    await this.#system('revoke api key', async (env) => {
+      const [key] = await fetch(model(env, 'auth.api_key').search({ where: { id } }), [
+        'user',
+        'prefix',
+        'tokenHash',
+      ]);
+      if (key === undefined || !(await this.#mayManageKeysOf(env, session, key['user'] as number)))
+        throw new HttpProblem(
+          404,
+          'missing-record',
+          'Not found',
+          `There is no API key ${id} of yours.`,
+        );
+      await model(env, 'auth.api_key').browse([id]).write({ revoked: true });
+      this.#keyCache.delete(String(key['tokenHash']));
+      await audit(env, {
+        kind: 'auth.api_key_revoked',
+        summary: `API key ${String(key['prefix'])}… revoked.`,
+        actor: session.user,
+        company: null,
+        details: { key: id },
+        ...(ip === undefined ? {} : { ip }),
+      });
+    });
+  }
+
+  /**
+   * A service account (RFC 0017 §5.1): a user without a password who acts only through API keys, with `groups`
+   * (checked by the caller) in the administrator's companies. Administrators only.
+   */
+  async createServiceAccount(
+    session: SessionInfo,
+    input: { readonly login: string; readonly name: string; readonly groups: readonly string[] },
+    ip?: string,
+  ): Promise<{ id: number; login: string; name: string; groups: string[] }> {
+    return this.#system(`create service account ${input.login}`, async (env) => {
+      if (!(session.secondFactor && (await this.#holdsAdministrator(env, session.user))))
+        throw new HttpProblem(
+          403,
+          'access',
+          'Forbidden',
+          'Service accounts are created by administrators.',
+        );
+      const administrators = new Set(env.access.administratorGroups());
+      if (input.groups.some((g) => administrators.has(g)))
+        throw new HttpProblem(
+          422,
+          'invalid-groups',
+          'Invalid roles',
+          'A service account cannot be an administrator.',
+        );
+      const [me] = await fetch(model(env, 'res.users').search({ where: { id: session.user } }), [
+        'company',
+      ]);
+      const company = typeof me?.['company'] === 'number' ? (me['company'] as number) : undefined;
+      const created = await model(env, 'res.users').create([
+        {
+          login: input.login,
+          name: input.name,
+          isService: true,
+          ...(company === undefined ? {} : { company, companies: { set: [company] } }),
+        },
+      ]);
+      const id = created.ids[0] as number;
+      if (input.groups.length > 0)
+        await model(env, 'auth.user_group').create(
+          input.groups.map((group) => ({ user: id, group })),
+        );
+      await audit(env, {
+        kind: 'auth.service_account_created',
+        summary: `Service account ${input.login} created with ${input.groups.join(', ') || 'no roles'}.`,
+        actor: session.user,
+        company: null,
+        details: { user: id, groups: [...input.groups] },
+        ...(ip === undefined ? {} : { ip }),
+      });
+      return { id, login: input.login, name: input.name, groups: [...input.groups] };
+    });
   }
 
   /** Identity loader for Shutro (`createShutro({ identity })`): the user is active; companies and groups from the database. */

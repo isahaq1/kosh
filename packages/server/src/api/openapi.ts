@@ -307,7 +307,24 @@ export function openApiDocument(
     openapi: '3.1.0',
     info,
     paths: Object.assign({}, ...list.map(modelPaths)),
+    // A session (sign-in) or an API key (RFC 0017 §5.1); cookie sessions also send X-CSRF-Token on changes.
+    security: [{ session: [] }, { apiKey: [] }, { cookie: [] }],
     components: {
+      securitySchemes: {
+        session: {
+          type: 'http',
+          scheme: 'bearer',
+          description: 'A session token from POST /api/v1/auth/login.',
+        },
+        apiKey: {
+          type: 'apiKey',
+          in: 'header',
+          name: 'X-Api-Key',
+          description:
+            'An API key (sk_…; also accepted as Authorization: Bearer). Its scopes — *, read:<app>, write:<app> — narrow the user’s rights.',
+        },
+        cookie: { type: 'apiKey', in: 'cookie', name: 'kosh_session' },
+      },
       schemas: {
         Problem: {
           type: 'object',

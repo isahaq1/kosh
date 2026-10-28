@@ -465,6 +465,16 @@ function Shell(): ReactElement {
                   </MenuTrigger>
                   <MenuContent>
                     <MenuLabel>{user.name}</MenuLabel>
+                    {registry.userPages().map((p) => (
+                      <MenuItem
+                        key={p.name}
+                        onSelect={() =>
+                          void navigate({ to: '/me/$page', params: { page: p.name } })
+                        }
+                      >
+                        {t(p.label)}
+                      </MenuItem>
+                    ))}
                     <MenuItem
                       onSelect={async () => {
                         await api.logout();
@@ -877,9 +887,31 @@ const openRoute = createRoute({
   path: '/open/$model/$id',
   component: OpenRecordPage,
 });
+/** A personal page from the user menu (`registry.registerUserPage`), outside any app. */
+function UserPage(): ReactElement {
+  const { page } = useParams({ strict: false }) as { page: string };
+  const { api, registry } = useServices();
+  const { t } = useTranslation();
+  const entry = registry.userPages().find((p) => p.name === page);
+  if (entry === undefined) return <p className="p-4 text-sm">{t('notFound')}</p>;
+  const Page = entry.component;
+  return <Page api={api} label={t(entry.label)} />;
+}
+const userPageRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/me/$page',
+  component: UserPage,
+});
 const routeTree = rootRoute.addChildren([
   loginRoute,
-  shellRoute.addChildren([indexRoute, openRoute, appRoute, actionRoute, recordRoute]),
+  shellRoute.addChildren([
+    indexRoute,
+    openRoute,
+    userPageRoute,
+    appRoute,
+    actionRoute,
+    recordRoute,
+  ]),
 ]);
 
 const LANG_KEY = 'kosh.lang';

@@ -80,6 +80,8 @@ const ResUsers = defineModel('res.users', {
     companies: f.many2many('res.company'),
     lang: f.char({ default: 'en_US' }),
     tz: f.char({ default: 'UTC' }),
+    /** A service account (RFC 0017 §5.1): no password, no sign-in; acts only through API keys, with its roles. */
+    isService: f.boolean({ default: false, label: 'Service account' }),
   },
 });
 
@@ -108,6 +110,27 @@ const AuthSession = defineModel('auth.session', {
     revoked: f.boolean({ default: false }),
     ip: f.char(),
     userAgent: f.char(),
+  },
+});
+
+/**
+ * An API key (RFC 0017 §5.1): acts as its user (a person or a service account) within its scopes, until it expires
+ * or is revoked. The secret is shown once and stored only as a SHA-256 digest; the prefix identifies it. Private.
+ */
+const AuthApiKey = defineModel('auth.api_key', {
+  fields: {
+    name: f.char({ required: true }),
+    user: f.many2one('res.users', { required: true, ondelete: 'cascade' }),
+    tokenHash: f.char({ required: true, index: 'unique' }),
+    /** The secret's start (`sk_ab12cd34`), to tell keys apart. */
+    prefix: f.char({ required: true }),
+    /** Space-separated: `*`, `read:<app>`, `write:<app>`. */
+    scopes: f.text({ required: true }),
+    expiresAt: f.datetime({ required: true }),
+    lastUsedAt: f.datetime(),
+    lastUsedIp: f.char(),
+    revoked: f.boolean({ default: false }),
+    issuedBy: f.many2one('res.users', { ondelete: 'set null' }),
   },
 });
 
@@ -205,6 +228,7 @@ export const baseShutro: ReturnType<typeof orm.defineModule> = defineModule({
     ResUsers,
     AuthCredential,
     AuthSession,
+    AuthApiKey,
     AuthUserGroup,
     AuthUserGrant,
     AuditEvent,
@@ -223,6 +247,7 @@ export const base: ReturnType<typeof defineKoshModule> = defineKoshModule({
   privateModels: [
     'auth.credential',
     'auth.session',
+    'auth.api_key',
     'auth.user_group',
     'auth.user_grant',
     'audit.event',

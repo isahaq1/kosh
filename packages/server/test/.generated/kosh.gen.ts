@@ -276,6 +276,8 @@ export interface ResUsers {
   lang?: string | null;
   /** Tz */
   tz?: string | null;
+  /** Service account */
+  isService: boolean;
 }
 
 export interface ResUsersCreate {
@@ -308,6 +310,8 @@ export interface ResUsersCreate {
   lang?: string | null;
   /** Tz */
   tz?: string | null;
+  /** Service account */
+  isService?: boolean;
 }
 
 export interface ResUsersUpdate {
@@ -340,6 +344,8 @@ export interface ResUsersUpdate {
   lang?: string | null;
   /** Tz */
   tz?: string | null;
+  /** Service account */
+  isService?: boolean;
 }
 
 // -------------------------------------------------------------------------------------------------- models

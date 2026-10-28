@@ -19,7 +19,9 @@ import { Navigation } from './api/navigation.js';
 import { openApiDocument } from './api/openapi.js';
 import { registerRestApi } from './api/rest.js';
 import { ViewRegistry } from './api/views.js';
+import { registerApiKeyRoutes } from './auth/api-keys.js';
 import { registerAuthRoutes } from './auth/routes.js';
+import { enforceScopes } from './auth/scopes.js';
 import { type AuthOptions, AuthService } from './auth/service.js';
 import { applyEnvironmentNames } from './env-names.js';
 import { HttpProblem, problemOf, ServerConfigError } from './errors.js';
@@ -231,6 +233,14 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
     });
   } as never);
 
+  // The app each module route belongs to (API key scopes, RFC 0017 §5.1): set while a module registers its routes.
+  const routeApps = new Map<string, string>();
+  let routeModule: string | null = null;
+  app.addHook('onRoute', (route) => {
+    if (routeModule === null) return;
+    for (const method of [route.method].flat())
+      routeApps.set(`${method} ${route.url}`, routeModule);
+  });
   app.addHook('onRequest', async (request, reply) => {
     reply.header('x-request-id', request.id);
     request.span = tracer.startSpan(`HTTP ${request.method}`, {
@@ -246,6 +256,18 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
     const config = request.routeOptions.config;
     if (config.public === true || config.auth === false) return;
     request.identity = await authenticate(request);
+    // An API key's scopes (RFC 0017 §5.1): the route's app is the module that registered it, or its model's.
+    const scopes = request.identity?.scopes;
+    if (scopes !== undefined) {
+      const route = request.routeOptions.url ?? '';
+      const model = (request.params as { model?: unknown } | undefined)?.model;
+      const owner =
+        routeApps.get(`${request.method} ${route}`) ??
+        (typeof model === 'string'
+          ? (registry.registry.models.get(model as never)?.module ?? null)
+          : null);
+      enforceScopes(scopes, request.method, route, owner);
+    }
     // Customers and vendors of the portal (RFC 0015 §5.1): the portal API and signing in, nothing else.
     if (
       request.identity !== null &&
@@ -269,7 +291,11 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
       timeWindow: options.rateLimit?.timeWindow ?? '1 minute',
       ...(valkey === undefined ? {} : { redis: valkey, nameSpace: 'kosh:ratelimit:' }),
       keyGenerator: (request) =>
-        request.identity === null ? `ip:${request.ip}` : `user:${request.identity.user}`,
+        request.identity === null
+          ? `ip:${request.ip}`
+          : request.identity.apiKey !== undefined
+            ? `key:${request.identity.apiKey}`
+            : `user:${request.identity.user}`,
       allowList: (request) => request.routeOptions.config.public === true,
       errorResponseBuilder: (_request, context) =>
         new HttpProblem(
@@ -312,8 +338,10 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
       });
   });
 
-  if (auth !== undefined)
+  if (auth !== undefined) {
     registerAuthRoutes(app, auth, { loginLimit: options.auth?.loginLimit ?? 10 });
+    registerApiKeyRoutes(app, auth, registry);
+  }
 
   // The generated REST API and its OpenAPI document (RFC 0002 §6.3–6.4).
   for (const statement of idempotencyTableStatements()) await driver.query(statement);
@@ -344,8 +372,14 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
     ...(options.apps === undefined ? {} : { apps: options.apps }),
   };
   for (const m of registry.loaded.modules)
-    if (m.routes !== undefined)
-      await (m.routes as (c: ModuleContext) => void | Promise<void>)(context);
+    if (m.routes !== undefined) {
+      routeModule = m.name;
+      try {
+        await (m.routes as (c: ModuleContext) => void | Promise<void>)(context);
+      } finally {
+        routeModule = null;
+      }
+    }
 
   // Health checks: public, not rate limited. Liveness: the process answers. Readiness: dependencies answer.
   app.get('/health/live', { config: { public: true } }, async () => ({ status: 'ok' }));

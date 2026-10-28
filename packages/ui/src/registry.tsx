@@ -120,6 +120,7 @@ type Kind =
   | 'component'
   | 'page'
   | 'header'
+  | 'userPage'
   | 'searchAssist'
   | 'chatterAssist'
   | 'createAssist';
@@ -132,6 +133,7 @@ export class Registry {
     component: new Map(),
     page: new Map(),
     header: new Map(),
+    userPage: new Map(),
     searchAssist: new Map(),
     chatterAssist: new Map(),
     createAssist: new Map(),
@@ -214,6 +216,36 @@ export class Registry {
     options: { readonly replace?: boolean } = {},
   ): this {
     return this.#add('header', name, component as ComponentType<never>, options.replace === true);
+  }
+
+  readonly #userPageLabels = new Map<string, string>();
+
+  /**
+   * A personal page every signed-in user reaches from the user menu, outside any app (`settings.ApiKeys`):
+   * served at `/me/<name>`; `label` is an i18n key (`settings:apiKeys.title`). The server still decides what the
+   * page may show and do.
+   */
+  registerUserPage(
+    name: string,
+    component: ComponentType<PageProps>,
+    options: { readonly label: string; readonly replace?: boolean },
+  ): this {
+    this.#add('userPage', name, component as ComponentType<never>, options.replace === true);
+    this.#userPageLabels.set(name, options.label);
+    return this;
+  }
+
+  /** The user pages, in registration order, with their label keys. */
+  userPages(): readonly {
+    readonly name: string;
+    readonly label: string;
+    readonly component: ComponentType<PageProps>;
+  }[] {
+    return [...this.#entries.userPage].map(([name, component]) => ({
+      name,
+      label: this.#userPageLabels.get(name) ?? name,
+      component: component as ComponentType<PageProps>,
+    }));
   }
 
   /** The header items, in registration order. */

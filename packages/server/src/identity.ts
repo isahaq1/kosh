@@ -19,6 +19,13 @@ export interface RequestIdentity {
   readonly grants?: readonly string[];
   readonly lang?: string;
   readonly tz?: string;
+  /**
+   * An API key's scopes (RFC 0017 §5.1), when the request carries one: they narrow what the user may do (`*`,
+   * `read:<app>`, `write:<app>`); the user's rights still apply. Absent for sessions.
+   */
+  readonly scopes?: readonly string[];
+  /** The API key the request carries. */
+  readonly apiKey?: number;
 }
 
 /**
