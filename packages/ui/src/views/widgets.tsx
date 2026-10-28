@@ -163,14 +163,32 @@ function SelectionWidget({ id, value, readonly, onChange, field }: WidgetProps):
   );
 }
 
-const TONES = ['info', 'success', 'danger', 'warning', 'neutral'] as const;
+type Tone = 'info' | 'success' | 'danger' | 'warning' | 'neutral';
+/** What a state's value means, by the words ERP states use (`posted`, `to_approve`, `cancel`…). */
+const MEANINGS: readonly (readonly [RegExp, Tone])[] = [
+  [
+    /(^|_)(cancel|cancelled|canceled|failed|refused|rejected|lost|blocked|overdue|error|bounced)($|_)/,
+    'danger',
+  ],
+  [
+    /(^|_)(to|not|partial|partially|pending|waiting|wait|hold|review|approve|quarantine)($|_)/,
+    'warning',
+  ],
+  [
+    /(^|_)(done|paid|posted|sale|confirmed|approved|won|delivered|validated|completed|complete|reconciled|invoiced|handled|active|accepted|signed|locked)($|_)/,
+    'success',
+  ],
+  [/(^|_)(sent|open|progress|received|in|scheduled|running|purchase|ordered)($|_)/, 'info'],
+];
+export function toneOf(value: string): Tone {
+  const v = value.toLowerCase();
+  return MEANINGS.find(([pattern]) => pattern.test(v))?.[1] ?? 'neutral';
+}
 
 function BadgeWidget({ value, field }: WidgetProps): ReactElement | null {
   if (value === null || value === undefined || value === '') return null;
-  const options = field.options ?? [];
-  const index = options.findIndex((o) => o.value === value);
-  const label = options[index]?.label ?? text(value);
-  return <Badge tone={TONES[Math.max(index, 0) % TONES.length] ?? 'neutral'}>{label}</Badge>;
+  const label = (field.options ?? []).find((o) => o.value === value)?.label ?? text(value);
+  return <Badge tone={toneOf(text(value))}>{label}</Badge>;
 }
 
 /** Display names a list or kanban loaded in one batch per model, so cells do not query one by one. */
