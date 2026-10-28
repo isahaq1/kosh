@@ -16,7 +16,10 @@ const ALL = ['read', 'write', 'create', 'unlink', 'export', 'import'] as const;
 export const newReference = (): string => `PAY-${randomBytes(9).toString('base64url')}`;
 
 /** The adapters Kosh ships; a module adding one extends this selection. */
-export const PROVIDERS = { fake: 'Test provider (no money moves)' } as const;
+export const PROVIDERS = {
+  fake: 'Test provider (no money moves)',
+  sslcommerz: 'SSLCommerz',
+} as const;
 
 export const PaymentProvider = defineModel('payment.provider', {
   label: 'Payment provider',

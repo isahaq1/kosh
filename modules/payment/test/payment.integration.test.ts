@@ -3,6 +3,8 @@
  * invoice (Pay now → the provider's page → its signed callback through an inbound webhook) and Accounting registers
  * the payment, reconciled, once — a repeated callback and a return before the callback do not pay twice; a declined
  * payment leaves the invoice open; another customer cannot pay or see it; employees do not use the portal's routes.
+ * SSLCommerz with its sandbox simulated: the session, IPNs confirmed with its validation API (forged and changed
+ * ones refused), a failure then a retry, and the transaction query when the customer is back first.
  */
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -20,12 +22,106 @@ import {
 } from '@kosh/server';
 import { type Driver, orm, pg } from '@kosh/server/orm';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { afterAll, beforeAll, expect, test } from 'vitest';
-import { paymentModule } from '../src/index.js';
+import { afterAll, beforeAll, describe, expect, test } from 'vitest';
+import { ADAPTERS, paymentModule, sslcommerzAdapter } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
 const PORTAL = 'https://portal.example.test';
-const catalogue = [base, paymentModule({ portalUrl: PORTAL, apiUrl: 'https://api.example.test' })];
+const API_URL = 'https://api.example.test';
+
+/** SSLCommerz's sandbox, simulated: sessions, the order validation API and the transaction query. */
+interface SslSession {
+  fields: Record<string, string>;
+  attempts: { status: string; val_id: string; bank_tran_id: string }[];
+}
+const ssl = new Map<string, SslSession>();
+const sslFetch = (async (input: string | URL | Request, init?: RequestInit) => {
+  const url = new URL(String(input));
+  const json = (body: unknown) =>
+    new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+  expect(url.origin).toBe('https://sandbox.sslcommerz.com');
+  if (url.pathname === '/gwprocess/v4/api.php') {
+    const fields = Object.fromEntries(new URLSearchParams(String(init?.body)));
+    if (fields['store_passwd'] !== 'store-secret')
+      return json({ status: 'FAILED', failedreason: 'Store Credential Error' });
+    ssl.set(fields['tran_id'] as string, { fields, attempts: [] });
+    return json({
+      status: 'SUCCESS',
+      sessionkey: 'S1',
+      GatewayPageURL: `https://sandbox.sslcommerz.com/EasyCheckOut/${fields['tran_id']}`,
+    });
+  }
+  const q = Object.fromEntries(url.searchParams);
+  expect(q['store_id']).toBe('padma');
+  if (url.pathname === '/validator/api/validationserverAPI.php') {
+    for (const [tranId, session] of ssl) {
+      const attempt = session.attempts.find((a) => a.val_id === q['val_id']);
+      if (attempt?.status === 'VALID')
+        return json({
+          status: 'VALID',
+          tran_id: tranId,
+          val_id: attempt.val_id,
+          amount: session.fields['total_amount'],
+          currency: 'BDT',
+          currency_type: 'BDT',
+          currency_amount: session.fields['total_amount'],
+          bank_tran_id: attempt.bank_tran_id,
+        });
+    }
+    return json({ status: 'INVALID_TRANSACTION' });
+  }
+  if (url.pathname === '/validator/api/merchantTransIDvalidationAPI.php') {
+    const session = ssl.get(q['tran_id'] ?? '');
+    return json({
+      APIConnect: 'DONE',
+      no_of_trans_found: session?.attempts.length ?? 0,
+      element: (session?.attempts ?? []).map((a) => ({
+        ...a,
+        tran_id: q['tran_id'],
+        amount: session?.fields['total_amount'],
+        currency: 'BDT',
+      })),
+    });
+  }
+  throw new Error(`unexpected ${url}`);
+}) as typeof fetch;
+/** The customer pays (or fails) on SSLCommerz: the attempt it records, and the IPN form it would post. */
+function sslAttempt(reference: string, status: 'VALID' | 'FAILED', amount?: string): string {
+  const session = ssl.get(reference);
+  if (session === undefined) throw new Error(`no session ${reference}`);
+  const attempt = {
+    status,
+    val_id: `VAL${session.attempts.length + 1}${reference.slice(-4)}`,
+    bank_tran_id: `BTX${session.attempts.length + 1}`,
+  };
+  session.attempts.push(attempt);
+  const paid = amount ?? (session.fields['total_amount'] as string);
+  return new URLSearchParams({
+    status,
+    tran_id: reference,
+    val_id: attempt.val_id,
+    amount: paid,
+    currency: 'BDT',
+    currency_type: 'BDT',
+    currency_amount: paid,
+    bank_tran_id: attempt.bank_tran_id,
+    tran_date: '2026-10-28 12:00:00',
+  }).toString();
+}
+const catalogue = [
+  base,
+  paymentModule({
+    portalUrl: PORTAL,
+    apiUrl: API_URL,
+    adapters: new Map([
+      ...ADAPTERS,
+      [
+        'sslcommerz',
+        sslcommerzAdapter({ storeId: 'padma', storePassword: 'store-secret', fetch: sslFetch }),
+      ],
+    ]),
+  }),
+];
 
 let container: StartedPostgreSqlContainer;
 let driver: Driver;
@@ -249,7 +345,16 @@ test('Pay now: the provider’s page, its callback, the payment registered and r
   const paid = await checkout(redirectUrl, 'paid');
   expect(paid.page).toContain('1500.00 BDT');
   expect(paid.status).toBe(303);
-  expect(paid.location).toBe(`${PORTAL}/d/invoices/${id}?payment=${reference}`);
+  // Back through the server's return route, on to the invoice in the portal.
+  expect(paid.location).toBe(`${API_URL}/api/v1/payment/return/${reference}`);
+  const back = await host.server.app.inject({
+    method: 'POST',
+    url: `/api/v1/payment/return/${reference}`,
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    payload: 'status=VALID',
+  });
+  expect(back.statusCode).toBe(303);
+  expect(back.headers.location).toBe(`${PORTAL}/d/invoices/${id}?payment=${reference}`);
   await drain();
 
   expect(await tx(reference)).toMatchObject({ state: 'done', amount: { amount: '1500.00' } });
@@ -335,4 +440,111 @@ test('a declined payment leaves the invoice open; others cannot pay it or see th
       })
     ).status,
   ).toBe(422);
+});
+
+describe('SSLCommerz (its sandbox simulated)', () => {
+  let sslProvider = 0;
+  const ipn = async (reference: string, body: string) => {
+    const path = new URL(ssl.get(reference)?.fields['ipn_url'] ?? '').pathname;
+    return host.server.app.inject({
+      method: 'POST',
+      url: path,
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: body,
+    });
+  };
+  const start = async (amount: string) => {
+    const id = await invoice(partners['acme'] as number, amount);
+    const res = await call('POST', '/api/portal/v1/payments', RINA, {
+      document: 'invoices',
+      id,
+      provider: sslProvider,
+    });
+    expect(res.status, JSON.stringify(res.json)).toBe(201);
+    return { id, ...(res.json as { reference: string; redirectUrl: string }) };
+  };
+
+  test('a session on SSLCommerz; its IPN, confirmed with the validation API, pays the invoice once', async () => {
+    const made = await call('POST', '/api/v1/models/payment.provider', 'maria', {
+      name: 'SSLCommerz',
+      code: 'sslcommerz',
+      journal: bank,
+    });
+    expect(made.status).toBe(201);
+    sslProvider = made.json.id;
+    const offered = (await call('GET', '/api/portal/v1/payments/providers', RINA)).json.providers;
+    expect(offered.map((p: Json) => p.name)).toEqual(['Test payments', 'SSLCommerz']);
+
+    const { id, reference, redirectUrl } = await start('1200');
+    expect(redirectUrl).toBe(`https://sandbox.sslcommerz.com/EasyCheckOut/${reference}`);
+    const sent = ssl.get(reference)?.fields ?? {};
+    expect(sent).toMatchObject({
+      total_amount: '1200.00',
+      currency: 'BDT',
+      tran_id: reference,
+      success_url: `${API_URL}/api/v1/payment/return/${reference}`,
+      cus_name: 'Acme Trading',
+      cus_country: 'Bangladesh',
+      shipping_method: 'NO',
+    });
+    expect(sent['ipn_url']?.startsWith(`${API_URL}/api/v1/hooks/`)).toBe(true);
+
+    const body = sslAttempt(reference, 'VALID');
+    expect((await ipn(reference, body)).statusCode).toBe(202);
+    expect((await ipn(reference, body)).statusCode).toBe(200); // the same val_id again: a duplicate
+    await drain();
+    expect(await tx(reference)).toMatchObject({ state: 'done', providerReference: 'BTX1' });
+    expect((await move(id)).amountResidual.amount).toBe('0.00');
+    expect(await paymentsFor(id)).toHaveLength(1);
+  });
+
+  test('IPNs SSLCommerz does not confirm are refused: an unknown val_id, a changed amount', async () => {
+    const { id, reference } = await start('600');
+    const forged = new URLSearchParams({
+      status: 'VALID',
+      tran_id: reference,
+      val_id: 'FORGED',
+      amount: '600.00',
+      currency: 'BDT',
+    }).toString();
+    expect((await ipn(reference, forged)).statusCode).toBe(401);
+    // A real payment of this transaction, with the amount changed on the way: refused.
+    const real = sslAttempt(reference, 'VALID');
+    const changed = real.replaceAll('600.00', '6.00');
+    expect((await ipn(reference, changed)).statusCode).toBe(401);
+    await drain();
+    expect(await tx(reference)).toMatchObject({ state: 'pending' });
+    expect(await paymentsFor(id)).toHaveLength(0);
+    // The genuine IPN still pays it.
+    expect((await ipn(reference, real)).statusCode).toBe(202);
+    await drain();
+    expect(await tx(reference)).toMatchObject({ state: 'done' });
+  });
+
+  test('a failure, then a successful retry; back before the IPN, the transaction query answers', async () => {
+    const first = await start('300');
+    expect((await ipn(first.reference, sslAttempt(first.reference, 'FAILED'))).statusCode).toBe(
+      202,
+    );
+    await drain();
+    expect(await tx(first.reference)).toMatchObject({ state: 'failed' });
+    expect((await ipn(first.reference, sslAttempt(first.reference, 'VALID'))).statusCode).toBe(202);
+    await drain();
+    expect(await tx(first.reference)).toMatchObject({ state: 'done' });
+    expect(await paymentsFor(first.id)).toHaveLength(1);
+
+    const second = await start('250');
+    sslAttempt(second.reference, 'VALID'); // paid at SSLCommerz; the IPN is late
+    const state = await call('GET', `/api/portal/v1/payments/${second.reference}`, RINA);
+    expect(state.json).toMatchObject({ state: 'done', amount: '250.00' });
+    expect(await paymentsFor(second.id)).toHaveLength(1);
+  });
+
+  test('without credentials SSLCommerz is not offered', () => {
+    expect(sslcommerzAdapter({}).configured('test')).toBe(false);
+    expect(sslcommerzAdapter({ storeId: 'a', storePassword: 'b' }).configured('live')).toBe(false);
+    expect(
+      sslcommerzAdapter({ storeId: 'a', storePassword: 'b', sandbox: false }).configured('live'),
+    ).toBe(true);
+  });
 });

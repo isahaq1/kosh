@@ -2,7 +2,8 @@
  * Settling a transaction (RFC 0017 §5.5): the provider's word — by its callback or asked when the customer returns —
  * moves a pending transaction to paid, failed or cancelled. Paid registers an `account.payment` for the invoice in
  * the provider's journal (Accounting posts and reconciles it), **once**: a transaction-scoped advisory lock on the
- * reference serialises a callback and a return arriving together, and a settled transaction is never settled again.
+ * reference serialises a callback and a return arriving together, and a paid transaction is never settled again
+ * (a failed or cancelled one becomes paid if the provider confirms it later).
  */
 import { registerPayment } from '@kosh/accounting';
 import { orm } from '@kosh/server/orm';
@@ -27,7 +28,13 @@ export async function settle(env: Env, result: PaymentResult): Promise<Settled |
   const [tx] = await found.load({ provider: true, currency: true, move: true });
   if (tx === undefined) return null;
   const same = { reference: tx.reference, changed: false };
-  if (tx.state !== 'pending' || result.status === 'pending')
+  // Paid is final. A failure or cancellation is not: the provider may still confirm the payment later (a retry,
+  // a failure reported early) — then it is paid. Nothing else changes a settled transaction.
+  if (
+    tx.state === 'done' ||
+    result.status === 'pending' ||
+    (tx.state !== 'pending' && result.status !== 'done')
+  )
     return { ...same, state: tx.state, payment: tx.payment?.id ?? null };
   if (result.status !== 'done') {
     await found.write({

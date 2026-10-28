@@ -19,8 +19,17 @@ export interface PaymentRequest {
   readonly currency: string;
   /** What is paid (`Invoice INV/2026/0042`). */
   readonly description: string;
-  readonly customer: { readonly name: string; readonly email: string | null };
-  /** Where the provider sends the customer back. */
+  readonly customer: {
+    readonly name: string;
+    readonly email: string | null;
+    readonly phone: string | null;
+    readonly street: string | null;
+    readonly city: string | null;
+    readonly zip: string | null;
+    /** ISO 3166 alpha-2. */
+    readonly country: string | null;
+  };
+  /** Where the provider sends the customer back (GET or POST; the server forwards them to the portal). */
   readonly returnUrl: string;
   /** The inbound webhook the provider calls (absolute URL). */
   readonly callbackUrl: string;
@@ -39,10 +48,12 @@ export interface PaymentResult {
 
 export interface PaymentAdapter {
   readonly code: string;
+  /** Whether its credentials are set (the portal offers only providers whose adapter can work). */
+  configured(mode: 'test' | 'live'): boolean;
   /** Starts a payment; returns the page to send the customer to. */
   createPayment(request: PaymentRequest): Promise<{ readonly redirectUrl: string }>;
   /** A callback's event id, or `null` when it is not genuine (checked with the endpoint's secret). */
-  verifyCallback(call: InboundCall, secret: string): string | null;
+  verifyCallback(call: InboundCall, secret: string): string | null | Promise<string | null>;
   /** What a verified callback says. */
   readCallback(call: InboundCall): PaymentResult | null;
   /** The provider's word on a payment (null: unknown to it). */
@@ -66,6 +77,7 @@ export const fakeAdapter: PaymentAdapter & {
   ): { body: string; signature: string } | null;
 } = {
   code: 'fake',
+  configured: (mode) => mode === 'test',
   async createPayment(request) {
     fakeLedger.set(request.reference, {
       reference: request.reference,

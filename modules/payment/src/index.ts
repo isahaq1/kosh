@@ -10,6 +10,7 @@
  * - `GET  /api/portal/v1/payments/:reference`              its state (asking the provider while it is pending)
  * - `GET  /api/v1/payment/fake/checkout/:reference`        the fake provider's checkout page
  * - `POST /api/v1/payment/fake/checkout/:reference?outcome=paid|declined`
+ * - `GET|POST /api/v1/payment/return/:reference`             back from the provider: on to the portal
  *
  * The callbacks arrive at `POST /api/v1/hooks/<token>` (the provider's endpoint, made with its first payment).
  */
@@ -27,6 +28,7 @@ import type { Env } from './.kosh/bindings.js';
 import { PaymentProvider, PaymentTransaction, paymentShutro } from './module.js';
 import { ADAPTERS, FAKE_SIGNATURE, fakeAdapter, type PaymentAdapter } from './providers.js';
 import { settle } from './settle.js';
+import { sslcommerzFromEnvironment } from './sslcommerz.js';
 
 export {
   newReference,
@@ -45,6 +47,11 @@ export {
   type PaymentStatus,
 } from './providers.js';
 export { type Settled, settle } from './settle.js';
+export {
+  type SslcommerzOptions,
+  sslcommerzAdapter,
+  sslcommerzFromEnvironment,
+} from './sslcommerz.js';
 
 type Row = Record<string, unknown>;
 const typed = (env: CoreEnv): Env => env as unknown as Env;
@@ -133,7 +140,10 @@ function registerPaymentRoutes(
             });
           return {
             providers: [...(await found.load({}))]
-              .filter((p) => adapters.has(p.code))
+              .filter(
+                (p) =>
+                  adapters.get(p.code)?.configured(p.state === 'live' ? 'live' : 'test') === true,
+              )
               .map((p) => ({ id: p.id, name: p.name, test: p.state === 'test' })),
           };
         });
@@ -204,6 +214,13 @@ function registerPaymentRoutes(
             'Test provider',
             'The test provider moves no money: it cannot be live.',
           );
+        if (!adapter.configured(provider.state === 'live' ? 'live' : 'test'))
+          throw new HttpProblem(
+            409,
+            'not-configured',
+            'Provider not set up',
+            `The ${provider.name} provider has no credentials for ${provider.state} payments on this server.`,
+          );
         const [move] = await su
           .model('account.move')
           .browse([id] as never)
@@ -237,8 +254,16 @@ function registerPaymentRoutes(
           amount: due.toFixed(move.currency.decimalPlaces ?? 2),
           currency: move.currency.name,
           description: `${d.spec.label} ${move.name}`,
-          customer: { name: move.partner?.name ?? '', email: move.partner?.email ?? null },
-          returnUrl: `${urls.portal}/d/${encodeURIComponent(key)}/${id}?payment=${encodeURIComponent(reference)}`,
+          customer: {
+            name: move.partner?.name ?? '',
+            email: move.partner?.email ?? null,
+            phone: move.partner?.phone ?? move.partner?.mobile ?? null,
+            street: move.partner?.street ?? null,
+            city: move.partner?.city ?? null,
+            zip: move.partner?.zip ?? null,
+            country: move.partner?.country ?? null,
+          },
+          returnUrl: `${urls.api}/api/v1/payment/return/${encodeURIComponent(reference)}`,
           callbackUrl: `${urls.api}/api/v1/hooks/${token}`,
           mode: provider.state === 'live' ? 'live' : 'test',
         });
@@ -348,12 +373,44 @@ function registerPaymentRoutes(
 <form method="post" action="${escapeHtml(action('declined'))}"><button type="submit">Decline</button></form></body></html>`);
     },
   );
-  // The checkout page's forms post `application/x-www-form-urlencoded` (empty): any body is accepted and ignored.
+  // Browsers come back from providers (and the fake checkout's forms) with form posts: any body is accepted and
+  // ignored — the provider's word comes from its callback or its API, never from the customer's browser.
   app.register(async (scope: FastifyInstance) => {
     scope.removeAllContentTypeParsers();
-    scope.addContentTypeParser('*', { parseAs: 'string', bodyLimit: 1024 }, (_req, _body, done) =>
-      done(null, null),
+    scope.addContentTypeParser(
+      '*',
+      { parseAs: 'string', bodyLimit: 64 * 1024 },
+      (_req, _body, done) => done(null, null),
     );
+    // Back from the provider (GET or POST): on to the document in the portal, which shows the payment's state.
+    const payable =
+      [...documents.values()].find(
+        (d) => d.model.name === 'account.move' && d.spec.payment !== undefined,
+      )?.spec.key ?? 'invoices';
+    scope.route({
+      method: ['GET', 'POST'],
+      url: '/api/v1/payment/return/:reference',
+      config: { auth: false },
+      handler: async (request, reply) => {
+        const reference = String((request.params as Row)['reference'] ?? '');
+        const move = await context.shutro.bootstrap({ reason: 'payment return' }, (raw) =>
+          raw.asSuperuser({ reason: 'payment return: which invoice' }, async (su) => {
+            const [t] = await (
+              await typed(su.withFlags({ checkCompany: false }))
+                .model('payment.transaction')
+                .search({ where: { reference }, limit: 1 })
+            ).load({});
+            return t?.move.id ?? null;
+          }),
+        );
+        return reply.redirect(
+          move === null
+            ? `${urls.portal}/`
+            : `${urls.portal}/d/${encodeURIComponent(payable)}/${move}?payment=${encodeURIComponent(reference)}`,
+          303,
+        );
+      },
+    });
     scope.post(
       '/api/v1/payment/fake/checkout/:reference',
       { config: { auth: false } },
@@ -386,7 +443,8 @@ function registerPaymentRoutes(
 
 /** Online payments with explicit options (tests, installations wiring their own adapters). */
 export function paymentModule(options: PaymentOptions = {}): KoshModule {
-  const adapters = options.adapters ?? ADAPTERS;
+  const adapters =
+    options.adapters ?? new Map([...ADAPTERS, ['sslcommerz', sslcommerzFromEnvironment()]]);
   return defineModule({
     shutro: paymentShutro,
     kosh: '^0.1.0',

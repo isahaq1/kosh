@@ -30,6 +30,8 @@ export default defineConfig({
       env: {
         KOSH_E2E_PORTAL_PORT: String(API_PORT),
         KOSH_PORTAL_URL: `http://localhost:${WEB_PORT}`,
+        // Providers send customers back through the API's return route: here behind the portal's proxy.
+        KOSH_API_URL: `http://localhost:${WEB_PORT}`,
       },
       stdout: 'pipe',
     },
