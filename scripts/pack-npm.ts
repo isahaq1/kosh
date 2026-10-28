@@ -43,6 +43,7 @@ const PACKAGES = [
   'notify',
   'mail',
   'automation',
+  'integrations',
   'studio',
   'assistant',
   'import',

@@ -5,6 +5,7 @@
  */
 
 import { automation } from '@kosh/automation';
+import { integrations } from '@kosh/integrations';
 import { mail } from '@kosh/mail';
 import { messaging, messagingShutro } from '@kosh/messaging';
 import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
@@ -402,7 +403,7 @@ export const purchaseApprovals = defineKoshModule({
   ],
 });
 
-export const MODULES = [purchaseApprovals, realtime, notify, mail, automation];
+export const MODULES = [purchaseApprovals, realtime, notify, mail, automation, integrations];
 
 // ---------------------------------------------------------------------------------------------------- library
 // In the catalogue but not installed: the App manager's end-to-end test installs and disables it (RFC 0008).

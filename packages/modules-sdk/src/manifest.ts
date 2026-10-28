@@ -108,6 +108,16 @@ export interface AutomationRuleSpec {
   readonly enabled?: boolean;
 }
 
+/**
+ * An event a module emits through Shutro's outbox (`env.emit(topic, { id, … })`), which webhooks and integrations
+ * may subscribe to (RFC 0017 §5.3): the topic, the model whose record `id` names, and what it means.
+ */
+export interface EventSpec {
+  readonly topic: string;
+  readonly model: string;
+  readonly label: string;
+}
+
 /** A default document template of a module. */
 export interface DocumentSpec {
   /** Unique within the module (`purchase_order`); stored as `module.key`. */
@@ -394,6 +404,8 @@ export interface ModuleInput {
   readonly externalGroups?: readonly string[];
   /** The country this module localizes (RFC 0016): set up for each company when the module is installed. */
   readonly localization?: LocalizationSpec;
+  /** Events the module emits that webhooks may subscribe to (RFC 0017 §5.3). */
+  readonly events?: readonly EventSpec[];
   /** What the module shows in the customer and vendor portal (RFC 0015), when `portal` is installed. */
   readonly portal?: { readonly documents: readonly PortalDocumentSpec[] };
   /** Import templates for the module's models (RFC 0014 §5.4), offered when `import` is installed. */

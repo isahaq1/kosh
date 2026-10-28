@@ -653,6 +653,7 @@ async function modulesFor(apps: readonly AppName[]): Promise<KoshModule[]> {
     (await import('@kosh/notify')).notify,
     (await import('@kosh/mail')).mail,
     (await import('@kosh/automation')).automation,
+    (await import('@kosh/integrations')).integrations,
     (await import('@kosh/studio')).studio,
     (await import('@kosh/import')).dataImport,
   ];
@@ -1168,6 +1169,7 @@ export async function runInit(argv: readonly string[], io: InitIo): Promise<numb
           'notify',
           'mail',
           'automation',
+          'integrations',
           'studio',
           'import',
           ...answers.apps,

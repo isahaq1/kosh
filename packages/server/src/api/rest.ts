@@ -186,6 +186,21 @@ function ifMatch(request: FastifyRequest): Date | undefined {
   return new Date(Number(m[1]));
 }
 
+/**
+ * A record as `GET /api/v1/models/<model>/<id>` returns it to `env`'s user (their readable default fields), or null
+ * when they cannot see it: what webhooks send (RFC 0017 §5.3).
+ */
+export async function readApiRecord(
+  env: Env,
+  model: ApiModel,
+  id: number,
+): Promise<Record<string, unknown> | null> {
+  const set = await ref(env, model.name).search({ where: { id }, limit: 1 });
+  if (set.length === 0) return null;
+  const [row] = await rows(set, fieldsOf(model, env, undefined));
+  return row ?? null;
+}
+
 async function record(
   env: Env,
   model: ApiModel,

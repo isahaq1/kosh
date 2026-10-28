@@ -19,6 +19,8 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
   kosh: '^0.1.0',
   hooks: { demo: salesDemo },
   depends: [contacts, product, messaging],
+  // What webhooks may subscribe to besides record changes (RFC 0017 §5.3).
+  events: [{ topic: 'sale.order.confirmed', model: 'sale.order', label: 'Sales order confirmed' }],
   app: {
     code: 'sales',
     label: 'Sales',

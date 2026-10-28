@@ -41,6 +41,7 @@ test('administrators sign in with a second factor', async ({ page }) => {
     /^Purchase/,
     /^Chat/,
     /^Reports/,
+    /^Integrations/,
     /^Automation/,
     /^Email/,
     /^Studio/,

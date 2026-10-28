@@ -221,6 +221,7 @@ for (const [login, name, groups] of [
       'reporting.designer',
       'messaging.user',
       'automation.manager',
+      'integrations.manager',
       'studio.manager',
       'assistant.user',
     ],

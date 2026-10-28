@@ -28,6 +28,7 @@ export {
   type DemoUser,
   type DocumentSpec,
   defineModule,
+  type EventSpec,
   type ImportTemplateSpec,
   type InboundAliasSpec,
   type KoshModule,

@@ -187,6 +187,7 @@ export function modulesTs(_options: StarterOptions): string {
  */
 import { base } from 'shutro-erp';
 import { automation } from 'shutro-erp/automation';
+import { integrations } from 'shutro-erp/integrations';
 import { mail } from 'shutro-erp/mail';
 import { notify } from 'shutro-erp/notify';
 import { realtime } from 'shutro-erp/realtime';
@@ -196,7 +197,7 @@ import { dataImport } from 'shutro-erp/import';
 import { studio } from 'shutro-erp/studio';
 ${imports.join('\n')}
 
-export const modules = [base, settings, realtime, notify, mail, automation, studio, dataImport, assistant${apps.map((a) => `, ${APPS[a].server}`).join('')}];
+export const modules = [base, settings, realtime, notify, mail, automation, integrations, studio, dataImport, assistant${apps.map((a) => `, ${APPS[a].server}`).join('')}];
 `;
 }
 
@@ -271,6 +272,7 @@ export function mainTsx(_options: StarterOptions): string {
     { name: 'notify', fn: 'registerNotifyWeb' },
     { name: 'mail', fn: 'registerMailWeb' },
     { name: 'automation', fn: 'registerAutomationWeb' },
+    { name: 'integrations', fn: 'registerIntegrationsWeb' },
     { name: 'studio', fn: 'registerStudioWeb' },
     { name: 'assistant', fn: 'registerAssistantWeb' },
     { name: 'import', fn: 'registerImportWeb' },
