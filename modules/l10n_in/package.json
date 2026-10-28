@@ -1,0 +1,55 @@
+{
+  "name": "@kosh/l10n_in",
+  "version": "0.1.0",
+  "private": true,
+  "description": "India: the chart of accounts, GST with CGST / SGST / IGST by place of supply, cess, reverse charge, GSTIN and PAN, HSN / SAC, TDS, an April–March year (RFC 0016)",
+  "keywords": [
+    "kosh",
+    "erp",
+    "typescript",
+    "postgresql",
+    "shutro"
+  ],
+  "author": "Isahaq <hmisahaq01@gmail.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/isahaq1/kosh/tree/main/modules/l10n_in#readme",
+  "bugs": {
+    "url": "https://github.com/isahaq1/kosh/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isahaq1/kosh.git",
+    "directory": "modules/l10n_in"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "@kosh/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node ../../scripts/copy-views.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@kosh/modules-sdk": "workspace:*",
+    "@kosh/server": "workspace:*",
+    "@kosh/views": "workspace:*",
+    "@kosh/accounting": "workspace:*",
+    "@kosh/contacts": "workspace:*",
+    "@kosh/product": "workspace:*"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^12.2.1",
+    "@kosh/reporting": "workspace:*"
+  }
+}

@@ -266,6 +266,25 @@ export async function installLocalization(
       .write({ account: await accountOf(code) });
     taxes += 1;
   }
+  for (const [externalId, target] of Object.entries(localization.components ?? {})) {
+    let component: number;
+    try {
+      component = Number(await env.refId('account.tax.component', externalId));
+    } catch (error) {
+      if (error instanceof orm.UnknownExternalIdError) continue; // removed by the users
+      throw error;
+    }
+    const codes = typeof target === 'string' ? { account: target } : target;
+    await env
+      .model('account.tax.component')
+      .browse([orm.asId(component, 'account.tax.component')])
+      .write({
+        account: await accountOf(codes.account),
+        ...(codes.reverseCharge === undefined
+          ? {}
+          : { reverseChargeAccount: await accountOf(codes.reverseCharge) }),
+      });
+  }
   let withholdings = 0;
   for (const w of localization.withholdings ?? []) {
     const exists = await env

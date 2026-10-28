@@ -75,7 +75,7 @@ Options (each also answers its question; with --yes the rest take their defaults
   --create-database         create the database when it does not exist
   --company <name>          the first company        --currency <code>   its currency (ISO 4217)
   --country <code>          the company's country (ISO 3166): ${LOCALIZED_COUNTRIES.join(', ')} install its localization
-                            with Accounting (default: BD for BDT, none otherwise; "none" for none)
+                            with Accounting (default: BD for BDT, IN for INR, none otherwise; "none" for none)
   --lang <en|bn>            language                 --tz <zone>         time zone (IANA)
   --admin-login <login>     --admin-name <name>      --admin-email <email>
   --admin-password <pw>     (or KOSH_ADMIN_PASSWORD; at least 12 characters)
@@ -472,7 +472,7 @@ async function ask(
           hint: 'the generic chart; taxes are yours to add',
         },
       ],
-      default: currency === 'BDT' ? 'BD' : 'none',
+      default: currency === 'BDT' ? 'BD' : currency === 'INR' ? 'IN' : 'none',
     }))
   ).toUpperCase();
   const country = countryAnswer === 'NONE' ? '' : countryAnswer;
@@ -672,6 +672,7 @@ async function modulesFor(apps: readonly AppName[]): Promise<KoshModule[]> {
     if (app === 'project') modules.push((await import('@kosh/project')).project);
     if (app === 'sale_project') modules.push((await import('@kosh/sale_project')).saleProject);
     if (app === 'l10n_bd') modules.push((await import('@kosh/l10n_bd')).l10nBd);
+    if (app === 'l10n_in') modules.push((await import('@kosh/l10n_in')).l10nIn);
   }
   return modules;
 }

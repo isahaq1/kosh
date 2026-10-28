@@ -16,7 +16,8 @@ export type AppName =
   | 'purchase_account'
   | 'project'
   | 'sale_project'
-  | 'l10n_bd';
+  | 'l10n_bd'
+  | 'l10n_in';
 export interface AppSpec {
   readonly label: string;
   /** Shown next to the app in the installer (where the terminal shows pictographs). */
@@ -103,6 +104,14 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     web: 'registerL10nBdWeb',
     bridge: ['accounting'],
     country: 'BD',
+  },
+  l10n_in: {
+    label:
+      'India: GST (CGST / SGST / IGST), cess, reverse charge, GSTIN, HSN / SAC, TDS, April–March year',
+    icon: '🇮🇳',
+    server: 'l10nIn',
+    bridge: ['accounting'],
+    country: 'IN',
   },
 };
 

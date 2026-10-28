@@ -223,6 +223,13 @@ export interface LocalizationSpec {
   };
   /** The account of each tax the module ships (`module.name` external id → account code). */
   readonly taxes?: Readonly<Record<string, string>>;
+  /**
+   * The accounts of the module's tax components (RFC 0016 step 5), by external id: the account code, or the account
+   * and the reverse-charge (payable) account.
+   */
+  readonly components?: Readonly<
+    Record<string, string | { readonly account: string; readonly reverseCharge?: string }>
+  >;
   readonly withholdings?: readonly {
     readonly name: string;
     readonly direction: 'vendor' | 'customer';
