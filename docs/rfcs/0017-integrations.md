@@ -310,3 +310,18 @@ transitions and the modules' declared events; OpenAPI describes the new security
 - **Tests**: created and executed on the return, once (a reload pays nothing more), the token kept; a forged
   "success" before the customer paid — bKash refuses to execute, the transaction fails, nothing is paid; a
   cancellation; not offered without credentials; BDT only.
+
+## Implementation notes (2026-10-28): step 4, part 2c — Razorpay
+
+- **The adapter** (`razorpay`), on Payment Links, from Razorpay's API documentation, tested against a simulated API;
+  to be checked with test keys. A link per transaction (`reference_id` = the reference, the amount in subunits,
+  `callback_url` = the return route, Razorpay's own notifications off); its id is the provider reference.
+- **Webhooks** come through the provider's inbound endpoint: the merchant adds it in Razorpay's dashboard with the
+  endpoint's secret; `X-Razorpay-Signature` (HMAC-SHA256 hex of the raw body) is verified with it and
+  `x-razorpay-event-id` is the event id. The `payment_link.paid` payload's shape is not on the validation page:
+  the adapter reads `payload.payment_link.entity` (reference, amount paid, currency) and `payload.payment.entity.id`
+  — to confirm with a test delivery.
+- **Returns** never use the browser's query (whose signature formula is on a page not consulted): the link is
+  fetched by its id; `paid` settles it, `expired` / `cancelled` cancel it. Test or live follows the key's prefix.
+- **Tests**: the link's fields, a signed webhook paying once (a wrong secret refused, a redelivery a duplicate),
+  the return before the webhook answered by Razorpay, an expired link; subunits; keys and modes.

@@ -181,7 +181,13 @@ differs from the transaction's is refused (*Failed*, with both amounts).
   payment completes only when Shutro ERP **executes** it — which it does on that return, for the transaction's own
   bKash payment id, believing only bKash's answer (completed, for this invoice and amount). A forged "success" makes
   bKash refuse; a payment left on bKash's page stays pending and costs the customer nothing.
-- Razorpay and Stripe come next.
+- **Razorpay** (`razorpay`, India: UPI, cards, netbanking, wallets through a Payment Link): set
+  `SHUTRO_ERP_RAZORPAY_KEY_ID` and `SHUTRO_ERP_RAZORPAY_KEY_SECRET` — test keys (`rzp_test_…`) serve providers in
+  *Test* mode, live keys *Live* ones. In Razorpay's dashboard, add a webhook for `payment_link.paid` (and
+  `payment_link.expired` / `payment_link.cancelled`) with the provider's endpoint URL and **the endpoint's secret**
+  (Integrations › Inbound webhooks, made with the first payment): `X-Razorpay-Signature` is checked with it and
+  `x-razorpay-event-id` makes redeliveries harmless. On the customer's return the link is fetched from Razorpay.
+- Stripe comes next.
 
 A provider is offered in the portal only when its adapter has credentials for the provider's mode. An adapter
 implements:
