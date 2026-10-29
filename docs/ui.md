@@ -177,6 +177,9 @@ form('sale.order', (k) => ({
 - **Your profile** (user menu, or "Your profile" in the palette): details, language and time zone, default company,
   password, two-factor sign-in with recovery codes, and signed-in devices to sign out.
 - **Companies**: with several, the sidebar's company block is a switcher, and the palette offers "Switch to …".
+- **People** (Settings › People; Administrators and People managers): invite by email (the link is also shown to
+  copy; `SHUTRO_ERP_BASE_URL` is the address it points to, `SMTP_URL` sends it), roles per app and company,
+  deactivate, a new sign-in link, reset two-factor; invited people choose their password at `/activate`.
 - Every package with screens must be listed as a Tailwind `@source` in `apps/web/src/index.css`, or classes used
   only there are not generated.
 

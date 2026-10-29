@@ -173,3 +173,30 @@ Bangla, light and dark, keyboard and screen reader, desktop and phone.
 - **Tests**: profile and sessions on real PostgreSQL (checked values, other companies refused, one device and all
   the others signed out, API keys refused, audit); E2E for the overview's search, the profile's details, this
   device, and two-factor on and off with codes from the shown key.
+
+## Implementation notes (2026-10-29): step 2 — People
+
+- **`settings.invitation`** (private): a hashed one-time token, its expiry (7 days), when it was used, who invited.
+  **People manager** (`settings.people`) is a new access level of the Settings app.
+- **Routes** (`/api/v1/settings/people…`): the list (search; active, invited, deactivated; portal users and service
+  accounts left out) with roles named by their app level ("Purchase · Manager"), two-factor, last activity; the
+  catalogue (apps and their access levels, technical modules apart, roles, companies, administrator groups); a
+  person with their recent audit events; invite (the login is the email, roles per company, a password nobody knows
+  until the link is used, the link emailed after the commit when mail is set up and always returned); change name,
+  email, active (deactivation revokes sessions and voids open invitations; not oneself); replace roles (the
+  person's companies follow them); a new link; reset two-factor (sessions revoked). Activation at
+  `POST /api/v1/auth/activate` (12 characters at least; used, replaced or expired links are 410).
+- **People managers** cannot give administrator roles, change their own roles, or change an administrator's account
+  (403); Shutro's constraint keeps the last active administrator for everyone. Every change is audited
+  (`people.invited`, `people.activated`, `people.deactivated`, `people.reactivated`, `people.changed`,
+  `security.assignment`, `auth.2fa_reset`).
+- **Screens**: Settings › People (search, status filter, the list), the invite dialog (roles per app as one choice
+  each — *No access · User · Manager…* —, per company when there are several, technical access folded, other roles
+  as checkboxes; the link with Copy), a person (details, roles, a new link, two-factor reset and deactivation with a
+  confirmation, reactivation, recent activity), and the back-office's `/activate` page that signs the person in.
+- **Deferred to step 3**: "What can they do?" (the effective access per model and field) joins the role pages,
+  which already need the server's effective computation; special grants stay in the permissions API.
+- **Tests**: on real PostgreSQL — the catalogue, an invitation emailed and returned, activation once (short
+  passwords, reuse refused), roles replaced, the manager's limits, deactivation signing out, a new link voiding the
+  old one, two-factor reset, others refused, the audit kinds. E2E: invite with a role, open the link in another
+  browser, choose a password, see only that app; deactivate.
