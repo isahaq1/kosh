@@ -10,6 +10,7 @@ import { AppsPage } from './AppsPage.js';
 import { AuditPage } from './AuditPage.js';
 import { CompaniesPage } from './CompaniesPage.js';
 import { CompanyPage } from './CompanyPage.js';
+import { ConnectedAppsPage } from './ConnectedAppsPage.js';
 import { messages } from './messages.js';
 import { OverviewPage } from './OverviewPage.js';
 import { PeoplePage } from './PeoplePage.js';
@@ -22,6 +23,7 @@ export { AppsPage } from './AppsPage.js';
 export { AuditPage } from './AuditPage.js';
 export { CompaniesPage } from './CompaniesPage.js';
 export { CompanyPage } from './CompanyPage.js';
+export { ConnectedAppsPage } from './ConnectedAppsPage.js';
 export { OverviewPage } from './OverviewPage.js';
 export { PeoplePage } from './PeoplePage.js';
 export { deviceOf, ProfilePage } from './ProfilePage.js';
@@ -42,6 +44,9 @@ export function registerSettingsWeb(registry: Registry, i18n?: i18n): Registry {
   // Every signed-in user's own profile (RFC 0019) and keys (RFC 0017 §5.1): in the user menu, not in Settings.
   registry.registerUserPage('settings.Profile', ProfilePage, { label: 'settings:profile.title' });
   registry.registerUserPage('settings.ApiKeys', ApiKeysPage, { label: 'settings:apiKeys.title' });
+  registry.registerUserPage('settings.ConnectedApps', ConnectedAppsPage, {
+    label: 'settings:connected.title',
+  });
   if (i18n !== undefined) addMessages(i18n, 'settings', messages);
   return registry;
 }

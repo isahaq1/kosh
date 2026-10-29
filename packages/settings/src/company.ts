@@ -14,6 +14,7 @@ import {
   type ApiField,
   audit,
   HttpProblem,
+  imageVersions,
   installDefaults,
   type ModuleContext,
   publicApiModels,
@@ -198,6 +199,11 @@ export function registerCompanyRoutes(context: ModuleContext): void {
     guarded(request, async (su, current, env) => {
       const all = await find(su, 'res.company', {}, ['name', 'currency']);
       const currencies = await find(su, 'res.currency', {}, ['name']);
+      const logos = await imageVersions(
+        su,
+        'company',
+        all.map((c) => c['id'] as number),
+      );
       const currencyName = new Map(currencies.map((c) => [c['id'], String(c['name'])]));
       return {
         canCreate: env.administrator,
@@ -213,6 +219,7 @@ export function registerCompanyRoutes(context: ModuleContext): void {
                 })
               ).length,
               current: c['id'] === current,
+              logo: logos[String(c['id'])] ?? null,
               // The person can switch to it: it is one of their companies.
               member:
                 (

@@ -438,6 +438,11 @@ export function integrationsModule(options: IntegrationsOptions = {}): KoshModul
         label: 'Inbound calls',
         views: ['list', 'form'],
       }),
+      'integrations.action_oauth_apps': {
+        type: 'client',
+        page: 'integrations.OAuthApps',
+        label: 'OAuth apps',
+      },
     },
     menus: [
       { id: 'integrations.root', label: 'Integrations', app: 'integrations' },
@@ -468,6 +473,13 @@ export function integrationsModule(options: IntegrationsOptions = {}): KoshModul
         label: 'Inbound calls',
         action: 'integrations.action_inbound',
         sequence: 4,
+      },
+      {
+        id: 'integrations.oauth_apps',
+        parent: 'integrations.root',
+        label: 'OAuth apps',
+        action: 'integrations.action_oauth_apps',
+        sequence: 5,
       },
     ],
     views: {

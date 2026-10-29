@@ -20,8 +20,15 @@ test('a webhook made on its form; the events offered; a test event logged as a d
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toContainText('CRM sync');
 
-  await page.getByText('Events you can subscribe to').click();
-  await expect(page.getByText('res.partner.created', { exact: true })).toBeVisible();
+  // The form settles after saving (it reloads the record): open the list until it stays open.
+  await expect(async () => {
+    const list = page.locator('details', { hasText: 'Events you can subscribe to' });
+    if ((await list.getAttribute('open')) === null)
+      await page.getByText('Events you can subscribe to').click();
+    await expect(page.getByText('res.partner.created', { exact: true })).toBeVisible({
+      timeout: 1000,
+    });
+  }).toPass();
   await page.getByRole('button', { name: 'Send a test event' }).click();
   await expect(page.getByText('A test event is on its way')).toBeVisible();
 

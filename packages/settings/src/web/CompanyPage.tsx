@@ -11,7 +11,9 @@ import {
   Badge,
   Button,
   Checkbox,
+  ImagePicker,
   Input,
+  imageUrl,
   Label,
   type PageProps,
   Select,
@@ -180,6 +182,18 @@ function CompanyForm({ api, company }: PageProps & { readonly company: Company }
   const [grouping, setGrouping] = useState<Company['numberGrouping']>(company.numberGrouping);
   const [color, setColor] = useState<string | null>(company.accentColor);
   const [typed, setTyped] = useState(company.accentColor ?? '');
+  const me = useQuery({
+    queryKey: ['me'],
+    queryFn: () => api.call<{ logos?: Record<string, string> }>('GET', '/api/v1/auth/me'),
+  });
+  const logo = useMutation({
+    mutationFn: (image: string | null) =>
+      image === null
+        ? api.call('DELETE', `/api/v1/images/company/${company.id}`)
+        : api.call('PUT', `/api/v1/images/company/${company.id}`, { image }),
+    // The sidebar and the switcher show the logo from the user's details.
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['me'] }),
+  });
   // Only the details changed are sent.
   const [details, setDetails] = useState<Record<string, Value>>({});
   const save = useMutation({
@@ -216,6 +230,19 @@ function CompanyForm({ api, company }: PageProps & { readonly company: Company }
       >
         <section className="grid gap-4 rounded-lg border bg-surface p-5">
           <h2 className="font-semibold">{t('company.identity')}</h2>
+          <ImagePicker
+            name={name}
+            src={imageUrl('company', company.id, me.data?.logos?.[String(company.id)])}
+            fit="logo"
+            busy={logo.isPending}
+            onChoose={(image) => logo.mutate(image)}
+            onRemove={() => logo.mutate(null)}
+          />
+          {logo.error === null ? null : (
+            <Alert tone="danger">
+              {logo.error instanceof ApiError ? logo.error.message : String(logo.error)}
+            </Alert>
+          )}
           <div className="grid gap-1.5">
             <Label htmlFor={`${id}-name`}>{t('company.name')}</Label>
             <Input

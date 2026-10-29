@@ -6,10 +6,12 @@
 import {
   Alert,
   ApiError,
+  Avatar,
   Badge,
   Button,
   Dialog,
   Input,
+  imageUrl,
   Label,
   type PageProps,
   Select,
@@ -29,6 +31,7 @@ interface Companies {
     readonly people: number;
     readonly current: boolean;
     readonly member: boolean;
+    readonly logo: string | null;
   }[];
   readonly currencies: readonly { readonly id: number; readonly name: string }[];
 }
@@ -142,12 +145,21 @@ export function CompaniesPage({ api }: PageProps): ReactElement {
         <ul className="divide-y rounded-lg border bg-surface">
           {data.companies.map((c) => (
             <li key={c.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-              <span
-                aria-hidden
-                className="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground"
-              >
-                <Building2 className="size-4" />
-              </span>
+              {c.logo === null ? (
+                <span
+                  aria-hidden
+                  className="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground"
+                >
+                  <Building2 className="size-4" />
+                </span>
+              ) : (
+                <Avatar
+                  name={c.name}
+                  src={imageUrl('company', c.id, c.logo)}
+                  shape="square"
+                  className="size-9 border"
+                />
+              )}
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-2 font-medium">
                   <span className="truncate">{c.name}</span>

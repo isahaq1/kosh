@@ -118,6 +118,7 @@ test('a direct message reaches the dock and the bell; no dock without Messaging'
   const bobContext = await browser.newContext();
   const bob = await bobContext.newPage();
   await signIn(bob, 'bob');
+  await expect(bob.getByRole('button', { name: 'Notifications' })).toBeVisible(); // on the home page too
   await expect(bob.getByRole('button', { name: 'Chat', exact: true })).toHaveCount(0);
   await bobContext.close();
 });

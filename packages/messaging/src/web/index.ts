@@ -19,7 +19,7 @@ export { Chatter } from './Chatter.js';
 export function registerMessagingWeb(registry: Registry, i18n?: i18n): Registry {
   registry.registerComponent('chatter', Chatter);
   registry.registerPage('messaging.Chat', ChatPage);
-  registry.registerHeaderItem('messaging.Dock', ChatDock);
+  registry.registerHeaderItem('messaging.Dock', ChatDock, { home: true });
   if (i18n !== undefined) addMessages(i18n, 'messaging', messages);
   return registry;
 }

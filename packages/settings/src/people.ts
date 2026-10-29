@@ -18,7 +18,13 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { layout, type Mailer } from '@kosh/mail';
 import type { KoshModule } from '@kosh/modules-sdk';
-import { audit, HttpProblem, isAdministratorUser, type ModuleContext } from '@kosh/server';
+import {
+  audit,
+  HttpProblem,
+  imageVersions,
+  isAdministratorUser,
+  type ModuleContext,
+} from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
 import type { FastifyRequest } from 'fastify';
 
@@ -231,6 +237,7 @@ export function registerPeopleRoutes(context: ModuleContext, options: PeopleOpti
     );
     const known = await knownGroups();
     const admin = adminGroups(su);
+    const photos = await imageVersions(su, 'user', ids);
     // "Purchase · Manager": a group named by the app level that gives it, else by its own label.
     const levelLabel = new Map<string, string>();
     for (const m of modules)
@@ -253,6 +260,7 @@ export function registerPeopleRoutes(context: ModuleContext, options: PeopleOpti
           name: String(u['name'] ?? ''),
           login: String(u['login'] ?? ''),
           email: typeof u['email'] === 'string' ? u['email'] : null,
+          avatar: photos[String(id)] ?? null,
           active: u['active'] !== false,
           state:
             u['active'] === false

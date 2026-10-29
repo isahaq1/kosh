@@ -17,7 +17,12 @@ const tokens = new Map<string, string>();
 
 // biome-ignore lint/suspicious/noExplicitAny: test assertions read untyped JSON responses
 type Json = any;
-async function call(method: 'GET' | 'PATCH' | 'POST', url: string, as: string, payload?: unknown) {
+async function call(
+  method: 'GET' | 'PATCH' | 'POST' | 'PUT' | 'DELETE',
+  url: string,
+  as: string,
+  payload?: unknown,
+) {
   let token = tokens.get(as);
   if (token === undefined) {
     const login = await server.app.inject({
@@ -198,4 +203,50 @@ test('companies: listed with their people; administrators add them', async () =>
   // The administrator can switch to it at once.
   const me = await call('GET', '/api/v1/auth/me', 'admin');
   expect(me.json.companies).toContain(made.json.id);
+});
+
+// A 1×1 PNG and the same bytes claiming to be SVG; an SVG itself is refused by its bytes.
+const PNG =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+const SVG = `data:image/svg+xml;base64,${Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>').toString('base64')}`;
+
+test('photos and logos: checked by their bytes, served versioned, the logo for company managers only', async () => {
+  const photo = await call('PUT', '/api/v1/auth/profile/avatar', 'bob', { image: PNG });
+  expect(photo.status, JSON.stringify(photo.json)).toBe(200);
+  expect(photo.json.avatar).toMatch(/^[0-9a-f]{16}$/);
+  const me = (await call('GET', '/api/v1/auth/me', 'bob')).json;
+  expect(me.avatar).toBe(photo.json.avatar);
+  const served = await server.app.inject({
+    method: 'GET',
+    url: `/api/v1/images/user/${me.id}?v=${me.avatar}`,
+    headers: { authorization: `Bearer ${tokens.get('bob')}` },
+  });
+  expect(served.statusCode).toBe(200);
+  expect(served.headers['content-type']).toBe('image/png');
+  expect(served.headers['cache-control']).toContain('immutable');
+  const again = await server.app.inject({
+    method: 'GET',
+    url: `/api/v1/images/user/${me.id}`,
+    headers: {
+      authorization: `Bearer ${tokens.get('bob')}`,
+      'if-none-match': String(served.headers.etag),
+    },
+  });
+  expect(again.statusCode).toBe(304);
+  for (const image of [SVG, 'not an image', `data:image/png;base64,${'A'.repeat(500_000)}`])
+    expect((await call('PUT', '/api/v1/auth/profile/avatar', 'bob', { image })).status).toBe(422);
+  expect((await call('DELETE', '/api/v1/auth/profile/avatar', 'bob')).json.avatar).toBeNull();
+  expect((await call('GET', '/api/v1/auth/me', 'bob')).json.avatar).toBeNull();
+
+  const company = (await call('GET', '/api/v1/settings/company', 'dana')).json.id;
+  expect(
+    (await call('PUT', `/api/v1/images/company/${company}`, 'bob', { image: PNG })).status,
+  ).toBe(403);
+  const logo = await call('PUT', `/api/v1/images/company/${company}`, 'dana', { image: PNG });
+  expect(logo.status, JSON.stringify(logo.json)).toBe(200);
+  expect((await call('GET', '/api/v1/auth/me', 'bob')).json.logos[String(company)]).toBe(
+    logo.json.logo,
+  );
+  const listed = await call('GET', '/api/v1/settings/companies', 'dana');
+  expect(listed.json.companies.find((c: Json) => c.id === company).logo).toBe(logo.json.logo);
 });

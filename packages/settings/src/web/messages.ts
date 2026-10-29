@@ -1,6 +1,18 @@
 /** Messages of the Settings app (namespace `settings`). */
 export const messages: Readonly<Record<string, object>> = {
   en: {
+    connected: {
+      title: 'Connected apps',
+      intro:
+        'Apps you allowed to act for you. They can never do more than you may; remove one and its access ends at once.',
+      none: 'You have not allowed any app.',
+      since: 'allowed {{when}}',
+      lastUsed: 'last used {{when}}',
+      neverUsed: 'not used yet',
+      revoke: 'Remove access',
+      revokeApp: 'Remove the access of {{app}}',
+      homepage: 'About {{app}}',
+    },
     roles: {
       title: 'Roles & permissions',
       intro: 'What each role lets people open and do. Changes are previewed before they are saved.',
@@ -142,6 +154,11 @@ export const messages: Readonly<Record<string, object>> = {
           description: 'Every company, its currency and people; switch between them or add one.',
           keywords: 'companies multi-company branches new company switch',
         },
+        'settings.action_people': {
+          description:
+            'Invite people, give them roles per app and company, deactivate them, reset their two-factor sign-in.',
+          keywords: 'people users employees invite invitation roles deactivate 2fa reset',
+        },
         'settings.action_roles': {
           description:
             'What each role opens and allows, rights per model, record rules; previewed before saving.',
@@ -200,6 +217,7 @@ export const messages: Readonly<Record<string, object>> = {
       password: 'Password',
       recoveryCodes:
         'Your recovery codes: each signs you in once if you lose your phone. Keep them somewhere safe; they are shown only now.',
+      photo: 'Photo',
       sessions: 'Signed-in devices',
       sessionsHint: 'Where you are signed in now. Sign out a device you do not recognise.',
       thisDevice: 'This device',
@@ -397,6 +415,17 @@ export const messages: Readonly<Record<string, object>> = {
     version: 'Version {{version}}',
   },
   bn: {
+    connected: {
+      title: 'সংযুক্ত অ্যাপস',
+      intro: 'যে অ্যাপগুলোকে আপনি আপনার হয়ে কাজ করতে দিয়েছেন। সরিয়ে দিলে সাথে সাথে প্রবেশাধিকার শেষ।',
+      none: 'আপনি কোনো অ্যাপকে অনুমতি দেননি।',
+      since: '{{when}} থেকে অনুমতি',
+      lastUsed: 'সর্বশেষ ব্যবহার {{when}}',
+      neverUsed: 'এখনো ব্যবহার হয়নি',
+      revoke: 'প্রবেশাধিকার সরান',
+      revokeApp: '{{app}}-এর প্রবেশাধিকার সরান',
+      homepage: '{{app}} সম্পর্কে',
+    },
     roles: {
       title: 'রোল ও অনুমতি',
       intro: 'প্রতিটি রোল মানুষকে কী খুলতে ও করতে দেয়। সংরক্ষণের আগে পরিবর্তন দেখানো হয়।',
@@ -590,6 +619,7 @@ export const messages: Readonly<Record<string, object>> = {
       password: 'পাসওয়ার্ড',
       recoveryCodes:
         'আপনার রিকভারি কোড: ফোন হারালে প্রতিটি একবার সাইন ইন করায়। নিরাপদে রাখুন; শুধু এখনই দেখানো হচ্ছে।',
+      photo: 'ছবি',
       sessions: 'সাইন ইন করা ডিভাইস',
       sessionsHint: 'এখন যেখানে আপনি সাইন ইন আছেন। অচেনা ডিভাইস সাইন আউট করুন।',
       thisDevice: 'এই ডিভাইস',

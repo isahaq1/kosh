@@ -242,3 +242,51 @@ test('Security: two-factor for everyone — set up before anything else; session
   await page.getByRole('button', { name: 'Export CSV' }).click();
   expect((await download).suggestedFilename()).toBe('audit-log.csv');
 });
+
+test('a profile photo and a company logo: chosen, made small, shown in the corner and the sidebar', async ({
+  page,
+}) => {
+  // A 64×64 PNG drawn by the browser itself.
+  await signIn(page, 'admin');
+  const png = Buffer.from(
+    (
+      await page.evaluate(() => {
+        const c = document.createElement('canvas');
+        c.width = 64;
+        c.height = 64;
+        const ctx = c.getContext('2d') as CanvasRenderingContext2D;
+        ctx.fillStyle = '#0d9488';
+        ctx.fillRect(0, 0, 64, 64);
+        return c.toDataURL('image/png');
+      })
+    ).split(',')[1] as string,
+    'base64',
+  );
+  await page.goto('/me/settings.Profile');
+  const photo = page.getByRole('region', { name: 'Photo' });
+  await photo.locator('input[type=file]').setInputFiles({
+    name: 'me.png',
+    mimeType: 'image/png',
+    buffer: png,
+  });
+  await expect(photo.getByRole('button', { name: 'Remove' })).toBeVisible();
+  await expect(page.locator('[data-kosh-account] img')).toHaveAttribute(
+    'src',
+    /\/api\/v1\/images\/user\/\d+\?v=/,
+  );
+
+  await page.goto('/settings/a/settings.action_company');
+  await page.locator('input[type=file]').setInputFiles({
+    name: 'logo.png',
+    mimeType: 'image/png',
+    buffer: png,
+  });
+  const sidebar = page.getByRole('complementary', { name: 'Sidebar' });
+  await expect(sidebar.locator('img[src*="/api/v1/images/company/"]')).toBeVisible();
+  // Back to none: the other tests' screenshots and checks stay as they were.
+  await page.getByRole('button', { name: 'Remove' }).click();
+  await expect(sidebar.locator('img[src*="/api/v1/images/company/"]')).toHaveCount(0);
+  await page.goto('/me/settings.Profile');
+  await page.getByRole('region', { name: 'Photo' }).getByRole('button', { name: 'Remove' }).click();
+  await expect(page.locator('[data-kosh-account] img')).toHaveCount(0);
+});

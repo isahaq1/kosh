@@ -13,7 +13,7 @@ export { type PushState, usePush } from './push.js';
 
 /** Registers the bell (and its messages in `i18n`, when given). */
 export function registerNotifyWeb(registry: Registry, i18n?: i18n): Registry {
-  registry.registerHeaderItem('notify.Bell', NotificationBell);
+  registry.registerHeaderItem('notify.Bell', NotificationBell, { home: true });
   if (i18n !== undefined) addMessages(i18n, 'notify', messages);
   return registry;
 }

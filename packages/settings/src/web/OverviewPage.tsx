@@ -20,6 +20,18 @@ interface Entry {
 
 const normalise = (s: string) => s.toLocaleLowerCase().normalize('NFKD');
 
+/** Each section's icon (AppIcon names); a module's own section shows the Settings gear. */
+const SECTION_ICONS: Readonly<Record<string, string>> = {
+  'settings.action_company': 'company',
+  'settings.action_companies': 'companies',
+  'settings.action_people': 'users',
+  'settings.action_roles': 'shield',
+  'settings.action_security': 'security',
+  'settings.action_audit': 'audit',
+  'settings.action_apps': 'apps',
+  'assistant.action_settings': 'assistant',
+};
+
 export function OverviewPage({ api }: PageProps): ReactElement {
   const { t } = useTranslation('settings');
   const id = useId();
@@ -112,7 +124,7 @@ export function OverviewPage({ api }: PageProps): ReactElement {
                   params={{ app: 'settings', action: e.action }}
                   className="flex h-full items-start gap-3 rounded-lg border bg-surface p-4 hover:border-primary/40 hover:bg-accent/40"
                 >
-                  <AppIcon name="settings" className="size-9" />
+                  <AppIcon name={SECTION_ICONS[e.action] ?? 'settings'} className="size-9" />
                   <span className="grid gap-0.5">
                     <span className="font-medium">{e.label}</span>
                     {e.description === '' ? null : (

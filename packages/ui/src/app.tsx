@@ -68,6 +68,7 @@ import {
 } from 'react';
 import { I18nextProvider, useTranslation } from 'react-i18next';
 import { ApiError, type CurrentUser, type KoshApi, type MenuNode } from './api.js';
+import { Avatar, imageUrl } from './components/Avatar.js';
 import {
   Alert,
   Button,
@@ -101,6 +102,7 @@ import { SearchBar } from './search/SearchBar.js';
 import { ViewTabs } from './search/ViewTabs.js';
 import { Activate } from './shell/Activate.js';
 import { CommandPalette, PaletteContext } from './shell/CommandPalette.js';
+import { Consent } from './shell/Consent.js';
 import { Home } from './shell/Home.js';
 import { Login } from './shell/Login.js';
 import { OfflineMenu } from './shell/OfflineMenu.js';
@@ -293,13 +295,14 @@ function CompanyBlock({
     enabled: me.companies.length > 0,
   });
   const name = names.data?.find((c) => c.id === company)?.displayName ?? t('app.name');
+  // The company's logo, else its initial.
   const badge = (
-    <span
-      aria-hidden
-      className="grid size-7 shrink-0 place-items-center rounded-md bg-primary text-xs font-semibold text-primary-foreground"
-    >
-      {name.slice(0, 1).toUpperCase()}
-    </span>
+    <Avatar
+      name={name.slice(0, 1)}
+      src={imageUrl('company', company, me.logos?.[String(company)])}
+      shape="square"
+      className="font-semibold"
+    />
   );
   if (collapsed) return <span title={name}>{badge}</span>;
   if (me.companies.length < 2)
@@ -372,12 +375,6 @@ function UserMenu({
   const { theme, setTheme, density, setDensity } = useKosh();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const initials = user.name
-    .split(/\s+/)
-    .map((w) => w.slice(0, 1))
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
   return (
     <Menu>
       <MenuTrigger asChild>
@@ -391,15 +388,7 @@ function UserMenu({
             collapsed && 'justify-center',
           )}
         >
-          <span
-            aria-hidden
-            className={cn(
-              'grid size-7 shrink-0 place-items-center rounded-full text-xs font-medium',
-              corner === undefined ? 'bg-muted' : 'bg-primary text-primary-foreground',
-            )}
-          >
-            {initials}
-          </span>
+          <Avatar name={user.name} src={imageUrl('user', user.id, user.avatar)} />
           {collapsed ? null : <span className="truncate">{user.name}</span>}
           {corner === undefined ? null : (
             <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden />
@@ -628,6 +617,12 @@ function Shell(): ReactElement {
                     </Link>
                   )}
                   <span className="flex-1" />
+                  {registry
+                    .headerItems()
+                    .filter((item) => item.home)
+                    .map(({ name, component: Item }) => (
+                      <Item key={name} api={api} />
+                    ))}
                   <UserMenu
                     user={user}
                     collapsed={false}
@@ -1100,9 +1095,29 @@ function ActivatePage(): ReactElement {
   return <Activate api={useServices().api} onSignedIn={() => void navigate({ to: '/' })} />;
 }
 
+/** Where to go after signing in: `?next=` when it is a path of this site (never another site), else home. */
+function nextPath(): string {
+  const next = new URLSearchParams(window.location.search).get('next') ?? '';
+  return next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') ? next : '/';
+}
+
 function LoginPage(): ReactElement {
   const navigate = useNavigate();
-  return <Login api={useServices().api} onSignedIn={() => void navigate({ to: '/' })} />;
+  return (
+    <Login
+      api={useServices().api}
+      onSignedIn={() => {
+        const next = nextPath();
+        // A page outside the router's own paths with its query (the OAuth consent) loads as an address.
+        if (next.startsWith('/oauth/')) window.location.assign(next);
+        else void navigate({ to: next });
+      }}
+    />
+  );
+}
+
+function ConsentPage(): ReactElement {
+  return <Consent api={useServices().api} />;
 }
 
 // ------------------------------------------------------------------------------------------------- router
@@ -1117,6 +1132,12 @@ const activateRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/activate',
   component: ActivatePage,
+});
+/** The OAuth consent page (RFC 0017 §5.2): outside the shell, like sign-in. */
+const consentRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/oauth/authorize',
+  component: ConsentPage,
 });
 const shellRoute = createRoute({ getParentRoute: () => rootRoute, id: 'shell', component: Shell });
 const indexRoute = createRoute({
@@ -1166,6 +1187,7 @@ const userPageRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   loginRoute,
   activateRoute,
+  consentRoute,
   shellRoute.addChildren([
     indexRoute,
     openRoute,

@@ -8,7 +8,9 @@ import {
   ApiError,
   Badge,
   Button,
+  ImagePicker,
   Input,
+  imageUrl,
   LANGUAGES,
   Label,
   type PageProps,
@@ -39,6 +41,8 @@ interface Session {
   readonly current: boolean;
 }
 interface Me {
+  readonly id: number;
+  readonly avatar?: string | null;
   readonly companies: readonly number[];
   readonly twoFactorEnabled: boolean;
   readonly administrator?: boolean;
@@ -373,6 +377,14 @@ export function ProfilePage({ api }: PageProps): ReactElement {
       setLang(saved.lang);
     },
   });
+  const photo = useMutation({
+    mutationFn: (image: string | null) =>
+      image === null
+        ? api.call('DELETE', '/api/v1/auth/profile/avatar')
+        : api.call('PUT', '/api/v1/auth/profile/avatar', { image }),
+    // The shell shows the photo from the user's details.
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['me'] }),
+  });
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [repeat, setRepeat] = useState('');
@@ -402,24 +414,28 @@ export function ProfilePage({ api }: PageProps): ReactElement {
   const set = (patch: Partial<Profile>) => setDraft({ ...draft, ...patch });
   return (
     <div className="mx-auto grid max-w-3xl gap-6">
-      <header className="flex items-center gap-4">
-        <span
-          aria-hidden
-          className="grid size-14 place-items-center rounded-full bg-primary text-lg font-semibold text-primary-foreground"
-        >
-          {draft.name
-            .split(/\s+/)
-            .map((w) => w.slice(0, 1))
-            .join('')
-            .slice(0, 2)
-            .toUpperCase()}
-        </span>
+      <header className="grid gap-4">
         <div>
           <h1 className="text-xl font-semibold">{t('profile.title')}</h1>
           <p className="text-sm text-muted-foreground">
             {t('profile.signedInAs', { login: draft.login })}
           </p>
         </div>
+        <section aria-label={t('profile.photo')} className="rounded-lg border bg-surface p-5">
+          <ImagePicker
+            name={draft.name}
+            src={imageUrl('user', me.data.id, me.data.avatar)}
+            fit="photo"
+            busy={photo.isPending}
+            onChoose={(image) => photo.mutate(image)}
+            onRemove={() => photo.mutate(null)}
+          />
+          {photo.error === null ? null : (
+            <div className="mt-3">
+              <Alert tone="danger">{message(photo.error)}</Alert>
+            </div>
+          )}
+        </section>
       </header>
 
       <form

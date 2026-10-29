@@ -95,6 +95,10 @@ export interface CurrentUser {
   readonly administratorNeedsSecondFactor: boolean;
   /** The policy requires two-factor sign-in of everyone and it is not on (RFC 0019 §3.5); older servers send none. */
   readonly twoFactorSetupRequired?: boolean;
+  /** The user's photo version, or null (older servers send none). */
+  readonly avatar?: string | null;
+  /** Each company's logo version, when it has one. */
+  readonly logos?: Readonly<Record<string, string>>;
 }
 
 export interface AppEntry {

@@ -7,11 +7,13 @@
 import {
   Alert,
   ApiError,
+  Avatar,
   Badge,
   Button,
   Dialog,
   EmptyState,
   Input,
+  imageUrl,
   Label,
   type PageProps,
   useKosh,
@@ -25,6 +27,7 @@ import { type Assignment, type Catalogue, RolesEditor } from './RolesEditor.js';
 interface Person {
   readonly id: number;
   readonly name: string;
+  readonly avatar?: string | null;
   readonly login: string;
   readonly email: string | null;
   readonly active: boolean;
@@ -45,24 +48,6 @@ interface Detail extends Person {
 type Status = 'all' | 'active' | 'invited' | 'deactivated';
 const P = '/api/v1/settings/people';
 const message = (error: unknown) => (error instanceof ApiError ? error.message : String(error));
-const initials = (name: string) =>
-  name
-    .split(/\s+/)
-    .map((w) => w.slice(0, 1))
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
-
-function Avatar({ name }: { readonly name: string }): ReactElement {
-  return (
-    <span
-      aria-hidden
-      className="grid size-8 shrink-0 place-items-center rounded-full bg-accent text-xs font-semibold text-accent-foreground"
-    >
-      {initials(name)}
-    </span>
-  );
-}
 
 function StateBadge({ person }: { readonly person: Person }): ReactElement {
   const { t } = useTranslation('settings');
@@ -339,7 +324,7 @@ function PersonDialog({
       {p === undefined ? null : (
         <div className="grid gap-5">
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <Avatar name={p.name} />
+            <Avatar name={p.name} src={imageUrl('user', p.id, p.avatar)} className="size-8" />
             <span className="text-muted-foreground">{p.login}</span>
             <StateBadge person={p} />
             {p.administrator ? <Badge tone="info">{t('people.administrator')}</Badge> : null}
@@ -564,7 +549,7 @@ export function PeoplePage({ api }: PageProps): ReactElement {
                 onClick={() => setOpen(p.id)}
                 className="flex w-full flex-wrap items-center gap-3 px-4 py-3 text-start hover:bg-muted/50"
               >
-                <Avatar name={p.name} />
+                <Avatar name={p.name} src={imageUrl('user', p.id, p.avatar)} className="size-8" />
                 <span className="grid min-w-48 flex-1">
                   <span className="font-medium">{p.name}</span>
                   <span className="text-sm text-muted-foreground">{p.login}</span>

@@ -209,12 +209,19 @@ export class Registry {
     return this.#entries.component.get(name) as ComponentType<NodeComponentProps> | undefined;
   }
 
-  /** An item of the shell's header, before the language and theme menus (`notify.Bell`). */
+  readonly #homeItems = new Set<string>();
+
+  /**
+   * An item of the shell's header, before the language and theme menus (`notify.Bell`). With `home`, it is also in
+   * the home page's corner, next to the account menu (notifications, messages).
+   */
   registerHeaderItem(
     name: string,
     component: ComponentType<HeaderItemProps>,
-    options: { readonly replace?: boolean } = {},
+    options: { readonly replace?: boolean; readonly home?: boolean } = {},
   ): this {
+    if (options.home === true) this.#homeItems.add(name);
+    else this.#homeItems.delete(name);
     return this.#add('header', name, component as ComponentType<never>, options.replace === true);
   }
 
@@ -252,10 +259,13 @@ export class Registry {
   headerItems(): readonly {
     readonly name: string;
     readonly component: ComponentType<HeaderItemProps>;
+    /** Also on the home page. */
+    readonly home: boolean;
   }[] {
     return [...this.#entries.header].map(([name, component]) => ({
       name,
       component: component as ComponentType<HeaderItemProps>,
+      home: this.#homeItems.has(name),
     }));
   }
 
