@@ -10,6 +10,7 @@ import type { Env } from '@kosh/server/orm';
 import { registerAdminApi } from './admin.js';
 import { installApprovalPolicies } from './approvals.js';
 import { permissionsShutro } from './models.js';
+import { registerRoleRoutes } from './roles.js';
 import { registerApprovalRoutes } from './routes.js';
 
 export { registerAdminApi } from './admin.js';
@@ -24,6 +25,7 @@ export {
   requestsOf,
 } from './approvals.js';
 export { permissionsShutro } from './models.js';
+export { registerRoleRoutes } from './roles.js';
 export { registerApprovalRoutes } from './routes.js';
 
 /** Package identity. */
@@ -49,6 +51,7 @@ export const permissions: ReturnType<typeof defineModule> = defineModule({
   },
   routes: (context: ModuleContext) => {
     registerAdminApi(context);
+    registerRoleRoutes(context);
     registerApprovalRoutes(context);
   },
 });

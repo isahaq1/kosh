@@ -59,7 +59,7 @@ function idParam(request: FastifyRequest, key = 'id'): number {
 }
 
 /** Refuses non-administrators (or, with `permission`, users without it). */
-function requireAdministrator(env: Env, permission?: string): void {
+export function requireAdministrator(env: Env, permission?: string): void {
   if (env.administrator) return;
   if (permission !== undefined && env.access.has(permission)) return;
   throw new HttpProblem(
@@ -148,6 +148,13 @@ export function registerAdminApi(context: ModuleContext): void {
         params: [],
       });
       const admins = env.access.administratorGroups();
+      // How many people hold each role (administrators read the assignments).
+      const holders = new Map<string, Set<number>>();
+      for (const a of await find(env, 'auth.user_group', {}, ['user', 'group']))
+        holders.set(
+          String(a['group']),
+          (holders.get(String(a['group'])) ?? new Set()).add(a['user'] as number),
+        );
       const levelsOf = (implies: readonly string[]) => {
         const closure = reg.security.closure(implies.filter((c) => reg.security.groups.has(c)));
         return [...loaded.accessLevels.entries()]
@@ -163,6 +170,7 @@ export function registerAdminApi(context: ModuleContext): void {
             administrator: admins.has(g.code),
             builtIn: true,
             accessLevels: levelsOf(g.implies),
+            holders: holders.get(g.code)?.size ?? 0,
           })),
           ...runtime.map((r) => ({
             code: r.code,
@@ -171,6 +179,7 @@ export function registerAdminApi(context: ModuleContext): void {
             administrator: admins.has(r.code),
             builtIn: false,
             accessLevels: levelsOf(r.implies),
+            holders: holders.get(r.code)?.size ?? 0,
           })),
         ],
       };
@@ -480,6 +489,7 @@ export function registerAdminApi(context: ModuleContext): void {
           models.map((name) => [
             name,
             {
+              label: (reg.get(name).model as { label?: string }).label ?? name,
               perms: PERMS.filter((p) => env.access.can(name as never, p)),
               hiddenFields: Object.keys(reg.get(name).model.fields).filter(
                 (k) => !env.access.canField(name as never, k, 'read'),
@@ -495,6 +505,10 @@ export function registerAdminApi(context: ModuleContext): void {
         permissions: [...reg.security.permissions.keys()]
           .filter((code) => env.access.has(code))
           .sort(),
+        /** The permissions' names, for screens. */
+        permissionLabels: Object.fromEntries(
+          [...reg.security.permissions.values()].map((p) => [p.code, p.label ?? p.code]),
+        ),
       };
     });
   });
