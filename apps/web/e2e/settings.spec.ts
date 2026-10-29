@@ -1,7 +1,8 @@
 /**
  * RFC 0019 step 1 end to end: Settings opens on its overview, whose search finds a section by its words; your
  * profile from the user menu — details saved, this device among the signed-in ones, two-factor sign-in set up with
- * the key shown (recovery codes once) and turned off again.
+ * the key shown (recovery codes once) and turned off again. People, Roles; the company's details, and Companies:
+ * a new company, switched to and back.
  */
 import { totp } from '@kosh/server';
 import { expect, test } from '@playwright/test';
@@ -144,4 +145,36 @@ test('Roles: a new role opens Contacts; the preview names who gains what before 
   await expect(again.getByText('Deleting it takes it from 1 people.')).toBeVisible();
   await again.getByRole('button', { name: 'Delete the role' }).last().click();
   await expect(page.getByRole('button', { name: /Front desk/ })).toHaveCount(0);
+});
+
+test('Company details saved; Companies: a new company, switched to and back', async ({ page }) => {
+  await signIn(page, 'admin');
+  await page.goto('/settings/a/settings.action_company');
+  await expect(page.getByRole('heading', { name: 'Details' })).toBeVisible();
+  await page.getByLabel('City', { exact: true }).fill('Chattogram');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText(/^Saved: everyone/)).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel('City', { exact: true })).toHaveValue('Chattogram');
+
+  await page.goto('/settings/a/settings.action_companies');
+  await expect(page.getByRole('heading', { name: 'Companies', level: 1 })).toBeVisible();
+  await expect(page.getByText('Current')).toBeVisible();
+  await page.getByRole('button', { name: 'New company' }).click();
+  const dialog = page.getByRole('dialog', { name: 'A new company' });
+  await dialog.getByRole('textbox', { name: 'Name' }).fill('Karnaphuli Traders');
+  await dialog.getByRole('combobox', { name: 'Currency' }).click();
+  await page.getByRole('option', { name: 'BDT' }).click();
+  await dialog.getByRole('button', { name: 'Create' }).click();
+  await expect(dialog).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Switch to Karnaphuli Traders' }).click();
+  await expect(page.getByRole('button', { name: /Karnaphuli Traders/ }).first()).toBeVisible();
+  await expect(page.getByRole('listitem').filter({ hasText: 'Karnaphuli Traders' })).toContainText(
+    'Current',
+  );
+  await page.getByRole('button', { name: 'Switch to Dhaka Ltd' }).click();
+  await expect(page.getByRole('listitem').filter({ hasText: 'Dhaka Ltd' })).toContainText(
+    'Current',
+  );
 });

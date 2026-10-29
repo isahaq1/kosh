@@ -516,6 +516,7 @@ function Shell(): ReactElement {
       accent={user.accents?.[String(current)] ?? null}
       {...(realtime === undefined ? {} : { realtime })}
       {...(offline === undefined ? {} : { offline })}
+      switchCompany={switchCompany}
     >
       <ToastProvider>
         <DesignProvider>

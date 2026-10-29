@@ -124,8 +124,13 @@ export const messages: Readonly<Record<string, object>> = {
       about: {
         'settings.action_company': {
           description:
-            'Name, number grouping and brand colour: how the company appears to everyone here.',
-          keywords: 'company name brand colour color accent logo lakh crore grouping numbers',
+            'Name, address, details, number grouping and brand colour: how the company appears to everyone here.',
+          keywords:
+            'company name address phone email website brand colour color accent logo lakh crore grouping numbers',
+        },
+        'settings.action_companies': {
+          description: 'Every company, its currency and people; switch between them or add one.',
+          keywords: 'companies multi-company branches new company switch',
         },
         'settings.action_roles': {
           description:
@@ -216,6 +221,27 @@ export const messages: Readonly<Record<string, object>> = {
       sampleSelected: 'A selected row',
       save: 'Save',
       saved: 'Saved: everyone sees the change when they next load a page.',
+      details: 'Details',
+      detailsHint:
+        'Address, contacts and what the installed apps need (tax ids, fiscal year…). Currency: {{currency}}.',
+      notSet: 'Not set',
+    },
+    companies: {
+      title: 'Companies',
+      intro:
+        'Every company of this installation. Switch to one to work in it; its settings follow.',
+      new: 'New company',
+      newTitle: 'A new company',
+      newHint:
+        'The installed apps set it up (journals, sequences, taxes). Administrators can switch to it at once; give others access in People.',
+      currency: 'Currency',
+      chooseCurrency: 'Choose its currency',
+      create: 'Create',
+      current: 'Current',
+      people_one: '{{count}} person',
+      people_other: '{{count}} people',
+      switch: 'Switch',
+      switchTo: 'Switch to {{name}}',
     },
     apiKeys: {
       title: 'API keys',
@@ -425,8 +451,13 @@ export const messages: Readonly<Record<string, object>> = {
       profileKeywords: 'প্রোফাইল পাসওয়ার্ড দুই-ধাপ ডিভাইস ভাষা সময় ইমেইল ফোন profile password two-factor 2fa',
       about: {
         'settings.action_company': {
-          description: 'নাম, সংখ্যার বিভাজন ও ব্র্যান্ডের রং: এখানে সবার কাছে প্রতিষ্ঠান যেভাবে দেখায়।',
-          keywords: 'প্রতিষ্ঠান নাম রং লাখ কোটি company brand colour lakh',
+          description:
+            'নাম, ঠিকানা, বিবরণ, সংখ্যার বিভাজন ও ব্র্যান্ডের রং: এখানে সবার কাছে প্রতিষ্ঠান যেভাবে দেখায়।',
+          keywords: 'প্রতিষ্ঠান নাম ঠিকানা রং লাখ কোটি company address brand colour lakh',
+        },
+        'settings.action_companies': {
+          description: 'সব প্রতিষ্ঠান, তাদের মুদ্রা ও মানুষ; একটি থেকে অন্যটিতে যান বা নতুন যোগ করুন।',
+          keywords: 'প্রতিষ্ঠানসমূহ শাখা companies multi-company switch',
         },
         'settings.action_people': {
           description:
@@ -516,6 +547,25 @@ export const messages: Readonly<Record<string, object>> = {
       sampleSelected: 'একটি নির্বাচিত সারি',
       save: 'সংরক্ষণ করুন',
       saved: 'সংরক্ষিত: পরের বার পাতা খুললে সবাই পরিবর্তন দেখবেন।',
+      details: 'বিবরণ',
+      detailsHint: 'ঠিকানা, যোগাযোগ ও ইনস্টল করা অ্যাপের যা দরকার (কর নম্বর, অর্থবছর…)। মুদ্রা: {{currency}}।',
+      notSet: 'নির্ধারিত নয়',
+    },
+    companies: {
+      title: 'প্রতিষ্ঠানসমূহ',
+      intro: 'এই ইনস্টলেশনের সব প্রতিষ্ঠান। কাজ করতে একটিতে যান; তার সেটিংস সাথে আসে।',
+      new: 'নতুন প্রতিষ্ঠান',
+      newTitle: 'নতুন প্রতিষ্ঠান',
+      newHint:
+        'ইনস্টল করা অ্যাপ এটি প্রস্তুত করে (জার্নাল, ক্রম, কর)। অ্যাডমিনিস্ট্রেটররা সাথে সাথে যেতে পারেন; অন্যদের প্রবেশাধিকার দিন মানুষ অংশে।',
+      currency: 'মুদ্রা',
+      chooseCurrency: 'মুদ্রা বেছে নিন',
+      create: 'তৈরি করুন',
+      current: 'বর্তমান',
+      people_one: '{{count}} জন',
+      people_other: '{{count}} জন',
+      switch: 'যান',
+      switchTo: '{{name}}-এ যান',
     },
     apiKeys: {
       title: 'এপিআই কী',

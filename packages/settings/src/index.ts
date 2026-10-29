@@ -3,7 +3,8 @@
  * `@kosh/settings` (RFC 0008, RFC 0019): the Settings app. Its App manager lists the installed, disabled and
  * available apps and installs, enables or disables them (`/api/v1/settings/apps`); it cannot be disabled. Changing
  * apps needs the Administrator role or the `settings.apps` access level. Its Company page sets the current company's
- * name, number grouping and brand colour (`settings.company`, RFC 0018). People (RFC 0019 §3.2) invites, deactivates
+ * name, number grouping, brand colour and details, and Companies lists them, switches and adds one (`settings.company`, RFC 0018,
+ * RFC 0019 §3.4). People (RFC 0019 §3.2) invites, deactivates
  * and gives roles to the installation's users (`settings.people`).
  */
 import { mailerFromEnv } from '@kosh/mail';
@@ -14,7 +15,7 @@ import { registerCompanyRoutes } from './company.js';
 import { type PeopleOptions, registerPeopleRoutes } from './people.js';
 import { registerAppRoutes } from './routes.js';
 
-export { type CompanySettings, registerCompanyRoutes } from './company.js';
+export { type CompanyDetail, type CompanySettings, registerCompanyRoutes } from './company.js';
 export {
   type Assignment,
   INVITATION_DAYS,
@@ -84,6 +85,11 @@ export function settingsModule(options: Partial<PeopleOptions> = {}): KoshModule
       'settings.action_overview': { type: 'client', page: 'settings.Overview', label: 'Settings' },
       'settings.action_apps': { type: 'client', page: 'settings.Apps', label: 'Apps' },
       'settings.action_company': { type: 'client', page: 'settings.Company', label: 'Company' },
+      'settings.action_companies': {
+        type: 'client',
+        page: 'settings.Companies',
+        label: 'Companies',
+      },
       'settings.action_people': { type: 'client', page: 'settings.People', label: 'People' },
       'settings.action_roles': {
         type: 'client',
@@ -109,6 +115,13 @@ export function settingsModule(options: Partial<PeopleOptions> = {}): KoshModule
         label: 'Company',
         action: 'settings.action_company',
         sequence: 1,
+      },
+      {
+        id: 'settings.companies',
+        parent: 'settings.group_workspace',
+        label: 'Companies',
+        action: 'settings.action_companies',
+        sequence: 2,
       },
       { id: 'settings.group_people', parent: 'settings.root', label: 'People', sequence: 20 },
       {

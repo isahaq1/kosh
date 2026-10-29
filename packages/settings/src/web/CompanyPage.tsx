@@ -1,7 +1,8 @@
 /**
- * Settings › Company (RFC 0018): the current company's name, number grouping and brand colour — the back-office's
- * accent for everyone in the company. The preview shows the colour as buttons, links and selections take it, in
- * light and dark; the themes keep text readable whatever colour is chosen.
+ * Settings › Company (RFC 0018, RFC 0019 §3.4): the current company's name, number grouping and brand colour — the
+ * back-office's accent for everyone in the company — and its details: address, contacts and whatever the installed
+ * apps add (tax ids, fiscal year…), as the server offers them. The preview shows the colour as buttons, links and
+ * selections take it, in light and dark; the themes keep text readable whatever colour is chosen.
  */
 import {
   Alert,
@@ -9,10 +10,12 @@ import {
   accentVariables,
   Badge,
   Button,
+  Checkbox,
   Input,
   Label,
   type PageProps,
   Select,
+  Textarea,
 } from '@kosh/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
@@ -24,6 +27,83 @@ interface Company {
   readonly name: string;
   readonly numberGrouping: 'international' | 'lakh';
   readonly accentColor: string | null;
+  readonly currency: string;
+  readonly details: readonly Detail[];
+}
+
+type Value = string | number | boolean | null;
+interface Detail {
+  readonly key: string;
+  readonly label: string;
+  readonly kind: string;
+  readonly readonly: boolean;
+  readonly options: readonly { readonly value: string; readonly label: string }[] | null;
+  readonly value: Value;
+}
+
+/** One detail, by its kind: text, a long text, a number, yes / no, or a choice. */
+function DetailField({
+  detail,
+  value,
+  onChange,
+}: {
+  readonly detail: Detail;
+  readonly value: Value;
+  readonly onChange: (value: Value) => void;
+}): ReactElement {
+  const id = `company-${detail.key}`;
+  const { t } = useTranslation('settings');
+  if (detail.kind === 'boolean')
+    return (
+      <div className="flex items-center gap-2 sm:col-span-2">
+        <Checkbox
+          id={id}
+          checked={value === true}
+          disabled={detail.readonly}
+          onCheckedChange={(checked) => onChange(checked === true)}
+        />
+        <Label htmlFor={id}>{detail.label}</Label>
+      </div>
+    );
+  return (
+    <div className={`grid gap-1.5 ${detail.kind === 'text' ? 'sm:col-span-2' : ''}`}>
+      <Label htmlFor={id}>{detail.label}</Label>
+      {detail.kind === 'selection' ? (
+        <Select
+          id={id}
+          label={detail.label}
+          value={typeof value === 'string' ? value : 'none'}
+          options={[{ value: 'none', label: t('company.notSet') }, ...(detail.options ?? [])]}
+          disabled={detail.readonly}
+          onChange={(v) => onChange(v === 'none' ? null : v)}
+        />
+      ) : detail.kind === 'text' ? (
+        <Textarea
+          id={id}
+          rows={3}
+          value={typeof value === 'string' ? value : ''}
+          readOnly={detail.readonly}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      ) : (
+        <Input
+          id={id}
+          type={detail.kind === 'integer' ? 'number' : 'text'}
+          value={value === null ? '' : String(value)}
+          readOnly={detail.readonly}
+          onChange={(e) =>
+            onChange(
+              detail.kind === 'integer'
+                ? e.target.value === ''
+                  ? null
+                  : Number.parseInt(e.target.value, 10)
+                : e.target.value,
+            )
+          }
+        />
+      )}
+    </div>
+  );
 }
 
 /** Suggested colours: indigo (the default), and a few that read well as an accent in both themes. */
@@ -100,14 +180,18 @@ function CompanyForm({ api, company }: PageProps & { readonly company: Company }
   const [grouping, setGrouping] = useState<Company['numberGrouping']>(company.numberGrouping);
   const [color, setColor] = useState<string | null>(company.accentColor);
   const [typed, setTyped] = useState(company.accentColor ?? '');
+  // Only the details changed are sent.
+  const [details, setDetails] = useState<Record<string, Value>>({});
   const save = useMutation({
     mutationFn: () =>
       api.call<Company>('PATCH', '/api/v1/settings/company', {
         name,
         numberGrouping: grouping,
         accentColor: color,
+        ...(Object.keys(details).length === 0 ? {} : { details }),
       }),
     onSuccess: () => {
+      setDetails({});
       void queryClient.invalidateQueries({ queryKey: ['settings', 'company'] });
       // The shell takes the accent and the grouping from the user's details.
       void queryClient.invalidateQueries({ queryKey: ['me'] });
@@ -155,6 +239,27 @@ function CompanyForm({ api, company }: PageProps & { readonly company: Company }
             />
           </div>
         </section>
+
+        {company.details.length === 0 ? null : (
+          <section className="grid gap-4 rounded-lg border bg-surface p-5">
+            <div>
+              <h2 className="font-semibold">{t('company.details')}</h2>
+              <p className="text-sm text-muted-foreground">
+                {t('company.detailsHint', { currency: company.currency })}
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {company.details.map((d) => (
+                <DetailField
+                  key={d.key}
+                  detail={d}
+                  value={d.key in details ? (details[d.key] as Value) : d.value}
+                  onChange={(v) => setDetails((all) => ({ ...all, [d.key]: v }))}
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="grid gap-4 rounded-lg border bg-surface p-5">
           <div>

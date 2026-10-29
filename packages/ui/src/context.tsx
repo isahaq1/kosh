@@ -35,6 +35,8 @@ export interface KoshContextValue {
   readonly realtime?: RealtimeClient;
   /** Changes saved offline, when the app keeps them: a form that cannot reach the server saves here. */
   readonly offline?: OfflineQueue;
+  /** Switches to another of the user's companies, when the shell offers it (Settings › Companies). */
+  readonly switchCompany?: (company: number) => void;
 }
 
 const Context = createContext<KoshContextValue | null>(null);
@@ -130,6 +132,7 @@ export function KoshProvider({
   accent,
   realtime,
   offline,
+  switchCompany,
   children,
 }: {
   readonly api: KoshApi;
@@ -144,6 +147,7 @@ export function KoshProvider({
   readonly accent?: string | null;
   readonly realtime?: RealtimeClient;
   readonly offline?: OfflineQueue;
+  readonly switchCompany?: (company: number) => void;
   readonly children: ReactNode;
 }): ReactElement {
   const [theme, setTheme] = useTheme();
@@ -166,6 +170,7 @@ export function KoshProvider({
       setDensity,
       ...(realtime === undefined ? {} : { realtime }),
       ...(offline === undefined ? {} : { offline }),
+      ...(switchCompany === undefined ? {} : { switchCompany }),
     }),
     [
       api,
@@ -179,6 +184,7 @@ export function KoshProvider({
       setDensity,
       realtime,
       offline,
+      switchCompany,
     ],
   );
   return <Context.Provider value={value}>{children}</Context.Provider>;
