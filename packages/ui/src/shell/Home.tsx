@@ -12,6 +12,7 @@ import {
   AtSign,
   BarChart3,
   CalendarClock,
+  CalendarDays,
   CheckCircle2,
   CircleCheckBig,
   History,
@@ -59,6 +60,18 @@ interface Todo {
   readonly name: string;
   readonly dueDate: string;
   readonly priority: string;
+}
+/** 09:30 in the browser's language and time zone. */
+const clock = (iso: string) =>
+  new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+
+interface Meeting {
+  readonly id: number;
+  readonly name: string;
+  readonly start: string;
+  readonly stop: string;
+  readonly room: { readonly displayName?: string } | number | null;
+  readonly location: string | null;
 }
 interface Saved {
   readonly id: number;
@@ -182,6 +195,29 @@ export function Home(): ReactElement {
   const complete = useMutation({
     mutationFn: (id: number) => api.transition('todo.task', id, 'complete'),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['home', 'todos'] }),
+  });
+  // Agenda (RFC 0021): today's confirmed events I organize or am invited to; nothing without Agenda.
+  const meetings = useQuery({
+    queryKey: ['home', 'meetings'],
+    queryFn: () => {
+      const from = new Date();
+      from.setHours(0, 0, 0, 0);
+      const to = new Date(from.getTime() + 86_400_000);
+      return api
+        .list('calendar.event', {
+          filter: {
+            state: 'confirmed',
+            start: { lt: to.toISOString() },
+            stop: { gt: from.toISOString() },
+            or: [{ organizer: uid }, { attendees: { any: { user: uid } } }],
+          },
+          fields: ['name', 'start', 'stop', 'room', 'location'],
+          order: ['start asc'],
+          limit: 20,
+        })
+        .then((r) => r.items as unknown as Meeting[])
+        .catch(() => [] as Meeting[]);
+    },
   });
   const saved = useQuery({
     queryKey: ['home', 'saved-views'],
@@ -378,6 +414,32 @@ export function Home(): ReactElement {
           </Card>
         )}
       </section>
+
+      {(meetings.data ?? []).length === 0 ? null : (
+        <section aria-labelledby="home-meetings" className="grid gap-3">
+          <h2 id="home-meetings" className="text-sm font-semibold text-muted-foreground">
+            {t('home.meetings')}
+          </h2>
+          <Card className="p-0">
+            <ul className="divide-y">
+              {(meetings.data ?? []).map((m) => (
+                <Item
+                  key={`meeting-${m.id}`}
+                  icon={<CalendarDays className="size-4" />}
+                  title={m.name}
+                  detail={[`${clock(m.start)}–${clock(m.stop)}`, m.location]
+                    .filter((x) => x !== null && x !== '')
+                    .join(' · ')}
+                >
+                  <Button size="sm" variant="ghost" onClick={() => open('calendar.event', m.id)}>
+                    {t('home.open')}
+                  </Button>
+                </Item>
+              ))}
+            </ul>
+          </Card>
+        </section>
+      )}
 
       {recent.length === 0 ? null : (
         <section aria-labelledby="home-recent" className="grid gap-3">
