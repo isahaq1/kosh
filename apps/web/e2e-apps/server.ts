@@ -48,6 +48,7 @@ import {
 } from '@kosh/server';
 import { orm, pg } from '@kosh/server/orm';
 import { settings } from '@kosh/settings';
+import { todo } from '@kosh/todo';
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
 
 export const ADMIN_TOTP_SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
@@ -104,6 +105,7 @@ const CATALOGUE = [
   purchase,
   accounting,
   project,
+  todo,
   saleAccount,
   purchaseAccount,
   saleProject,
@@ -133,6 +135,7 @@ await applyApps(
         'purchase',
         'accounting',
         'project',
+        'todo',
         'assistant',
         'import',
         'l10n_bd',
@@ -186,6 +189,7 @@ for (const [login, name, groups] of [
       'sales.manager',
       'purchase.manager',
       'project.manager',
+      'todo.user',
       'messaging.user',
       'reporting.user',
       'assistant.user',
@@ -197,7 +201,14 @@ for (const [login, name, groups] of [
   [
     'rahim',
     'Rahim Uddin',
-    ['sale_account.user', 'sale_project.user', 'account.user', 'messaging.user', 'reporting.user'],
+    [
+      'sale_account.user',
+      'sale_project.user',
+      'account.user',
+      'messaging.user',
+      'reporting.user',
+      'todo.user',
+    ],
   ],
 ] as const)
   await auth.createUser({

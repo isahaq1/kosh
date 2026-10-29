@@ -12,6 +12,7 @@ import {
   AtSign,
   BarChart3,
   CalendarClock,
+  CheckCircle2,
   CircleCheckBig,
   History,
   List,
@@ -52,6 +53,12 @@ interface Mention {
   readonly model: string;
   readonly resId: number;
   readonly createdAt: string;
+}
+interface Todo {
+  readonly id: number;
+  readonly name: string;
+  readonly dueDate: string;
+  readonly priority: string;
 }
 interface Saved {
   readonly id: number;
@@ -154,6 +161,28 @@ export function Home(): ReactElement {
         .then((r) => r.items.filter((n) => n.kind === 'mention'))
         .catch(() => [] as Mention[]),
   });
+  // Focus (RFC 0021): my open to-dos due today or before; nothing when Focus is not installed or not mine.
+  const todos = useQuery({
+    queryKey: ['home', 'todos'],
+    queryFn: () =>
+      api
+        .list('todo.task', {
+          filter: {
+            state: 'open',
+            owner: uid,
+            dueDate: { lte: new Date().toISOString().slice(0, 10) },
+          },
+          fields: ['name', 'dueDate', 'priority'],
+          order: ['dueDate asc', 'id asc'],
+          limit: 20,
+        })
+        .then((r) => r.items as unknown as Todo[])
+        .catch(() => [] as Todo[]),
+  });
+  const complete = useMutation({
+    mutationFn: (id: number) => api.transition('todo.task', id, 'complete'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['home', 'todos'] }),
+  });
   const saved = useQuery({
     queryKey: ['home', 'saved-views'],
     queryFn: () =>
@@ -205,7 +234,11 @@ export function Home(): ReactElement {
   );
   const tint = (a: AppEntry) => TINTS[categories.indexOf(a.category ?? '') % TINTS.length];
   const recent = recentRecords(uid);
-  const waiting = (approvals.data?.length ?? 0) + due.length + (mentions.data?.length ?? 0);
+  const waiting =
+    (approvals.data?.length ?? 0) +
+    due.length +
+    (mentions.data?.length ?? 0) +
+    (todos.data?.length ?? 0);
   const views = (saved.data ?? []).filter((v) => routes.data?.[v.targetModel]?.app !== undefined);
 
   return (
@@ -242,7 +275,7 @@ export function Home(): ReactElement {
           {t('home.attention')}
           {waiting === 0 ? null : <Badge tone="info">{waiting}</Badge>}
         </h2>
-        {approvals.isPending || activities.isPending || mentions.isPending ? (
+        {approvals.isPending || activities.isPending || mentions.isPending || todos.isPending ? (
           <Skeleton className="h-16" />
         ) : waiting === 0 ? (
           <Card className="flex items-center gap-3 p-4 text-sm text-muted-foreground">
@@ -287,6 +320,34 @@ export function Home(): ReactElement {
                     size="sm"
                     busy={done.isPending && done.variables === a.id}
                     onClick={() => done.mutate(a.id)}
+                  >
+                    {t('home.done')}
+                  </Button>
+                </Item>
+              ))}
+              {(todos.data ?? []).map((todo) => (
+                <Item
+                  key={`todo-${todo.id}`}
+                  icon={<CheckCircle2 className="size-4" />}
+                  title={
+                    <span className="flex items-center gap-2">
+                      <span className="truncate">{todo.name}</span>
+                      {todo.dueDate < today ? (
+                        <Badge tone="danger">{t('home.overdue')}</Badge>
+                      ) : (
+                        <Badge tone="warning">{t('home.dueToday')}</Badge>
+                      )}
+                    </span>
+                  }
+                  detail={t('home.todo')}
+                >
+                  <Button size="sm" variant="ghost" onClick={() => open('todo.task', todo.id)}>
+                    {t('home.open')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    busy={complete.isPending && complete.variables === todo.id}
+                    onClick={() => complete.mutate(todo.id)}
                   >
                     {t('home.done')}
                   </Button>
