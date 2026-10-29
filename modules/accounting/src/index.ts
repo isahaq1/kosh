@@ -251,6 +251,32 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       implies: ['user'],
     },
   },
+  // Settings › App settings › Accounting (RFC 0020): per company, changed by accounting managers.
+  settings: {
+    sections: [
+      {
+        key: 'periods',
+        label: 'Fiscal year and lock dates',
+        description: 'When the fiscal year starts, and the dates before which nothing may change.',
+        keywords: 'fiscal year lock date period closing tax return',
+        scope: 'company',
+        editors: ['account.manager'],
+        fields: [
+          {
+            key: 'fiscalYearStart',
+            min: 1,
+            max: 12,
+            help: 'The month it starts: 7 for July–June.',
+          },
+          { key: 'lockDate', help: 'Nothing is posted, reversed or reconciled on or before it.' },
+          {
+            key: 'taxLockDate',
+            help: 'Tax returns are filed up to it: tax lines cannot change on or before it.',
+          },
+        ],
+      },
+    ],
+  },
   actions: {
     'accounting.action_customer_invoices': action(AccountMove, {
       label: 'Customer invoices',

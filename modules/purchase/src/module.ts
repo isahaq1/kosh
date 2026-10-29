@@ -15,6 +15,7 @@ import {
   defineModel,
   defineModule,
   type Env,
+  extendModel,
   f,
   onchange,
   records,
@@ -125,8 +126,15 @@ export const PurchaseOrder = defineModel('purchase.order', {
     }),
   },
   onchange: {
-    // The vendor's currency, else the company's.
+    // The vendor's currency, else the company's; empty terms from the company's settings.
     partner: onchange('purchase.order', async (d, env) => {
+      if ((d.get('note') ?? '') === '') {
+        const [company] = (
+          await env.model('res.company').browse([env.companyId]).load(['purchaseTerms'])
+        ).read(['purchaseTerms']);
+        const terms = company?.['purchaseTerms'];
+        if (typeof terms === 'string' && terms !== '') d.set('note', terms);
+      }
       const p = await d.record('partner');
       if (p?.currency) {
         d.set('currency', p.currency.id);
@@ -138,6 +146,13 @@ export const PurchaseOrder = defineModel('purchase.order', {
         .load({ currency: true });
       if (company !== undefined) d.set('currency', company.currency.id);
     }),
+  },
+});
+
+/** The company's purchase settings (RFC 0020): the terms new orders start with. */
+export const CompanyPurchase = extendModel('res.company', {
+  fields: {
+    purchaseTerms: f.text({ label: 'Default terms and conditions' }),
   },
 });
 
@@ -238,7 +253,7 @@ export const PurchaseOrderLine = defineModel('purchase.order.line', {
 
 export const purchaseShutro = defineModule({
   name: 'purchase',
-  version: '0.2.0',
+  version: '0.3.0',
   migrations: [
     {
       version: '0.2.0',
@@ -276,4 +291,5 @@ export const purchaseShutro = defineModule({
     }),
   ],
   models: [PurchaseOrder, PurchaseOrderLine],
+  extensions: [CompanyPurchase],
 });

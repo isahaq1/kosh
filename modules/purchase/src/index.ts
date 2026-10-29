@@ -33,6 +33,22 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
     manager: { label: 'Manager (all orders)', groups: ['purchase.manager'], implies: ['user'] },
     director: { label: 'Director', groups: ['purchase.director'], implies: ['manager'] },
   },
+  // Settings › App settings › Purchase (RFC 0020): per company, changed by purchase managers.
+  settings: {
+    sections: [
+      {
+        key: 'orders',
+        label: 'Purchase orders',
+        description: 'The terms new requests for quotation and purchase orders start with.',
+        keywords: 'purchase order rfq terms conditions vendor',
+        scope: 'company',
+        editors: ['purchase.manager'],
+        fields: [
+          { key: 'purchaseTerms', help: 'Filled in on new orders; each can still be changed.' },
+        ],
+      },
+    ],
+  },
   approvals: [
     {
       name: 'Purchase approvals',

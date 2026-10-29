@@ -33,6 +33,31 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
     user: { label: 'Salesperson (own orders)', groups: ['sales.user'] },
     manager: { label: 'Manager (all orders)', groups: ['sales.manager'], implies: ['user'] },
   },
+  // Settings › App settings › Sales (RFC 0020): per company, changed by sales managers.
+  settings: {
+    sections: [
+      {
+        key: 'quotations',
+        label: 'Quotations',
+        description: 'How long new quotations stay valid, and the terms they start with.',
+        keywords: 'quote validity expiry terms conditions',
+        scope: 'company',
+        editors: ['sales.manager'],
+        fields: [
+          {
+            key: 'saleValidityDays',
+            min: 0,
+            max: 365,
+            help: 'A new quotation is valid until its date plus these days; 0 leaves it open.',
+          },
+          {
+            key: 'saleTerms',
+            help: 'Filled in on new quotations; each can still be changed.',
+          },
+        ],
+      },
+    ],
+  },
   // The printed quotation (RFC 0005), installed as a template designers can change; the portal prints it too.
   documents: [
     {

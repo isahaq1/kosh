@@ -243,3 +243,41 @@ test('the Sales app: menus for salespeople, none for others', async () => {
   const bob = await call('GET', '/api/v1/apps', 'bob');
   expect(bob.json.apps.map((a: Json) => a.code)).not.toContain('sales');
 });
+
+test('the company’s quotation settings (RFC 0020): validity from the order date, default terms', async () => {
+  await driver.query({
+    text: "UPDATE res_company SET sale_validity_days = 15, sale_terms = 'Payment within 30 days.'",
+    params: [],
+  });
+  const partners = await call('GET', '/api/v1/models/res.partner?fields=id&limit=1', 'rahim');
+  const res = await call('POST', '/api/v1/models/sale.order/onchange', 'rahim', {
+    values: { partner: partners.json.items[0].id, dateOrder: '2026-03-01' },
+    changed: ['partner'],
+  });
+  expect(res.status, JSON.stringify(res.json)).toBe(200);
+  expect(res.json.values).toMatchObject({
+    validityDate: '2026-03-16',
+    note: 'Payment within 30 days.',
+  });
+  // A new date moves the validity; terms already written stay.
+  const moved = await call('POST', '/api/v1/models/sale.order/onchange', 'rahim', {
+    values: {
+      partner: partners.json.items[0].id,
+      dateOrder: '2026-04-01',
+      validityDate: '2026-03-16',
+      note: 'Mine',
+    },
+    changed: ['dateOrder'],
+  });
+  expect(moved.json.values.validityDate).toBe('2026-04-16');
+  expect(moved.json.values.note ?? 'Mine').toBe('Mine');
+  await driver.query({
+    text: 'UPDATE res_company SET sale_validity_days = 0, sale_terms = NULL',
+    params: [],
+  });
+  const open = await call('POST', '/api/v1/models/sale.order/onchange', 'rahim', {
+    values: { partner: partners.json.items[0].id, dateOrder: '2026-03-01' },
+    changed: ['partner'],
+  });
+  expect(open.json.values.validityDate ?? null).toBeNull();
+});

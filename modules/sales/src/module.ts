@@ -13,6 +13,7 @@ import {
   defineModel,
   defineModule,
   type Env,
+  extendModel,
   f,
   onchange,
   records,
@@ -120,8 +121,9 @@ export const SaleOrder = defineModel('sale.order', {
     }),
   },
   onchange: {
-    // The customer's currency, else the company's.
+    // The customer's currency, else the company's; an empty validity and terms from the company's settings.
     partner: onchange('sale.order', async (d, env) => {
+      await quotationDefaults(d, env);
       const p = await d.record('partner');
       if (p?.currency) {
         d.set('currency', p.currency.id);
@@ -133,8 +135,40 @@ export const SaleOrder = defineModel('sale.order', {
         .load({ currency: true });
       if (company !== undefined) d.set('currency', company.currency.id);
     }),
+    // A new order date moves the validity with it.
+    dateOrder: onchange('sale.order', async (d, env) => {
+      d.set('validityDate', null);
+      await quotationDefaults(d, env);
+    }),
   },
 });
+
+/** The company's quotation settings (RFC 0020): how long quotations stay valid, and their default terms. */
+export const CompanySales = extendModel('res.company', {
+  fields: {
+    saleValidityDays: f.integer({ default: 30, label: 'Quotations valid for (days, 0: no limit)' }),
+    saleTerms: f.text({ label: 'Default terms and conditions' }),
+  },
+});
+
+/** Fills an order's empty validity and terms from its company's settings. */
+async function quotationDefaults(
+  d: { get(key: string): unknown; set(key: string, value: unknown): void },
+  env: Env,
+): Promise<void> {
+  const [company] = (
+    await env.model('res.company').browse([env.companyId]).load(['saleValidityDays', 'saleTerms'])
+  ).read(['saleValidityDays', 'saleTerms']);
+  const days = Number(company?.['saleValidityDays'] ?? 0);
+  const date = d.get('dateOrder');
+  if ((d.get('validityDate') ?? null) === null && days > 0 && typeof date === 'string') {
+    const [y, m, day] = date.split('-').map(Number) as [number, number, number];
+    d.set('validityDate', new Date(Date.UTC(y, m - 1, day + days)).toISOString().slice(0, 10));
+  }
+  const terms = company?.['saleTerms'];
+  if ((d.get('note') ?? '') === '' && typeof terms === 'string' && terms !== '')
+    d.set('note', terms);
+}
 
 export const SaleOrderLine = defineModel('sale.order.line', {
   label: 'Order line',
@@ -238,7 +272,7 @@ export const SaleOrderLine = defineModel('sale.order.line', {
 
 export const salesShutro = defineModule({
   name: 'sales',
-  version: '0.2.0',
+  version: '0.3.0',
   migrations: [
     {
       version: '0.2.0',
@@ -262,4 +296,5 @@ export const salesShutro = defineModule({
     orm.defineSequence({ code: 'sale.order', prefix: 'SO/{year}/', padding: 5, reset: 'yearly' }),
   ],
   models: [SaleOrder, SaleOrderLine],
+  extensions: [CompanySales],
 });
