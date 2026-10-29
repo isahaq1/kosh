@@ -1,18 +1,25 @@
 /**
- * The Workspace sidebar (RFC 0018 §4.1): the company at the top, search, Home, then the user's apps — each a button
- * that opens its sections (the current app opens itself; one at a time) — and the user at the bottom. It collapses
- * to an icon rail (`Ctrl+B`, remembered per browser) and becomes a drawer on small screens. The server decides which
- * apps and menus the user sees; the sidebar shows them.
+ * The Workspace sidebar (RFC 0018 §4.1), shown inside an app: the company at the top, search, Home, then the open
+ * app — its name switches to another app — with only its own sections, and the user at the bottom. The home page has
+ * no sidebar. It collapses to an icon rail (`Ctrl+B`, remembered per browser) and becomes a drawer on small screens.
+ * The server decides which apps and menus the user sees; the sidebar shows them.
  */
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { ChevronDown, House, PanelLeftClose, PanelLeftOpen, Search, X } from 'lucide-react';
+import { ChevronsUpDown, House, PanelLeftClose, PanelLeftOpen, Search, X } from 'lucide-react';
 import { Dialog } from 'radix-ui';
-import { type ReactElement, type ReactNode, useEffect, useState } from 'react';
+import { type ReactElement, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AppEntry, KoshApi, MenuNode } from '../api.js';
 import { AppIcon } from '../components/AppIcon.js';
-import { Button } from '../components/primitives.js';
+import {
+  Button,
+  Menu,
+  MenuCheckboxItem,
+  MenuContent,
+  MenuLabel,
+  MenuTrigger,
+} from '../components/primitives.js';
 import { cn } from '../lib/cn.js';
 
 const SIDEBAR_KEY = 'kosh.sidebar';
@@ -85,7 +92,7 @@ function AppSections({
     queryFn: () => api.menus(app),
   });
   return (
-    <ul className="ms-4 grid gap-0.5 border-s ps-2 pt-1 pb-2">
+    <ul className="grid gap-0.5 pt-1 pb-2">
       {entriesOf(menus.data ?? []).map((node) =>
         node.children.length > 0 ? (
           <li key={node.id} className="pt-1">
@@ -140,8 +147,7 @@ export function Sidebar({
 }): ReactElement {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [open, setOpen] = useState<string | undefined>(current);
-  useEffect(() => setOpen(current), [current]);
+  const app = apps.find((a) => a.code === current);
   const item =
     'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted focus-visible:outline-2';
   return (
@@ -179,51 +185,52 @@ export function Sidebar({
         aria-label={t('shell.menu')}
         className="-mx-2 mt-2 flex-1 overflow-y-auto border-t px-2 pt-2"
       >
-        <ul className="grid gap-0.5">
-          {apps.map((a) => {
-            const expanded = !collapsed && open === a.code;
-            return (
-              <li key={a.code}>
+        {app === undefined ? null : (
+          <>
+            <Menu>
+              <MenuTrigger asChild>
                 <button
                   type="button"
-                  aria-expanded={collapsed ? undefined : expanded}
                   // "Sales app": distinct from the screens' own buttons named like an app (Chat, Studio).
-                  aria-label={t('shell.appNamed', { app: a.label })}
-                  title={collapsed ? a.label : undefined}
-                  className={cn(
-                    item,
-                    current === a.code && 'font-medium',
-                    collapsed && 'justify-center',
-                  )}
-                  onClick={() => {
-                    if (collapsed || a.code !== current) {
-                      setOpen(a.code);
-                      void navigate({ to: '/$app', params: { app: a.code } });
-                      onNavigate?.();
-                    } else setOpen(expanded ? undefined : a.code);
-                  }}
+                  aria-label={t('shell.appNamed', { app: app.label })}
+                  title={collapsed ? app.label : undefined}
+                  className={cn(item, 'font-semibold', collapsed && 'justify-center')}
                 >
-                  <AppIcon name={a.icon ?? a.code} className="size-6 rounded-md [&_svg]:size-3.5" />
+                  <AppIcon
+                    name={app.icon ?? app.code}
+                    className="size-6 rounded-md [&_svg]:size-3.5"
+                  />
                   {collapsed ? null : (
                     <>
-                      <span className="flex-1 truncate text-start">{a.label}</span>
-                      <ChevronDown
-                        className={cn(
-                          'size-3.5 text-muted-foreground transition-transform',
-                          !expanded && '-rotate-90 rtl:rotate-90',
-                        )}
-                        aria-hidden
-                      />
+                      <span className="flex-1 truncate text-start">{app.label}</span>
+                      <ChevronsUpDown className="size-3.5 text-muted-foreground" aria-hidden />
                     </>
                   )}
                 </button>
-                {expanded ? (
-                  <AppSections api={api} app={a.code} company={company} onNavigate={onNavigate} />
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
+              </MenuTrigger>
+              <MenuContent align="start" className="w-60">
+                <MenuLabel>{t('shell.apps')}</MenuLabel>
+                {apps.map((a) => (
+                  <MenuCheckboxItem
+                    key={a.code}
+                    checked={a.code === current}
+                    onCheckedChange={() => {
+                      if (a.code === current) return;
+                      void navigate({ to: '/$app', params: { app: a.code } });
+                      onNavigate?.();
+                    }}
+                  >
+                    <AppIcon name={a.icon ?? a.code} className="size-5 rounded [&_svg]:size-3" />
+                    {a.label}
+                  </MenuCheckboxItem>
+                ))}
+              </MenuContent>
+            </Menu>
+            {collapsed ? null : (
+              <AppSections api={api} app={app.code} company={company} onNavigate={onNavigate} />
+            )}
+          </>
+        )}
       </nav>
       <div className={cn('flex items-center gap-1 border-t pt-2', collapsed && 'flex-col')}>
         <div className="min-w-0 flex-1">{bottom}</div>

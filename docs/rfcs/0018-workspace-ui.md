@@ -246,3 +246,14 @@ the workflow popover reads the transitions the server serves, the summary reads 
   user.
 - **Tests**: E2E for a saved view as a tab (current, back to All with the right count, back again), the floating
   bar (fixed at the bottom; cleared), Ctrl+click opening the record in a new tab, Today's date and saved view.
+
+## Change (2026-10-29, asked by the user): a home page without chrome, an app's own sidebar
+
+- **Home and the user's own pages** (`/`, `/me/<page>`): no sidebar and no page bar — only the account menu in the
+  top corner (name and login, the user's pages such as Your profile and API keys, the companies when there are
+  several, language, theme and density, Sign out), and a link Home on the user's pages. The notification bell, the
+  chat dock and Studio live in an app's page bar; Today lists what needs the user.
+- **Inside an app**: the sidebar shows only that app's sections, under its name — a menu that switches to another
+  app — with the company, search and Home above; the page bar is back. Ctrl+B, the rail and the phone drawer as
+  before.
+

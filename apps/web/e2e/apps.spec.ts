@@ -6,7 +6,7 @@
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
-import { openApp, openAppManager, signIn } from './support.js';
+import { choose, openApp, openAppManager, signIn } from './support.js';
 
 async function axe(page: Page, where: string): Promise<void> {
   const results = await new AxeBuilder({ page })
@@ -69,9 +69,7 @@ test('install an app, use it, disable it: the data stays', async ({ page }) => {
 for (const theme of ['Light', 'Dark'] as const)
   test(`the Apps page passes axe (${theme})`, async ({ page }) => {
     await signIn(page, 'admin');
-    await page.getByRole('button', { name: 'Theme' }).click();
-    await page.getByRole('menuitemcheckbox', { name: theme }).click();
-    await page.keyboard.press('Escape');
+    await choose(page, 'Theme', theme);
     await openAppManager(page);
     await expect(page.getByRole('heading', { name: 'Apps', level: 1 })).toBeVisible();
     await axe(page, `apps ${theme}`);
@@ -86,8 +84,7 @@ test('without the App manager access: no Settings, and the server refuses', asyn
 
 test('the Apps page in Bangla', async ({ page }) => {
   await signIn(page, 'admin');
-  await page.getByRole('button', { name: 'Language' }).click();
-  await page.getByRole('menuitemcheckbox', { name: 'বাংলা' }).click();
+  await choose(page, 'Language', 'বাংলা');
   await openAppManager(page);
   await expect(
     page.getByText('আপনার ব্যবসার প্রয়োজনীয় অ্যাপগুলো ইনস্টল করুন।', { exact: false }),

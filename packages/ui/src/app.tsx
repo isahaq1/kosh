@@ -34,10 +34,12 @@ import {
   CalendarDays,
   ChartColumn,
   ChartGantt,
+  ChevronDown,
   ChevronRight,
   ChevronsUpDown,
   Columns3,
   Grid2x2,
+  House,
   Languages,
   LayoutDashboard,
   List,
@@ -348,15 +350,26 @@ function CompanyBlock({
 }
 
 /** The user at the bottom of the sidebar: their pages and signing out. */
+/** What the corner menu adds (the home page has no sidebar or page bar): the companies to switch between. */
+interface CornerOptions {
+  readonly companies: readonly { readonly id: number; readonly name: string }[];
+  readonly current: number;
+  readonly onSwitch: (id: number) => void;
+}
+
 function UserMenu({
   user,
   collapsed,
+  corner,
 }: {
   readonly user: CurrentUser;
   readonly collapsed: boolean;
+  /** The home page's account menu (top corner): also the language, the theme and the companies. */
+  readonly corner?: CornerOptions;
 }): ReactElement {
   const { t } = useTranslation();
-  const { api, registry, persister } = useServices();
+  const { api, registry, persister, lang, setLang } = useServices();
+  const { theme, setTheme, density, setDensity } = useKosh();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const initials = user.name
@@ -371,22 +384,37 @@ function UserMenu({
         <button
           type="button"
           aria-label={user.name}
+          data-kosh-account={corner === undefined ? 'sidebar' : 'corner'}
           className={cn(
-            'flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-muted',
+            'flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-muted',
+            corner === undefined ? 'w-full' : 'rounded-full border bg-surface pe-3',
             collapsed && 'justify-center',
           )}
         >
           <span
             aria-hidden
-            className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-xs font-medium"
+            className={cn(
+              'grid size-7 shrink-0 place-items-center rounded-full text-xs font-medium',
+              corner === undefined ? 'bg-muted' : 'bg-primary text-primary-foreground',
+            )}
           >
             {initials}
           </span>
           {collapsed ? null : <span className="truncate">{user.name}</span>}
+          {corner === undefined ? null : (
+            <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden />
+          )}
         </button>
       </MenuTrigger>
-      <MenuContent align="start" side="top">
-        <MenuLabel>{user.name}</MenuLabel>
+      <MenuContent
+        align={corner === undefined ? 'start' : 'end'}
+        side={corner === undefined ? 'top' : 'bottom'}
+        className={corner === undefined ? undefined : 'max-h-[80vh] w-64 overflow-y-auto'}
+      >
+        <MenuLabel>
+          {user.name}
+          <span className="block text-xs font-normal text-muted-foreground">{user.login}</span>
+        </MenuLabel>
         {registry.userPages().map((p) => (
           <MenuItem
             key={p.name}
@@ -395,6 +423,60 @@ function UserMenu({
             {t(p.label)}
           </MenuItem>
         ))}
+        {corner === undefined ? null : (
+          <>
+            {corner.companies.length < 2 ? null : (
+              <>
+                <MenuSeparator />
+                <MenuLabel>{t('shell.company')}</MenuLabel>
+                {corner.companies.map((c) => (
+                  <MenuCheckboxItem
+                    key={c.id}
+                    checked={c.id === corner.current}
+                    onCheckedChange={() => {
+                      if (c.id !== corner.current) corner.onSwitch(c.id);
+                    }}
+                  >
+                    {c.name}
+                  </MenuCheckboxItem>
+                ))}
+              </>
+            )}
+            <MenuSeparator />
+            <MenuLabel>{t('shell.language')}</MenuLabel>
+            {LANGUAGES.map((l) => (
+              <MenuCheckboxItem
+                key={l.code}
+                checked={lang === l.code}
+                onCheckedChange={() => setLang(l.code)}
+              >
+                <span lang={l.code.replace('_', '-')}>{l.name}</span>
+              </MenuCheckboxItem>
+            ))}
+            <MenuSeparator />
+            <MenuLabel>{t('shell.theme')}</MenuLabel>
+            {(['light', 'dark', 'system'] as ThemeChoice[]).map((choice) => (
+              <MenuCheckboxItem
+                key={choice}
+                checked={theme === choice}
+                onCheckedChange={() => setTheme(choice)}
+              >
+                {t(`shell.${choice}`)}
+              </MenuCheckboxItem>
+            ))}
+            <MenuLabel>{t('shell.density')}</MenuLabel>
+            {(['comfortable', 'compact'] as const).map((choice) => (
+              <MenuCheckboxItem
+                key={choice}
+                checked={density === choice}
+                onCheckedChange={() => setDensity(choice)}
+              >
+                {t(`views.${choice}`)}
+              </MenuCheckboxItem>
+            ))}
+          </>
+        )}
+        <MenuSeparator />
         <MenuItem
           onSelect={async () => {
             await api.logout();
@@ -532,88 +614,33 @@ function Shell(): ReactElement {
             >
               {t('shell.skip')}
             </a>
-            <div className="flex min-h-screen">
-              <aside
-                aria-label={t('shell.sidebar')}
-                className={cn(
-                  'sticky top-0 hidden h-screen shrink-0 border-e bg-surface transition-[width] lg:block',
-                  collapsed ? 'w-14' : 'w-60',
-                )}
-              >
-                {sidebar(false)}
-              </aside>
-              <SidebarDrawer open={drawer} onOpenChange={setDrawer}>
-                {sidebar(true)}
-              </SidebarDrawer>
-              <div className="flex min-w-0 flex-1 flex-col">
-                {/* Solid, no backdrop filter: a filter would make the bar the box of fixed panels inside it (chat). */}
-                <header className="sticky top-0 z-30 border-b bg-surface">
-                  <div className="flex h-12 items-center gap-2 px-3 lg:px-4">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="lg:hidden"
-                      aria-label={t('shell.openMenu')}
-                      onClick={() => setDrawer(true)}
+            {params.app === undefined ? (
+              // The home page and the user's own pages: no sidebar, no page bar; the account menu in the corner.
+              <div className="flex min-h-screen flex-col">
+                <div className="flex h-14 items-center gap-2 px-4 lg:px-6">
+                  {userPage === undefined ? null : (
+                    <Link
+                      to="/"
+                      className="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
                     >
-                      <PanelLeft className="rtl:rotate-180" aria-hidden />
-                    </Button>
-                    <nav
-                      aria-label={t('shell.location')}
-                      className="flex min-w-0 flex-1 items-center gap-1.5 text-sm"
-                    >
-                      {app === undefined ? (
-                        <span className="font-semibold">
-                          {userPage !== undefined
-                            ? t(userPage.label)
-                            : params.app === undefined
-                              ? t('shell.home')
-                              : t('app.name')}
-                        </span>
-                      ) : (
-                        <>
-                          <Link
-                            to="/$app"
-                            params={{ app: app.code }}
-                            className="font-semibold hover:underline"
-                          >
-                            {app.label}
-                          </Link>
-                          {section === undefined ? null : (
-                            <>
-                              <ChevronRight
-                                className="size-3.5 text-muted-foreground rtl:rotate-180"
-                                aria-hidden
-                              />
-                              <Link
-                                to="/$app/a/$action"
-                                params={{ app: app.code, action: params.action ?? '' }}
-                                className="truncate text-muted-foreground hover:text-foreground hover:underline"
-                              >
-                                {section}
-                              </Link>
-                            </>
-                          )}
-                        </>
-                      )}
-                    </nav>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="lg:hidden"
-                      aria-label={t('palette.button')}
-                      onClick={() => setPalette(true)}
-                    >
-                      <Search aria-hidden />
-                    </Button>
-                    <OfflineMenu />
-                    {registry.headerItems().map(({ name, component: Item }) => (
-                      <Item key={name} api={api} />
-                    ))}
-                    <LanguageMenu />
-                    <ThemeMenu />
-                  </div>
-                </header>
+                      <House className="size-4" aria-hidden />
+                      {t('shell.home')}
+                    </Link>
+                  )}
+                  <span className="flex-1" />
+                  <UserMenu
+                    user={user}
+                    collapsed={false}
+                    corner={{
+                      companies: (companyNames.data ?? []).map((c) => ({
+                        id: c.id,
+                        name: c.displayName,
+                      })),
+                      current,
+                      onSwitch: switchCompany,
+                    }}
+                  />
+                </div>
                 {user.administratorNeedsSecondFactor ? (
                   <div className="px-4 pt-3">
                     <Alert tone="info">{t('auth.adminNeeds2fa')}</Alert>
@@ -623,7 +650,100 @@ function Shell(): ReactElement {
                   <Outlet />
                 </main>
               </div>
-            </div>
+            ) : (
+              <div className="flex min-h-screen">
+                <aside
+                  aria-label={t('shell.sidebar')}
+                  className={cn(
+                    'sticky top-0 hidden h-screen shrink-0 border-e bg-surface transition-[width] lg:block',
+                    collapsed ? 'w-14' : 'w-60',
+                  )}
+                >
+                  {sidebar(false)}
+                </aside>
+                <SidebarDrawer open={drawer} onOpenChange={setDrawer}>
+                  {sidebar(true)}
+                </SidebarDrawer>
+                <div className="flex min-w-0 flex-1 flex-col">
+                  {/* Solid, no backdrop filter: a filter would make the bar the box of fixed panels inside it (chat). */}
+                  <header className="sticky top-0 z-30 border-b bg-surface">
+                    <div className="flex h-12 items-center gap-2 px-3 lg:px-4">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="lg:hidden"
+                        aria-label={t('shell.openMenu')}
+                        onClick={() => setDrawer(true)}
+                      >
+                        <PanelLeft className="rtl:rotate-180" aria-hidden />
+                      </Button>
+                      <nav
+                        aria-label={t('shell.location')}
+                        className="flex min-w-0 flex-1 items-center gap-1.5 text-sm"
+                      >
+                        {app === undefined ? (
+                          <span className="font-semibold">
+                            {userPage !== undefined
+                              ? t(userPage.label)
+                              : params.app === undefined
+                                ? t('shell.home')
+                                : t('app.name')}
+                          </span>
+                        ) : (
+                          <>
+                            <Link
+                              to="/$app"
+                              params={{ app: app.code }}
+                              className="font-semibold hover:underline"
+                            >
+                              {app.label}
+                            </Link>
+                            {section === undefined ? null : (
+                              <>
+                                <ChevronRight
+                                  className="size-3.5 text-muted-foreground rtl:rotate-180"
+                                  aria-hidden
+                                />
+                                <Link
+                                  to="/$app/a/$action"
+                                  params={{ app: app.code, action: params.action ?? '' }}
+                                  className="truncate text-muted-foreground hover:text-foreground hover:underline"
+                                >
+                                  {section}
+                                </Link>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </nav>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="lg:hidden"
+                        aria-label={t('palette.button')}
+                        onClick={() => setPalette(true)}
+                      >
+                        <Search aria-hidden />
+                      </Button>
+                      <OfflineMenu />
+                      {registry.headerItems().map(({ name, component: Item }) => (
+                        <Item key={name} api={api} />
+                      ))}
+                      <LanguageMenu />
+                      <ThemeMenu />
+                    </div>
+                  </header>
+                  {user.administratorNeedsSecondFactor ? (
+                    <div className="px-4 pt-3">
+                      <Alert tone="info">{t('auth.adminNeeds2fa')}</Alert>
+                    </div>
+                  ) : null}
+                  <main id="content" className="mx-auto w-full max-w-[100rem] flex-1 p-4 lg:p-6">
+                    <Outlet />
+                  </main>
+                </div>
+              </div>
+            )}
             <CommandPalette
               open={palette}
               onOpenChange={setPalette}

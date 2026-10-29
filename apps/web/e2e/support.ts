@@ -17,6 +17,18 @@ export async function signIn(page: Page, login: string): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Apps' })).toBeVisible();
 }
 
+/**
+ * Picks a theme or a language: from the account menu in the home page's corner, or from the page bar inside an app.
+ * `menu` is the page bar's button (Theme, Language) when there is no account menu.
+ */
+export async function choose(page: Page, menu: string, item: string): Promise<void> {
+  const corner = page.locator('[data-kosh-account="corner"]');
+  if ((await corner.count()) > 0) await corner.click();
+  else await page.getByRole('button', { name: menu }).click();
+  await page.getByRole('menuitemcheckbox', { name: item }).click();
+  await page.keyboard.press('Escape');
+}
+
 /** Opens an app from the launcher. */
 export async function openApp(page: Page, label: string): Promise<void> {
   await page.getByRole('link', { name: label }).click();

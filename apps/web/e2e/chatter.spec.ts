@@ -4,7 +4,7 @@
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
-import { signIn } from './support.js';
+import { choose, signIn } from './support.js';
 
 const ORDERS = '/purchase/a/purchase.action_orders';
 
@@ -96,9 +96,7 @@ test('an activity planned for a colleague, completed in their session', async ({
 for (const theme of ['Light', 'Dark'] as const)
   test(`the chatter has no serious accessibility violations (${theme})`, async ({ page }) => {
     await signIn(page, 'dina');
-    await page.getByRole('button', { name: 'Theme' }).click();
-    await page.getByRole('menuitemcheckbox', { name: theme }).click();
-    await page.keyboard.press('Escape');
+    await choose(page, 'Theme', theme);
     await openOrder(page, 'PO-R-002');
     await expect(chatter(page).getByRole('article').first()).toBeVisible();
     const results = await new AxeBuilder({ page })

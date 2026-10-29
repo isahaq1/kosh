@@ -1,6 +1,7 @@
 /**
- * The shell: sign-in (with 2FA for administrators), apps and menus per role (installing a module grants nothing),
- * languages (Bangla; Arabic switches the layout to right-to-left), themes, sign-out.
+ * The shell: sign-in (with 2FA for administrators), apps and menus per role (installing a module grants nothing), the
+ * home page without sidebar (the account menu in its corner) and an app's own sidebar, languages (Bangla; Arabic
+ * switches the layout to right-to-left), themes, sign-out.
  */
 import { expect, test } from '@playwright/test';
 import { signIn } from './support.js';
@@ -32,21 +33,33 @@ test('requesters see their apps and menus', async ({ page }) => {
   ).toHaveAttribute('aria-current', 'page');
 });
 
-test('the sidebar: apps open their sections; collapsed with Ctrl+B and remembered; a drawer on phones', async ({
+test('home has no sidebar; an app sidebar shows its own sections and switches apps; Ctrl+B; a drawer on phones', async ({
   page,
 }) => {
   await signIn(page, 'rahim');
   const sidebar = page.getByRole('complementary', { name: 'Sidebar' });
-  await sidebar.getByRole('button', { name: 'Purchase app' }).click();
+  await expect(sidebar).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'You are here' })).toHaveCount(0);
+
+  await page.getByRole('main').getByRole('link', { name: 'Purchase' }).click();
   await expect(page).toHaveURL(/\/purchase\/a\/purchase\.action_orders/);
-  await expect(sidebar.getByRole('button', { name: 'Purchase app' })).toHaveAttribute(
-    'aria-expanded',
-    'true',
+  await expect(sidebar.getByRole('button', { name: 'Purchase app' })).toBeVisible();
+  await expect(sidebar.getByRole('link', { name: 'Orders' })).toHaveAttribute(
+    'aria-current',
+    'page',
   );
+  // Only this app's sections.
+  await expect(sidebar.getByRole('button', { name: 'Contacts app' })).toHaveCount(0);
   // The page bar says where the user is.
   const here = page.getByRole('navigation', { name: 'You are here' });
   await expect(here).toContainText('Purchase');
   await expect(here).toContainText('Orders');
+
+  // The app's name switches to another app.
+  await sidebar.getByRole('button', { name: 'Purchase app' }).click();
+  await page.getByRole('menuitemcheckbox', { name: 'Contacts' }).click();
+  await expect(page).toHaveURL(/\/contacts\//);
+  await expect(sidebar.getByRole('button', { name: 'Contacts app' })).toBeVisible();
 
   await page.keyboard.press('Control+b');
   await expect(sidebar.getByRole('button', { name: 'Expand the sidebar' })).toBeVisible();
@@ -59,9 +72,9 @@ test('the sidebar: apps open their sections; collapsed with Ctrl+B and remembere
   await expect(sidebar).toBeHidden();
   await page.getByRole('button', { name: 'Open the menu' }).click();
   const drawer = page.getByRole('dialog', { name: 'Main menu' });
-  await drawer.getByRole('button', { name: 'Contacts app' }).click();
+  await drawer.getByRole('link', { name: 'Home' }).click();
   await expect(drawer).toBeHidden(); // following a link closes it
-  await expect(page).toHaveURL(/\/contacts\//);
+  await expect(page).toHaveURL(/\/$/);
 });
 
 test('administrators sign in with a second factor', async ({ page }) => {
@@ -83,23 +96,25 @@ test('administrators sign in with a second factor', async ({ page }) => {
 
 test('Bangla labels; Arabic switches to right-to-left; dark theme', async ({ page }) => {
   await signIn(page, 'rahim');
-  await page.getByRole('button', { name: 'Language' }).click();
+  // Home: the account menu in the corner holds the language and the theme.
+  const account = page.getByRole('button', { name: 'Rahim Uddin' });
+  await account.click();
   await page.getByRole('menuitemcheckbox', { name: 'বাংলা' }).click();
   await expect(page.getByRole('heading', { name: 'অ্যাপস' })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('lang', 'bn-BD');
   await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
 
-  await page.getByRole('button', { name: 'ভাষা' }).click();
+  await account.click();
   await page.getByRole('menuitemcheckbox', { name: 'العربية' }).click();
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await expect(page.getByRole('heading', { name: 'التطبيقات' })).toBeVisible();
-  // Logical properties: the sidebar (with the user menu) sits at the inline start, i.e. on the right in RTL.
-  const box = await page.getByRole('button', { name: 'Rahim Uddin' }).boundingBox();
-  expect(box?.x ?? 0).toBeGreaterThan(900);
+  // Logical properties: the account menu sits at the inline end, i.e. on the left in RTL.
+  const box = await account.boundingBox();
+  expect(box?.x ?? 9999).toBeLessThan(400);
 
-  await page.getByRole('button', { name: 'اللغة' }).click();
+  await account.click();
   await page.getByRole('menuitemcheckbox', { name: 'English' }).click();
-  await page.getByRole('button', { name: 'Theme' }).click();
+  await account.click();
   await page.getByRole('menuitemcheckbox', { name: 'Dark' }).click();
   await expect(page.locator('html')).toHaveClass(/dark/);
   await page.reload();

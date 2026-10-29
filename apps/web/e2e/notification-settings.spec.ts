@@ -5,7 +5,7 @@
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
-import { signIn } from './support.js';
+import { choose, signIn } from './support.js';
 
 /** The bell is named "Notifications", or "3 unread notifications" when some are unread (earlier specs). */
 async function openSettings(
@@ -13,6 +13,8 @@ async function openSettings(
   bell: RegExp = /^(Notifications|\d+ unread notifications?)$/,
   settings = 'Notification settings',
 ) {
+  // The bell is in an app's page bar (the home page has only the account menu).
+  if (!page.url().includes('/a/')) await page.goto('/contacts/a/contacts.action_partners');
   await page.getByRole('button', { name: bell }).click();
   await page.getByRole('button', { name: settings }).click();
   return page.getByRole('dialog', { name: settings });
@@ -78,9 +80,7 @@ test('quiet hours, a day off, the digest hour, the fallback and the email mode a
 for (const theme of ['Light', 'Dark'] as const)
   test(`the settings dialog passes axe (${theme}) and reads in Bangla`, async ({ page }) => {
     await signIn(page, 'rahim');
-    await page.getByRole('button', { name: 'Theme' }).click();
-    await page.getByRole('menuitemcheckbox', { name: theme }).click();
-    await page.keyboard.press('Escape');
+    await choose(page, 'Theme', theme);
     const dialog = await openSettings(page);
     await expect(dialog.getByRole('checkbox', { name: 'Mentions: Bell' })).toBeVisible();
     const results = await new AxeBuilder({ page })
