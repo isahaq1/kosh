@@ -5,6 +5,7 @@
  * | Keys            | Does                                | Marked with             |
  * | --------------- | ----------------------------------- | ----------------------- |
  * | Ctrl/⌘ + K      | command palette                     | (the shell)             |
+ * | Ctrl/⌘ + B      | collapse / expand the sidebar       | (the shell)             |
  * | ?               | this list                           | (the shell)             |
  * | /               | focus the search box                | `data-kosh-search`      |
  * | N               | new record                          | `data-kosh-new`         |
@@ -38,6 +39,8 @@ const click = (selector: string): boolean => {
 export function useShortcuts(handlers: {
   readonly palette: () => void;
   readonly help: () => void;
+  /** Collapses or expands the sidebar (RFC 0018). */
+  readonly sidebar?: () => void;
 }): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -47,6 +50,11 @@ export function useShortcuts(handlers: {
         e.preventDefault();
         if (e.shiftKey) click('[data-kosh-chat]');
         else handlers.palette();
+        return;
+      }
+      if (mod && key === 'b' && handlers.sidebar !== undefined && !typing(e.target)) {
+        e.preventDefault();
+        handlers.sidebar();
         return;
       }
       if (mod && key === 's') {
@@ -108,6 +116,7 @@ export function ShortcutsHelp({
   const mod = isMac ? '⌘' : 'Ctrl';
   const rows: [string, string[]][] = [
     ['palette', [mod, 'K']],
+    ['sidebar', [mod, 'B']],
     ['search', ['/']],
     ['new', ['N']],
     ['views', ['Alt', '1…9']],

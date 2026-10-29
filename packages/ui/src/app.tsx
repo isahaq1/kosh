@@ -34,9 +34,9 @@ import {
   CalendarDays,
   ChartColumn,
   ChartGantt,
+  ChevronRight,
   Columns3,
   Grid2x2,
-  Grid3x3,
   Languages,
   LayoutDashboard,
   List,
@@ -45,12 +45,12 @@ import {
   Monitor,
   Moon,
   Network,
+  PanelLeft,
   Plus,
   Search,
   Sheet,
   Sun,
   Table2,
-  UserRound,
 } from 'lucide-react';
 import { Direction } from 'radix-ui';
 import {
@@ -82,6 +82,7 @@ import { KoshProvider, type ThemeChoice, useKosh } from './context.js';
 import { DesignProvider } from './design.js';
 import { addMessages, createI18n, directionOf } from './i18n/index.js';
 import { LANGUAGES } from './i18n/messages.js';
+import { cn } from './lib/cn.js';
 import {
   claimOfflineCache,
   createOfflinePersister,
@@ -100,6 +101,7 @@ import { Home } from './shell/Home.js';
 import { Login } from './shell/Login.js';
 import { OfflineMenu } from './shell/OfflineMenu.js';
 import { rememberRecord } from './shell/recent.js';
+import { Sidebar, SidebarDrawer, useSidebarCollapsed } from './shell/Sidebar.js';
 import { ShortcutsHelp, useShortcuts } from './shell/shortcuts.js';
 import { ToastProvider, useToast } from './shell/toast.js';
 import { neighbours } from './views/listMemory.js';
@@ -195,62 +197,6 @@ function firstAction(menus: readonly MenuNode[]): MenuNode | undefined {
   return undefined;
 }
 
-function MenuLinks({
-  app,
-  menus,
-}: {
-  readonly app: string;
-  readonly menus: readonly MenuNode[];
-}): ReactElement {
-  const navigate = useNavigate();
-  const entries = menus.flatMap((root) => (root.action === undefined ? root.children : [root]));
-  return (
-    <ul className="flex flex-wrap items-center gap-1">
-      {entries.map((m) =>
-        m.children.length > 0 ? (
-          <li key={m.id}>
-            <Menu>
-              <MenuTrigger asChild>
-                <Button variant="ghost" size="sm">
-                  {m.label}
-                </Button>
-              </MenuTrigger>
-              <MenuContent align="start">
-                {m.children.map((c) =>
-                  c.action === undefined ? null : (
-                    <MenuItem
-                      key={c.id}
-                      onSelect={() =>
-                        void navigate({
-                          to: '/$app/a/$action',
-                          params: { app, action: c.action as string },
-                        })
-                      }
-                    >
-                      {c.label}
-                    </MenuItem>
-                  ),
-                )}
-              </MenuContent>
-            </Menu>
-          </li>
-        ) : m.action === undefined ? null : (
-          <li key={m.id}>
-            <Link
-              to="/$app/a/$action"
-              params={{ app, action: m.action }}
-              className="rounded-md px-3 py-1.5 text-sm hover:bg-muted"
-              activeProps={{ 'aria-current': 'page', className: 'bg-muted font-medium' }}
-            >
-              {m.label}
-            </Link>
-          </li>
-        ),
-      )}
-    </ul>
-  );
-}
-
 function ThemeMenu(): ReactElement {
   const { t } = useTranslation();
   const { theme, setTheme, density, setDensity } = useKosh();
@@ -316,47 +262,138 @@ function LanguageMenu(): ReactElement {
   );
 }
 
-function CompanySwitcher({
+/** The company at the top of the sidebar: its initial and name, or the switcher when the user has several. */
+function CompanyBlock({
   me,
   company,
+  collapsed,
   onChange,
 }: {
   readonly me: CurrentUser;
   readonly company: number;
+  readonly collapsed: boolean;
   readonly onChange: (id: number) => void;
-}): ReactElement | null {
+}): ReactElement {
   const { t } = useTranslation();
   const { api } = useServices();
   const names = useQuery({
     queryKey: ['names', 'res.company', me.companies],
     queryFn: () => api.names('res.company', { ids: me.companies }),
-    enabled: me.companies.length > 1,
+    enabled: me.companies.length > 0,
   });
-  if (me.companies.length < 2) return null;
+  const name = names.data?.find((c) => c.id === company)?.displayName ?? t('app.name');
+  const badge = (
+    <span
+      aria-hidden
+      className="grid size-7 shrink-0 place-items-center rounded-md bg-primary text-xs font-semibold text-primary-foreground"
+    >
+      {name.slice(0, 1).toUpperCase()}
+    </span>
+  );
+  if (collapsed) return <span title={name}>{badge}</span>;
+  if (me.companies.length < 2)
+    return (
+      <div className="flex items-center gap-2.5 px-1 py-1">
+        {badge}
+        <span className="truncate text-sm font-semibold">{name}</span>
+      </div>
+    );
   return (
-    <Select
-      label={t('shell.company')}
-      className="h-8 w-48"
-      value={String(company)}
-      options={(names.data ?? []).map((c) => ({ value: String(c.id), label: c.displayName }))}
-      onChange={(v) => onChange(Number(v))}
-    />
+    <div className="flex items-center gap-2 px-1">
+      {badge}
+      <Select
+        label={t('shell.company')}
+        className="h-8 min-w-0 flex-1"
+        value={String(company)}
+        options={(names.data ?? []).map((c) => ({ value: String(c.id), label: c.displayName }))}
+        onChange={(v) => onChange(Number(v))}
+      />
+    </div>
+  );
+}
+
+/** The user at the bottom of the sidebar: their pages and signing out. */
+function UserMenu({
+  user,
+  collapsed,
+}: {
+  readonly user: CurrentUser;
+  readonly collapsed: boolean;
+}): ReactElement {
+  const { t } = useTranslation();
+  const { api, registry, persister } = useServices();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const initials = user.name
+    .split(/\s+/)
+    .map((w) => w.slice(0, 1))
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+  return (
+    <Menu>
+      <MenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={user.name}
+          className={cn(
+            'flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-muted',
+            collapsed && 'justify-center',
+          )}
+        >
+          <span
+            aria-hidden
+            className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-xs font-medium"
+          >
+            {initials}
+          </span>
+          {collapsed ? null : <span className="truncate">{user.name}</span>}
+        </button>
+      </MenuTrigger>
+      <MenuContent align="start" side="top">
+        <MenuLabel>{user.name}</MenuLabel>
+        {registry.userPages().map((p) => (
+          <MenuItem
+            key={p.name}
+            onSelect={() => void navigate({ to: '/me/$page', params: { page: p.name } })}
+          >
+            {t(p.label)}
+          </MenuItem>
+        ))}
+        <MenuItem
+          onSelect={async () => {
+            await api.logout();
+            queryClient.clear();
+            await dropOfflineCache(persister);
+            await navigate({ to: '/login' });
+          }}
+        >
+          <LogOut className="size-4" aria-hidden />
+          {t('auth.signOut')}
+        </MenuItem>
+      </MenuContent>
+    </Menu>
   );
 }
 
 function Shell(): ReactElement {
-  const { api, registry, lang, realtime, offline, persister } = useServices();
+  const { api, registry, lang, realtime, offline } = useServices();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const params = useParams({ strict: false }) as { app?: string };
+  const params = useParams({ strict: false }) as { app?: string; action?: string };
   const me = useQuery({ queryKey: ['me'], queryFn: () => api.me(), retry: false });
   const [company, setCompany] = useState<number | undefined>(undefined);
   const [palette, setPalette] = useState(false);
   const [help, setHelp] = useState(false);
+  const [drawer, setDrawer] = useState(false);
+  const [collapsed, setCollapsed] = useSidebarCollapsed();
   const shortcutHandlers = useMemo(
-    () => ({ palette: () => setPalette(true), help: () => setHelp(true) }),
-    [],
+    () => ({
+      palette: () => setPalette(true),
+      help: () => setHelp(true),
+      sidebar: () => setCollapsed(!collapsed),
+    }),
+    [collapsed, setCollapsed],
   );
   useShortcuts(shortcutHandlers);
   const openHelp = useCallback(() => setHelp(true), []);
@@ -378,6 +415,47 @@ function Shell(): ReactElement {
   const user = me.data;
   const current = company ?? user.company ?? user.companies[0] ?? 0;
   const app = apps.data?.find((a) => a.code === params.app);
+  /** The open section's label (the menu entry of the current action), for the page bar. */
+  const section = (() => {
+    const walk = (nodes: readonly MenuNode[]): string | undefined => {
+      for (const n of nodes) {
+        if (n.action !== undefined && n.action === params.action) return n.label;
+        const found = walk(n.children);
+        if (found !== undefined) return found;
+      }
+      return undefined;
+    };
+    return params.action === undefined ? undefined : walk(menus.data ?? []);
+  })();
+  const switchCompany = (id: number) => {
+    api.setCompany(id);
+    setCompany(id);
+    void queryClient.invalidateQueries();
+  };
+  const sidebar = (inDrawer: boolean) => (
+    <Sidebar
+      api={api}
+      apps={apps.data ?? []}
+      current={params.app}
+      company={current}
+      collapsed={inDrawer ? false : collapsed}
+      onCollapse={inDrawer ? undefined : setCollapsed}
+      onSearch={() => {
+        setDrawer(false);
+        setPalette(true);
+      }}
+      top={
+        <CompanyBlock
+          me={user}
+          company={current}
+          collapsed={inDrawer ? false : collapsed}
+          onChange={switchCompany}
+        />
+      }
+      bottom={<UserMenu user={user} collapsed={inDrawer ? false : collapsed} />}
+      onNavigate={inDrawer ? () => setDrawer(false) : undefined}
+    />
+  );
   return (
     <KoshProvider
       api={api}
@@ -401,115 +479,88 @@ function Shell(): ReactElement {
             >
               {t('shell.skip')}
             </a>
-            <header className="sticky top-0 z-30 border-b bg-surface">
-              <div className="flex h-12 items-center gap-2 px-3">
-                <Menu>
-                  <MenuTrigger asChild>
-                    <Button variant="ghost" size="icon" aria-label={t('shell.apps')}>
-                      <Grid3x3 aria-hidden />
-                    </Button>
-                  </MenuTrigger>
-                  <MenuContent align="start">
-                    <MenuItem onSelect={() => void navigate({ to: '/' })}>
-                      {t('shell.apps')}
-                    </MenuItem>
-                    <MenuSeparator />
-                    {(apps.data ?? []).map((a) => (
-                      <MenuItem
-                        key={a.code}
-                        onSelect={() => void navigate({ to: '/$app', params: { app: a.code } })}
-                      >
-                        {a.label}
-                      </MenuItem>
-                    ))}
-                  </MenuContent>
-                </Menu>
-                <Link to="/" className="font-semibold">
-                  {app?.label ?? t('app.name')}
-                </Link>
-                <nav aria-label={t('shell.menu')} className="ms-2 flex-1">
-                  {params.app === undefined ? null : (
-                    <MenuLinks app={params.app} menus={menus.data ?? []} />
-                  )}
-                </nav>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="hidden h-8 w-56 justify-between text-muted-foreground sm:flex"
-                  onClick={() => setPalette(true)}
-                  aria-keyshortcuts="Control+K Meta+K"
-                >
-                  <span className="flex items-center gap-2">
-                    <Search className="size-4" aria-hidden />
-                    {t('palette.button')}
-                  </span>
-                  <kbd className="rounded border bg-surface px-1.5 text-xs">Ctrl K</kbd>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="sm:hidden"
-                  aria-label={t('palette.button')}
-                  onClick={() => setPalette(true)}
-                >
-                  <Search aria-hidden />
-                </Button>
-                <OfflineMenu />
-                {registry.headerItems().map(({ name, component: Item }) => (
-                  <Item key={name} api={api} />
-                ))}
-                <CompanySwitcher
-                  me={user}
-                  company={current}
-                  onChange={(id) => {
-                    api.setCompany(id);
-                    setCompany(id);
-                    void queryClient.invalidateQueries();
-                  }}
-                />
-                <LanguageMenu />
-                <ThemeMenu />
-                <Menu>
-                  <MenuTrigger asChild>
-                    <Button variant="ghost" size="icon" aria-label={user.name}>
-                      <UserRound aria-hidden />
-                    </Button>
-                  </MenuTrigger>
-                  <MenuContent>
-                    <MenuLabel>{user.name}</MenuLabel>
-                    {registry.userPages().map((p) => (
-                      <MenuItem
-                        key={p.name}
-                        onSelect={() =>
-                          void navigate({ to: '/me/$page', params: { page: p.name } })
-                        }
-                      >
-                        {t(p.label)}
-                      </MenuItem>
-                    ))}
-                    <MenuItem
-                      onSelect={async () => {
-                        await api.logout();
-                        queryClient.clear();
-                        await dropOfflineCache(persister);
-                        await navigate({ to: '/login' });
-                      }}
+            <div className="flex min-h-screen">
+              <aside
+                aria-label={t('shell.sidebar')}
+                className={cn(
+                  'sticky top-0 hidden h-screen shrink-0 border-e bg-surface transition-[width] lg:block',
+                  collapsed ? 'w-14' : 'w-60',
+                )}
+              >
+                {sidebar(false)}
+              </aside>
+              <SidebarDrawer open={drawer} onOpenChange={setDrawer}>
+                {sidebar(true)}
+              </SidebarDrawer>
+              <div className="flex min-w-0 flex-1 flex-col">
+                {/* Solid, no backdrop filter: a filter would make the bar the box of fixed panels inside it (chat). */}
+                <header className="sticky top-0 z-30 border-b bg-surface">
+                  <div className="flex h-12 items-center gap-2 px-3 lg:px-4">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="lg:hidden"
+                      aria-label={t('shell.openMenu')}
+                      onClick={() => setDrawer(true)}
                     >
-                      <LogOut className="size-4" aria-hidden />
-                      {t('auth.signOut')}
-                    </MenuItem>
-                  </MenuContent>
-                </Menu>
+                      <PanelLeft className="rtl:rotate-180" aria-hidden />
+                    </Button>
+                    <nav
+                      aria-label={t('shell.location')}
+                      className="flex min-w-0 flex-1 items-center gap-1.5 text-sm"
+                    >
+                      {app === undefined ? (
+                        <span className="font-semibold">
+                          {params.app === undefined ? t('shell.home') : t('app.name')}
+                        </span>
+                      ) : (
+                        <>
+                          <Link
+                            to="/$app"
+                            params={{ app: app.code }}
+                            className="font-semibold hover:underline"
+                          >
+                            {app.label}
+                          </Link>
+                          {section === undefined ? null : (
+                            <>
+                              <ChevronRight
+                                className="size-3.5 text-muted-foreground rtl:rotate-180"
+                                aria-hidden
+                              />
+                              <span className="truncate text-muted-foreground">{section}</span>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </nav>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="lg:hidden"
+                      aria-label={t('palette.button')}
+                      onClick={() => setPalette(true)}
+                    >
+                      <Search aria-hidden />
+                    </Button>
+                    <OfflineMenu />
+                    {registry.headerItems().map(({ name, component: Item }) => (
+                      <Item key={name} api={api} />
+                    ))}
+                    <LanguageMenu />
+                    <ThemeMenu />
+                  </div>
+                </header>
+                {user.administratorNeedsSecondFactor ? (
+                  <div className="px-4 pt-3">
+                    <Alert tone="info">{t('auth.adminNeeds2fa')}</Alert>
+                  </div>
+                ) : null}
+                <main id="content" className="mx-auto w-full max-w-[100rem] flex-1 p-4 lg:p-6">
+                  <Outlet />
+                </main>
               </div>
-            </header>
-            {user.administratorNeedsSecondFactor ? (
-              <div className="px-4 pt-3">
-                <Alert tone="info">{t('auth.adminNeeds2fa')}</Alert>
-              </div>
-            ) : null}
-            <main id="content" className="mx-auto w-full max-w-[100rem] p-4">
-              <Outlet />
-            </main>
+            </div>
             <CommandPalette
               open={palette}
               onOpenChange={setPalette}

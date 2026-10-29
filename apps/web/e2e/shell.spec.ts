@@ -32,6 +32,38 @@ test('requesters see their apps and menus', async ({ page }) => {
   ).toHaveAttribute('aria-current', 'page');
 });
 
+test('the sidebar: apps open their sections; collapsed with Ctrl+B and remembered; a drawer on phones', async ({
+  page,
+}) => {
+  await signIn(page, 'rahim');
+  const sidebar = page.getByRole('complementary', { name: 'Sidebar' });
+  await sidebar.getByRole('button', { name: 'Purchase app' }).click();
+  await expect(page).toHaveURL(/\/purchase\/a\/purchase\.action_orders/);
+  await expect(sidebar.getByRole('button', { name: 'Purchase app' })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  // The page bar says where the user is.
+  const here = page.getByRole('navigation', { name: 'You are here' });
+  await expect(here).toContainText('Purchase');
+  await expect(here).toContainText('Orders');
+
+  await page.keyboard.press('Control+b');
+  await expect(sidebar.getByRole('button', { name: 'Expand the sidebar' })).toBeVisible();
+  await page.reload();
+  await expect(sidebar.getByRole('button', { name: 'Expand the sidebar' })).toBeVisible();
+  await sidebar.getByRole('button', { name: 'Expand the sidebar' }).click();
+  await expect(sidebar.getByRole('button', { name: 'Collapse the sidebar' })).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(sidebar).toBeHidden();
+  await page.getByRole('button', { name: 'Open the menu' }).click();
+  const drawer = page.getByRole('dialog', { name: 'Main menu' });
+  await drawer.getByRole('button', { name: 'Contacts app' }).click();
+  await expect(drawer).toBeHidden(); // following a link closes it
+  await expect(page).toHaveURL(/\/contacts\//);
+});
+
 test('administrators sign in with a second factor', async ({ page }) => {
   await signIn(page, 'admin');
   await expect(page.getByText('Administrator rights apply after')).toHaveCount(0);
@@ -61,9 +93,9 @@ test('Bangla labels; Arabic switches to right-to-left; dark theme', async ({ pag
   await page.getByRole('menuitemcheckbox', { name: 'العربية' }).click();
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await expect(page.getByRole('heading', { name: 'التطبيقات' })).toBeVisible();
-  // Logical properties: the user menu sits at the inline end, i.e. on the left in RTL.
+  // Logical properties: the sidebar (with the user menu) sits at the inline start, i.e. on the right in RTL.
   const box = await page.getByRole('button', { name: 'Rahim Uddin' }).boundingBox();
-  expect(box?.x ?? 1000).toBeLessThan(300);
+  expect(box?.x ?? 0).toBeGreaterThan(900);
 
   await page.getByRole('button', { name: 'اللغة' }).click();
   await page.getByRole('menuitemcheckbox', { name: 'English' }).click();
