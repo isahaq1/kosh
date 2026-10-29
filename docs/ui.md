@@ -149,6 +149,26 @@ createRoot(root).render(<KoshApp api={createKoshApi()} registry={registry} />);
 - Landmarks: the sidebar is a `complementary` region with the `Main menu` navigation inside; right-to-left puts it
   on the right (logical properties).
 
+### Record pages (RFC 0018 step 3)
+
+- **Header**: the record's name, its state chip, a *Read-only* mark when locked, and a line of **key facts** — the
+  view's `subtitle` fields, else the first many2one, the first date and the total. The page bar says where the user
+  is (its section links back to the list); the back arrow keeps the list's filters. The first transition is the
+  filled button when none is marked `primary`.
+- **Sections as cards**: each group, notebook and table of lines is a card; loose fields share one. Saved records
+  read first: their inputs show no box until hovered or focused (`.kosh-quiet`).
+- **Right rail** (beside the record from 80 rem, under it below; open by default, hidden with the panel button and
+  remembered): **Summary** — the view's `summary` fields, else its group named `totals` — **Details** (created / updated
+  by and when, company, when the user may read them) and the **timeline** (the chatter).
+
+```ts
+form('sale.order', (k) => ({
+  subtitle: ['partner', 'dateOrder', 'amountTotal'], // optional: the key facts
+  summary: ['amountUntaxed', 'amountTax', 'amountTotal'], // optional: else the `totals` group
+  sheet: [/* … */],
+}));
+```
+
 ## Tests
 
 `apps/web/e2e` (Playwright) runs against a real server (`e2e/server.ts`: PostgreSQL via Testcontainers, a contacts

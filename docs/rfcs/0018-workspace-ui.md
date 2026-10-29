@@ -209,3 +209,18 @@ the workflow popover reads the transitions the server serves, the summary reads 
 - **Tests**: E2E for the sidebar (an app's sections and the current one marked, the page bar, `Ctrl+B` remembered
   across a reload, the drawer at phone width closing on navigation); the right-to-left test now finds the user menu
   on the right with the sidebar.
+
+## Implementation notes (2026-10-29): step 3 — record pages
+
+- **Header**: title, state chip, a *Read-only* mark, the key facts (`subtitle` hint, else the first many2one, date
+  and the total); the form's own breadcrumbs are gone (the page bar's section now links to the list, Back keeps
+  the list's state); the first transition is the filled button unless one is marked `primary`.
+- **Cards** per group, notebook and lines; loose fields share one. **Read first** is done with quiet inputs (no box
+  until hover or focus, an unlayered rule so Tailwind's borders do not win) rather than swapping text for inputs on
+  click: the same controls, labels and keyboard order, nothing to activate first.
+- **Right rail** with Summary (`summary` hint or the `totals` group, moved out of the main column), Details (the
+  magic fields the user may read) and the chatter as the timeline; open by default, toggled and remembered
+  (`kosh.rail`); under the record below 80 rem (RFC §4.2 said tabs: one column reads better on phones).
+- **View hints** `subtitle` and `summary` on form views, validated against the model's fields.
+- **Tests**: E2E for the key facts, the rail's Summary with the total, hiding the rail and its memory; tests that
+  read the totals group or the form's breadcrumbs follow the rail and the page bar.
