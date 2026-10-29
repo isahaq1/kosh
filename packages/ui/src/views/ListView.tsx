@@ -70,6 +70,12 @@ const features = tableFeatures({});
 const helper = createColumnHelper<typeof features, Row>();
 type Density = import('../context.js').Density;
 const HEIGHTS: Record<Density, number> = { comfortable: 40, compact: 32 };
+/** The record's page in a new tab: the list's address with the record's id (`/<app>/a/<action>/<id>`). */
+function openInNewTab(id: number): void {
+  const path = window.location.pathname.replace(/\/$/, '');
+  window.open(`${path}/${id}`, '_blank', 'noopener');
+}
+
 /** Requests a bulk action sends at once. */
 const PARALLEL = 6;
 /** How long a bulk delete waits for Undo before it runs. */
@@ -360,7 +366,6 @@ function Rows({
         offset,
         count: true,
       });
-      onCount?.(result.count ?? result.items.length);
       rememberList(
         model,
         result.items.map((r) => r.id),
@@ -378,6 +383,10 @@ function Rows({
   useEffect(() => {
     if (query.data !== undefined) onRows?.(query.data.items);
   }, [query.data, onRows]);
+  // From the data, not the fetch: a search answered from the cache (back to All) has its count too.
+  useEffect(() => {
+    if (query.data !== undefined) onCount?.(query.data.count ?? query.data.items.length);
+  }, [query.data, onCount]);
   const names = useRowNames(items, Object.values(fields));
   const tableColumns = useMemo(
     () =>
@@ -690,7 +699,13 @@ function Rows({
     return (
       <EmptyState
         icon={<Inbox aria-hidden />}
-        title={filtered === true ? t('views.emptyFiltered') : t('views.emptyTitle')}
+        title={
+          filtered === true
+            ? t('views.emptyFiltered')
+            : props.served.view.label === undefined
+              ? t('views.emptyTitle')
+              : t('views.emptyNamed', { name: props.served.view.label.toLocaleLowerCase() })
+        }
         {...(filtered === true ? {} : { description: t('views.emptyHint') })}
         {...(props.served.operations.create && offset === 0
           ? {
@@ -801,9 +816,17 @@ function Rows({
                     'cursor-pointer border-b hover:bg-muted/60 focus-visible:bg-muted',
                     isSelected && 'bg-accent/60 hover:bg-accent/70',
                   )}
-                  onClick={() => props.onOpen(id)}
+                  // Ctrl / Cmd + click or the middle button: the record in a new tab, the list stays.
+                  onClick={(e) => {
+                    if (e.ctrlKey || e.metaKey) openInNewTab(id);
+                    else props.onOpen(id);
+                  }}
+                  onAuxClick={(e) => {
+                    if (e.button === 1) openInNewTab(id);
+                  }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') props.onOpen(id);
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) openInNewTab(id);
+                    else if (e.key === 'Enter') props.onOpen(id);
                     // Space on the row itself selects it (the checkbox handles its own keys).
                     if (e.key === ' ' && selection !== undefined && e.target === e.currentTarget) {
                       e.preventDefault();
@@ -1232,12 +1255,14 @@ export function ListView(props: ViewProps): ReactElement {
       }),
   });
 
-  const toolbar =
+  // Selected rows: a floating bar at the bottom of the screen (RFC 0018 §4.3); the list's own toolbar stays put.
+  const floating =
     ids.length > 0 ? (
       <div
         role="toolbar"
         aria-label={t('views.selected', { count: ids.length })}
-        className="flex flex-wrap items-center gap-2 border-b bg-accent/40 px-3 py-2 text-sm"
+        data-kosh-selection-bar
+        className="fixed inset-x-0 bottom-4 z-30 mx-auto flex w-fit max-w-[calc(100vw-2rem)] flex-wrap items-center gap-2 rounded-xl border bg-surface px-3 py-2 text-sm shadow-lg"
       >
         <span className="font-medium">{t('views.selected', { count: ids.length })}</span>
         <Button
@@ -1278,7 +1303,9 @@ export function ListView(props: ViewProps): ReactElement {
           </Button>
         ) : null}
       </div>
-    ) : (
+    ) : null;
+  const toolbar = (
+    <>
       <div className="flex flex-wrap items-center gap-2 border-b px-3 py-1.5 text-sm">
         <span className="text-muted-foreground">
           {count === null ? (
@@ -1365,7 +1392,9 @@ export function ListView(props: ViewProps): ReactElement {
           </Menu>
         ) : null}
       </div>
-    );
+      {floating}
+    </>
+  );
 
   return (
     <div className="rounded-lg border bg-surface">
