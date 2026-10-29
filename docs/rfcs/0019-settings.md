@@ -200,3 +200,26 @@ Bangla, light and dark, keyboard and screen reader, desktop and phone.
   passwords, reuse refused), roles replaced, the manager's limits, deactivation signing out, a new link voiding the
   old one, two-factor reset, others refused, the audit kinds. E2E: invite with a role, open the link in another
   browser, choose a password, see only that app; deactivate.
+
+## Implementation notes (2026-10-29): step 3 — Roles & permissions
+
+- **Shutro request #30** answered in Shutro (`5e31959`, chosen over reading Shutro's tables): `securityAdmin.describe()`
+  returns the runtime roles, model access, record rules, permission grants and field groups as stored, read
+  through the transaction, for administrators. Shutro ERP needs a Shutro release with it before its next package.
+- **Server** (`@kosh/permissions`, administrators only): the roles list counts holders;
+  `GET /api/v1/admin/roles/:code` gives a role in full — label, access levels, holders, per model the rights it
+  gets from code and the roles it includes (locked) and its own runtime grants, feature permissions (locked or
+  its own), its record rules and field security, the models to choose from (apps first);
+  `POST …/roles/:code/preview` takes the role's proposed state and returns, per holder, the app access levels and
+  feature permissions they gain or lose — counting their other roles in any company — and the model rights that
+  change. Nothing is written. The effective access route now names models and permissions.
+- **Screens**: Settings › Roles & permissions (search; all, custom, built-in; the apps a role opens; holders), a
+  role (name; per app one access level for custom roles, fixed for built-in ones; Advanced — rights per model with
+  the locked ones ticked and greyed, feature permissions, record rules with a JSON condition, field security — then
+  *Review the changes* with the preview and *Save*; delete custom roles), a new role from scratch or copied, and
+  "What can they do?" on a person (administrators). Record rules use a JSON condition for now; the automation
+  condition builder comes to them later.
+- **Tests**: on real PostgreSQL — a runtime role in full (locked and own rights, holders, counts), the preview
+  (gains for everyone, a loss only for those without another role giving it, nothing saved), administrators only;
+  in Shutro — `describe()` inside the transaction and refused to others. E2E: a new role opening Contacts, saved
+  after its preview; given to Bob in People, "What can they do?"; the next change previewed as a gain for him.

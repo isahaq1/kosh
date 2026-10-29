@@ -180,6 +180,9 @@ form('sale.order', (k) => ({
 - **People** (Settings › People; Administrators and People managers): invite by email (the link is also shown to
   copy; `SHUTRO_ERP_BASE_URL` is the address it points to, `SMTP_URL` sends it), roles per app and company,
   deactivate, a new sign-in link, reset two-factor; invited people choose their password at `/activate`.
+- **Roles & permissions** (Settings; administrators): a role's apps as access levels, Advanced rights per model,
+  feature permissions, record rules and field security; every save is reviewed first — who gains and who loses
+  what. A person's page shows "What can they do?", computed by the server as them.
 - Every package with screens must be listed as a Tailwind `@source` in `apps/web/src/index.css`, or classes used
   only there are not generated.
 
