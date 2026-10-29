@@ -105,6 +105,13 @@ export interface FormView extends ViewBase {
   readonly readonlyWhen?: Condition;
   /** Messages and activities (RFC 0006). */
   readonly chatter?: boolean;
+  /**
+   * The key facts under the title (RFC 0018 §4.2): the customer, the date, the total. Default: the first many2one,
+   * date and monetary fields of the form.
+   */
+  readonly subtitle?: readonly string[];
+  /** The fields of the right rail's Summary (RFC 0018 §4.2). Default: the group named `totals`. */
+  readonly summary?: readonly string[];
 }
 
 export interface KanbanCard {

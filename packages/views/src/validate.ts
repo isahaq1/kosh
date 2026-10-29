@@ -67,6 +67,9 @@ export function validateView(view: ViewDefinition, models: ModelLookup): string[
         `unknown transition '${node.transition}' (has ${info.transitions.join(', ') || 'none'})`,
       );
   }
+  if (view.type === 'form')
+    for (const key of [...(view.subtitle ?? []), ...(view.summary ?? [])])
+      if (!info.fields.has(key)) problems.push(`unknown field '${key}' in the subtitle or summary`);
   if (view.type === 'form' && view.header.statusbar !== undefined) {
     const kind = info.fields.get(view.header.statusbar)?.kind;
     if (kind !== 'state' && kind !== 'selection')

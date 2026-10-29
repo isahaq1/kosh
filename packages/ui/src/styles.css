@@ -134,3 +134,14 @@
     }
   }
 }
+
+/* Outside the layers on purpose: unlayered styles win over Tailwind's utilities (the inputs' border classes). */
+/* Saved records read first (RFC 0018 §4.2): their inputs show no box until hovered or focused. */
+.kosh-quiet
+:is(input:not([type="checkbox"]):not([type="color"]), textarea, button[role="combobox"]):not(
+  :hover
+):not(:focus-visible):not(:focus):not([aria-invalid="true"]) {
+  border-color: transparent;
+  background-color: transparent;
+  box-shadow: none;
+}

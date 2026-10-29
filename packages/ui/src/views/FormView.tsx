@@ -22,6 +22,7 @@ import {
   ChevronRight,
   CircleDot,
   MoreHorizontal,
+  PanelRight,
   Plus,
   Trash2,
 } from 'lucide-react';
@@ -87,6 +88,30 @@ function lineValues(values: Values, fields: Readonly<Record<string, ViewField>>)
  * The one2many and many2many fields a form shows (its lines, its tags): a record's default fields leave them out,
  * so the form asks for them by name.
  */
+const RAIL_KEY = 'kosh.rail';
+/** Whether the record pages' right rail is open (RFC 0018: open by default), remembered per browser. */
+function useRail(): [boolean, (open: boolean) => void] {
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(RAIL_KEY) !== 'closed';
+    } catch {
+      return true;
+    }
+  });
+  return [
+    open,
+    (next: boolean) => {
+      setOpen(next);
+      try {
+        if (next) localStorage.removeItem(RAIL_KEY);
+        else localStorage.setItem(RAIL_KEY, 'closed');
+      } catch {
+        // storage unavailable: the choice lasts for this page
+      }
+    },
+  ];
+}
+
 function relationFieldsOf(
   sheet: readonly FormNode[],
   fields: Readonly<Record<string, ViewField>>,
@@ -299,6 +324,7 @@ export function FormView({
   const toast = useToast();
   const queryClient = useQueryClient();
   const formId = useId();
+  const [railOpen, setRailOpen] = useRail();
   const route = useParams({ strict: false }) as { app?: string; action?: string };
   const view = served.view;
   if (view.type !== 'form') throw new Error(`FormView renders form views, not ${view.type}.`);
@@ -717,6 +743,126 @@ export function FormView({
       visible(b.visibleWhen)
     );
   });
+  // The rail (RFC 0018 §4.2): the summary (the view's `summary` fields, else its `totals` group), the record's
+  // details, and the timeline.
+  const totalsGroup =
+    view.summary === undefined
+      ? view.sheet.find((n) => n.kind === 'group' && n.id === 'totals')
+      : undefined;
+  const summaryNodes: FieldNode[] =
+    view.summary !== undefined
+      ? view.summary.map((key) => ({ kind: 'field', id: `summary-${key}`, field: key }))
+      : totalsGroup?.kind === 'group'
+        ? totalsGroup.children.filter((n): n is FieldNode => n.kind === 'field')
+        : [];
+  const row = (node: FieldNode) => {
+    const field = fields[node.field];
+    if (field === undefined || !visible(node.visibleWhen)) return null;
+    const Widget = registry.widget(node, field);
+    return (
+      <div key={node.id} className="flex items-baseline justify-between gap-3 py-1 text-sm">
+        <dt className="text-muted-foreground">{node.label ?? field.label}</dt>
+        <dd className="text-end font-medium tabular-nums">
+          <Widget
+            id={`${formId}-rail-${node.id}`}
+            node={node}
+            field={field}
+            value={values[node.field]}
+            record={values}
+            readonly
+          />
+        </dd>
+      </div>
+    );
+  };
+  const detailNodes: FieldNode[] = ['createdBy', 'createdAt', 'updatedBy', 'updatedAt', 'company']
+    .filter((key) => fields[key] !== undefined && values[key] !== undefined && values[key] !== null)
+    .map((key) => ({ kind: 'field', id: `detail-${key}`, field: key }));
+  const chatter =
+    view.chatter === true && registry.component('chatter') !== undefined && !isNew
+      ? (registry.component('chatter') as NonNullable<ReturnType<typeof registry.component>>)
+      : undefined;
+  const rail = (
+    <>
+      {summaryNodes.length === 0 ? null : (
+        <section className="rounded-lg border bg-surface p-4" aria-labelledby={`${formId}-summary`}>
+          <h2 id={`${formId}-summary`} className="mb-1 text-sm font-semibold">
+            {t('views.summary')}
+          </h2>
+          <dl className="divide-y">{summaryNodes.map(row)}</dl>
+        </section>
+      )}
+      {isNew || detailNodes.length === 0 ? null : (
+        <section className="rounded-lg border bg-surface p-4" aria-labelledby={`${formId}-details`}>
+          <h2 id={`${formId}-details`} className="mb-1 text-sm font-semibold">
+            {t('views.details')}
+          </h2>
+          <dl>{detailNodes.map(row)}</dl>
+        </section>
+      )}
+      {chatter === undefined
+        ? null
+        : (() => {
+            const Chatter = chatter;
+            return (
+              <Chatter
+                node={{ kind: 'component', id: 'chatter', component: 'chatter' }}
+                record={record ?? null}
+                model={model}
+                served={served}
+                api={api}
+                version={loaded.data?.etag ?? null}
+                reload={() => void loaded.refetch()}
+              />
+            );
+          })()}
+    </>
+  );
+  const showRail = railOpen;
+  // The main column: each group, notebook and table of lines a card; loose fields together.
+  const sections: { key: string; nodes: FormNode[] }[] = [];
+  for (const node of view.sheet) {
+    if (node === totalsGroup) continue;
+    const loose = node.kind === 'field' || node.kind === 'component';
+    const last = sections[sections.length - 1];
+    if (loose && last?.key.startsWith('loose-') === true) last.nodes.push(node);
+    else sections.push({ key: loose ? `loose-${node.id}` : node.id, nodes: [node] });
+  }
+  // The key facts under the title: the view's `subtitle`, else the first many2one, date and monetary fields.
+  const flatFields = (nodes: readonly FormNode[]): FieldNode[] =>
+    nodes.flatMap((n) =>
+      n.kind === 'field'
+        ? [n]
+        : n.kind === 'group'
+          ? flatFields(n.children)
+          : n.kind === 'notebook'
+            ? n.pages.flatMap((p) => flatFields(p.children))
+            : [],
+    );
+  const facts: FieldNode[] = isNew
+    ? []
+    : view.subtitle !== undefined
+      ? view.subtitle
+          .filter((key) => fields[key] !== undefined)
+          .map((key) => ({ kind: 'field', id: `fact-${key}`, field: key }))
+      : (() => {
+          const candidates = flatFields(view.sheet).filter(
+            (n) =>
+              n.field !== statusbar &&
+              values[n.field] !== null &&
+              values[n.field] !== undefined &&
+              values[n.field] !== '',
+          );
+          const first = (kinds: readonly string[]) =>
+            candidates.find((n) => kinds.includes(fields[n.field]?.kind ?? ''));
+          // The total, when the summary has one; else its first amount.
+          const totals =
+            summaryNodes.find((n) => n.field === 'amountTotal') ??
+            summaryNodes.find((n) => fields[n.field]?.kind === 'monetary');
+          return [first(['many2one']), first(['date']), totals ?? first(['monetary'])].filter(
+            (n): n is FieldNode => n !== undefined,
+          );
+        })();
   const named = [values['displayName'], values['name']].find(
     (v) => typeof v === 'string' && v.trim() !== '',
   );
@@ -727,7 +873,7 @@ export function FormView({
       <form
         aria-label={title}
         data-kosh-form
-        className="grid gap-4"
+        className={cn('grid gap-4', !isNew && 'kosh-quiet')}
         onSubmit={(e) => {
           e.preventDefault();
           if (dirty && !locked) save.mutate();
@@ -746,29 +892,6 @@ export function FormView({
               <ArrowLeft className="rtl:-scale-x-100" aria-hidden />
             </Button>
             <div className="min-w-0">
-              {crumbs === undefined || crumbs.length === 0 ? null : (
-                <nav aria-label={t('views.breadcrumbs')}>
-                  <ol className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-                    {crumbs.map((c, i) => (
-                      // biome-ignore lint/suspicious/noArrayIndexKey: a crumb's position in the path is its identity (app, then list); the path is never reordered
-                      <li key={i} className="flex items-center gap-1">
-                        {c.onClick === undefined ? (
-                          <span>{c.label}</span>
-                        ) : (
-                          <button
-                            type="button"
-                            className="hover:text-foreground hover:underline"
-                            onClick={c.onClick}
-                          >
-                            {c.label}
-                          </button>
-                        )}
-                        <ChevronRight className="size-3 rtl:-scale-x-100" aria-hidden />
-                      </li>
-                    ))}
-                  </ol>
-                </nav>
-              )}
               <div className="flex min-w-0 flex-wrap items-center gap-2.5">
                 <h1 className="truncate text-xl font-semibold">{title}</h1>
                 {statusbar === undefined || fields[statusbar] === undefined || isNew ? null : (
@@ -778,7 +901,34 @@ export function FormView({
                     transitions={served.transitions.filter((tr) => tr.field === statusbar)}
                   />
                 )}
+                {locked && !isNew ? (
+                  <span className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
+                    {t('views.readonly')}
+                  </span>
+                ) : null}
               </div>
+              {facts.length === 0 ? null : (
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+                  {facts.map((node, i) => {
+                    const field = fields[node.field] as NonNullable<(typeof fields)[string]>;
+                    const Widget = registry.widget(node, field);
+                    return (
+                      <span key={node.id} className="flex items-center gap-2" title={field.label}>
+                        {i === 0 ? null : <span aria-hidden>·</span>}
+                        <span className="sr-only">{field.label}: </span>
+                        <Widget
+                          id={`${formId}-fact-${node.id}`}
+                          node={node}
+                          field={field}
+                          value={values[node.field]}
+                          record={values}
+                          readonly
+                        />
+                      </span>
+                    );
+                  })}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -868,6 +1018,18 @@ export function FormView({
                 </Button>
               </>
             ) : null}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="hidden xl:inline-flex"
+              aria-pressed={railOpen}
+              aria-label={railOpen ? t('views.hidePanel') : t('views.showPanel')}
+              title={railOpen ? t('views.hidePanel') : t('views.showPanel')}
+              onClick={() => setRailOpen(!railOpen)}
+            >
+              <PanelRight className="rtl:-scale-x-100" aria-hidden />
+            </Button>
             {!isNew && served.operations.unlink ? (
               <Menu>
                 <MenuTrigger asChild>
@@ -886,105 +1048,111 @@ export function FormView({
           </div>
         </div>
 
-        {live.changedByOther ? (
-          <Alert
-            tone="warning"
-            action={
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => {
-                  setChanges({});
-                  setLines(new Map());
-                  live.dismiss();
-                  void loaded.refetch();
-                }}
+        <div
+          className={cn(
+            'grid gap-4',
+            showRail && 'xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start',
+          )}
+        >
+          <div className="grid min-w-0 content-start gap-4">
+            {live.changedByOther ? (
+              <Alert
+                tone="warning"
+                action={
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      setChanges({});
+                      setLines(new Map());
+                      live.dismiss();
+                      void loaded.refetch();
+                    }}
+                  >
+                    {t('views.reload')}
+                  </Button>
+                }
               >
-                {t('views.reload')}
-              </Button>
-            }
-          >
-            {t('views.changedByOther')}
-          </Alert>
-        ) : null}
-        {problem === null ? null : (
-          <Alert
-            tone={problem.kind === 'stale-record' ? 'warning' : 'danger'}
-            action={
-              problem.kind === 'stale-record' ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => {
-                    setChanges({});
-                    setProblem(null);
-                    void loaded.refetch();
-                  }}
-                >
-                  {t('views.reload')}
-                </Button>
-              ) : undefined
-            }
-          >
-            {problem.kind === 'stale-record' ? t('views.stale') : problem.message}
-          </Alert>
-        )}
-        {warnings.map((w) => (
-          <Alert key={w} tone="info">
-            {w}
-          </Alert>
-        ))}
+                {t('views.changedByOther')}
+              </Alert>
+            ) : null}
+            {problem === null ? null : (
+              <Alert
+                tone={problem.kind === 'stale-record' ? 'warning' : 'danger'}
+                action={
+                  problem.kind === 'stale-record' ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => {
+                        setChanges({});
+                        setProblem(null);
+                        void loaded.refetch();
+                      }}
+                    >
+                      {t('views.reload')}
+                    </Button>
+                  ) : undefined
+                }
+              >
+                {problem.kind === 'stale-record' ? t('views.stale') : problem.message}
+              </Alert>
+            )}
+            {warnings.map((w) => (
+              <Alert key={w} tone="info">
+                {w}
+              </Alert>
+            ))}
 
-        {buttons.length === 0 ? null : (
-          <div
-            role="toolbar"
-            aria-label={t('views.recordActions')}
-            className="flex flex-wrap gap-2"
-          >
-            <div className="contents">
-              {buttons.map((b) => (
-                <Button
-                  key={b.id}
-                  type="button"
-                  size="sm"
-                  variant={b.primary === true ? 'primary' : 'secondary'}
-                  busy={transition.isPending && transition.variables === b.transition}
-                  onClick={() =>
-                    b.confirm === undefined ? transition.mutate(b.transition) : setConfirming(b)
-                  }
-                >
-                  {b.label ?? b.transition}
-                </Button>
-              ))}
-            </div>
+            {buttons.length === 0 ? null : (
+              <div
+                role="toolbar"
+                aria-label={t('views.recordActions')}
+                className="flex flex-wrap gap-2"
+              >
+                <div className="contents">
+                  {buttons.map((b, i) => (
+                    <Button
+                      key={b.id}
+                      type="button"
+                      size="sm"
+                      variant={
+                        b.primary === true || (i === 0 && !buttons.some((x) => x.primary === true))
+                          ? 'primary'
+                          : 'secondary'
+                      }
+                      busy={transition.isPending && transition.variables === b.transition}
+                      onClick={() =>
+                        b.confirm === undefined ? transition.mutate(b.transition) : setConfirming(b)
+                      }
+                    >
+                      {b.label ?? b.transition}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {sections.map((section) => (
+              <section key={section.key} className="rounded-lg border bg-surface p-5">
+                <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+                  {renderNodes(section.nodes)}
+                </div>
+              </section>
+            ))}
+
+            {showRail ? null : rail}
           </div>
-        )}
-
-        <div className="grid gap-6 rounded-lg border bg-surface p-5">
-          {locked && !isNew ? (
-            <p className="text-xs text-muted-foreground">{t('views.readonly')}</p>
+          {showRail ? (
+            <aside
+              aria-label={t('views.recordPanel')}
+              // Beside the record when wide; under it otherwise (one grid column).
+              className="grid content-start gap-4 xl:sticky xl:top-28"
+            >
+              {rail}
+            </aside>
           ) : null}
-          <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">{renderNodes(view.sheet)}</div>
         </div>
-
-        {view.chatter === true && registry.component('chatter') !== undefined && !isNew
-          ? (() => {
-              const Chatter = registry.component('chatter') as NonNullable<
-                ReturnType<typeof registry.component>
-              >;
-              return (
-                <Chatter
-                  node={{ kind: 'component', id: 'chatter', component: 'chatter' }}
-                  record={record ?? null}
-                  model={model}
-                  served={served}
-                  api={api}
-                  version={loaded.data?.etag ?? null}
-                  reload={() => void loaded.refetch()}
-                />
-              );
-            })()
-          : null}
       </form>
 
       <Dialog

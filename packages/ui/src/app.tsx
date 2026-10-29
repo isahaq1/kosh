@@ -528,7 +528,13 @@ function Shell(): ReactElement {
                                 className="size-3.5 text-muted-foreground rtl:rotate-180"
                                 aria-hidden
                               />
-                              <span className="truncate text-muted-foreground">{section}</span>
+                              <Link
+                                to="/$app/a/$action"
+                                params={{ app: app.code, action: params.action ?? '' }}
+                                className="truncate text-muted-foreground hover:text-foreground hover:underline"
+                              >
+                                {section}
+                              </Link>
                             </>
                           )}
                         </>

@@ -18,7 +18,7 @@ test('the palette finds records and menus, and remembers recent records', async 
   await expect(palette.getByRole('option', { name: /Acme Trading/ })).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'Acme Trading', level: 1 })).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Breadcrumbs' })).toContainText('Contacts');
+  await expect(page.getByRole('navigation', { name: 'You are here' })).toContainText('Contacts');
 
   // Menus by name, then recent records first in an empty palette.
   await page.keyboard.press(`${mod}+k`);
@@ -71,7 +71,7 @@ test('the record pager walks the list; Ctrl+S saves; leaving unsaved asks first'
   await expect(page.getByText('Unsaved changes')).toBeVisible();
   // Leaving asks; staying keeps the edit.
   page.once('dialog', (dialog) => void dialog.dismiss());
-  await page.getByRole('navigation', { name: 'Breadcrumbs' }).getByRole('button').last().click();
+  await page.getByRole('button', { name: 'Back' }).click();
   await expect(city).toHaveValue('Narayanganj');
   await page.keyboard.press(`${mod}+s`);
   await expect(page.getByText('All changes saved')).toBeVisible();

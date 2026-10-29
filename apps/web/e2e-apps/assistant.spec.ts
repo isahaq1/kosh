@@ -41,5 +41,6 @@ test('a pasted order fills a new sales order and its lines; saving creates them'
   await expect(page.getByRole('button', { name: 'Save' })).toHaveCount(0);
   // Saved with its line: 3 × 950.
   await expect(page.getByRole('heading', { name: /^SO\/\d{4}\/\d{5}$/ })).toBeVisible();
-  await expect(page.getByRole('group', { name: 'Totals' })).toContainText('Total2,850');
+  // The totals are in the record's Summary (the right rail).
+  await expect(page.getByRole('region', { name: 'Summary' })).toContainText('2,850');
 });
