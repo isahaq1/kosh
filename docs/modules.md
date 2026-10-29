@@ -196,6 +196,13 @@ To-dos for the people who use them: their own, or on lists shared with colleague
 checklists. Install it with `shutro-erp apps install todo` and give people the *Focus › User* access level; their
 open to-dos due today appear on the home page.
 
+### Agenda (`modules/calendar`, RFC 0021)
+
+Meetings with attendees from the company and outside, rooms that are never double-booked, private events others see
+as *busy*, one-click answers and free / busy for several people and rooms (`GET /api/v1/agenda/busy`). Install it
+with `shutro-erp apps install calendar`; *Agenda › User* for everyone, *Manager* for those who manage rooms and the
+default length (Settings › App settings › Agenda).
+
 ## Demo data (RFC 0008 §5.8)
 
 `npx shutro-erp init --demo` (or a yes to the question after the apps) loads every installed app's demo data: a sample

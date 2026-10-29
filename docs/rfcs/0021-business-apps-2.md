@@ -109,3 +109,49 @@ reviewed steps.
 - **Next for Focus**: *Add to Focus* from any record's chatter (the record link), repeating to-dos, and a "Due
   today" filter (Shutro domains have no relative date today; the search layer would compute it).
 
+## Design note: Agenda (`modules/calendar`, app code `agenda`)
+
+- **Models**: `calendar.event` (title, start, end, all day, location, video link, description, organizer, privacy
+  *public* / *private*, state *confirmed* / *cancelled*, a room, an optional link to any record), `calendar.attendee`
+  (a person of the company or a contact from outside, with their answer: *needs action*, *accepted*, *tentative*,
+  *declined*), `calendar.room` (name, capacity, location, active).
+- **Further than Odoo**: rooms are booked with the event and **a room cannot be double-booked** (checked by the
+  server across everyone's events, private ones included); **free / busy** for several people and rooms at once,
+  private events shown only as *busy*; answering is one click for the attendee (`respond`) and the organizer sees
+  the answers on the event; the end follows the start by the default length set in App settings.
+- **Privacy**: public events are seen by every Agenda user; private ones by their organizer and attendees only.
+  Rooms are managed by Agenda managers.
+- **Step 1**: the models, rules and the room check; calendar (week) / list / form views; respond and free / busy
+  routes; the default length setting; demo data. **Step 2**: repeating events with exceptions, email invitations
+  with replies routed back (RFC 0006 inbound), each attendee's time zone, and other apps' dates (activities, leave,
+  production) on the same calendar.
+
+## Implementation notes (2026-10-29): Agenda, step 1
+
+- **Module** `modules/calendar` (`@kosh/calendar`, export `calendarApp`), app **Agenda** (code `agenda`); access
+  levels *User* (own and public events) and *Manager* (every event, rooms).
+- **Models** as designed: events (privacy, state *Confirmed* / *Cancelled* with *Cancel* / *Restore*), attendees
+  (a person or a contact, with their answer), rooms. An event ends after it starts (database check); **a room is
+  never double-booked** — the check reads every confirmed event as the system, private ones included, so nobody
+  books over a meeting they cannot see; a cancelled event frees its room.
+- **Rules**: public events for every Agenda user; private ones for their organizer and attendees; only the
+  organizer changes or deletes an event; an attendee changes their own answer only; managers see everything.
+- **Routes**: `POST /api/v1/agenda/events/:id/respond` (accepted / tentative / declined, as the user);
+  `GET /api/v1/agenda/busy?users=&rooms=&from=&to=` (at most two months; busy blocks per person — organizer or
+  attendee who has not declined — and per room; titles only of the events the caller may see).
+- **Setting** (RFC 0020): *Default length (minutes)* for the whole installation, changed by Agenda managers; the
+  form's end follows the start by it.
+- **Screens**: Calendar (week, by organizer), list and form with attendees and the chatter; Rooms; the home page
+  shows *Today's meetings* (confirmed events today that one organizes or is invited to).
+- **Fixed on the way**: the REST onchange route passed datetimes as strings, which Shutro refuses — every form with
+  a datetime field (this one's start) failed its onchange; it now converts them as create and update do. Tests of
+  the business apps navigated away right after *Save* and could cancel the save under load (a new record's title
+  shows before it is saved); they now wait for the record's address or the server's answer (Projects' long-standing
+  flakiness).
+- **Tests**: on real PostgreSQL — privacy, organizer-only changes, answers, the room check against a private event
+  and after a cancellation, free / busy with private events as busy only, the default length through App settings,
+  the demo data. E2E (apps): a room booked for a meeting today with the end filled in, the same slot refused, the
+  meeting on the home page.
+- **Step 2**: repeating events with exceptions, email invitations with replies routed back, each attendee's time
+  zone, a free / busy picker in the form, other apps' dates on the same calendar.
+
