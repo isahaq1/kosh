@@ -1443,6 +1443,9 @@ importers:
 
   packages/settings:
     dependencies:
+      '@kosh/mail':
+        specifier: workspace:*
+        version: link:../mail
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../modules-sdk

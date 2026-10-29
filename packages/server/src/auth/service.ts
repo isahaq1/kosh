@@ -1039,6 +1039,12 @@ export class AuthService {
     this.#cache.clear(); // other sessions of this user, cached by token
   }
 
+  /** Forgets what is cached about `user` (their identity and sessions): after their roles or account changed. */
+  forget(user: number): void {
+    this.#forgetUser(user);
+    this.#cache.clear();
+  }
+
   /** The signed-in user's own details (RFC 0019 §3.6). */
   async profile(session: SessionInfo): Promise<Profile> {
     return this.#system('profile', async (env) => {
