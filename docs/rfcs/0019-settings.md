@@ -223,3 +223,23 @@ Bangla, light and dark, keyboard and screen reader, desktop and phone.
   (gains for everyone, a loss only for those without another role giving it, nothing saved), administrators only;
   in Shutro — `describe()` inside the transaction and refused to others. E2E: a new role opening Contacts, saved
   after its preview; given to Bob in People, "What can they do?"; the next change previewed as a gain for him.
+
+## Implementation notes (2026-10-29): step 4, part 1 — Companies
+
+- **The company's fields**: base's `res.company` gains address (street, city, postal code), email, phone and website
+  (`l10n_in` declared street / city / zip itself; it now takes them from base). The Company page's **Details** are
+  every stored simple field (text, long text, number, yes / no, choice) of `res.company` the generated API serves,
+  minus those with controls of their own — so a localization's BIN or GSTIN appear without code in Settings. The
+  chart template is shown, not changed (its installer sets it). The server accepts only offered fields with values
+  of their kind; Shutro checks the rest.
+- **Companies**: `GET /api/v1/settings/companies` (Administrator or Settings / Company) lists every company with its
+  currency, its people (internal users who may work in it), whether it is the current one and whether the person
+  can switch to it; `POST` (administrators) creates one with its currency, adds it to every administrator's and the
+  creator's companies, audits it (`settings.company_created`), and after the commit runs the apps' company
+  defaults (`installDefaults`, each app in turn, as for the first company). Country and localization at creation
+  wait for the localization installer to run per company (RFC 0016); logo and fiscal year start come with them.
+- **Screens**: Settings › Company with Details; Settings › Companies (switch, New company). The UI context gains
+  `switchCompany` so pages can switch as the sidebar does.
+- **Tests**: on real PostgreSQL — details offered, saved, emptied and checked; companies listed with their people,
+  creation refused to non-administrators and checked, the new company in the administrator's companies and not in
+  others'. E2E: a detail saved; a new company created, switched to and back.

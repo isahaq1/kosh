@@ -176,7 +176,13 @@ form('sale.order', (k) => ({
   `settings.group_apps` and, optionally, `settings:overview.about.<action>.description` / `.keywords` messages.
 - **Your profile** (user menu, or "Your profile" in the palette): details, language and time zone, default company,
   password, two-factor sign-in with recovery codes, and signed-in devices to sign out.
-- **Companies**: with several, the sidebar's company block is a switcher, and the palette offers "Switch to …".
+- **Company** (Settings › Company): name, number grouping, brand colour, and **Details** — every simple field the
+  installed apps add to the company (address and contacts from base; tax ids and the like from localizations),
+  shown by kind; the chart template is shown, not changed.
+- **Companies** (Settings › Companies): every company with its currency and people; *Switch* for one's own;
+  administrators add a company (name, currency) — the apps install its defaults, administrators can switch to it at
+  once. With several, the sidebar's company block is a switcher, and the palette offers "Switch to …". Pages switch
+  through `useKosh().switchCompany`.
 - **People** (Settings › People; Administrators and People managers): invite by email (the link is also shown to
   copy; `SHUTRO_ERP_BASE_URL` is the address it points to, `SMTP_URL` sends it), roles per app and company,
   deactivate, a new sign-in link, reset two-factor; invited people choose their password at `/activate`.
