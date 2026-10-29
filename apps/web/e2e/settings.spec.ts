@@ -52,3 +52,44 @@ test('your profile: details saved, this device listed, two-factor on and off', a
   await twoFactor.getByRole('button', { name: 'Turn off two-factor sign-in' }).click();
   await expect(twoFactor.getByText('Off', { exact: true })).toBeVisible();
 });
+
+test('People: invited with a role, the link opens the password page, then deactivated', async ({
+  page,
+  browser,
+}) => {
+  await signIn(page, 'admin');
+  await page.goto('/settings/a/settings.action_people');
+  await expect(page.getByRole('heading', { name: 'People', level: 1 })).toBeVisible();
+  await page.getByRole('button', { name: 'Invite', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Invite someone' });
+  await dialog.getByRole('textbox', { name: 'Name' }).fill('Mina Sultana');
+  await dialog.getByRole('textbox', { name: 'Email' }).fill('mina@example.test');
+  await dialog.getByRole('combobox', { name: 'Contacts' }).click();
+  await page.getByRole('option', { name: 'User' }).click();
+  await dialog.getByRole('button', { name: 'Send the invitation' }).click();
+  const link = ((await dialog.getByTestId('invitation-link').textContent()) ?? '').trim();
+  expect(link).toMatch(/\/activate\?token=/);
+  await dialog.getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByRole('button', { name: /Mina Sultana/ })).toContainText('Invited');
+
+  // Mina, in her own browser: the link, a password, and she is in — with Contacts only.
+  const minaContext = await browser.newContext();
+  const mina = await minaContext.newPage();
+  const url = new URL(link);
+  await mina.goto(`${url.pathname}${url.search}`);
+  await expect(mina.getByRole('heading', { name: 'Choose your password' })).toBeVisible();
+  await mina.getByLabel('Password', { exact: true }).fill('a long new password');
+  await mina.getByLabel('Repeat the password').fill('a long new password');
+  await mina.getByRole('button', { name: 'Save and sign in' }).click();
+  await expect(mina.getByRole('heading', { name: 'Apps' })).toBeVisible();
+  await expect(mina.getByRole('main').getByRole('link')).toHaveText([/^Contacts/]);
+  await minaContext.close();
+
+  await page.reload();
+  await page.getByRole('button', { name: /Mina Sultana/ }).click();
+  const person = page.getByRole('dialog', { name: 'Mina Sultana' });
+  await expect(person.getByText('Active', { exact: true })).toBeVisible();
+  await person.getByRole('button', { name: 'Deactivate' }).click();
+  await person.getByRole('button', { name: 'Deactivate' }).last().click();
+  await expect(person.getByText('Deactivated', { exact: true })).toBeVisible();
+});

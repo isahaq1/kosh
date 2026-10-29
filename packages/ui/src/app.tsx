@@ -96,6 +96,7 @@ import { onAppUpdate, registerServiceWorker } from './pwa/register.js';
 import { createRealtimeClient, type RealtimeClient } from './realtime.js';
 import type { Registry } from './registry.js';
 import { SearchBar } from './search/SearchBar.js';
+import { Activate } from './shell/Activate.js';
 import { CommandPalette, PaletteContext } from './shell/CommandPalette.js';
 import { Home } from './shell/Home.js';
 import { Login } from './shell/Login.js';
@@ -968,6 +969,11 @@ function OpenRecordPage(): ReactElement {
   );
 }
 
+function ActivatePage(): ReactElement {
+  const navigate = useNavigate();
+  return <Activate api={useServices().api} onSignedIn={() => void navigate({ to: '/' })} />;
+}
+
 function LoginPage(): ReactElement {
   const navigate = useNavigate();
   return <Login api={useServices().api} onSignedIn={() => void navigate({ to: '/' })} />;
@@ -980,6 +986,11 @@ const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
   component: LoginPage,
+});
+const activateRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/activate',
+  component: ActivatePage,
 });
 const shellRoute = createRoute({ getParentRoute: () => rootRoute, id: 'shell', component: Shell });
 const indexRoute = createRoute({
@@ -1028,6 +1039,7 @@ const userPageRoute = createRoute({
 });
 const routeTree = rootRoute.addChildren([
   loginRoute,
+  activateRoute,
   shellRoute.addChildren([
     indexRoute,
     openRoute,
