@@ -21,3 +21,6 @@ Design documents written before implementation. An RFC is implemented only after
 | 0015 | [Customer and vendor portal](0015-customer-portal.md) | Accepted, implemented (portal users and invitations, the internal-only guard, documents declared in manifests, the portal API with signatures, Sales / Accounting / Purchase / Projects in the portal, announcements, the portal app) |
 | 0016 | [Country localizations (Bangladesh first)](0016-localizations.md) | Accepted; steps 1–4 implemented (several taxes per line, bank accounts and payment details, fiscal year start, amounts in words, lakh grouping; withholding at payment with certificates; the `localization` declaration and `l10n_bd`; the Mushak documents, registers and return; step 5 parts 1–3: tax components by place of supply, reverse charge, debit notes, `l10n_in`, GSTR-1 / 3B, e-invoicing and e-way bills with the fake provider) |
 | 0017 | [Integrations platform](0017-integrations.md) | Accepted: API keys and service accounts, OAuth 2.0 apps, outbound and inbound webhooks, online payments |
+| 0018 | [Workspace back-office](0018-workspace-ui.md) | Accepted, implemented |
+| 0019 | [Settings](0019-settings.md) | Accepted, implemented |
+| 0020 | [App settings](0020-app-settings.md) | Proposed |
