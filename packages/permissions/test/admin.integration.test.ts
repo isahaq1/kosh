@@ -397,4 +397,41 @@ describe('reports and audit', () => {
     // Refused changes leave no event.
     expect(events.events.some((e) => e.kind === 'security.rule')).toBe(false);
   });
+
+  test('the audit log filtered by person, record, period and words; exported as CSV', async () => {
+    const get = async (query: string) => {
+      const res = await t.call({ url: `/api/v1/admin/audit?${query}`, as: 'admin' });
+      expect(res.status, res.body).toBe(200);
+      return (res.json() as { events: Record<string, unknown>[] }).events;
+    };
+    const mine = await get(`actor=${t.users['admin']}&kind=security.&limit=5`);
+    expect(mine.length).toBeGreaterThan(0);
+    expect(
+      mine.every((e) => e['actor'] === t.users['admin'] && e['actorName'] === 'Administrator'),
+    ).toBe(true);
+    const today = new Date().toISOString().slice(0, 10);
+    expect((await get(`from=${today}&to=${today}&limit=5`)).length).toBeGreaterThan(0);
+    expect(await get('to=2000-01-01')).toEqual([]);
+    const role = await get('q=role&kind=security.role');
+    expect(role.every((e) => /role/i.test(String(e['summary'])))).toBe(true);
+    const target = mine.find((e) => typeof e['targetId'] === 'number');
+    if (target !== undefined)
+      expect(
+        (
+          await get(`model=${String(target['targetModel'])}&record=${String(target['targetId'])}`)
+        ).every((e) => e['targetId'] === target['targetId']),
+      ).toBe(true);
+    for (const bad of ['actor=x', 'from=yesterday', 'limit=5000'])
+      expect((await t.call({ url: `/api/v1/admin/audit?${bad}`, as: 'admin' })).status).toBe(400);
+
+    const csv = await t.call({ url: '/api/v1/admin/audit?kind=security.&format=csv', as: 'admin' });
+    expect(csv.status).toBe(200);
+    expect(csv.headers['content-type']).toContain('text/csv');
+    const lines = csv.body.replace(/^﻿/, '').trim().split('\r\n');
+    expect(lines[0]).toBe('id,createdAt,kind,actorName,summary,targetModel,targetId,ip');
+    expect(lines.length).toBeGreaterThan(1);
+    // The export is itself in the log.
+    expect((await get('kind=data.export&limit=1'))[0]?.['summary']).toMatch(/audit event/);
+    expect((await t.call({ url: '/api/v1/admin/audit', as: 'maria' })).status).toBe(403);
+  });
 });

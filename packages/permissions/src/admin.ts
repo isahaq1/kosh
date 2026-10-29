@@ -518,18 +518,50 @@ export function registerAdminApi(context: ModuleContext): void {
 
   // ------------------------------------------------------------------------------------------- audit log
 
-  app.get('/api/v1/admin/audit', async (request) => {
-    const q = (request.query ?? {}) as { kind?: unknown; limit?: unknown; before?: unknown };
-    const limit = q.limit === undefined ? 100 : Number(q.limit);
+  // Filters (RFC 0019 §3.5): `kind` (`auth.` for a family), `actor` (a user id), `model` and `record` (the target),
+  // `from` / `to` (ISO dates, `to` inclusive of its day), `q` (words of the summary), `before` (an id: the next page);
+  // `format=csv` downloads the page as CSV — an export, itself audited.
+  app.get('/api/v1/admin/audit', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, unknown>;
+    const limit = q['limit'] === undefined ? 100 : Number(q['limit']);
     if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw bad('limit must be 1–1000.');
-    return request.env(
+    const where: Record<string, unknown> = {};
+    const text = (key: string) =>
+      typeof q[key] === 'string' && q[key] !== '' ? (q[key] as string) : undefined;
+    const id = (key: string) => {
+      const v = text(key);
+      if (v === undefined) return undefined;
+      const n = Number(v);
+      if (!Number.isSafeInteger(n) || n <= 0) throw bad(`${key} is a positive integer.`);
+      return n;
+    };
+    const date = (key: string) => {
+      const v = text(key);
+      if (v === undefined) return undefined;
+      const d = new Date(v);
+      if (Number.isNaN(d.getTime())) throw bad(`${key} is an ISO date.`);
+      return d;
+    };
+    const kind = text('kind');
+    if (kind !== undefined) where['kind'] = kind.endsWith('.') ? { like: `${kind}%` } : kind;
+    if (id('actor') !== undefined) where['actor'] = id('actor');
+    if (text('model') !== undefined) where['targetModel'] = text('model');
+    if (id('record') !== undefined) where['targetId'] = id('record');
+    if (text('q') !== undefined) where['summary'] = { ilike: `%${text('q')}%` };
+    const from = date('from');
+    const to = date('to');
+    if (from !== undefined || to !== undefined)
+      where['createdAt'] = {
+        ...(from === undefined ? {} : { gte: from }),
+        // `to` is a day: everything before the next one.
+        ...(to === undefined ? {} : { lt: new Date(to.getTime() + 86_400_000) }),
+      };
+    if (id('before') !== undefined) where['id'] = { lt: id('before') };
+    const csv = q['format'] === 'csv';
+    const events = await request.env(
       async (env) => {
         requireAdministrator(env, 'permissions.view_audit');
         return env.asSuperuser({ reason: 'read audit log' }, async (su) => {
-          const where: Record<string, unknown> = {};
-          if (typeof q.kind === 'string' && q.kind !== '')
-            where['kind'] = q.kind.endsWith('.') ? { like: `${q.kind}%` } : q.kind;
-          if (q.before !== undefined) where['id'] = { lt: Number(q.before) };
           const set = await ref(su, 'audit.event').search({ where, order: ['id desc'], limit });
           const keys = [
             'kind',
@@ -542,10 +574,67 @@ export function registerAdminApi(context: ModuleContext): void {
             'ip',
             'createdAt',
           ];
-          return { events: set.length === 0 ? [] : (await set.load(keys)).read(keys) };
+          const found = set.length === 0 ? [] : (await set.load(keys)).read(['id', ...keys]);
+          const actors = [
+            ...new Set(found.map((e) => e['actor']).filter((a) => typeof a === 'number')),
+          ];
+          const names = new Map(
+            actors.length === 0
+              ? []
+              : (
+                  await // Deactivated people keep their name in the log.
+                  (
+                    await ref(su.withFlags({ activeTest: false }), 'res.users').search({
+                      where: { id: { in: actors } },
+                    })
+                  ).load(['name'])
+                )
+                  .read(['id', 'name'])
+                  .map((u) => [u['id'], String(u['name'])]),
+          );
+          if (csv)
+            await audit(env, {
+              kind: 'data.export',
+              summary: `Exported ${found.length} audit event(s).`,
+              targetModel: 'audit.event',
+              details: { filters: where },
+              ip: request.ip,
+            });
+          return found.map(
+            (e): Row => ({
+              ...e,
+              actorName: typeof e['actor'] === 'number' ? (names.get(e['actor']) ?? null) : null,
+            }),
+          );
         });
       },
       { write: true },
     ); // the system read of the log is itself audited
+    if (!csv) return { events };
+    const cell = (v: unknown) => {
+      const s =
+        v === null || v === undefined ? '' : v instanceof Date ? v.toISOString() : String(v);
+      // Quoted, and never read as a formula by a spreadsheet.
+      return `"${(/^[=+\-@]/.test(s) ? `'${s}` : s).replaceAll('"', '""')}"`;
+    };
+    const columns = [
+      'id',
+      'createdAt',
+      'kind',
+      'actorName',
+      'summary',
+      'targetModel',
+      'targetId',
+      'ip',
+    ];
+    const lines = [
+      columns.join(','),
+      ...events.map((e) => columns.map((c) => cell(e[c])).join(',')),
+    ];
+    // A byte-order mark so spreadsheets read UTF-8 (Bangla names).
+    return reply
+      .header('content-type', 'text/csv; charset=utf-8')
+      .header('content-disposition', 'attachment; filename="audit-log.csv"')
+      .send(`﻿${lines.join('\r\n')}\r\n`);
   });
 }
