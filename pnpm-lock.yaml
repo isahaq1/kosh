@@ -92,6 +92,9 @@ importers:
       '@kosh/settings':
         specifier: workspace:*
         version: link:../../packages/settings
+      '@kosh/todo':
+        specifier: workspace:*
+        version: link:../../modules/todo
     devDependencies:
       '@testcontainers/postgresql':
         specifier: ^12.2.1
@@ -287,6 +290,9 @@ importers:
       '@kosh/server':
         specifier: workspace:*
         version: link:../../packages/server
+      '@kosh/todo':
+        specifier: workspace:*
+        version: link:../../modules/todo
       '@kosh/views':
         specifier: workspace:*
         version: link:../../packages/views
@@ -845,6 +851,25 @@ importers:
         specifier: ^12.2.1
         version: 12.2.1
 
+  modules/todo:
+    dependencies:
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   packages/assistant:
     dependencies:
       '@anthropic-ai/sdk':
@@ -1023,6 +1048,9 @@ importers:
       '@kosh/studio':
         specifier: workspace:*
         version: link:../studio
+      '@kosh/todo':
+        specifier: workspace:*
+        version: link:../../modules/todo
     devDependencies:
       '@testcontainers/postgresql':
         specifier: ^12.2.1
