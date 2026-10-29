@@ -1,6 +1,6 @@
 # RFC 0021: Business apps, part 2 — eleven apps, named for what they do
 
-- **Status:** Proposed (2026-10-29)
+- **Status:** Accepted (2026-10-29)
 - **Depends on:** 0001 (manifest), 0003 (permissions), 0004 (views), 0006 (messaging, activities), 0008 (business
   apps, App manager), 0009 (accounting), 0015 (portal), 0017 (integrations), 0020 (app settings)
 - **Asked for (2026-10-29):** "add inventory, manufacturing, calendar, employees, letter of credit, website,
@@ -33,6 +33,7 @@ Technical names (`stock`, `mrp`…) stay plain for developers; users see the app
 | **Event Hub** | `event` | Events | Events with sessions, tickets and seats, registrations from Sites or the portal, attendee check-in by QR from a phone, badges as PDF, follow-up emails; revenue to Accounting. |
 | **Focus** | `todo` | To-Do | Personal tasks and checklists for everyone (no app access needed), linked to any record, with due dates, priorities and a *Today* list on the home page; shared lists for small teams. |
 | **Pipeline** | `crm` | CRM | Leads and opportunities on a kanban with weighted forecast; stage rules (required fields, approvals) from Settings; activities and emails in the chatter; duplicate detection on contacts; won deals become quotations in Sales through a bridge; lead sources and conversion reports. |
+| **Counter** | `pos` | Point of Sale | Sells at a shop counter from a browser or a tablet, offline-first (sales queue on the device and sync when back online, RFC 0010's offline queue); barcode and scale input; several payment methods per sale including bKash / cards through the payment providers (RFC 0017); cash sessions with opening and closing counts and differences explained; receipts printed or sent by SMS / email; stock from Stockroom, revenue and VAT (Mushak 6.3 where it applies) to Accounting in one entry per session. |
 
 ## 3. Shared principles
 
@@ -58,6 +59,7 @@ Order by what others need:
 5. **Production** (+ `mrp_account`), then **Asset Care** (+ `maintenance_stock`).
 6. **Trade Finance** (+ its Accounting and Purchase / Sales links).
 7. **Event Hub** (+ `event_account`), then **Sites** (+ `website_crm`).
+8. **Counter** (+ `pos_account`), after Stockroom: it sells from stock.
 
 Each app starts with a short design note (its models, screens and tests) appended to this RFC, built in two or three
 reviewed steps.
@@ -77,3 +79,33 @@ reviewed steps.
 - Metadata-driven: models, views, menus, permissions and settings declared once per app.
 - Secure by default: default-deny access levels, record rules and field security per app; server-side checks.
 - Money is Shutro `Decimal`; all UI text through i18n (English, Bangla); light and dark; desktop and mobile.
+
+## Decisions (2026-10-29)
+
+1. **Names** accepted: Stockroom, Production, Agenda, Workforce, Trade Finance, Sites, Hiring, Asset Care, Event Hub,
+   Focus, Pipeline.
+2. **Order**: Focus and Agenda first, then as §4.
+3. **Sites**: content, forms and an API; the public rendering in the Next.js site later.
+4. **Point of Sale** added the same day as **Counter** (`pos`), after Stockroom.
+
+## Implementation notes (2026-10-29): Focus, step 1
+
+- **Module** `modules/todo` (`@kosh/todo`), app **Focus** (code `focus`). Access level *User* (`todo.user`): the
+  RFC's "for everyone, no app access needed" became an access level like every app's, as CLAUDE.md asks; give it
+  to everyone through a role.
+- **Models**: `todo.list` (owner, members, colour), `todo.task` (title, list, *For*, due date, priority normal /
+  high / urgent, state *To do* → *Done* with *Done* / *Reopen*, notes, a checklist with its progress in percent, an
+  optional link to any record by model and id), `todo.item` (a checklist step). Record rules: one's own to-dos,
+  and those of lists one owns or is a member of — through Shutro's dotted paths (`'list.members'`); nobody
+  else's, administrators aside.
+- **Screens**: To-dos as a board by list, a list, a calendar of due dates and a form with the checklist and the
+  chatter; Lists with sharing. The home page lists the open to-dos due today or before among *Needs your
+  attention*, with *Open* and *Done*.
+- **Wiring**: the installer offers Focus (not in the default set), the npm package bundles it, the demo
+  installation has it (a shared list, three to-dos), the business apps' E2E server installs it.
+- **Tests**: on real PostgreSQL — privacy (own, shared list's owner and members, others refused, people without
+  Focus refused), the checklist's progress, Done / Reopen, the demo data. E2E (apps): a to-do due today, listed, on
+  the home page, done from there.
+- **Next for Focus**: *Add to Focus* from any record's chatter (the record link), repeating to-dos, and a "Due
+  today" filter (Shutro domains have no relative date today; the search layer would compute it).
+

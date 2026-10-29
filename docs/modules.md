@@ -190,6 +190,12 @@ export const SaleOrder = defineModel('sale.order', {
 The views come from Shutro's own type generator, run through Shutro ERP's single Shutro gateway (`loadCodegen` in
 `@kosh/server/orm`). Their imports point at `@kosh/server/orm`, and other modules are referenced by package name.
 
+### Focus (`modules/todo`, RFC 0021)
+
+To-dos for the people who use them: their own, or on lists shared with colleagues, with due dates, priorities and
+checklists. Install it with `shutro-erp apps install todo` and give people the *Focus › User* access level; their
+open to-dos due today appear on the home page.
+
 ## Demo data (RFC 0008 §5.8)
 
 `npx shutro-erp init --demo` (or a yes to the question after the apps) loads every installed app's demo data: a sample
