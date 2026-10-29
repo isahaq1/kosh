@@ -88,6 +88,7 @@ export {
   type RequestRunOptions,
   runOptionsOf,
 } from './identity.js';
+export { imageVersions, registerImageRoutes } from './images.js';
 export { migrate, orm, pg } from './orm.js';
 export { buildKoshRegistry, KOSH_VERSION, type KoshRegistry } from './registry.js';
 export {

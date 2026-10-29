@@ -11,6 +11,7 @@ import type { FastifyRequest } from 'fastify';
 import { audit } from '../audit.js';
 import { HttpProblem } from '../errors.js';
 import type { RequestIdentity } from '../identity.js';
+import { imageVersions } from '../images.js';
 import type { Env, Shutro, VerifiedIdentity } from '../orm.js';
 import { keepingAdministrator } from './admins.js';
 import {
@@ -22,6 +23,7 @@ import {
   verifyPassword,
   verifyTotp,
 } from './crypto.js';
+import { resolveAccessToken } from './oauth.js';
 
 /** Options of the session layer. */
 export interface AuthOptions {
@@ -56,6 +58,10 @@ export interface UserInfo {
   readonly groupings: Readonly<Record<string, 'international' | 'lakh'>>;
   /** The brand colour of each of the user's companies that has one (RFC 0018): `#rrggbb`. */
   readonly accents: Readonly<Record<string, string>>;
+  /** The user's photo version (`/api/v1/images/user/<id>?v=<version>`), or null without one. */
+  readonly avatar: string | null;
+  /** Each of the user's companies' logo version, when it has one. */
+  readonly logos: Readonly<Record<string, string>>;
   readonly twoFactorEnabled: boolean;
   /** Holds an administrator role (in some company). */
   readonly administrator: boolean;
@@ -395,6 +401,22 @@ export class AuthService {
         scopes: key.scopes,
         apiKey: key.id,
       });
+    // An OAuth access token (RFC 0017 §5.2): the consenting user, within the grant's scopes.
+    const bearer = /^Bearer\s+(oat_\S+)$/i.exec(String(request.headers.authorization ?? ''))?.[1];
+    if (bearer !== undefined) {
+      const access = await this.#system('oauth token', (env) => resolveAccessToken(env, bearer));
+      if (access === null)
+        throw unauthenticated(
+          'invalid-token',
+          'The access token is unknown, expired or revoked.',
+          'Refresh it, or ask the user to allow the app again.',
+        );
+      return this.#identity(request, access.user, {
+        elevated: false,
+        scopes: access.scopes,
+        oauthToken: access.token,
+      });
+    }
     const session = await this.session(request);
     if (session === null) return null;
     if (session.twoFactorRequired)
@@ -417,6 +439,7 @@ export class AuthService {
       readonly session?: boolean;
       readonly scopes?: readonly string[];
       readonly apiKey?: number;
+      readonly oauthToken?: number;
     },
   ): Promise<RequestIdentity | null> {
     const info = await this.#identityOf(user);
@@ -459,6 +482,7 @@ export class AuthService {
       tz: info.tz,
       ...(options.scopes === undefined ? {} : { scopes: options.scopes }),
       ...(options.apiKey === undefined ? {} : { apiKey: options.apiKey }),
+      ...(options.oauthToken === undefined ? {} : { oauthToken: options.oauthToken }),
       // A session without the second factor the policy asks of everyone (RFC 0019 §3.5): the server allows only
       // setting it up. API keys are not sessions: their owner signed in to make them.
       ...(options.session === true &&
@@ -848,6 +872,8 @@ export class AuthService {
         companies: companyIds,
         groupings,
         accents,
+        avatar: (await imageVersions(env, 'user', [session.user]))[String(session.user)] ?? null,
+        logos: await imageVersions(env, 'company', companyIds),
         twoFactorEnabled,
         administrator,
         administratorNeedsSecondFactor:

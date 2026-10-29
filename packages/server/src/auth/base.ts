@@ -185,6 +185,77 @@ const AuthPolicy = defineModel('auth.policy', {
 });
 
 /**
+ * OAuth 2.0 apps (RFC 0017 §5.2): third-party applications that act for a user who consented, within scopes. The
+ * client secret (confidential apps) is stored as a digest; public apps rely on PKCE. Private: managed by the
+ * Integrations routes and the OAuth flow.
+ */
+const OAuthApp = defineModel('oauth.app', {
+  fields: {
+    name: f.char({ required: true }),
+    clientId: f.char({ required: true, index: 'unique' }),
+    secretHash: f.char(),
+    confidential: f.boolean({ default: true }),
+    /** One per line; the redirect must match one exactly. */
+    redirectUris: f.text({ required: true }),
+    /** The scopes it may ask for, space separated (`*`, `read:<app>`, `write:<app>`). */
+    scopes: f.char({ required: true }),
+    homepage: f.char(),
+    active: f.boolean({ default: true }),
+    owner: f.many2one('res.users', { ondelete: 'set null' }),
+  },
+});
+
+/** A user's consent to an app, with the scopes granted; revoking it ends every token of it. */
+const OAuthGrant = defineModel('oauth.grant', {
+  fields: {
+    user: f.many2one('res.users', { required: true, ondelete: 'cascade' }),
+    app: f.many2one('oauth.app', { required: true, ondelete: 'cascade' }),
+    scopes: f.char({ required: true }),
+    revoked: f.boolean({ default: false }),
+    lastUsedAt: f.datetime(),
+  },
+});
+
+/** An authorization code: once, for 10 minutes, bound to its redirect and its PKCE challenge. */
+const OAuthCode = defineModel('oauth.code', {
+  fields: {
+    codeHash: f.char({ required: true, index: 'unique' }),
+    grant: f.many2one('oauth.grant', { required: true, ondelete: 'cascade' }),
+    redirectUri: f.char({ required: true }),
+    challenge: f.char(),
+    expiresAt: f.datetime({ required: true }),
+    used: f.boolean({ default: false }),
+  },
+});
+
+/** An access token (1 hour) and its refresh token (rotated at each use), both stored as digests. */
+const OAuthToken = defineModel('oauth.token', {
+  fields: {
+    grant: f.many2one('oauth.grant', { required: true, ondelete: 'cascade' }),
+    accessHash: f.char({ required: true, index: 'unique' }),
+    refreshHash: f.char({ required: true, index: 'unique' }),
+    accessExpiresAt: f.datetime({ required: true }),
+    refreshExpiresAt: f.datetime({ required: true }),
+    /** No longer valid: replaced by a newer pair, or revoked. */
+    revoked: f.boolean({ default: false }),
+    /** Replaced by a newer pair: its refresh token coming back means someone else holds it. */
+    rotated: f.boolean({ default: false }),
+  },
+});
+
+/** Profile photos and company logos (`images.ts`): small images, their bytes in base64. Private: served by routes. */
+const KoshImage = defineModel('kosh.image', {
+  fields: {
+    ownerModel: f.char({ required: true, index: true }),
+    ownerId: f.integer({ required: true, index: true }),
+    mime: f.char({ required: true }),
+    data: f.text({ required: true }),
+    /** The bytes' digest (16 hex): the version in the image's URL. */
+    hash: f.char({ required: true }),
+  },
+});
+
+/**
  * The security audit log (CLAUDE.md: logins, permission changes, exports, sensitive actions). Append-only: no one
  * may change or delete events (administrators included: the REST API never serves it, and the admin API only reads).
  */
@@ -256,6 +327,11 @@ export const baseShutro: ReturnType<typeof orm.defineModule> = defineModule({
     AuthUserGroup,
     AuthUserGrant,
     AuthPolicy,
+    OAuthApp,
+    OAuthGrant,
+    OAuthCode,
+    OAuthToken,
+    KoshImage,
     AuditEvent,
     SavedView,
   ],
@@ -276,6 +352,11 @@ export const base: ReturnType<typeof defineKoshModule> = defineKoshModule({
     'auth.user_group',
     'auth.user_grant',
     'auth.policy',
+    'oauth.app',
+    'oauth.grant',
+    'oauth.code',
+    'oauth.token',
+    'kosh.image',
     'audit.event',
   ],
 });

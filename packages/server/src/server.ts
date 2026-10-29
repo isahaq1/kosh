@@ -20,12 +20,14 @@ import { openApiDocument } from './api/openapi.js';
 import { registerRestApi } from './api/rest.js';
 import { ViewRegistry } from './api/views.js';
 import { registerApiKeyRoutes } from './auth/api-keys.js';
+import { registerOAuthRoutes } from './auth/oauth.js';
 import { registerAuthRoutes } from './auth/routes.js';
 import { enforceScopes } from './auth/scopes.js';
 import { type AuthOptions, AuthService } from './auth/service.js';
 import { applyEnvironmentNames } from './env-names.js';
 import { HttpProblem, problemOf, ServerConfigError } from './errors.js';
 import { type Authenticator, denyAll, type RequestIdentity, runOptionsOf } from './identity.js';
+import { registerImageRoutes } from './images.js';
 import { type Driver, type Env, orm, pg, type Shutro } from './orm.js';
 import { buildKoshRegistry, KOSH_VERSION, type KoshRegistry } from './registry.js';
 import { endSpan, tracer } from './telemetry.js';
@@ -66,6 +68,8 @@ export interface ServerOptions {
     /** Sign-in attempts per 15 minutes per IP and login (default 10; 0 turns the limit off). */
     readonly loginLimit?: number;
   };
+  /** OAuth 2.0 provider (RFC 0017 §5.2): the back-office's address, where the consent page is (`KOSH_BASE_URL`). */
+  readonly oauth?: { readonly baseUrl?: string };
   /**
    * Shutro's identity loader checks every request's user (active, companies, groups) against `base`'s data. Default:
    * on with the built-in authentication; custom authenticators opt in.
@@ -312,7 +316,9 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
           ? `ip:${request.ip}`
           : request.identity.apiKey !== undefined
             ? `key:${request.identity.apiKey}`
-            : `user:${request.identity.user}`,
+            : request.identity.oauthToken !== undefined
+              ? `oauth:${request.identity.oauthToken}`
+              : `user:${request.identity.user}`,
       allowList: (request) => request.routeOptions.config.public === true,
       errorResponseBuilder: (_request, context) =>
         new HttpProblem(
@@ -358,6 +364,10 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
   if (auth !== undefined) {
     registerAuthRoutes(app, auth, { loginLimit: options.auth?.loginLimit ?? 10 });
     registerApiKeyRoutes(app, auth, registry);
+    registerImageRoutes(app, auth);
+    registerOAuthRoutes(app, auth, () => shutro as Shutro, registry, {
+      baseUrl: options.oauth?.baseUrl ?? process.env['KOSH_BASE_URL'] ?? 'http://localhost:5173',
+    });
   }
 
   // The generated REST API and its OpenAPI document (RFC 0002 §6.3–6.4).
