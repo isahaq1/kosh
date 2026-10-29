@@ -169,6 +169,17 @@ form('sale.order', (k) => ({
 }));
 ```
 
+### Settings and your profile (RFC 0019)
+
+- **Settings** opens on an overview of its sections, grouped (Workspace, Apps; People and Security next), with a
+  search over their names, descriptions and keywords. A module adds a section by a menu under
+  `settings.group_apps` and, optionally, `settings:overview.about.<action>.description` / `.keywords` messages.
+- **Your profile** (user menu, or "Your profile" in the palette): details, language and time zone, default company,
+  password, two-factor sign-in with recovery codes, and signed-in devices to sign out.
+- **Companies**: with several, the sidebar's company block is a switcher, and the palette offers "Switch to …".
+- Every package with screens must be listed as a Tailwind `@source` in `apps/web/src/index.css`, or classes used
+  only there are not generated.
+
 ## Tests
 
 `apps/web/e2e` (Playwright) runs against a real server (`e2e/server.ts`: PostgreSQL via Testcontainers, a contacts

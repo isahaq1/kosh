@@ -1,6 +1,6 @@
 # RFC 0019: Settings — people, roles, companies and your profile
 
-- **Status:** Proposed (2026-10-29)
+- **Status:** Accepted (2026-10-29)
 - **Depends on:** 0003 (permissions), 0008 (Settings app, App manager), 0015 (portal invitations), 0017 (API keys),
   0018 (Workspace UI)
 - **Asked for (2026-10-29):** "user manage, company, role permission", "user profile, switch company and others",
@@ -137,9 +137,39 @@ notification preferences). Every page is searchable, permission-checked on the s
 2. **Who manages people**: Administrators plus a *People manager* access level (proposed), or Administrators only?
 3. **Order**: this RFC before RFC 0018 step 4 (lists and the Today home) (proposed), or after?
 
+## Decisions (2026-10-29)
+
+1. **Invitations**: emailed when mail is set up, and the link always shown to copy.
+2. **Who manages people and roles**: Administrators, and a *People manager* access level.
+3. **Order**: this RFC before RFC 0018 step 4.
+
 ## Alignment with CLAUDE.md
 
 Permission-based everywhere (the server checks each route; sections the user may not open are not listed); the
 Administrator bypass stays the single explicit one, with the last-administrator and two-factor safeguards; every
 change audited; no business logic in React (previews and effective access are computed on the server); English and
 Bangla, light and dark, keyboard and screen reader, desktop and phone.
+
+## Implementation notes (2026-10-29): step 1 — the Settings home, your profile, switching companies
+
+- **Overview** (`settings.Overview`, the app's first entry): every section the user may open in its group — menus
+  `settings.group_workspace` (Company), `settings.group_apps` (App manager, the AI assistant; modules add theirs
+  there), People and Security in the next steps — each with what it is for, and a search over names, descriptions
+  and keywords (`settings:overview.about.<action>` messages; "lakh" finds Company). The sidebar shows the same
+  groups as headings. Searching inside a section's fields is left for later.
+- **Your profile** (`/me/settings.Profile`, first in the user menu; in the overview under *You*): details (name,
+  email, phone), language and region (the app follows the language saved; time zone; the default company when there
+  are several), password, two-factor sign-in (set up with the key and an authenticator link, recovery codes shown
+  once, turned off with the password and a code), signed-in devices (browser and system from the user agent, address,
+  last activity; sign one out or all the others). Server: `GET / PATCH /api/v1/auth/profile`,
+  `GET /api/v1/auth/sessions`, `DELETE /api/v1/auth/sessions/:id`, `POST /api/v1/auth/sessions/sign-out-others` —
+  sessions only (API keys are refused), CSRF-checked, audited (`auth.profile_changed`, `auth.session_revoked`).
+- **Switching companies**: the sidebar's company block is a menu of the user's companies (the current one checked),
+  and the palette offers "Switch to …" for each other company; "Your profile" is a palette command too.
+- **Found on the way**: the web app's Tailwind sources missed eight packages' screens (Settings, Integrations,
+  Import, Automation, Mail, Accounting, both localizations), so their unique classes were never generated; the
+  sidebar's group headings failed the contrast check (axe) and use the full muted colour now. The starter project
+  scans the whole bundle and was not affected.
+- **Tests**: profile and sessions on real PostgreSQL (checked values, other companies refused, one device and all
+  the others signed out, API keys refused, audit); E2E for the overview's search, the profile's details, this
+  device, and two-factor on and off with codes from the shown key.
