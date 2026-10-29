@@ -10,6 +10,9 @@
  * - `POST /api/v1/auth/2fa/verify`    `{ code }` (TOTP or recovery code) completes a pending sign-in
  * - `POST /api/v1/auth/2fa/disable`   `{ password, code }`
  * - `POST /api/v1/auth/password`      `{ current, next }`; other sessions are revoked
+ * - `GET  /api/v1/auth/profile`       your details (RFC 0019); `PATCH` `{ name?, email?, phone?, lang?, tz?, company? }`
+ * - `GET  /api/v1/auth/sessions`      your signed-in devices; `DELETE …/sessions/:id` signs one out
+ * - `POST /api/v1/auth/sessions/sign-out-others`
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { HttpProblem } from '../errors.js';
@@ -101,4 +104,40 @@ export function registerAuthRoutes(
     );
     return { ok: true };
   });
+
+  // Your own profile and sessions (RFC 0019 §3.6): a session's, never an API key's.
+  app.get('/api/v1/auth/profile', { config: { auth: false } }, async (request) =>
+    auth.profile(await auth.requireSession(request)),
+  );
+  app.patch('/api/v1/auth/profile', { config: { auth: false } }, async (request) => {
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const values: Record<string, unknown> = {};
+    for (const key of ['name', 'email', 'phone', 'lang', 'tz'] as const)
+      if (body[key] !== undefined) {
+        if (
+          body[key] !== null &&
+          (typeof body[key] !== 'string' || (body[key] as string).length > 200)
+        )
+          throw new HttpProblem(400, 'invalid-body', 'Invalid body', `'${key}' is a short text.`);
+        values[key] = body[key];
+      }
+    if (body['company'] !== undefined) {
+      if (!Number.isSafeInteger(body['company']))
+        throw new HttpProblem(400, 'invalid-body', 'Invalid body', "'company' is a company id.");
+      values['company'] = body['company'];
+    }
+    return auth.updateProfile(await auth.requireSession(request), values);
+  });
+  app.get('/api/v1/auth/sessions', { config: { auth: false } }, async (request) => ({
+    sessions: await auth.sessions(await auth.requireSession(request)),
+  }));
+  app.delete('/api/v1/auth/sessions/:id', { config: { auth: false } }, async (request) => {
+    const id = Number((request.params as { id?: string }).id);
+    if (!Number.isSafeInteger(id) || id <= 0)
+      throw new HttpProblem(400, 'invalid-id', 'Invalid id', 'The id is a positive integer.');
+    return auth.revokeSessions(await auth.requireSession(request), id);
+  });
+  app.post('/api/v1/auth/sessions/sign-out-others', { config: { auth: false } }, async (request) =>
+    auth.revokeSessions(await auth.requireSession(request), 'others'),
+  );
 }

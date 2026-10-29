@@ -1038,4 +1038,182 @@ export class AuthService {
     this.#forgetUser(session.user);
     this.#cache.clear(); // other sessions of this user, cached by token
   }
+
+  /** The signed-in user's own details (RFC 0019 §3.6). */
+  async profile(session: SessionInfo): Promise<Profile> {
+    return this.#system('profile', async (env) => {
+      const [row] = await fetch(model(env, 'res.users').browse([session.user]), PROFILE_KEYS);
+      return {
+        login: String(row?.['login'] ?? ''),
+        name: String(row?.['name'] ?? ''),
+        email: typeof row?.['email'] === 'string' ? row['email'] : null,
+        phone: typeof row?.['phone'] === 'string' ? row['phone'] : null,
+        lang: String(row?.['lang'] ?? 'en_US'),
+        tz: String(row?.['tz'] ?? 'UTC'),
+        company: typeof row?.['company'] === 'number' ? row['company'] : null,
+      };
+    });
+  }
+
+  /**
+   * Changes the user's own details: name, email, phone, language, time zone, and the default company (one of
+   * theirs). Audited.
+   */
+  async updateProfile(
+    session: SessionInfo,
+    values: Partial<Omit<Profile, 'login'>>,
+  ): Promise<Profile> {
+    const changes: Record<string, unknown> = {};
+    if (values.name !== undefined) {
+      const name = values.name.trim();
+      if (name === '' || name.length > 200)
+        throw new HttpProblem(
+          422,
+          'invalid-name',
+          'Invalid name',
+          'Your name is 1–200 characters.',
+        );
+      changes['name'] = name;
+    }
+    if (values.email !== undefined) {
+      const email = values.email === null ? '' : values.email.trim();
+      if (email !== '' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
+        throw new HttpProblem(
+          422,
+          'invalid-email',
+          'Invalid email',
+          `'${email}' is not an email address.`,
+        );
+      changes['email'] = email === '' ? null : email;
+    }
+    if (values.phone !== undefined) changes['phone'] = values.phone?.trim() || null;
+    if (values.lang !== undefined) {
+      if (!/^[a-z]{2,3}(_[A-Z]{2})?$/.test(values.lang))
+        throw new HttpProblem(
+          422,
+          'invalid-lang',
+          'Invalid language',
+          'A language code such as en_US or bn_BD.',
+        );
+      changes['lang'] = values.lang;
+    }
+    if (values.tz !== undefined) {
+      try {
+        new Intl.DateTimeFormat('en', { timeZone: values.tz });
+      } catch {
+        throw new HttpProblem(
+          422,
+          'invalid-tz',
+          'Invalid time zone',
+          `'${values.tz}' is not a time zone.`,
+        );
+      }
+      changes['tz'] = values.tz;
+    }
+    if (values.company !== undefined && values.company !== null) {
+      const info = await this.#identityOf(session.user);
+      if (info === null || !info.companies.includes(values.company))
+        throw new HttpProblem(
+          422,
+          'invalid-company',
+          'Invalid company',
+          'Choose one of your companies.',
+        );
+      changes['company'] = values.company;
+    }
+    if (Object.keys(changes).length > 0)
+      await this.#system('profile change', async (env) => {
+        await model(env, 'res.users').browse([session.user]).write(changes);
+        await audit(env, {
+          kind: 'auth.profile_changed',
+          summary: `Changed ${Object.keys(changes).join(', ')}.`,
+          actor: session.user,
+        });
+      });
+    this.#forgetUser(session.user);
+    return this.profile(session);
+  }
+
+  /** The user's active sessions, newest use first; the current one marked. */
+  async sessions(session: SessionInfo): Promise<SessionEntry[]> {
+    return this.#system('sessions', async (env) => {
+      const rows = await fetch(
+        model(env, 'auth.session').search({
+          where: { user: session.user, revoked: false, expiresAt: { gt: new Date() } },
+          order: ['lastSeenAt desc', 'id desc'],
+          limit: 50,
+        }),
+        ['id', 'ip', 'userAgent', 'lastSeenAt', 'createdAt', 'secondFactor'],
+      );
+      return rows.map((r) => ({
+        id: r['id'] as number,
+        ip: typeof r['ip'] === 'string' ? r['ip'] : null,
+        userAgent: typeof r['userAgent'] === 'string' ? r['userAgent'] : null,
+        lastSeenAt: new Date(timeOf(r['lastSeenAt']) ?? 0).toISOString(),
+        createdAt:
+          timeOf(r['createdAt']) === null
+            ? null
+            : new Date(timeOf(r['createdAt']) as number).toISOString(),
+        secondFactor: r['secondFactor'] === true,
+        current: r['id'] === session.id,
+      }));
+    });
+  }
+
+  /** Signs out one of the user's own sessions (or all but this one with `'others'`). Audited. */
+  async revokeSessions(
+    session: SessionInfo,
+    which: number | 'others',
+  ): Promise<{ revoked: number }> {
+    const revoked = await this.#system('sign out a session', async (env) => {
+      const set = await model(env, 'auth.session').search({
+        where: {
+          user: session.user,
+          revoked: false,
+          ...(which === 'others' ? { id: { ne: session.id } } : { id: which }),
+        },
+      });
+      if (which !== 'others' && set.length === 0)
+        throw new HttpProblem(404, 'missing-record', 'Not found', `You have no session ${which}.`);
+      if (set.length > 0) await set.write({ revoked: true });
+      await audit(env, {
+        kind: 'auth.session_revoked',
+        summary:
+          which === 'others'
+            ? `Signed out ${set.length} other session(s).`
+            : `Signed out session ${which}.`,
+        actor: session.user,
+      });
+      return set.length;
+    });
+    this.#forgetUser(session.user);
+    this.#cache.clear();
+    return { revoked };
+  }
+}
+
+const PROFILE_KEYS = ['login', 'name', 'email', 'phone', 'lang', 'tz', 'company'] as const;
+
+/** The user's own details (RFC 0019 §3.6). */
+export interface Profile {
+  readonly login: string;
+  readonly name: string;
+  readonly email: string | null;
+  readonly phone: string | null;
+  readonly lang: string;
+  readonly tz: string;
+  /** The default company. */
+  readonly company: number | null;
+}
+
+/** One of the user's sessions (a signed-in device). */
+export interface SessionEntry {
+  readonly id: number;
+  readonly ip: string | null;
+  readonly userAgent: string | null;
+  readonly lastSeenAt: string;
+  readonly createdAt: string | null;
+  readonly secondFactor: boolean;
+  /** This browser. */
+  readonly current: boolean;
 }
