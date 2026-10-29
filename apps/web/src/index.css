@@ -10,3 +10,11 @@
 @source "../../../packages/notify/src/web";
 @source "../../../packages/assistant/src/web";
 @source "../../../modules/portal/src/web";
+@source "../../../packages/automation/src/web";
+@source "../../../packages/import/src/web";
+@source "../../../packages/integrations/src/web";
+@source "../../../packages/mail/src/web";
+@source "../../../packages/settings/src/web";
+@source "../../../modules/accounting/src/web";
+@source "../../../modules/l10n_bd/src/web";
+@source "../../../modules/l10n_in/src/web";
