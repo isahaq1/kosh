@@ -31,6 +31,7 @@ test('a project and a task from their forms; the board shows the task under its 
   await page.getByRole('combobox', { name: 'Customer' }).click();
   await page.getByRole('option', { name: 'Bengal Steel' }).click();
   await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/projects\.action_projects\/\d+$/); // saved, not only typed
   await expect(page.getByRole('heading', { name: 'Bridge works' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Project manager' })).toHaveText('Rahim Uddin'); // the creator
 
@@ -42,6 +43,7 @@ test('a project and a task from their forms; the board shows the task under its 
   await page.getByRole('option', { name: 'New' }).click();
   await page.getByLabel('Planned hours').fill('8');
   await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/projects\.action_tasks\/\d+$/);
   await expect(page.getByRole('heading', { name: 'Survey the site' })).toBeVisible();
   await expect(page.getByText('Bengal Steel')).toBeVisible(); // the project's customer, from the onchange
 
@@ -53,8 +55,12 @@ test('a project and a task from their forms; the board shows the task under its 
   await column.getByRole('button', { name: 'Survey the site', exact: true }).click();
   await page.getByRole('combobox', { name: 'Stage' }).click();
   await page.getByRole('option', { name: 'Done' }).click();
+  // Wait for the server's answer: Save is also disabled while the save is still on its way.
+  const saved = page.waitForResponse(
+    (r) => r.url().includes('/api/v1/models/project.task/') && r.request().method() === 'PATCH',
+  );
   await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+  expect((await saved).status()).toBeLessThan(300);
   await page.goto('/projects/a/projects.action_tasks?view=list');
   await expect(page.getByRole('row', { name: /Survey the site/ })).toContainText('Done');
   await page.goto('/projects/a/projects.action_projects');

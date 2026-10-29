@@ -26,7 +26,8 @@ test('a to-do due today: listed, on the home page, done from there', async ({ pa
   await page.getByRole('combobox', { name: 'Priority' }).click();
   await page.getByRole('option', { name: 'High' }).click();
   await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByRole('heading', { name: 'Call the bank about the LC' })).toBeVisible();
+  // Saved (a new record's title shows before it is): the address carries its id.
+  await expect(page).toHaveURL(/focus\.action_tasks\/\d+$/);
 
   await page.goto('/focus/a/focus.action_tasks?view=list');
   await expect(page.getByRole('heading', { name: 'To-dos', level: 1 })).toBeVisible();
