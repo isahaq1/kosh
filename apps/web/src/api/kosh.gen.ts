@@ -118,6 +118,20 @@ export interface ResCompany {
   currency: number;
   /** Number grouping */
   numberGrouping: "international" | "lakh";
+  /** Brand colour */
+  accentColor?: string | null;
+  /** Address */
+  street?: string | null;
+  /** City */
+  city?: string | null;
+  /** Postal code */
+  zip?: string | null;
+  /** Email */
+  email?: string | null;
+  /** Phone */
+  phone?: string | null;
+  /** Website */
+  website?: string | null;
 }
 
 export interface ResCompanyCreate {
@@ -127,6 +141,20 @@ export interface ResCompanyCreate {
   currency: number;
   /** Number grouping */
   numberGrouping?: "international" | "lakh";
+  /** Brand colour */
+  accentColor?: string | null;
+  /** Address */
+  street?: string | null;
+  /** City */
+  city?: string | null;
+  /** Postal code */
+  zip?: string | null;
+  /** Email */
+  email?: string | null;
+  /** Phone */
+  phone?: string | null;
+  /** Website */
+  website?: string | null;
 }
 
 export interface ResCompanyUpdate {
@@ -136,6 +164,20 @@ export interface ResCompanyUpdate {
   currency?: number;
   /** Number grouping */
   numberGrouping?: "international" | "lakh";
+  /** Brand colour */
+  accentColor?: string | null;
+  /** Address */
+  street?: string | null;
+  /** City */
+  city?: string | null;
+  /** Postal code */
+  zip?: string | null;
+  /** Email */
+  email?: string | null;
+  /** Phone */
+  phone?: string | null;
+  /** Website */
+  website?: string | null;
 }
 
 /** Res Currency */

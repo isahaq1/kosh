@@ -31,6 +31,13 @@ const ResCompany = defineModel('res.company', {
     ),
     /** The company's brand colour (`#4f46e5`), the back-office's accent (RFC 0018); the default when empty. */
     accentColor: f.char({ size: 7, label: 'Brand colour' }),
+    /** Its address and how to reach it (RFC 0019 §3.4): on documents, e-invoices and the portal. */
+    street: f.char({ label: 'Address' }),
+    city: f.char({ label: 'City' }),
+    zip: f.char({ size: 12, label: 'Postal code' }),
+    email: f.char({ label: 'Email' }),
+    phone: f.char({ label: 'Phone' }),
+    website: f.char({ label: 'Website' }),
   },
 });
 

@@ -119,10 +119,8 @@ export const CompanyGst = extendModel('res.company', {
   fields: {
     gstin: f.char({ size: 15, label: 'GSTIN' }),
     pan: f.char({ size: 10, label: 'PAN' }),
-    /** Its principal place of business: the seller's address on e-invoices and e-way bills. */
-    street: f.char({ label: 'Address' }),
-    city: f.char({ label: 'City' }),
-    zip: f.char({ size: 6, label: 'PIN code' }),
+    // Its principal place of business (`street`, `city`, `zip`: the base's company address) is the seller's
+    // address on e-invoices and e-way bills.
     /** Customer invoices and notes are registered with the IRP when posted (turnover above the threshold). */
     einvoiceEnabled: f.boolean({ required: true, default: false, label: 'E-invoicing' }),
   },
