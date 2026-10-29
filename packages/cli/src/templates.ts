@@ -15,6 +15,7 @@ export type AppName =
   | 'sale_account'
   | 'purchase_account'
   | 'project'
+  | 'todo'
   | 'sale_project'
   | 'l10n_bd'
   | 'l10n_in';
@@ -90,6 +91,11 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'purchaseAccount',
     bridge: ['purchase', 'accounting'],
+  },
+  todo: {
+    label: 'Focus: your to-dos and shared lists, with checklists and due dates',
+    icon: '✅',
+    server: 'todo',
   },
   sale_project: {
     label: 'Bridge: tasks and projects from sales orders (Sales ↔ Projects)',

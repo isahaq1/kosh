@@ -19,6 +19,7 @@ import { saleProject } from '@kosh/sale_project';
 import { sales } from '@kosh/sales';
 import { base } from '@kosh/server';
 import { settings } from '@kosh/settings';
+import { todo } from '@kosh/todo';
 
 /** What the demo installs; the bridges come as proposals of the plan. */
 export const DEMO_APPS: readonly string[] = [
@@ -31,6 +32,7 @@ export const DEMO_APPS: readonly string[] = [
   'purchase',
   'accounting',
   'project',
+  'todo',
   'l10n_bd',
 ];
 
@@ -51,6 +53,7 @@ export function demoCatalogue(): KoshModule[] {
     purchase,
     accounting,
     project,
+    todo,
     saleAccount,
     purchaseAccount,
     saleProject,

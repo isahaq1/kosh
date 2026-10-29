@@ -16,6 +16,7 @@
     "@kosh/permissions": "workspace:*",
     "@kosh/product": "workspace:*",
     "@kosh/project": "workspace:*",
+    "@kosh/todo": "workspace:*",
     "@kosh/purchase": "workspace:*",
     "@kosh/purchase_account": "workspace:*",
     "@kosh/realtime": "workspace:*",
