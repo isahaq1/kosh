@@ -233,3 +233,43 @@ test('roles replaced; a People manager’s limits; deactivation signs out; two-f
     ]),
   );
 });
+
+test('added directly with a password: signs in at once, no invitation; checked and audited', async () => {
+  const before = sent.length;
+  const added = await call('POST', P, 'hana', {
+    name: 'Tanvir',
+    login: 'tanvir',
+    password: 'a long enough password',
+    assignments: [],
+  });
+  expect(added.status, JSON.stringify(added.json)).toBe(201);
+  expect(added.json).toMatchObject({ login: 'tanvir', activationUrl: null, emailed: false });
+  expect(sent.length).toBe(before); // no email
+  expect((await login('tanvir', 'a long enough password')).length).toBeGreaterThan(10);
+
+  for (const body of [
+    { name: 'X', login: 'x1', password: 'short' }, // under 12 characters
+    { name: 'X', login: 'a b', password: 'a long enough password' },
+    { name: 'X', login: 'xx', password: 'a long enough password' },
+    { name: 'X', login: 'xyz', email: 'not-an-email', password: 'a long enough password' },
+  ])
+    expect((await call('POST', P, 'hana', body)).status, JSON.stringify(body)).toBe(422);
+  expect(
+    (
+      await call('POST', P, 'hana', {
+        name: 'Again',
+        login: 'tanvir',
+        password: 'a long enough password',
+      })
+    ).status,
+  ).toBe(409);
+  expect(
+    (await call('POST', P, 'bob', { name: 'Y', login: 'yyy', password: 'a long enough password' }))
+      .status,
+  ).toBe(403);
+  const [event] = await server.driver.query<{ summary: string }>({
+    text: "SELECT summary FROM audit_event WHERE kind = 'people.created' ORDER BY id DESC LIMIT 1",
+    params: [],
+  });
+  expect(event?.summary).toContain('tanvir');
+});

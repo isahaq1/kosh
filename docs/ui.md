@@ -183,7 +183,9 @@ form('sale.order', (k) => ({
   administrators add a company (name, currency) — the apps install its defaults, administrators can switch to it at
   once. With several, the sidebar's company block is a switcher, and the palette offers "Switch to …". Pages switch
   through `useKosh().switchCompany`.
-- **People** (Settings › People; Administrators and People managers): invite by email (the link is also shown to
+- **People** (Settings › People; Administrators and People managers): *Add or invite* — add someone directly with
+  a password you pass on (the login may be a plain name, the email optional; `people.created` in the audit log), or
+  invite by email (the link is also shown to
   copy; `SHUTRO_ERP_BASE_URL` is the address it points to, `SMTP_URL` sends it), roles per app and company,
   deactivate, a new sign-in link, reset two-factor; invited people choose their password at `/activate`.
 - **Layout**: the home page and the user's own pages have no sidebar or page bar, only the notifications, the chat

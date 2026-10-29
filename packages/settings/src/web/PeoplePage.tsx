@@ -97,6 +97,7 @@ function InvitationLink({
   );
 }
 
+/** Invite someone (they choose their password from a link), or add them directly with a password you pass on. */
 function InviteDialog({
   api,
   catalogue,
@@ -110,33 +111,51 @@ function InviteDialog({
   const { t } = useTranslation('settings');
   const id = useId();
   const queryClient = useQueryClient();
+  const [mode, setMode] = useState<'invite' | 'password'>('invite');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [login, setLogin] = useState('');
+  const [password, setPassword] = useState('');
+  const [repeat, setRepeat] = useState('');
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const invite = useMutation({
     mutationFn: () =>
-      api.call<{ activationUrl: string; emailed: boolean; login: string }>('POST', P, {
-        name,
-        email,
-        assignments,
-      }),
+      api.call<{ activationUrl: string | null; emailed: boolean; login: string }>(
+        'POST',
+        P,
+        mode === 'invite'
+          ? { name, email, assignments }
+          : { name, email, login: login.trim() === '' ? email : login, password, assignments },
+      ),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['settings', 'people'] }),
   });
   useEffect(() => {
     if (!open) {
+      setMode('invite');
       setName('');
       setEmail('');
+      setLogin('');
+      setPassword('');
+      setRepeat('');
       setAssignments([]);
       invite.reset();
     }
   }, [open, invite.reset]);
   const done = invite.data;
+  const mismatch = repeat !== '' && repeat !== password;
+  const ready =
+    name.trim() !== '' &&
+    (mode === 'invite'
+      ? email.includes('@')
+      : (login.trim() !== '' || email.includes('@')) &&
+        password.length >= 12 &&
+        repeat === password);
   return (
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title={t('people.inviteTitle')}
-      description={t('people.inviteHint')}
+      title={mode === 'invite' ? t('people.inviteTitle') : t('people.addTitle')}
+      description={mode === 'invite' ? t('people.inviteHint') : t('people.addHint')}
       wide
       footer={
         done === undefined ? (
@@ -145,10 +164,10 @@ function InviteDialog({
             <Button
               variant="primary"
               busy={invite.isPending}
-              disabled={name.trim() === '' || !email.includes('@')}
+              disabled={!ready}
               onClick={() => invite.mutate()}
             >
-              {t('people.send')}
+              {mode === 'invite' ? t('people.send') : t('people.add')}
             </Button>
           </>
         ) : (
@@ -159,16 +178,45 @@ function InviteDialog({
       }
     >
       {done !== undefined ? (
-        <InvitationLink url={done.activationUrl} emailed={done.emailed} to={done.login} />
+        done.activationUrl === null ? (
+          <Alert tone="info">{t('people.added', { login: done.login })}</Alert>
+        ) : (
+          <InvitationLink url={done.activationUrl} emailed={done.emailed} to={done.login} />
+        )
       ) : (
         <div className="grid gap-4">
+          <fieldset className="grid gap-2 sm:grid-cols-2">
+            <legend className="sr-only">{t('people.how')}</legend>
+            {(['invite', 'password'] as const).map((m) => (
+              <label
+                key={m}
+                className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-sm ${
+                  mode === m ? 'border-primary bg-accent/40' : ''
+                }`}
+              >
+                <input
+                  type="radio"
+                  name={`${id}-mode`}
+                  className="mt-1"
+                  checked={mode === m}
+                  onChange={() => setMode(m)}
+                />
+                <span>
+                  <span className="font-medium">{t(`people.mode.${m}`)}</span>
+                  <span className="block text-muted-foreground">{t(`people.mode.${m}Hint`)}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <Label htmlFor={`${id}-name`}>{t('profile.name')}</Label>
               <Input id={`${id}-name`} value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor={`${id}-email`}>{t('profile.email')}</Label>
+              <Label htmlFor={`${id}-email`}>
+                {mode === 'invite' ? t('profile.email') : t('people.emailOptional')}
+              </Label>
               <Input
                 id={`${id}-email`}
                 type="email"
@@ -176,6 +224,44 @@ function InviteDialog({
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
+            {mode === 'password' ? (
+              <>
+                <div className="grid gap-1.5">
+                  <Label htmlFor={`${id}-login`}>{t('people.login')}</Label>
+                  <Input
+                    id={`${id}-login`}
+                    autoComplete="off"
+                    placeholder={email === '' ? 'rahim' : email}
+                    value={login}
+                    onChange={(e) => setLogin(e.target.value)}
+                  />
+                </div>
+                <div />
+                <div className="grid gap-1.5">
+                  <Label htmlFor={`${id}-password`}>{t('people.password')}</Label>
+                  <Input
+                    id={`${id}-password`}
+                    type="password"
+                    autoComplete="new-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">{t('people.passwordHint')}</p>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor={`${id}-repeat`}>{t('people.repeat')}</Label>
+                  <Input
+                    id={`${id}-repeat`}
+                    type="password"
+                    autoComplete="new-password"
+                    aria-invalid={mismatch ? true : undefined}
+                    value={repeat}
+                    onChange={(e) => setRepeat(e.target.value)}
+                  />
+                  {mismatch ? <p className="text-xs text-danger">{t('people.mismatch')}</p> : null}
+                </div>
+              </>
+            ) : null}
           </div>
           <div className="grid gap-2">
             <h3 className="text-sm font-semibold">{t('people.roles')}</h3>

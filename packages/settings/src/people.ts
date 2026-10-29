@@ -381,14 +381,27 @@ export function registerPeopleRoutes(context: ModuleContext, options: PeopleOpti
     });
   });
 
+  // An invitation (the person chooses their password), or — with `password` — a person added directly: the
+  // manager sets the password and passes it on; the login may then be a plain name (`rahim`) and the email optional.
   app.post('/api/v1/settings/people', async (request, reply) => {
     const body = (request.body ?? {}) as Row;
     const name = String(body['name'] ?? '').trim();
-    const login = String(body['email'] ?? '')
+    const address = String(body['email'] ?? '')
       .trim()
       .toLowerCase();
+    const password = typeof body['password'] === 'string' ? body['password'] : undefined;
+    const direct = password !== undefined;
+    const login = direct
+      ? String(body['login'] ?? address)
+          .trim()
+          .toLowerCase()
+      : address;
     if (name === '' || name.length > 200) throw bad('The name is 1–200 characters.');
-    if (!EMAIL.test(login)) throw bad('The email is their login and where the invitation goes.');
+    if (!direct && !EMAIL.test(login))
+      throw bad('The email is their login and where the invitation goes.');
+    if (direct && !/^[a-z0-9._@+-]{3,100}$/.test(login))
+      throw bad('The login is 3–100 letters, digits, or . _ @ + -.');
+    if (direct && address !== '' && !EMAIL.test(address)) throw bad('The email is not valid.');
     const made = await guarded(request, async (env, su, manager) => {
       const assignments = await checkAssignments(su, body['assignments'] ?? [], manager);
       const taken = await ref(withArchived(su), 'res.users').search({ where: { login }, limit: 1 });
@@ -407,18 +420,29 @@ export function registerPeopleRoutes(context: ModuleContext, options: PeopleOpti
         {
           login,
           name,
-          email: login,
+          email: address === '' ? null : address,
           company: home,
           companies: { set: companies.length === 0 ? [env.companyId] : companies },
         },
       ]);
       const user = created.ids[0] as number;
-      // No usable password until the invitation is used.
-      await auth.setPassword(su, user, randomBytes(32).toString('base64url'));
+      // Added directly: the manager's password (checked for length); invited: none usable until the link is used.
+      await auth.setPassword(su, user, password ?? randomBytes(32).toString('base64url'));
       if (assignments.length > 0)
         await ref(su, 'auth.user_group').create(
           assignments.map((a) => ({ user, group: a.group, company: a.company })),
         );
+      if (direct) {
+        await audit(env, {
+          kind: 'people.created',
+          summary: `${name} (${login}) added with a password and ${assignments.length} role(s).`,
+          targetModel: 'res.users',
+          targetId: user,
+          details: { assignments },
+          ip: request.ip,
+        });
+        return { id: user, login, activationUrl: null, expiresAt: null, emailed: false };
+      }
       const link = await invite(su, user, env.uid);
       await audit(env, {
         kind: 'people.invited',

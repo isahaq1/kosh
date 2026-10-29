@@ -62,7 +62,7 @@ test('People: invited with a role, the link opens the password page, then deacti
   await signIn(page, 'admin');
   await page.goto('/settings/a/settings.action_people');
   await expect(page.getByRole('heading', { name: 'People', level: 1 })).toBeVisible();
-  await page.getByRole('button', { name: 'Invite', exact: true }).click();
+  await page.getByRole('button', { name: 'Add or invite', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Invite someone' });
   await dialog.getByRole('textbox', { name: 'Name' }).fill('Mina Sultana');
   await dialog.getByRole('textbox', { name: 'Email' }).fill('mina@example.test');
@@ -289,4 +289,35 @@ test('a profile photo and a company logo: chosen, made small, shown in the corne
   await page.goto('/me/settings.Profile');
   await page.getByRole('region', { name: 'Photo' }).getByRole('button', { name: 'Remove' }).click();
   await expect(page.locator('[data-kosh-account] img')).toHaveCount(0);
+});
+
+test('People: a person added directly with a password signs in at once', async ({
+  page,
+  browser,
+}) => {
+  await signIn(page, 'admin');
+  await page.goto('/settings/a/settings.action_people');
+  await page.getByRole('button', { name: 'Add or invite', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Invite someone' });
+  await dialog.getByRole('radio', { name: /Add with a password/ }).check();
+  const add = page.getByRole('dialog', { name: 'Add someone' });
+  await add.getByRole('textbox', { name: 'Name' }).fill('Shapla Akter');
+  await add.getByRole('textbox', { name: 'Login' }).fill('shapla');
+  await add.getByLabel('Password', { exact: true }).fill('shapla secret pass');
+  await add.getByLabel('Repeat the password').fill('shapla secret pass');
+  await add.getByRole('combobox', { name: 'Contacts' }).click();
+  await page.getByRole('option', { name: 'User' }).click();
+  await add.getByRole('button', { name: 'Add the person' }).click();
+  await expect(add.getByText('shapla can sign in now')).toBeVisible();
+  await add.getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByRole('button', { name: /Shapla Akter/ })).toBeVisible();
+
+  const context = await browser.newContext();
+  const shapla = await context.newPage();
+  await shapla.goto('/login');
+  await shapla.getByLabel('Login').fill('shapla');
+  await shapla.getByLabel('Password').fill('shapla secret pass');
+  await shapla.getByRole('button', { name: 'Sign in' }).click();
+  await expect(shapla.getByRole('main').getByRole('link', { name: /Contacts/ })).toBeVisible();
+  await context.close();
 });
