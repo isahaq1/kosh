@@ -38,6 +38,9 @@ importers:
       '@kosh/automation':
         specifier: workspace:*
         version: link:../../packages/automation
+      '@kosh/calendar':
+        specifier: workspace:*
+        version: link:../../modules/calendar
       '@kosh/contacts':
         specifier: workspace:*
         version: link:../../modules/contacts
@@ -239,6 +242,9 @@ importers:
       '@kosh/automation':
         specifier: workspace:*
         version: link:../../packages/automation
+      '@kosh/calendar':
+        specifier: workspace:*
+        version: link:../../modules/calendar
       '@kosh/cli':
         specifier: workspace:*
         version: link:../../packages/cli
@@ -397,6 +403,31 @@ importers:
       react-i18next:
         specifier: ^17.0.21
         version: 17.0.21(i18next@26.4.7(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
+
+  modules/calendar:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
 
   modules/contacts:
     dependencies:
@@ -979,6 +1010,9 @@ importers:
       '@kosh/automation':
         specifier: workspace:*
         version: link:../automation
+      '@kosh/calendar':
+        specifier: workspace:*
+        version: link:../../modules/calendar
       '@kosh/contacts':
         specifier: workspace:*
         version: link:../../modules/contacts
