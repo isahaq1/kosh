@@ -11,11 +11,13 @@ import { mailerFromEnv } from '@kosh/mail';
 import { defineModule, type KoshModule } from '@kosh/modules-sdk';
 import { base, baseShutro, type ModuleContext } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
+import { registerAppSettingsRoutes } from './app-settings.js';
 import { registerCompanyRoutes } from './company.js';
 import { type PeopleOptions, registerPeopleRoutes } from './people.js';
 import { registerAppRoutes } from './routes.js';
 import { registerSecurityRoutes } from './security.js';
 
+export { registerAppSettingsRoutes } from './app-settings.js';
 export { type CompanyDetail, type CompanySettings, registerCompanyRoutes } from './company.js';
 export {
   type Assignment,
@@ -86,6 +88,11 @@ export function settingsModule(options: Partial<PeopleOptions> = {}): KoshModule
     actions: {
       'settings.action_overview': { type: 'client', page: 'settings.Overview', label: 'Settings' },
       'settings.action_apps': { type: 'client', page: 'settings.Apps', label: 'Apps' },
+      'settings.action_app_settings': {
+        type: 'client',
+        page: 'settings.AppSettings',
+        label: 'App settings',
+      },
       'settings.action_company': { type: 'client', page: 'settings.Company', label: 'Company' },
       'settings.action_companies': {
         type: 'client',
@@ -174,11 +181,19 @@ export function settingsModule(options: Partial<PeopleOptions> = {}): KoshModule
         action: 'settings.action_apps',
         sequence: 1,
       },
+      {
+        id: 'settings.app_settings',
+        parent: 'settings.group_apps',
+        label: 'App settings',
+        action: 'settings.action_app_settings',
+        sequence: 2,
+      },
     ],
     routes: (context: ModuleContext) => {
       registerAppRoutes(context);
       registerCompanyRoutes(context);
       registerSecurityRoutes(context);
+      registerAppSettingsRoutes(context);
       registerPeopleRoutes(context, {
         baseUrl: options.baseUrl ?? process.env['KOSH_BASE_URL'] ?? 'http://localhost:5173',
         mailer: 'mailer' in options ? options.mailer : mailerFromEnv(),

@@ -6,6 +6,7 @@
 import { addMessages, type Registry } from '@kosh/ui';
 import type { i18n } from 'i18next';
 import { ApiKeysPage } from './ApiKeysPage.js';
+import { AppSettingsPage } from './AppSettingsPage.js';
 import { AppsPage } from './AppsPage.js';
 import { AuditPage } from './AuditPage.js';
 import { CompaniesPage } from './CompaniesPage.js';
@@ -19,6 +20,7 @@ import { RolesPage } from './RolesPage.js';
 import { SecurityPage } from './SecurityPage.js';
 
 export { ApiKeysPage } from './ApiKeysPage.js';
+export { AppSettingsPage } from './AppSettingsPage.js';
 export { AppsPage } from './AppsPage.js';
 export { AuditPage } from './AuditPage.js';
 export { CompaniesPage } from './CompaniesPage.js';
@@ -35,6 +37,7 @@ export { SecurityPage } from './SecurityPage.js';
 export function registerSettingsWeb(registry: Registry, i18n?: i18n): Registry {
   registry.registerPage('settings.Overview', OverviewPage);
   registry.registerPage('settings.Apps', AppsPage);
+  registry.registerPage('settings.AppSettings', AppSettingsPage);
   registry.registerPage('settings.People', PeoplePage);
   registry.registerPage('settings.Roles', RolesPage);
   registry.registerPage('settings.Company', CompanyPage);

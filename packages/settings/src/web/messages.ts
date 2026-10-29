@@ -1,6 +1,24 @@
 /** Messages of the Settings app (namespace `settings`). */
 export const messages: Readonly<Record<string, object>> = {
   en: {
+    appSettings: {
+      title: 'App settings',
+      intro:
+        'Each app’s own settings, in one place. Who may change them is set by the app; every change is in the audit log.',
+      apps: 'Apps',
+      none: 'No installed app you may open has settings yet.',
+      perCompany: 'For this company',
+      everywhere: 'For every company',
+      changed: 'Changed',
+      reset: 'Reset',
+      resetOne: 'Reset {{setting}} to its default',
+      defaultIs: 'Default: {{value}}',
+      save: 'Save',
+      discard: 'Discard',
+      saved: 'Saved.',
+      readOnly: 'You may see these settings; changing them needs another role.',
+      notSet: 'Not set',
+    },
     connected: {
       title: 'Connected apps',
       intro:
@@ -166,6 +184,11 @@ export const messages: Readonly<Record<string, object>> = {
           description:
             'Sign-ins, permission changes, exports and sensitive actions; filtered and exported.',
           keywords: 'audit log history events who did what logins export csv',
+        },
+        'settings.action_app_settings': {
+          description:
+            'Each app’s own settings: quotations, purchase orders, fiscal year and lock dates, and more.',
+          keywords: 'app settings configuration defaults',
         },
         'settings.action_companies': {
           description: 'Every company, its currency and people; switch between them or add one.',
@@ -432,6 +455,24 @@ export const messages: Readonly<Record<string, object>> = {
     version: 'Version {{version}}',
   },
   bn: {
+    appSettings: {
+      title: 'অ্যাপ সেটিংস',
+      intro:
+        'প্রতিটি অ্যাপের নিজস্ব সেটিংস, এক জায়গায়। কে বদলাতে পারবেন তা অ্যাপ ঠিক করে; প্রতিটি পরিবর্তন অডিট লগে থাকে।',
+      apps: 'অ্যাপস',
+      none: 'আপনি খুলতে পারেন এমন কোনো অ্যাপের এখনো সেটিংস নেই।',
+      perCompany: 'এই প্রতিষ্ঠানের জন্য',
+      everywhere: 'সব প্রতিষ্ঠানের জন্য',
+      changed: 'পরিবর্তিত',
+      reset: 'ডিফল্টে ফিরিয়ে দিন',
+      resetOne: '{{setting}} ডিফল্টে ফিরিয়ে দিন',
+      defaultIs: 'ডিফল্ট: {{value}}',
+      save: 'সংরক্ষণ করুন',
+      discard: 'বাদ দিন',
+      saved: 'সংরক্ষিত।',
+      readOnly: 'আপনি এই সেটিংস দেখতে পারেন; বদলাতে অন্য রোল লাগে।',
+      notSet: 'নির্ধারিত নয়',
+    },
     connected: {
       title: 'সংযুক্ত অ্যাপস',
       intro: 'যে অ্যাপগুলোকে আপনি আপনার হয়ে কাজ করতে দিয়েছেন। সরিয়ে দিলে সাথে সাথে প্রবেশাধিকার শেষ।',

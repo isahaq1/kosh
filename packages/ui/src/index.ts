@@ -118,3 +118,4 @@ export const PACKAGE: { readonly name: string; readonly rfc: string } = Object.f
   name: '@kosh/ui',
   rfc: 'RFC 0007',
 });
+export { DateField } from './views/DateField.js';

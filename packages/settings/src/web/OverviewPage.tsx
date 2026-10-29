@@ -29,6 +29,7 @@ const SECTION_ICONS: Readonly<Record<string, string>> = {
   'settings.action_security': 'security',
   'settings.action_audit': 'audit',
   'settings.action_apps': 'apps',
+  'settings.action_app_settings': 'settings',
   'assistant.action_settings': 'assistant',
 };
 
@@ -37,10 +38,27 @@ export function OverviewPage({ api }: PageProps): ReactElement {
   const id = useId();
   const [query, setQuery] = useState('');
   const menus = useQuery({ queryKey: ['menus', 'settings'], queryFn: () => api.menus('settings') });
-  const about = (action: string) => ({
-    description: t(`overview.about.${action}.description`, { defaultValue: '' }),
-    keywords: t(`overview.about.${action}.keywords`, { defaultValue: '' }),
+  // The apps' own settings (RFC 0020): their sections' words make App settings findable by them.
+  const appSettings = useQuery({
+    queryKey: ['settings', 'app-settings'],
+    queryFn: () =>
+      api.call<{ apps: { label: string; sections: { label: string; keywords: string }[] }[] }>(
+        'GET',
+        '/api/v1/settings/app-settings',
+      ),
   });
+  const about = (action: string) => {
+    const words =
+      action === 'settings.action_app_settings'
+        ? (appSettings.data?.apps ?? [])
+            .flatMap((a) => [a.label, ...a.sections.flatMap((s) => [s.label, s.keywords])])
+            .join(' ')
+        : '';
+    return {
+      description: t(`overview.about.${action}.description`, { defaultValue: '' }),
+      keywords: `${t(`overview.about.${action}.keywords`, { defaultValue: '' })} ${words}`,
+    };
+  };
   const entry = (n: MenuNode): Entry | null =>
     n.action === undefined || n.action === 'settings.action_overview'
       ? null
