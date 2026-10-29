@@ -268,12 +268,29 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
           : null);
       enforceScopes(scopes, request.method, route, owner);
     }
-    // Customers and vendors of the portal (RFC 0015 §5.1): the portal API and signing in, nothing else.
-    if (
+    const externalUser =
       request.identity !== null &&
       external.size > 0 &&
       request.identity.groups.length > 0 &&
-      request.identity.groups.every((g) => external.has(g)) &&
+      request.identity.groups.every((g) => external.has(g));
+    // Two-factor sign-in required of everyone (RFC 0019 §3.5): until it is set up, only the sign-in routes (setting
+    // it up, signing out, who am I). Portal users are not the company's people: the policy is not theirs.
+    if (
+      request.identity?.twoFactorMissing === true &&
+      !externalUser &&
+      request.url.startsWith('/api/') &&
+      !request.url.startsWith('/api/v1/auth/')
+    )
+      throw new HttpProblem(
+        403,
+        'two-factor-setup-required',
+        'Two-factor sign-in required',
+        'This installation requires two-factor sign-in: set it up first.',
+        'POST /api/v1/auth/2fa/setup, then POST /api/v1/auth/2fa/enable.',
+      );
+    // Customers and vendors of the portal (RFC 0015 §5.1): the portal API and signing in, nothing else.
+    if (
+      externalUser &&
       !PORTAL_PATHS.some((p) => request.url.startsWith(p)) &&
       request.url.startsWith('/api/')
     )

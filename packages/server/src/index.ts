@@ -70,6 +70,7 @@ export {
   AuthService,
   cookieOf,
   SESSION_COOKIE,
+  type SecurityPolicy,
   type SessionInfo,
   timeOf,
   type UserInfo,

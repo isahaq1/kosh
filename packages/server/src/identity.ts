@@ -26,6 +26,8 @@ export interface RequestIdentity {
   readonly scopes?: readonly string[];
   /** The API key the request carries. */
   readonly apiKey?: number;
+  /** A session without the second factor the security policy asks of everyone (RFC 0019 §3.5). */
+  readonly twoFactorMissing?: true;
 }
 
 /**

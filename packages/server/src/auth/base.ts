@@ -170,6 +170,21 @@ const AuthUserGrant = defineModel('auth.user_grant', {
 });
 
 /**
+ * The installation's security policy (RFC 0019 §3.5): one row, read by the auth service, changed in Settings ›
+ * Security. Without a row: two-factor sign-in for administrators only, sessions as the server is configured.
+ */
+const AuthPolicy = defineModel('auth.policy', {
+  fields: {
+    twoFactor: f.selection(
+      { administrators: 'Administrators', everyone: 'Everyone' },
+      { required: true, default: 'administrators', label: 'Two-factor sign-in required for' },
+    ),
+    /** Days a sign-in lasts at most; empty: the server's setting. */
+    sessionDays: f.integer({ label: 'Session lifetime (days)' }),
+  },
+});
+
+/**
  * The security audit log (CLAUDE.md: logins, permission changes, exports, sensitive actions). Append-only: no one
  * may change or delete events (administrators included: the REST API never serves it, and the admin API only reads).
  */
@@ -240,6 +255,7 @@ export const baseShutro: ReturnType<typeof orm.defineModule> = defineModule({
     AuthApiKey,
     AuthUserGroup,
     AuthUserGrant,
+    AuthPolicy,
     AuditEvent,
     SavedView,
   ],
@@ -259,6 +275,7 @@ export const base: ReturnType<typeof defineKoshModule> = defineKoshModule({
     'auth.api_key',
     'auth.user_group',
     'auth.user_grant',
+    'auth.policy',
     'audit.event',
   ],
 });

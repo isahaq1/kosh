@@ -61,6 +61,16 @@ export interface UserInfo {
   readonly administrator: boolean;
   /** Administrator rights are withheld until this session has a second factor (enable or verify 2FA). */
   readonly administratorNeedsSecondFactor: boolean;
+  /** The policy requires two-factor sign-in of everyone and it is not on: nothing but setting it up is allowed. */
+  readonly twoFactorSetupRequired: boolean;
+}
+
+/** The installation's security policy (RFC 0019 §3.5). */
+export interface SecurityPolicy {
+  /** Who must sign in with a second factor: administrators only (the default), or everyone. */
+  readonly twoFactor: 'administrators' | 'everyone';
+  /** Days a sign-in lasts at most; null: the server's `lifetimeMs`. */
+  readonly sessionDays: number | null;
 }
 
 /** An API key as listed (never its secret). */
@@ -136,6 +146,7 @@ export class AuthService {
     { at: number; key: { id: number; user: number; scopes: string[] } }
   >();
   readonly #dummy: Promise<string> = hashPassword(randomToken());
+  #policy: { at: number; policy: SecurityPolicy } | undefined;
 
   constructor(shutro: () => Shutro, options: AuthOptions = {}) {
     this.#shutro = shutro;
@@ -215,6 +226,8 @@ export class AuthService {
     login: string,
     password: string,
   ): Promise<{ token: string; csrfToken: string; twoFactorRequired: boolean }> {
+    const { sessionDays } = await this.policy();
+    const lifetimeMs = sessionDays === null ? this.#options.lifetimeMs : sessionDays * 86_400_000;
     const outcome = await this.#system(`login ${login}`, async (env) => {
       const user = one(
         await fetch(model(env, 'res.users').search({ where: { login } }), ['login']),
@@ -245,7 +258,7 @@ export class AuthService {
           csrfHash: digest(csrfToken),
           user: user['id'],
           twoFactorVerified: !twoFactorRequired,
-          expiresAt: new Date(now + this.#options.lifetimeMs),
+          expiresAt: new Date(now + lifetimeMs),
           lastSeenAt: new Date(now),
           ip: request.ip,
           userAgent: String(request.headers['user-agent'] ?? '').slice(0, 300),
@@ -390,7 +403,10 @@ export class AuthService {
         'Enter the code from your authenticator app first.',
         'POST /api/v1/auth/2fa/verify.',
       );
-    return this.#identity(request, session.user, { elevated: session.secondFactor });
+    return this.#identity(request, session.user, {
+      elevated: session.secondFactor,
+      session: true,
+    });
   }
 
   async #identity(
@@ -398,6 +414,7 @@ export class AuthService {
     user: number,
     options: {
       readonly elevated: boolean;
+      readonly session?: boolean;
       readonly scopes?: readonly string[];
       readonly apiKey?: number;
     },
@@ -442,6 +459,13 @@ export class AuthService {
       tz: info.tz,
       ...(options.scopes === undefined ? {} : { scopes: options.scopes }),
       ...(options.apiKey === undefined ? {} : { apiKey: options.apiKey }),
+      // A session without the second factor the policy asks of everyone (RFC 0019 §3.5): the server allows only
+      // setting it up. API keys are not sessions: their owner signed in to make them.
+      ...(options.session === true &&
+      !info.twoFactorEnabled &&
+      (await this.policy()).twoFactor === 'everyone'
+        ? { twoFactorMissing: true as const }
+        : {}),
     };
   }
 
@@ -828,6 +852,7 @@ export class AuthService {
         administrator,
         administratorNeedsSecondFactor:
           administrator && !(session.secondFactor && twoFactorEnabled),
+        twoFactorSetupRequired: !twoFactorEnabled && (await this.policy()).twoFactor === 'everyone',
       };
     });
   }
@@ -976,6 +1001,13 @@ export class AuthService {
 
   /** Turns 2FA off (password and a current code required). */
   async disableTwoFactor(session: SessionInfo, password: string, code: string): Promise<void> {
+    if ((await this.policy()).twoFactor === 'everyone')
+      throw new HttpProblem(
+        409,
+        'two-factor-required',
+        'Two-factor sign-in is required',
+        'This installation requires two-factor sign-in of everyone: it cannot be turned off.',
+      );
     await this.#system('2fa disable', async (env) => {
       const credentials = await model(env, 'auth.credential').search({
         where: { user: session.user },
@@ -1037,6 +1069,31 @@ export class AuthService {
     });
     this.#forgetUser(session.user);
     this.#cache.clear(); // other sessions of this user, cached by token
+  }
+
+  /** The security policy (cached like sessions; {@link forgetPolicy} after changing it). */
+  async policy(): Promise<SecurityPolicy> {
+    const cached = this.#policy;
+    if (cached !== undefined && Date.now() - cached.at < this.#options.cacheMs)
+      return cached.policy;
+    const policy = await this.#system('policy', async (env) => {
+      const [row] = await fetch(model(env, 'auth.policy').search({ where: {}, limit: 1 }), [
+        'twoFactor',
+        'sessionDays',
+      ]);
+      const days = row?.['sessionDays'];
+      return {
+        twoFactor: row?.['twoFactor'] === 'everyone' ? 'everyone' : 'administrators',
+        sessionDays: typeof days === 'number' && days > 0 ? days : null,
+      } satisfies SecurityPolicy;
+    });
+    this.#policy = { at: Date.now(), policy };
+    return policy;
+  }
+
+  /** Forgets the cached policy: after Settings › Security changed it. */
+  forgetPolicy(): void {
+    this.#policy = undefined;
   }
 
   /** Forgets what is cached about `user` (their identity and sessions): after their roles or account changed. */
