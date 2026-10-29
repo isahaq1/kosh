@@ -186,6 +186,11 @@ form('sale.order', (k) => ({
 - **People** (Settings › People; Administrators and People managers): invite by email (the link is also shown to
   copy; `SHUTRO_ERP_BASE_URL` is the address it points to, `SMTP_URL` sends it), roles per app and company,
   deactivate, a new sign-in link, reset two-factor; invited people choose their password at `/activate`.
+- **Lists** (RFC 0018 step 4): saved searches are tabs above the search (*All*, then the saved ones; *More* past
+  six); selected rows show a floating bar at the bottom; Ctrl / Cmd + click or the middle button opens a record in a
+  new tab; an empty list says what it is for.
+- **Today** (the home page): the date, *Needs your attention* (approvals by record, activities due, unread mentions),
+  recent records, your saved views and the apps.
 - **Security** (Settings; administrators): two-factor sign-in required of administrators only or of everyone — the
   people it would stop are named before saving, and they see a set-up page instead of the back-office until they
   do —, the most days a sign-in lasts, and every signed-in device across people with *Sign out*.

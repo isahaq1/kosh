@@ -224,3 +224,25 @@ the workflow popover reads the transitions the server serves, the summary reads 
 - **View hints** `subtitle` and `summary` on form views, validated against the model's fields.
 - **Tests**: E2E for the key facts, the rail's Summary with the total, hiding the rail and its memory; tests that
   read the totals group or the form's breadcrumbs follow the rail and the page bar.
+
+## Implementation notes (2026-10-29): step 4 — lists and Today
+
+- **Saved views as tabs**: above the search, *All* and the saved searches of the model for the current view type
+  (the user's own and shared ones, marked), the one matching the search (its order aside) current; more than six go
+  into a *More* menu. Saving and the full list stay in the favorites menu; with nothing saved there are no tabs.
+- **Floating selection bar**: selected rows show the bar (count, clear, transitions, archive, delete, export) at the
+  bottom of the screen with the only shadow besides popovers; the list's toolbar no longer changes.
+- **Rows**: Ctrl / Cmd + click, Ctrl + Enter or the middle button opens the record in a new tab (a hover button
+  would have added a column the spreadsheet keys count); "duplicate" waits for a copy operation on the server.
+- **Empty states** name the list ("No contacts yet") and keep *Create the first one*.
+- **Fixed on the way**: the record count followed the fetch, not the data, so going back to a search answered from
+  the cache (the *All* tab) kept the previous count.
+- **Today**: the date over the greeting; *Needs your attention* as one list — each approval waiting for the user by
+  record (*Review*), activities due (overdue or due today; *Open*, *Mark done*), unread mentions (*Open* reads them) —
+  with its count; recent records; **your saved views** across apps, one click back to the list, pivot or chart
+  with its search (this is §4.4's "pinned": saved views are what users already keep); the apps as a compact grid.
+- **Deviations**: the apps stay on Today rather than an *All apps* page (the sidebar lists them too, and a page of
+  its own would be one click more); failed payments join *Needs your attention* when the payment app exposes them per
+  user.
+- **Tests**: E2E for a saved view as a tab (current, back to All with the right count, back again), the floating
+  bar (fixed at the bottom; cleared), Ctrl+click opening the record in a new tab, Today's date and saved view.
