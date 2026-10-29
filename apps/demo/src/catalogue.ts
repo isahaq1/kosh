@@ -1,6 +1,7 @@
 /** The demo's catalogue: every framework app and business app, with the bridges the planner proposes. */
 import { accounting } from '@kosh/accounting';
 import { automation } from '@kosh/automation';
+import { calendarApp } from '@kosh/calendar';
 import { contacts } from '@kosh/contacts';
 import { l10nBd } from '@kosh/l10n_bd';
 import { mail } from '@kosh/mail';
@@ -33,6 +34,7 @@ export const DEMO_APPS: readonly string[] = [
   'accounting',
   'project',
   'todo',
+  'calendar',
   'l10n_bd',
 ];
 
@@ -54,6 +56,7 @@ export function demoCatalogue(): KoshModule[] {
     accounting,
     project,
     todo,
+    calendarApp,
     saleAccount,
     purchaseAccount,
     saleProject,
