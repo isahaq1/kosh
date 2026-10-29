@@ -93,6 +93,8 @@ export interface CurrentUser {
   readonly twoFactorEnabled: boolean;
   readonly administrator: boolean;
   readonly administratorNeedsSecondFactor: boolean;
+  /** The policy requires two-factor sign-in of everyone and it is not on (RFC 0019 §3.5); older servers send none. */
+  readonly twoFactorSetupRequired?: boolean;
 }
 
 export interface AppEntry {

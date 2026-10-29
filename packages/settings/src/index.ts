@@ -14,6 +14,7 @@ import { orm } from '@kosh/server/orm';
 import { registerCompanyRoutes } from './company.js';
 import { type PeopleOptions, registerPeopleRoutes } from './people.js';
 import { registerAppRoutes } from './routes.js';
+import { registerSecurityRoutes } from './security.js';
 
 export { type CompanyDetail, type CompanySettings, registerCompanyRoutes } from './company.js';
 export {
@@ -23,6 +24,7 @@ export {
   registerPeopleRoutes,
 } from './people.js';
 export { type AppInfo, type PlanInfo, PROTECTED_APPS, registerAppRoutes } from './routes.js';
+export { registerSecurityRoutes } from './security.js';
 
 /** Package identity. */
 export const PACKAGE: { readonly name: string; readonly rfc: string } = Object.freeze({
@@ -90,6 +92,8 @@ export function settingsModule(options: Partial<PeopleOptions> = {}): KoshModule
         page: 'settings.Companies',
         label: 'Companies',
       },
+      'settings.action_security': { type: 'client', page: 'settings.Security', label: 'Security' },
+      'settings.action_audit': { type: 'client', page: 'settings.Audit', label: 'Audit log' },
       'settings.action_people': { type: 'client', page: 'settings.People', label: 'People' },
       'settings.action_roles': {
         type: 'client',
@@ -138,6 +142,30 @@ export function settingsModule(options: Partial<PeopleOptions> = {}): KoshModule
         action: 'settings.action_roles',
         sequence: 2,
       },
+      // Security: administrators only (the server refuses everyone else).
+      {
+        id: 'settings.group_security',
+        parent: 'settings.root',
+        label: 'Security',
+        sequence: 30,
+        visibleTo: ['base.admin'],
+      },
+      {
+        id: 'settings.security',
+        parent: 'settings.group_security',
+        label: 'Security',
+        action: 'settings.action_security',
+        sequence: 1,
+        visibleTo: ['base.admin'],
+      },
+      {
+        id: 'settings.audit',
+        parent: 'settings.group_security',
+        label: 'Audit log',
+        action: 'settings.action_audit',
+        sequence: 2,
+        visibleTo: ['base.admin'],
+      },
       { id: 'settings.group_apps', parent: 'settings.root', label: 'Apps', sequence: 40 },
       {
         id: 'settings.apps',
@@ -150,6 +178,7 @@ export function settingsModule(options: Partial<PeopleOptions> = {}): KoshModule
     routes: (context: ModuleContext) => {
       registerAppRoutes(context);
       registerCompanyRoutes(context);
+      registerSecurityRoutes(context);
       registerPeopleRoutes(context, {
         baseUrl: options.baseUrl ?? process.env['KOSH_BASE_URL'] ?? 'http://localhost:5173',
         mailer: 'mailer' in options ? options.mailer : mailerFromEnv(),

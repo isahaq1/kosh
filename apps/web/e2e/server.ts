@@ -228,6 +228,8 @@ for (const [login, name, groups] of [
   ],
   ['maria', 'Maria Das', ['contacts.user', 'purchase.manager', 'reporting.user', 'messaging.user']],
   ['bob', 'Bob Smith', ['base.user']],
+  // Sets up two-factor sign-in when Settings › Security asks it of everyone (settings.spec).
+  ['tariq', 'Tariq Hasan', ['contacts.user']],
 ] as const)
   await auth.createUser({
     login,

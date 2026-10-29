@@ -2,7 +2,8 @@
  * RFC 0019 step 1 end to end: Settings opens on its overview, whose search finds a section by its words; your
  * profile from the user menu — details saved, this device among the signed-in ones, two-factor sign-in set up with
  * the key shown (recovery codes once) and turned off again. People, Roles; the company's details, and Companies:
- * a new company, switched to and back.
+ * a new company, switched to and back. Security: two-factor sign-in asked of everyone (set up before anything
+ * else), a session signed out by an administrator, the audit log filtered and exported.
  */
 import { totp } from '@kosh/server';
 import { expect, test } from '@playwright/test';
@@ -177,4 +178,67 @@ test('Company details saved; Companies: a new company, switched to and back', as
   await expect(page.getByRole('listitem').filter({ hasText: 'Dhaka Ltd' })).toContainText(
     'Current',
   );
+});
+
+test('Security: two-factor for everyone — set up before anything else; sessions signed out; the audit log', async ({
+  page,
+  browser,
+}) => {
+  await signIn(page, 'admin');
+  const choose = async (label: string) => {
+    await page.goto('/settings/a/settings.action_security');
+    await page.getByRole('radio', { name: new RegExp(`^${label}`) }).check();
+  };
+  await choose('Everyone');
+  await expect(page.getByText(/have no two-factor sign-in yet \(.*Tariq Hasan/)).toBeVisible();
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText('Saved: it applies from now on.')).toBeVisible();
+
+  const other = await browser.newContext();
+  const tariq = await other.newPage();
+  try {
+    await tariq.goto('/login');
+    await tariq.getByLabel('Login').fill('tariq');
+    await tariq.getByLabel('Password').fill('correct horse battery');
+    await tariq.getByRole('button', { name: 'Sign in' }).click();
+    await expect(
+      tariq.getByRole('heading', { name: 'Set up two-factor sign-in', level: 1 }),
+    ).toBeVisible();
+    await tariq.getByRole('button', { name: 'Set it up' }).click();
+    const key = ((await tariq.getByTestId('two-factor-key').textContent()) ?? '').trim();
+    await tariq.getByLabel('Authentication code').fill(totp(key));
+    await tariq.getByRole('button', { name: 'Turn on and continue' }).click();
+    await expect(tariq.getByText(/Keep these recovery codes/)).toBeVisible();
+    await tariq.getByRole('button', { name: 'Continue' }).click();
+    await expect(tariq.getByRole('heading', { name: 'Apps' })).toBeVisible();
+  } finally {
+    // Back to the default: the other tests sign in without a second factor.
+    await choose('Administrators only');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByText('Saved: it applies from now on.')).toBeVisible();
+  }
+
+  // Tariq's device among the signed-in ones; signed out from here.
+  await page.reload();
+  const devices = page.getByRole('region', { name: 'Signed-in devices' });
+  await devices.getByLabel('Search by person or address').fill('Tariq');
+  await devices
+    .getByRole('button', { name: /^Sign Tariq Hasan out of/ })
+    .first()
+    .click();
+  await expect(devices.getByText('No signed-in devices match.')).toBeVisible();
+  await tariq.reload();
+  await expect(tariq).toHaveURL(/\/login/);
+  await other.close();
+
+  // The audit log: the policy changes, filtered by kind, exported.
+  await page.goto('/settings/a/settings.action_audit');
+  await expect(page.getByRole('heading', { name: 'Audit log', level: 1 })).toBeVisible();
+  await page.getByRole('combobox', { name: 'Kind' }).click();
+  await page.getByRole('option', { name: 'Security and permissions' }).click();
+  await expect(page.getByText(/Signed out a session of tariq/)).toBeVisible();
+  await expect(page.getByText(/twoFactor = everyone/).first()).toBeVisible();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export CSV' }).click();
+  expect((await download).suggestedFilename()).toBe('audit-log.csv');
 });

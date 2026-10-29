@@ -30,6 +30,18 @@ export const en = {
     signOut: 'Sign out',
     invalid: 'The login or password is wrong.',
     adminNeeds2fa: 'Administrator rights apply after you verify a second factor.',
+    setupTitle: 'Set up two-factor sign-in',
+    setupIntro:
+      'This company requires a second step when you sign in: a code from an authenticator app on your phone. Set it up to continue.',
+    setupStart: 'Set it up',
+    setupStep1: 'Add this account to your authenticator app.',
+    setupOpenApp: 'Open in the app',
+    setupStep2: 'Or type this key:',
+    setupStep3: 'Enter the 6-digit code it shows.',
+    setupTurnOn: 'Turn on and continue',
+    setupCodes:
+      'Keep these recovery codes somewhere safe: each signs you in once if you lose your phone.',
+    setupContinue: 'Continue',
   },
   shell: {
     apps: 'Apps',
@@ -308,6 +320,17 @@ export const bn: DeepPartial<Messages> = {
     signOut: 'সাইন আউট',
     invalid: 'লগইন বা পাসওয়ার্ড ভুল।',
     adminNeeds2fa: 'দ্বিতীয় ধাপ যাচাইয়ের পর অ্যাডমিনিস্ট্রেটরের অধিকার কার্যকর হবে।',
+    setupTitle: 'দুই-ধাপের সাইন-ইন চালু করুন',
+    setupIntro:
+      'এই প্রতিষ্ঠানে সাইন-ইনের সময় একটি দ্বিতীয় ধাপ লাগে: ফোনের অথেনটিকেটর অ্যাপের একটি কোড। চালিয়ে যেতে এটি চালু করুন।',
+    setupStart: 'চালু করুন',
+    setupStep1: 'অ্যাকাউন্টটি আপনার অথেনটিকেটর অ্যাপে যোগ করুন।',
+    setupOpenApp: 'অ্যাপে খুলুন',
+    setupStep2: 'অথবা এই কী লিখুন:',
+    setupStep3: 'অ্যাপে দেখানো ৬-সংখ্যার কোড দিন।',
+    setupTurnOn: 'চালু করে এগিয়ে যান',
+    setupCodes: 'এই রিকভারি কোডগুলো নিরাপদে রাখুন: ফোন হারালে প্রতিটি একবার সাইন-ইন করায়।',
+    setupContinue: 'এগিয়ে যান',
   },
   shell: {
     apps: 'অ্যাপস',

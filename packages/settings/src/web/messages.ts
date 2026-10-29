@@ -128,6 +128,16 @@ export const messages: Readonly<Record<string, object>> = {
           keywords:
             'company name address phone email website brand colour color accent logo lakh crore grouping numbers',
         },
+        'settings.action_security': {
+          description:
+            'Two-factor sign-in for administrators or everyone, how long a sign-in lasts, signed-in devices.',
+          keywords: 'security two-factor 2fa mfa policy sessions devices sign out',
+        },
+        'settings.action_audit': {
+          description:
+            'Sign-ins, permission changes, exports and sensitive actions; filtered and exported.',
+          keywords: 'audit log history events who did what logins export csv',
+        },
         'settings.action_companies': {
           description: 'Every company, its currency and people; switch between them or add one.',
           keywords: 'companies multi-company branches new company switch',
@@ -225,6 +235,61 @@ export const messages: Readonly<Record<string, object>> = {
       detailsHint:
         'Address, contacts and what the installed apps need (tax ids, fiscal year…). Currency: {{currency}}.',
       notSet: 'Not set',
+    },
+    security: {
+      title: 'Security',
+      intro:
+        'How people sign in here, and who is signed in where. Every change is in the audit log.',
+      policy: 'Sign-in policy',
+      policyHint: 'The server enforces it on every request.',
+      twoFactorFor: 'Two-factor sign-in is required of',
+      administrators: 'Administrators only',
+      administratorsHint:
+        'Recommended to start with: everyone else may turn it on in their profile.',
+      everyone: 'Everyone',
+      everyoneHint:
+        'People without it can only set it up when they next open the back-office; nobody can turn it off. Portal users are not concerned.',
+      wouldStop_one:
+        '{{count}} person has no two-factor sign-in yet ({{names}}): they will set it up before anything else.',
+      wouldStop_other:
+        '{{count}} people have no two-factor sign-in yet ({{names}}): they will set it up before anything else.',
+      sessionDays: 'A sign-in lasts at most (days)',
+      sessionDaysHint: 'From 1 to 90 days, for new sign-ins; empty: the server’s setting.',
+      serverDefault: 'Default',
+      save: 'Save',
+      saved: 'Saved: it applies from now on.',
+      sessions: 'Signed-in devices',
+      sessionsHint:
+        'Everyone’s active sign-ins. Sign out one you do not trust; the person signs in again.',
+      searchSessions: 'Search by person or address',
+      signOutOf: 'Sign {{name}} out of {{device}}',
+      noSessions: 'No signed-in devices match.',
+    },
+    audit: {
+      title: 'Audit log',
+      intro: 'Sign-ins, permission changes, exports and sensitive actions — kept, never changed.',
+      export: 'Export CSV',
+      kind: 'Kind',
+      all: 'All kinds',
+      families: {
+        auth: 'Sign-ins',
+        security: 'Security and permissions',
+        people: 'People',
+        settings: 'Settings',
+        data: 'Exports and data',
+        admin: 'Administration',
+      },
+      person: 'Person',
+      everyone: 'Everyone',
+      from: 'From',
+      to: 'To',
+      words: 'Words',
+      when: 'When',
+      what: 'What',
+      ip: 'Address',
+      system: 'System',
+      none: 'No events match.',
+      more: 'Show more',
     },
     companies: {
       title: 'Companies',
@@ -455,6 +520,14 @@ export const messages: Readonly<Record<string, object>> = {
             'নাম, ঠিকানা, বিবরণ, সংখ্যার বিভাজন ও ব্র্যান্ডের রং: এখানে সবার কাছে প্রতিষ্ঠান যেভাবে দেখায়।',
           keywords: 'প্রতিষ্ঠান নাম ঠিকানা রং লাখ কোটি company address brand colour lakh',
         },
+        'settings.action_security': {
+          description: 'অ্যাডমিনিস্ট্রেটর বা সবার জন্য দুই-ধাপের সাইন-ইন, সাইন-ইনের মেয়াদ, সাইন ইন করা ডিভাইস।',
+          keywords: 'নিরাপত্তা security 2fa sessions',
+        },
+        'settings.action_audit': {
+          description: 'সাইন-ইন, অনুমতি পরিবর্তন, রপ্তানি ও সংবেদনশীল কাজ।',
+          keywords: 'অডিট লগ audit log events export',
+        },
         'settings.action_companies': {
           description: 'সব প্রতিষ্ঠান, তাদের মুদ্রা ও মানুষ; একটি থেকে অন্যটিতে যান বা নতুন যোগ করুন।',
           keywords: 'প্রতিষ্ঠানসমূহ শাখা companies multi-company switch',
@@ -550,6 +623,58 @@ export const messages: Readonly<Record<string, object>> = {
       details: 'বিবরণ',
       detailsHint: 'ঠিকানা, যোগাযোগ ও ইনস্টল করা অ্যাপের যা দরকার (কর নম্বর, অর্থবছর…)। মুদ্রা: {{currency}}।',
       notSet: 'নির্ধারিত নয়',
+    },
+    security: {
+      title: 'নিরাপত্তা',
+      intro: 'এখানে মানুষ কীভাবে সাইন ইন করেন, আর কে কোথায় সাইন ইন আছেন। প্রতিটি পরিবর্তন অডিট লগে থাকে।',
+      policy: 'সাইন-ইন নীতি',
+      policyHint: 'সার্ভার প্রতিটি অনুরোধে এটি প্রয়োগ করে।',
+      twoFactorFor: 'দুই-ধাপের সাইন-ইন যাদের জন্য বাধ্যতামূলক',
+      administrators: 'শুধু অ্যাডমিনিস্ট্রেটর',
+      administratorsHint: 'শুরুতে প্রস্তাবিত: বাকিরা প্রোফাইল থেকে চালু করতে পারেন।',
+      everyone: 'সবাই',
+      everyoneHint:
+        'যাদের নেই তারা পরের বার ব্যাক-অফিস খুললে শুধু এটি চালু করতে পারবেন; কেউ বন্ধ করতে পারবেন না। পোর্টাল ব্যবহারকারীরা এর বাইরে।',
+      wouldStop_one:
+        '{{count}} জনের এখনো দুই-ধাপের সাইন-ইন নেই ({{names}}): অন্য কিছুর আগে তারা এটি চালু করবেন।',
+      wouldStop_other:
+        '{{count}} জনের এখনো দুই-ধাপের সাইন-ইন নেই ({{names}}): অন্য কিছুর আগে তারা এটি চালু করবেন।',
+      sessionDays: 'একটি সাইন-ইন সর্বোচ্চ (দিন)',
+      sessionDaysHint: 'নতুন সাইন-ইনের জন্য ১ থেকে ৯০ দিন; খালি: সার্ভারের সেটিং।',
+      serverDefault: 'ডিফল্ট',
+      save: 'সংরক্ষণ করুন',
+      saved: 'সংরক্ষিত: এখন থেকে কার্যকর।',
+      sessions: 'সাইন ইন করা ডিভাইস',
+      sessionsHint: 'সবার সক্রিয় সাইন-ইন। অবিশ্বস্ত কোনোটি সাইন আউট করুন; ব্যক্তি আবার সাইন ইন করবেন।',
+      searchSessions: 'ব্যক্তি বা ঠিকানা দিয়ে খুঁজুন',
+      signOutOf: '{{device}} থেকে {{name}}-কে সাইন আউট করুন',
+      noSessions: 'মিলে এমন কোনো ডিভাইস নেই।',
+    },
+    audit: {
+      title: 'অডিট লগ',
+      intro: 'সাইন-ইন, অনুমতি পরিবর্তন, রপ্তানি ও সংবেদনশীল কাজ — সংরক্ষিত, কখনো বদলানো হয় না।',
+      export: 'CSV রপ্তানি',
+      kind: 'ধরন',
+      all: 'সব ধরন',
+      families: {
+        auth: 'সাইন-ইন',
+        security: 'নিরাপত্তা ও অনুমতি',
+        people: 'মানুষ',
+        settings: 'সেটিংস',
+        data: 'রপ্তানি ও ডেটা',
+        admin: 'প্রশাসন',
+      },
+      person: 'ব্যক্তি',
+      everyone: 'সবাই',
+      from: 'থেকে',
+      to: 'পর্যন্ত',
+      words: 'শব্দ',
+      when: 'কখন',
+      what: 'কী',
+      ip: 'ঠিকানা',
+      system: 'সিস্টেম',
+      none: 'মিলে এমন কোনো ঘটনা নেই।',
+      more: 'আরও দেখুন',
     },
     companies: {
       title: 'প্রতিষ্ঠানসমূহ',

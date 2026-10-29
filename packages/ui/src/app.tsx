@@ -104,6 +104,7 @@ import { OfflineMenu } from './shell/OfflineMenu.js';
 import { rememberRecord } from './shell/recent.js';
 import { Sidebar, SidebarDrawer, useSidebarCollapsed } from './shell/Sidebar.js';
 import { ShortcutsHelp, useShortcuts } from './shell/shortcuts.js';
+import { TwoFactorSetup } from './shell/TwoFactorSetup.js';
 import { ToastProvider, useToast } from './shell/toast.js';
 import { neighbours } from './views/listMemory.js';
 
@@ -438,7 +439,7 @@ function Shell(): ReactElement {
   const apps = useQuery({
     queryKey: ['apps', company],
     queryFn: () => api.apps(),
-    enabled: me.isSuccess,
+    enabled: me.isSuccess && me.data.twoFactorSetupRequired !== true,
   });
   const companyNames = useQuery({
     queryKey: ['names', 'res.company', me.data?.companies],
@@ -448,12 +449,14 @@ function Shell(): ReactElement {
   const menus = useQuery({
     queryKey: ['menus', params.app, company],
     queryFn: () => api.menus(params.app),
-    enabled: me.isSuccess && params.app !== undefined,
+    enabled: me.isSuccess && me.data.twoFactorSetupRequired !== true && params.app !== undefined,
   });
   if (me.error instanceof ApiError && me.error.status === 401) return <Navigate to="/login" />;
   // A failed refresh keeps the last answer (offline, the server down): the cached screens stay usable.
   if (me.isError && me.data === undefined) return <Alert>{me.error.message}</Alert>;
   if (me.data === undefined) return <Spinner label={t('app.loading')} />;
+  // The policy asks everyone for a second factor (RFC 0019 §3.5): nothing else until it is set up.
+  if (me.data.twoFactorSetupRequired === true) return <TwoFactorSetup api={api} />;
   const user = me.data;
   const current = company ?? user.company ?? user.companies[0] ?? 0;
   const app = apps.data?.find((a) => a.code === params.app);
