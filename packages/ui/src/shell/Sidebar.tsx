@@ -89,7 +89,7 @@ function AppSections({
       {entriesOf(menus.data ?? []).map((node) =>
         node.children.length > 0 ? (
           <li key={node.id} className="pt-1">
-            <p className="px-2 pb-0.5 text-xs font-medium tracking-wide text-muted-foreground/80 uppercase">
+            <p className="px-2 pb-0.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
               {node.label}
             </p>
             <ul className="grid gap-0.5">

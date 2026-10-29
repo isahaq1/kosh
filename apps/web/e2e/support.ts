@@ -21,3 +21,8 @@ export async function signIn(page: Page, login: string): Promise<void> {
 export async function openApp(page: Page, label: string): Promise<void> {
   await page.getByRole('link', { name: label }).click();
 }
+
+/** Opens Settings › App manager (Settings opens on its overview). */
+export async function openAppManager(page: Page): Promise<void> {
+  await page.goto('/settings/a/settings.action_apps');
+}

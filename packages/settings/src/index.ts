@@ -54,24 +54,36 @@ export const settings: ReturnType<typeof defineModule> = defineModule({
     company: { label: 'Company settings', groups: ['settings.company'] },
   },
   actions: {
+    'settings.action_overview': { type: 'client', page: 'settings.Overview', label: 'Settings' },
     'settings.action_apps': { type: 'client', page: 'settings.Apps', label: 'Apps' },
     'settings.action_company': { type: 'client', page: 'settings.Company', label: 'Company' },
   },
   menus: [
     { id: 'settings.root', label: 'Settings', app: 'settings' },
+    // The overview first (the app's home), then the sections in groups (RFC 0019 §3.1). Modules add their settings
+    // under `settings.group_apps`.
     {
-      id: 'settings.apps',
+      id: 'settings.overview',
       parent: 'settings.root',
-      label: 'Apps',
-      action: 'settings.action_apps',
-      sequence: 1,
+      label: 'Overview',
+      action: 'settings.action_overview',
+      sequence: 0,
     },
+    { id: 'settings.group_workspace', parent: 'settings.root', label: 'Workspace', sequence: 10 },
     {
       id: 'settings.company',
-      parent: 'settings.root',
+      parent: 'settings.group_workspace',
       label: 'Company',
       action: 'settings.action_company',
-      sequence: 2,
+      sequence: 1,
+    },
+    { id: 'settings.group_apps', parent: 'settings.root', label: 'Apps', sequence: 40 },
+    {
+      id: 'settings.apps',
+      parent: 'settings.group_apps',
+      label: 'App manager',
+      action: 'settings.action_apps',
+      sequence: 1,
     },
   ],
   routes: (context: ModuleContext) => {

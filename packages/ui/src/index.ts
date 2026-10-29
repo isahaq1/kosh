@@ -28,7 +28,7 @@ export {
   type Versioned,
   type ViewField,
 } from './api.js';
-export { KoshApp, type KoshAppProps } from './app.js';
+export { KoshApp, type KoshAppProps, useLanguage } from './app.js';
 export { AppIcon } from './components/AppIcon.js';
 export * from './components/primitives.js';
 export {

@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
   ArrowRight,
+  Building2,
   FileText,
   History,
   Home,
@@ -17,6 +18,7 @@ import {
   Plus,
   Search,
   Sun,
+  UserRound,
 } from 'lucide-react';
 import { Dialog as RDialog } from 'radix-ui';
 import {
@@ -96,11 +98,16 @@ export function CommandPalette({
   onOpenChange,
   api,
   onShortcuts,
+  companies = [],
+  onSwitchCompany,
 }: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly api: KoshApi;
   readonly onShortcuts: () => void;
+  /** The user's other companies, offered as "Switch to …" (RFC 0019 §3.4). */
+  readonly companies?: readonly { readonly id: number; readonly name: string }[];
+  readonly onSwitchCompany?: (id: number) => void;
 }): ReactElement {
   const { t } = useTranslation();
   const { uid, setTheme } = useKosh();
@@ -257,6 +264,18 @@ export function CommandPalette({
         icon: <Monitor className="size-4" aria-hidden />,
         run: () => setTheme('system'),
       },
+      ...companies.map((c) => ({
+        id: `cmd:company:${c.id}`,
+        label: t('palette.switchCompany', { name: c.name }),
+        icon: <Building2 className="size-4" aria-hidden />,
+        run: () => onSwitchCompany?.(c.id),
+      })),
+      {
+        id: 'cmd:profile',
+        label: t('palette.profile'),
+        icon: <UserRound className="size-4" aria-hidden />,
+        run: () => void navigate({ to: '/me/$page', params: { page: 'settings.Profile' } }),
+      },
       {
         id: 'cmd:shortcuts',
         label: t('palette.shortcuts'),
@@ -290,6 +309,8 @@ export function CommandPalette({
     setTheme,
     t,
     onShortcuts,
+    companies,
+    onSwitchCompany,
   ]);
 
   useEffect(() => {

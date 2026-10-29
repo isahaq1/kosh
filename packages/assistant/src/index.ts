@@ -86,7 +86,7 @@ export function createAssistant(options: AssistantOptions = {}): KoshModule {
     menus: [
       {
         id: 'assistant.settings',
-        parent: 'settings.root',
+        parent: 'settings.group_apps',
         label: 'AI assistant',
         action: 'assistant.action_settings',
         sequence: 50,

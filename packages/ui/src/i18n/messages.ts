@@ -30,6 +30,7 @@ export const en = {
     density: 'Density',
     home: 'Home',
     appNamed: '{{app}} app',
+    switchCompany: 'Company: {{name}} (switch)',
     sidebar: 'Sidebar',
     collapseSidebar: 'Collapse the sidebar',
     expandSidebar: 'Expand the sidebar',
@@ -219,6 +220,8 @@ export const en = {
   },
   toast: { region: 'Notifications', close: 'Close' },
   palette: {
+    switchCompany: 'Switch to {{name}}',
+    profile: 'Your profile',
     button: 'Search or jump to…',
     title: 'Command palette',
     description: 'Search records, menus and commands. Use the arrow keys and Enter.',
@@ -297,6 +300,7 @@ export const bn: DeepPartial<Messages> = {
     density: 'ঘনত্ব',
     home: 'হোম',
     appNamed: '{{app}} অ্যাপ',
+    switchCompany: 'প্রতিষ্ঠান: {{name}} (বদলান)',
     sidebar: 'সাইডবার',
     collapseSidebar: 'সাইডবার ছোট করুন',
     expandSidebar: 'সাইডবার বড় করুন',
@@ -483,6 +487,8 @@ export const bn: DeepPartial<Messages> = {
   },
   toast: { region: 'বিজ্ঞপ্তি', close: 'বন্ধ করুন' },
   palette: {
+    switchCompany: '{{name}}-এ যান',
+    profile: 'আপনার প্রোফাইল',
     button: 'খুঁজুন বা যান…',
     title: 'কমান্ড প্যালেট',
     description: 'রেকর্ড, মেনু ও কমান্ড খুঁজুন। তীর কী ও এন্টার ব্যবহার করুন।',

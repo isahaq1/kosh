@@ -35,6 +35,7 @@ import {
   ChartColumn,
   ChartGantt,
   ChevronRight,
+  ChevronsUpDown,
   Columns3,
   Grid2x2,
   Languages,
@@ -75,7 +76,6 @@ import {
   MenuLabel,
   MenuSeparator,
   MenuTrigger,
-  Select,
   Spinner,
 } from './components/primitives.js';
 import { KoshProvider, type ThemeChoice, useKosh } from './context.js';
@@ -184,6 +184,12 @@ function useServices(): Services {
   const value = useContext(ServicesContext);
   if (value === null) throw new Error('Shutro ERP routes render inside <KoshApp>.');
   return value;
+}
+
+/** The app's language and its switch (as the language menu does: direction, the server's labels). */
+export function useLanguage(): { readonly lang: string; setLang(lang: string): void } {
+  const { lang, setLang } = useServices();
+  return { lang, setLang };
 }
 
 // ------------------------------------------------------------------------------------------------- shell
@@ -298,17 +304,43 @@ function CompanyBlock({
         <span className="truncate text-sm font-semibold">{name}</span>
       </div>
     );
+  // Several companies: a switcher (also in the palette: "Switch to …").
   return (
-    <div className="flex items-center gap-2 px-1">
-      {badge}
-      <Select
-        label={t('shell.company')}
-        className="h-8 min-w-0 flex-1"
-        value={String(company)}
-        options={(names.data ?? []).map((c) => ({ value: String(c.id), label: c.displayName }))}
-        onChange={(v) => onChange(Number(v))}
-      />
-    </div>
+    <Menu>
+      <MenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={t('shell.switchCompany', { name })}
+          className="flex w-full items-center gap-2.5 rounded-md px-1 py-1 text-start hover:bg-muted"
+        >
+          {badge}
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold">{name}</span>
+          <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        </button>
+      </MenuTrigger>
+      <MenuContent align="start" className="w-64">
+        <MenuLabel>{t('shell.company')}</MenuLabel>
+        {(names.data ?? []).map((c) => (
+          <MenuCheckboxItem
+            key={c.id}
+            checked={c.id === company}
+            onCheckedChange={() => {
+              if (c.id !== company) onChange(c.id);
+            }}
+          >
+            <span className="flex items-center gap-2">
+              <span
+                aria-hidden
+                className="grid size-5 place-items-center rounded bg-muted text-[10px] font-semibold"
+              >
+                {c.displayName.slice(0, 1).toUpperCase()}
+              </span>
+              {c.displayName}
+            </span>
+          </MenuCheckboxItem>
+        ))}
+      </MenuContent>
+    </Menu>
   );
 }
 
@@ -380,7 +412,11 @@ function Shell(): ReactElement {
   const { api, registry, lang, realtime, offline } = useServices();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const params = useParams({ strict: false }) as { app?: string; action?: string };
+  const params = useParams({ strict: false }) as {
+    app?: string;
+    action?: string;
+    page?: string;
+  };
   const me = useQuery({ queryKey: ['me'], queryFn: () => api.me(), retry: false });
   const [company, setCompany] = useState<number | undefined>(undefined);
   const [palette, setPalette] = useState(false);
@@ -403,6 +439,11 @@ function Shell(): ReactElement {
     queryFn: () => api.apps(),
     enabled: me.isSuccess,
   });
+  const companyNames = useQuery({
+    queryKey: ['names', 'res.company', me.data?.companies],
+    queryFn: () => api.names('res.company', { ids: me.data?.companies ?? [] }),
+    enabled: (me.data?.companies.length ?? 0) > 1,
+  });
   const menus = useQuery({
     queryKey: ['menus', params.app, company],
     queryFn: () => api.menus(params.app),
@@ -415,6 +456,11 @@ function Shell(): ReactElement {
   const user = me.data;
   const current = company ?? user.company ?? user.companies[0] ?? 0;
   const app = apps.data?.find((a) => a.code === params.app);
+  // A page of the user menu (`/me/<page>`): the page bar names it.
+  const userPage =
+    params.page === undefined
+      ? undefined
+      : registry.userPages().find((p) => p.name === params.page);
   /** The open section's label (the menu entry of the current action), for the page bar. */
   const section = (() => {
     const walk = (nodes: readonly MenuNode[]): string | undefined => {
@@ -428,6 +474,7 @@ function Shell(): ReactElement {
     return params.action === undefined ? undefined : walk(menus.data ?? []);
   })();
   const switchCompany = (id: number) => {
+    setPalette(false);
     api.setCompany(id);
     setCompany(id);
     void queryClient.invalidateQueries();
@@ -511,7 +558,11 @@ function Shell(): ReactElement {
                     >
                       {app === undefined ? (
                         <span className="font-semibold">
-                          {params.app === undefined ? t('shell.home') : t('app.name')}
+                          {userPage !== undefined
+                            ? t(userPage.label)
+                            : params.app === undefined
+                              ? t('shell.home')
+                              : t('app.name')}
                         </span>
                       ) : (
                         <>
@@ -572,6 +623,10 @@ function Shell(): ReactElement {
               onOpenChange={setPalette}
               api={api}
               onShortcuts={openHelp}
+              companies={(companyNames.data ?? [])
+                .filter((c) => c.id !== current)
+                .map((c) => ({ id: c.id, name: c.displayName }))}
+              onSwitchCompany={switchCompany}
             />
             <ShortcutsHelp open={help} onOpenChange={setHelp} />
           </PaletteContext.Provider>
