@@ -214,3 +214,34 @@ interface PaymentAdapter {
 **Addresses**: providers send customers back (GET or POST) to `SHUTRO_ERP_API_URL` + `/api/v1/payment/return/<reference>`,
 which forwards them to the invoice in the portal (`SHUTRO_ERP_PORTAL_URL` + `/d/invoices/<id>?payment=<reference>`),
 and call back at `SHUTRO_ERP_API_URL` + `/api/v1/hooks/<token>`; both must be the public addresses in production.
+
+## OAuth 2.0 apps
+
+Shutro ERP is an OAuth 2.0 provider: another company's app asks one of your users for access, the user allows it
+on a consent page, and the app then calls the API as that user — never with more than the user may do, and only
+within the scopes the user allowed (`*`, `read:<app>`, `write:<app>`, as for API keys).
+
+**Register an app** (Integrations › OAuth apps; administrators and Integrations managers): a name, its redirect
+addresses (https; http only for localhost; matched exactly) and the scopes it may ask for. A confidential app
+(a server) gets a client secret, shown once; a public app (a phone or browser app) has none and must use PKCE.
+*New secret* replaces the secret at once; *Switch off* stops every token the app holds.
+
+**The flow** (authorization code with PKCE, S256):
+
+1. Send the user to `<back-office>/oauth/authorize?response_type=code&client_id=…&redirect_uri=…&scope=read:contacts&state=…&code_challenge=…&code_challenge_method=S256`.
+   Signed out, they sign in first and come back. They see the app, what it may do and where they will go back,
+   then *Allow* or *Cancel*; either returns to the redirect with `code` and `state`, or `error=access_denied`.
+2. Trade the code within 10 minutes: `POST /api/v1/oauth/token` (form or JSON) with `grant_type=authorization_code`,
+   `code`, `redirect_uri`, `code_verifier`, and the client (`client_secret_basic`, `client_secret_post`, or only
+   `client_id` for public apps). The answer: `access_token` (`oat_…`, one hour), `refresh_token` (`ort_…`, 30 days),
+   `scope`.
+3. Call the API with `Authorization: Bearer oat_…`.
+4. Refresh with `grant_type=refresh_token`: a new pair each time, the old one ends. A refresh token used twice — or a
+   code used twice — revokes every token of the grant (someone else may hold it).
+5. `POST /api/v1/oauth/revoke` with `token` ends a token (RFC 7009).
+
+Discovery: `GET /.well-known/oauth-authorization-server`. Users see and remove the apps they allowed in the account
+menu › **Connected apps**; removing one ends its tokens at once. Tokens never give administrator rights, cannot
+manage credentials (sign-in, keys, OAuth apps) and are rate limited per token. Everything is audited
+(`oauth.consent`, `oauth.revoked`, `oauth.refresh_reused`, `oauth.app_*`).
+

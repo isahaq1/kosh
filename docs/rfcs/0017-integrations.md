@@ -343,3 +343,30 @@ transitions and the modules' declared events; OpenAPI describes the new security
   old timestamp refused; a redelivery a duplicate), the return before the event, an expired session; keys and modes.
 - **Step 4 is complete** in code: the test provider, SSLCommerz, bKash, Razorpay and Stripe. Each real adapter is to
   be checked on its sandbox; a payment link in the invoice email and provider fees remain.
+
+## Implementation notes (2026-10-29): step 5 — OAuth 2.0 apps
+
+- **Models** (base, private): `oauth.app` (client id, the secret's digest for confidential apps, redirect URIs,
+  allowed scopes, homepage, active, owner), `oauth.grant` (a user's consent to an app with its scopes; revoked ends
+  every token), `oauth.code` (digest, redirect, PKCE challenge, 10 minutes, once), `oauth.token` (access and refresh
+  digests, one hour and 30 days, revoked, rotated).
+- **Flow** (`packages/server/src/auth/oauth.ts`): the consent data and decision at `/api/v1/oauth/authorize` (session;
+  the redirect must be registered and the scopes allowed before anything is shown — errors are 400s, never
+  redirects; PKCE S256 required of public apps), `/api/v1/oauth/token` (code and refresh grants; form or JSON;
+  client secret basic or post, or none for public apps), `/api/v1/oauth/revoke`, discovery. A reused code or rotated
+  refresh token revokes the grant's tokens; the revocation commits before the refusal is answered. Errors follow
+  RFC 6749 (`invalid_grant`, `invalid_client` with 401); answers are `no-store`.
+- **Authentication**: `Authorization: Bearer oat_…` is resolved before sessions; the identity is the user's with the
+  grant's scopes (the API keys' scope checks apply), never administrator groups; rate limits per token; archived
+  users' and switched-off apps' tokens stop working.
+- **Screens**: the consent page at `/oauth/authorize` (outside the shell; signed out → sign in → back, `next` only to
+  this site), Integrations › OAuth apps (new app with the secret once, new secret, switch off/on), account menu ›
+  Connected apps (what each app may do, last use, remove access). English and Bangla.
+- **Not in this step**: OpenID Connect (ID tokens, single sign-on), dynamic client registration, consent remembered
+  without asking again (the screen says when the user allowed it before).
+- **Tests**: on real PostgreSQL — apps (secret once, checked addresses and scopes, managers only), the code flow
+  (consent data, unregistered redirect / extra scope / unknown client refused, deny, wrong verifier and secret
+  refused, the token within its scopes, credentials refused, a replayed code revoking the tokens), refresh rotation
+  and reuse detection, public apps with PKCE, revocation by the app and by the user's grant, discovery, audit. E2E:
+  register, consent, token, read, remove access.
+

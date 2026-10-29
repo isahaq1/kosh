@@ -252,7 +252,8 @@ the workflow popover reads the transitions the server serves, the summary reads 
 - **Home and the user's own pages** (`/`, `/me/<page>`): no sidebar and no page bar — only the account menu in the
   top corner (name and login, the user's pages such as Your profile and API keys, the companies when there are
   several, language, theme and density, Sign out), and a link Home on the user's pages. The notification bell, the
-  chat dock and Studio live in an app's page bar; Today lists what needs the user.
+  chat dock are there too (asked the same day; a header item opts in with `home: true`); Studio lives in an app's
+  page bar.
 - **Inside an app**: the sidebar shows only that app's sections, under its name — a menu that switches to another
   app — with the company, search and Home above; the page bar is back. Ctrl+B, the rail and the phone drawer as
   before.

@@ -186,9 +186,11 @@ form('sale.order', (k) => ({
 - **People** (Settings › People; Administrators and People managers): invite by email (the link is also shown to
   copy; `SHUTRO_ERP_BASE_URL` is the address it points to, `SMTP_URL` sends it), roles per app and company,
   deactivate, a new sign-in link, reset two-factor; invited people choose their password at `/activate`.
-- **Layout**: the home page and the user's own pages have no sidebar or page bar, only the account menu in the top
-  corner (profile pages, companies, language, theme, density, Sign out). Inside an app, the sidebar lists that app's
+- **Layout**: the home page and the user's own pages have no sidebar or page bar, only the notifications, the chat
+  dock and the account menu in the top corner (profile pages, companies, language, theme, density, Sign out). Inside an app, the sidebar lists that app's
   sections under its name, which switches apps; the page bar carries the bell, chat, Studio, language and theme.
+- **Photos and logos**: Your profile › Change photo; Settings › Company › the logo. `Avatar` and `ImagePicker`
+  (`@kosh/ui`) show and choose them — resized to 256 px in the browser before upload.
 - **Lists** (RFC 0018 step 4): saved searches are tabs above the search (*All*, then the saved ones; *More* past
   six); selected rows show a floating bar at the bottom; Ctrl / Cmd + click or the middle button opens a record in a
   new tab; an empty list says what it is for.

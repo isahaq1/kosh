@@ -270,3 +270,21 @@ Bangla, light and dark, keyboard and screen reader, desktop and phone.
   listed, signed out (the person's token stops working), one's own refused; the audit filters, names and the CSV
   with its own event. E2E: *everyone* saved with the people named, a person's set-up page then the back-office, back
   to the default; their device signed out from Security; the audit log filtered and exported.
+
+## Addition (2026-10-29, asked by the user): profile photos and company logos
+
+- **Stored** in the database (`kosh.image`, private: the owner model and id, the type, the bytes, a digest) so they
+  work with or without file storage; small by design — the browser resizes to 256 px (photos cropped to the centre
+  as WebP, logos fitted whole as PNG) and the server accepts PNG, JPEG or WebP only, checked by their bytes (no SVG),
+  at most 300 KB.
+- **Routes**: `GET /api/v1/images/user|company/:id` (signed-in users; `?v=<digest>` cached for a year, else a
+  minute; ETag), `PUT / DELETE /api/v1/auth/profile/avatar` (your own photo), `PUT / DELETE
+  /api/v1/images/company/:id` (Administrator or Settings / Company, one of their companies). Audited. `me` carries
+  the photo's and the companies' logo versions; People and Companies list theirs.
+- **Screens**: Your profile (Change photo, Remove), Settings › Company (the logo in Identity); the photo in the
+  account menu and the sidebar's user button, People's rows and dialog; the logo in the sidebar's company block and
+  Companies. Settings' overview gives each section its own icon.
+- **Tests**: on real PostgreSQL — a photo stored, served with its type and cache headers, 304 on its ETag, SVG / not
+  an image / too large refused, removed; the logo refused to a plain user, listed and in `me`. E2E: a photo and a
+  logo chosen, shown in the corner and the sidebar, removed.
+
