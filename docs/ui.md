@@ -186,6 +186,11 @@ form('sale.order', (k) => ({
 - **People** (Settings › People; Administrators and People managers): invite by email (the link is also shown to
   copy; `SHUTRO_ERP_BASE_URL` is the address it points to, `SMTP_URL` sends it), roles per app and company,
   deactivate, a new sign-in link, reset two-factor; invited people choose their password at `/activate`.
+- **Security** (Settings; administrators): two-factor sign-in required of administrators only or of everyone — the
+  people it would stop are named before saving, and they see a set-up page instead of the back-office until they
+  do —, the most days a sign-in lasts, and every signed-in device across people with *Sign out*.
+- **Audit log** (Settings; administrators and the *View the audit log* permission): filters by kind, person, period
+  and words, more on demand, *Export CSV*.
 - **Roles & permissions** (Settings; administrators): a role's apps as access levels, Advanced rights per model,
   feature permissions, record rules and field security; every save is reviewed first — who gains and who loses
   what. A person's page shows "What can they do?", computed by the server as them.

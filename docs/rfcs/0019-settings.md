@@ -243,3 +243,30 @@ Bangla, light and dark, keyboard and screen reader, desktop and phone.
 - **Tests**: on real PostgreSQL — details offered, saved, emptied and checked; companies listed with their people,
   creation refused to non-administrators and checked, the new company in the administrator's companies and not in
   others'. E2E: a detail saved; a new company created, switched to and back.
+
+## Implementation notes (2026-10-29): step 4, part 2 — Security
+
+- **The policy** (`auth.policy` in base, one row, private): two-factor sign-in required of `administrators` (the
+  default, as before) or `everyone`, and `sessionDays` (1–90, empty: the server's `lifetimeMs`) for new sign-ins.
+  The auth service reads it (cached like sessions, forgotten on change). With *everyone*, a session without 2FA
+  carries `twoFactorMissing`; the server's request hook then allows only `/api/v1/auth/…` and answers
+  `403 two-factor-setup-required` elsewhere; `me` says `twoFactorSetupRequired`, and the shell shows a set-up page
+  (key, code, recovery codes once) instead of the back-office. Turning 2FA off is refused (`409`) while the policy
+  stands. API keys are not sessions, and portal users (all groups external) are not the company's people: neither
+  is concerned.
+- **Routes** (`@kosh/settings`, administrators only): `GET / PATCH /api/v1/settings/security` (the policy and the
+  people without 2FA; audited `security.policy`); `GET /api/v1/settings/sessions` (every active, verified session
+  with the person, device, address and last use; the caller's own marked) and
+  `DELETE /api/v1/settings/sessions/:id` (audited `security.session_revoked`; one's own session is refused — sign
+  out instead). The audit route (`@kosh/permissions`) gains filters by person, record, period and words, the
+  actors' names, and `format=csv` (an audited `data.export`, cells guarded against spreadsheet formulas).
+- **Screens**: Settings › Security (the policy with the people it would stop named before saving; signed-in devices
+  searched and signed out) and Settings › Audit log (filters, more on demand, Export CSV), under a Security group
+  visible to administrators.
+- **Not in this step**: sessions for People managers (administrators only for now), a per-company policy, and
+  password rules; the audit log's retention.
+- **Tests**: on real PostgreSQL — the default policy, *everyone* blocking all but the sign-in routes until 2FA is
+  set up and refusing to turn it off, the lifetime of new sign-ins, checked values, administrators only; sessions
+  listed, signed out (the person's token stops working), one's own refused; the audit filters, names and the CSV
+  with its own event. E2E: *everyone* saved with the people named, a person's set-up page then the back-office, back
+  to the default; their device signed out from Security; the audit log filtered and exported.

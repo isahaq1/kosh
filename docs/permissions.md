@@ -31,6 +31,10 @@ rule, field and permission check, acting as themselves (their changes are attrib
 - **2FA is mandatory**: administrator groups count only in a session that entered a second factor (verify at
   sign-in, or enrolment in this session) while 2FA is on. Without it the user keeps their other roles only, and
   `GET /api/v1/auth/me` says `administratorNeedsSecondFactor: true`.
+- **Two-factor for everyone** (Settings › Security, `auth.policy`): with the policy set to *everyone*, a session
+  of someone without 2FA reaches only `/api/v1/auth/…` (set it up, sign out, `me` with
+  `twoFactorSetupRequired: true`); every other API answers `403 two-factor-setup-required`, and 2FA cannot be turned
+  off. API keys and portal users are not concerned. The policy also caps how long new sign-ins last (1–90 days).
 - **At least one administrator** (active, with 2FA) always remains: archiving them, turning their 2FA off, removing
   their role or the role itself is refused with `409 last-administrator`. Users holding roles are archived, not
   deleted.
@@ -56,7 +60,7 @@ saved (unknown roles, models, fields and permissions, and broken rule domains ar
 | `GET` / `PUT users/:id/roles { assignments: [{ role, company? }] }` | per-company assignments (replaces the set) |
 | `GET` / `POST users/:id/grants { grant, reason, company?, expiresAt? }`, `DELETE grants/:id` | special grants |
 | `GET users/:id/effective?company=` | who can do what: groups, per-model permissions, hidden and read-only fields, permissions, computed by Shutro as that user |
-| `GET audit?kind=security.&limit=&before=` | the audit log (newest first; a kind ending in `.` is a prefix) |
+| `GET audit?kind=&actor=&model=&record=&from=&to=&q=&limit=&before=` | the audit log (newest first; a kind ending in `.` is a prefix; `to` includes its day; `q` searches the summary; each event names its actor); `format=csv` exports the page (itself an audited `data.export`) |
 
 ## Approvals
 
