@@ -136,6 +136,19 @@ createRoot(root).render(<KoshApp api={createKoshApi()} registry={registry} />);
   language's order (Bengali digits too), or picked on a calendar (arrows, Page Up / Down, Home / End, Enter; the week
   starts as the language says).
 
+### The Workspace shell (RFC 0018 step 2)
+
+- **Sidebar** (`shell/Sidebar.tsx`): the company (its initial and name, or the switcher with several companies),
+  search (the palette), Home, then the user's apps — each a button ("Sales app") that opens its sections, groups
+  such as Reporting kept as small headings; the current app opens itself, one at a time — and the user menu at the
+  bottom. `Ctrl+B` (or the button beside the user) collapses it to an icon rail, remembered per browser. Below
+  64 rem it is a drawer behind the menu button; following a link closes it.
+- **Page bar**: where the user is (app › section, in the navigation "You are here"), then the screens' header items
+  (chat, notifications, Studio), language and theme. It has a solid background: a backdrop filter would become the
+  containing box of fixed panels rendered inside it (the chat dock).
+- Landmarks: the sidebar is a `complementary` region with the `Main menu` navigation inside; right-to-left puts it
+  on the right (logical properties).
+
 ## Tests
 
 `apps/web/e2e` (Playwright) runs against a real server (`e2e/server.ts`: PostgreSQL via Testcontainers, a contacts

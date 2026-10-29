@@ -191,3 +191,21 @@ the workflow popover reads the transitions the server serves, the summary reads 
 - **Tests**: typed dates, accents, tones and sum labels (unit); the company settings API with its checks and the
   accents in the user's details (integration); E2E: the brand colour applied, the state chip's workflow, a date
   typed and picked by keyboard, lines shown on a saved order.
+
+## Implementation notes (2026-10-29): step 2 — the shell
+
+- **Sidebar** with the company block, search, Home, the apps as disclosure buttons named "<App> app" (distinct from
+  screens' own buttons such as Chat or Studio) whose sections are links in the `Main menu` navigation, groups as
+  headings, and the user menu at the bottom; collapsed to a rail with `Ctrl+B` (in the shortcuts list) or its
+  button, remembered per browser; a Radix dialog drawer below 64 rem. The top app menu and the launcher button are
+  gone; the company switcher and the user menu moved into the sidebar.
+- **Page bar**: "You are here" (app › section), header items, language, theme; solid background (a backdrop filter
+  made the bar the containing block of the chat dock's fixed panels and hid the bell behind them).
+- **Deviations from §4.1**, kept for later steps: the bell stays the inbox (no separate Inbox entry yet); apps keep
+  their declared order (most used first needs usage counts); the home page's app grid is the "All apps" page until
+  step 4 brings the Today home.
+- **Escape**: shortcuts already leave keys to open popovers and menus (step 1's fix), so closing the drawer or a
+  menu never navigates.
+- **Tests**: E2E for the sidebar (an app's sections and the current one marked, the page bar, `Ctrl+B` remembered
+  across a reload, the drawer at phone width closing on navigation); the right-to-left test now finds the user menu
+  on the right with the sidebar.
