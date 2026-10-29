@@ -400,7 +400,9 @@ export function registerRestApi(
         'Invalid onchange request',
         'The body is { values: { ...the record }, changed: ["field", ...] }.',
       );
-    return request.env((env) => ref(env, model.name).onchange(input));
+    // Datetimes arrive as ISO strings, as for create and update.
+    const values = coerceValues(model, (input as { values: Record<string, unknown> }).values);
+    return request.env((env) => ref(env, model.name).onchange({ ...input, values }));
   });
 
   app.post('/api/v1/models/:model/:id/transitions/:name', async (request, reply) => {
