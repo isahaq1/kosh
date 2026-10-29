@@ -23,4 +23,4 @@ Design documents written before implementation. An RFC is implemented only after
 | 0017 | [Integrations platform](0017-integrations.md) | Accepted: API keys and service accounts, OAuth 2.0 apps, outbound and inbound webhooks, online payments |
 | 0018 | [Workspace back-office](0018-workspace-ui.md) | Accepted, implemented |
 | 0019 | [Settings](0019-settings.md) | Accepted, implemented |
-| 0020 | [App settings](0020-app-settings.md) | Proposed |
+| 0020 | [App settings](0020-app-settings.md) | Accepted; step 1 implemented (the declaration, the API, the per-app page; Sales, Purchase, Accounting) |

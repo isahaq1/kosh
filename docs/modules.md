@@ -35,6 +35,48 @@ export const contacts = defineModule({
 
 Version ranges: `1.2.3`, `^1.2.0`, `~1.2.0`, `>=1.2.0 <2.0.0`, `*`.
 
+## App settings (RFC 0020)
+
+An app declares its own settings in its manifest; they appear in **Settings › App settings**, found by the Settings
+search, saved through one checked and audited API. A `company` section names `res.company` fields the module adds
+with `extendModel` — their type, label and default come from the field; an `installation` section keeps its own
+key / values (`type` and `label` required). `editors` are the groups that may change a section (Administrators
+always; none declared: administrators only); everyone who opens the app may see it.
+
+```ts
+// module.ts (Shutro)
+export const CompanySales = extendModel('res.company', {
+  fields: {
+    saleValidityDays: f.integer({ default: 30, label: 'Quotations valid for (days, 0: no limit)' }),
+    saleTerms: f.text({ label: 'Default terms and conditions' }),
+  },
+});
+// … defineModule({ …, extensions: [CompanySales] })
+
+// index.ts (Kosh manifest)
+settings: {
+  sections: [
+    {
+      key: 'quotations',
+      label: 'Quotations',
+      description: 'How long new quotations stay valid, and the terms they start with.',
+      keywords: 'quote validity expiry terms',
+      scope: 'company',
+      editors: ['sales.manager'],
+      fields: [
+        { key: 'saleValidityDays', min: 0, max: 365, help: 'A new quotation is valid until its date plus these days.' },
+        { key: 'saleTerms', help: 'Filled in on new quotations.' },
+      ],
+    },
+  ],
+},
+```
+
+Code reads company settings as the company's fields; installation settings with
+`installationSetting(env, 'app.key', fallback)` from `@kosh/server`. A setting may show only when another of its
+section has a value (`visibleWhen: { key, equals }`). A wrong declaration (an unknown company field, a type that is
+not a setting type, an unknown editor group, a duplicate key) stops the server at start.
+
 ## Installing, disabling and enabling apps (RFC 0008)
 
 `src/modules.ts` lists the **catalogue**: the modules this installation can install. The database records which of

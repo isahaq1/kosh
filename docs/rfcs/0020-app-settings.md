@@ -1,6 +1,6 @@
 # RFC 0020: App settings — every app's own settings, in one place, declared once
 
-- **Status:** Proposed (2026-10-29)
+- **Status:** Accepted (2026-10-29)
 - **Depends on:** 0001 (module manifest), 0003 (permissions), 0008 (Settings app), 0019 (Settings)
 - **Asked for (2026-10-29):** "make settings and all module more professional and flexible than odoo" — chosen
   first: *settings per app*.
@@ -133,3 +133,39 @@ defineModule({
 - Secure by default: every change is checked on the server against the declaration and the section's editors,
   written as the user, audited. Money settings use Shutro `Decimal`.
 - Kosh does not reimplement ORM features: company settings are Shutro fields; sequences wait for Shutro (#31).
+
+## Decisions (2026-10-29)
+
+1. **Storage**: company settings are `res.company` fields the apps add (typed, checked by Shutro); installation-wide
+   ones a key / value record.
+2. **Shutro request #31** (runtime sequence formats and next numbers): asked of Shutro; Numbering is read-only
+   until it is in.
+3. **Order**: this RFC now; step 1 first.
+
+## Implementation notes (2026-10-29): step 1 — the declaration, the API and the page
+
+- **Declaration** (`@kosh/modules-sdk`: `SettingsSpec`, `SettingsSectionSpec`, `SettingFieldSpec`): company sections
+  name `res.company` fields (type, label and default from Shutro's metadata, so nothing is declared twice);
+  installation sections declare type, label, default and options. Types: boolean, integer, decimal (a string, never
+  a JS number), char, text, selection, date; bounds, help and `visibleWhen`. Many2one settings wait for a picker
+  that searches as the user. Checked when the server starts (the Settings app reads every declaration).
+- **Storage**: company fields; `kosh.setting` (base, private) for installation values; `installationSetting()` in
+  `@kosh/server` reads them in code.
+- **API** under `/api/v1/settings/app-settings` (not `/settings/apps`, the App manager's): the apps the user may see
+  (those whose access levels they hold, or administrators), an app's sections with values, defaults,
+  changed-from-default and editable, `PATCH` a section (only the given keys; each checked against its setting; only
+  what changed is written; `settings.changed` audited with the old and new values) and `reset`.
+- **Screen**: Settings › App settings (Apps group): the apps on the left (`?app=` in the address), each section a
+  card with its scope (*For this company* / *For every company*), the settings with their help, *Changed* and
+  *Reset* (the default in its tooltip), *Save* and *Discard* per section, read-only for those who may only see it;
+  dates on the app's own calendar. The Settings search finds the page by any section's or setting's words.
+- **First adopters**: Sales — quotations valid for N days (from the order date; 0 leaves it open) and default terms,
+  applied by the order form's onchanges (Shutro defaults are synchronous, so they cannot read the company); Purchase
+  — default terms; Accounting — fiscal year start, lock date, tax lock date (existing company fields). Sales and
+  Purchase move to 0.3.0 for their new company columns.
+- **Tests**: on real PostgreSQL — a test app's company and installation sections: who sees them, the field's metadata,
+  editors only, checked values (bounds, options, unknown keys), audit with old and new values, reset; a wrong
+  declaration stops the server; Sales' onchanges fill the validity and terms from the company and move the validity
+  with the date. E2E (apps): found by the Settings search, changed, kept after a reload, marked, reset; Accounting's
+  section.
+
