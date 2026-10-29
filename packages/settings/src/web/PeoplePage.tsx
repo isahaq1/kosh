@@ -203,6 +203,73 @@ function InviteDialog({
   );
 }
 
+/** What a person can do, computed by the server as them (administrators only). */
+function Effective({ api, personId }: PageProps & { readonly personId: number }): ReactElement {
+  const { t } = useTranslation('settings');
+  const [open, setOpen] = useState(false);
+  const effective = useQuery({
+    queryKey: ['settings', 'people', personId, 'effective'],
+    queryFn: () =>
+      api.call<{
+        administrator: boolean;
+        models: Record<string, { label: string; perms: string[]; hiddenFields: string[] }>;
+        permissions: string[];
+        permissionLabels: Record<string, string>;
+      }>('GET', `/api/v1/admin/users/${personId}/effective`),
+    enabled: open,
+  });
+  const models = Object.entries(effective.data?.models ?? {})
+    .filter(([, m]) => m.perms.includes('read'))
+    .sort((a, b) => a[1].label.localeCompare(b[1].label));
+  return (
+    <details
+      className="rounded-md border"
+      onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}
+    >
+      <summary className="cursor-pointer px-3 py-2 text-sm font-semibold">
+        {t('people.canDo')}
+      </summary>
+      <div className="grid gap-3 border-t p-3 text-sm">
+        {effective.data === undefined ? (
+          <p className="text-muted-foreground">…</p>
+        ) : effective.data.administrator ? (
+          <p>{t('people.canDoAll')}</p>
+        ) : (
+          <>
+            {models.length === 0 ? (
+              <p className="text-muted-foreground">{t('people.canDoNothing')}</p>
+            ) : (
+              <ul className="grid gap-1">
+                {models.map(([name, m]) => (
+                  <li key={name} className="flex flex-wrap gap-x-2">
+                    <span className="font-medium">{m.label}</span>
+                    <span className="text-muted-foreground">
+                      {m.perms.map((p) => t(`roles.perm.${p}`)).join(', ')}
+                    </span>
+                    {m.hiddenFields.length === 0 ? null : (
+                      <span className="text-xs text-muted-foreground">
+                        {t('people.hiddenFields', { count: m.hiddenFields.length })}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {effective.data.permissions.length === 0 ? null : (
+              <p>
+                <span className="font-medium">{t('roles.permissions')}: </span>
+                {effective.data.permissions
+                  .map((p) => effective.data?.permissionLabels[p] ?? p)
+                  .join(', ')}
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </details>
+  );
+}
+
 function PersonDialog({
   api,
   catalogue,
@@ -387,6 +454,8 @@ function PersonDialog({
           </section>
 
           {error === null ? null : <Alert tone="danger">{message(error)}</Alert>}
+
+          {catalogue.manager.administrator ? <Effective api={api} personId={personId} /> : null}
 
           <section className="grid gap-2">
             <h3 className="text-sm font-semibold">{t('people.activity')}</h3>

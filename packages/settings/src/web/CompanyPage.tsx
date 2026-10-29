@@ -16,7 +16,7 @@ import {
 } from '@kosh/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
-import { type CSSProperties, type ReactElement, useEffect, useId, useState } from 'react';
+import { type CSSProperties, type ReactElement, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface Company {
@@ -74,24 +74,32 @@ function Preview({
 }
 
 export function CompanyPage({ api }: PageProps): ReactElement {
-  const { t } = useTranslation('settings');
-  const id = useId();
-  const queryClient = useQueryClient();
   const company = useQuery({
     queryKey: ['settings', 'company'],
     queryFn: () => api.call<Company>('GET', '/api/v1/settings/company'),
   });
-  const [name, setName] = useState('');
-  const [grouping, setGrouping] = useState<Company['numberGrouping']>('international');
-  const [color, setColor] = useState<string | null>(null);
-  const [typed, setTyped] = useState('');
-  useEffect(() => {
-    if (company.data === undefined) return;
-    setName(company.data.name);
-    setGrouping(company.data.numberGrouping);
-    setColor(company.data.accentColor);
-    setTyped(company.data.accentColor ?? '');
-  }, [company.data]);
+  if (company.error !== null)
+    return (
+      <Alert tone="danger">
+        {company.error instanceof ApiError ? company.error.message : String(company.error)}
+      </Alert>
+    );
+  // The form starts from the loaded company: nothing can be chosen before it is there and then overwritten.
+  return company.data === undefined ? (
+    <p className="text-sm text-muted-foreground">…</p>
+  ) : (
+    <CompanyForm api={api} company={company.data} />
+  );
+}
+
+function CompanyForm({ api, company }: PageProps & { readonly company: Company }): ReactElement {
+  const { t } = useTranslation('settings');
+  const id = useId();
+  const queryClient = useQueryClient();
+  const [name, setName] = useState(company.name);
+  const [grouping, setGrouping] = useState<Company['numberGrouping']>(company.numberGrouping);
+  const [color, setColor] = useState<string | null>(company.accentColor);
+  const [typed, setTyped] = useState(company.accentColor ?? '');
   const save = useMutation({
     mutationFn: () =>
       api.call<Company>('PATCH', '/api/v1/settings/company', {
@@ -105,12 +113,6 @@ export function CompanyPage({ api }: PageProps): ReactElement {
       void queryClient.invalidateQueries({ queryKey: ['me'] });
     },
   });
-  if (company.error !== null)
-    return (
-      <Alert tone="danger">
-        {company.error instanceof ApiError ? company.error.message : String(company.error)}
-      </Alert>
-    );
   const pick = (next: string | null) => {
     setColor(next);
     setTyped(next ?? '');
@@ -219,12 +221,7 @@ export function CompanyPage({ api }: PageProps): ReactElement {
         )}
         {save.isSuccess ? <Alert tone="info">{t('company.saved')}</Alert> : null}
         <div className="flex justify-end">
-          <Button
-            type="submit"
-            variant="primary"
-            busy={save.isPending}
-            disabled={company.data === undefined}
-          >
+          <Button type="submit" variant="primary" busy={save.isPending}>
             {t('company.save')}
           </Button>
         </div>

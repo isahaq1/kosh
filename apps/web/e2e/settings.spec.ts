@@ -93,3 +93,55 @@ test('People: invited with a role, the link opens the password page, then deacti
   await person.getByRole('button', { name: 'Deactivate' }).last().click();
   await expect(person.getByText('Deactivated', { exact: true })).toBeVisible();
 });
+
+test('Roles: a new role opens Contacts; the preview names who gains what before saving', async ({
+  page,
+}) => {
+  await signIn(page, 'admin');
+  await page.goto('/settings/a/settings.action_roles');
+  await expect(page.getByRole('heading', { name: 'Roles & permissions', level: 1 })).toBeVisible();
+  await page.getByRole('button', { name: 'New role' }).click();
+  const create = page.getByRole('dialog', { name: 'A new role' });
+  await create.getByRole('textbox', { name: 'Name' }).fill('Front desk');
+  await expect(create.getByText('company.front_desk')).toBeVisible();
+  await create.getByRole('button', { name: 'Create' }).click();
+
+  const role = page.getByRole('dialog', { name: 'Front desk' });
+  await role.getByRole('combobox', { name: 'Contacts' }).click();
+  await page.getByRole('option', { name: 'User' }).click();
+  await role.getByRole('button', { name: 'Review the changes' }).click();
+  await expect(role.getByRole('region', { name: 'What saving changes' })).toContainText(
+    'No one holds this role yet',
+  );
+  await role.getByRole('button', { name: 'Save' }).click();
+  await expect(role.getByText(/^Saved/)).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // Given to Bob in People, the role's next change is previewed for him.
+  await page.goto('/settings/a/settings.action_people');
+  await page.getByRole('button', { name: /Bob/ }).click();
+  const bob = page.getByRole('dialog', { name: /Bob/ });
+  await bob.getByLabel('Front desk').click();
+  await bob.getByRole('button', { name: 'Save the roles' }).click();
+  await expect(bob.getByText('Front desk').first()).toBeVisible();
+  await bob.getByText('What can they do?').click();
+  await expect(bob.getByText('Contact', { exact: false }).first()).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  await page.goto('/settings/a/settings.action_roles');
+  await page.getByRole('button', { name: /Front desk/ }).click();
+  const again = page.getByRole('dialog', { name: 'Front desk' });
+  await again.getByRole('combobox', { name: 'Contacts' }).click();
+  await page.getByRole('option', { name: 'Manager' }).click();
+  await again.getByRole('button', { name: 'Review the changes' }).click();
+  await expect(again.getByRole('region', { name: 'What saving changes' })).toContainText(
+    /gains .*Manager/,
+  );
+  await again.getByRole('button', { name: 'Keep editing' }).click();
+
+  // Deleting the role takes it from Bob again (other tests expect him without roles).
+  await again.getByRole('button', { name: 'Delete the role' }).click();
+  await expect(again.getByText('Deleting it takes it from 1 people.')).toBeVisible();
+  await again.getByRole('button', { name: 'Delete the role' }).last().click();
+  await expect(page.getByRole('button', { name: /Front desk/ })).toHaveCount(0);
+});

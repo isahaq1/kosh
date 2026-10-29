@@ -27,10 +27,17 @@ test('the company’s brand colour becomes the accent', async ({ page }) => {
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText(/^Saved/)).toBeVisible();
   await page.reload();
+  // The shell applies the accent once the user's details are loaded again.
+  await expect
+    .poll(async () =>
+      Number(
+        await page.evaluate(() => document.documentElement.style.getPropertyValue('--accent-h')),
+      ),
+    )
+    .toBeGreaterThan(170);
   const hue = await page.evaluate(() =>
     document.documentElement.style.getPropertyValue('--accent-h'),
   );
-  expect(Number(hue)).toBeGreaterThan(170);
   expect(Number(hue)).toBeLessThan(200); // teal
   // Back to the default for the other tests.
   await page.getByRole('button', { name: 'Use the default' }).click();

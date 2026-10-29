@@ -85,6 +85,11 @@ export function settingsModule(options: Partial<PeopleOptions> = {}): KoshModule
       'settings.action_apps': { type: 'client', page: 'settings.Apps', label: 'Apps' },
       'settings.action_company': { type: 'client', page: 'settings.Company', label: 'Company' },
       'settings.action_people': { type: 'client', page: 'settings.People', label: 'People' },
+      'settings.action_roles': {
+        type: 'client',
+        page: 'settings.Roles',
+        label: 'Roles & permissions',
+      },
     },
     menus: [
       { id: 'settings.root', label: 'Settings', app: 'settings' },
@@ -112,6 +117,13 @@ export function settingsModule(options: Partial<PeopleOptions> = {}): KoshModule
         label: 'People',
         action: 'settings.action_people',
         sequence: 1,
+      },
+      {
+        id: 'settings.roles',
+        parent: 'settings.group_people',
+        label: 'Roles & permissions',
+        action: 'settings.action_roles',
+        sequence: 2,
       },
       { id: 'settings.group_apps', parent: 'settings.root', label: 'Apps', sequence: 40 },
       {
