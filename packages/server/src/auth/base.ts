@@ -243,6 +243,14 @@ const OAuthToken = defineModel('oauth.token', {
   },
 });
 
+/** Installation-wide app settings (RFC 0020): one value per key (`sales.something`), JSON. Private: Settings edits it. */
+const KoshSetting = defineModel('kosh.setting', {
+  fields: {
+    key: f.char({ required: true, index: 'unique' }),
+    value: f.json(),
+  },
+});
+
 /** Profile photos and company logos (`images.ts`): small images, their bytes in base64. Private: served by routes. */
 const KoshImage = defineModel('kosh.image', {
   fields: {
@@ -332,6 +340,7 @@ export const baseShutro: ReturnType<typeof orm.defineModule> = defineModule({
     OAuthCode,
     OAuthToken,
     KoshImage,
+    KoshSetting,
     AuditEvent,
     SavedView,
   ],
@@ -357,6 +366,7 @@ export const base: ReturnType<typeof defineKoshModule> = defineKoshModule({
     'oauth.code',
     'oauth.token',
     'kosh.image',
+    'kosh.setting',
     'audit.event',
   ],
 });

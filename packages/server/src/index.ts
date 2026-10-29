@@ -24,6 +24,7 @@ export { type FoundRecord, type MenuNode, moduleVisible, Navigation } from './ap
 export { fieldSchema, openApiDocument, openApiOf } from './api/openapi.js';
 export { readApiRecord, registerRestApi } from './api/rest.js';
 export { type ServedView, type ViewField, ViewRegistry } from './api/views.js';
+export { installationSetting } from './app-settings.js';
 export {
   APPS_CHANNEL,
   APPS_LOG_TABLE,

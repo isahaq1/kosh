@@ -443,6 +443,8 @@ export interface ModuleInput {
   readonly events?: readonly EventSpec[];
   /** Endpoints the module receives calls on from outside (RFC 0017 §5.4). */
   readonly inboundWebhooks?: readonly InboundWebhookSpec[];
+  /** The app's own settings, shown in Settings › App settings (RFC 0020). */
+  readonly settings?: SettingsSpec;
   /** What the module shows in the customer and vendor portal (RFC 0015), when `portal` is installed. */
   readonly portal?: { readonly documents: readonly PortalDocumentSpec[] };
   /** Import templates for the module's models (RFC 0014 §5.4), offered when `import` is installed. */
@@ -458,6 +460,43 @@ export interface ModuleInput {
 }
 
 /** A defined module: frozen, with its name and version taken from the Shutro module. */
+/**
+ * A setting (RFC 0020 §3.1). In a `company` section, `key` names a `res.company` field the module adds with
+ * `extendModel`: its type, label and default come from the field; `help`, bounds and `visibleWhen` add to it. In an
+ * `installation` section, the setting is a key / value of its own: `type` and `label` are required.
+ */
+export interface SettingFieldSpec {
+  readonly key: string;
+  readonly type?: 'boolean' | 'integer' | 'decimal' | 'char' | 'text' | 'selection' | 'date';
+  readonly label?: string;
+  readonly help?: string;
+  readonly default?: string | number | boolean | null;
+  readonly min?: number;
+  readonly max?: number;
+  /** Selection options (installation settings): value → label. */
+  readonly options?: Readonly<Record<string, string>>;
+  /** Shown only when another setting of the section has this value. */
+  readonly visibleWhen?: { readonly key: string; readonly equals: string | number | boolean };
+}
+
+/** A section of an app's settings (RFC 0020 §3.1). */
+export interface SettingsSectionSpec {
+  readonly key: string;
+  readonly label: string;
+  readonly description?: string;
+  /** Words the Settings search also finds it by. */
+  readonly keywords?: string;
+  /** Per company (`res.company` fields) or for the whole installation. */
+  readonly scope: 'company' | 'installation';
+  /** Groups whose holders may change it; Administrators always may. Empty: administrators only. */
+  readonly editors?: readonly string[];
+  readonly fields: readonly SettingFieldSpec[];
+}
+
+export interface SettingsSpec {
+  readonly sections: readonly SettingsSectionSpec[];
+}
+
 export interface KoshModule extends Omit<ModuleInput, 'depends'> {
   readonly name: string;
   readonly version: string;
