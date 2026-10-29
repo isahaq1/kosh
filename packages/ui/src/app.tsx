@@ -96,6 +96,7 @@ import { onAppUpdate, registerServiceWorker } from './pwa/register.js';
 import { createRealtimeClient, type RealtimeClient } from './realtime.js';
 import type { Registry } from './registry.js';
 import { SearchBar } from './search/SearchBar.js';
+import { ViewTabs } from './search/ViewTabs.js';
 import { Activate } from './shell/Activate.js';
 import { CommandPalette, PaletteContext } from './shell/CommandPalette.js';
 import { Home } from './shell/Home.js';
@@ -839,6 +840,7 @@ function WindowActionPage(): ReactElement {
           </fieldset>
         ) : null}
       </div>
+      <ViewTabs model={model} viewType={type} state={state} onChange={setState} />
       <SearchBar
         model={model}
         viewType={type}
