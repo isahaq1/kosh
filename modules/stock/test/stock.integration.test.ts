@@ -350,6 +350,99 @@ test('partial validation: what is done moves, the rest goes to a confirmed backo
   await run(left.id, 'cancel');
 });
 
+test('a count: listed with what is expected, scanned from a phone, applied by a manager', async () => {
+  const C = '/api/v1/models/stock.count';
+  for (const [name, barcode] of [
+    ['Cement', '8901'],
+    ['Sand', '8902'],
+  ] as const)
+    ids[name] = (
+      await call('POST', '/api/v1/models/product.product', 'dina', {
+        name,
+        barcode,
+        uom: ids['Units'],
+      })
+    ).json.id;
+  const receipt = await transfer('receipt', [{ product: ids['Cement'], quantity: '10' }]);
+  await run(receipt, 'confirm');
+  await run(receipt, 'validate');
+
+  const count = await call('POST', C, 'rahim', { location: ids['stock'] });
+  expect(count.status, JSON.stringify(count.json)).toBe(201);
+  const id = count.json.id as number;
+  const scan = (barcode: string, quantity?: string) =>
+    call('POST', `/api/v1/stockroom/counts/${id}/scan`, 'rahim', {
+      barcode,
+      ...(quantity === undefined ? {} : { quantity }),
+    });
+  expect((await scan('8901')).status).toBe(409); // not started
+  const started = await call('POST', `${C}/${id}/transitions/start`, 'rahim');
+  expect(started.status, JSON.stringify(started.json)).toBe(200);
+  const [cement] = await find(
+    'stock.count.line',
+    { count: id, product: ids['Cement'] },
+    'expected,counted',
+    'rahim',
+  );
+  expect(cement).toMatchObject({ expected: '10', counted: null });
+
+  // Seven cement bags counted, then one more; three bags of sand nobody expected; an unknown barcode.
+  expect((await scan('8901', '7')).json).toEqual({ product: 'Cement', counted: '7' });
+  expect((await scan('8901')).json.counted).toBe('8');
+  expect((await scan('8902', '3')).json.counted).toBe('3');
+  expect((await scan('0000')).status).toBe(404);
+  expect((await scan('8901', '-2')).status).toBe(400);
+  const lines = await find(
+    'stock.count.line',
+    { count: id, counted: { ne: null } },
+    'product,expected,counted,difference',
+    'rahim',
+  );
+  expect(lines.map((l) => [l.product, l.difference])).toEqual([
+    [ids['Cement'], '-2'],
+    [ids['Sand'], '3'],
+  ]);
+
+  // Counters count; managers apply.
+  expect((await call('POST', `${C}/${id}/transitions/apply`, 'rahim')).status).toBe(403);
+  const applied = await call('POST', `${C}/${id}/transitions/apply`, 'dina');
+  expect(applied.status, JSON.stringify(applied.json)).toBe(200);
+  expect(Number((await onHand('Cement')).qtyOnHand)).toBe(8);
+  expect(Number((await onHand('Sand')).qtyOnHand)).toBe(3);
+  const adjustments = await find(
+    'stock.picking',
+    { count: id },
+    'kind,state,source,destination',
+    'dina',
+  );
+  expect(adjustments).toHaveLength(2);
+  expect(adjustments.every((a) => a.kind === 'adjustment' && a.state === 'done')).toBe(true);
+  // Untouched products (not counted) stay as they were.
+  expect(Number((await onHand('Rebar')).qtyOnHand)).toBe(1.5);
+});
+
+test('a count does not take what is reserved for a delivery: the reservation is named', async () => {
+  const C = '/api/v1/models/stock.count';
+  const delivery = await transfer('delivery', [{ product: ids['Cement'], quantity: '8' }], {
+    origin: 'SO/2026/00099',
+  });
+  await run(delivery, 'confirm');
+  const id = (await call('POST', C, 'dina', { location: ids['stock'] })).json.id as number;
+  await call('POST', `${C}/${id}/transitions/start`, 'dina');
+  await call('POST', `/api/v1/stockroom/counts/${id}/scan`, 'dina', {
+    barcode: '8901',
+    quantity: '5',
+  });
+  const refused = await call('POST', `${C}/${id}/transitions/apply`, 'dina');
+  expect(refused.status).toBe(422);
+  expect(JSON.stringify(refused.json)).toContain('reserved for');
+  expect(JSON.stringify(refused.json)).toContain('SO/2026/00099');
+  expect(Number((await onHand('Cement')).qtyOnHand)).toBe(8); // nothing changed
+  await run(delivery, 'cancel');
+  expect((await call('POST', `${C}/${id}/transitions/apply`, 'dina')).status).toBe(200);
+  expect(Number((await onHand('Cement')).qtyOnHand)).toBe(5);
+});
+
 test('the setting: reserve only with Check availability', async () => {
   expect(
     (

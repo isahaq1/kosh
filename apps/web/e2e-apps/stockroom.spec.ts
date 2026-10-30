@@ -70,3 +70,37 @@ test('a receipt in part with its backorder, a delivery reserved, explained and v
   const line = page.getByRole('row').filter({ hasText: 'Steel beam' });
   await expect(line).toContainText('2'); // six in, four out
 });
+
+test('a count: started, an unknown barcode reported, a line counted and applied; stock follows', async ({
+  page,
+}) => {
+  await signIn(page, 'dina'); // Stockroom manager
+  await page.goto('/stockroom/a/stockroom.action_counts/new');
+  await page.getByRole('combobox', { name: 'Location' }).click();
+  await page.getByRole('option', { name: 'WH/Stock' }).click();
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/stockroom\.action_counts\/\d+$/);
+  await page.getByRole('button', { name: 'Start counting' }).click();
+  await expect(page.getByRole('button', { name: /^State: Counting/ })).toBeVisible();
+
+  await page.getByRole('textbox', { name: 'Barcode' }).fill('0000000');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'No product has the barcode' }),
+  ).toBeVisible();
+
+  const beam = page.locator('tbody tr').filter({ hasText: 'Steel beam' });
+  await beam.getByRole('textbox').last().fill('1');
+  const saved = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'PATCH' && /\/stock\.count\/\d+$/.test(new URL(r.url()).pathname),
+  );
+  await page.getByRole('button', { name: 'Save' }).click();
+  await saved;
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Yes' }).click();
+  await expect(page.getByRole('button', { name: /^State: Applied/ })).toBeVisible();
+
+  await page.goto('/stockroom/a/stockroom.action_stock');
+  await expect(page.getByRole('row').filter({ hasText: 'Steel beam' })).toContainText('1');
+});

@@ -9,10 +9,15 @@ import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
 import { product } from '@kosh/product';
+import { HttpProblem, type ModuleContext } from '@kosh/server';
+import { type Id, orm } from '@kosh/server/orm';
 import { action, field, form, kanban, list, search } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import { stockDemo } from './demo.js';
 import {
+  onHandIn,
+  StockCount,
+  StockCountLine,
   StockLocation,
   StockMove,
   StockPicking,
@@ -25,8 +30,11 @@ import {
 export {
   defaultLocations,
   inProductUnit,
+  onHandIn,
   ProductStock,
   reserveOnConfirm,
+  StockCount,
+  StockCountLine,
   StockLocation,
   StockMove,
   StockPicking,
@@ -60,6 +68,76 @@ async function mainWarehouses(env: Env): Promise<string | undefined> {
   return made === 0 ? undefined : `${made} main warehouse(s) made`;
 }
 
+/**
+ * Counting from a phone: each scan of a product's barcode adds to what is counted (one, or the quantity sent), on
+ * the count's line for the product — made with what is expected when the product was not listed. As the user:
+ * their rights apply; the count must be counting.
+ */
+function registerCountRoutes({ app }: ModuleContext): void {
+  app.post('/api/v1/stockroom/counts/:id/scan', async (request) => {
+    const id = Number((request.params as { id?: string }).id);
+    if (!Number.isSafeInteger(id) || id <= 0)
+      throw new HttpProblem(400, 'invalid-id', 'Invalid id', 'A count id.');
+    const body = (request.body ?? {}) as { barcode?: unknown; quantity?: unknown };
+    const barcode = typeof body.barcode === 'string' ? body.barcode.trim() : '';
+    if (barcode === '')
+      throw new HttpProblem(400, 'invalid-barcode', 'No barcode', 'Send the scanned barcode.');
+    let quantity = orm.toDecimal(1);
+    if (body.quantity !== undefined)
+      try {
+        quantity = orm.toDecimal(String(body.quantity));
+      } catch {
+        throw new HttpProblem(400, 'invalid-quantity', 'Invalid quantity', 'A positive number.');
+      }
+    if (quantity.lte(0))
+      throw new HttpProblem(400, 'invalid-quantity', 'Invalid quantity', 'A positive number.');
+    return request.env(
+      async (raw) => {
+        const env = raw as Env;
+        const [count] = await (
+          await env
+            .model('stock.count')
+            .search({ where: { id: orm.asId(id, 'stock.count') }, limit: 1 })
+        ).load({ location: true });
+        if (count === undefined)
+          throw new HttpProblem(404, 'missing-record', 'Not found', `There is no count ${id}.`);
+        if (count.state !== 'counting')
+          throw new HttpProblem(409, 'not-counting', 'Not counting', 'Start the count first.');
+        const [found] = await (
+          await env.model('product.product').search({ where: { barcode }, limit: 1 })
+        ).load(['name', 'kind']);
+        if (found === undefined)
+          throw new HttpProblem(
+            404,
+            'unknown-barcode',
+            'Unknown barcode',
+            `No product has the barcode ${barcode}.`,
+          );
+        const product = found.id as Id<'product.product'>;
+        const [line] = await (
+          await env
+            .model('stock.count.line')
+            .search({ where: { count: count.id, product }, limit: 1 })
+        ).load(['counted', 'expected']);
+        const counted = (line?.counted ?? orm.toDecimal(0)).plus(quantity);
+        if (line !== undefined) await line.write({ counted });
+        else
+          await env.model('stock.count.line').create([
+            {
+              count: count.id,
+              product,
+              expected: await onHandIn(env, product, count.location.id),
+              counted,
+            },
+          ]);
+        await env.flush();
+        return { product: found.name, counted: counted.toString() };
+      },
+      { write: true },
+    );
+  });
+}
+
 export const stock: ReturnType<typeof defineModule> = defineModule({
   shutro: stockShutro,
   kosh: '^0.1.0',
@@ -85,6 +163,7 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       implies: ['user'],
     },
   },
+  routes: (context: ModuleContext) => registerCountRoutes(context),
   settings: {
     sections: [
       {
@@ -134,6 +213,11 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       label: 'Reservations',
       views: ['list'],
     }),
+    'stockroom.action_counts': action(StockCount, {
+      label: 'Counts',
+      views: ['list', 'form'],
+      defaultFilters: ['open'],
+    }),
     'stockroom.action_warehouses': action(StockWarehouse, {
       label: 'Warehouses',
       views: ['list', 'form'],
@@ -180,6 +264,13 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       label: 'Reservations',
       action: 'stockroom.action_reservations',
       sequence: 5,
+    },
+    {
+      id: 'stockroom.counts',
+      parent: 'stockroom.root',
+      label: 'Counts',
+      action: 'stockroom.action_counts',
+      sequence: 6,
     },
     {
       id: 'stockroom.configuration',
@@ -275,6 +366,39 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
     'stock.reservation.list': list(StockReservation, {
       columns: ['label', 'quant', 'quantity', 'move'],
     }),
+    'stock.count.list': list(StockCount, {
+      columns: ['name', 'location', 'date', 'user', { field: 'state', widget: 'badge' }],
+    }),
+    'stock.count.form': form(StockCount, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('start', { primary: true, label: 'Start counting' }),
+          k.button('apply', {
+            primary: true,
+            label: 'Apply',
+            confirm: 'Apply this count? Stock is adjusted to what was counted.',
+          }),
+          k.button('cancel', { label: 'Cancel' }),
+          k.button('redraft', { label: 'Back to draft' }),
+        ],
+      },
+      sheet: [
+        k.group('main', ['location', 'date', 'user']),
+        k.component('scan', 'stock.Scan'),
+        k.lines('lines', [
+          { field: 'product', id: 'count_product' },
+          { field: 'expected', id: 'count_expected' },
+          { field: 'counted', id: 'count_counted' },
+          { field: 'difference', id: 'count_difference' },
+        ]),
+        k.group('about', ['note'], { columns: 1 }),
+      ],
+      chatter: true,
+    })),
+    'stock.count.line.list': list(StockCountLine, {
+      columns: ['count', 'product', 'expected', 'counted', 'difference'],
+    }),
     'stock.warehouse.list': list(StockWarehouse, { columns: ['name', 'code', 'address'] }),
     'stock.warehouse.form': form(StockWarehouse, (k) => ({
       header: { buttons: [] },
@@ -329,6 +453,15 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       groupBy: ['quant'],
     }),
     'stock.warehouse': search(StockWarehouse, { fields: ['name', 'code'] }),
+    'stock.count': search(StockCount, {
+      fields: ['name', 'location.fullName'],
+      filters: {
+        open: { label: 'To do', domain: { state: { in: ['draft', 'counting'] } } },
+        applied: { label: 'Applied', domain: { state: 'done' } },
+      },
+      groupBy: ['location', 'user'],
+    }),
+    'stock.count.line': search(StockCountLine, { fields: ['product.name', 'count.name'] }),
     'stock.location': search(StockLocation, {
       fields: ['fullName'],
       filters: { internal: { label: 'Internal', domain: { usage: 'internal' } } },

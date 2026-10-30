@@ -593,7 +593,12 @@ export const StockPicking = defineModel('stock.picking', {
       label: 'Reference',
     }),
     kind: f.selection(
-      { receipt: 'Receipt', delivery: 'Delivery', internal: 'Internal move' },
+      {
+        receipt: 'Receipt',
+        delivery: 'Delivery',
+        internal: 'Internal move',
+        adjustment: 'Inventory adjustment',
+      },
       { required: true, default: 'receipt', label: 'Type' },
     ),
     partner: f.many2one('res.partner', { ondelete: 'set null', label: 'Contact' }),
@@ -614,6 +619,8 @@ export const StockPicking = defineModel('stock.picking', {
     origin: f.char({ label: 'Source document' }),
     note: f.text(),
     moves: f.one2many('stock.move', 'picking', { label: 'Lines' }),
+    /** The count this adjustment applies. */
+    count: f.many2one('stock.count', { ondelete: 'set null', label: 'Count' }),
     /** The transfer this one takes the rest of. */
     backorderOf: f.many2one('stock.picking', { ondelete: 'set null', label: 'Backorder of' }),
     backorders: f.one2many('stock.picking', 'backorderOf'),
@@ -777,12 +784,230 @@ export const StockPicking = defineModel('stock.picking', {
               (p.kind === 'receipt' && p.destination.usage !== 'internal') ||
               (p.kind === 'delivery' && p.source.usage !== 'internal') ||
               (p.kind === 'internal' &&
-                (p.source.usage !== 'internal' || p.destination.usage !== 'internal')),
+                (p.source.usage !== 'internal' || p.destination.usage !== 'internal')) ||
+              (p.kind === 'adjustment' &&
+                !(
+                  (p.source.usage === 'adjustment' && p.destination.usage === 'internal') ||
+                  (p.source.usage === 'internal' && p.destination.usage === 'adjustment')
+                )),
           )
           .map((p) => p.id),
       ),
       message:
-        'A transfer goes between two places: a receipt into stock, a delivery out of stock, an internal move between stock locations.',
+        'A transfer goes between two places: a receipt into stock, a delivery out of stock, an internal move between stock locations, an adjustment between stock and the adjustment location.',
+    },
+  },
+});
+
+/** What `product` has in `location` and the locations inside it, in the product's unit. */
+export async function onHandIn(
+  env: Env,
+  product: Id<'product.product'>,
+  location: Id<'stock.location'>,
+): Promise<Decimal> {
+  const quants = await (
+    await env.model('stock.quant').search({ where: { product, location: { childOf: location } } })
+  ).load(['quantity']);
+  return [...quants].reduce((s, q) => s.plus(q.quantity), zero);
+}
+
+export const StockCountLine = defineModel('stock.count.line', {
+  label: 'Count line',
+  order: ['id asc'],
+  access: {
+    'stock.user': ['read', 'write', 'create', 'unlink'],
+    'stock.manager': [...ALL, 'export', 'import'],
+  },
+  fields: {
+    count: f.many2one('stock.count', { required: true, ondelete: 'cascade' }),
+    product: f.many2one('product.product', { required: true, ondelete: 'restrict' }),
+    /** On hand when the count started, in the product's unit. */
+    expected: f.decimal({ scale: 4, label: 'Expected' }),
+    /** What was found (empty: not counted yet, left as it is). */
+    counted: f.decimal({ scale: 4, label: 'Counted' }),
+    difference: f.decimal({
+      scale: 4,
+      store: true,
+      label: 'Difference',
+      ...compute('stock.count.line', 'difference', ['expected', 'counted'], (lines) => {
+        for (const l of lines)
+          l.difference = l.counted === null ? null : l.counted.minus(l.expected ?? zero);
+      }),
+    }),
+  },
+  sqlConstraints: {
+    onePerProduct: {
+      unique: ['count', 'product'],
+      message: 'A product is counted once per count.',
+    },
+    notNegative: {
+      check: orm.sql`counted IS NULL OR counted >= 0`,
+      message: 'A counted quantity cannot be negative.',
+    },
+  },
+  constraints: {
+    goodsOnly: {
+      ...check('stock.count.line', ['product'], async (lines) =>
+        (await lines.load({ product: true }))
+          .filter((l) => l.product.kind !== 'goods')
+          .map((l) => l.id),
+      ),
+      message: 'Services are not counted: only goods are kept in stock.',
+    },
+  },
+});
+
+/**
+ * Applies counts: what was found against what is on hand now, in one adjustment transfer for the gains (from the
+ * adjustment location into the counted location) and one for the losses (out of it, reserved first), both validated.
+ * Refused when a loss is held by other transfers' reservations (they are named).
+ */
+async function applyCounts(ids: readonly Id<'stock.count'>[], env: Env): Promise<void> {
+  await env.asSuperuser({ reason: 'stock count applied' }, async (su) => {
+    const counts = await su
+      .model('stock.count')
+      .browse(ids)
+      .load({ location: true, company: true, lines: { product: true } });
+    const adjustment = (
+      await su.model('stock.location').search({ where: { usage: 'adjustment' }, limit: 1 })
+    ).ids[0];
+    if (adjustment === undefined)
+      throw new orm.ValidationError(
+        'stock.count',
+        ['state'],
+        'There is no inventory adjustment location.',
+        'Upgrade the Stockroom app to restore it.',
+      );
+    for (const c of counts) {
+      const gains: { product: Id<'product.product'>; quantity: Decimal }[] = [];
+      const losses: { product: Id<'product.product'>; quantity: Decimal }[] = [];
+      for (const l of c.lines) {
+        if (l.counted === null) continue;
+        const diff = l.counted.minus(await onHandIn(su, l.product.id, c.location.id));
+        if (diff.gt(0)) gains.push({ product: l.product.id, quantity: diff });
+        if (diff.lt(0)) losses.push({ product: l.product.id, quantity: diff.negated() });
+      }
+      for (const [lines, source, destination] of [
+        [gains, adjustment, c.location.id],
+        [losses, c.location.id, adjustment],
+      ] as const) {
+        if (lines.length === 0) continue;
+        const made = await su.model('stock.picking').create([
+          {
+            kind: 'adjustment',
+            company: c.company.id,
+            source,
+            destination,
+            origin: c.name,
+            count: c.id,
+            moves: { create: lines.map((l) => ({ product: l.product, quantity: l.quantity })) },
+          },
+        ]);
+        await made.confirm();
+        if (source !== adjustment) await made.reserve();
+        const [loaded] = await made.load(['availability']);
+        if (loaded?.availability !== 'full') {
+          const held = await (
+            await su.model('stock.reservation').search({
+              where: { 'quant.location': { childOf: c.location.id } },
+              limit: 3,
+            })
+          ).load(['label']);
+          throw new orm.ValidationError(
+            'stock.count',
+            ['state'],
+            `Some of what is missing is reserved: ${[...held].map((r) => r.label).join('; ')}.`,
+            'Unreserve or cancel those transfers, then apply the count again.',
+          );
+        }
+        await made.validate();
+      }
+    }
+  });
+}
+
+export const StockCount = defineModel('stock.count', {
+  label: 'Count',
+  recName: 'name',
+  order: ['date desc', 'id desc'],
+  companyScoped: { required: true },
+  tracking: ['state'],
+  access: {
+    'stock.user': ['read', 'write', 'create'],
+    'stock.manager': [...ALL, 'export'],
+  },
+  fields: {
+    name: f.char({
+      required: true,
+      readonly: true,
+      sequence: { code: 'stock.count', dateField: 'date' },
+      label: 'Reference',
+    }),
+    location: f.many2one('stock.location', { required: true, ondelete: 'restrict' }),
+    date: f.date({ required: true, default: (env: Env) => env.today() }),
+    user: f.many2one('res.users', {
+      default: (env: Env) => env.userId,
+      label: 'Counted by',
+    }),
+    lines: f.one2many('stock.count.line', 'count'),
+    adjustments: f.one2many('stock.picking', 'count'),
+    note: f.text(),
+    state: f.state({
+      states: { draft: 'Draft', counting: 'Counting', done: 'Applied', cancel: 'Cancelled' },
+      initial: 'draft',
+      transitions: {
+        /** Lists what the location holds (and inside it), with what is expected, for counting. */
+        start: {
+          from: ['draft'],
+          to: 'counting',
+          after: records('stock.count', async (counts): Promise<void> => {
+            const env = counts.env;
+            await env.asSuperuser({ reason: 'stock count started' }, async (su) => {
+              for (const c of await su
+                .model('stock.count')
+                .browse(counts.ids)
+                .load({ lines: true })) {
+                // Indexed first: creating a line unloads the count's lines.
+                const existing = new Map([...c.lines].map((l) => [l.product.id, l]));
+                const listed = new Set(existing.keys());
+                const quants = await (
+                  await su
+                    .model('stock.quant')
+                    .search({ where: { location: { childOf: c.location.id } } })
+                ).load({ product: true });
+                for (const q of quants) listed.add(q.product.id);
+                for (const product of listed) {
+                  const expected = await onHandIn(su, product, c.location.id);
+                  const line = existing.get(product);
+                  if (line !== undefined) await line.write({ expected });
+                  else
+                    await su.model('stock.count.line').create([{ count: c.id, product, expected }]);
+                }
+              }
+            });
+          }),
+        },
+        apply: {
+          from: ['counting'],
+          to: 'done',
+          requires: 'stock.count_apply',
+          before: records('stock.count', async (counts): Promise<void> => {
+            await applyCounts(counts.ids, counts.env);
+          }),
+        },
+        cancel: { from: ['draft', 'counting'], to: 'cancel' },
+        redraft: { from: ['cancel'], to: 'draft' },
+      },
+    }),
+  },
+  constraints: {
+    internalLocation: {
+      ...check('stock.count', ['location'], async (counts) =>
+        (await counts.load({ location: true }))
+          .filter((c) => c.location.usage !== 'internal')
+          .map((c) => c.id),
+      ),
+      message: 'Stock is counted in an internal location.',
     },
   },
 });
@@ -839,8 +1064,30 @@ export const stockShutro = defineModule({
       padding: 5,
       reset: 'yearly',
     }),
+    orm.defineSequence({
+      code: 'stock.count',
+      prefix: 'CNT/{year}/',
+      padding: 5,
+      reset: 'yearly',
+    }),
   ],
-  models: [StockWarehouse, StockLocation, StockQuant, StockReservation, StockMove, StockPicking],
+  permissions: [
+    orm.definePermission({
+      code: 'stock.count_apply',
+      label: 'Apply stock counts',
+      groups: ['stock.manager'],
+    }),
+  ],
+  models: [
+    StockWarehouse,
+    StockLocation,
+    StockQuant,
+    StockReservation,
+    StockMove,
+    StockPicking,
+    StockCount,
+    StockCountLine,
+  ],
   extensions: [ProductStock],
   data: [
     shared('location_vendors', 'Vendors', 'vendor'),
