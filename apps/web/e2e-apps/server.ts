@@ -19,6 +19,7 @@ import { createAssistant, fakeClient } from '@kosh/assistant';
 import { automation } from '@kosh/automation';
 import { calendarApp } from '@kosh/calendar';
 import { contacts } from '@kosh/contacts';
+import { crm } from '@kosh/crm';
 import { dataImport } from '@kosh/import';
 import { l10nBd } from '@kosh/l10n_bd';
 import { l10nIn } from '@kosh/l10n_in';
@@ -108,6 +109,7 @@ const CATALOGUE = [
   project,
   todo,
   calendarApp,
+  crm,
   saleAccount,
   purchaseAccount,
   saleProject,
@@ -139,6 +141,7 @@ await applyApps(
         'project',
         'todo',
         'calendar',
+        'crm',
         'assistant',
         'import',
         'l10n_bd',
@@ -194,6 +197,7 @@ for (const [login, name, groups] of [
       'project.manager',
       'todo.user',
       'calendar.manager',
+      'crm.manager',
       'messaging.user',
       'reporting.user',
       'assistant.user',
@@ -213,6 +217,7 @@ for (const [login, name, groups] of [
       'reporting.user',
       'todo.user',
       'calendar.user',
+      'crm.user',
     ],
   ],
 ] as const)

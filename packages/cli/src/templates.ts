@@ -17,6 +17,7 @@ export type AppName =
   | 'project'
   | 'todo'
   | 'calendar'
+  | 'crm'
   | 'sale_project'
   | 'l10n_bd'
   | 'l10n_in';
@@ -102,6 +103,11 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     label: 'Agenda: meetings, rooms that are never double-booked, who is free when',
     icon: '📅',
     server: 'calendarApp',
+  },
+  crm: {
+    label: 'Pipeline: deals on a board, stage rules, the weighted forecast',
+    icon: '📈',
+    server: 'crm',
   },
   sale_project: {
     label: 'Bridge: tasks and projects from sales orders (Sales ↔ Projects)',

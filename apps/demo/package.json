@@ -17,6 +17,7 @@
     "@kosh/product": "workspace:*",
     "@kosh/project": "workspace:*",
     "@kosh/calendar": "workspace:*",
+    "@kosh/crm": "workspace:*",
     "@kosh/todo": "workspace:*",
     "@kosh/purchase": "workspace:*",
     "@kosh/purchase_account": "workspace:*",
