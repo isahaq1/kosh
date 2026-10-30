@@ -210,6 +210,13 @@ close date); won by reaching a winning stage, lost with a reason; the weighted f
 duplicates by email, phone or company (`GET /api/v1/pipeline/deals/:id/duplicates`). Install it with
 `shutro-erp apps install crm`; *Pipeline › Salesperson* or *Manager*.
 
+### Workforce (`modules/hr`, RFC 0021)
+
+Employees (separate from users), the org chart, departments, positions, contracts and leave. Leave counts working
+days by the weekend set in App settings › Workforce, keeps to the year's balance, never overlaps, and is decided by
+the line manager (`POST /api/v1/workforce/leaves/:id/decide`) or HR — never by the person asking. Personal details
+and wages are for HR managers only. Install it with `shutro-erp apps install hr`.
+
 ## Demo data (RFC 0008 §5.8)
 
 `npx shutro-erp init --demo` (or a yes to the question after the apps) loads every installed app's demo data: a sample

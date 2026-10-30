@@ -197,3 +197,55 @@ reviewed steps.
 - **Step 2**: the `crm_sale` bridge (a won deal's quotation), *Lose* / *Reopen* buttons and a duplicates panel on
   the form, lead capture from Sites' forms and inbound email, activities due per deal on the board.
 
+## Design note: Workforce (`modules/hr`, app code `workforce`)
+
+- **Models**: `hr.department` (a tree, with its head), `hr.job` (positions), `hr.employee` (separate from users:
+  an employee may never sign in; work contact details, department, position, manager; personal details — birthday,
+  national id, address, emergency contact — under field security), `hr.contract` (dates, type, wage under field
+  security, state *draft* → *running* → *ended* / *cancelled*), `hr.leave.type` (days per year, whether a balance
+  applies), `hr.leave` (employee, type, from / to, working days, state *draft* → *submitted* → *approved* /
+  *refused*).
+- **Further than Odoo**: **working days by the company's week** — the weekend is a setting (Friday–Saturday in
+  Bangladesh by default; Saturday–Sunday; Friday only) and a leave's days count only working days, checked by the
+  server, not trusted from the form; **the balance is enforced** (a request beyond the year's days for that type is
+  refused, the remaining days shown on the request); **no overlapping leave** for the same person; **decisions by
+  the line manager** (or HR), never by the requester, through one checked route; personal data and wages hidden from
+  everyone but HR managers by default; an **org chart** from the managers.
+- **Access**: *Employee* (the directory's work details, their own leave and contract, their team's leave when they
+  manage people) and *HR manager* (everything, personal data, contracts, leave types).
+- **Step 1**: the models, rules, field security, the weekend setting, the leave checks and decision route, the
+  directory / org chart / form views, leave requests with a calendar, demo data. **Step 2**: documents with expiry
+  reminders, attendance, allocations per person, public holidays in the working-day count.
+
+## Implementation notes (2026-10-30): Workforce, step 1
+
+- **Module** `modules/hr` (`@kosh/hr`, export `hr`), app **Workforce** (code `workforce`); access levels
+  *Employee* (the directory's work details, their own leave and contract, their team's leave) and *HR manager*
+  (everything, personal data, contracts, leave types, the decision permission `hr.leave_decide`).
+- **Field security**: birthday, national id, home address, emergency contact and the wage are visible to HR managers
+  only; employees see each other's work details. A user is at most one employee (checked across archived ones).
+- **Leave**: working days by the weekend of App settings › Workforce (*Friday and Saturday* by default; *Saturday
+  and Sunday*; *Friday only*), counted by the server and refused when the form says otherwise or no working day is
+  covered; no overlap with the same person's other leave; the year's days per type (Casual 10, Sick 14, Earned 20,
+  Unpaid: no balance) for what is waiting and approved. **Never decided by the person asking**: *Approve* /
+  *Refuse* need the permission and a guard refuses one's own request (HR managers included); the line manager decides
+  through `POST /api/v1/workforce/leaves/:id/decide`, recorded in the audit log under their name.
+  `GET /api/v1/workforce/balance` gives each type's allowed, taken, waiting and remaining days.
+- **Screens**: Employees (list, org chart by manager, form with the chatter), Leave (list, calendar, form with
+  Submit / Approve / Refuse / Back to draft), Contracts (Start / End / Cancel), Departments (with their tree),
+  Positions, Leave types.
+- **Fixed on the way**:
+  - Forms applied every onchange answer, so an earlier answer arriving late undid what was typed since (the leave's
+    *To* reset to its *From*); only the latest answer applies now.
+  - Dates read from PostgreSQL are local midnights; the leave check reads their local date (`toISOString()` moved them
+    a day back east of UTC).
+  - The forms of Focus, Agenda and Workforce declared no workflow buttons (Done / Reopen, Cancel / Restore, Submit /
+    Approve…); they do now, with the status bar.
+- **Tests**: on real PostgreSQL — working days by the weekend, field security, one employee per user, the leave
+  checks (days, a weekend only, overlap, balance), decisions by the manager and never by the requester (route and
+  transition, HR managers included), the balance route, the weekend setting, contracts seen by their employee
+  without the wage, the demo data (also in the Dhaka time zone). E2E (apps): HR adds an employee (national id hidden
+  from them), the employee asks for a week's leave counted as five working days and submits it, HR approves it.
+- **Step 2**: documents with expiry reminders, attendance, allocations per person, public holidays in the count,
+  *Approve* / *Refuse* buttons for line managers (their route exists), the balance on the leave form.
+
