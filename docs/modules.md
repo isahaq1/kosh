@@ -248,7 +248,8 @@ to Price differences.
 Bills of materials with versions and effective dates, work centres with their cost per hour, and production orders
 that list what is required, available and short, and what they will cost, before they start. Confirm reserves the
 components through Stockroom; Produce consumes them and puts the product in stock. Install it with
-`shutro-erp apps install mrp`.
+`shutro-erp apps install mrp`. With Accounting, `mrp_account` values what is made at what it consumed plus its
+operations, and Work in progress clears with each order.
 
 ## Demo data (RFC 0008 §5.8)
 

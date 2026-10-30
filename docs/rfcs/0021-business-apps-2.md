@@ -531,3 +531,17 @@ reviewed steps.
 - **Step 2**: by-products and scrap with reasons, the work centres' Gantt with capacity, `mrp_account` (the
   finished product valued at what it consumed plus its operations, so Work in progress clears exactly).
 
+## Implementation notes (2026-10-30): Production, step 2 part 1 — `mrp_account`
+
+- **Module** `modules/mrp_account`, the Production ↔ Accounting bridge (proposed when both are installed; it builds
+  on `stock_account`).
+- **The product made** enters stock at what its order consumed (the components' valuation layers) plus its
+  operations (minutes at the work centres' rates), per unit: it overrides the lines' `incomingUnitCost` for the
+  output transfer (Production links the order's output transfer before validating it, so the bridge finds the
+  order). With average cost, the product's cost follows.
+- **The operations** are posted into 1250 *Work in progress* against 5200 *Production labour and overhead* (added to
+  the chart when missing), through Stockroom's `validated()` hook — so Work in progress clears with each order.
+- **Tests**: the bridge proposed; 5 fixtures from 650 of components and 1,000 of operations enter at 1,650 (330 a
+  unit, the product's cost after); Work in progress back to 0.00; 5200 −1,000; Inventory 1,650.
+- **Next** (Production step 2 part 2): by-products and scrap with reasons; then the work centres' Gantt.
+
