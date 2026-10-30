@@ -62,6 +62,9 @@ importers:
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
+      '@kosh/mrp':
+        specifier: workspace:*
+        version: link:../../modules/mrp
       '@kosh/notify':
         specifier: workspace:*
         version: link:../../packages/notify
@@ -296,6 +299,9 @@ importers:
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
+      '@kosh/mrp':
+        specifier: workspace:*
+        version: link:../../modules/mrp
       '@kosh/product':
         specifier: workspace:*
         version: link:../../modules/product
@@ -634,6 +640,37 @@ importers:
       react-i18next:
         specifier: ^17.0.21
         version: 17.0.21(i18next@26.4.7(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
+
+  modules/mrp:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/stock':
+        specifier: workspace:*
+        version: link:../stock
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
 
   modules/payment:
     dependencies:
@@ -1387,6 +1424,9 @@ importers:
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../modules-sdk
+      '@kosh/mrp':
+        specifier: workspace:*
+        version: link:../../modules/mrp
       '@kosh/notify':
         specifier: workspace:*
         version: link:../notify
