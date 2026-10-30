@@ -21,6 +21,7 @@ export type AppName =
   | 'hr'
   | 'recruitment'
   | 'stock'
+  | 'mrp'
   | 'sale_project'
   | 'sale_stock'
   | 'purchase_stock'
@@ -133,6 +134,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🏬',
     server: 'stock',
     web: 'registerStockWeb',
+  },
+  mrp: {
+    label:
+      'Production: bills of materials with versions, orders that show what is short and what they cost',
+    icon: '🏭',
+    server: 'mrp',
   },
   sale_project: {
     label: 'Bridge: tasks and projects from sales orders (Sales ↔ Projects)',

@@ -9,6 +9,7 @@ import { l10nBd } from '@kosh/l10n_bd';
 import { mail } from '@kosh/mail';
 import { messaging } from '@kosh/messaging';
 import type { KoshModule } from '@kosh/modules-sdk';
+import { mrp } from '@kosh/mrp';
 import { notify } from '@kosh/notify';
 import { permissions } from '@kosh/permissions';
 import { product } from '@kosh/product';
@@ -47,6 +48,7 @@ export const DEMO_APPS: readonly string[] = [
   'hr',
   'recruitment',
   'stock',
+  'mrp',
   'l10n_bd',
 ];
 
@@ -73,6 +75,7 @@ export function demoCatalogue(): KoshModule[] {
     hr,
     recruitment,
     stock,
+    mrp,
     saleAccount,
     purchaseAccount,
     saleProject,
