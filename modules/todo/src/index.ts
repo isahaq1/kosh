@@ -83,7 +83,13 @@ export const todo: ReturnType<typeof defineModule> = defineModule({
       mode: 'month',
     }),
     'todo.task.form': form(TodoTask, (k) => ({
-      header: { buttons: [] },
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('complete', { primary: true, label: 'Done' }),
+          k.button('reopen', { label: 'Reopen' }),
+        ],
+      },
       sheet: [
         k.group('main', ['name', 'list', 'owner', 'dueDate', 'priority', 'progress']),
         k.lines('items', [{ field: 'name', id: 'item_name' }, 'done']),

@@ -240,7 +240,16 @@ export const calendarApp: ReturnType<typeof defineModule> = defineModule({
       defaultOrder: ['start desc'],
     }),
     'calendar.event.form': form(CalendarEvent, (k) => ({
-      header: { buttons: [] },
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('cancel', {
+            label: 'Cancel the event',
+            confirm: 'Cancel this event? Its room is freed.',
+          }),
+          k.button('restore', { label: 'Restore' }),
+        ],
+      },
       sheet: [
         k.group('when', ['name', 'start', 'stop', 'allDay', 'organizer', 'privacy']),
         k.group('where', ['room', 'location', 'videoUrl']),
