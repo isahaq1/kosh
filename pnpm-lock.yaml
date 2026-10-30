@@ -59,6 +59,9 @@ importers:
       '@kosh/maintenance':
         specifier: workspace:*
         version: link:../../modules/maintenance
+      '@kosh/maintenance_stock':
+        specifier: workspace:*
+        version: link:../../modules/maintenance_stock
       '@kosh/messaging':
         specifier: workspace:*
         version: link:../../packages/messaging
@@ -305,6 +308,9 @@ importers:
       '@kosh/maintenance':
         specifier: workspace:*
         version: link:../../modules/maintenance
+      '@kosh/maintenance_stock':
+        specifier: workspace:*
+        version: link:../../modules/maintenance_stock
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
@@ -671,6 +677,40 @@ importers:
         specifier: workspace:*
         version: link:../../packages/views
     devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/maintenance_stock:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/maintenance':
+        specifier: workspace:*
+        version: link:../maintenance
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/stock':
+        specifier: workspace:*
+        version: link:../stock
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
       '@kosh/settings':
         specifier: workspace:*
         version: link:../../packages/settings
@@ -1498,6 +1538,9 @@ importers:
       '@kosh/maintenance':
         specifier: workspace:*
         version: link:../../modules/maintenance
+      '@kosh/maintenance_stock':
+        specifier: workspace:*
+        version: link:../../modules/maintenance_stock
       '@kosh/messaging':
         specifier: workspace:*
         version: link:../messaging
