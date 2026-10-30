@@ -19,6 +19,7 @@ export type AppName =
   | 'calendar'
   | 'crm'
   | 'hr'
+  | 'recruitment'
   | 'sale_project'
   | 'l10n_bd'
   | 'l10n_in';
@@ -114,6 +115,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     label: 'Workforce: employees, the org chart, contracts and leave',
     icon: '🧑‍💼',
     server: 'hr',
+  },
+  recruitment: {
+    label: 'Hiring: openings, applicants on a board, independent scorecards, hire in one step',
+    icon: '🤝',
+    server: 'recruitment',
+    web: 'registerRecruitmentWeb',
   },
   sale_project: {
     label: 'Bridge: tasks and projects from sales orders (Sales ↔ Projects)',

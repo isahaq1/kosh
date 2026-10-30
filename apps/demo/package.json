@@ -19,6 +19,7 @@
     "@kosh/calendar": "workspace:*",
     "@kosh/crm": "workspace:*",
     "@kosh/hr": "workspace:*",
+    "@kosh/recruitment": "workspace:*",
     "@kosh/todo": "workspace:*",
     "@kosh/purchase": "workspace:*",
     "@kosh/purchase_account": "workspace:*",

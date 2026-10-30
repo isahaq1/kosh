@@ -16,6 +16,7 @@ import { project } from '@kosh/project';
 import { purchase } from '@kosh/purchase';
 import { purchaseAccount } from '@kosh/purchase_account';
 import { realtime } from '@kosh/realtime';
+import { recruitment } from '@kosh/recruitment';
 import { reporting } from '@kosh/reporting';
 import { saleAccount } from '@kosh/sale_account';
 import { saleProject } from '@kosh/sale_project';
@@ -39,6 +40,7 @@ export const DEMO_APPS: readonly string[] = [
   'calendar',
   'crm',
   'hr',
+  'recruitment',
   'l10n_bd',
 ];
 
@@ -63,6 +65,7 @@ export function demoCatalogue(): KoshModule[] {
     calendarApp,
     crm,
     hr,
+    recruitment,
     saleAccount,
     purchaseAccount,
     saleProject,

@@ -34,6 +34,7 @@ import { project } from '@kosh/project';
 import { purchase } from '@kosh/purchase';
 import { purchaseAccount } from '@kosh/purchase_account';
 import { realtime } from '@kosh/realtime';
+import { recruitment } from '@kosh/recruitment';
 import { installTemplates, reporting } from '@kosh/reporting';
 import { saleAccount } from '@kosh/sale_account';
 import { salePortal } from '@kosh/sale_portal';
@@ -112,6 +113,7 @@ const CATALOGUE = [
   calendarApp,
   crm,
   hr,
+  recruitment,
   saleAccount,
   purchaseAccount,
   saleProject,
@@ -145,6 +147,7 @@ await applyApps(
         'calendar',
         'crm',
         'hr',
+        'recruitment',
         'assistant',
         'import',
         'l10n_bd',
@@ -202,6 +205,7 @@ for (const [login, name, groups] of [
       'calendar.manager',
       'crm.manager',
       'hr.manager',
+      'hiring.manager',
       'messaging.user',
       'reporting.user',
       'assistant.user',
@@ -223,6 +227,7 @@ for (const [login, name, groups] of [
       'calendar.user',
       'crm.user',
       'hr.user',
+      'hiring.user',
     ],
   ],
 ] as const)

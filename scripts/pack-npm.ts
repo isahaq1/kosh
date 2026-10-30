@@ -60,6 +60,7 @@ const PACKAGES = [
   'calendar',
   'crm',
   'hr',
+  'recruitment',
   'sale_project',
   'portal',
   'sale_portal',
