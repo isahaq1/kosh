@@ -217,6 +217,14 @@ days by the weekend set in App settings › Workforce, keeps to the year's balan
 the line manager (`POST /api/v1/workforce/leaves/:id/decide`) or HR — never by the person asking. Personal details
 and wages are for HR managers only. Install it with `shutro-erp apps install hr`.
 
+### Hiring (`modules/recruitment`, RFC 0021)
+
+Openings for Workforce positions with a headcount, applicants on a board of stages, and scorecards each interviewer
+keeps to themselves (the average shows to all). **Hire** (`POST /api/v1/hiring/applicants/:id/hire`, hiring
+managers) makes the Workforce employee, moves the applicant to the hired stage and closes the opening when it is
+filled; it is the only way to hire. One application per email and opening; expected salaries for hiring managers
+only. Install it with `shutro-erp apps install recruitment`.
+
 ## Demo data (RFC 0008 §5.8)
 
 `npx shutro-erp init --demo` (or a yes to the question after the apps) loads every installed app's demo data: a sample

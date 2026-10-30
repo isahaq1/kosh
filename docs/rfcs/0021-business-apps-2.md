@@ -249,3 +249,41 @@ reviewed steps.
 - **Step 2**: documents with expiry reminders, attendance, allocations per person, public holidays in the count,
   *Approve* / *Refuse* buttons for line managers (their route exists), the balance on the leave form.
 
+## Design note: Hiring (`modules/recruitment`, app code `hiring`)
+
+- **Models**: `hiring.opening` (a position to fill: the Workforce position and department, the hiring manager, the
+  headcount, *open* / *closed*), `hiring.stage` (the board, one stage *hired*), `hiring.applicant` (contact details,
+  the opening, the stage, source, expected salary under field security, *refused* with a reason, the average rating,
+  the employee once hired), `hiring.scorecard` (an interviewer's score 1–5, recommendation and notes).
+- **Further than Odoo**: **independent scorecards** — an interviewer sees only their own, so the first opinion does
+  not steer the next; the applicant's average shows to everyone; **hire in one step** — the applicant becomes a
+  Workforce employee (name, email, position, department) linked to the applicant, and the opening **closes by itself
+  when its headcount is filled** (a hire beyond it is refused); **no duplicate applications** — one email per
+  opening.
+- **Access**: *Interviewer* (applicants and openings, their own scorecards) and *Hiring manager* (everything,
+  salaries, hiring, stages).
+- **Step 1**: the models, rules, field security, the checks, the hire route, the board / list / form views, demo
+  data. **Step 2**: interviews booked through Agenda (a `recruitment_calendar` bridge), candidates applying through
+  Sites and the portal, offer letters as documents, email to candidates from the chatter.
+
+## Implementation notes (2026-10-30): Hiring, step 1
+
+- **Module** `modules/recruitment` (`@kosh/recruitment`, export `recruitment`, web `@kosh/recruitment/web`), app
+  **Hiring** (code `hiring`), depending on Workforce; access levels *Interviewer* and *Hiring manager*.
+- **Hire**: `POST /api/v1/hiring/applicants/:id/hire` (hiring managers) makes the Workforce employee (name, work
+  email and phone, the opening's position and department, joined today), links it, moves the applicant to the hired
+  stage, and closes the opening when its headcount is reached; refused for a refused applicant, twice, on a closed
+  opening, or beyond the headcount (also after a reopen). Recorded in the audit log. The employee link is set by this
+  step only: a constraint refuses it outside the audited superuser scope, so nobody marks an applicant hired by hand.
+  The applicant form shows a **Hire** button (with what will happen) to hiring managers.
+- **Scorecards**: a record rule shows interviewers their own; hiring managers see all; the applicant's stored rating
+  is the average to one decimal. Scores are 1 to 5 (a database check).
+- **Other checks**: one application per email and opening (case-insensitive, checked across every application);
+  a refusal says why; expected salaries are visible and writable by hiring managers only.
+- **Screens**: Applicants (board by stage, list, form with scorecards and the chatter), Openings (Close / Reopen),
+  Scorecards, Stages.
+- **Tests**: on real PostgreSQL — duplicates, refusals, salary field security, own scorecards and the average, the
+  hire step (not by hand, not by interviewers, the employee made, the opening closed, never twice or beyond), the demo.
+  E2E (apps): Dina opens a position and adds an applicant, Rahim (interviewer) sees neither Hire nor the salary, Dina
+  hires and the opening closes.
+
