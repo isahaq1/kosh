@@ -203,6 +203,13 @@ as *busy*, one-click answers and free / busy for several people and rooms (`GET 
 with `shutro-erp apps install calendar`; *Agenda › User* for everyone, *Manager* for those who manage rooms and the
 default length (Settings › App settings › Agenda).
 
+### Pipeline (`modules/crm`, RFC 0021)
+
+Deals on a board of stages, each with its probability and the fields it requires (a proposal needs its revenue and
+close date); won by reaching a winning stage, lost with a reason; the weighted forecast by salesperson and month;
+duplicates by email, phone or company (`GET /api/v1/pipeline/deals/:id/duplicates`). Install it with
+`shutro-erp apps install crm`; *Pipeline › Salesperson* or *Manager*.
+
 ## Demo data (RFC 0008 §5.8)
 
 `npx shutro-erp init --demo` (or a yes to the question after the apps) loads every installed app's demo data: a sample

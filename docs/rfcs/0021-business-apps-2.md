@@ -155,3 +155,45 @@ reviewed steps.
 - **Step 2**: repeating events with exceptions, email invitations with replies routed back, each attendee's time
   zone, a free / busy picker in the form, other apps' dates on the same calendar.
 
+## Design note: Pipeline (`modules/crm`, app code `pipeline`)
+
+- **Models**: `crm.stage` (name, order, probability, *won*, folded, **required fields** to enter it),
+  `crm.lost.reason`, `crm.deal` (title, customer or prospect company and contact details, salesperson, stage,
+  expected revenue and close date, probability from the stage, weighted revenue, source, priority, *lost* with its
+  reason, status *open* / *won* / *lost* computed from the stage and *lost*).
+- **Further than Odoo**: **stage rules** — a stage names the fields a deal must have to enter it (a proposal needs
+  its revenue and close date), enforced by the server with the missing fields named; **won by stage, lost with a
+  reason** (required unless switched off in App settings), reopened in one step; **duplicates** of a deal — other
+  deals and contacts with the same email, phone or company — on demand; the **weighted forecast** by salesperson
+  and month in a pivot.
+- **Rules**: salespeople see their own deals and unassigned ones; managers see all.
+- **Step 1**: the models, rules, stage rules and the lost-reason check, the board / list / form / pivot views, lose
+  and reopen, duplicates, the default stages and lost reasons, the setting, demo data. **Step 2**: the `crm_sale`
+  bridge (a won deal's quotation in Sales, the deal linked to it), activities and email from the deal, lead
+  capture from Sites' forms.
+
+## Implementation notes (2026-10-30): Pipeline, step 1
+
+- **Module** `modules/crm` (`@kosh/crm`, export `crm`), app **Pipeline** (code `pipeline`); access levels
+  *Salesperson* (own and unassigned deals) and *Manager* (every deal, stages, lost reasons).
+- **Models** as designed. Expected and weighted revenue are Shutro decimals (exact: 1 250 000 × 60 % = 750 000);
+  the status (*open* / *won* / *lost*) is computed and stored from the stage and *lost*, so it filters and groups.
+  The default board: New 10 %, Qualified 30 %, Proposal 60 % and Negotiation 80 % (both needing the expected
+  revenue and close date), Won 100 %; four lost reasons. Priority is *normal* / *good* / *very good* /
+  *excellent* (Shutro's selection keys start with a letter).
+- **Stage rules**: a stage lists the fields it requires (`expectedRevenue closeDate`, from a fixed set of deal
+  fields); the server refuses a deal in that stage without them. The check reads the stages itself (Shutro's
+  constraints depend on the model's own fields only).
+- **Lost**: *Lost* with a reason — required unless *A lost deal needs a reason* is switched off in App settings ›
+  Pipeline; `POST …/lose` and `…/reopen`, or the form's *Lost* and *Lost because*.
+- **Duplicates**: `GET /api/v1/pipeline/deals/:id/duplicates` — deals and contacts with the same email, the same
+  last eight digits of the phone, or the same company name, as the user (only what they may read).
+- **Screens**: Deals as a board by stage, a list with totals, the form with the chatter, a pivot; Forecast (weighted
+  and expected revenue by salesperson and month); Stages and Lost reasons in Configuration.
+- **Tests**: on real PostgreSQL — who sees which deals, the stage's probability (onchange), the weighted revenue,
+  the stage rule refusing then accepting, won by stage, lost with and without a reason (the setting), reopened,
+  duplicates by phone, email and company, the demo data. E2E (apps): a deal created, refused at Proposal until its
+  details are there, lost only with a reason.
+- **Step 2**: the `crm_sale` bridge (a won deal's quotation), *Lose* / *Reopen* buttons and a duplicates panel on
+  the form, lead capture from Sites' forms and inbound email, activities due per deal on the board.
+
