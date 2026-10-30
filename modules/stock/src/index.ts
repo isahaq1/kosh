@@ -241,13 +241,21 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       },
       sheet: [
         k.group('main', ['kind', 'partner', 'warehouse', 'source', 'destination']),
-        k.group('when', ['scheduledDate', 'doneDate', 'origin', 'status', 'availability']),
+        k.group('when', [
+          'scheduledDate',
+          'doneDate',
+          'origin',
+          'status',
+          'availability',
+          'backorderOf',
+        ]),
         k.lines('moves', [
           'product',
           'name',
           'quantity',
           'uom',
           { field: 'reserved', id: 'move_reserved' },
+          { field: 'quantityDone', id: 'move_done' },
         ]),
         k.group('about', ['note'], { columns: 1 }),
       ],

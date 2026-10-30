@@ -256,6 +256,33 @@ test('a salesperson without Stockroom rights still gets the delivery made', asyn
   expect(delivery.status).toBe('ready'); // the two beams left hold one
 });
 
+test('a partial delivery: the order is partly delivered, the backorder stays with the order', async () => {
+  const worker = saleStockWorker({ shutro: host.server.shutro });
+  await receive('Steel beam', '10');
+  const id = await order('sumi', [
+    { product: ids['Steel beam'], name: 'Steel beam', quantity: '10', priceUnit: '1000' },
+  ]);
+  await worker.drain();
+  const [delivery] = await find('stock.picking', { saleOrder: id }, 'id');
+  const [line] = await find('stock.move', { picking: delivery.id }, 'id,saleLine');
+  await call('PATCH', `/api/v1/models/stock.move/${line.id}`, 'sumi', { quantityDone: '4' });
+  await run(`${T}/${delivery.id}/transitions/validate`);
+  expect((await call('GET', `${O}/${id}`, 'sumi')).json.deliveryState).toBe('partial');
+  const [orderLine] = await find('sale.order.line', { order: id }, 'qtyDelivered');
+  expect(orderLine.qtyDelivered).toBe('4');
+  const [backorder] = await find(
+    'stock.picking',
+    { backorderOf: delivery.id },
+    'saleOrder,origin,status',
+  );
+  expect(backorder.saleOrder).toBe(id);
+  const [rest] = await find('stock.move', { picking: backorder.id }, 'quantity,saleLine');
+  expect(rest).toMatchObject({ quantity: '6', saleLine: line.saleLine });
+  await run(`${T}/${backorder.id}/transitions/validate`);
+  expect((await call('GET', `${O}/${id}`, 'sumi')).json.deliveryState).toBe('delivered');
+  expect((await find('sale.order.line', { order: id }, 'qtyDelivered'))[0].qtyDelivered).toBe('10');
+});
+
 test('an order of services only gets no delivery', async () => {
   const id = await order('sumi', [
     { product: ids['Installation'], name: 'Installation', quantity: '2', priceUnit: '500' },

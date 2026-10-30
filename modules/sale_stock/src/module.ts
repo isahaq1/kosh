@@ -8,17 +8,41 @@ import { productShutro } from '@kosh/product';
 import { salesShutro } from '@kosh/sales';
 import { orm } from '@kosh/server/orm';
 import { defaultLocations, stockShutro } from '@kosh/stock';
-import { compute, defineModule, type Env, extendModel, f } from './.kosh/bindings.js';
+import { compute, defineModule, type Env, extendModel, f, type Records } from './.kosh/bindings.js';
 
 const zero = orm.toDecimal(0);
 
 export const PickingSale = extendModel('stock.picking', {
   fields: { saleOrder: f.many2one('sale.order', { ondelete: 'set null', label: 'Sales order' }) },
+  overrides: {
+    // A backorder stays with its order.
+    backorderValues: async function (
+      this: unknown,
+      next: () => Promise<Map<number, Record<string, unknown>>>,
+    ): Promise<Map<number, Record<string, unknown>>> {
+      const out = await next();
+      for (const p of await (this as Records<'stock.picking'>).load({}))
+        out.set(p.id, { ...out.get(p.id), saleOrder: p.saleOrder?.id ?? null });
+      return out;
+    },
+  },
 });
 
 export const MoveSale = extendModel('stock.move', {
   fields: {
     saleLine: f.many2one('sale.order.line', { ondelete: 'set null', label: 'Order line' }),
+  },
+  overrides: {
+    // The rest of a line stays tied to its order line.
+    backorderValues: async function (
+      this: unknown,
+      next: () => Promise<Map<number, Record<string, unknown>>>,
+    ): Promise<Map<number, Record<string, unknown>>> {
+      const out = await next();
+      for (const m of await (this as Records<'stock.move'>).load({}))
+        out.set(m.id, { ...out.get(m.id), saleLine: m.saleLine?.id ?? null });
+      return out;
+    },
   },
 });
 
@@ -33,12 +57,12 @@ export const LineDelivered = extendModel('sale.order.line', {
       ...compute(
         'sale.order.line',
         'qtyDelivered',
-        ['moves.quantity', 'moves.picking.state'],
+        ['moves.quantity', 'moves.quantityDone', 'moves.picking.state'],
         (lines) => {
           for (const l of lines)
             l.qtyDelivered = [...l.moves]
               .filter((m) => m.picking.state === 'done')
-              .reduce((s, m) => s.plus(m.quantity), zero);
+              .reduce((s, m) => s.plus(m.quantityDone ?? m.quantity), zero);
         },
       ),
     }),

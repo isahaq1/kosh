@@ -19,6 +19,7 @@ import {
   type Env,
   extendModel,
   f,
+  method,
   onchange,
   record,
   records,
@@ -319,6 +320,44 @@ export const StockMove = defineModel('stock.move', {
         },
       ),
     }),
+    /**
+     * What is actually moved, in the line's unit, set while the transfer waits (empty: all of it). Less than the
+     * quantity validates part of the line; the rest goes to a backorder.
+     */
+    quantityDone: f.decimal({ scale: 4, label: 'Done' }),
+    /** The done quantity in the product's unit. */
+    doneQty: f.decimal({
+      scale: 4,
+      store: true,
+      label: 'Done in the product’s unit',
+      ...compute(
+        'stock.move',
+        'doneQty',
+        [
+          'quantity',
+          'quantityDone',
+          'uom.name',
+          'uom.ratio',
+          'uom.category',
+          'uom.rounding',
+          'product.uom.name',
+          'product.uom.ratio',
+          'product.uom.category',
+          'product.uom.rounding',
+        ],
+        (moves) => {
+          for (const m of moves) {
+            const done = m.quantityDone ?? m.quantity;
+            const unit = m.uom ?? null;
+            const productUnit = m.product.uom ?? null;
+            m.doneQty =
+              unit !== null && productUnit !== null && unit.category !== productUnit.category
+                ? done
+                : inProductUnit(done, unit, productUnit);
+          }
+        },
+      ),
+    }),
     reservations: f.one2many('stock.reservation', 'move'),
     reserved: f.decimal({
       scale: 4,
@@ -328,6 +367,20 @@ export const StockMove = defineModel('stock.move', {
         for (const m of moves)
           m.reserved = [...m.reservations].reduce((s, r) => s.plus(r.quantity), zero);
       }),
+    }),
+  },
+  methods: {
+    /**
+     * What a backorder's line copies from each of these lines: the product, description and unit. A bridge adds
+     * its link by overriding it (`sale_stock`: the order line), so the rest of a line stays tied to its origin.
+     */
+    backorderValues: method('stock.move', async function (): Promise<
+      Map<number, Record<string, unknown>>
+    > {
+      const out = new Map<number, Record<string, unknown>>();
+      for (const m of await this.load({}))
+        out.set(m.id, { product: m.product.id, name: m.name, uom: m.uom?.id ?? null });
+      return out;
     }),
   },
   onchange: {
@@ -345,6 +398,12 @@ export const StockMove = defineModel('stock.move', {
         [...moves].filter((m) => m.quantity.lte(0)).map((m) => m.id),
       ),
       message: 'A line moves a positive quantity.',
+    },
+    doneNotNegative: {
+      ...check('stock.move', ['quantityDone'], async (moves) =>
+        [...moves].filter((m) => m.quantityDone !== null && m.quantityDone.lt(0)).map((m) => m.id),
+      ),
+      message: 'A done quantity cannot be negative.',
     },
     goodsOnly: {
       ...check('stock.move', ['product'], async (moves) =>
@@ -423,7 +482,12 @@ async function unreserve(ids: readonly Id<'stock.picking'>[], env: Env): Promise
   });
 }
 
-/** Moves the stock of validated transfers: out of what was reserved, into the destination's quant. */
+/**
+ * Moves the stock of validated transfers: what each line has done (all of it unless less is set) leaves its
+ * reservations and enters the destination's quant; the reservations are released. Lines done in part leave the
+ * rest to a backorder — a new transfer with the same partner, places and source document, and every other field
+ * of its transfer and lines that `backorderValues` gives (a bridge's order and order lines too) — confirmed at once.
+ */
 async function applyMoves(ids: readonly Id<'stock.picking'>[], env: Env): Promise<void> {
   await env.asSuperuser({ reason: 'stock transfer validated' }, async (su) => {
     const pickings = await su
@@ -441,24 +505,35 @@ async function applyMoves(ids: readonly Id<'stock.picking'>[], env: Env): Promis
       }
     >();
     const used: Id<'stock.reservation'>[] = [];
+    const backorders: { picking: Id<'stock.picking'>; rest: Map<Id<'stock.move'>, Decimal> }[] = [];
     for (const p of pickings) {
+      const rest = new Map<Id<'stock.move'>, Decimal>();
       for (const m of p.moves) {
-        if (p.source.usage === 'internal')
+        const done = m.doneQty ?? zero;
+        if (p.source.usage === 'internal') {
+          let left = done;
           for (const r of m.reservations) {
-            out.set(r.quant.id, (out.get(r.quant.id) ?? zero).plus(r.quantity));
+            const take = left.lt(r.quantity) ? left : r.quantity;
+            if (take.gt(0)) out.set(r.quant.id, (out.get(r.quant.id) ?? zero).plus(take));
+            left = left.minus(take);
             used.push(r.id);
           }
-        if (p.destination.usage === 'internal') {
+        }
+        if (p.destination.usage === 'internal' && done.gt(0)) {
           const key = `${m.product.id}:${p.destination.id}`;
           const before = into.get(key)?.quantity ?? zero;
           into.set(key, {
             product: m.product.id,
             location: p.destination.id,
             company: p.company.id,
-            quantity: before.plus(m.productQty ?? zero),
+            quantity: before.plus(done),
           });
         }
+        const lineDone = m.quantityDone ?? m.quantity;
+        if (lineDone.lt(m.quantity)) rest.set(m.id, m.quantity.minus(lineDone));
+        if (m.quantityDone === null) await m.write({ quantityDone: m.quantity });
       }
+      if (rest.size > 0) backorders.push({ picking: p.id, rest });
     }
     if (used.length > 0) await su.model('stock.reservation').browse(used).unlink();
     for (const [quant, quantity] of out) {
@@ -474,6 +549,29 @@ async function applyMoves(ids: readonly Id<'stock.picking'>[], env: Env): Promis
       else await su.model('stock.quant').create([{ product, location, company, quantity }]);
     }
     await su.model('stock.picking').browse(ids).write({ doneDate: su.today() });
+    type Raw = { create(rows: readonly Record<string, unknown>[]): Promise<{ ids: number[] }> };
+    for (const { picking, rest } of backorders) {
+      const from = (await su.model('stock.picking').browse([picking]).backorderValues()).get(
+        picking,
+      );
+      const lines = await su
+        .model('stock.move')
+        .browse([...rest.keys()])
+        .backorderValues();
+      const made = await (su.model('stock.picking' as never) as unknown as Raw).create([
+        {
+          ...from,
+          backorderOf: picking,
+          moves: {
+            create: [...rest].map(([id, quantity]) => ({ ...lines.get(id), quantity })),
+          },
+        },
+      ]);
+      await su
+        .model('stock.picking')
+        .browse(made.ids as Id<'stock.picking'>[])
+        .confirm();
+    }
   });
 }
 
@@ -516,6 +614,9 @@ export const StockPicking = defineModel('stock.picking', {
     origin: f.char({ label: 'Source document' }),
     note: f.text(),
     moves: f.one2many('stock.move', 'picking', { label: 'Lines' }),
+    /** The transfer this one takes the rest of. */
+    backorderOf: f.many2one('stock.picking', { ondelete: 'set null', label: 'Backorder of' }),
+    backorders: f.one2many('stock.picking', 'backorderOf'),
     /** How much of what leaves an internal location is reserved; receipts are always ready. */
     availability: f.selection(
       { none: 'Nothing reserved', partial: 'Partly reserved', full: 'Everything reserved' },
@@ -598,12 +699,18 @@ export const StockPicking = defineModel('stock.picking', {
         validate: {
           from: ['confirmed'],
           to: 'done',
+          // What is done must be reserved (out of stock), and something must be done.
           guard: records('stock.picking', async (pickings) => {
-            const loaded = await pickings.load(['availability']);
-            return loaded.filter((p) => p.availability !== 'full');
+            const loaded = await pickings.load({ source: true, moves: true });
+            return loaded.filter(
+              (p) =>
+                [...p.moves].every((m) => (m.doneQty ?? zero).lte(0)) ||
+                (p.source.usage === 'internal' &&
+                  [...p.moves].some((m) => (m.reserved ?? zero).lt(m.doneQty ?? zero))),
+            );
           }),
           message:
-            'Not everything is reserved yet: check availability, or wait for the stock to come in.',
+            'Not everything done is reserved: check availability, wait for the stock, or lower the done quantities.',
           before: records('stock.picking', async (pickings): Promise<void> => {
             await applyMoves(pickings.ids, pickings.env);
           }),
@@ -618,6 +725,30 @@ export const StockPicking = defineModel('stock.picking', {
         redraft: { from: ['cancel'], to: 'draft' },
       },
       extensible: true,
+    }),
+  },
+  methods: {
+    /**
+     * What a backorder copies from each of these transfers: the type, contact, places, company, source document,
+     * date and note. A bridge adds its link by overriding it (`sale_stock`: the sales order).
+     */
+    backorderValues: method('stock.picking', async function (): Promise<
+      Map<number, Record<string, unknown>>
+    > {
+      const out = new Map<number, Record<string, unknown>>();
+      for (const p of await this.load({}))
+        out.set(p.id, {
+          kind: p.kind,
+          partner: p.partner?.id ?? null,
+          warehouse: p.warehouse?.id ?? null,
+          source: p.source.id,
+          destination: p.destination.id,
+          company: p.company.id,
+          origin: p.origin,
+          scheduledDate: p.scheduledDate,
+          note: p.note,
+        });
+      return out;
     }),
   },
   onchange: {

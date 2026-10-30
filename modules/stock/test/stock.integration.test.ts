@@ -232,7 +232,7 @@ test('a delivery reserves what is available, says for what, and waits; never bel
   expect(Number((await onHand('LED panel')).qtyReserved)).toBe(24);
   const refused = await run(delivery, 'validate');
   expect(refused.status).toBe(409);
-  expect(JSON.stringify(refused.json)).toContain('Not everything is reserved');
+  expect(JSON.stringify(refused.json)).toContain('Not everything done is reserved');
 
   // Lines are fixed once confirmed.
   const [line] = await find('stock.move', { picking: delivery }, 'id', 'rahim');
@@ -290,6 +290,64 @@ test('quantities are never edited by hand; access by role', async () => {
       .status,
   ).toBe(403);
   expect((await call('GET', T, 'bob')).status).toBe(403);
+});
+
+test('partial validation: what is done moves, the rest goes to a confirmed backorder', async () => {
+  // Ten ordered from the vendor, six arrive.
+  const receipt = await transfer('receipt', [{ product: ids['LED panel'], quantity: '10' }], {
+    origin: 'PO/2026/00003',
+  });
+  await run(receipt, 'confirm');
+  const [line] = await find('stock.move', { picking: receipt }, 'id', 'rahim');
+  expect(
+    (await call('PATCH', `/api/v1/models/stock.move/${line.id}`, 'rahim', { quantityDone: '6' }))
+      .status,
+  ).toBe(200);
+  expect((await run(receipt, 'validate')).status).toBe(200);
+  expect(Number((await onHand('LED panel')).qtyOnHand)).toBe(6);
+  const [backorder] = await find(
+    'stock.picking',
+    { backorderOf: receipt },
+    'name,kind,status,origin,source,destination',
+    'rahim',
+  );
+  expect(backorder).toMatchObject({
+    kind: 'receipt',
+    status: 'ready',
+    origin: 'PO/2026/00003',
+    source: ids['vendors'],
+    destination: ids['stock'],
+  });
+  const [rest] = await find('stock.move', { picking: backorder.id }, 'product,quantity', 'rahim');
+  expect(rest).toMatchObject({ product: ids['LED panel'], quantity: '4' });
+  const [done] = await find('stock.move', { picking: receipt }, 'quantity,quantityDone', 'rahim');
+  expect(done).toMatchObject({ quantity: '10', quantityDone: '6' });
+
+  // A delivery of five with only six on hand: done 2 of what is reserved; the rest waits, reserved again.
+  const delivery = await transfer('delivery', [{ product: ids['LED panel'], quantity: '5' }]);
+  await run(delivery, 'confirm');
+  const [out] = await find('stock.move', { picking: delivery }, 'id', 'rahim');
+  await call('PATCH', `/api/v1/models/stock.move/${out.id}`, 'rahim', { quantityDone: '7' });
+  expect((await run(delivery, 'validate')).status).toBe(409); // more than is reserved
+  await call('PATCH', `/api/v1/models/stock.move/${out.id}`, 'rahim', { quantityDone: '2' });
+  expect((await run(delivery, 'validate')).status).toBe(200);
+  const [left] = await find('stock.picking', { backorderOf: delivery }, 'status', 'rahim');
+  expect(left.status).toBe('ready'); // 3 of the 4 left are reserved again
+  const panel = await onHand('LED panel');
+  expect(Number(panel.qtyOnHand)).toBe(4);
+  expect(Number(panel.qtyReserved)).toBe(3);
+  // A negative done quantity, and nothing done, are refused.
+  expect(
+    (await call('PATCH', `/api/v1/models/stock.move/${out.id}`, 'rahim', { quantityDone: '-1' }))
+      .status,
+  ).toBe(422);
+  const nothing = await transfer('delivery', [{ product: ids['LED panel'], quantity: '1' }]);
+  await run(nothing, 'confirm');
+  const [zero] = await find('stock.move', { picking: nothing }, 'id', 'rahim');
+  await call('PATCH', `/api/v1/models/stock.move/${zero.id}`, 'rahim', { quantityDone: '0' });
+  expect((await run(nothing, 'validate')).status).toBe(409);
+  await run(nothing, 'cancel');
+  await run(left.id, 'cancel');
 });
 
 test('the setting: reserve only with Check availability', async () => {

@@ -1,7 +1,7 @@
 /**
- * Stockroom end to end (RFC 0021): Dina receives ten steel beams — the new receipt comes with its locations — and
- * validates it; Rahim delivers four, confirmed and ready because they are reserved, the reservation saying for what;
- * he validates it, and the product shows six on hand.
+ * Stockroom end to end (RFC 0021): Dina expects ten steel beams — the new receipt comes with its locations — and
+ * validates the six that arrived, the other four going to a backorder that is ready; Rahim delivers four, confirmed
+ * and ready because they are reserved, the reservation saying for what; he validates it, and two are left on hand.
  */
 import { expect, type Page, test } from '@playwright/test';
 
@@ -32,15 +32,27 @@ async function transfer(page: Page, action: string, quantity: string): Promise<s
   return page.url().replace(/^https?:\/\/[^/]+/, '');
 }
 
-test('a receipt in, a delivery reserved, explained and validated; stock on hand follows', async ({
+test('a receipt in part with its backorder, a delivery reserved, explained and validated; stock follows', async ({
   page,
   browser,
 }) => {
   await signIn(page, 'dina'); // Stockroom manager
-  await transfer(page, 'stockroom.action_receipts', '10');
+  const receipt = await transfer(page, 'stockroom.action_receipts', '10');
   await expect(page.getByText('Vendors').first()).toBeVisible();
+  // Six of the ten arrive: the rest goes to a backorder.
+  await page.locator('tbody tr').last().getByRole('textbox').last().fill('6');
+  const saved = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'PATCH' && /\/stock\.picking\/\d+$/.test(new URL(r.url()).pathname),
+  );
+  await page.getByRole('button', { name: 'Save' }).click();
+  await saved;
   await page.getByRole('button', { name: 'Validate' }).click();
   await expect(page.getByRole('button', { name: /^State: Done/ })).toBeVisible();
+  await page.goto('/stockroom/a/stockroom.action_receipts');
+  const backorder = page.getByRole('row').filter({ hasText: 'Ready' });
+  await expect(backorder).toHaveCount(1);
+  expect(receipt).toMatch(/\d+$/);
 
   const context = await browser.newContext();
   const rahim = await context.newPage();
@@ -56,5 +68,5 @@ test('a receipt in, a delivery reserved, explained and validated; stock on hand 
 
   await page.goto('/stockroom/a/stockroom.action_stock');
   const line = page.getByRole('row').filter({ hasText: 'Steel beam' });
-  await expect(line).toContainText('6');
+  await expect(line).toContainText('2'); // six in, four out
 });
