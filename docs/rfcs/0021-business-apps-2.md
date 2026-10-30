@@ -350,11 +350,33 @@ reviewed steps.
   to the company's main warehouse, carries the order as its source document, and is confirmed (a delivery reserves
   its stock). A receipt is expected on the order's arrival date.
 - **Made in an audited superuser scope**: a salesperson or buyer without Stockroom rights still gets the transfer
-  made for the warehouse; the order's company, not
-  the user's current one, picks the warehouse.
+  made for the warehouse; the order's company, not the user's current one, picks the warehouse.
 - **On the orders**: each line's delivered / received quantity from validated transfers, the order's *Delivery* /
   *Receipt* status (nothing, to do, partly, done) on the form and the list; the transfer links back to its order.
 - **Tests**: the bridge proposed, the transfer made once (a replayed event adds nothing), goods lines only, units
   kept (a dozen stays a dozen on the line, 12 in stock), partial availability, validation completing the order,
   users without Stockroom rights, an order of services only.
+
+## Implementation notes (2026-10-30): Stockroom, step 2 part 2 — partial validation and backorders
+
+- **Done quantities**: each line of a waiting transfer takes what was actually moved (*Done*, in the line's unit;
+  empty means all of it). *Validate* moves what is done — refused when nothing is done, or when more is done out of
+  stock than is reserved — and releases the rest of the reservations; the lines keep their quantity and record what
+  was done.
+- **Backorders**: lines done in part leave the rest to a new transfer, *Backorder of* the first, with the same type,
+  contact, places, company, source document, date and note, confirmed at once (a delivery's backorder reserves again).
+  What a backorder copies is the `backorderValues` method of transfers and lines; `sale_stock` and `purchase_stock`
+  override it so a backorder stays with its order and its lines with their order lines (Shutro's method overrides,
+  traceable in the registry, instead of copying fields by reflection).
+- **The orders** count what was done: a sales order is *Partly delivered* after a partial delivery and *Delivered*
+  when its backorder is; the same for receipts.
+- **Fixed on the way** (`@kosh/ui` forms):
+  - after a workflow button (Confirm, Validate…) the form showed the transition's answer, which has no lines: the
+    lines disappeared until a reload (sales and purchase orders too); the record and its lines are fetched again;
+  - saving an edited line sent all its columns, read-only ones and its id included (refused by the server); only the
+    edited columns of a saved line are sent now, new lines send their writable columns.
+- **Tests**: on real PostgreSQL — six of ten received with a ready backorder of four, the source document and places
+  kept; a delivery done in part within what is reserved (more refused), its backorder reserved again; a negative or
+  nothing-done validation refused; a sales order partly then fully delivered through its backorder, the order line
+  kept. E2E (apps): six of ten beams received from the form, the backorder ready in Receipts.
 
