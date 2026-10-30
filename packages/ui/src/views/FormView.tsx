@@ -72,6 +72,8 @@ interface LineState {
     readonly id?: number;
     readonly values: Values;
     readonly dirty: boolean;
+    /** The columns edited on a saved line: only they are sent (the rest may be locked, a confirmed line's product). */
+    readonly edited?: readonly string[];
   }[];
   readonly deleted: readonly number[];
 }
@@ -79,8 +81,13 @@ interface LineState {
 /** A line's values as the server takes them: many2many as `{ set }` (a line's taxes). */
 function lineValues(values: Values, fields: Readonly<Record<string, ViewField>>): Values {
   const out: Values = {};
-  for (const [key, value] of Object.entries(values))
-    out[key] = fields[key]?.kind === 'many2many' && Array.isArray(value) ? { set: value } : value;
+  // Only what a line can be given: its id and read-only columns (a computed total, a reserved quantity) are shown,
+  // never written.
+  for (const [key, value] of Object.entries(values)) {
+    const field = fields[key];
+    if (field === undefined || field.readonly === true) continue;
+    out[key] = field.kind === 'many2many' && Array.isArray(value) ? { set: value } : value;
+  }
   return out;
 }
 
@@ -144,7 +151,13 @@ function commandsOf(lines: LineState, fields: Readonly<Record<string, ViewField>
       ? {
           update: lines.rows
             .filter((r) => r.id !== undefined && r.dirty)
-            .map((r) => ({ id: r.id, values: lineValues(r.values, fields) })),
+            .map((r) => ({
+              id: r.id,
+              values: lineValues(
+                Object.fromEntries((r.edited ?? []).map((k) => [k, r.values[k]])),
+                fields,
+              ),
+            })),
         }
       : {}),
     ...(lines.deleted.length > 0 ? { delete: lines.deleted } : {}),
@@ -202,7 +215,7 @@ function Lines({
       }),
     enabled: ids.length > 0 && target !== '',
   });
-  const rows =
+  const rows: LineState['rows'] =
     state?.rows ??
     (loaded.data?.items ?? []).map((r) => ({
       key: `id-${r.id}`,
@@ -257,7 +270,12 @@ function Lines({
                           set(
                             rows.map((r, i) =>
                               i === index
-                                ? { ...r, values: { ...r.values, [c.field]: value }, dirty: true }
+                                ? {
+                                    ...r,
+                                    values: { ...r.values, [c.field]: value },
+                                    dirty: true,
+                                    edited: [...new Set([...(r.edited ?? []), c.field])],
+                                  }
                                 : r,
                             ),
                           )
@@ -507,7 +525,13 @@ export function FormView({
     onSuccess: async (result, name) => {
       setProblem(null);
       queryClient.setQueryData(['record', model, recordId], result);
-      await queryClient.invalidateQueries({ queryKey: ['list', model] });
+      // The answer has the record's own fields: its lines (and what the transition changed in them, a line's
+      // reserved quantity) are fetched again.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['record', model, recordId] }),
+        queryClient.invalidateQueries({ queryKey: ['lines'] }),
+        queryClient.invalidateQueries({ queryKey: ['list', model] }),
+      ]);
       const button =
         view.type === 'form' ? view.header.buttons.find((b) => b.transition === name) : undefined;
       toast({ title: t('views.transitionDone', { action: button?.label ?? name }) });
