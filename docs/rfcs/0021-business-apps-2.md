@@ -397,5 +397,50 @@ reviewed steps.
   unknown barcode, a negative quantity, scanning before the start, counters unable to apply, gains and losses as two
   validated adjustments, uncounted products untouched, a reserved loss refused with its reservation named and applied
   once released. E2E (apps): a count started, an unknown barcode reported, a line counted, applied, stock following.
-- **Next** (step 2 part 4): lots and serial numbers.
+- **Then** (step 2 part 4): lots and serial numbers.
 
+## Implementation notes (2026-10-30): Stockroom, step 2 part 4 — lots and serial numbers (step 2 complete)
+
+- **Tracking** per product: *Not tracked*, *By lot* (a batch, with an expiry date), *By serial number* (one unit
+  each). Lots and serial numbers (`stock.lot`) belong to a product and a company; quants hold a lot (one stock line
+  per product, location and lot).
+- **In**: a receipt (or a count's gains) lists its lots in *Lots and serial numbers* — an existing lot, or the name
+  of a new one, made at validation. Validation checks that the lots cover what is done, product by product ("Router:
+  2 of 3 have a lot or serial number"), that a serial number is one unit, listed once and never already in stock.
+- **Out**: reservations take the lots that **expire first** (then the oldest stock); a line may take one lot only
+  (*Lot to take*). Validation records which lots left on the transfer, so each lot's page shows its stock by location
+  and its **history** — every transfer that moved it, from the vendor's receipt to the customer's delivery. A
+  reservation names its lot ("4 Units of L-OLD reserved for …").
+- **Counts by lot**: a count lists each lot with what is expected; scanning a lot or serial number counts it (a
+  phone's camera reads it); stock found needs its lot; a missing lot is taken out by its lot.
+- **Tests**: on real PostgreSQL — serials missing, listed twice, received twice, then received; lots with expiry
+  dates reserved first expiry first, the lots that left recorded, a lot's history, a line taking one lot; a count
+  listing serial numbers, one scanned, a missing one taken out by its lot. E2E (apps): a product tracked by serial
+  number received with two serials from the forms, listed in Lots and serial numbers.
+- **Step 3** next: `stock_account` — the stock's value (FIFO / average) posted to Accounting.
+
+
+## Design note: Stockroom step 3 — `stock_account` (decided 2026-10-30: perpetual, per product)
+
+- **Bridge** `stock_account` (Stockroom ↔ Accounting), proposed when both are installed.
+- **Cost method per product** (with a category default): *Average cost* (each receipt re-weighs the product's cost)
+  or *FIFO* (deliveries take the cost of the oldest receipts still in stock). Not tracked by value: services.
+- **Valuation layers** (`stock.valuation.layer`): one per product per validated transfer — quantity, unit cost and
+  value (Shutro `Decimal`), and for FIFO what is left of each incoming layer. The stock's value at any date is the
+  sum of the layers up to it; the valuation report reads them (by product, location and date).
+- **Posted at once**, one entry per validated transfer in a *Stock* journal:
+  - receipt: Dr *Inventory* (1200) / Cr *Goods received not billed* (a new interim account);
+  - delivery: Dr *Cost of goods sold* (5000) / Cr *Inventory*;
+  - count gain / loss: Dr *Inventory* / Cr *Stock adjustment* (gain), and the reverse (loss);
+  - internal moves post nothing (the value stays).
+  The accounts come from the product's category, else from the company's defaults (Settings › App settings ›
+  Stockroom), and the chart gains the interim and adjustment accounts.
+- **Vendor bills** for goods (with `purchase_account`) debit *Goods received not billed* instead of the expense
+  account, so receipt and bill meet in the interim account; a price difference between the receipt's cost and the
+  bill goes to a *Price difference* account. The receipt's cost is the purchase line's price when the receipt comes
+  from an order (`purchase_stock`), else the product's cost.
+- **Never edited after the fact**: entries are posted through Accounting's rules (lock dates, immutability); a
+  correction is a new transfer.
+- **Tests** (planned): average and FIFO on receipts at different prices, deliveries valued, entries balanced and
+  posted, count adjustments valued, the bill clearing the interim account with a price difference, the stock value
+  at a date equal to the Inventory account's balance.

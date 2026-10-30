@@ -236,7 +236,8 @@ With Sales or Purchase, the `sale_stock` / `purchase_stock` bridges make each co
 receipt, once, and show what is delivered or received on the order. A transfer can be validated in part: the
 done quantities move, and the rest goes to a backorder that stays with its order. Counts list what a location
 holds, take scans from a phone (`POST /api/v1/stockroom/counts/:id/scan`) and, applied by a manager, adjust the
-stock through validated adjustment transfers.
+stock through validated adjustment transfers. Products can be tracked by lot (with expiry dates, first expiry
+first out) or by serial number; every lot shows where it is and where it went.
 
 ## Demo data (RFC 0008 §5.8)
 
