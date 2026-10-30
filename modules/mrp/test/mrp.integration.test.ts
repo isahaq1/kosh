@@ -298,6 +298,44 @@ test('the checks; access by role', async () => {
   expect((await call('GET', P, 'bob')).status).toBe(403);
 });
 
+test('scrap on an order, with its reason; by-products of a bill must be other products', async () => {
+  const order = (
+    await call('POST', P, 'rahim', { product: ids['Fixture'], quantity: '1', bom: ids['v1'] })
+  ).json.id as number;
+  await receive('Panel', '1');
+  const scrap = await call('POST', '/api/v1/models/stock.scrap', 'rahim', {
+    product: ids['Panel'],
+    quantity: '1',
+    reason: 'defect',
+    production: order,
+  });
+  expect(scrap.status, JSON.stringify(scrap.json)).toBe(201);
+  expect(
+    (
+      await call(
+        'POST',
+        `/api/v1/models/stock.scrap/${scrap.json.id}/transitions/validate`,
+        'rahim',
+      )
+    ).status,
+  ).toBe(200);
+  const listed = await find('stock.scrap', { production: order }, 'reason,state', 'rahim');
+  expect(listed.map((x) => [x.reason, x.state])).toEqual([['defect', 'done']]);
+  const itself = await call('POST', '/api/v1/models/mrp.bom.byproduct', 'maria', {
+    bom: ids['v1'],
+    product: ids['Fixture'],
+    quantity: '1',
+  });
+  expect(itself.status).toBe(422);
+  const all = await call('POST', '/api/v1/models/mrp.bom.byproduct', 'maria', {
+    bom: ids['v1'],
+    product: ids['Cable'],
+    quantity: '1',
+    costShare: '100',
+  });
+  expect(all.status).toBe(422);
+});
+
 test('the demo data loads', async () => {
   const auth = host.server.auth;
   if (auth === undefined) throw new Error('base is installed');

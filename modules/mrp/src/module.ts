@@ -15,6 +15,7 @@ import {
   defineModel,
   defineModule,
   type Env,
+  extendModel,
   f,
   onchange,
   records,
@@ -94,6 +95,7 @@ export const MrpBom = defineModel('mrp.bom', {
     validTo: f.date({ label: 'Valid until' }),
     lines: f.one2many('mrp.bom.line', 'bom', { label: 'Components' }),
     operations: f.one2many('mrp.bom.operation', 'bom'),
+    byproducts: f.one2many('mrp.bom.byproduct', 'bom', { label: 'By-products' }),
     note: f.text(),
     label: f.char({
       store: true,
@@ -142,6 +144,46 @@ export const MrpBomLine = defineModel('mrp.bom.line', {
           .map((l) => l.id),
       ),
       message: 'A product is not a component of itself.',
+    },
+  },
+});
+
+/** What else one bill makes (sawdust, offcuts), and the share of the order's cost it carries. */
+export const MrpBomByproduct = defineModel('mrp.bom.byproduct', {
+  label: 'By-product',
+  order: ['id asc'],
+  access: { 'mrp.user': READ, 'mrp.manager': ALL },
+  fields: {
+    bom: f.many2one('mrp.bom', { required: true, ondelete: 'cascade' }),
+    product: f.many2one('product.product', { required: true, ondelete: 'restrict' }),
+    quantity: f.decimal({ scale: 4, required: true, default: '1' }),
+    uom: f.many2one('uom.uom', { label: 'Unit' }),
+    /** Percent of the order's cost (the main product carries the rest). */
+    costShare: f.decimal({
+      scale: 2,
+      required: true,
+      default: '0',
+      label: 'Share of the cost (%)',
+    }),
+  },
+  sqlConstraints: {
+    positive: {
+      check: orm.sql`quantity > 0 AND cost_share >= 0 AND cost_share < 100`,
+      message: 'A by-product is made in a positive quantity, with a share of the cost under 100 %.',
+    },
+  },
+  constraints: {
+    sharesUnderAll: {
+      ...check('mrp.bom.byproduct', ['costShare', 'bom', 'product'], async (lines) => {
+        const failing: number[] = [];
+        for (const l of await lines.load({ bom: { byproducts: true } })) {
+          const total = [...l.bom.byproducts].reduce((s, b) => s.plus(b.costShare), zero);
+          if (total.gte(100) || l.product.id === l.bom.product.id) failing.push(l.id);
+        }
+        return failing;
+      }),
+      message:
+        'By-products are other products than the one made, and their shares of the cost stay under 100 %.',
     },
   },
 });
@@ -298,6 +340,8 @@ export const MrpProduction = defineModel('mrp.production', {
     date: f.date({ required: true, default: (env: Env) => env.today(), label: 'Planned for' }),
     warehouse: f.many2one('stock.warehouse', { ondelete: 'restrict' }),
     components: f.one2many('mrp.production.component', 'production'),
+    /** Scrap recorded on the order, with its reasons (Stockroom's scrap). */
+    scraps: f.one2many('stock.scrap', 'production'),
     consumption: f.many2one('stock.picking', {
       ondelete: 'set null',
       label: 'Components transfer',
@@ -476,6 +520,11 @@ export const MrpProduction = defineModel('mrp.production', {
                 o.warehouse?.id ?? null,
                 o.company.id,
               );
+              const [bill] =
+                o.bom === null
+                  ? []
+                  : await env.model('mrp.bom').browse([o.bom.id]).load({ byproducts: true });
+              const factor = bill === undefined ? zero : o.quantity.div(bill.quantity);
               const made = await env.model('stock.picking').create([
                 {
                   kind: 'production',
@@ -484,7 +533,16 @@ export const MrpProduction = defineModel('mrp.production', {
                   source: production,
                   destination: stock,
                   origin: o.name,
-                  moves: { create: [{ product: o.product.id, quantity: o.quantity }] },
+                  moves: {
+                    create: [
+                      { product: o.product.id, quantity: o.quantity },
+                      ...[...(bill?.byproducts ?? [])].map((b) => ({
+                        product: b.product.id,
+                        quantity: b.quantity.times(factor).toDecimalPlaces(4),
+                        uom: b.uom?.id ?? null,
+                      })),
+                    ],
+                  },
                 },
               ]);
               // Linked before it is validated: what values it (mrp_account) finds its order.
@@ -548,6 +606,13 @@ export const MrpProduction = defineModel('mrp.production', {
   },
 });
 
+/** Scrap recorded on a production order (a broken component, a faulty unit made), with its reason. */
+export const ScrapProduction = extendModel('stock.scrap', {
+  fields: {
+    production: f.many2one('mrp.production', { ondelete: 'set null', label: 'Production order' }),
+  },
+});
+
 export const mrpShutro = defineModule({
   name: 'mrp',
   version: '0.1.0',
@@ -568,8 +633,10 @@ export const mrpShutro = defineModule({
     MrpWorkcenter,
     MrpBom,
     MrpBomLine,
+    MrpBomByproduct,
     MrpBomOperation,
     MrpProduction,
     MrpProductionComponent,
   ],
+  extensions: [ScrapProduction],
 });

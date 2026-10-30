@@ -222,3 +222,45 @@ test('made at what it consumed plus its operations; Work in progress clears', as
   expect(await balanceOf('5200')).toBe('-1000.00');
   expect(await balanceOf('1200')).toBe('1650.00');
 });
+
+test('a by-product carries its share of the cost; Work in progress still clears', async () => {
+  const offcut = (
+    await call('POST', '/api/v1/models/product.product', { name: 'Offcut', uom: ids['Units'] })
+  ).json.id;
+  const share = await call('POST', '/api/v1/models/mrp.bom.byproduct', {
+    bom: ids['bom'],
+    product: offcut,
+    quantity: '2',
+    costShare: '10',
+  });
+  expect(share.status, JSON.stringify(share.json)).toBe(201);
+  for (const [name, quantity] of [
+    ['Panel', '5'],
+    ['Cable', '15'],
+  ] as const) {
+    const made = await call('POST', T, {
+      kind: 'receipt',
+      source: ids['vendors'],
+      destination: ids['stock'],
+      moves: { create: [{ product: ids[name], quantity }] },
+    });
+    await ok(`${T}/${made.json.id}/transitions/confirm`);
+    await ok(`${T}/${made.json.id}/transitions/validate`);
+  }
+  const id = (await call('POST', P, { product: ids['Fixture'], quantity: '5', bom: ids['bom'] }))
+    .json.id as number;
+  await ok(`${P}/${id}/transitions/confirm`);
+  await ok(`${P}/${id}/transitions/produce`);
+  const order = (await call('GET', `${P}/${id}`)).json;
+  const layers = await find(
+    'stock.valuation.layer',
+    { picking: order.output },
+    'product,quantity,value',
+  );
+  // 1,650 in all: 90 % to the 5 fixtures, 10 % to the 10 offcuts.
+  expect(layers.map((l) => [l.product, l.quantity, l.value])).toEqual([
+    [ids['Fixture'], '5', '1485'],
+    [offcut, '10', '165'],
+  ]);
+  expect(await balanceOf('1250')).toBe('0.00');
+});

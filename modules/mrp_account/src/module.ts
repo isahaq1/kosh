@@ -27,6 +27,13 @@ async function madeBy(env: Env, picking: Id<'stock.picking'>) {
     await env.model('mrp.production').search({ where: { output: picking }, limit: 1 })
   ).load({});
   if (order === undefined) return null;
+  const [bill] =
+    order.bom === null
+      ? []
+      : await env.model('mrp.bom').browse([order.bom.id]).load({ byproducts: true });
+  const shares = new Map<number, Decimal>(
+    [...(bill?.byproducts ?? [])].map((b) => [b.product.id, b.costShare]),
+  );
   let consumed = zero;
   if (order.consumption !== null) {
     const layers = await (
@@ -34,7 +41,7 @@ async function madeBy(env: Env, picking: Id<'stock.picking'>) {
     ).load(['value']);
     consumed = [...layers].reduce((s, l) => s.minus(l.value), zero); // out layers are negative
   }
-  return { order, consumed, operations: order.operationCost ?? zero };
+  return { order, consumed, operations: order.operationCost ?? zero, shares };
 }
 
 export const OutputCost = extendModel('stock.move', {
@@ -47,11 +54,18 @@ export const OutputCost = extendModel('stock.move', {
       const out = await next();
       const moves = this as Records<'stock.move'>;
       const env = moves.env as unknown as Env;
-      for (const m of await moves.load({ picking: { source: true } })) {
+      for (const m of await moves.load({ picking: { source: true }, product: true })) {
         if (m.picking.kind !== 'production' || m.picking.source.usage !== 'production') continue;
         const made = await madeBy(env, m.picking.id);
         if (made === null || m.productQty === null || m.productQty.lte(0)) continue;
-        const unit = made.consumed.plus(made.operations).div(m.productQty);
+        // A by-product carries its share of the cost; the product made, the rest.
+        const total = made.consumed.plus(made.operations);
+        const others = [...made.shares.values()].reduce((s, x) => s.plus(x), zero);
+        const share =
+          m.product.id === made.order.product.id
+            ? orm.toDecimal(100).minus(others)
+            : (made.shares.get(m.product.id) ?? zero);
+        const unit = total.times(share).div(100).div(m.productQty);
         out.set(m.id, unit.toDecimalPlaces(4).toString());
       }
       return out;

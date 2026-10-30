@@ -22,12 +22,14 @@ import {
 
 export {
   MrpBom,
+  MrpBomByproduct,
   MrpBomLine,
   MrpBomOperation,
   MrpProduction,
   MrpProductionComponent,
   MrpWorkcenter,
   mrpShutro,
+  ScrapProduction,
   validBom,
 } from './module.js';
 
@@ -140,6 +142,12 @@ export const mrp: ReturnType<typeof defineModule> = defineModule({
           { field: 'short', id: 'component_short' },
           { field: 'cost', id: 'component_cost' },
         ]),
+        k.lines('scraps', [
+          { field: 'product', id: 'scrap_product' },
+          { field: 'quantity', id: 'scrap_quantity' },
+          { field: 'reason', id: 'scrap_reason' },
+          { field: 'state', id: 'scrap_state' },
+        ]),
         k.group('transfers', ['consumption', 'output']),
         k.group('about', ['note'], { columns: 1 }),
       ],
@@ -161,6 +169,12 @@ export const mrp: ReturnType<typeof defineModule> = defineModule({
           { field: 'name', id: 'bom_operation_name' },
           { field: 'workcenter', id: 'bom_operation_workcenter' },
           { field: 'minutes', id: 'bom_operation_minutes' },
+        ]),
+        k.lines('byproducts', [
+          { field: 'product', id: 'bom_byproduct_product' },
+          { field: 'quantity', id: 'bom_byproduct_quantity' },
+          { field: 'uom', id: 'bom_byproduct_uom' },
+          { field: 'costShare', id: 'bom_byproduct_share' },
         ]),
         k.group('about', ['note'], { columns: 1 }),
       ],
