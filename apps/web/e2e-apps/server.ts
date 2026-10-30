@@ -25,6 +25,7 @@ import { dataImport } from '@kosh/import';
 import { l10nBd } from '@kosh/l10n_bd';
 import { l10nIn } from '@kosh/l10n_in';
 import { mail } from '@kosh/mail';
+import { maintenance } from '@kosh/maintenance';
 import { installActivityTypes, messaging } from '@kosh/messaging';
 import { mrp } from '@kosh/mrp';
 import { mrpAccount } from '@kosh/mrp_account';
@@ -123,6 +124,7 @@ const CATALOGUE = [
   recruitment,
   stock,
   mrp,
+  maintenance,
   saleAccount,
   purchaseAccount,
   saleProject,
@@ -164,6 +166,7 @@ await applyApps(
         'recruitment',
         'stock',
         'mrp',
+        'maintenance',
         'assistant',
         'import',
         'l10n_bd',
@@ -224,6 +227,7 @@ for (const [login, name, groups] of [
       'hiring.manager',
       'stock.manager',
       'mrp.manager',
+      'maintenance.manager',
       'messaging.user',
       'reporting.user',
       'assistant.user',
@@ -248,6 +252,7 @@ for (const [login, name, groups] of [
       'hiring.user',
       'stock.user',
       'mrp.user',
+      'maintenance.user',
     ],
   ],
 ] as const)

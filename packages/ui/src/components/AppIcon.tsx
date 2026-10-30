@@ -35,6 +35,7 @@ import {
   Wallet,
   Warehouse,
   Workflow,
+  Wrench,
 } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { cn } from '../lib/cn.js';
@@ -79,6 +80,8 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   hiring: UserPlus,
   stockroom: Warehouse,
   production: Factory,
+  assetcare: Wrench,
+  maintenance: Wrench,
   mrp: Factory,
   stock: Warehouse,
   recruitment: UserPlus,

@@ -63,6 +63,7 @@ const PACKAGES = [
   'recruitment',
   'stock',
   'mrp',
+  'maintenance',
   'sale_project',
   'sale_stock',
   'purchase_stock',
