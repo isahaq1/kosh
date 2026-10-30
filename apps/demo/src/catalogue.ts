@@ -4,6 +4,7 @@ import { automation } from '@kosh/automation';
 import { calendarApp } from '@kosh/calendar';
 import { contacts } from '@kosh/contacts';
 import { crm } from '@kosh/crm';
+import { hr } from '@kosh/hr';
 import { l10nBd } from '@kosh/l10n_bd';
 import { mail } from '@kosh/mail';
 import { messaging } from '@kosh/messaging';
@@ -37,6 +38,7 @@ export const DEMO_APPS: readonly string[] = [
   'todo',
   'calendar',
   'crm',
+  'hr',
   'l10n_bd',
 ];
 
@@ -60,6 +62,7 @@ export function demoCatalogue(): KoshModule[] {
     todo,
     calendarApp,
     crm,
+    hr,
     saleAccount,
     purchaseAccount,
     saleProject,

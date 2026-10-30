@@ -59,6 +59,7 @@ const PACKAGES = [
   'todo',
   'calendar',
   'crm',
+  'hr',
   'sale_project',
   'portal',
   'sale_portal',

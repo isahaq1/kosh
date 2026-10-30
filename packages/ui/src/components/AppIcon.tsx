@@ -73,6 +73,8 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   focus: ListChecks,
   agenda: CalendarDays,
   pipeline: TrendingUp,
+  workforce: Briefcase,
+  hr: Briefcase,
   crm: TrendingUp,
   calendar: CalendarDays,
   todo: ListChecks,

@@ -64,6 +64,7 @@
     "@kosh/project": "workspace:*",
     "@kosh/calendar": "workspace:*",
     "@kosh/crm": "workspace:*",
+    "@kosh/hr": "workspace:*",
     "@kosh/todo": "workspace:*",
     "@kosh/sale_project": "workspace:*",
     "@kosh/mail": "workspace:*",
