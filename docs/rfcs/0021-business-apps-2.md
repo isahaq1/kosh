@@ -341,3 +341,20 @@ reviewed steps.
 - **Step 2** as planned: `sale_stock`, `purchase_stock`, partial validation with backorders, counts from a phone,
   lots and serial numbers. **Step 3**: `stock_account`.
 
+## Implementation notes (2026-10-30): Stockroom, step 2 part 1 — the Sales and Purchase bridges
+
+- **`sale_stock`** and **`purchase_stock`** (proposed whenever Sales or Purchase meets Stockroom): confirming an
+  order makes its transfer through the outbox — Sales' `sale.order.confirmed`, and Purchase's new
+  `purchase.order.confirmed` (also offered to webhooks) — exactly once, after the confirmation committed. The
+  delivery or receipt has a line per goods line in the line's own unit (services are not moved), comes from or goes
+  to the company's main warehouse, carries the order as its source document, and is confirmed (a delivery reserves
+  its stock). A receipt is expected on the order's arrival date.
+- **Made in an audited superuser scope**: a salesperson or buyer without Stockroom rights still gets the transfer
+  made for the warehouse; the order's company, not
+  the user's current one, picks the warehouse.
+- **On the orders**: each line's delivered / received quantity from validated transfers, the order's *Delivery* /
+  *Receipt* status (nothing, to do, partly, done) on the form and the list; the transfer links back to its order.
+- **Tests**: the bridge proposed, the transfer made once (a replayed event adds nothing), goods lines only, units
+  kept (a dozen stays a dozen on the line, 12 in stock), partial availability, validation completing the order,
+  users without Stockroom rights, an order of services only.
+
