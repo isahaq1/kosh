@@ -130,6 +130,7 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
       'Stockroom: warehouses, transfers with one clear status, reservations that say what they are for',
     icon: '🏬',
     server: 'stock',
+    web: 'registerStockWeb',
   },
   sale_project: {
     label: 'Bridge: tasks and projects from sales orders (Sales ↔ Projects)',

@@ -18,6 +18,7 @@ import { portalMessages, registerPortalWeb } from '@kosh/portal/web';
 import { recruitmentMessages, registerRecruitmentWeb } from '@kosh/recruitment/web';
 import { registerReportingWeb, reportingMessages } from '@kosh/reporting/web';
 import { registerSettingsWeb, settingsMessages } from '@kosh/settings/web';
+import { registerStockWeb, stockMessages } from '@kosh/stock/web';
 import { registerStudioWeb, studioMessages } from '@kosh/studio/web';
 import { createDefaultRegistry, createKoshApi, KoshApp } from '@kosh/ui';
 import { StrictMode } from 'react';
@@ -40,6 +41,7 @@ registerPortalWeb(registry);
 registerL10nBdWeb(registry);
 registerL10nInWeb(registry);
 registerRecruitmentWeb(registry);
+registerStockWeb(registry);
 const messages = {
   accounting: accountingMessages,
   assistant: assistantMessages,
@@ -52,6 +54,7 @@ const messages = {
   notify: notifyMessages,
   portal: portalMessages,
   recruitment: recruitmentMessages,
+  stock: stockMessages,
   reporting: reportingMessages,
   messaging: messagingMessages,
   settings: settingsMessages,
