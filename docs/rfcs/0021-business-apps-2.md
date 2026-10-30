@@ -444,3 +444,27 @@ reviewed steps.
 - **Tests** (planned): average and FIFO on receipts at different prices, deliveries valued, entries balanced and
   posted, count adjustments valued, the bill clearing the interim account with a price difference, the stock value
   at a date equal to the Inventory account's balance.
+
+## Implementation notes (2026-10-30): Stockroom, step 3 part 1 — `stock_account`
+
+- **Module** `modules/stock_account` (`@kosh/stock_account`, export `stockAccount`), the Stockroom ↔ Accounting
+  bridge; access level *Stock valuation (read)*; Stockroom › Valuation (pivot by product, list of layers).
+- **Hook**: Stockroom's transfers have a `validated()` method, empty, called at the end of a validation in its
+  superuser scope; the bridge overrides it (Shutro's method overrides) — Stockroom knows nothing of Accounting.
+- **Cost**: per product, else its category, else average. Average re-weighs the product's cost on each receipt;
+  FIFO takes the oldest incoming layers' remaining value, and the product's cost beyond them (stock from before the
+  bridge). The incoming cost is the `incomingUnitCost` method of transfer lines — the product's cost here; the
+  Purchase bridge (part 2) gives the order's price.
+- **Entries**, posted at once in the *Stock* journal (`STJ`) with Accounting's posting rules: receipt Dr 1200
+  Inventory / Cr 2150 Goods received not billed; delivery Dr 5000 Cost of goods sold / Cr Inventory; count gains and
+  losses against 5100 Stock adjustments; internal moves nothing. The bridge adds 2150, 5100 and 5110 Price
+  differences to the company's chart and points the company's defaults at them (on install, after a chart is
+  installed, and before the first valuation); a category may name its own Inventory and Cost of goods sold accounts.
+- **Valuation at a date**: `GET /api/v1/stockroom/valuation?date=` sums the layers by product; the tests check it
+  equals the Inventory account's balance. Layers are read-only to everyone (written by validations only).
+- **Tests**: the bridge proposed; receipts valued and posted; FIFO across two costs (10 × 100 + 5 × 130 delivered,
+  5 × 130 left); average cost delivered; a count loss to Stock adjustments; internal moves unposted; the value
+  equal to the Inventory balance; layers not editable, not readable by stock users.
+- **Part 2**: `purchase_stock_account` — receipts at the purchase order's price, vendor bills for goods clearing
+  Goods received not billed, the difference to Price differences.
+
