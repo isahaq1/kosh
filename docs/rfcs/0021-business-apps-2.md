@@ -627,3 +627,23 @@ reviewed steps.
   added, reported down by a technician, repaired, operational again.
 - **Step 2**: `maintenance_stock` (parts drawn from Stockroom on an order), labour cost, the plans' calendar.
 
+## Implementation notes (2026-10-30): Asset Care, step 2 — spare parts, labour cost, the plans' calendar (complete)
+
+- **`maintenance_stock`** (Asset Care ↔ Stockroom, proposed when both are installed): maintenance orders list their
+  **spare parts** (product, quantity, unit, cost at the product's cost). *Start* reserves them in a transfer from the
+  main stock to the new *Maintenance* location; *Finish* consumes them — **refused while some are short**, naming
+  them ("Parts are short: Filter (1)"); *Cancel* releases them. All in an audited superuser scope, so technicians need
+  no Stockroom rights. With `stock_account`, parts leave Inventory as a stock adjustment.
+- **Hooks in Asset Care**, empty by default: `started()`, `finishing()` (throwing refuses the finish) and
+  `cancelled()` on maintenance orders — the bridge overrides them.
+- **Labour cost**: App settings › Asset Care gains *Cost of an hour of work*; a finished order's labour hours are
+  costed at it (*Labour cost*). The order shows its parts cost too.
+- **The plans' calendar**: preventive plans by their next due date.
+- **Stockroom**: counts find the *Inventory adjustment* location by name (Scrap and Maintenance are adjustment
+  locations too).
+- **Tests**: the bridge proposed; parts reserved at the start by a technician without stock rights, the finish
+  refused while one filter is short, then both consumed to Maintenance; 1.5 hours at 500 costed 750; cancelling
+  releasing the reservation.
+- **Asset Care complete** (steps 1–2). Later: a maintenance expense account for parts and labour, mobile checklists
+  with photos, meter readings by scanning the equipment's tag.
+

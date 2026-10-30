@@ -259,7 +259,8 @@ gives each centre's load by day.
 Equipment with asset tags, warranty and meters that only count up; preventive plans by time or by meter whose
 orders are made when due (hourly, or `POST /api/v1/assetcare/plans/run`), with checklists ticked before an order is
 done; breakdowns that put equipment down until repaired; reliability (failures, downtime, MTTR, MTBF, availability)
-from `GET /api/v1/assetcare/reliability`. Install it with `shutro-erp apps install maintenance`.
+from `GET /api/v1/assetcare/reliability`. Install it with `shutro-erp apps install maintenance`. With Stockroom,
+`maintenance_stock` reserves an order's spare parts when it starts and consumes them when it is finished.
 
 ## Demo data (RFC 0008 §5.8)
 
