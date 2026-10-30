@@ -243,6 +243,13 @@ adjustment at once; Stockroom › Valuation shows the stock's value. With Purcha
 values receipts at the order's price and has vendor bills clear Goods received not billed, the difference going
 to Price differences.
 
+### Production (`modules/mrp`, RFC 0021)
+
+Bills of materials with versions and effective dates, work centres with their cost per hour, and production orders
+that list what is required, available and short, and what they will cost, before they start. Confirm reserves the
+components through Stockroom; Produce consumes them and puts the product in stock. Install it with
+`shutro-erp apps install mrp`.
+
 ## Demo data (RFC 0008 §5.8)
 
 `npx shutro-erp init --demo` (or a yes to the question after the apps) loads every installed app's demo data: a sample

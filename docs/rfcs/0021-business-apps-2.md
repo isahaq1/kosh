@@ -486,3 +486,48 @@ reviewed steps.
 - **Stockroom is complete** (steps 1–3). Later: landed costs, valuation of returns, foreign-currency price
   differences at the bill's rate.
 
+
+## Design note: Production (`modules/mrp`, app code `production`)
+
+- **Bills of materials** (`mrp.bom`): the product made and how many one bill yields, its components
+  (`mrp.bom.line`: product, quantity, unit) and its operations (`mrp.bom.operation`: work centre, minutes per
+  yield). **Versions with effective dates**: a bill has a version and *valid from / until* dates; a production
+  order takes the bill valid on its date (the latest that starts on or before it), so a new recipe can start on a
+  given day without touching the running orders.
+- **Work centres** (`mrp.workcenter`): hours available per day and a cost per hour (labour and overhead).
+- **Production orders** (`mrp.production`, MO/2026/00001): product, quantity, bill, date, warehouse. Their
+  component lines say what is **required, available and short — before the order starts** — and the order shows
+  its **cost roll-up** (materials at cost, operations at their centres' rates, the total and the unit cost) while
+  still a draft. One status: Draft, Waiting (short), Ready, Done, Cancelled.
+- **Through Stockroom**: *Confirm* makes the consumption transfer (components from stock to the new *Production*
+  location, reserved); *Produce* validates it and the output transfer (the finished product from Production into
+  stock) — quantities change only through transfers, as everywhere. *Cancel* cancels them.
+- **Stockroom gains** a *Production* location usage and transfer type; `stock_account` values them against a new
+  *Work in progress* account (1250) instead of Cost of goods sold or Goods received not billed.
+- **Access**: *Production user* (orders) and *Production manager* (bills, work centres, everything).
+- **Step 2**: by-products and scrap with reasons, the work centres' Gantt with capacity, `mrp_account` (the finished
+  product's cost from what was consumed and the operations, so Work in progress clears exactly).
+
+## Implementation notes (2026-10-30): Production, step 1
+
+- **Module** `modules/mrp` (`@kosh/mrp`, export `mrp`), app **Production** (code `production`), depending on
+  Stockroom; access levels *User* (orders; Production users are Stockroom users) and *Manager* (bills, work centres).
+- **Bills of materials** with components (in any unit of the component's category) and operations (work centre,
+  minutes per yield), versions and *valid from / until* dates; an order takes the bill valid on its date (the latest
+  started), proposed when the product or the date changes. Checks: a component is never the product itself, the
+  bill belongs to the order's product, quantities are positive, a version ends after it starts.
+- **Orders**: *Check components* lists what is required (in the product's unit), available in the warehouse and
+  short, with the cost: materials at the components' cost and operations at their centres' rates, total and unit
+  cost — all before anything starts. *Confirm* reserves the components in a *Production* transfer (stock → the new
+  Production location); *Check availability* reserves what came in; *Produce* is refused while anything is short,
+  then validates the components' transfer and the output transfer (Production → stock); *Cancel* releases.
+- **Stockroom** gained the *Production* location and transfer type; `stock_account` posts them against 1250 *Work in
+  progress* (components in, the product out), not Cost of goods sold or Goods received not billed.
+- **Tests**: on real PostgreSQL — the version valid on a date; the needs, shortages and cost roll-up (650 of
+  materials, 1,000 of operations, 330 a unit); confirmation reserving in part, production refused while short, then
+  made with the stock following; cancelling releasing; the checks and access by role; the demo. `stock_account`:
+  production in and out of Work in progress. E2E (apps): a bill made from the forms, an order with its bill chosen,
+  its components checked with the cost, confirmed with its transfer.
+- **Step 2**: by-products and scrap with reasons, the work centres' Gantt with capacity, `mrp_account` (the
+  finished product valued at what it consumed plus its operations, so Work in progress clears exactly).
+
