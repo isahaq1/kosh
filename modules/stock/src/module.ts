@@ -70,12 +70,14 @@ export async function defaultLocations(
   env: Env,
   kind: string,
   warehouse?: Id<'stock.warehouse'> | null,
+  /** The document's company (an order's), else the user's current one. */
+  forCompany?: Id<'res.company'>,
 ): Promise<{
   warehouse: Id<'stock.warehouse'> | null;
   source: Id<'stock.location'> | null;
   destination: Id<'stock.location'> | null;
 }> {
-  const company = env.companyId as Id<'res.company'>;
+  const company = forCompany ?? (env.companyId as Id<'res.company'>);
   const wh =
     warehouse ??
     (await env.model('stock.warehouse').search({ where: { company }, limit: 1 })).ids[0] ??

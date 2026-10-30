@@ -20,6 +20,13 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
   kosh: '^0.1.0',
   hooks: { demo: purchaseDemo },
   depends: [contacts, product, messaging, permissions],
+  events: [
+    {
+      topic: 'purchase.order.confirmed',
+      model: 'purchase.order',
+      label: 'Purchase order confirmed',
+    },
+  ],
   app: {
     code: 'purchase',
     label: 'Purchase',

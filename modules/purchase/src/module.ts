@@ -115,6 +115,11 @@ export const PurchaseOrder = defineModel('purchase.order', {
           to: 'purchase',
           guard: records('purchase.order', (orders) => approvalGuard(orders)),
           message: 'Waiting for approvals.',
+          // Other apps act on a confirmation through the outbox (purchase_stock makes the receipt).
+          after: records('purchase.order', async (orders) => {
+            for (const o of await orders.load({}))
+              await orders.env.emit('purchase.order.confirmed', { id: o.id });
+          }),
         },
         reject: { from: ['to_approve'], to: 'draft' },
         lock: { from: ['purchase'], to: 'done' },
