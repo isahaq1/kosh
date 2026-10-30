@@ -25,6 +25,7 @@ import {
   StockPicking,
   StockQuant,
   StockReservation,
+  StockScrap,
   StockWarehouse,
   stockShutro,
 } from './module.js';
@@ -35,6 +36,7 @@ export {
   onHandIn,
   ProductStock,
   reserveOnConfirm,
+  SCRAP_REASONS,
   StockCount,
   StockCountLine,
   StockLocation,
@@ -44,6 +46,7 @@ export {
   StockPicking,
   StockQuant,
   StockReservation,
+  StockScrap,
   StockWarehouse,
   stockShutro,
 } from './module.js';
@@ -235,6 +238,10 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       views: ['list', 'form'],
       defaultFilters: ['in_stock'],
     }),
+    'stockroom.action_scraps': action(StockScrap, {
+      label: 'Scrap',
+      views: ['list', 'form'],
+    }),
     'stockroom.action_counts': action(StockCount, {
       label: 'Counts',
       views: ['list', 'form'],
@@ -300,6 +307,13 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       label: 'Counts',
       action: 'stockroom.action_counts',
       sequence: 6,
+    },
+    {
+      id: 'stockroom.scraps',
+      parent: 'stockroom.root',
+      label: 'Scrap',
+      action: 'stockroom.action_scraps',
+      sequence: 8,
     },
     {
       id: 'stockroom.configuration',
@@ -425,6 +439,35 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
     'stock.reservation.list': list(StockReservation, {
       columns: ['label', 'quant', 'quantity', 'move'],
     }),
+    'stock.scrap.list': list(StockScrap, {
+      columns: [
+        'name',
+        'date',
+        'product',
+        'quantity',
+        'reason',
+        { field: 'state', widget: 'badge' },
+      ],
+    }),
+    'stock.scrap.form': form(StockScrap, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('validate', {
+            primary: true,
+            label: 'Scrap',
+            confirm: 'Scrap it? The stock leaves for the Scrap location.',
+          }),
+          k.button('cancel', { label: 'Cancel' }),
+        ],
+      },
+      sheet: [
+        k.group('main', ['product', 'quantity', 'location', 'lot']),
+        k.group('why', ['reason', 'date', 'picking']),
+        k.group('about', ['note'], { columns: 1 }),
+      ],
+      chatter: true,
+    })),
     'stock.count.list': list(StockCount, {
       columns: ['name', 'location', 'date', 'user', { field: 'state', widget: 'badge' }],
     }),
@@ -520,6 +563,10 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
         applied: { label: 'Applied', domain: { state: 'done' } },
       },
       groupBy: ['location', 'user'],
+    }),
+    'stock.scrap': search(StockScrap, {
+      fields: ['name', 'product.name'],
+      groupBy: ['reason', 'product', 'date'],
     }),
     'stock.count.line': search(StockCountLine, { fields: ['product.name', 'count.name'] }),
     'stock.lot': search(StockLot, {

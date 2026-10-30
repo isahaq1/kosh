@@ -308,6 +308,23 @@ test('production: components into Work in progress, the product out of it', asyn
   expect((await entryOf(made))[1]).toEqual(['1250', '0', layer.value]);
 });
 
+test('scrap: a loss to Stock adjustments', async () => {
+  const S = '/api/v1/models/stock.scrap';
+  const made = await call('POST', S, 'maria', {
+    product: ids['Panel'],
+    quantity: '1',
+    reason: 'defect',
+  });
+  expect((await call('POST', `${S}/${made.json.id}/transitions/validate`, 'maria')).status).toBe(
+    200,
+  );
+  const scrap = (await call('GET', `${S}/${made.json.id}`, 'maria')).json;
+  expect(await entryOf(scrap.picking)).toEqual([
+    ['5100', '50', '0'],
+    ['1200', '0', '50'],
+  ]);
+});
+
 test('nobody edits the valuation; stock users do not read it', async () => {
   const [layer] = await find('stock.valuation.layer', {}, 'id');
   expect(

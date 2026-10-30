@@ -579,6 +579,36 @@ test('counts by lot: a serial number scanned, a missing one taken out by its lot
   ]);
 });
 
+test('scrap: with its reason, out to the Scrap location; never more than is available', async () => {
+  const S = '/api/v1/models/stock.scrap';
+  const before = Number((await onHand('Cement')).qtyOnHand);
+  const too = await call('POST', S, 'rahim', {
+    product: ids['Cement'],
+    quantity: '1000',
+    reason: 'damaged',
+  });
+  expect(too.status, JSON.stringify(too.json)).toBe(201);
+  const refused = await call('POST', `${S}/${too.json.id}/transitions/validate`, 'rahim');
+  expect(refused.status).toBe(422);
+  expect(JSON.stringify(refused.json)).toContain('available to scrap');
+  const one = await call('POST', S, 'rahim', {
+    product: ids['Cement'],
+    quantity: '1',
+    reason: 'spill',
+    note: 'Bag torn by the forklift',
+  });
+  expect((await call('POST', `${S}/${one.json.id}/transitions/validate`, 'rahim')).status).toBe(
+    200,
+  );
+  expect(Number((await onHand('Cement')).qtyOnHand)).toBe(before - 1);
+  const scrap = (await call('GET', `${S}/${one.json.id}`, 'rahim')).json;
+  expect(scrap.state).toBe('done');
+  const moved = (await call('GET', `${T}/${scrap.picking}`, 'rahim')).json;
+  expect(moved).toMatchObject({ kind: 'adjustment', state: 'done', origin: scrap.name });
+  const [scrapLocation] = await find('stock.location', { name: 'Scrap' }, 'id', 'rahim');
+  expect(moved.destination).toBe(scrapLocation.id);
+});
+
 test('the setting: reserve only with Check availability', async () => {
   expect(
     (

@@ -1133,7 +1133,9 @@ async function applyCounts(ids: readonly Id<'stock.count'>[], env: Env): Promise
       .browse(ids)
       .load({ location: true, company: true, lines: { product: true } });
     const adjustment = (
-      await su.model('stock.location').search({ where: { usage: 'adjustment' }, limit: 1 })
+      await su
+        .model('stock.location')
+        .search({ where: { usage: 'adjustment', name: { ne: 'Scrap' } }, limit: 1 })
     ).ids[0];
     if (adjustment === undefined)
       throw new orm.ValidationError(
@@ -1319,6 +1321,122 @@ export const StockCount = defineModel('stock.count', {
   },
 });
 
+export const SCRAP_REASONS = {
+  damaged: 'Damaged',
+  defect: 'Defective',
+  expired: 'Expired',
+  spill: 'Spilt or broken in handling',
+  other: 'Other',
+} as const;
+
+/**
+ * Scrap: stock thrown away, with its reason. Validated, it leaves its location for the Scrap location in a validated
+ * adjustment transfer (reserved first: what other transfers hold is not scrapped), so it is valued as a loss.
+ */
+export const StockScrap = defineModel('stock.scrap', {
+  label: 'Scrap',
+  recName: 'name',
+  order: ['date desc', 'id desc'],
+  companyScoped: { required: true },
+  tracking: ['state', 'quantity', 'reason'],
+  access: {
+    'stock.user': ['read', 'write', 'create'],
+    'stock.manager': [...ALL, 'export'],
+  },
+  fields: {
+    name: f.char({
+      required: true,
+      readonly: true,
+      sequence: { code: 'stock.scrap', dateField: 'date' },
+      label: 'Reference',
+    }),
+    product: f.many2one('product.product', { required: true, ondelete: 'restrict' }),
+    /** In the product's unit. */
+    quantity: f.decimal({ scale: 4, required: true, default: '1' }),
+    /** Where it is thrown away from (empty: the main warehouse's stock). */
+    location: f.many2one('stock.location', { ondelete: 'restrict', label: 'From' }),
+    lot: f.many2one('stock.lot', { ondelete: 'restrict', label: 'Lot / serial number' }),
+    reason: f.selection(SCRAP_REASONS, { required: true, default: 'damaged' }),
+    note: f.text(),
+    date: f.date({ required: true, default: (env: Env) => env.today() }),
+    picking: f.many2one('stock.picking', { ondelete: 'set null', label: 'Transfer' }),
+    state: f.state({
+      states: { draft: 'Draft', done: 'Scrapped', cancel: 'Cancelled' },
+      initial: 'draft',
+      transitions: {
+        validate: {
+          from: ['draft'],
+          to: 'done',
+          before: records('stock.scrap', async (scraps): Promise<void> => {
+            await scrapStock(scraps.ids, scraps.env as unknown as Env);
+          }),
+        },
+        cancel: { from: ['draft'], to: 'cancel' },
+      },
+    }),
+  },
+  sqlConstraints: {
+    positive: { check: orm.sql`quantity > 0`, message: 'Scrap a positive quantity.' },
+  },
+});
+
+/** Moves the scraps' stock to the Scrap location through validated adjustment transfers. */
+async function scrapStock(ids: readonly Id<'stock.scrap'>[], env: Env): Promise<void> {
+  const scrapped = (
+    await env
+      .model('stock.location')
+      .search({ where: { usage: 'adjustment', name: 'Scrap' }, limit: 1 })
+  ).ids[0];
+  if (scrapped === undefined)
+    throw new orm.ValidationError(
+      'stock.scrap',
+      ['state'],
+      'There is no Scrap location.',
+      'Upgrade the Stockroom app to restore it.',
+    );
+  for (const sc of await env.model('stock.scrap').browse(ids).load({ product: true })) {
+    const from =
+      sc.location?.id ?? (await defaultLocations(env, 'internal', null, sc.company.id)).source;
+    if (from === null)
+      throw new orm.ValidationError(
+        'stock.scrap',
+        ['location'],
+        'There is no stock location.',
+        'Choose where from.',
+      );
+    const made = await env.model('stock.picking').create([
+      {
+        kind: 'adjustment',
+        company: sc.company.id,
+        source: from,
+        destination: scrapped,
+        origin: sc.name,
+        note: sc.note,
+        moves: {
+          create: [
+            { product: sc.product.id, quantity: sc.quantity, restrictLot: sc.lot?.id ?? null },
+          ],
+        },
+      },
+    ]);
+    await made.confirm();
+    await made.reserve();
+    const [loaded] = await made.load(['availability']);
+    if (loaded?.availability !== 'full')
+      throw new orm.ValidationError(
+        'stock.scrap',
+        ['quantity'],
+        `Not ${sc.quantity.toString()} of ${sc.product.name} is available to scrap there.`,
+        'Scrap less, from another location, or unreserve what other transfers hold.',
+      );
+    await made.validate();
+    await env
+      .model('stock.scrap')
+      .browse([sc.id])
+      .write({ picking: made.ids[0] ?? null });
+  }
+}
+
 /** What a product has in stock, across the internal locations. */
 export const ProductStock = extendModel('product.product', {
   fields: {
@@ -1381,6 +1499,12 @@ export const stockShutro = defineModule({
       reset: 'yearly',
     }),
     orm.defineSequence({
+      code: 'stock.scrap',
+      prefix: 'SC/{year}/',
+      padding: 5,
+      reset: 'yearly',
+    }),
+    orm.defineSequence({
       code: 'stock.count',
       prefix: 'CNT/{year}/',
       padding: 5,
@@ -1405,6 +1529,7 @@ export const stockShutro = defineModule({
     StockLotLine,
     StockCount,
     StockCountLine,
+    StockScrap,
   ],
   extensions: [ProductStock],
   data: [
@@ -1412,5 +1537,6 @@ export const stockShutro = defineModule({
     shared('location_customers', 'Customers', 'customer'),
     shared('location_adjustment', 'Inventory adjustment', 'adjustment'),
     shared('location_production', 'Production', 'production'),
+    shared('location_scrap', 'Scrap', 'adjustment'),
   ],
 });
