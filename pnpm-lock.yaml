@@ -104,6 +104,9 @@ importers:
       '@kosh/settings':
         specifier: workspace:*
         version: link:../../packages/settings
+      '@kosh/stock':
+        specifier: workspace:*
+        version: link:../../modules/stock
       '@kosh/todo':
         specifier: workspace:*
         version: link:../../modules/todo
@@ -314,6 +317,9 @@ importers:
       '@kosh/server':
         specifier: workspace:*
         version: link:../../packages/server
+      '@kosh/stock':
+        specifier: workspace:*
+        version: link:../../modules/stock
       '@kosh/todo':
         specifier: workspace:*
         version: link:../../modules/todo
@@ -996,6 +1002,34 @@ importers:
         specifier: ^12.2.1
         version: 12.2.1
 
+  modules/stock:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   modules/todo:
     dependencies:
       '@kosh/messaging':
@@ -1199,6 +1233,9 @@ importers:
       '@kosh/settings':
         specifier: workspace:*
         version: link:../settings
+      '@kosh/stock':
+        specifier: workspace:*
+        version: link:../../modules/stock
       '@kosh/storage':
         specifier: workspace:*
         version: link:../storage
