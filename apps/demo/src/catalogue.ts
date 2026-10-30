@@ -26,6 +26,7 @@ import { sales } from '@kosh/sales';
 import { base } from '@kosh/server';
 import { settings } from '@kosh/settings';
 import { stock } from '@kosh/stock';
+import { stockAccount } from '@kosh/stock_account';
 import { todo } from '@kosh/todo';
 
 /** What the demo installs; the bridges come as proposals of the plan. */
@@ -76,6 +77,7 @@ export function demoCatalogue(): KoshModule[] {
     saleProject,
     saleStock,
     purchaseStock,
+    stockAccount,
     l10nBd,
   ];
 }

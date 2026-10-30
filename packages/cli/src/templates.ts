@@ -24,6 +24,7 @@ export type AppName =
   | 'sale_project'
   | 'sale_stock'
   | 'purchase_stock'
+  | 'stock_account'
   | 'l10n_bd'
   | 'l10n_in';
 export interface AppSpec {
@@ -149,6 +150,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'purchaseStock',
     bridge: ['purchase', 'stock'],
+  },
+  stock_account: {
+    label: 'Bridge: the stock valued and posted as it moves (Stockroom ↔ Accounting)',
+    icon: '🔗',
+    server: 'stockAccount',
+    bridge: ['stock', 'accounting'],
   },
   l10n_bd: {
     label: 'Bangladesh: chart of accounts, VAT and SD, VDS and TDS, BIN and TIN, July–June year',

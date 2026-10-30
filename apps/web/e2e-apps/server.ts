@@ -55,6 +55,7 @@ import {
 import { orm, pg } from '@kosh/server/orm';
 import { settings } from '@kosh/settings';
 import { stock } from '@kosh/stock';
+import { stockAccount } from '@kosh/stock_account';
 import { todo } from '@kosh/todo';
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
 
@@ -123,6 +124,7 @@ const CATALOGUE = [
   saleProject,
   saleStock,
   purchaseStock,
+  stockAccount,
   assistant,
   dataImport,
   l10nBd,

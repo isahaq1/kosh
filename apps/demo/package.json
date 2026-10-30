@@ -23,6 +23,7 @@
     "@kosh/stock": "workspace:*",
     "@kosh/sale_stock": "workspace:*",
     "@kosh/purchase_stock": "workspace:*",
+    "@kosh/stock_account": "workspace:*",
     "@kosh/todo": "workspace:*",
     "@kosh/purchase": "workspace:*",
     "@kosh/purchase_account": "workspace:*",
