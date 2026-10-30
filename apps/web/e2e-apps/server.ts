@@ -34,6 +34,7 @@ import { project } from '@kosh/project';
 import { purchase } from '@kosh/purchase';
 import { purchaseAccount } from '@kosh/purchase_account';
 import { purchaseStock } from '@kosh/purchase_stock';
+import { purchaseStockAccount } from '@kosh/purchase_stock_account';
 import { realtime } from '@kosh/realtime';
 import { recruitment } from '@kosh/recruitment';
 import { installTemplates, reporting } from '@kosh/reporting';
@@ -125,6 +126,7 @@ const CATALOGUE = [
   saleStock,
   purchaseStock,
   stockAccount,
+  purchaseStockAccount,
   assistant,
   dataImport,
   l10nBd,

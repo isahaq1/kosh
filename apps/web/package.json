@@ -58,6 +58,7 @@
     "@kosh/sale_stock": "workspace:*",
     "@kosh/purchase_stock": "workspace:*",
     "@kosh/stock_account": "workspace:*",
+    "@kosh/purchase_stock_account": "workspace:*",
     "@kosh/todo": "workspace:*",
     "@kosh/sale_project": "workspace:*",
     "@kosh/mail": "workspace:*",

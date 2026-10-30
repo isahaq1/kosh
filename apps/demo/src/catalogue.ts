@@ -16,6 +16,7 @@ import { project } from '@kosh/project';
 import { purchase } from '@kosh/purchase';
 import { purchaseAccount } from '@kosh/purchase_account';
 import { purchaseStock } from '@kosh/purchase_stock';
+import { purchaseStockAccount } from '@kosh/purchase_stock_account';
 import { realtime } from '@kosh/realtime';
 import { recruitment } from '@kosh/recruitment';
 import { reporting } from '@kosh/reporting';
@@ -78,6 +79,7 @@ export function demoCatalogue(): KoshModule[] {
     saleStock,
     purchaseStock,
     stockAccount,
+    purchaseStockAccount,
     l10nBd,
   ];
 }
