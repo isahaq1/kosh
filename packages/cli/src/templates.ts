@@ -29,6 +29,7 @@ export type AppName =
   | 'stock_account'
   | 'purchase_stock_account'
   | 'mrp_account'
+  | 'maintenance_stock'
   | 'l10n_bd'
   | 'l10n_in';
 export interface AppSpec {
@@ -186,6 +187,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'mrpAccount',
     bridge: ['mrp', 'accounting'],
+  },
+  maintenance_stock: {
+    label: 'Bridge: spare parts on maintenance orders (Asset Care ↔ Stockroom)',
+    icon: '🔗',
+    server: 'maintenanceStock',
+    bridge: ['maintenance', 'stock'],
   },
   l10n_bd: {
     label: 'Bangladesh: chart of accounts, VAT and SD, VDS and TDS, BIN and TIN, July–June year',

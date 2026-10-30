@@ -8,6 +8,7 @@ import { hr } from '@kosh/hr';
 import { l10nBd } from '@kosh/l10n_bd';
 import { mail } from '@kosh/mail';
 import { maintenance } from '@kosh/maintenance';
+import { maintenanceStock } from '@kosh/maintenance_stock';
 import { messaging } from '@kosh/messaging';
 import type { KoshModule } from '@kosh/modules-sdk';
 import { mrp } from '@kosh/mrp';
@@ -88,6 +89,7 @@ export function demoCatalogue(): KoshModule[] {
     stockAccount,
     purchaseStockAccount,
     mrpAccount,
+    maintenanceStock,
     l10nBd,
   ];
 }

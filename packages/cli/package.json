@@ -69,6 +69,7 @@
     "@kosh/stock": "workspace:*",
     "@kosh/mrp": "workspace:*",
     "@kosh/maintenance": "workspace:*",
+    "@kosh/maintenance_stock": "workspace:*",
     "@kosh/mrp_account": "workspace:*",
     "@kosh/sale_stock": "workspace:*",
     "@kosh/purchase_stock": "workspace:*",

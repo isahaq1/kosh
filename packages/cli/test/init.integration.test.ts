@@ -114,7 +114,7 @@ test('a fresh installation: database created, project written, migrated, adminis
   // The catalogue lists every app; the database says which are installed (RFC 0008).
   expect(modules).toContain("import { reporting } from 'shutro-erp/reporting';");
   expect(modules).toContain(
-    'export const modules = [base, settings, realtime, notify, mail, automation, integrations, studio, dataImport, assistant, permissions, reporting, messaging, contacts, product, sales, purchase, accounting, project, saleAccount, purchaseAccount, todo, calendarApp, crm, hr, recruitment, stock, mrp, maintenance, saleProject, saleStock, purchaseStock, stockAccount, purchaseStockAccount, mrpAccount, l10nBd, l10nIn];',
+    'export const modules = [base, settings, realtime, notify, mail, automation, integrations, studio, dataImport, assistant, permissions, reporting, messaging, contacts, product, sales, purchase, accounting, project, saleAccount, purchaseAccount, todo, calendarApp, crm, hr, recruitment, stock, mrp, maintenance, saleProject, saleStock, purchaseStock, stockAccount, purchaseStockAccount, mrpAccount, maintenanceStock, l10nBd, l10nIn];',
   );
   const main = await readFile(join(project, 'src/web/main.tsx'), 'utf8');
   expect(main).toContain(

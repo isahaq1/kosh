@@ -70,6 +70,7 @@ const PACKAGES = [
   'stock_account',
   'purchase_stock_account',
   'mrp_account',
+  'maintenance_stock',
   'portal',
   'sale_portal',
   'account_portal',
