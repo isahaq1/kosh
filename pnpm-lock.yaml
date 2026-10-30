@@ -56,6 +56,9 @@ importers:
       '@kosh/mail':
         specifier: workspace:*
         version: link:../../packages/mail
+      '@kosh/maintenance':
+        specifier: workspace:*
+        version: link:../../modules/maintenance
       '@kosh/messaging':
         specifier: workspace:*
         version: link:../../packages/messaging
@@ -299,6 +302,9 @@ importers:
       '@kosh/mail':
         specifier: workspace:*
         version: link:../../packages/mail
+      '@kosh/maintenance':
+        specifier: workspace:*
+        version: link:../../modules/maintenance
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
@@ -646,6 +652,31 @@ importers:
       react-i18next:
         specifier: ^17.0.21
         version: 17.0.21(i18next@26.4.7(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
+
+  modules/maintenance:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
 
   modules/mrp:
     dependencies:
@@ -1464,6 +1495,9 @@ importers:
       '@kosh/mail':
         specifier: workspace:*
         version: link:../mail
+      '@kosh/maintenance':
+        specifier: workspace:*
+        version: link:../../modules/maintenance
       '@kosh/messaging':
         specifier: workspace:*
         version: link:../messaging
