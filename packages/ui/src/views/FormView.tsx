@@ -399,6 +399,8 @@ export function FormView({
         : [],
     );
   const [changes, setChanges] = useState<Values>(proposedChanges);
+  /** The latest onchange request: older answers are ignored. */
+  const onchangeSequence = useRef(0);
   const [lines, setLines] = useState<ReadonlyMap<string, LineState>>(proposedLines);
   const [problem, setProblem] = useState<ApiError | null>(null);
   const [warnings, setWarnings] = useState<readonly string[]>([]);
@@ -519,6 +521,8 @@ export function FormView({
   });
 
   const runOnchange = (draft: Values, changed: readonly string[]) => {
+    // Only the latest change's answer applies: an earlier one arriving late would undo what was typed since.
+    const sequence = ++onchangeSequence.current;
     // The record's id travels on its own: it is not a field of the draft.
     const { id: _id, ...plain } = draft;
     void api
@@ -528,6 +532,7 @@ export function FormView({
         changed: [...changed],
       })
       .then((result) => {
+        if (sequence !== onchangeSequence.current) return;
         const assisted: Values = {};
         // Computed values (display name, totals) come back too: shown, never written.
         for (const [k, v] of Object.entries(result.values))
