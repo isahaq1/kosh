@@ -113,6 +113,9 @@ importers:
       '@kosh/stock':
         specifier: workspace:*
         version: link:../../modules/stock
+      '@kosh/stock_account':
+        specifier: workspace:*
+        version: link:../../modules/stock_account
       '@kosh/todo':
         specifier: workspace:*
         version: link:../../modules/todo
@@ -332,6 +335,9 @@ importers:
       '@kosh/stock':
         specifier: workspace:*
         version: link:../../modules/stock
+      '@kosh/stock_account':
+        specifier: workspace:*
+        version: link:../../modules/stock_account
       '@kosh/todo':
         specifier: workspace:*
         version: link:../../modules/todo
@@ -1131,6 +1137,40 @@ importers:
         specifier: ^17.0.21
         version: 17.0.21(i18next@26.4.7(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
 
+  modules/stock_account:
+    dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../accounting
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/stock':
+        specifier: workspace:*
+        version: link:../stock
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   modules/todo:
     dependencies:
       '@kosh/messaging':
@@ -1343,6 +1383,9 @@ importers:
       '@kosh/stock':
         specifier: workspace:*
         version: link:../../modules/stock
+      '@kosh/stock_account':
+        specifier: workspace:*
+        version: link:../../modules/stock_account
       '@kosh/storage':
         specifier: workspace:*
         version: link:../storage

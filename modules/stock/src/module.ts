@@ -733,6 +733,8 @@ async function applyMoves(ids: readonly Id<'stock.picking'>[], env: Env): Promis
     }
     if (shipped.length > 0) await su.model('stock.lot.line').create(shipped);
     await su.model('stock.picking').browse(ids).write({ doneDate: su.today() });
+    // What follows a validation in other apps (`stock_account` values the stock).
+    await su.model('stock.picking').browse(ids).validated();
     type Raw = { create(rows: readonly Record<string, unknown>[]): Promise<{ ids: number[] }> };
     for (const { picking, rest } of backorders) {
       const from = (await su.model('stock.picking').browse([picking]).backorderValues()).get(
@@ -966,6 +968,12 @@ export const StockPicking = defineModel('stock.picking', {
     }),
   },
   methods: {
+    /**
+     * Runs once these transfers are validated — their stock moved, their done quantities written — in the
+     * validation's audited superuser scope, before any backorder is made. Nothing here; a bridge overrides it
+     * (`stock_account`: the stock's value posted to Accounting).
+     */
+    validated: method('stock.picking', async (): Promise<void> => undefined),
     /**
      * What a backorder copies from each of these transfers: the type, contact, places, company, source document,
      * date and note. A bridge adds its link by overriding it (`sale_stock`: the sales order).
