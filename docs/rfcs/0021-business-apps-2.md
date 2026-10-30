@@ -543,5 +543,22 @@ reviewed steps.
   the chart when missing), through Stockroom's `validated()` hook — so Work in progress clears with each order.
 - **Tests**: the bridge proposed; 5 fixtures from 650 of components and 1,000 of operations enter at 1,650 (330 a
   unit, the product's cost after); Work in progress back to 0.00; 5200 −1,000; Inventory 1,650.
-- **Next** (Production step 2 part 2): by-products and scrap with reasons; then the work centres' Gantt.
+- **Then** (Production step 2 part 2): by-products and scrap with reasons; then the work centres' Gantt.
+
+## Implementation notes (2026-10-30): Production, step 2 part 2 — by-products and scrap
+
+- **Scrap** (`stock.scrap`, Stockroom › Scrap — for any stock, not only production): a product, a quantity, where
+  from (the main stock by default), a lot, and **a reason** (damaged, defective, expired, spilt or broken in
+  handling, other) with a note. *Scrap* moves it to the new *Scrap* location in a validated adjustment transfer,
+  reserved first — what other transfers hold is not scrapped, and more than is available is refused; with
+  `stock_account` it is a loss to Stock adjustments. Reports group scrap by reason and product.
+- **On a production order**: scrap recorded with the order (`production` on the scrap) is listed on it.
+- **By-products** on bills of materials (`mrp.bom.byproduct`): a product, a quantity per yield, a unit and a **share
+  of the cost**; producing puts them in stock with the product made, and `mrp_account` splits the order's cost by
+  the shares (the product made carries the rest). A by-product is never the product itself; the shares stay under
+  100 %.
+- **Tests**: scrap with its reason to the Scrap location, more than available refused; its loss to 5100; scrap on an
+  order listed there; a by-product of itself or shares of 100 % refused; 1,650 split 1,485 / 165 between 5 fixtures
+  and 10 offcuts at 10 %, Work in progress still cleared.
+- **Next**: the work centres' Gantt with capacity (Production step 2 part 3).
 
