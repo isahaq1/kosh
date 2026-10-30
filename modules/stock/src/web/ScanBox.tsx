@@ -29,13 +29,18 @@ export function ScanBox({ api, record, reload }: NodeComponentProps): ReactEleme
   const send = async (code: string): Promise<void> => {
     if (record === null || code.trim() === '') return;
     try {
-      const answer = await api.call<{ product: string; counted: string }>(
+      const answer = await api.call<{ product: string; lot?: string; counted: string }>(
         'POST',
         `/api/v1/stockroom/counts/${String(record.id)}/scan`,
         { barcode: code.trim(), quantity },
       );
       setError(null);
-      setResult(t('scan.counted', { product: answer.product, counted: answer.counted }));
+      setResult(
+        t('scan.counted', {
+          product: answer.lot === undefined ? answer.product : `${answer.product} ${answer.lot}`,
+          counted: answer.counted,
+        }),
+      );
       setBarcode('');
       reload();
     } catch (e) {

@@ -19,6 +19,8 @@ import {
   StockCount,
   StockCountLine,
   StockLocation,
+  StockLot,
+  StockLotLine,
   StockMove,
   StockPicking,
   StockQuant,
@@ -36,6 +38,8 @@ export {
   StockCount,
   StockCountLine,
   StockLocation,
+  StockLot,
+  StockLotLine,
   StockMove,
   StockPicking,
   StockQuant,
@@ -69,9 +73,9 @@ async function mainWarehouses(env: Env): Promise<string | undefined> {
 }
 
 /**
- * Counting from a phone: each scan of a product's barcode adds to what is counted (one, or the quantity sent), on
- * the count's line for the product — made with what is expected when the product was not listed. As the user:
- * their rights apply; the count must be counting.
+ * Counting from a phone: each scan adds to what is counted (one, or the quantity sent) — a lot or serial number's
+ * name counts that lot, a product's barcode the product — on the count's line, made with what is expected when it
+ * was not listed. As the user: their rights apply; the count must be counting.
  */
 function registerCountRoutes({ app }: ModuleContext): void {
   app.post('/api/v1/stockroom/counts/:id/scan', async (request) => {
@@ -103,9 +107,16 @@ function registerCountRoutes({ app }: ModuleContext): void {
           throw new HttpProblem(404, 'missing-record', 'Not found', `There is no count ${id}.`);
         if (count.state !== 'counting')
           throw new HttpProblem(409, 'not-counting', 'Not counting', 'Start the count first.');
-        const [found] = await (
-          await env.model('product.product').search({ where: { barcode }, limit: 1 })
-        ).load(['name', 'kind']);
+        const [scannedLot] = await (
+          await env.model('stock.lot').search({ where: { name: barcode }, limit: 1 })
+        ).load({ product: true });
+        const lot = scannedLot?.id ?? null;
+        const [found] =
+          scannedLot !== undefined
+            ? [scannedLot.product]
+            : await (
+                await env.model('product.product').search({ where: { barcode }, limit: 1 })
+              ).load(['name', 'kind']);
         if (found === undefined)
           throw new HttpProblem(
             404,
@@ -115,9 +126,10 @@ function registerCountRoutes({ app }: ModuleContext): void {
           );
         const product = found.id as Id<'product.product'>;
         const [line] = await (
-          await env
-            .model('stock.count.line')
-            .search({ where: { count: count.id, product }, limit: 1 })
+          await env.model('stock.count.line').search({
+            where: { count: count.id, product, lot: lot === null ? { isNull: true } : lot },
+            limit: 1,
+          })
         ).load(['counted', 'expected']);
         const counted = (line?.counted ?? orm.toDecimal(0)).plus(quantity);
         if (line !== undefined) await line.write({ counted });
@@ -126,12 +138,17 @@ function registerCountRoutes({ app }: ModuleContext): void {
             {
               count: count.id,
               product,
-              expected: await onHandIn(env, product, count.location.id),
+              lot,
+              expected: await onHandIn(env, product, count.location.id, lot),
               counted,
             },
           ]);
         await env.flush();
-        return { product: found.name, counted: counted.toString() };
+        return {
+          product: found.name,
+          ...(scannedLot === undefined ? {} : { lot: scannedLot.name }),
+          counted: counted.toString(),
+        };
       },
       { write: true },
     );
@@ -213,6 +230,11 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       label: 'Reservations',
       views: ['list'],
     }),
+    'stockroom.action_lots': action(StockLot, {
+      label: 'Lots and serial numbers',
+      views: ['list', 'form'],
+      defaultFilters: ['in_stock'],
+    }),
     'stockroom.action_counts': action(StockCount, {
       label: 'Counts',
       views: ['list', 'form'],
@@ -263,6 +285,13 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       parent: 'stockroom.root',
       label: 'Reservations',
       action: 'stockroom.action_reservations',
+      sequence: 5,
+    },
+    {
+      id: 'stockroom.lots',
+      parent: 'stockroom.root',
+      label: 'Lots and serial numbers',
+      action: 'stockroom.action_lots',
       sequence: 5,
     },
     {
@@ -347,18 +376,48 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
           'uom',
           { field: 'reserved', id: 'move_reserved' },
           { field: 'quantityDone', id: 'move_done' },
+          { field: 'restrictLot', id: 'move_restrict_lot' },
+        ]),
+        k.lines('lotLines', [
+          { field: 'product', id: 'lot_line_product' },
+          { field: 'lot', id: 'lot_line_lot' },
+          { field: 'lotName', id: 'lot_line_name' },
+          { field: 'quantity', id: 'lot_line_quantity' },
         ]),
         k.group('about', ['note'], { columns: 1 }),
       ],
       chatter: true,
     })),
     'stock.quant.list': list(StockQuant, {
-      columns: ['product', 'location', 'quantity', 'reserved', 'available'],
+      columns: ['product', 'location', 'lot', 'quantity', 'reserved', 'available'],
+    }),
+    'stock.lot.list': list(StockLot, {
+      columns: ['name', 'product', 'expiryDate', 'qtyOnHand'],
+    }),
+    'stock.lot.form': form(StockLot, (k) => ({
+      header: { buttons: [] },
+      sheet: [
+        k.group('main', ['name', 'product', 'expiryDate', 'qtyOnHand']),
+        k.lines('quants', [
+          { field: 'location', id: 'lot_quant_location' },
+          { field: 'quantity', id: 'lot_quant_quantity' },
+          { field: 'reserved', id: 'lot_quant_reserved' },
+        ]),
+        k.lines('history', [
+          { field: 'picking', id: 'lot_history_picking' },
+          { field: 'quantity', id: 'lot_history_quantity' },
+        ]),
+        k.group('about', ['note'], { columns: 1 }),
+      ],
+      chatter: true,
+    })),
+    'stock.lot.line.list': list(StockLotLine, {
+      columns: ['picking', 'product', 'lot', 'lotName', 'quantity'],
     }),
     'stock.quant.form': form(StockQuant, (k) => ({
       header: { buttons: [] },
       sheet: [
-        k.group('main', ['product', 'location']),
+        k.group('main', ['product', 'location', 'lot']),
         k.group('quantities', ['quantity', 'reserved', 'available']),
         k.lines('reservations', [{ field: 'label', id: 'reservation_label' }]),
       ],
@@ -388,6 +447,7 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
         k.component('scan', 'stock.Scan'),
         k.lines('lines', [
           { field: 'product', id: 'count_product' },
+          { field: 'lot', id: 'count_lot' },
           { field: 'expected', id: 'count_expected' },
           { field: 'counted', id: 'count_counted' },
           { field: 'difference', id: 'count_difference' },
@@ -462,6 +522,16 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       groupBy: ['location', 'user'],
     }),
     'stock.count.line': search(StockCountLine, { fields: ['product.name', 'count.name'] }),
+    'stock.lot': search(StockLot, {
+      fields: ['name', 'product.name'],
+      filters: {
+        in_stock: { label: 'In stock', domain: { qtyOnHand: { gt: 0 } } },
+      },
+      groupBy: ['product', 'expiryDate'],
+    }),
+    'stock.lot.line': search(StockLotLine, {
+      fields: ['lot.name', 'product.name', 'picking.name'],
+    }),
     'stock.location': search(StockLocation, {
       fields: ['fullName'],
       filters: { internal: { label: 'Internal', domain: { usage: 'internal' } } },
@@ -482,6 +552,7 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
               id: 'stock_quantities',
               label: 'Stock',
               children: [
+                field({ field: 'tracking', id: 'stock_tracking' }),
                 field({ field: 'qtyOnHand', id: 'stock_on_hand' }),
                 field({ field: 'qtyReserved', id: 'stock_reserved' }),
                 field({ field: 'qtyAvailable', id: 'stock_available' }),

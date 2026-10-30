@@ -19,8 +19,9 @@ async function signIn(page: Page, login: string): Promise<void> {
 async function transfer(page: Page, action: string, quantity: string): Promise<string> {
   await page.goto(`/stockroom/a/${action}/new`);
   await expect(page.getByRole('combobox', { name: 'To' })).not.toHaveText(/^$/);
-  await page.getByRole('button', { name: 'Add a line' }).click();
-  const row = page.locator('tbody tr').last();
+  const moves = page.getByRole('table', { name: 'moves' });
+  await moves.locator('..').getByRole('button', { name: 'Add a line' }).click();
+  const row = moves.locator('tbody tr').last();
   await row.getByRole('combobox').first().click();
   await page.getByRole('option', { name: /Steel beam/ }).click();
   const qty = row.getByRole('textbox').nth(1);
@@ -40,7 +41,13 @@ test('a receipt in part with its backorder, a delivery reserved, explained and v
   const receipt = await transfer(page, 'stockroom.action_receipts', '10');
   await expect(page.getByText('Vendors').first()).toBeVisible();
   // Six of the ten arrive: the rest goes to a backorder.
-  await page.locator('tbody tr').last().getByRole('textbox').last().fill('6');
+  await page
+    .getByRole('table', { name: 'moves' })
+    .locator('tbody tr')
+    .last()
+    .getByRole('textbox')
+    .last()
+    .fill('6');
   const saved = page.waitForResponse(
     (r) =>
       r.request().method() === 'PATCH' && /\/stock\.picking\/\d+$/.test(new URL(r.url()).pathname),
@@ -103,4 +110,42 @@ test('a count: started, an unknown barcode reported, a line counted and applied;
 
   await page.goto('/stockroom/a/stockroom.action_stock');
   await expect(page.getByRole('row').filter({ hasText: 'Steel beam' })).toContainText('1');
+});
+
+test('serial numbers: a tracked product received with its serials, listed in Lots and serial numbers', async ({
+  page,
+}) => {
+  await signIn(page, 'dina');
+  await page.goto('/product/a/product.action_products/new');
+  await page.getByRole('textbox', { name: 'Name', exact: true }).fill('E2E Router');
+  await page.getByRole('combobox', { name: 'Tracking' }).click();
+  await page.getByRole('option', { name: 'By serial number' }).click();
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/product\.action_products\/\d+$/);
+
+  await page.goto('/stockroom/a/stockroom.action_receipts/new');
+  await expect(page.getByRole('combobox', { name: 'To' })).not.toHaveText(/^$/);
+  const moves = page.getByRole('table', { name: 'moves' });
+  await moves.locator('..').getByRole('button', { name: 'Add a line' }).click();
+  await moves.locator('tbody tr').last().getByRole('combobox').first().click();
+  await page.getByRole('option', { name: /E2E Router/ }).click();
+  await moves.locator('tbody tr').last().getByRole('textbox').nth(1).fill('2');
+  const serials = page.getByRole('table', { name: 'lotLines' });
+  for (const serial of ['E2E-SN-1', 'E2E-SN-2']) {
+    await serials.locator('..').getByRole('button', { name: 'Add a line' }).click();
+    const row = serials.locator('tbody tr').last();
+    await row.getByRole('combobox').first().click();
+    await page.getByRole('option', { name: /E2E Router/ }).click();
+    await row.getByRole('textbox').first().fill(serial);
+  }
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/stockroom\.action_receipts\/\d+$/);
+  await page.getByRole('button', { name: 'Confirm' }).click();
+  await expect(page.getByRole('button', { name: /^State: Confirmed/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Validate' }).click();
+  await expect(page.getByRole('button', { name: /^State: Done/ })).toBeVisible();
+
+  await page.goto('/stockroom/a/stockroom.action_lots');
+  await expect(page.getByRole('row').filter({ hasText: 'E2E-SN-1' })).toContainText('E2E Router');
+  await expect(page.getByRole('row').filter({ hasText: 'E2E-SN-2' })).toBeVisible();
 });

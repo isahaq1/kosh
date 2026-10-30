@@ -443,6 +443,142 @@ test('a count does not take what is reserved for a delivery: the reservation is 
   expect(Number((await onHand('Cement')).qtyOnHand)).toBe(5);
 });
 
+test('serial numbers: as many as received, one unit each, never received twice', async () => {
+  ids['Router'] = (
+    await call('POST', '/api/v1/models/product.product', 'dina', {
+      name: 'Router',
+      uom: ids['Units'],
+      tracking: 'serial',
+    })
+  ).json.id;
+  const receipt = await transfer('receipt', [{ product: ids['Router'], quantity: '3' }]);
+  await run(receipt, 'confirm');
+  const missing = await run(receipt, 'validate');
+  expect(missing.status).toBe(422);
+  expect(JSON.stringify(missing.json)).toContain('Router: 0 of 3 have a lot or serial number');
+  const list = (names: readonly string[]) =>
+    call('PATCH', `${T}/${receipt}`, 'rahim', {
+      lotLines: { create: names.map((lotName) => ({ product: ids['Router'], lotName })) },
+    });
+  await list(['SN-1', 'SN-1', 'SN-2']);
+  const twice = await run(receipt, 'validate');
+  expect(twice.status).toBe(422);
+  expect(JSON.stringify(twice.json)).toContain('SN-1 is listed twice');
+  const [, second] = await find('stock.lot.line', { picking: receipt }, 'id', 'rahim');
+  await call('PATCH', `/api/v1/models/stock.lot.line/${second.id}`, 'rahim', { lotName: 'SN-3' });
+  expect((await run(receipt, 'validate')).status).toBe(200);
+  const lots = await find('stock.lot', { product: ids['Router'] }, 'name,qtyOnHand', 'rahim');
+  expect(lots.map((l) => [l.name, l.qtyOnHand])).toEqual([
+    ['SN-1', '1'],
+    ['SN-2', '1'],
+    ['SN-3', '1'],
+  ]);
+  for (const l of lots) ids[l.name] = l.id;
+  // SN-1 again: refused.
+  const again = await transfer('receipt', [{ product: ids['Router'], quantity: '1' }], {
+    lotLines: { create: [{ product: ids['Router'], lot: ids['SN-1'] }] },
+  });
+  await run(again, 'confirm');
+  const dup = await run(again, 'validate');
+  expect(dup.status).toBe(422);
+  expect(JSON.stringify(dup.json)).toContain('SN-1 is already in stock');
+  await run(again, 'cancel');
+});
+
+test('lots: first expiry first out, a line may take one lot, the history of a lot', async () => {
+  ids['Milk'] = (
+    await call('POST', '/api/v1/models/product.product', 'dina', {
+      name: 'Milk',
+      uom: ids['Units'],
+      tracking: 'lot',
+    })
+  ).json.id;
+  for (const [name, expiryDate] of [
+    ['L-NEW', '2026-12-31'],
+    ['L-OLD', '2026-11-15'],
+  ] as const)
+    ids[name] = (
+      await call('POST', '/api/v1/models/stock.lot', 'rahim', {
+        name,
+        product: ids['Milk'],
+        expiryDate,
+      })
+    ).json.id;
+  const receipt = await transfer('receipt', [{ product: ids['Milk'], quantity: '10' }], {
+    lotLines: {
+      create: [
+        { product: ids['Milk'], lot: ids['L-NEW'], quantity: '6' },
+        { product: ids['Milk'], lot: ids['L-OLD'], quantity: '4' },
+      ],
+    },
+  });
+  await run(receipt, 'confirm');
+  expect((await run(receipt, 'validate')).status).toBe(200);
+
+  const delivery = await transfer('delivery', [{ product: ids['Milk'], quantity: '5' }]);
+  await run(delivery, 'confirm');
+  const [line] = await find('stock.move', { picking: delivery }, 'id', 'rahim');
+  const held = await find('stock.reservation', { move: line.id }, 'label,quantity', 'rahim');
+  expect(held.map((r) => r.quantity)).toEqual(['4', '1']);
+  expect(held[0].label).toContain('of L-OLD reserved for');
+  expect(held[1].label).toContain('of L-NEW reserved for');
+  expect((await run(delivery, 'validate')).status).toBe(200);
+  const left = await find('stock.lot.line', { picking: delivery }, 'lot,quantity', 'rahim');
+  expect(left.map((l) => [l.lot, l.quantity])).toEqual([
+    [ids['L-OLD'], '4'],
+    [ids['L-NEW'], '1'],
+  ]);
+  const history = await find('stock.lot.line', { lot: ids['L-OLD'] }, 'picking,quantity', 'rahim');
+  expect(history.map((h) => h.picking)).toEqual([receipt, delivery]);
+  expect(
+    (await call('GET', `/api/v1/models/stock.lot/${ids['L-OLD']}`, 'rahim')).json.qtyOnHand,
+  ).toBe('0');
+
+  // A delivery of one taken from L-NEW only.
+  const chosen = await transfer('delivery', [
+    { product: ids['Milk'], quantity: '1', restrictLot: ids['L-NEW'] },
+  ]);
+  await run(chosen, 'confirm');
+  const [chosenLine] = await find('stock.move', { picking: chosen }, 'id', 'rahim');
+  const [only] = await find('stock.reservation', { move: chosenLine.id }, 'label', 'rahim');
+  expect(only.label).toContain('of L-NEW');
+  await run(chosen, 'cancel');
+});
+
+test('counts by lot: a serial number scanned, a missing one taken out by its lot', async () => {
+  const C = '/api/v1/models/stock.count';
+  const id = (await call('POST', C, 'dina', { location: ids['stock'] })).json.id as number;
+  await call('POST', `${C}/${id}/transitions/start`, 'dina');
+  const routers = await find(
+    'stock.count.line',
+    { count: id, product: ids['Router'] },
+    'lot,expected',
+    'dina',
+  );
+  const byLot = (rows: Json[][]) => rows.sort((x, y) => x[0] - y[0]);
+  expect(byLot(routers.map((l) => [l.lot, l.expected]))).toEqual(
+    byLot([
+      [ids['SN-1'], '1'],
+      [ids['SN-2'], '1'],
+      [ids['SN-3'], '1'],
+    ]),
+  );
+  const scanned = await call('POST', `/api/v1/stockroom/counts/${id}/scan`, 'dina', {
+    barcode: 'SN-2',
+  });
+  expect(scanned.json).toEqual({ product: 'Router', lot: 'SN-2', counted: '1' });
+  const [sn3] = await find('stock.count.line', { count: id, lot: ids['SN-3'] }, 'id', 'dina');
+  await call('PATCH', `/api/v1/models/stock.count.line/${sn3.id}`, 'dina', { counted: '0' });
+  const applied = await call('POST', `${C}/${id}/transitions/apply`, 'dina');
+  expect(applied.status, JSON.stringify(applied.json)).toBe(200);
+  const lots = await find('stock.lot', { product: ids['Router'] }, 'name,qtyOnHand', 'dina');
+  expect(lots.map((l) => [l.name, l.qtyOnHand])).toEqual([
+    ['SN-1', '1'],
+    ['SN-2', '1'],
+    ['SN-3', '0'],
+  ]);
+});
+
 test('the setting: reserve only with Check availability', async () => {
   expect(
     (
