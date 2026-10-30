@@ -21,6 +21,8 @@
     "@kosh/hr": "workspace:*",
     "@kosh/recruitment": "workspace:*",
     "@kosh/stock": "workspace:*",
+    "@kosh/sale_stock": "workspace:*",
+    "@kosh/purchase_stock": "workspace:*",
     "@kosh/todo": "workspace:*",
     "@kosh/purchase": "workspace:*",
     "@kosh/purchase_account": "workspace:*",

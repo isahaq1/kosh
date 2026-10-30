@@ -33,12 +33,14 @@ import { product } from '@kosh/product';
 import { project } from '@kosh/project';
 import { purchase } from '@kosh/purchase';
 import { purchaseAccount } from '@kosh/purchase_account';
+import { purchaseStock } from '@kosh/purchase_stock';
 import { realtime } from '@kosh/realtime';
 import { recruitment } from '@kosh/recruitment';
 import { installTemplates, reporting } from '@kosh/reporting';
 import { saleAccount } from '@kosh/sale_account';
 import { salePortal } from '@kosh/sale_portal';
 import { saleProject } from '@kosh/sale_project';
+import { saleStock } from '@kosh/sale_stock';
 import { sales } from '@kosh/sales';
 import {
   applyApps,
@@ -119,6 +121,8 @@ const CATALOGUE = [
   saleAccount,
   purchaseAccount,
   saleProject,
+  saleStock,
+  purchaseStock,
   assistant,
   dataImport,
   l10nBd,

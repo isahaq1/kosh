@@ -113,9 +113,11 @@ test('every app with demo data loaded it, once', async () => {
     'project',
     'purchase',
     'purchase_account',
+    'purchase_stock',
     'recruitment',
     'sale_account',
     'sale_project',
+    'sale_stock',
     'sales',
     'stock',
     'todo',
@@ -124,6 +126,8 @@ test('every app with demo data loaded it, once', async () => {
     ['sales', 'sale_account'],
     ['purchase', 'purchase_account'],
     ['project', 'sale_project'],
+    ['stock', 'sale_stock'],
+    ['purchase', 'purchase_stock'],
     ['contacts', 'sales'],
   ])
     expect(order.indexOf(app as string)).toBeLessThan(order.indexOf(bridge as string));
@@ -141,7 +145,7 @@ test('every app with demo data loaded it, once', async () => {
     text: 'SELECT count(*)::text AS n FROM kosh_module WHERE demo_at IS NOT NULL',
     params: [],
   });
-  expect(Number(marks[0]?.n)).toBe(15);
+  expect(Number(marks[0]?.n)).toBe(17);
 });
 
 test('the salesperson sees the orders and the invoices made from them; the buyer the approvals', async () => {

@@ -15,11 +15,13 @@ import { product } from '@kosh/product';
 import { project } from '@kosh/project';
 import { purchase } from '@kosh/purchase';
 import { purchaseAccount } from '@kosh/purchase_account';
+import { purchaseStock } from '@kosh/purchase_stock';
 import { realtime } from '@kosh/realtime';
 import { recruitment } from '@kosh/recruitment';
 import { reporting } from '@kosh/reporting';
 import { saleAccount } from '@kosh/sale_account';
 import { saleProject } from '@kosh/sale_project';
+import { saleStock } from '@kosh/sale_stock';
 import { sales } from '@kosh/sales';
 import { base } from '@kosh/server';
 import { settings } from '@kosh/settings';
@@ -72,6 +74,8 @@ export function demoCatalogue(): KoshModule[] {
     saleAccount,
     purchaseAccount,
     saleProject,
+    saleStock,
+    purchaseStock,
     l10nBd,
   ];
 }
