@@ -53,4 +53,9 @@ test('a bill of materials, an order checked for what is short and what it costs,
   await page.getByRole('button', { name: 'Confirm' }).click();
   await expect(page.getByRole('button', { name: /^State: Confirmed/ })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Components transfer' })).toContainText('TR/');
+
+  // The work centres' schedule opens on its Gantt.
+  await page.goto('/production/a/production.action_workorders');
+  await expect(page.getByRole('main')).toContainText('Work orders');
+  await expect(page.getByRole('alert')).toHaveCount(0);
 });

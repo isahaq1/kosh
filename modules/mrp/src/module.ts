@@ -297,6 +297,139 @@ async function explode(ids: readonly Id<'mrp.production'>[], env: Env): Promise<
   });
 }
 
+/** When a work centre's day starts (local time). */
+export const DAY_STARTS_AT = 8;
+
+/**
+ * Forward schedule of `minutes` of work at a centre working `hoursPerDay` from `DAY_STARTS_AT`, from `from`: what does
+ * not fit in a day continues the next day. Returns the start and the end.
+ */
+export function schedule(
+  from: Date,
+  minutes: number,
+  hoursPerDay: number,
+): { start: Date; stop: Date } {
+  const dayStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), DAY_STARTS_AT);
+  const dayEnd = (d: Date) => new Date(dayStart(d).getTime() + hoursPerDay * 3_600_000);
+  let at = new Date(Math.max(from.getTime(), dayStart(from).getTime()));
+  if (at >= dayEnd(at)) at = dayStart(new Date(at.getTime() + 86_400_000));
+  const start = at;
+  let left = minutes * 60_000;
+  for (;;) {
+    const room = dayEnd(at).getTime() - at.getTime();
+    if (left <= room) return { start, stop: new Date(at.getTime() + left) };
+    left -= room;
+    at = dayStart(new Date(dayStart(at).getTime() + 86_400_000));
+  }
+}
+
+/**
+ * A step of a production order at a work centre: planned from the bill's operation (its minutes for the quantity
+ * ordered), scheduled after what the centre already has, then started and finished with the minutes it took.
+ */
+export const MrpWorkorder = defineModel('mrp.workorder', {
+  label: 'Work order',
+  recName: 'name',
+  order: ['plannedStart asc', 'id asc'],
+  companyScoped: { required: true },
+  access: {
+    'mrp.user': ['read', 'write'],
+    'mrp.manager': [...ALL, 'export'],
+  },
+  fields: {
+    production: f.many2one('mrp.production', { required: true, ondelete: 'cascade' }),
+    name: f.char({ required: true, label: 'Operation' }),
+    workcenter: f.many2one('mrp.workcenter', { required: true, ondelete: 'restrict' }),
+    plannedMinutes: f.decimal({ scale: 2, required: true, default: '0', label: 'Planned minutes' }),
+    plannedStart: f.datetime({ label: 'Planned start' }),
+    plannedStop: f.datetime({ label: 'Planned end' }),
+    startedAt: f.datetime({ label: 'Started' }),
+    finishedAt: f.datetime({ label: 'Finished' }),
+    /** The minutes it took (from start to finish). */
+    actualMinutes: f.decimal({ scale: 2, label: 'Minutes taken' }),
+    state: f.state({
+      states: { ready: 'Ready', progress: 'In progress', done: 'Done', cancel: 'Cancelled' },
+      initial: 'ready',
+      transitions: {
+        start: {
+          from: ['ready'],
+          to: 'progress',
+          after: records('mrp.workorder', async (orders): Promise<void> => {
+            await orders.write({ startedAt: new Date() } as never);
+          }),
+        },
+        finish: {
+          from: ['progress'],
+          to: 'done',
+          after: records('mrp.workorder', async (orders): Promise<void> => {
+            const now = new Date();
+            for (const w of await orders.load({})) {
+              const began = w.startedAt instanceof Date ? w.startedAt : now;
+              await w.write({
+                finishedAt: now,
+                // Whole milliseconds, then minutes (Shutro takes no fractional JS numbers).
+                actualMinutes: orm
+                  .toDecimal(now.getTime() - began.getTime())
+                  .div(60_000)
+                  .toDecimalPlaces(2),
+              } as never);
+            }
+          }),
+        },
+        /** Done with its order (Produce), however far it got. */
+        close: { from: ['ready', 'progress'], to: 'done' },
+        cancel: { from: ['ready', 'progress'], to: 'cancel' },
+      },
+    }),
+  },
+});
+
+/**
+ * Makes the orders' work orders from their bills' operations and schedules them forward, step after step, each at
+ * its work centre after what the centre already has planned (from the order's date).
+ */
+async function planWork(ids: readonly Id<'mrp.production'>[], env: Env): Promise<void> {
+  await env.asSuperuser({ reason: 'production schedule' }, async (su) => {
+    const orders = await su
+      .model('mrp.production')
+      .browse(ids)
+      .load({ bom: { operations: { workcenter: true } } });
+    for (const o of orders) {
+      if (o.bom === null) continue;
+      const factor = o.quantity.div(o.bom.quantity);
+      // The order's day, local (a date is read as text or as a local midnight).
+      const day = new Date(`${iso(o.date as unknown)}T00:00:00`);
+      let after = new Date(day.getFullYear(), day.getMonth(), day.getDate(), DAY_STARTS_AT);
+      for (const op of o.bom.operations) {
+        const minutes = op.minutes.times(factor).toDecimalPlaces(2);
+        // The centre is free after the last step it has that is not done or cancelled.
+        const busy = await (
+          await su.model('mrp.workorder').search({
+            where: { workcenter: op.workcenter.id, state: { in: ['ready', 'progress'] } },
+            order: ['plannedStop desc'],
+            limit: 1,
+          })
+        ).load(['plannedStop']);
+        const free = [...busy][0]?.plannedStop;
+        const from = free instanceof Date && free > after ? free : after;
+        const { start, stop } = schedule(from, Number(minutes), Number(op.workcenter.hoursPerDay));
+        await su.model('mrp.workorder').create([
+          {
+            production: o.id,
+            company: o.company.id,
+            name: op.name,
+            workcenter: op.workcenter.id,
+            plannedMinutes: minutes,
+            plannedStart: start,
+            plannedStop: stop,
+          },
+        ] as never);
+        after = stop;
+      }
+    }
+  });
+}
+
 /** The places of an order: its warehouse's stock, and the Production location. */
 async function placesOf(
   env: Env,
@@ -342,6 +475,7 @@ export const MrpProduction = defineModel('mrp.production', {
     components: f.one2many('mrp.production.component', 'production'),
     /** Scrap recorded on the order, with its reasons (Stockroom's scrap). */
     scraps: f.one2many('stock.scrap', 'production'),
+    workorders: f.one2many('mrp.workorder', 'production', { label: 'Work orders' }),
     consumption: f.many2one('stock.picking', {
       ondelete: 'set null',
       label: 'Components transfer',
@@ -452,14 +586,17 @@ export const MrpProduction = defineModel('mrp.production', {
             (await orders.load({})).filter((o) => o.bom === null),
           ),
           message: 'Choose the bill of materials first.',
-          // The components, then their transfer to Production, reserved.
+          // The components, their transfer to Production (reserved), and the work orders, scheduled.
           after: records('mrp.production', async (orders): Promise<void> => {
             await explode(orders.ids, orders.env);
+            await planWork(orders.ids, orders.env as unknown as Env);
             const env = orders.env as unknown as Env;
             for (const o of await env
               .model('mrp.production')
               .browse(orders.ids)
               .load({ components: true })) {
+              // Nothing to consume (labour only): no components transfer.
+              if (o.components.length === 0) continue;
               const { stock, production } = await placesOf(
                 env,
                 o.warehouse?.id ?? null,
@@ -512,6 +649,11 @@ export const MrpProduction = defineModel('mrp.production', {
           message: 'Components are short: check availability, or wait for them to come in.',
           before: records('mrp.production', async (orders): Promise<void> => {
             const env = orders.env as unknown as Env;
+            // What is left of the work is done with the order.
+            const open = await env.model('mrp.workorder').search({
+              where: { production: { in: [...orders.ids] }, state: { in: ['ready', 'progress'] } },
+            });
+            if (open.length > 0) await open.close();
             for (const o of await env.model('mrp.production').browse(orders.ids).load({})) {
               if (o.consumption !== null)
                 await env.model('stock.picking').browse([o.consumption.id]).validate();
@@ -560,6 +702,10 @@ export const MrpProduction = defineModel('mrp.production', {
           to: 'cancel',
           after: records('mrp.production', async (orders): Promise<void> => {
             const env = orders.env as unknown as Env;
+            const open = await env.model('mrp.workorder').search({
+              where: { production: { in: [...orders.ids] }, state: { in: ['ready', 'progress'] } },
+            });
+            for (const w of await open.load({})) await w.cancel();
             for (const o of await env
               .model('mrp.production')
               .browse(orders.ids)
@@ -637,6 +783,7 @@ export const mrpShutro = defineModule({
     MrpBomOperation,
     MrpProduction,
     MrpProductionComponent,
+    MrpWorkorder,
   ],
   extensions: [ScrapProduction],
 });

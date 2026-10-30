@@ -26,7 +26,7 @@ import { settings } from '@kosh/settings';
 import { stock } from '@kosh/stock';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { mrp } from '../src/index.js';
+import { mrp, schedule } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
 const catalogue = [base, settings, contacts, product, messaging, stock, mrp];
@@ -334,6 +334,81 @@ test('scrap on an order, with its reason; by-products of a bill must be other pr
     costShare: '100',
   });
   expect(all.status).toBe(422);
+});
+
+test('the scheduler: what does not fit in a day continues the next day', () => {
+  const at = (d: number, h: number, m = 0) => new Date(2026, 10, d, h, m).getTime();
+  const one = schedule(new Date(2026, 10, 16, 6), 600, 8);
+  expect([one.start.getTime(), one.stop.getTime()]).toEqual([at(16, 8), at(17, 10)]);
+  const late = schedule(new Date(2026, 10, 16, 17), 30, 8);
+  expect([late.start.getTime(), late.stop.getTime()]).toEqual([at(17, 8), at(17, 8, 30)]);
+});
+
+test('work orders: scheduled at their centre after what it has, on the Gantt; capacity by day', async () => {
+  const paint = (
+    await call('POST', '/api/v1/models/mrp.workcenter', 'maria', {
+      name: 'Paint',
+      hoursPerDay: '4',
+    })
+  ).json.id;
+  const chair = (await call('POST', '/api/v1/models/product.product', 'maria', { name: 'Chair' }))
+    .json.id;
+  const bill = (
+    await call('POST', '/api/v1/models/mrp.bom', 'maria', {
+      product: chair,
+      operations: { create: [{ name: 'Paint', workcenter: paint, minutes: '300' }] },
+    })
+  ).json.id;
+  const order = async () => {
+    const id = (
+      await call('POST', P, 'rahim', {
+        product: chair,
+        quantity: '1',
+        bom: bill,
+        date: '2026-11-16',
+      })
+    ).json.id as number;
+    const confirmed = await run(id, 'confirm');
+    expect(confirmed.status, JSON.stringify(confirmed.json)).toBe(200);
+    return id;
+  };
+  const first = await order();
+  const second = await order();
+  const at = (d: number, h: number) => new Date(2026, 10, d, h).getTime();
+  const plan = async (production: number) =>
+    (await find('mrp.workorder', { production }, 'plannedStart,plannedStop,state', 'rahim')).map(
+      (w) => [new Date(w.plannedStart).getTime(), new Date(w.plannedStop).getTime(), w.state],
+    );
+  // 5 hours at 4 a day: 16th 8–12, 17th 8–9; the next order after it: 17th 9–12, 18th 8–10.
+  expect(await plan(first)).toEqual([[at(16, 8), at(17, 9), 'ready']]);
+  expect(await plan(second)).toEqual([[at(17, 9), at(18, 10), 'ready']]);
+  const capacity = await call(
+    'GET',
+    '/api/v1/production/capacity?from=2026-11-16&to=2026-11-18',
+    'rahim',
+  );
+  expect(capacity.status, JSON.stringify(capacity.json)).toBe(200);
+  const row = (capacity.json.workcenters as Json[]).find((w) => w.id === paint);
+  expect(row.days.map((d: Json) => [d.day, d.plannedHours, d.load])).toEqual([
+    ['2026-11-16', '4.00', 100],
+    ['2026-11-17', '4.00', 100],
+    ['2026-11-18', '2.00', 50],
+  ]);
+
+  // Started and finished: the minutes taken; producing closes what is left; cancelling cancels.
+  const [step] = await find('mrp.workorder', { production: first }, 'id', 'rahim');
+  const W = '/api/v1/models/mrp.workorder';
+  expect((await call('POST', `${W}/${step.id}/transitions/start`, 'rahim')).status).toBe(200);
+  expect((await call('POST', `${W}/${step.id}/transitions/finish`, 'rahim')).status).toBe(200);
+  const done = (await call('GET', `${W}/${step.id}`, 'rahim')).json;
+  expect(done.state).toBe('done');
+  expect(Number(done.actualMinutes)).toBeGreaterThanOrEqual(0);
+  expect((await run(second, 'cancel')).status).toBe(200);
+  expect((await plan(second))[0]?.[2]).toBe('cancel');
+  expect(
+    (await call('GET', '/api/v1/production/capacity?from=2026-11-18&to=2026-11-16', 'rahim'))
+      .status,
+  ).toBe(400);
 });
 
 test('the demo data loads', async () => {
