@@ -380,3 +380,22 @@ reviewed steps.
   nothing-done validation refused; a sales order partly then fully delivered through its backorder, the order line
   kept. E2E (apps): six of ten beams received from the form, the backorder ready in Receipts.
 
+## Implementation notes (2026-10-30): Stockroom, step 2 part 3 — counts from a phone
+
+- **Counts** (`stock.count`, Stockroom › Counts): a location and the locations inside it. *Start counting* lists
+  every product it holds (and those added by hand) with what is expected; counters fill in what they find, or scan.
+- **Scanning**: `POST /api/v1/stockroom/counts/:id/scan` (`{ barcode, quantity? }`) adds one — or the quantity sent —
+  to the product's line, making the line (with what is expected) for a product that was not listed; as the user, on
+  a count that is counting. The count form has a scan box: a barcode scanner or the keyboard types into it and Enter
+  adds; where the browser reads barcodes (`BarcodeDetector`, Chrome on Android), the phone's camera scans.
+- **Apply** (managers only, the `stock.count_apply` permission): what was found is compared with what is on hand
+  *now* (moves made while counting are not lost), in one validated *Inventory adjustment* transfer for the gains and
+  one for the losses — quantities still change only through validated transfers. A loss held by other transfers'
+  reservations is refused and the reservations are named ("8 Units reserved for TR/… (SO/2026/00099)"); products not
+  counted stay as they are.
+- **Tests**: on real PostgreSQL — the listing with what is expected, scans adding up, a product not listed, an
+  unknown barcode, a negative quantity, scanning before the start, counters unable to apply, gains and losses as two
+  validated adjustments, uncounted products untouched, a reserved loss refused with its reservation named and applied
+  once released. E2E (apps): a count started, an unknown barcode reported, a line counted, applied, stock following.
+- **Next** (step 2 part 4): lots and serial numbers.
+

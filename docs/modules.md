@@ -234,7 +234,9 @@ is validated only when everything is reserved, so stock never goes below zero. Q
 validated transfers. Every company gets its main warehouse `WH`. Install it with `shutro-erp apps install stock`.
 With Sales or Purchase, the `sale_stock` / `purchase_stock` bridges make each confirmed order's delivery or
 receipt, once, and show what is delivered or received on the order. A transfer can be validated in part: the
-done quantities move, and the rest goes to a backorder that stays with its order.
+done quantities move, and the rest goes to a backorder that stays with its order. Counts list what a location
+holds, take scans from a phone (`POST /api/v1/stockroom/counts/:id/scan`) and, applied by a manager, adjust the
+stock through validated adjustment transfers.
 
 ## Demo data (RFC 0008 §5.8)
 
