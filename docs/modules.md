@@ -239,7 +239,9 @@ holds, take scans from a phone (`POST /api/v1/stockroom/counts/:id/scan`) and, a
 stock through validated adjustment transfers. Products can be tracked by lot (with expiry dates, first expiry
 first out) or by serial number; every lot shows where it is and where it went. With Accounting, the
 `stock_account` bridge values the stock (average cost or FIFO) and posts each receipt, delivery and count
-adjustment at once; Stockroom › Valuation shows the stock's value.
+adjustment at once; Stockroom › Valuation shows the stock's value. With Purchase too, `purchase_stock_account`
+values receipts at the order's price and has vendor bills clear Goods received not billed, the difference going
+to Price differences.
 
 ## Demo data (RFC 0008 §5.8)
 

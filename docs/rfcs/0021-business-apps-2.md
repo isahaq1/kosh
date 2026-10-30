@@ -468,3 +468,21 @@ reviewed steps.
 - **Part 2**: `purchase_stock_account` — receipts at the purchase order's price, vendor bills for goods clearing
   Goods received not billed, the difference to Price differences.
 
+## Implementation notes (2026-10-30): Stockroom, step 3 part 2 — `purchase_stock_account` (Stockroom complete)
+
+- **Module** `modules/purchase_stock_account`, the bridge of Purchase, Stockroom and Accounting (proposed when the
+  three apps are installed; it depends on `purchase_stock`, `stock_account` and `purchase_account`).
+- **Receipts at the order's price**: it overrides the lines' `incomingUnitCost` — the purchase line's price per
+  product unit (a dozen at 2,400 is 200 a unit), in the company's currency at the day's rate (without a rate, the
+  product's cost).
+- **Two extension points in Accounting**, both empty by default: `productLineAccounts()` (the account of a
+  document's product lines that name none; the journal's default otherwise) and `posted()` (run after posting). The
+  bridge points vendor bills' goods at *Goods received not billed* and, once a bill from an order is posted, posts
+  the difference between what the bill says and the value received for the billed quantity to *Price
+  differences* — the interim account is cleared.
+- **Tests**: the bridge proposed; a receipt valued at the order's price (the average cost follows), a dozen's price
+  per unit; the bill's goods on 2150; a price 5 higher on 10 units: 50 in 5110; 2150 back to zero; Inventory at the
+  received value.
+- **Stockroom is complete** (steps 1–3). Later: landed costs, valuation of returns, foreign-currency price
+  differences at the bill's rate.
+
