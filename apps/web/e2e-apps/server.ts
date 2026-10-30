@@ -27,6 +27,7 @@ import { l10nIn } from '@kosh/l10n_in';
 import { mail } from '@kosh/mail';
 import { installActivityTypes, messaging } from '@kosh/messaging';
 import { mrp } from '@kosh/mrp';
+import { mrpAccount } from '@kosh/mrp_account';
 import { notify } from '@kosh/notify';
 import { installApprovalPolicies, permissions } from '@kosh/permissions';
 import { portal } from '@kosh/portal';
@@ -129,6 +130,7 @@ const CATALOGUE = [
   purchaseStock,
   stockAccount,
   purchaseStockAccount,
+  mrpAccount,
   assistant,
   dataImport,
   l10nBd,

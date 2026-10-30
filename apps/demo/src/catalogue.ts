@@ -10,6 +10,7 @@ import { mail } from '@kosh/mail';
 import { messaging } from '@kosh/messaging';
 import type { KoshModule } from '@kosh/modules-sdk';
 import { mrp } from '@kosh/mrp';
+import { mrpAccount } from '@kosh/mrp_account';
 import { notify } from '@kosh/notify';
 import { permissions } from '@kosh/permissions';
 import { product } from '@kosh/product';
@@ -83,6 +84,7 @@ export function demoCatalogue(): KoshModule[] {
     purchaseStock,
     stockAccount,
     purchaseStockAccount,
+    mrpAccount,
     l10nBd,
   ];
 }
