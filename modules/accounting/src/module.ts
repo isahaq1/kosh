@@ -27,6 +27,7 @@ import {
   type Env,
   extendModel,
   f,
+  method,
   onchange,
   record,
   records,
@@ -673,6 +674,10 @@ export const AccountMove = defineModel('account.move', {
           guard: records('account.move', (moves) => approvalGuard(moves)),
           message: 'Waiting for approvals.',
           before: records('account.move', (moves) => postMoves(moves)),
+          after: records('account.move', async (moves): Promise<void> => {
+            // Through the full environment: a definition's own callbacks do not see its methods.
+            await (moves.env as unknown as Env).model('account.move').browse(moves.ids).posted();
+          }),
         },
         reject: { from: ['to_approve'], to: 'draft' },
         cancel: { from: ['draft', 'to_approve'], to: 'cancel' },
@@ -693,6 +698,22 @@ export const AccountMove = defineModel('account.move', {
      */
     placeOfSupply: f.char({ size: 6, label: 'Place of supply' }),
     reversedBy: f.many2one('account.move', { label: 'Reversed by' }),
+  },
+  methods: {
+    /**
+     * The account of each product line of these documents that names none, by line: nothing here (the journal's
+     * default account applies). An app that knows better overrides it (`purchase_stock_account`: a vendor bill's
+     * goods to Goods received not billed).
+     */
+    productLineAccounts: method(
+      'account.move',
+      async (): Promise<Map<number, number>> => new Map<number, number>(),
+    ),
+    /**
+     * Runs once these entries are posted, in the posting's scope. Nothing here; an app overrides it
+     * (`purchase_stock_account`: the price difference between a bill and the goods received).
+     */
+    posted: method('account.move', async (): Promise<void> => undefined),
   },
   constraints: {
     // A posted entry is frozen (the database triggers of chart.ts back this up for raw SQL and deletes).
@@ -1124,8 +1145,12 @@ async function postMoves(moves: Moves): Promise<void> {
       type Item<T> = T extends Iterable<infer E> ? E : never;
       type Tax = Item<Item<typeof products>['taxes']>;
       const byTax = new Map<number, { amount: Decimal; base: Decimal; tax: Tax }>();
+      const proposed = await (env as unknown as Env)
+        .model('account.move')
+        .browse([m.id])
+        .productLineAccounts();
       for (const l of products) {
-        const account = l.account?.id ?? m.journal.defaultAccount?.id ?? null;
+        const account = l.account?.id ?? proposed.get(l.id) ?? m.journal.defaultAccount?.id ?? null;
         if (account === null)
           throw fail(
             ['lines'],
