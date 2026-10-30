@@ -47,6 +47,9 @@ importers:
       '@kosh/crm':
         specifier: workspace:*
         version: link:../../modules/crm
+      '@kosh/hr':
+        specifier: workspace:*
+        version: link:../../modules/hr
       '@kosh/l10n_bd':
         specifier: workspace:*
         version: link:../../modules/l10n_bd
@@ -257,6 +260,9 @@ importers:
       '@kosh/crm':
         specifier: workspace:*
         version: link:../../modules/crm
+      '@kosh/hr':
+        specifier: workspace:*
+        version: link:../../modules/hr
       '@kosh/integrations':
         specifier: workspace:*
         version: link:../../packages/integrations
@@ -452,6 +458,31 @@ importers:
         version: 12.2.1
 
   modules/crm:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/hr:
     dependencies:
       '@kosh/contacts':
         specifier: workspace:*
@@ -1050,6 +1081,9 @@ importers:
       '@kosh/crm':
         specifier: workspace:*
         version: link:../../modules/crm
+      '@kosh/hr':
+        specifier: workspace:*
+        version: link:../../modules/hr
       '@kosh/import':
         specifier: workspace:*
         version: link:../import
