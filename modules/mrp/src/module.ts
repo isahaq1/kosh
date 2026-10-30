@@ -487,12 +487,13 @@ export const MrpProduction = defineModel('mrp.production', {
                   moves: { create: [{ product: o.product.id, quantity: o.quantity }] },
                 },
               ]);
-              await made.confirm();
-              await made.validate();
+              // Linked before it is validated: what values it (mrp_account) finds its order.
               await env
                 .model('mrp.production')
                 .browse([o.id])
                 .write({ output: made.ids[0] ?? null });
+              await made.confirm();
+              await made.validate();
             }
           }),
         },
