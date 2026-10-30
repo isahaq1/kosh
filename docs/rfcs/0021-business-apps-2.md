@@ -287,3 +287,57 @@ reviewed steps.
   E2E (apps): Dina opens a position and adds an applicant, Rahim (interviewer) sees neither Hire nor the salary, Dina
   hires and the opening closes.
 
+
+## Design note: Stockroom (`modules/stock`, app code `stockroom`)
+
+- **Models**: `stock.warehouse` (name, short code, company, its locations), `stock.location` (a tree through
+  Shutro's hierarchy — `childOf` finds what is inside a location — with a usage: *internal*, *vendor*, *customer*,
+  *adjustment*, *transit*; the vendor, customer and adjustment locations are shared), `stock.quant` (what is in an
+  internal location: on hand, reserved and available, in the product's unit; written only by validated transfers),
+  `stock.picking` — the **Transfer**, one document for receipts, deliveries and internal moves — with its
+  `stock.move` lines (product, quantity and unit), and `stock.reservation` (which quant is held for which line).
+- **Units converted exactly**: a line may be in any unit of the product's unit category (a dozen of a product kept in
+  units); Shutro's `Quantity` converts it exactly, and quants are kept in the product's unit.
+- **One clear status**: *Draft*, *Waiting*, *Ready* (everything reserved), *Done*, *Cancelled* — one chip, where Odoo
+  shows a state and a separate availability.
+- **Reservations explained**: every reservation names its transfer and origin ("2 Units reserved for
+  TR/2026/00042 (SO/2026/00017)"); a product shows on hand, reserved and available.
+- **Never below zero**: a transfer out of an internal location is validated only when all of it is reserved, and
+  reservations take only what is available, so quantities never go negative (Odoo allows negative stock by default).
+- **Access**: *Stockroom user* (transfers, reading stock) and *Stockroom manager* (warehouses, locations, everything).
+  Quantities change only through validated transfers, never by editing them.
+- **Settings** (App settings › Stockroom): reserve when a transfer is confirmed (on by default).
+- **Step 1**: the models, the default warehouse of every company (`WH`, `WH/Stock`), transfers with confirm, check
+  availability, unreserve, validate and cancel, product quantities, the screens (transfers list / board / form,
+  stock by location, warehouses, locations), demo data. **Step 2**: `sale_stock` (deliveries from confirmed orders) and
+  `purchase_stock` (receipts), partial validation with backorders, counts from a phone, lots and serial numbers.
+  **Step 3**: `stock_account` (valuation, FIFO / average, posted to Accounting).
+
+## Implementation notes (2026-10-30): Stockroom, step 1
+
+- **Module** `modules/stock` (`@kosh/stock`, export `stock`), app **Stockroom** (code `stockroom`), depending on
+  Products, Contacts and Messaging; access levels *User* and *Manager*.
+- **Main warehouse**: the `defaults` hook gives every company without one its `WH` warehouse and `WH/Stock`
+  location — at install, at `kosh init`, and when Settings › Companies makes a company. The shared *Vendors*,
+  *Customers* and *Inventory adjustment* locations come as data. Location names are built from four levels of
+  stored names (Shutro refuses a computed field that depends on itself; deeper levels start with `…`).
+- **Transfers**: *Confirm* (reserves when the setting is on; the lines are checked as a draft first), *Check
+  availability*, *Unreserve*, *Validate* (refused with 409 unless everything leaving an internal location is
+  reserved; it consumes the reservations, adds to the destination's quant and dates the transfer), *Cancel*
+  (releases), *Back to draft*. Lines change only in a draft. Receipts, Deliveries and Transfers open new transfers
+  of their kind with the locations filled in.
+- **Reservations** take only what is available in the source location and the locations inside it (Shutro's
+  `childOf`), oldest stock first; each one reads "24 Units reserved for TR/2026/00005 (SO/2026/00017)". Quants are
+  read-only to every user and checked `quantity >= 0` in the database.
+- **Products** show on hand, reserved and available (the product form and list, through view extensions).
+- **Fixed on the way** (`@kosh/ui` forms): a new record opened from an action with defaults (Customer invoices and Vendor bills, Deliveries)
+  was saved without them, so the server's own default applied; it is now created with them, and their onchanges
+  run when the form opens (a new receipt's locations).
+- **Tests**: on real PostgreSQL — the main warehouse and the location names, receipts in dozens and grams converted
+  exactly, services and other unit categories refused, a delivery partly reserved and explained, validation refused
+  until everything is reserved, stock found on a shelf inside the stock location, two deliveries competing and
+  cancelling releasing, lines fixed once confirmed, quantities never edited by hand, access by role, the setting,
+  the demo data. E2E (apps): a receipt validated, a delivery reserved, explained and validated, the stock on hand.
+- **Step 2** as planned: `sale_stock`, `purchase_stock`, partial validation with backorders, counts from a phone,
+  lots and serial numbers. **Step 3**: `stock_account`.
+

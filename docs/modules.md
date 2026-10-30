@@ -225,6 +225,14 @@ managers) makes the Workforce employee, moves the applicant to the hired stage a
 filled; it is the only way to hire. One application per email and opening; expected salaries for hiring managers
 only. Install it with `shutro-erp apps install recruitment`.
 
+### Stockroom (`modules/stock`, RFC 0021)
+
+Warehouses, a tree of locations, and the Transfer — one document for receipts, deliveries and internal moves —
+with one status (Draft, Waiting, Ready, Done, Cancelled). Lines may be in any unit of the product's unit category and
+are converted exactly. Reservations take only what is available and say what they are for; a transfer out of stock
+is validated only when everything is reserved, so stock never goes below zero. Quantities change only through
+validated transfers. Every company gets its main warehouse `WH`. Install it with `shutro-erp apps install stock`.
+
 ## Demo data (RFC 0008 §5.8)
 
 `npx shutro-erp init --demo` (or a yes to the question after the apps) loads every installed app's demo data: a sample
