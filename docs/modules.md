@@ -254,6 +254,13 @@ cost; scrap (Stockroom › Scrap) is recorded with its reason, on an order or an
 work orders scheduled at the work centres (Production › Work orders, a Gantt); `GET /api/v1/production/capacity`
 gives each centre's load by day.
 
+### Asset Care (`modules/maintenance`, RFC 0021)
+
+Equipment with asset tags, warranty and meters that only count up; preventive plans by time or by meter whose
+orders are made when due (hourly, or `POST /api/v1/assetcare/plans/run`), with checklists ticked before an order is
+done; breakdowns that put equipment down until repaired; reliability (failures, downtime, MTTR, MTBF, availability)
+from `GET /api/v1/assetcare/reliability`. Install it with `shutro-erp apps install maintenance`.
+
 ## Demo data (RFC 0008 §5.8)
 
 `npx shutro-erp init --demo` (or a yes to the question after the apps) loads every installed app's demo data: a sample

@@ -583,3 +583,47 @@ reviewed steps.
 - **Production complete** (steps 1–2). Later: rescheduling by dragging bars, routings with parallel steps,
   quality checks.
 
+
+## Design note: Asset Care (`modules/maintenance`, app code `assetcare`)
+
+- **Equipment** (`maintenance.equipment`): name, asset tag, category, where it is, vendor, bought on, **warranty
+  until**, responsible; its **meters** (`maintenance.meter`: hours, km, cycles) with **readings** that never go
+  backwards; a status — *Operational*, *Down* while a breakdown is open, *Retired* when archived.
+- **Preventive plans** (`maintenance.plan`): **by time** (every N days from a start date or the last time done) or
+  **by meter** (every N units of a meter from the last reading done at), each with a **checklist**. When a plan is
+  due — within the lead time of App settings › Asset Care (7 days by default) — its maintenance order is made with
+  the checklist, once (a plan with an open order gets no other). Plans are run hourly by the server and on demand
+  (`POST /api/v1/assetcare/plans/run`).
+- **Maintenance orders** (`maintenance.request`, MT/2026/00001): *Preventive* (from a plan) or *Breakdown*
+  (reported by anyone with access, the equipment down from the report); assigned, scheduled; *Start*, *Finish* —
+  refused while the checklist is not ticked — with labour hours; downtime from report to finish. A preventive
+  order done moves its plan on (the date, the meter value).
+- **Reliability** (`GET /api/v1/assetcare/reliability?from=&to=`): per equipment over a period — failures, downtime
+  hours, MTTR (mean time to repair), MTBF (mean operating time between failures) and availability.
+- **Access**: *Technician* (orders, readings, reporting breakdowns) and *Manager* (equipment, plans, everything).
+- **Step 2**: parts drawn from Stockroom on an order (`maintenance_stock`), labour cost, the plans' calendar.
+
+## Implementation notes (2026-10-30): Asset Care, step 1
+
+- **Module** `modules/maintenance` (`@kosh/maintenance`, export `maintenance`), app **Asset Care** (code
+  `assetcare`); access levels *Technician* and *Manager*. It needs only Contacts: parts from Stockroom come with the
+  `maintenance_stock` bridge (step 2).
+- **Equipment** with asset tags unique per company, warranty, vendor, responsible, meters; the status
+  (*Operational* / *Down* while a breakdown is open / *Retired* when archived) is computed, never set by hand.
+- **Meters count up**: a reading below an earlier one (or above a later one) is refused; the meter shows its latest.
+- **Preventive plans** by time or by meter with checklists; `runPlans` makes each due plan's order once (none while
+  one is open), with the checklist and the equipment's responsible as technician; hourly in the server (off with
+  `KOSH_SCHEDULES=off`), and on demand for managers (`POST /api/v1/assetcare/plans/run`). Orders of plans by time
+  come within the lead time of App settings › Asset Care (7 days).
+- **Maintenance orders**: *Finish* is refused until the checklist is ticked; a preventive order done moves its plan
+  on (the date, the meter's value); downtime is counted from the report to the finish when the equipment stopped
+  (breakdowns by default), from whole milliseconds.
+- **Reliability**: `GET /api/v1/assetcare/reliability?from=&to=` — failures, downtime, MTTR, MTBF and availability
+  per equipment over the period.
+- **Tests**: on real PostgreSQL — readings never backwards; a plan by meter made once past its interval with its
+  checklist, finish refused until ticked, then moved on; a plan by time within the lead time and not past it once the
+  setting is lowered; a plan without its interval refused; a breakdown putting equipment down until done, three hours
+  of downtime, MTTR 3, MTBF 69 and availability 95.8 % over three days; access by role; the demo. E2E (apps): a press
+  added, reported down by a technician, repaired, operational again.
+- **Step 2**: `maintenance_stock` (parts drawn from Stockroom on an order), labour cost, the plans' calendar.
+
