@@ -436,8 +436,12 @@ export function FormView({
   };
   const save = useMutation({
     mutationFn: async (): Promise<Versioned & { readonly queued?: true }> => {
+      // A new record is created with the action's defaults too (a bill from Bills, a delivery from Deliveries):
+      // they are part of it without being changes.
       const payload = payloadOf(
-        changes,
+        isNew
+          ? { ...Object.fromEntries(Object.entries(base).filter(([k]) => !isLines(k))), ...changes }
+          : changes,
         fields,
         lines,
         (key) => served.fields[fields[key]?.target ?? ''] ?? {},
@@ -552,12 +556,13 @@ export function FormView({
     setChanges({ ...changes, [key]: value });
     if (served.onchange.includes(key)) runOnchange({ ...values, [key]: value }, [key]);
   };
-  // Proposed values trigger their onchanges once the new record is there (the customer's currency): what follows
-  // from them is part of the proposal, unsaved like it.
+  // Proposed values and the action's defaults trigger their onchanges once the new record is there (the customer's
+  // currency; a new receipt's locations): what follows from them is part of the new record, unsaved like it.
   // biome-ignore lint/correctness/useExhaustiveDependencies: once per loaded new record
   useEffect(() => {
-    if (!isNew || record === undefined || proposed === undefined) return;
-    const keys = proposed.filter((key) => served.onchange.includes(key) && !isLines(key));
+    if (!isNew || record === undefined) return;
+    const given = [...new Set([...(proposed ?? []), ...Object.keys(defaults ?? {})])];
+    const keys = given.filter((key) => served.onchange.includes(key) && !isLines(key));
     if (keys.length > 0) runOnchange(values, keys);
   }, [record]);
 
