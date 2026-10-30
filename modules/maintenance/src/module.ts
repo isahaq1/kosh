@@ -14,6 +14,7 @@ import {
   defineModule,
   type Env,
   f,
+  method,
   records,
 } from './.kosh/bindings.js';
 
@@ -36,6 +37,18 @@ const addDays = (date: string, days: number): string => {
 /** Hours between two instants, from whole milliseconds (no fractional JS numbers into decimals). */
 export const hoursBetween = (from: Date, to: Date): Decimal =>
   orm.toDecimal(Math.max(0, to.getTime() - from.getTime())).div(3_600_000);
+
+/** The cost of an hour of a technician's work (App settings › Asset Care). */
+export async function labourRate(env: Env): Promise<Decimal> {
+  try {
+    const rate = orm.toDecimal(
+      String(await installationSetting(env, 'maintenance.labourRate', '0')),
+    );
+    return rate.gte(0) ? rate : zero;
+  } catch {
+    return zero;
+  }
+}
 
 /** How many days before a plan is due its order is made (App settings › Asset Care). */
 export async function leadDays(env: Env): Promise<number> {
@@ -332,6 +345,8 @@ export const MaintenanceRequest = defineModel('maintenance.request', {
       ),
     }),
     labourHours: f.decimal({ scale: 2, default: '0', label: 'Labour (hours)' }),
+    /** The labour hours at the rate of App settings when the order was finished. */
+    labourCost: f.decimal({ scale: 2, default: '0', label: 'Labour cost' }),
     tasks: f.one2many('maintenance.request.task', 'request', { label: 'Checklist' }),
     note: f.text(),
     state: f.state({
@@ -343,6 +358,10 @@ export const MaintenanceRequest = defineModel('maintenance.request', {
           to: 'progress',
           after: records('maintenance.request', async (requests): Promise<void> => {
             await requests.write({ startedAt: new Date() } as never);
+            await (requests.env as unknown as Env)
+              .model('maintenance.request')
+              .browse(requests.ids)
+              .started();
           }),
         },
         finish: {
@@ -352,10 +371,22 @@ export const MaintenanceRequest = defineModel('maintenance.request', {
             (await requests.load({ tasks: true })).filter((r) => [...r.tasks].some((t) => !t.done)),
           ),
           message: 'Tick every item of the checklist first.',
-          // Done: when, and a preventive order moves its plan on.
+          // What other apps need done first (maintenance_stock: the parts consumed); refusing refuses the finish.
+          before: records('maintenance.request', async (requests): Promise<void> => {
+            await (requests.env as unknown as Env)
+              .model('maintenance.request')
+              .browse(requests.ids)
+              .finishing();
+          }),
+          // Done: when, the labour's cost, and a preventive order moves its plan on.
           after: records('maintenance.request', async (requests): Promise<void> => {
             const env = requests.env as unknown as Env;
+            const rate = await labourRate(env);
             await requests.write({ finishedAt: new Date() } as never);
+            for (const r of await requests.load({}))
+              await r.write({
+                labourCost: (r.labourHours ?? zero).times(rate).toDecimalPlaces(2),
+              } as never);
             await env.asSuperuser({ reason: 'preventive plan done' }, async (su) => {
               for (const r of await su
                 .model('maintenance.request')
@@ -370,9 +401,29 @@ export const MaintenanceRequest = defineModel('maintenance.request', {
             });
           }),
         },
-        cancel: { from: ['new', 'progress'], to: 'cancel' },
+        cancel: {
+          from: ['new', 'progress'],
+          to: 'cancel',
+          after: records('maintenance.request', async (requests): Promise<void> => {
+            await (requests.env as unknown as Env)
+              .model('maintenance.request')
+              .browse(requests.ids)
+              .cancelled();
+          }),
+        },
       },
     }),
+  },
+  methods: {
+    /** Runs once these orders are started. Nothing here; `maintenance_stock` reserves their parts. */
+    started: method('maintenance.request', async (): Promise<void> => undefined),
+    /**
+     * Runs before these orders are finished; throwing refuses the finish. Nothing here; `maintenance_stock`
+     * consumes their parts (refused when some are short).
+     */
+    finishing: method('maintenance.request', async (): Promise<void> => undefined),
+    /** Runs once these orders are cancelled. Nothing here; `maintenance_stock` releases their parts. */
+    cancelled: method('maintenance.request', async (): Promise<void> => undefined),
   },
 });
 

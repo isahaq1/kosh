@@ -26,6 +26,7 @@ import {
 
 export {
   hoursBetween,
+  labourRate,
   leadDays,
   MaintenanceEquipment,
   MaintenanceMeter,
@@ -150,12 +151,20 @@ export const maintenance: ReturnType<typeof defineModule> = defineModule({
     sections: [
       {
         key: 'plans',
-        label: 'Preventive plans',
-        description: 'How early the orders of preventive plans are made.',
+        label: 'Plans and costs',
+        description:
+          'How early the orders of preventive plans are made, and what an hour of work costs.',
         keywords: 'preventive plan maintenance lead time days due',
         scope: 'installation',
         editors: ['maintenance.manager'],
         fields: [
+          {
+            key: 'labourRate',
+            type: 'decimal',
+            label: 'Cost of an hour of work',
+            default: '0',
+            help: 'A finished order’s labour hours are costed at this rate.',
+          },
           {
             key: 'leadDays',
             type: 'integer',
@@ -181,7 +190,7 @@ export const maintenance: ReturnType<typeof defineModule> = defineModule({
     }),
     'assetcare.action_plans': action(MaintenancePlan, {
       label: 'Preventive plans',
-      views: ['list', 'form'],
+      views: ['list', 'calendar', 'form'],
     }),
     'assetcare.action_readings': action(MaintenanceMeterReading, {
       label: 'Meter readings',
@@ -267,6 +276,7 @@ export const maintenance: ReturnType<typeof defineModule> = defineModule({
           'downtime',
           'downtimeHours',
           'labourHours',
+          'labourCost',
         ]),
         k.group('what', ['description'], { columns: 1 }),
         k.lines('tasks', [
@@ -326,6 +336,11 @@ export const maintenance: ReturnType<typeof defineModule> = defineModule({
         'nextDate',
         'lastDoneDate',
       ],
+    }),
+    'maintenance.plan.calendar': calendar(MaintenancePlan, {
+      dateStart: 'nextDate',
+      title: 'name',
+      mode: 'month',
     }),
     'maintenance.plan.form': form(MaintenancePlan, (k) => ({
       header: { buttons: [] },

@@ -1135,7 +1135,7 @@ async function applyCounts(ids: readonly Id<'stock.count'>[], env: Env): Promise
     const adjustment = (
       await su
         .model('stock.location')
-        .search({ where: { usage: 'adjustment', name: { ne: 'Scrap' } }, limit: 1 })
+        .search({ where: { usage: 'adjustment', name: 'Inventory adjustment' }, limit: 1 })
     ).ids[0];
     if (adjustment === undefined)
       throw new orm.ValidationError(
