@@ -1,0 +1,62 @@
+{
+  "name": "@kosh/purchase_stock_account",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bridge: receipts valued at the purchase order's price, vendor bills clearing goods received not billed (RFC 0021)",
+  "keywords": [
+    "kosh",
+    "erp",
+    "typescript",
+    "postgresql",
+    "shutro"
+  ],
+  "author": "Isahaq <hmisahaq01@gmail.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/isahaq1/kosh/tree/main/modules/purchase_stock_account#readme",
+  "bugs": {
+    "url": "https://github.com/isahaq1/kosh/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isahaq1/kosh.git",
+    "directory": "modules/purchase_stock_account"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "@kosh/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node ../../scripts/copy-views.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@kosh/modules-sdk": "workspace:*",
+    "@kosh/server": "workspace:*",
+    "@kosh/views": "workspace:*",
+    "@kosh/purchase": "workspace:*",
+    "@kosh/stock": "workspace:*",
+    "@kosh/accounting": "workspace:*",
+    "@kosh/purchase_stock": "workspace:*",
+    "@kosh/stock_account": "workspace:*",
+    "@kosh/purchase_account": "workspace:*",
+    "@kosh/product": "workspace:*",
+    "@kosh/contacts": "workspace:*"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^12.2.1",
+    "@kosh/settings": "workspace:*",
+    "@kosh/messaging": "workspace:*",
+    "@kosh/permissions": "workspace:*"
+  }
+}

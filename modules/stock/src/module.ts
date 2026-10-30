@@ -459,7 +459,7 @@ export const StockMove = defineModel('stock.move', {
     },
     doneNotNegative: {
       ...check('stock.move', ['quantityDone'], async (moves) =>
-        [...moves].filter((m) => m.quantityDone !== null && m.quantityDone.lt(0)).map((m) => m.id),
+        [...moves].filter((m) => m.quantityDone?.lt(0) === true).map((m) => m.id),
       ),
       message: 'A done quantity cannot be negative.',
     },

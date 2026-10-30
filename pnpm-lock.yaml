@@ -83,6 +83,9 @@ importers:
       '@kosh/purchase_stock':
         specifier: workspace:*
         version: link:../../modules/purchase_stock
+      '@kosh/purchase_stock_account':
+        specifier: workspace:*
+        version: link:../../modules/purchase_stock_account
       '@kosh/realtime':
         specifier: workspace:*
         version: link:../../packages/realtime
@@ -308,6 +311,9 @@ importers:
       '@kosh/purchase_stock':
         specifier: workspace:*
         version: link:../../modules/purchase_stock
+      '@kosh/purchase_stock_account':
+        specifier: workspace:*
+        version: link:../../modules/purchase_stock_account
       '@kosh/realtime':
         specifier: workspace:*
         version: link:../../packages/realtime
@@ -899,6 +905,55 @@ importers:
         specifier: ^12.2.1
         version: 12.2.1
 
+  modules/purchase_stock_account:
+    dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../accounting
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/purchase':
+        specifier: workspace:*
+        version: link:../purchase
+      '@kosh/purchase_account':
+        specifier: workspace:*
+        version: link:../purchase_account
+      '@kosh/purchase_stock':
+        specifier: workspace:*
+        version: link:../purchase_stock
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/stock':
+        specifier: workspace:*
+        version: link:../stock
+      '@kosh/stock_account':
+        specifier: workspace:*
+        version: link:../stock_account
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   modules/recruitment:
     dependencies:
       '@kosh/contacts':
@@ -1353,6 +1408,9 @@ importers:
       '@kosh/purchase_stock':
         specifier: workspace:*
         version: link:../../modules/purchase_stock
+      '@kosh/purchase_stock_account':
+        specifier: workspace:*
+        version: link:../../modules/purchase_stock_account
       '@kosh/realtime':
         specifier: workspace:*
         version: link:../realtime

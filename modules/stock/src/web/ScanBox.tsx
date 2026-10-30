@@ -128,7 +128,6 @@ export function ScanBox({ api, record, reload }: NodeComponentProps): ReactEleme
         )}
       </div>
       {camera ? (
-        // biome-ignore lint/a11y/useMediaCaption: a live camera preview has no captions
         <video ref={video} className="max-h-64 w-full rounded-md bg-black" playsInline muted />
       ) : null}
       <p aria-live="polite" className="text-sm text-muted-foreground">
