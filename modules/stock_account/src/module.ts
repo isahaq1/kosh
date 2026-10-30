@@ -24,6 +24,7 @@ const money = (d: Decimal) => d.toDecimalPlaces(2);
 
 /** The accounts this bridge adds to a chart (by code), when the chart has none with that code. */
 export const STOCK_ACCOUNTS = [
+  { code: '1250', name: 'Work in progress', type: 'asset_current' },
   { code: '2150', name: 'Goods received not billed', type: 'liability_current' },
   { code: '5100', name: 'Stock adjustments', type: 'expense_direct_cost' },
   { code: '5110', name: 'Price differences', type: 'expense_direct_cost' },
@@ -34,6 +35,7 @@ const COMPANY_DEFAULTS = {
   stockCogsAccount: '5000',
   stockAdjustmentAccount: '5100',
   stockPriceDiffAccount: '5110',
+  stockProductionAccount: '1250',
 } as const;
 
 export const CategoryValuation = extendModel('product.category', {
@@ -68,6 +70,7 @@ export const CompanyStockAccounts = extendModel('res.company', {
     stockCogsAccount: f.many2one('account.account', { label: 'Cost of goods sold account' }),
     stockAdjustmentAccount: f.many2one('account.account', { label: 'Stock adjustments account' }),
     stockPriceDiffAccount: f.many2one('account.account', { label: 'Price differences account' }),
+    stockProductionAccount: f.many2one('account.account', { label: 'Work in progress account' }),
   },
 });
 
@@ -125,6 +128,7 @@ export async function stockAccountsOf(
   cogs: Id<'account.account'>;
   adjustment: Id<'account.account'>;
   priceDiff: Id<'account.account'>;
+  production: Id<'account.account'>;
 } | null> {
   const [c] = await env.model('res.company').browse([company]).load({});
   if (c === undefined) return null;
@@ -162,7 +166,8 @@ export async function stockAccountsOf(
     after.stockInterimAccount == null ||
     after.stockCogsAccount == null ||
     after.stockAdjustmentAccount == null ||
-    after.stockPriceDiffAccount == null
+    after.stockPriceDiffAccount == null ||
+    after.stockProductionAccount == null
   )
     return null;
   return {
@@ -172,6 +177,7 @@ export async function stockAccountsOf(
     cogs: after.stockCogsAccount.id,
     adjustment: after.stockAdjustmentAccount.id,
     priceDiff: after.stockPriceDiffAccount.id,
+    production: after.stockProductionAccount.id,
   };
 }
 
@@ -280,12 +286,15 @@ async function valueTransfers(pickings: Records<'stock.picking'>): Promise<void>
         });
       }
       if (value.lte(0)) continue;
+      // Production consumes into and produces out of Work in progress.
       const against =
-        p.kind === 'adjustment'
-          ? accounts.adjustment
-          : incoming
-            ? accounts.interim
-            : (product.category?.stockCogsAccount?.id ?? accounts.cogs);
+        p.kind === 'production'
+          ? accounts.production
+          : p.kind === 'adjustment'
+            ? accounts.adjustment
+            : incoming
+              ? accounts.interim
+              : (product.category?.stockCogsAccount?.id ?? accounts.cogs);
       const stock = product.category?.stockValuationAccount?.id ?? accounts.valuation;
       const label = `${p.name} ${product.name}`;
       if (incoming) {

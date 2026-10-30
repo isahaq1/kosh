@@ -141,6 +141,7 @@ export const StockLocation = defineModel('stock.location', {
         vendor: 'Vendors',
         customer: 'Customers',
         adjustment: 'Inventory adjustment',
+        production: 'Production',
         transit: 'In transit',
       },
       { required: true, default: 'internal' },
@@ -830,6 +831,7 @@ export const StockPicking = defineModel('stock.picking', {
         delivery: 'Delivery',
         internal: 'Internal move',
         adjustment: 'Inventory adjustment',
+        production: 'Production',
       },
       { required: true, default: 'receipt', label: 'Type' },
     ),
@@ -1028,6 +1030,11 @@ export const StockPicking = defineModel('stock.picking', {
                 !(
                   (p.source.usage === 'adjustment' && p.destination.usage === 'internal') ||
                   (p.source.usage === 'internal' && p.destination.usage === 'adjustment')
+                )) ||
+              (p.kind === 'production' &&
+                !(
+                  (p.source.usage === 'production' && p.destination.usage === 'internal') ||
+                  (p.source.usage === 'internal' && p.destination.usage === 'production')
                 )),
           )
           .map((p) => p.id),
@@ -1352,8 +1359,11 @@ export const ProductStock = extendModel('product.product', {
   },
 });
 
-const shared = (id: string, name: string, usage: 'vendor' | 'customer' | 'adjustment') =>
-  record('stock.location', id, { name, usage, company: null }, { noupdate: true });
+const shared = (
+  id: string,
+  name: string,
+  usage: 'vendor' | 'customer' | 'adjustment' | 'production',
+) => record('stock.location', id, { name, usage, company: null }, { noupdate: true });
 
 export const stockShutro = defineModule({
   name: 'stock',
@@ -1401,5 +1411,6 @@ export const stockShutro = defineModule({
     shared('location_vendors', 'Vendors', 'vendor'),
     shared('location_customers', 'Customers', 'customer'),
     shared('location_adjustment', 'Inventory adjustment', 'adjustment'),
+    shared('location_production', 'Production', 'production'),
   ],
 });

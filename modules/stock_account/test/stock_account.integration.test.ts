@@ -82,7 +82,7 @@ const run = async (url: string, as = 'maria') => {
 };
 /** A validated transfer of one product; its id. */
 async function move(
-  kind: 'receipt' | 'delivery' | 'internal',
+  kind: 'receipt' | 'delivery' | 'internal' | 'production',
   name: string,
   quantity: string,
   places: { source: string; destination: string },
@@ -288,6 +288,24 @@ test('internal moves keep their value; the stock value equals the Inventory acco
     orm.toDecimal(0),
   );
   expect(balance.toFixed(2)).toBe('750.00');
+});
+
+test('production: components into Work in progress, the product out of it', async () => {
+  const consumed = await move('production', 'Panel', '1', {
+    source: 'stock',
+    destination: 'production',
+  });
+  expect(await entryOf(consumed)).toEqual([
+    ['1250', '50', '0'],
+    ['1200', '0', '50'],
+  ]);
+  const made = await move('production', 'Cement', '1', {
+    source: 'production',
+    destination: 'stock',
+  });
+  const [layer] = await find('stock.valuation.layer', { picking: made }, 'value');
+  expect((await entryOf(made))[0]).toEqual(['1200', layer.value, '0']);
+  expect((await entryOf(made))[1]).toEqual(['1250', '0', layer.value]);
 });
 
 test('nobody edits the valuation; stock users do not read it', async () => {
