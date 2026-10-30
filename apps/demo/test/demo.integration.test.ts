@@ -123,6 +123,7 @@ test('every app with demo data loaded it, once', async () => {
     'sales',
     'stock',
     'todo',
+    'trade_finance',
   ]);
   for (const [app, bridge] of [
     ['sales', 'sale_account'],
@@ -148,7 +149,7 @@ test('every app with demo data loaded it, once', async () => {
     text: 'SELECT count(*)::text AS n FROM kosh_module WHERE demo_at IS NOT NULL',
     params: [],
   });
-  expect(Number(marks[0]?.n)).toBe(19);
+  expect(Number(marks[0]?.n)).toBe(20);
 });
 
 test('the salesperson sees the orders and the invoices made from them; the buyer the approvals', async () => {

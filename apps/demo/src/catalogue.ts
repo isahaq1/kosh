@@ -33,6 +33,7 @@ import { settings } from '@kosh/settings';
 import { stock } from '@kosh/stock';
 import { stockAccount } from '@kosh/stock_account';
 import { todo } from '@kosh/todo';
+import { tradeFinance } from '@kosh/trade_finance';
 
 /** What the demo installs; the bridges come as proposals of the plan. */
 export const DEMO_APPS: readonly string[] = [
@@ -53,6 +54,7 @@ export const DEMO_APPS: readonly string[] = [
   'stock',
   'mrp',
   'maintenance',
+  'trade_finance',
   'l10n_bd',
 ];
 
@@ -81,6 +83,7 @@ export function demoCatalogue(): KoshModule[] {
     stock,
     mrp,
     maintenance,
+    tradeFinance,
     saleAccount,
     purchaseAccount,
     saleProject,

@@ -62,6 +62,7 @@ import { settings } from '@kosh/settings';
 import { stock } from '@kosh/stock';
 import { stockAccount } from '@kosh/stock_account';
 import { todo } from '@kosh/todo';
+import { tradeFinance } from '@kosh/trade_finance';
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
 
 export const ADMIN_TOTP_SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
@@ -126,6 +127,7 @@ const CATALOGUE = [
   stock,
   mrp,
   maintenance,
+  tradeFinance,
   saleAccount,
   purchaseAccount,
   saleProject,
@@ -169,6 +171,7 @@ await applyApps(
         'stock',
         'mrp',
         'maintenance',
+        'trade_finance',
         'assistant',
         'import',
         'l10n_bd',
@@ -230,6 +233,7 @@ for (const [login, name, groups] of [
       'stock.manager',
       'mrp.manager',
       'maintenance.manager',
+      'trade_finance.manager',
       'messaging.user',
       'reporting.user',
       'assistant.user',
@@ -255,6 +259,7 @@ for (const [login, name, groups] of [
       'stock.user',
       'mrp.user',
       'maintenance.user',
+      'trade_finance.user',
     ],
   ],
 ] as const)

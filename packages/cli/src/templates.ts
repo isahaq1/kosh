@@ -23,6 +23,7 @@ export type AppName =
   | 'stock'
   | 'mrp'
   | 'maintenance'
+  | 'trade_finance'
   | 'sale_project'
   | 'sale_stock'
   | 'purchase_stock'
@@ -149,6 +150,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
       'Asset Care: equipment, preventive plans by time or meter, maintenance orders, reliability',
     icon: '🛠️',
     server: 'maintenance',
+  },
+  trade_finance: {
+    label:
+      'Trade Finance: letters of credit, amendments, presentations and discrepancies, bank limits',
+    icon: '🏦',
+    server: 'tradeFinance',
   },
   sale_project: {
     label: 'Bridge: tasks and projects from sales orders (Sales ↔ Projects)',
