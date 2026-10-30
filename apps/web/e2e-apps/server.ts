@@ -52,6 +52,7 @@ import {
 } from '@kosh/server';
 import { orm, pg } from '@kosh/server/orm';
 import { settings } from '@kosh/settings';
+import { stock } from '@kosh/stock';
 import { todo } from '@kosh/todo';
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
 
@@ -114,6 +115,7 @@ const CATALOGUE = [
   crm,
   hr,
   recruitment,
+  stock,
   saleAccount,
   purchaseAccount,
   saleProject,
@@ -148,6 +150,7 @@ await applyApps(
         'crm',
         'hr',
         'recruitment',
+        'stock',
         'assistant',
         'import',
         'l10n_bd',
@@ -206,6 +209,7 @@ for (const [login, name, groups] of [
       'crm.manager',
       'hr.manager',
       'hiring.manager',
+      'stock.manager',
       'messaging.user',
       'reporting.user',
       'assistant.user',
@@ -228,6 +232,7 @@ for (const [login, name, groups] of [
       'crm.user',
       'hr.user',
       'hiring.user',
+      'stock.user',
     ],
   ],
 ] as const)

@@ -76,6 +76,8 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   pipeline: TrendingUp,
   workforce: Briefcase,
   hiring: UserPlus,
+  stockroom: Warehouse,
+  stock: Warehouse,
   recruitment: UserPlus,
   hr: Briefcase,
   crm: TrendingUp,

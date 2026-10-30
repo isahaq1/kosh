@@ -20,6 +20,7 @@ export type AppName =
   | 'crm'
   | 'hr'
   | 'recruitment'
+  | 'stock'
   | 'sale_project'
   | 'l10n_bd'
   | 'l10n_in';
@@ -121,6 +122,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🤝',
     server: 'recruitment',
     web: 'registerRecruitmentWeb',
+  },
+  stock: {
+    label:
+      'Stockroom: warehouses, transfers with one clear status, reservations that say what they are for',
+    icon: '🏬',
+    server: 'stock',
   },
   sale_project: {
     label: 'Bridge: tasks and projects from sales orders (Sales ↔ Projects)',
