@@ -647,3 +647,54 @@ reviewed steps.
 - **Asset Care complete** (steps 1–2). Later: a maintenance expense account for parts and labour, mobile checklists
   with photos, meter readings by scanning the equipment's tag.
 
+
+## Design note: Trade Finance (`modules/trade_finance`, app code `tradefinance`)
+
+- **Letters of credit** (`trade.lc`, LC/2026/00001 inside, the bank's LC number beside it): *import* (we are the
+  applicant, the vendor the beneficiary) or *export* (the customer's bank opens it for us); the issuing bank (a
+  contact), the counterparty, the currency and amount with a **tolerance** (± %, UCP 600 art. 30 "about"); payment
+  **at sight** or **usance** (days after acceptance); the Incoterm; the **latest shipment date**, the **expiry date
+  and place**; partial shipments and transshipment allowed or not; the documents required; the margin (%). States:
+  *Draft* (application being prepared) → *Applied* → *Issued* → *Settled* (all drawn and paid, or closed) /
+  *Cancelled*.
+- **Amendments** (`trade.lc.amendment`): new amount, expiry or shipment date, and a note; **applied to the LC only
+  when accepted** (UCP 600 art. 10), refused ones change nothing.
+- **Presentations** (`trade.lc.presentation`): the documents presented for an amount drawn, the discrepancies found;
+  *Accept* (a discrepant set only once the discrepancies are waived) sets the **maturity** — the acceptance date at
+  sight, plus the usance days otherwise; *Pay* settles it; *Refuse*. What is drawn never passes the amount plus the
+  tolerance; an LC whose drawings are paid in full is settled.
+- **Limits per bank** (`trade.lc.limit`: a bank, a currency, an amount): what its issued LCs leave outstanding is
+  shown, and **issuing an LC beyond the limit is refused**.
+- **Alerts**: `GET /api/v1/trade/alerts` lists issued LCs whose shipment or expiry date falls within the window of App
+  settings › Trade Finance (15 days by default), and the LCs list filters them.
+- **Access**: *User* (LCs, presentations) and *Manager* (limits, issuing, accepting, everything).
+- **Step 2**: margin and bank charges posted to Accounting (`trade_finance_account`), LCs linked to purchase and sales
+  orders, shipments against the LC.
+
+## Implementation notes (2026-10-30): Trade Finance, step 1
+
+- **Module** `modules/trade_finance` (`@kosh/trade_finance`, export `tradeFinance`), app **Trade Finance** (code
+  `tradefinance`); access levels *User* (users see contacts: the banks and counterparties of their LCs) and
+  *Manager*; the feature permission `trade_finance.issue` (recording an LC issued, accepting amendments) is the
+  managers'.
+- **LCs** with the checks: goods ship on or before the LC expires, which is after it is applied for; usance needs its
+  days; positive amounts; tolerance and margin between 0 and 100 %. *Issued by the bank* is refused beyond the bank's
+  limit in the LC's currency (what its other issued LCs leave outstanding plus this one).
+- **Amendments** apply their new amount, expiry or shipment date to the LC only when accepted; only issued LCs are
+  amended.
+- **Presentations**: a discrepant set is accepted only once waived; acceptance sets the maturity (at sight: the day;
+  usance: so many days after); what is drawn (refused sets aside) never passes the amount plus the tolerance, nor is
+  drawn after the expiry; when what is paid reaches the amount, the LC is settled. The LC shows what can be drawn,
+  drawn, paid and outstanding.
+- **Alerts**: `GET /api/v1/trade/alerts` — issued LCs' shipment and expiry dates within App settings › Trade Finance
+  (15 days by default), with the days left. (Reading the setting is an audited superuser read, so the route runs in
+  a read-write transaction.)
+- **Tests**: on real PostgreSQL — the dates, usance and amount checks; issuing within the limit (80,000 of 100,000
+  issued, 30,000 more refused), not by users; an amendment to 90,000 applied once accepted (94,500 drawable with 5 %),
+  a refused one changing nothing; a discrepant presentation accepted once waived with a 90-day maturity, 100,000
+  drawn refused, 94,500 drawn and paid settling the LC; alerts at 5 and 10 days, none with a 3-day window; access; the
+  demo (which makes US dollars when an installation has none). E2E (apps): an LC applied, issued, documents
+  presented and accepted with their maturity.
+- **Step 2**: margin and bank charges posted to Accounting (`trade_finance_account`), LCs linked to purchase and sales
+  orders, shipments against an LC, alerts on the home page and by notification.
+

@@ -262,6 +262,14 @@ done; breakdowns that put equipment down until repaired; reliability (failures, 
 from `GET /api/v1/assetcare/reliability`. Install it with `shutro-erp apps install maintenance`. With Stockroom,
 `maintenance_stock` reserves an order's spare parts when it starts and consumes them when it is finished.
 
+### Trade Finance (`modules/trade_finance`, RFC 0021)
+
+Import and export letters of credit under UCP 600: the amount with its tolerance, at sight or usance, the shipment
+and expiry dates; amendments applied once accepted; presentations whose discrepancies are waived or refused, with
+their maturity, drawn within the LC and paid until it is settled; limits per bank and currency that issuing never
+passes; alerts on shipment and expiry dates (`GET /api/v1/trade/alerts`). Install it with
+`shutro-erp apps install trade_finance`.
+
 ## Demo data (RFC 0008 §5.8)
 
 `npx shutro-erp init --demo` (or a yes to the question after the apps) loads every installed app's demo data: a sample
