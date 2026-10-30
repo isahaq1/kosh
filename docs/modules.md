@@ -250,7 +250,9 @@ that list what is required, available and short, and what they will cost, before
 components through Stockroom; Produce consumes them and puts the product in stock. Install it with
 `shutro-erp apps install mrp`. With Accounting, `mrp_account` values what is made at what it consumed plus its
 operations, and Work in progress clears with each order. Bills may make by-products that carry a share of the
-cost; scrap (Stockroom › Scrap) is recorded with its reason, on an order or anywhere.
+cost; scrap (Stockroom › Scrap) is recorded with its reason, on an order or anywhere. Confirmed orders get their
+work orders scheduled at the work centres (Production › Work orders, a Gantt); `GET /api/v1/production/capacity`
+gives each centre's load by day.
 
 ## Demo data (RFC 0008 §5.8)
 

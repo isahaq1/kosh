@@ -560,5 +560,26 @@ reviewed steps.
 - **Tests**: scrap with its reason to the Scrap location, more than available refused; its loss to 5100; scrap on an
   order listed there; a by-product of itself or shares of 100 % refused; 1,650 split 1,485 / 165 between 5 fixtures
   and 10 offcuts at 10 %, Work in progress still cleared.
-- **Next**: the work centres' Gantt with capacity (Production step 2 part 3).
+- **Then**: the work centres' Gantt with capacity (Production step 2 part 3).
+
+## Implementation notes (2026-10-30): Production, step 2 part 3 — work orders, the Gantt, capacity (step 2 complete)
+
+- **Work orders** (`mrp.workorder`): made when an order is confirmed, one per operation of its bill, with the minutes
+  for the quantity ordered; **scheduled forward** at their work centre, after what the centre already has planned
+  and after the order's previous step, from the order's date: a centre works its hours a day from 08:00, and what
+  does not fit continues the next day. *Start* and *Finish* record when, and the minutes it took; *Produce* closes
+  what is left; *Cancel* cancels them.
+- **The Gantt**: Production › Work orders opens on the work centres' timeline (rows by centre); the order's form
+  lists its steps with their planned times.
+- **Capacity**: `GET /api/v1/production/capacity?from=&to=` gives each centre's planned hours and load (percent of
+  its hours) day by day, counting only the hours inside each day's working window (a step running overnight does
+  not count the night).
+- **Fixed on the way**: an order whose bill has operations but no components (labour only) made an empty
+  components transfer, refused by Stockroom; it makes none now. Minutes taken are computed from whole
+  milliseconds (Shutro refuses fractional JavaScript numbers as decimals, by design).
+- **Tests**: the scheduler's day spill; two orders at a 4-hour paint shop queued 16th 8–12 and 17th 8–9, then 17th
+  9–12 and 18th 8–10; capacity 100 % / 100 % / 50 %; a step started and finished with its minutes; cancelling
+  cancels; an inverted period refused. E2E (apps): Work orders open on the Gantt.
+- **Production complete** (steps 1–2). Later: rescheduling by dragging bars, routings with parallel steps,
+  quality checks.
 
