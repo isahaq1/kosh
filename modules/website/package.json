@@ -1,0 +1,70 @@
+{
+  "name": "@kosh/website",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sites: website pages from blocks with a live preview, forms that create records, a public API (RFC 0021)",
+  "keywords": [
+    "kosh",
+    "erp",
+    "typescript",
+    "postgresql",
+    "shutro"
+  ],
+  "author": "Isahaq <hmisahaq01@gmail.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/isahaq1/kosh/tree/main/modules/website#readme",
+  "bugs": {
+    "url": "https://github.com/isahaq1/kosh/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isahaq1/kosh.git",
+    "directory": "modules/website"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "@kosh/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./web": {
+      "@kosh/source": "./src/web/index.ts",
+      "types": "./dist/web/index.d.ts",
+      "default": "./dist/web/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node ../../scripts/copy-views.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@kosh/modules-sdk": "workspace:*",
+    "@kosh/server": "workspace:*",
+    "@kosh/views": "workspace:*",
+    "@kosh/messaging": "workspace:*",
+    "@kosh/contacts": "workspace:*",
+    "@kosh/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@kosh/settings": "workspace:*",
+    "@testcontainers/postgresql": "^12.2.1",
+    "@types/react": "^19.3.0",
+    "i18next": "^26.4.7",
+    "react": "^19.3.1",
+    "react-i18next": "^17.0.21",
+    "@kosh/permissions": "workspace:*"
+  },
+  "peerDependencies": {
+    "i18next": "^26.4.7",
+    "react": "^19.3.1",
+    "react-i18next": "^17.0.21"
+  }
+}
