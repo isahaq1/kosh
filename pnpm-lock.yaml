@@ -137,6 +137,9 @@ importers:
       '@kosh/trade_finance':
         specifier: workspace:*
         version: link:../../modules/trade_finance
+      '@kosh/trade_finance_account':
+        specifier: workspace:*
+        version: link:../../modules/trade_finance_account
     devDependencies:
       '@testcontainers/postgresql':
         specifier: ^12.2.1
@@ -377,6 +380,9 @@ importers:
       '@kosh/trade_finance':
         specifier: workspace:*
         version: link:../../modules/trade_finance
+      '@kosh/trade_finance_account':
+        specifier: workspace:*
+        version: link:../../modules/trade_finance_account
       '@kosh/views':
         specifier: workspace:*
         version: link:../../packages/views
@@ -1430,6 +1436,37 @@ importers:
         specifier: ^12.2.1
         version: 12.2.1
 
+  modules/trade_finance_account:
+    dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../accounting
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/trade_finance':
+        specifier: workspace:*
+        version: link:../trade_finance
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   packages/assistant:
     dependencies:
       '@anthropic-ai/sdk':
@@ -1653,6 +1690,9 @@ importers:
       '@kosh/trade_finance':
         specifier: workspace:*
         version: link:../../modules/trade_finance
+      '@kosh/trade_finance_account':
+        specifier: workspace:*
+        version: link:../../modules/trade_finance_account
     devDependencies:
       '@testcontainers/postgresql':
         specifier: ^12.2.1

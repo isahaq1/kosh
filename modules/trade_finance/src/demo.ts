@@ -41,7 +41,6 @@ export async function tradeFinanceDemo(ctx: DemoContext): Promise<string> {
           expiryDate: ctx.date(35),
           expiryPlace: 'Dhaka',
           documents: 'Commercial invoice, bill of lading, packing list, certificate of origin',
-          marginPercent: '10',
         },
         {
           direction: 'import',
@@ -49,6 +48,8 @@ export async function tradeFinanceDemo(ctx: DemoContext): Promise<string> {
           partner: vendor,
           currency: usd,
           amount: '45000',
+          // The margin of the application being prepared (an issued one would post it, needing the day's USD rate).
+          marginPercent: '10',
           latestShipmentDate: ctx.date(60),
           expiryDate: ctx.date(75),
         },

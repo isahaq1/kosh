@@ -15,6 +15,7 @@ import {
   defineModule,
   type Env,
   f,
+  method,
   records,
 } from './.kosh/bindings.js';
 
@@ -236,13 +237,32 @@ export const TradeLc = defineModel('trade.lc', {
           after: records('trade.lc', async (lcs): Promise<void> => {
             for (const lc of await lcs.load({}))
               if (lc.issueDate === null) await lc.write({ issueDate: lcs.env.today() } as never);
+            await (lcs.env as unknown as Env).model('trade.lc').browse(lcs.ids).issued();
           }),
         },
-        settle: { from: ['issued'], to: 'settled' },
-        cancel: { from: ['draft', 'applied', 'issued'], to: 'cancel' },
+        settle: {
+          from: ['issued'],
+          to: 'settled',
+          after: records('trade.lc', async (lcs): Promise<void> => {
+            await (lcs.env as unknown as Env).model('trade.lc').browse(lcs.ids).closed();
+          }),
+        },
+        cancel: {
+          from: ['draft', 'applied', 'issued'],
+          to: 'cancel',
+          after: records('trade.lc', async (lcs): Promise<void> => {
+            await (lcs.env as unknown as Env).model('trade.lc').browse(lcs.ids).closed();
+          }),
+        },
         redraft: { from: ['cancel'], to: 'draft' },
       },
     }),
+  },
+  methods: {
+    /** Runs once these LCs are recorded issued. Nothing here; `trade_finance_account` posts their margin. */
+    issued: method('trade.lc', async (): Promise<void> => undefined),
+    /** Runs once these LCs are settled or cancelled. Nothing here; `trade_finance_account` releases the margin. */
+    closed: method('trade.lc', async (): Promise<void> => undefined),
   },
   sqlConstraints: {
     sensible: {
@@ -391,6 +411,7 @@ export const TradePresentation = defineModel('trade.lc.presentation', {
           after: records('trade.lc.presentation', async (presentations): Promise<void> => {
             const env = presentations.env as unknown as Env;
             await presentations.write({ paidOn: env.today() } as never);
+            await env.model('trade.lc.presentation').browse(presentations.ids).paid();
             // An LC paid in full is settled.
             for (const p of await presentations.load({ lc: true })) {
               const [lc] = await env.model('trade.lc').browse([p.lc.id]).load({});
@@ -402,6 +423,10 @@ export const TradePresentation = defineModel('trade.lc.presentation', {
         refuse: { from: ['presented'], to: 'refused' },
       },
     }),
+  },
+  methods: {
+    /** Runs once these presentations are paid. Nothing here; `trade_finance_account` posts the payment. */
+    paid: method('trade.lc.presentation', async (): Promise<void> => undefined),
   },
   constraints: {
     // Drawn only on an issued LC, never beyond the amount plus the tolerance, nor after it expired.
