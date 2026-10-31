@@ -7,12 +7,13 @@ import type {
   ButtonNode,
   FormNode,
   ResolvedView,
+  StatNode,
   ViewDefinition,
   ViewExtension,
   ViewOperation,
 } from './types.js';
 
-type AnyNode = FormNode | ButtonNode;
+type AnyNode = FormNode | ButtonNode | StatNode;
 
 /** A view or extension that cannot apply. */
 export class ViewDefinitionError extends Error {
@@ -37,6 +38,7 @@ export function nodesOf(view: ViewDefinition): AnyNode[] {
           walk(page.children);
         }
       if (node.kind === 'lines') out.push(...node.columns);
+      if (node.kind === 'stats') out.push(...node.children);
     }
   };
   switch (view.type) {
@@ -94,7 +96,7 @@ function applyIn<T extends AnyNode>(nodes: readonly T[], op: ViewOperation): [T[
           ...target,
           children: [...target.children, ...(added as unknown as FormNode[])],
         } as unknown as T;
-      else if ((target as { kind: string }).kind === 'page')
+      else if ((target as { kind: string }).kind === 'page' || target.kind === 'stats')
         out[index] = {
           ...target,
           children: [
@@ -133,6 +135,14 @@ function applyIn<T extends AnyNode>(nodes: readonly T[], op: ViewOperation): [T[
           out[i] = { ...node, pages: pagesOut } as unknown as T;
           return [out, true];
         }
+      }
+    }
+    if (node.kind === 'stats') {
+      const [children, done] = applyIn(node.children as unknown as FormNode[], op);
+      if (done) {
+        const out = [...nodes];
+        out[i] = { ...node, children } as unknown as T;
+        return [out, true];
       }
     }
     if (node.kind === 'lines') {

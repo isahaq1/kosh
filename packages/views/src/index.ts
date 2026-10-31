@@ -25,10 +25,12 @@ export {
   type ModelHandle,
   map,
   pivot,
+  type StatInput,
   search,
   spreadsheet,
+  stat,
 } from './builders.js';
-export { type ConditionEnv, evaluate, holds } from './condition.js';
+export { type ConditionEnv, evaluate, holds, resolveRecord } from './condition.js';
 export type { Block, Layout } from './documents.js';
 export { nodesOf, resolveView, ViewDefinitionError } from './extend.js';
 export type * from './types.js';

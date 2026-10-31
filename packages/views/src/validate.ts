@@ -62,6 +62,22 @@ export function validateView(view: ViewDefinition, models: ModelLookup): string[
         problems.push(`'${node.field}' is not a one2many of ${view.model}`);
       else for (const column of node.columns) checkField(column, field.target);
     }
+    if (node.kind === 'stat') {
+      const related = models(node.model);
+      if (related === undefined)
+        problems.push(`stat '${node.id}': the model '${node.model}' is not installed`);
+      else {
+        const measure = node.measure === undefined ? null : Object.values(node.measure)[0];
+        if (typeof measure === 'string' && !related.fields.has(measure))
+          problems.push(`stat '${node.id}': no field '${measure}' on ${node.model}`);
+        for (const key of Object.keys(node.where))
+          if (!['and', 'or', 'not'].includes(key) && !key.includes('.') && !related.fields.has(key))
+            problems.push(`stat '${node.id}': no field '${key}' on ${node.model}`);
+        for (const key of recordKeys(node.where))
+          if (!info.fields.has(key))
+            problems.push(`stat '${node.id}': '$record' names no field '${key}' of ${view.model}`);
+      }
+    }
     if (node.kind === 'button' && !info.transitions.includes(node.transition))
       problems.push(
         `unknown transition '${node.transition}' (has ${info.transitions.join(', ') || 'none'})`,
@@ -95,6 +111,14 @@ export function validateView(view: ViewDefinition, models: ModelLookup): string[
         problems.push(`defaultOrder '${term}' is not a stored field`);
     }
   return problems;
+}
+
+/** The record fields a condition's `$record` placeholders name. */
+function recordKeys(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(recordKeys);
+  if (typeof value !== 'object' || value === null) return [];
+  if ('$record' in value) return [String((value as { $record: unknown }).$record)];
+  return Object.values(value).flatMap(recordKeys);
 }
 
 function isLineColumn(view: ViewDefinition, node: FieldNode): boolean {

@@ -6,7 +6,9 @@ import {
   kanban,
   list,
   type ModelInfo,
+  resolveRecord,
   resolveView,
+  stat,
   ViewDefinitionError,
   validateAction,
   validateSearch,
@@ -260,4 +262,100 @@ test('client actions open a registered page, named <module>.<Name>', () => {
   expect(validateAction({ type: 'client', page: 'Apps' }, none, new Map())).toEqual([
     "the page 'Apps' is not '<module>.<Name>'",
   ]);
+});
+
+describe('stat tiles (RFC 0022 §3.1)', () => {
+  const withStats = () => ({
+    ...form(PurchaseOrder, (f) => ({
+      sheet: [
+        f.stats('related', [
+          {
+            id: 'lines_count',
+            label: 'Lines',
+            model: 'purchase.order.line',
+            where: { product: { $record: 'name' } },
+          },
+        ]),
+        f.group('main', ['name']),
+      ],
+    })),
+    id: 'purchase.order.form',
+  });
+
+  test('k.stats builds a row; another module appends a tile by the row anchor', () => {
+    const resolved = resolveView(withStats(), 'purchase', [
+      {
+        module: 'purchase_account',
+        extension: {
+          view: 'purchase.order.form',
+          operations: [
+            {
+              append: 'related',
+              nodes: [
+                stat({
+                  id: 'bills',
+                  label: 'Bills',
+                  model: 'purchase.order',
+                  where: { partner: { $record: 'partner' } },
+                  measure: { sum: 'amountTotal' },
+                }),
+              ],
+            },
+          ],
+        },
+      },
+    ]);
+    const view = resolved.view;
+    if (view.type !== 'form') throw new Error('form');
+    const row = view.sheet[0];
+    expect(row?.kind === 'stats' && row.children.map((c) => c.id)).toEqual([
+      'lines_count',
+      'bills',
+    ]);
+    expect(resolved.origins).toMatchObject({ lines_count: 'purchase', bills: 'purchase_account' });
+  });
+
+  test('tiles are checked: the model, the measure, the filter fields and the $record fields', () => {
+    expect(validateView(withStats(), lookup)).toEqual([]);
+    const bad = form(PurchaseOrder, (f) => ({
+      sheet: [
+        f.stats('related', [
+          { id: 'a', label: 'A', model: 'nowhere.model', where: {} },
+          {
+            id: 'b',
+            label: 'B',
+            model: 'purchase.order',
+            where: { nope: 1 },
+            measure: { sum: 'missing' },
+          },
+          {
+            id: 'c',
+            label: 'C',
+            model: 'purchase.order',
+            where: { partner: { $record: 'ghost' } },
+          },
+        ]),
+      ],
+    }));
+    const problems = validateView({ ...bad, id: 'x' }, lookup);
+    expect(problems).toEqual([
+      "stat 'a': the model 'nowhere.model' is not installed",
+      "stat 'b': no field 'missing' on purchase.order",
+      "stat 'b': no field 'nope' on purchase.order",
+      "stat 'c': '$record' names no field 'ghost' of purchase.order",
+    ]);
+  });
+
+  test("$record placeholders take the record's values; related values give their id", () => {
+    expect(
+      resolveRecord(
+        {
+          partner: { $record: 'partner' },
+          state: { in: ['sale'] },
+          or: [{ order: { $record: 'id' } }],
+        },
+        { id: 42, partner: { id: 7, displayName: 'Bengal Steel' } },
+      ),
+    ).toEqual({ partner: 7, state: { in: ['sale'] }, or: [{ order: 42 }] });
+  });
 });

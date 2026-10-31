@@ -57,6 +57,7 @@ import { cn } from '../lib/cn.js';
 import { useLiveRecord } from '../live.js';
 import type { FormProps } from '../registry.js';
 import { useToast } from '../shell/toast.js';
+import { StatsRow } from './StatsRow.js';
 import { StatusChip } from './StatusChip.js';
 import { PrefetchedNames, useRowNames } from './widgets.js';
 
@@ -721,6 +722,17 @@ export function FormView({
             </Tabs>
           );
         }
+        case 'stats':
+          if (isNew || !visible(node.visibleWhen)) return null;
+          return (
+            <StatsRow
+              key={node.id}
+              node={node}
+              values={values}
+              env={env}
+              version={loaded.data?.etag ?? null}
+            />
+          );
         case 'lines': {
           const ids = Array.isArray(values[node.field])
             ? (values[node.field] as unknown[]).filter((v): v is number => typeof v === 'number')
@@ -1167,13 +1179,20 @@ export function FormView({
               </div>
             )}
 
-            {sections.map((section) => (
-              <section key={section.key} className="rounded-lg border bg-surface p-5">
-                <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+            {sections.map((section) =>
+              section.nodes[0]?.kind === 'stats' ? (
+                // The tiles of related records stand on their own, not in a card.
+                <div key={section.key} className="grid">
                   {renderNodes(section.nodes)}
                 </div>
-              </section>
-            ))}
+              ) : (
+                <section key={section.key} className="rounded-lg border bg-surface p-5">
+                  <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+                    {renderNodes(section.nodes)}
+                  </div>
+                </section>
+              ),
+            )}
 
             {showRail ? null : rail}
           </div>

@@ -30,6 +30,8 @@ import type {
   PivotView,
   SearchSpec,
   SpreadsheetView,
+  StatNode,
+  StatsNode,
   WindowAction,
 } from './types.js';
 
@@ -74,6 +76,14 @@ export function field<K extends string>(input: FieldInput<K>): FieldNode {
   return fieldNode(input);
 }
 
+/** A stat tile's input: the related model's handle or name, the rest as the node. */
+export type StatInput = Omit<StatNode, 'kind' | 'model'> & { readonly model: ModelRef };
+
+/** A stat tile (RFC 0022 §3.1), for `k.stats` and for extensions appending to another module's row. */
+export function stat(input: StatInput): StatNode {
+  return { ...input, kind: 'stat', model: nameOf(input.model) };
+}
+
 type ViewInput<V> = Omit<V, 'id' | 'model' | 'type'>;
 
 /** A list view. */
@@ -115,6 +125,12 @@ export interface FormKit<K extends string> {
     component: string,
     props?: Readonly<Record<string, unknown>>,
   ): ComponentNode;
+  /** A row of tiles of related records; empty rows are for other modules to fill. */
+  stats(
+    id: string,
+    children: readonly StatInput[],
+    options?: { readonly visibleWhen?: Condition },
+  ): StatsNode;
   button(
     transition: string,
     options?: Omit<ButtonNode, 'kind' | 'id' | 'transition'> & { readonly id?: string },
@@ -147,6 +163,12 @@ function kit<K extends string>(): FormKit<K> {
       id,
       component,
       ...(props === undefined ? {} : { props }),
+    }),
+    stats: (id, children, options = {}) => ({
+      kind: 'stats',
+      id,
+      ...options,
+      children: children.map(stat),
     }),
     button: (transition, options = {}) => {
       const { id, ...rest } = options;

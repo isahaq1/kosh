@@ -65,7 +65,34 @@ export interface ComponentNode {
   readonly visibleWhen?: Condition;
 }
 
-export type FormNode = FieldNode | GroupNode | NotebookNode | LinesNode | ComponentNode;
+/**
+ * A tile of related records (RFC 0022 §3.1): how many — or how much — of another model relate to this record, with
+ * a jump to that list. `where` takes `$record` placeholders (`{ partner: { $record: 'id' } }`); the value is computed
+ * by the server with the user's rights.
+ */
+export interface StatNode {
+  readonly kind: 'stat';
+  readonly id: string;
+  readonly label: string;
+  readonly model: string;
+  readonly where: Condition;
+  /** Default: the count. */
+  readonly measure?: { readonly sum: string } | { readonly avg: string };
+  /** The window action that opens the records, filtered the same way. */
+  readonly action?: string;
+  readonly tone?: 'neutral' | 'info' | 'success' | 'warning' | 'danger';
+  readonly visibleWhen?: Condition;
+}
+
+/** A row of stat tiles; other modules append theirs (`{ append: 'related', nodes: [stat(...)] }`). */
+export interface StatsNode {
+  readonly kind: 'stats';
+  readonly id: string;
+  readonly children: readonly StatNode[];
+  readonly visibleWhen?: Condition;
+}
+
+export type FormNode = FieldNode | GroupNode | NotebookNode | LinesNode | ComponentNode | StatsNode;
 
 /** A header button running a state transition. */
 export interface ButtonNode {
@@ -304,10 +331,10 @@ export interface SearchSpec {
 
 /** An operation of a view extension, on the node with id `anchor`. */
 export type ViewOperation =
-  | { readonly insertAfter: string; readonly nodes: readonly (FormNode | ButtonNode)[] }
-  | { readonly insertBefore: string; readonly nodes: readonly (FormNode | ButtonNode)[] }
-  | { readonly append: string; readonly nodes: readonly (FormNode | ButtonNode)[] }
-  | { readonly replace: string; readonly nodes: readonly (FormNode | ButtonNode)[] }
+  | { readonly insertAfter: string; readonly nodes: readonly (FormNode | ButtonNode | StatNode)[] }
+  | { readonly insertBefore: string; readonly nodes: readonly (FormNode | ButtonNode | StatNode)[] }
+  | { readonly append: string; readonly nodes: readonly (FormNode | ButtonNode | StatNode)[] }
+  | { readonly replace: string; readonly nodes: readonly (FormNode | ButtonNode | StatNode)[] }
   | { readonly remove: string }
   | { readonly setAttrs: string; readonly attrs: Readonly<Record<string, unknown>> };
 

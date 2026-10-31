@@ -143,3 +143,27 @@ export function evaluate(
   }
   return unknown ? undefined : true;
 }
+
+const idOfValue = (v: unknown): unknown =>
+  typeof v === 'object' && v !== null && !Array.isArray(v) && 'id' in v
+    ? (v as { id: unknown }).id
+    : v;
+
+/**
+ * A condition with its `$record` placeholders replaced by the record's values (`{ partner: { $record: 'id' } }` on
+ * record 42 becomes `{ partner: 42 }`); related values give their id. For stat tiles (RFC 0022 §3.1) and any
+ * filter a record page opens.
+ */
+export function resolveRecord(
+  condition: Condition,
+  values: Readonly<Record<string, unknown>>,
+): Condition {
+  const walk = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(walk);
+    if (typeof value !== 'object' || value === null) return value;
+    if ('$record' in value)
+      return idOfValue(values[String((value as { $record: unknown }).$record)]) ?? null;
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, walk(v)]));
+  };
+  return walk(condition) as Condition;
+}
