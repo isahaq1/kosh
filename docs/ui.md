@@ -58,9 +58,26 @@ viewExtensions: [{
 }],
 ```
 
-Operations: `insertAfter`, `insertBefore`, `append` (into a group or page), `replace`, `remove`, `setAttrs`. They
-apply in module dependency order; an unknown anchor or a duplicate id fails at startup. `resolveView()` records the
-module behind every node and the chain of modules that changed the view.
+Operations: `insertAfter`, `insertBefore`, `append` (into a group, a page or a row of tiles), `replace`, `remove`,
+`setAttrs`. They apply in module dependency order; an unknown anchor or a duplicate id fails at startup.
+`resolveView()` records the module behind every node and the chain of modules that changed the view.
+
+## Related records on a record page (RFC 0022 §3.1)
+
+```ts
+k.stats('related', [
+  { id: 'orders', label: 'Orders', model: SaleOrder, where: { partner: { $record: 'id' } }, action: 'sales.action_orders' },
+  { id: 'due', label: 'Due', model: AccountMove, where: { partner: { $record: 'id' }, state: 'posted' },
+    measure: { sum: 'amountResidual' }, tone: 'warning' },
+]),
+```
+
+A row of tiles under the title: a count (the default) or a sum / average over another model, filtered by the record
+(`$record` names its fields), computed by the server **as the user** (`aggregate`: their rights and record rules
+apply), refetched after every save or transition, and a click opens the tile's action with the same filter. An
+app declares an empty row (`k.stats('related', [])`) for other modules to fill: `{ append: 'related', nodes:
+[stat({...})] }` from `@kosh/views`. The tile's model, measure, filter fields and `$record` fields are checked when
+the server starts.
 
 ## What the server serves
 

@@ -123,3 +123,23 @@ step 3 last. Performance budgets apply (an overview with eight tiles < 300 ms se
    them, so the look is agreed on real screens early; then the widgets, the guidance, and one pass per app.
 2. **Images are files in `@kosh/storage`** (S3-compatible), with thumbnails made in a job; the image widget shows
    them in forms, kanban cards and lists.
+
+## Implementation notes (2026-10-31): step 1, part 3.1 — related records on record pages
+
+- **`k.stats(id, tiles)`** in `@kosh/views`: a `stats` node of `stat` tiles (`label`, `model`, `where` with
+  `$record` placeholders, `measure` — the count by default, or `{ sum }` / `{ avg }` —, `action`, `tone`,
+  `visibleWhen`). `stat(...)` builds a tile for extensions; `{ append: '<row id>', nodes: [stat(...)] }` adds to
+  another module's row. Load-time checks: the tile's model is installed, its measure and filter fields exist on it,
+  and `$record` names fields of the page's model. `resolveRecord(condition, values)` fills the placeholders.
+- **The UI** (`StatsRow`) computes each tile through `POST /models/:model/aggregate` as the user — their rights
+  and record rules apply, nothing is computed in the browser —, refetches with the record's version (so a
+  transition updates the tiles), formats sums per locale with the currency when the measure is monetary, and opens
+  the tile's action (or the model's default) with the same filter as a custom search chip labelled by the tile.
+  The row stands under the title, outside the cards, four tiles wide on a desktop and two on a phone.
+- **Rows and tiles shipped**: Contacts declares an empty row `related` on the contact; Sales appends *Sales orders*
+  and *Sales* (the total, in green), Purchase *Purchase orders* and *Purchases*, Accounting *Invoices*, *Due from
+  them* (posted customer invoices not paid, in amber) and *Bills*. Sales orders and purchase orders declare a row;
+  `sale_account` / `purchase_account` append *Invoices* / *Bills* and the posted total, `sale_stock` /
+  `purchase_stock` *Deliveries* / *Receipts*.
+- **E2E**: the accounting flow checks the order's *Invoices 1* tile after *Create invoice* and that it opens the
+  invoices filtered to that order.
