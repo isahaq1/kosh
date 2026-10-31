@@ -313,3 +313,15 @@ test('the demo data loads', async () => {
   });
   expect(JSON.stringify(summary)).toContain('Workforce');
 });
+
+test('the Workforce overview (RFC 0022 step 2) to a user; the employee form has its tiles', async () => {
+  const overview = await call('GET', '/api/v1/reports/overview?app=workforce', 'dina');
+  expect(overview.status, JSON.stringify(overview.json)).toBe(200);
+  expect(overview.json.cards.map((c: { id: string }) => c.id)).toContain('leave_waiting');
+  const form = await call('GET', '/api/v1/views/hr.employee.form', 'dina');
+  expect(form.json.view.sheet[0].children.map((c: { id: string }) => c.id)).toEqual([
+    'employee_team',
+    'employee_leave_days',
+    'employee_contracts',
+  ]);
+});

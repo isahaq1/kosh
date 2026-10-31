@@ -280,3 +280,18 @@ step 3 last. Performance budgets apply (an overview with eight tiles < 300 ms se
   Both apps now depend on `reporting`.
 - Tests: Projects (the overview, the project's tiles, the gantt served), Pipeline (the overview), `website_crm`
   (the tile on the deal). E2E (apps): both overviews, the projects timeline.
+
+## Implementation notes (2026-10-31): step 2 — Workforce, Hiring and Stockroom
+
+- **Workforce**: the Overview (employees, departments, leave waiting approval, leave days this month against
+  last, by department, joined by month, running contracts, leave days by person); tiles on an employee (their
+  team, leave days taken, contracts); a board of employees by department with their user's avatar; emails and
+  phones as links; leave rows toned by decision.
+- **Hiring**: the Overview (open openings, people to hire, applicants in process, hired, by stage, where they
+  come from, the best rated, by opening); tiles on an opening (applicants, in process, hired); ratings as stars on
+  the board and the list.
+- **Stockroom**: the Overview (receipts and deliveries to do, transfers done this month against last,
+  reservations, transfers by status, on hand by location, the most stocked products, scheduled transfers); the
+  scheduled date as days left on the list and the board, rows toned by status, cards tinted by kind.
+- All three now depend on `reporting`. Tests: each overview to a user; the employee's and the opening's tiles.
+  E2E (apps): the three overviews.

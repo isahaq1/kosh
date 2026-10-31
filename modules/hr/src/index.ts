@@ -10,9 +10,10 @@
 import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
+import { reporting } from '@kosh/reporting';
 import { audit, HttpProblem, type ModuleContext } from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
-import { action, calendar, form, hierarchy, list, search } from '@kosh/views';
+import { action, calendar, form, hierarchy, kanban, list, search } from '@kosh/views';
 import { hrDemo } from './demo.js';
 import {
   HrContract,
@@ -178,7 +179,7 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
   shutro: hrShutro,
   kosh: '^0.1.0',
   hooks: { demo: hrDemo },
-  depends: [contacts, messaging],
+  depends: [contacts, messaging, reporting],
   app: {
     code: 'workforce',
     label: 'Workforce',
@@ -222,10 +223,89 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
     ],
   },
   routes: (context: ModuleContext) => registerWorkforceRoutes(context),
+  // The Overview (RFC 0022 step 2).
+  overview: {
+    cards: [
+      {
+        id: 'employees',
+        title: 'Employees',
+        kind: 'kpi',
+        model: 'hr.employee',
+        measure: 'count',
+        w: 3,
+      },
+      {
+        id: 'departments',
+        title: 'Departments',
+        kind: 'kpi',
+        model: 'hr.department',
+        measure: 'count',
+        w: 3,
+      },
+      {
+        id: 'leave_waiting',
+        title: 'Leave waiting approval',
+        kind: 'kpi',
+        model: 'hr.leave',
+        measure: 'count',
+        filter: { state: 'submitted' },
+        w: 3,
+      },
+      {
+        id: 'leave_month',
+        title: 'Leave days this month',
+        kind: 'kpi',
+        model: 'hr.leave',
+        measure: 'sum:days',
+        filter: { state: 'approved' },
+        comparison: { field: 'dateFrom', mode: 'previous' },
+        w: 3,
+      },
+      {
+        id: 'by_department',
+        title: 'By department',
+        kind: 'chart',
+        model: 'hr.employee',
+        measure: 'count',
+        groupBy: 'department',
+        chart: 'pie',
+        w: 6,
+      },
+      {
+        id: 'joined_by_month',
+        title: 'Joined by month',
+        kind: 'chart',
+        model: 'hr.employee',
+        measure: 'count',
+        groupBy: 'hireDate:month',
+        chart: 'bar',
+        w: 6,
+      },
+      {
+        id: 'contracts_running',
+        title: 'Running contracts',
+        kind: 'kpi',
+        model: 'hr.contract',
+        measure: 'count',
+        filter: { state: 'running' },
+        w: 3,
+      },
+      {
+        id: 'leave_by_employee',
+        title: 'Leave days by person',
+        kind: 'pivot',
+        model: 'hr.leave',
+        measure: 'sum:days',
+        groupBy: 'employee',
+        filter: { state: 'approved' },
+        w: 6,
+      },
+    ],
+  },
   actions: {
     'workforce.action_employees': action(HrEmployee, {
       label: 'Employees',
-      views: ['list', 'form', 'hierarchy'],
+      views: ['list', 'kanban', 'form', 'hierarchy'],
     }),
     'workforce.action_leaves': action(HrLeave, {
       label: 'Leave',
@@ -298,8 +378,24 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
   ],
   views: {
     'hr.employee.list': list(HrEmployee, {
-      columns: ['name', 'job', 'department', 'manager', 'workEmail', 'workPhone'],
+      columns: [
+        'name',
+        'job',
+        'department',
+        'manager',
+        { field: 'workEmail', widget: 'email' },
+        { field: 'workPhone', widget: 'phone' },
+      ],
       defaultOrder: ['name asc'],
+    }),
+    'hr.employee.kanban': kanban(HrEmployee, {
+      groupBy: 'department',
+      card: {
+        title: 'name',
+        subtitle: 'job',
+        avatar: 'user',
+        footer: [{ field: 'workEmail', widget: 'email' }],
+      },
     }),
     'hr.employee.hierarchy': hierarchy(HrEmployee, {
       parent: 'manager',
@@ -309,6 +405,30 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
     'hr.employee.form': form(HrEmployee, (k) => ({
       header: { buttons: [] },
       sheet: [
+        k.stats('related', [
+          {
+            id: 'employee_team',
+            label: 'Team',
+            model: HrEmployee,
+            where: { manager: { $record: 'id' } },
+            action: 'workforce.action_employees',
+          },
+          {
+            id: 'employee_leave_days',
+            label: 'Leave days taken',
+            model: HrLeave,
+            where: { employee: { $record: 'id' }, state: 'approved' },
+            measure: { sum: 'days' },
+            action: 'workforce.action_leaves',
+          },
+          {
+            id: 'employee_contracts',
+            label: 'Contracts',
+            model: HrContract,
+            where: { employee: { $record: 'id' } },
+            action: 'workforce.action_contracts',
+          },
+        ]),
         k.group('work', ['name', 'job', 'department', 'manager', 'user', 'hireDate']),
         k.group('contact', ['workEmail', 'workPhone']),
         k.group('personal', ['birthday', 'nationalId', 'emergencyContact', 'privateAddress']),
@@ -377,6 +497,11 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
         { field: 'state', widget: 'badge' },
       ],
       defaultOrder: ['dateFrom desc'],
+      decorations: {
+        success: { state: 'approved' },
+        warning: { state: 'submitted' },
+        danger: { state: 'refused' },
+      },
     }),
     'hr.leave.calendar': calendar(HrLeave, {
       dateStart: 'dateFrom',

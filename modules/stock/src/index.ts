@@ -9,6 +9,7 @@ import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
 import { product } from '@kosh/product';
+import { reporting } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import { type Id, orm } from '@kosh/server/orm';
 import { action, field, form, kanban, list, search, stat } from '@kosh/views';
@@ -166,7 +167,7 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       (env as Env).asSuperuser({ reason: 'main warehouses' }, (su) => mainWarehouses(su)),
     demo: stockDemo,
   },
-  depends: [product, contacts, messaging],
+  depends: [product, contacts, messaging, reporting],
   app: {
     code: 'stockroom',
     label: 'Stockroom',
@@ -202,6 +203,87 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
             help: 'Off: stock is reserved only with Check availability.',
           },
         ],
+      },
+    ],
+  },
+  // The Overview (RFC 0022 step 2).
+  overview: {
+    cards: [
+      {
+        id: 'receipts_todo',
+        title: 'Receipts to do',
+        kind: 'kpi',
+        model: 'stock.picking',
+        measure: 'count',
+        filter: { kind: 'receipt', status: { in: ['waiting', 'ready'] } },
+        w: 3,
+      },
+      {
+        id: 'deliveries_todo',
+        title: 'Deliveries to do',
+        kind: 'kpi',
+        model: 'stock.picking',
+        measure: 'count',
+        filter: { kind: 'delivery', status: { in: ['waiting', 'ready'] } },
+        w: 3,
+      },
+      {
+        id: 'done_month',
+        title: 'Transfers done this month',
+        kind: 'kpi',
+        model: 'stock.picking',
+        measure: 'count',
+        filter: { status: 'done' },
+        comparison: { field: 'scheduledDate', mode: 'previous' },
+        w: 3,
+      },
+      {
+        id: 'reservations',
+        title: 'Reservations',
+        kind: 'kpi',
+        model: 'stock.reservation',
+        measure: 'count',
+        w: 3,
+      },
+      {
+        id: 'by_status',
+        title: 'Transfers by status',
+        kind: 'chart',
+        model: 'stock.picking',
+        measure: 'count',
+        groupBy: 'status',
+        chart: 'bar',
+        w: 6,
+      },
+      {
+        id: 'on_hand_by_location',
+        title: 'On hand by location',
+        kind: 'chart',
+        model: 'stock.quant',
+        measure: 'sum:quantity',
+        groupBy: 'location',
+        filter: { quantity: { gt: 0 } },
+        chart: 'bar',
+        w: 6,
+      },
+      {
+        id: 'most_stocked',
+        title: 'Most stocked products',
+        kind: 'pivot',
+        model: 'stock.quant',
+        measure: 'sum:quantity',
+        groupBy: 'product',
+        filter: { quantity: { gt: 0 } },
+        w: 6,
+      },
+      {
+        id: 'late',
+        title: 'Scheduled transfers',
+        kind: 'list',
+        model: 'stock.picking',
+        measure: 'count',
+        filter: { status: { in: ['waiting', 'ready'] } },
+        w: 6,
       },
     ],
   },
@@ -344,17 +426,23 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
         'partner',
         'source',
         'destination',
-        'scheduledDate',
+        { field: 'scheduledDate', widget: 'daysLeft' },
         'origin',
         { field: 'status', widget: 'badge' },
       ],
+      decorations: {
+        success: { status: 'done' },
+        warning: { status: 'waiting' },
+        neutral: { status: 'cancelled' },
+      },
     }),
     'stock.picking.kanban': kanban(StockPicking, {
       groupBy: 'status',
       card: {
         title: 'name',
         subtitle: 'partner',
-        footer: ['scheduledDate', 'origin'],
+        color: 'kind',
+        footer: [{ field: 'scheduledDate', widget: 'daysLeft' }, 'origin'],
         badges: [{ field: 'kind', widget: 'badge' }],
       },
     }),

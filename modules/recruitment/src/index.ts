@@ -8,6 +8,7 @@
  */
 import { hr } from '@kosh/hr';
 import { defineModule } from '@kosh/modules-sdk';
+import { reporting } from '@kosh/reporting';
 import { audit, HttpProblem, type ModuleContext } from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
 import { action, form, kanban, list, search } from '@kosh/views';
@@ -162,7 +163,7 @@ export const recruitment: ReturnType<typeof defineModule> = defineModule({
   shutro: recruitmentShutro,
   kosh: '^0.1.0',
   hooks: { demo: recruitmentDemo },
-  depends: [hr],
+  depends: [hr, reporting],
   app: {
     code: 'hiring',
     label: 'Hiring',
@@ -180,6 +181,87 @@ export const recruitment: ReturnType<typeof defineModule> = defineModule({
     },
   },
   routes: (context: ModuleContext) => registerHiringRoutes(context),
+  // The Overview (RFC 0022 step 2).
+  overview: {
+    cards: [
+      {
+        id: 'openings_open',
+        title: 'Open openings',
+        kind: 'kpi',
+        model: 'hiring.opening',
+        measure: 'count',
+        filter: { state: 'open' },
+        w: 3,
+      },
+      {
+        id: 'to_hire',
+        title: 'People to hire',
+        kind: 'kpi',
+        model: 'hiring.opening',
+        measure: 'sum:headcount',
+        filter: { state: 'open' },
+        w: 3,
+      },
+      {
+        id: 'in_process',
+        title: 'Applicants in process',
+        kind: 'kpi',
+        model: 'hiring.applicant',
+        measure: 'count',
+        filter: { refused: false, 'stage.hired': false },
+        w: 3,
+      },
+      {
+        id: 'hired',
+        title: 'Hired',
+        kind: 'kpi',
+        model: 'hiring.applicant',
+        measure: 'count',
+        filter: { 'stage.hired': true },
+        w: 3,
+      },
+      {
+        id: 'by_stage',
+        title: 'Applicants by stage',
+        kind: 'chart',
+        model: 'hiring.applicant',
+        measure: 'count',
+        groupBy: 'stage',
+        filter: { refused: false },
+        chart: 'bar',
+        w: 6,
+      },
+      {
+        id: 'by_source',
+        title: 'Where applicants come from',
+        kind: 'chart',
+        model: 'hiring.applicant',
+        measure: 'count',
+        groupBy: 'source',
+        chart: 'pie',
+        w: 6,
+      },
+      {
+        id: 'top_rated',
+        title: 'Best rated applicants',
+        kind: 'list',
+        model: 'hiring.applicant',
+        measure: 'sum:rating',
+        filter: { refused: false },
+        w: 6,
+      },
+      {
+        id: 'by_opening',
+        title: 'Applicants by opening',
+        kind: 'pivot',
+        model: 'hiring.applicant',
+        measure: 'count',
+        groupBy: 'opening',
+        filter: { refused: false },
+        w: 6,
+      },
+    ],
+  },
   actions: {
     'hiring.action_applicants': action(HiringApplicant, {
       label: 'Applicants',
@@ -235,7 +317,7 @@ export const recruitment: ReturnType<typeof defineModule> = defineModule({
       card: {
         title: 'name',
         subtitle: 'opening',
-        footer: ['rating', 'source'],
+        footer: [{ field: 'rating', widget: 'rating' }, 'source'],
         badges: [{ field: 'status', widget: 'badge' }],
       },
     }),
@@ -244,8 +326,8 @@ export const recruitment: ReturnType<typeof defineModule> = defineModule({
         'name',
         'opening',
         'stage',
-        'email',
-        'rating',
+        { field: 'email', widget: 'email' },
+        { field: 'rating', widget: 'rating' },
         { field: 'status', widget: 'badge' },
       ],
       inlineEdit: ['stage'],
@@ -291,6 +373,31 @@ export const recruitment: ReturnType<typeof defineModule> = defineModule({
         buttons: [k.button('close', { label: 'Close' }), k.button('reopen', { label: 'Reopen' })],
       },
       sheet: [
+        k.stats('related', [
+          {
+            id: 'opening_applicants',
+            label: 'Applicants',
+            model: HiringApplicant,
+            where: { opening: { $record: 'id' } },
+            action: 'hiring.action_applicants',
+          },
+          {
+            id: 'opening_in_process',
+            label: 'In process',
+            model: HiringApplicant,
+            where: { opening: { $record: 'id' }, refused: false, 'stage.hired': false },
+            action: 'hiring.action_applicants',
+            tone: 'info',
+          },
+          {
+            id: 'opening_hired',
+            label: 'Hired',
+            model: HiringApplicant,
+            where: { opening: { $record: 'id' }, 'stage.hired': true },
+            action: 'hiring.action_applicants',
+            tone: 'success',
+          },
+        ]),
         k.group('main', ['name', 'job', 'department', 'manager']),
         k.group('count', ['headcount', 'hiredCount']),
         k.group('about', ['description'], { columns: 1 }),

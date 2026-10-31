@@ -224,3 +224,15 @@ test('the demo data loads', async () => {
   });
   expect(JSON.stringify(summary)).toContain('Hiring');
 });
+
+test('the Hiring overview (RFC 0022 step 2) to a user; the opening form has its tiles', async () => {
+  const overview = await call('GET', '/api/v1/reports/overview?app=hiring', 'rahim');
+  expect(overview.status, JSON.stringify(overview.json)).toBe(200);
+  expect(overview.json.cards.map((c: { id: string }) => c.id)).toContain('to_hire');
+  const form = await call('GET', '/api/v1/views/hiring.opening.form', 'rahim');
+  expect(form.json.view.sheet[0].children.map((c: { id: string }) => c.id)).toEqual([
+    'opening_applicants',
+    'opening_in_process',
+    'opening_hired',
+  ]);
+});

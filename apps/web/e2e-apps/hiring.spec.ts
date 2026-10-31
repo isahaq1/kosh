@@ -60,3 +60,11 @@ test('a hiring manager hires an applicant; the filled opening closes', async ({
   await page.goto(opening);
   await expect(page.getByRole('button', { name: /^State: Closed/ })).toBeVisible();
 });
+
+test('the Hiring overview (RFC 0022 step 2)', async ({ page }) => {
+  await signIn(page, 'dina');
+  await page.goto('/hiring/a/recruitment.action_overview');
+  await expect(page.getByRole('heading', { name: 'Hiring · Overview' })).toBeVisible();
+  for (const title of ['Open openings', 'People to hire', 'Applicants by stage'])
+    await expect(page.getByRole('region', { name: title, exact: true })).toBeVisible();
+});

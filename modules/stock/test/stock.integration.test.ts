@@ -640,3 +640,9 @@ test('the demo data loads', async () => {
   expect(JSON.stringify(summary)).toContain('Stockroom');
   expect(idOf).toBeDefined();
 });
+
+test('the Stockroom overview (RFC 0022 step 2) is served to a user', async () => {
+  const overview = await call('GET', '/api/v1/reports/overview?app=stockroom', 'rahim');
+  expect(overview.status, JSON.stringify(overview.json)).toBe(200);
+  expect(overview.json.cards.map((c: { id: string }) => c.id)).toContain('receipts_todo');
+});

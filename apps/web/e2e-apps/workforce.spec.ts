@@ -73,3 +73,11 @@ test('an employee asks for leave counted in working days; HR approves it', async
   await page.getByRole('button', { name: 'Approve' }).click();
   await expect(page.getByRole('button', { name: /^State: Approved/ })).toBeVisible();
 });
+
+test('the Workforce overview (RFC 0022 step 2)', async ({ page }) => {
+  await signIn(page, 'dina');
+  await page.goto('/workforce/a/hr.action_overview');
+  await expect(page.getByRole('heading', { name: 'Workforce · Overview' })).toBeVisible();
+  for (const title of ['Employees', 'Leave waiting approval', 'By department'])
+    await expect(page.getByRole('region', { name: title, exact: true })).toBeVisible();
+});

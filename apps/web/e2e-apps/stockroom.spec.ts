@@ -149,3 +149,11 @@ test('serial numbers: a tracked product received with its serials, listed in Lot
   await expect(page.getByRole('row').filter({ hasText: 'E2E-SN-1' })).toContainText('E2E Router');
   await expect(page.getByRole('row').filter({ hasText: 'E2E-SN-2' })).toBeVisible();
 });
+
+test('the Stockroom overview (RFC 0022 step 2)', async ({ page }) => {
+  await signIn(page, 'dina');
+  await page.goto('/stockroom/a/stock.action_overview');
+  await expect(page.getByRole('heading', { name: 'Stockroom · Overview' })).toBeVisible();
+  for (const title of ['Receipts to do', 'Deliveries to do', 'Transfers by status'])
+    await expect(page.getByRole('region', { name: title, exact: true })).toBeVisible();
+});
