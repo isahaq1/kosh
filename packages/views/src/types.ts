@@ -17,6 +17,11 @@ export interface FieldNode {
   readonly widget?: string;
   readonly readonlyWhen?: Condition;
   readonly visibleWhen?: Condition;
+  /**
+   * Required on the form when this holds (RFC 0022 step 3): the mark, the checklist and the hint; the server's own
+   * constraints stay the authority.
+   */
+  readonly requiredWhen?: Condition;
   /** List columns: show the total. */
   readonly sum?: boolean;
   /** Placeholder / help text. */

@@ -310,3 +310,15 @@ step 3 last. Performance budgets apply (an overview with eight tiles < 300 ms se
 - All of them now depend on `reporting`. **Step 2 complete**: every business app has an overview; the record
   pages of the apps that relate to each other carry tiles.
 - Tests: each overview served to a user of the app (seven files). E2E (apps): the seven overviews.
+
+## Implementation notes (2026-10-31): step 3 — flexibility
+
+- **Overviews per person**: *Customise* on an app's overview hides cards (the ×), *Done* keeps the rest; the hidden
+  ones are remembered in the person's browser, like a list's columns and density, and *Show the hidden cards*
+  brings them back. The app's layout itself stays what the manifest declares.
+- **`requiredWhen`** on a field node: the field is marked required, counted in the checklist and hinted when the
+  condition holds on the record (the browser evaluates it); the server's own constraints remain the authority.
+- Not done: per-company default views (no demand yet; the saved views as tabs cover most of it).
+- E2E (apps): a card hidden on the Sales overview stays hidden after a reload and comes back with *Show*.
+- **RFC 0022 complete** (steps 1–3). Later: a job making thumbnails for imported images, galleries, column layouts
+  shared across devices (a user setting on the server).

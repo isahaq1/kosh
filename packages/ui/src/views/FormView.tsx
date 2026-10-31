@@ -326,15 +326,15 @@ function Lines({
   );
 }
 
-/** The keys of every field node of a sheet, in order (groups, pages and loose fields; not line columns). */
-function flatFieldKeys(nodes: readonly FormNode[]): string[] {
+/** Every field node of a sheet, in order (groups, pages and loose fields; not line columns). */
+function flatFieldNodes(nodes: readonly FormNode[]): FieldNode[] {
   return nodes.flatMap((n) =>
     n.kind === 'field'
-      ? [n.field]
+      ? [n]
       : n.kind === 'group'
-        ? flatFieldKeys(n.children)
+        ? flatFieldNodes(n.children)
         : n.kind === 'notebook'
-          ? n.pages.flatMap((p) => flatFieldKeys(p.children))
+          ? n.pages.flatMap((p) => flatFieldNodes(p.children))
           : [],
   );
 }
@@ -649,7 +649,7 @@ export function FormView({
       >
         <Label htmlFor={id}>
           {node.label ?? field.label}
-          {field.required && !readonly ? (
+          {(field.required || holds(node.requiredWhen, values, env)) && !readonly ? (
             <span aria-hidden className="text-danger">
               {' '}
               *
@@ -832,15 +832,18 @@ export function FormView({
   // The required fields still empty (new and draft records): the checklist in the rail.
   const missing = isNew
     ? []
-    : flatFieldKeys(view.sheet).filter((key) => {
-        const meta = fields[key];
-        const v = values[key];
-        return (
-          meta?.required === true &&
-          !meta.readonly &&
-          (v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0))
-        );
-      });
+    : flatFieldNodes(view.sheet)
+        .filter((n) => {
+          const meta = fields[n.field];
+          const v = values[n.field];
+          return (
+            meta !== undefined &&
+            !meta.readonly &&
+            (meta.required || holds(n.requiredWhen, values, env)) &&
+            (v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0))
+          );
+        })
+        .map((n) => n.field);
   // RFC 0022 §3.5: the record's document templates as a Print menu, when reporting's web is registered.
   const Print = registry.component('reporting.Documents');
   const buttons = view.header.buttons.filter((b) => {

@@ -39,3 +39,23 @@ test('the Sales overview: KPIs, a chart, the top customers and the open quotatio
   );
   await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0);
 });
+
+test('a card hidden by the user stays hidden after a reload; Show brings it back (RFC 0022 step 3)', async ({
+  page,
+}) => {
+  await signIn(page, 'rahim');
+  await page.goto('/sales/a/sales.action_overview');
+  await expect(page.getByRole('region', { name: 'Open quotations', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Customise' }).click();
+  await page
+    .getByRole('region', { name: 'Open quotations', exact: true })
+    .getByRole('button', { name: /Remove/ })
+    .click();
+  await page.getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByRole('region', { name: 'Open quotations', exact: true })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'Sales this month', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Open quotations', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: /Show the 1 hidden card/ }).click();
+  await expect(page.getByRole('region', { name: 'Open quotations', exact: true })).toBeVisible();
+});

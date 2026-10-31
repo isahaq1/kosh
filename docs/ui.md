@@ -90,6 +90,8 @@ run, each `allowed` or not with the guard's `message` (the guard runs read-only;
 it as a banner — "Next step: Confirm" with the button, or "Before Confirm: …" — and lists the required fields
 still empty in the right rail. A field's `help` from the model shows under its input; `k.group(id, children,
 { description })` and `k.page(id, label, children, { description })` put a sentence under a section's title.
+A field node's `requiredWhen` (a domain on the record's own values) marks it required, lists it in the checklist
+and hints it when the condition holds; the server's constraints stay the authority.
 
 ## Related records on a record page (RFC 0022 §3.1)
 
