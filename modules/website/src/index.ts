@@ -28,6 +28,7 @@ import { registerSitesRoutes, type SitesOptions, SUBMITTED } from './routes.js';
 export {
   HONEYPOT,
   safeUrl,
+  submissionValues,
   WebsiteBlock,
   WebsiteForm,
   WebsiteFormField,

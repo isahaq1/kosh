@@ -6,7 +6,7 @@
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import type { Id } from '@kosh/server/orm';
 import type { Env } from './.kosh/bindings.js';
-import { formTargets, HONEYPOT } from './module.js';
+import { formTargets, HONEYPOT, submissionValues } from './module.js';
 import { type PublicPage, pageHtml, pageOf } from './render.js';
 
 export const SUBMITTED = 'website.form.submitted';
@@ -42,10 +42,12 @@ interface SiteInfo {
 /** A per-server memory of public reads (misses too), for `ttlMs`; at most `max` entries, the oldest dropped. */
 class Memo {
   readonly #entries = new Map<string, { readonly at: number; readonly value: unknown }>();
-  constructor(
-    readonly ttlMs: number,
-    readonly max = 500,
-  ) {}
+  readonly ttlMs: number;
+  readonly max: number;
+  constructor(ttlMs: number, max = 500) {
+    this.ttlMs = ttlMs;
+    this.max = max;
+  }
   async get<T>(key: string, load: () => Promise<T>): Promise<T> {
     const hit = this.#entries.get(key);
     if (hit !== undefined && Date.now() - hit.at < this.ttlMs) return hit.value as T;
@@ -163,85 +165,91 @@ export function registerSitesRoutes(context: ModuleContext, options: SitesOption
       const describe = context.registry.registry;
       const result = await shutro.bootstrap(
         { reason: `sites: form ${key} submitted`, company: site.company },
-        async (raw) => {
-          const env = raw as unknown as Env;
-          const [form] = await env.model('website.form').search({ where: { key }, limit: 1 });
-          if (form === undefined) throw notFound(`form ${key}`);
-          const spam = String(sent[HONEYPOT] ?? '') !== '';
-          const fields = [
-            ...(await env.model('website.form.field').search({ where: { form: form.id } })),
-          ];
-          const data: Record<string, string> = {};
-          for (const x of fields) {
-            const value = sent[x.name];
-            if (value !== undefined && value !== null && typeof value !== 'string')
-              throw invalid(x.label, 'is text');
-            const text = (value ?? '').trim();
-            if (text !== '') data[x.name] = text;
-          }
-          if (spam) {
-            const [made] = (
-              await env
-                .model('website.submission')
-                .create([{ form: form.id, site: site.id as never, data, state: 'spam' }])
-            ).ids;
-            return { message: form.successMessage, submission: made ?? null };
-          }
-          const targets = await formTargets(env);
-          if (!targets.includes(form.target) || !describe.models.has(form.target as never))
-            throw new HttpProblem(
-              409,
-              'form-target',
-              'Form not available',
-              'This form creates records no installed app allows.',
-            );
-          const description = describe.describe(form.target as never);
-          const values: Record<string, unknown> = {};
-          for (const x of fields) {
-            const target = description.fields[x.targetField];
-            if (
-              target === undefined ||
-              !(FILLS[x.kind] ?? []).includes(target.kind) ||
-              target.readonly ||
-              target.computed
-            )
+        // The visitor has no rights of their own: the record is made as the system, audited with the form's key.
+        (raw) =>
+          (raw as unknown as Env).asSuperuser({ reason: `website form ${key}` }, async (env) => {
+            const [form] = await env.model('website.form').search({ where: { key }, limit: 1 });
+            if (form === undefined) throw notFound(`form ${key}`);
+            const spam = String(sent[HONEYPOT] ?? '') !== '';
+            const fields = [
+              ...(await env.model('website.form.field').search({ where: { form: form.id } })),
+            ];
+            const data: Record<string, string> = {};
+            for (const x of fields) {
+              const value = sent[x.name];
+              if (value !== undefined && value !== null && typeof value !== 'string')
+                throw invalid(x.label, 'is text');
+              const text = (value ?? '').trim();
+              if (text !== '') data[x.name] = text;
+            }
+            if (spam) {
+              const [made] = (
+                await env
+                  .model('website.submission')
+                  .create([{ form: form.id, site: site.id as never, data, state: 'spam' }])
+              ).ids;
+              await env.flush();
+              return { message: form.successMessage, submission: made ?? null };
+            }
+            const targets = await formTargets(env);
+            if (!targets.includes(form.target) || !describe.models.has(form.target as never))
               throw new HttpProblem(
                 409,
-                'form-field',
+                'form-target',
                 'Form not available',
-                `The input ${x.name} fills ${x.targetField}, which a form cannot fill.`,
+                'This form creates records no installed app allows.',
               );
-            const text = data[x.name];
-            if (text === undefined) {
-              if (x.required) throw invalid(x.label, 'is required');
-              continue;
+            const description = describe.describe(form.target as never);
+            const values: Record<string, unknown> = {
+              ...(await submissionValues(env, form.target)),
+            };
+            for (const x of fields) {
+              const target = description.fields[x.targetField];
+              if (
+                target === undefined ||
+                !(FILLS[x.kind] ?? []).includes(target.kind) ||
+                target.readonly ||
+                target.computed
+              )
+                throw new HttpProblem(
+                  409,
+                  'form-field',
+                  'Form not available',
+                  `The input ${x.name} fills ${x.targetField}, which a form cannot fill.`,
+                );
+              const text = data[x.name];
+              if (text === undefined) {
+                if (x.required) throw invalid(x.label, 'is required');
+                continue;
+              }
+              values[x.targetField] = inputValue(x, text);
             }
-            values[x.targetField] = inputValue(x, text);
-          }
-          const created = await env.model(form.target as never).create([values as never]);
-          const id = created.ids[0] as number;
-          const [named] = (
-            await env
-              .model(form.target as never)
-              .browse([id as never])
-              .load([description.recName] as never)
-          ).read([description.recName] as never) as Record<string, unknown>[];
-          const [made] = (
-            await env.model('website.submission').create([
-              {
-                form: form.id,
-                site: site.id as never,
-                data,
-                state: 'received',
-                resModel: form.target,
-                resId: id,
-                resName: String(named?.[description.recName] ?? ''),
-              },
-            ])
-          ).ids;
-          if (made !== undefined) await env.emit(SUBMITTED, { id: made });
-          return { message: form.successMessage, submission: made ?? null };
-        },
+            const created = await env.model(form.target as never).create([values as never]);
+            const id = created.ids[0] as number;
+            const [named] = (
+              await env
+                .model(form.target as never)
+                .browse([id as never])
+                .load([description.recName] as never)
+            ).read([description.recName] as never) as Record<string, unknown>[];
+            const [made] = (
+              await env.model('website.submission').create([
+                {
+                  form: form.id,
+                  site: site.id as never,
+                  data,
+                  state: 'received',
+                  resModel: form.target,
+                  resId: id,
+                  resName: String(named?.[description.recName] ?? ''),
+                },
+              ])
+            ).ids;
+            if (made !== undefined) await env.emit(SUBMITTED, { id: made });
+            // Written while still the superuser: the commit's flush checks constraints as the caller.
+            await env.flush();
+            return { message: form.successMessage, submission: made ?? null };
+          }),
       );
       return reply.status(201).send({ message: result.message });
     },

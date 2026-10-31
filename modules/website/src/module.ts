@@ -172,6 +172,11 @@ export async function formTargets(env: Env): Promise<string[]> {
   return env.model('website.form').browse([]).targets();
 }
 
+/** What a record of `target` made from a submission starts with (`submissionValues()`, as bridges extend it). */
+export async function submissionValues(env: Env, target: string): Promise<Record<string, unknown>> {
+  return env.model('website.form').browse([]).submissionValues(target);
+}
+
 /** A link a public page may carry: a path on the site, or http(s) — never `javascript:` or `data:`. */
 export function safeUrl(url: string): boolean {
   if (url.startsWith('/') && !url.startsWith('//')) return true;
@@ -205,6 +210,14 @@ export const WebsiteForm = defineModel('website.form', {
   methods: {
     /** The models a form may create: contacts here; bridges add theirs (`website_crm`: `crm.lead`). */
     targets: method('website.form', async (): Promise<string[]> => ['res.partner']),
+    /**
+     * What a record made from a submission starts with, before the form's inputs (which win): nothing here; bridges
+     * set their own (`website_crm`: a deal from the website, for no salesperson yet).
+     */
+    submissionValues: method(
+      'website.form',
+      async (_target: string): Promise<Record<string, unknown>> => ({}),
+    ),
   },
   sqlConstraints: {
     oneKey: { unique: ['company', 'key'], message: 'Another form has this key.' },
