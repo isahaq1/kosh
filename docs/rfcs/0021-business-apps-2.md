@@ -878,3 +878,19 @@ website says and takes what its visitors send; it does not lock the design.
   script tag; unsafe links, a path without `/` and a second page at a path refused; editors cannot make sites or
   forms, others see nothing. E2E (apps): a site and a page with a block, previewed, published, read by a visitor.
 - **Next**: `website_crm` (forms to Pipeline leads), Event Hub registration from a page, product pages.
+
+## Implementation notes (2026-10-31): `website_crm` — forms to Pipeline deals
+
+- **Bridge** `modules/website_crm` (`@kosh/website_crm`, export `websiteCrm`), proposed with Sites and Pipeline. It
+  overrides `targets()` on `website.form` to allow `crm.deal`, and `submissionValues()` — a second extension point
+  added to Sites for it: what a record made from a submission starts with, before the form's inputs (which win) —
+  so a deal from a form is named *Website enquiry*, comes from the website, is in the first stage, and has no
+  salesperson (the default would be the acting user, which in a public submission is the system, id 0).
+- **Found on the way**: a submission's record is made inside `asSuperuser` (the visitor has no rights), and the
+  pending writes are flushed *inside* that scope: the commit's flush runs constraints as the caller, and Shutro's
+  company-scope check reads the new record, which the system scope may not. Node's type stripping refuses parameter
+  properties, so modules loaded from source keep plain fields.
+- **Tests**: the plan proposes the bridge; a form for deals accepted; a visitor's submission becoming a deal with the
+  contact, company, email, budget and notes from the inputs, from the website, in *New*, for no salesperson, its
+  submission linking it; a form filling the name itself wins over the default.
+

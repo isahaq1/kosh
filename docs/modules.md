@@ -296,7 +296,9 @@ POST /api/v1/public/sites/padma/forms/contact            { "name": "…", "email
 ```
 
 A form fills plain fields only (text, numbers, dates) of the model it creates; each value is checked (required,
-email, phone, date, length). Public reads are kept 30 seconds per server and sent with `Cache-Control`.
+email, phone, date, length). Public reads are kept 30 seconds per server and sent with `Cache-Control`. With
+Pipeline, `website_crm` lets a form create deals: they arrive from the website in the first stage, for no
+salesperson yet, so every Pipeline user sees them.
 
 ## Demo data (RFC 0008 §5.8)
 
