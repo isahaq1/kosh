@@ -34,7 +34,7 @@ test('the Sales overview: KPIs, a chart, the top customers and the open quotatio
   ])
     await expect(page.getByRole('region', { name: title, exact: true })).toBeVisible();
   // The seeded orders: at least one open quotation, and a customer in the pivot.
-  await expect(page.getByRole('region', { name: 'Top customers', exact: true })).toContainText(
+  await expect(page.getByRole('region', { name: 'Top customers' })).toContainText(
     /Bengal Steel|Padma/,
   );
   await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0);

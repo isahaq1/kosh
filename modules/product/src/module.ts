@@ -169,7 +169,11 @@ export const productShutro = defineModule({
   ],
   depends: [baseShutro, storageShutro],
   groups: [
-    orm.defineGroup({ code: 'product.user', label: 'Products user', implies: ['base.user'] }),
+    orm.defineGroup({
+      code: 'product.user',
+      label: 'Products user',
+      implies: ['base.user', 'storage.user'],
+    }),
     orm.defineGroup({
       code: 'product.manager',
       label: 'Products manager',

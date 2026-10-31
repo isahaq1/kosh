@@ -62,7 +62,12 @@ export const contactsShutro = defineModule({
   version: '0.2.0',
   depends: [baseShutro, storageShutro],
   groups: [
-    orm.defineGroup({ code: 'contacts.user', label: 'Contacts user', implies: ['base.user'] }),
+    orm.defineGroup({
+      code: 'contacts.user',
+      label: 'Contacts user',
+      // Photos are attachments (RFC 0022 §3.3).
+      implies: ['base.user', 'storage.user'],
+    }),
     orm.defineGroup({
       code: 'contacts.manager',
       label: 'Contacts manager',

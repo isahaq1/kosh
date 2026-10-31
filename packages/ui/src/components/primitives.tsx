@@ -460,3 +460,11 @@ export function EmptyState({
     </div>
   );
 }
+
+/** The classes of a button, for elements that must look like one (a file picker's label). */
+export function buttonClass(
+  variant: ButtonProps['variant'] = 'primary',
+  size: ButtonProps['size'] = 'md',
+): string {
+  return buttonVariants({ variant, size });
+}

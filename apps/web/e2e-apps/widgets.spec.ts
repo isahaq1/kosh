@@ -15,9 +15,9 @@ async function signIn(page: Page, login: string): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Apps' })).toBeVisible();
 }
 
-/** A 2 × 2 PNG (red), enough for the browser to draw and shrink. */
+/** A 1 × 1 PNG, enough for the browser to draw and shrink. */
 const PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFElEQVR4nGP4z8DwHwyBFIjFAAB+hAX/9k5+ywAAAABJRU5ErkJggg==',
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
   'base64',
 );
 
@@ -33,29 +33,44 @@ test('a contact: a photo chosen, uploaded and shown; the email a link', async ({
     mimeType: 'image/png',
     buffer: PNG,
   });
-  const picture = page.getByRole('img', { name: 'E2E Photo Ltd' });
+  const picture = page.getByRole('img', { name: 'E2E Photo Ltd' }).first();
   await expect(picture).toBeVisible();
   await expect(picture).toHaveAttribute(
     'src',
     /\/api\/v1\/attachments\/\d+\/download\?inline=true&w=256/,
   );
-  await page.getByRole('button', { name: 'Save' }).click();
+  await Promise.all([
+    page.waitForResponse(
+      (r) => r.request().method() === 'PATCH' && r.url().includes('/res.partner/'),
+    ),
+    page.getByRole('button', { name: 'Save' }).click(),
+  ]);
   await page.reload();
-  await expect(page.getByRole('img', { name: 'E2E Photo Ltd' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'hello@photo.test' })).toHaveAttribute(
-    'href',
-    'mailto:hello@photo.test',
-  );
+  await expect(page.getByRole('img', { name: 'E2E Photo Ltd' }).first()).toBeVisible();
+  // On the list (display only) the email is a link; on the editable form it is the input.
+  await page.goto('/contacts/a/contacts.action_partners?view=list');
+  await expect(
+    page
+      .getByRole('row', { name: /E2E Photo Ltd/ })
+      .getByRole('link', { name: 'hello@photo.test' }),
+  ).toHaveAttribute('href', 'mailto:hello@photo.test');
 });
 
 test("a deal's priority as stars on the board and the list", async ({ page }) => {
   await signIn(page, 'dina');
   await page.goto('/pipeline/a/pipeline.action_deals/new');
   await page.getByRole('textbox', { name: 'Deal', exact: true }).fill('E2E Starred deal');
-  await page.getByRole('radio', { name: 'Very good' }).click();
+  await page.getByRole('combobox', { name: 'Priority' }).click();
+  await page.getByRole('option', { name: 'Very good' }).click();
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page).toHaveURL(/pipeline\.action_deals\/\d+$/);
-  await expect(page.getByLabel(/^Priority: Very good$/)).toBeVisible();
+  await page.goto('/pipeline/a/pipeline.action_deals?view=kanban');
+  await expect(
+    page
+      .getByRole('listitem')
+      .filter({ hasText: 'E2E Starred deal' })
+      .getByRole('img', { name: 'Priority: Very good' }),
+  ).toBeVisible();
   await page.goto('/pipeline/a/pipeline.action_deals?view=list');
   const row = page.getByRole('row', { name: /E2E Starred deal/ });
   await expect(row.getByRole('img', { name: 'Priority: Very good' })).toBeVisible();

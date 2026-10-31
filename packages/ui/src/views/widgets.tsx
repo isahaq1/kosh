@@ -16,7 +16,15 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Avatar } from '../components/Avatar.js';
-import { Badge, Button, Checkbox, Input, Select, Textarea } from '../components/primitives.js';
+import {
+  Badge,
+  Button,
+  buttonClass,
+  Checkbox,
+  Input,
+  Select,
+  Textarea,
+} from '../components/primitives.js';
 import { useKosh } from '../context.js';
 import { cn } from '../lib/cn.js';
 import type { Registry, WidgetProps } from '../registry.js';
@@ -788,9 +796,16 @@ function imageWidget(shape: 'image' | 'avatar') {
               e.target.value = '';
             }}
           />
-          <Button asChild size="sm" variant="secondary" busy={busy}>
-            <label htmlFor={inputId}>{t('views.image.choose')}</label>
-          </Button>
+          <label
+            htmlFor={inputId}
+            className={cn(
+              buttonClass('secondary', 'sm'),
+              'cursor-pointer',
+              busy && 'pointer-events-none opacity-50',
+            )}
+          >
+            {t('views.image.choose')}
+          </label>
           {id === null ? null : (
             <Button type="button" size="sm" variant="ghost" onClick={() => onChange?.(null)}>
               {t('views.image.remove')}
