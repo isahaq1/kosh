@@ -267,3 +267,16 @@ step 3 last. Performance budgets apply (an overview with eight tiles < 300 ms se
   cancelled muted); the invoice's posted **payments** as tiles (count and amount) opening the payments list.
 - Tests: Accounting on real PostgreSQL (the overview to a user; the tiles on the invoice form). E2E (apps): the
   overview.
+
+## Implementation notes (2026-10-31): step 2 — Projects and Pipeline
+
+- **Projects**: the Overview (projects, open tasks, hours this month against last, planned hours open, tasks by
+  stage, hours by project, open tasks by person, the projects with most hours); tiles on a project (tasks, open
+  ones, hours); the task board with the assignee's avatar, the project's tint, the deadline as days left and the
+  priority as stars; a **timeline** of projects from start to deadline (Gantt).
+- **Pipeline**: the Overview (the pipeline and its weighted forecast, won and lost this month against last, deals
+  by stage — the funnel —, the forecast by close month, by salesperson, the biggest open deals); the close date as
+  days left on the list; a tiles row on the deal that `website_crm` fills with the website submissions behind it.
+  Both apps now depend on `reporting`.
+- Tests: Projects (the overview, the project's tiles, the gantt served), Pipeline (the overview), `website_crm`
+  (the tile on the deal). E2E (apps): both overviews, the projects timeline.

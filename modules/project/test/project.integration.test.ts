@@ -131,6 +131,7 @@ test('installing Projects brings its dependencies and the stages', async () => {
     'contacts',
     'messaging',
     'project',
+    'reporting',
     'storage',
   ]);
   expect(Object.keys(stages)).toEqual(['New', 'In progress', 'Done']);
@@ -239,4 +240,19 @@ test('timesheets add up on the task and the project; users see their own, manage
   const all = await call('GET', '/api/v1/models/project.timesheet?fields=hours,project', 'maria');
   expect(all.json.items).toHaveLength(2);
   expect(all.json.items.every((l: Json) => l.project === p.id)).toBe(true);
+});
+
+test('the Projects overview (RFC 0022 step 2) to a user; the project form has its tiles', async () => {
+  const overview = await call('GET', '/api/v1/reports/overview?app=projects', 'rahim');
+  expect(overview.status, JSON.stringify(overview.json)).toBe(200);
+  expect(overview.json.cards.map((c: { id: string }) => c.id)).toContain('open_tasks');
+  const form = await call('GET', '/api/v1/views/project.project.form', 'rahim');
+  expect(form.status, JSON.stringify(form.json)).toBe(200);
+  expect(form.json.view.sheet[0].children.map((c: { id: string }) => c.id)).toEqual([
+    'project_tasks',
+    'project_open_tasks',
+    'project_hours',
+  ]);
+  const gantt = await call('GET', '/api/v1/views?model=project.project&type=gantt', 'rahim');
+  expect(gantt.status, JSON.stringify(gantt.json)).toBe(200);
 });

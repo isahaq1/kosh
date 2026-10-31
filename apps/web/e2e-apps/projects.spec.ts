@@ -85,3 +85,13 @@ test('the manager logs a timesheet; the hours show on the task and in the list',
   await page.goto('/projects/a/projects.action_tasks?view=list');
   await expect(page.getByRole('row', { name: /Survey the site/ })).toContainText('2.5');
 });
+
+test('the Projects overview and the projects timeline (RFC 0022 step 2)', async ({ page }) => {
+  await signIn(page, 'rahim');
+  await page.goto('/projects/a/project.action_overview');
+  await expect(page.getByRole('heading', { name: 'Projects · Overview' })).toBeVisible();
+  for (const title of ['Open tasks', 'Hours this month', 'Tasks by stage'])
+    await expect(page.getByRole('region', { name: title, exact: true })).toBeVisible();
+  await page.goto('/projects/a/projects.action_projects?view=gantt');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});

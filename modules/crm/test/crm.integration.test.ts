@@ -232,3 +232,9 @@ test('the demo data loads', async () => {
   });
   expect(JSON.stringify(summary)).toContain('Pipeline');
 });
+
+test('the Pipeline overview (RFC 0022 step 2) is served to a manager', async () => {
+  const overview = await call('GET', '/api/v1/reports/overview?app=pipeline', 'maria');
+  expect(overview.status, JSON.stringify(overview.json)).toBe(200);
+  expect(overview.json.cards.map((c: { id: string }) => c.id)).toContain('forecast');
+});

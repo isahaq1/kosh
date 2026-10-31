@@ -7,7 +7,8 @@
 import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
-import { action, calendar, form, kanban, list, pivot, search } from '@kosh/views';
+import { reporting } from '@kosh/reporting';
+import { action, calendar, form, gantt, kanban, list, pivot, search } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import { projectDemo, SUPPORT_PROJECT } from './demo.js';
 import {
@@ -50,7 +51,7 @@ export const project: ReturnType<typeof defineModule> = defineModule({
       },
     },
   ],
-  depends: [contacts, messaging],
+  depends: [contacts, messaging, reporting],
   app: {
     code: 'projects',
     label: 'Projects',
@@ -67,10 +68,89 @@ export const project: ReturnType<typeof defineModule> = defineModule({
       implies: ['user'],
     },
   },
+  // The Overview (RFC 0022 step 2): what is open, where the hours go, who carries the load.
+  overview: {
+    cards: [
+      {
+        id: 'projects_all',
+        title: 'Projects',
+        kind: 'kpi',
+        model: 'project.project',
+        measure: 'count',
+        w: 3,
+      },
+      {
+        id: 'open_tasks',
+        title: 'Open tasks',
+        kind: 'kpi',
+        model: 'project.task',
+        measure: 'count',
+        filter: { 'stage.done': false },
+        w: 3,
+      },
+      {
+        id: 'hours_month',
+        title: 'Hours this month',
+        kind: 'kpi',
+        model: 'project.timesheet',
+        measure: 'sum:hours',
+        comparison: { field: 'date', mode: 'previous' },
+        w: 3,
+      },
+      {
+        id: 'planned_open',
+        title: 'Planned hours open',
+        kind: 'kpi',
+        model: 'project.task',
+        measure: 'sum:plannedHours',
+        filter: { 'stage.done': false },
+        w: 3,
+      },
+      {
+        id: 'tasks_by_stage',
+        title: 'Tasks by stage',
+        kind: 'chart',
+        model: 'project.task',
+        measure: 'count',
+        groupBy: 'stage',
+        chart: 'bar',
+        w: 6,
+      },
+      {
+        id: 'hours_by_project',
+        title: 'Hours by project',
+        kind: 'chart',
+        model: 'project.timesheet',
+        measure: 'sum:hours',
+        groupBy: 'project',
+        chart: 'pie',
+        w: 6,
+      },
+      {
+        id: 'load_by_person',
+        title: 'Open tasks by person',
+        kind: 'chart',
+        model: 'project.task',
+        measure: 'count',
+        groupBy: 'assignee',
+        filter: { 'stage.done': false },
+        chart: 'bar',
+        w: 6,
+      },
+      {
+        id: 'busiest',
+        title: 'Projects with most hours',
+        kind: 'list',
+        model: 'project.project',
+        measure: 'sum:hours',
+        w: 6,
+      },
+    ],
+  },
   actions: {
     'projects.action_projects': action(ProjectProject, {
       label: 'Projects',
-      views: ['list', 'form'],
+      views: ['list', 'gantt', 'form'],
     }),
     'projects.action_tasks': action(ProjectTask, {
       label: 'Tasks',
@@ -132,6 +212,31 @@ export const project: ReturnType<typeof defineModule> = defineModule({
     'project.project.form': form(ProjectProject, (k) => ({
       header: { buttons: [] },
       sheet: [
+        k.stats('related', [
+          {
+            id: 'project_tasks',
+            label: 'Tasks',
+            model: ProjectTask,
+            where: { project: { $record: 'id' } },
+            action: 'projects.action_tasks',
+          },
+          {
+            id: 'project_open_tasks',
+            label: 'Open',
+            model: ProjectTask,
+            where: { project: { $record: 'id' }, 'stage.done': false },
+            action: 'projects.action_tasks',
+            tone: 'warning',
+          },
+          {
+            id: 'project_hours',
+            label: 'Hours',
+            model: ProjectTimesheet,
+            where: { project: { $record: 'id' } },
+            measure: { sum: 'hours' },
+            action: 'projects.action_timesheets',
+          },
+        ]),
         k.group('main', ['name', 'partner', 'manager', 'sequence']),
         k.group('dates', ['dateStart', 'dateEnd', 'taskCount', 'hours']),
         k.group('about', ['description'], { columns: 1 }),
@@ -151,9 +256,20 @@ export const project: ReturnType<typeof defineModule> = defineModule({
       card: {
         title: 'name',
         subtitle: 'project',
-        footer: ['assignee', 'deadline'],
-        badges: [{ field: 'priority', widget: 'badge' }],
+        avatar: 'assignee',
+        color: 'project',
+        footer: [
+          { field: 'deadline', widget: 'daysLeft' },
+          { field: 'priority', widget: 'priority' },
+        ],
       },
+    }),
+    // Projects on a timeline, from their start to their deadline.
+    'project.project.gantt': gantt(ProjectProject, {
+      dateStart: 'dateStart',
+      dateStop: 'dateEnd',
+      title: 'name',
+      scale: 'week',
     }),
     'project.task.list': list(ProjectTask, {
       columns: [
@@ -161,8 +277,8 @@ export const project: ReturnType<typeof defineModule> = defineModule({
         'project',
         'stage',
         'assignee',
-        'deadline',
-        { field: 'priority', widget: 'badge' },
+        { field: 'deadline', widget: 'daysLeft' },
+        { field: 'priority', widget: 'priority' },
         { field: 'plannedHours', sum: true },
         { field: 'effectiveHours', sum: true },
       ],

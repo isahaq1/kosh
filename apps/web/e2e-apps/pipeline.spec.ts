@@ -60,3 +60,13 @@ test('a deal: the stage’s rule refuses the move until its details are there; l
   await expect(page.getByRole('heading', { name: 'Deals', level: 1 })).toBeVisible();
   await expect(page.getByRole('row', { name: /Laptops for Meghna Bank/ })).toHaveCount(0); // open deals only
 });
+
+test('the Pipeline overview (RFC 0022 step 2): the pipeline, its forecast, the funnel', async ({
+  page,
+}) => {
+  await signIn(page, 'rahim');
+  await page.goto('/pipeline/a/crm.action_overview');
+  await expect(page.getByRole('heading', { name: 'Pipeline · Overview' })).toBeVisible();
+  for (const title of ['Pipeline', 'Weighted forecast', 'Deals by stage'])
+    await expect(page.getByRole('region', { name: title, exact: true })).toBeVisible();
+});

@@ -11,6 +11,7 @@
 import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
+import { reporting } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
 import { action, form, kanban, list, pivot, search } from '@kosh/views';
@@ -118,7 +119,7 @@ export const crm: ReturnType<typeof defineModule> = defineModule({
   shutro: crmShutro,
   kosh: '^0.1.0',
   hooks: { demo: crmDemo },
-  depends: [contacts, messaging],
+  depends: [contacts, messaging, reporting],
   app: {
     code: 'pipeline',
     label: 'Pipeline',
@@ -153,6 +154,91 @@ export const crm: ReturnType<typeof defineModule> = defineModule({
     ],
   },
   routes: (context: ModuleContext) => registerPipelineRoutes(context),
+  // The Overview (RFC 0022 step 2): the pipeline and its weighted forecast, the month's wins and losses, who sells.
+  overview: {
+    cards: [
+      {
+        id: 'pipeline',
+        title: 'Pipeline',
+        kind: 'kpi',
+        model: 'crm.deal',
+        measure: 'sum:expectedRevenue',
+        filter: { status: 'open' },
+        w: 3,
+      },
+      {
+        id: 'forecast',
+        title: 'Weighted forecast',
+        kind: 'kpi',
+        model: 'crm.deal',
+        measure: 'sum:weightedRevenue',
+        filter: { status: 'open' },
+        w: 3,
+      },
+      {
+        id: 'won_month',
+        title: 'Won this month',
+        kind: 'kpi',
+        model: 'crm.deal',
+        measure: 'sum:expectedRevenue',
+        filter: { status: 'won' },
+        comparison: { field: 'closeDate', mode: 'previous' },
+        w: 3,
+      },
+      {
+        id: 'lost_month',
+        title: 'Lost this month',
+        kind: 'kpi',
+        model: 'crm.deal',
+        measure: 'count',
+        filter: { status: 'lost' },
+        comparison: { field: 'closeDate', mode: 'previous' },
+        w: 3,
+      },
+      {
+        id: 'funnel',
+        title: 'Deals by stage',
+        kind: 'chart',
+        model: 'crm.deal',
+        measure: 'sum:expectedRevenue',
+        groupBy: 'stage',
+        filter: { status: 'open' },
+        chart: 'bar',
+        w: 6,
+      },
+      {
+        id: 'forecast_by_month',
+        title: 'Forecast by close month',
+        kind: 'chart',
+        model: 'crm.deal',
+        measure: 'sum:weightedRevenue',
+        groupBy: 'closeDate:month',
+        filter: { status: 'open' },
+        chart: 'bar',
+        w: 6,
+      },
+      {
+        id: 'by_salesperson',
+        title: 'Pipeline by salesperson',
+        kind: 'chart',
+        model: 'crm.deal',
+        measure: 'sum:expectedRevenue',
+        groupBy: 'salesperson',
+        filter: { status: 'open' },
+        chart: 'pie',
+        w: 6,
+      },
+      {
+        id: 'biggest_open',
+        title: 'Biggest open deals',
+        kind: 'list',
+        model: 'crm.deal',
+        measure: 'sum:expectedRevenue',
+        filter: { status: 'open' },
+        w: 6,
+      },
+    ],
+  },
   actions: {
     'pipeline.action_deals': action(CrmDeal, {
       label: 'Deals',
@@ -224,7 +310,7 @@ export const crm: ReturnType<typeof defineModule> = defineModule({
         'probability',
         { field: 'weightedRevenue', sum: true },
         { field: 'priority', widget: 'priority' },
-        'closeDate',
+        { field: 'closeDate', widget: 'daysLeft' },
         { field: 'status', widget: 'badge' },
       ],
       inlineEdit: ['stage', 'salesperson', 'closeDate'],
@@ -233,6 +319,8 @@ export const crm: ReturnType<typeof defineModule> = defineModule({
     'crm.deal.form': form(CrmDeal, (k) => ({
       header: { buttons: [] },
       sheet: [
+        // The bridges' tiles (website_crm: the submissions that made or touched the deal).
+        k.stats('related', []),
         k.group('deal', ['name', 'stage', 'salesperson', 'priority', 'status']),
         k.group('money', [
           'expectedRevenue',

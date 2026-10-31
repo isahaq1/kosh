@@ -222,3 +222,11 @@ test("the form's own name input wins over the default", async () => {
   expect(named).toHaveLength(1);
   expect(named[0].source).toBe('website');
 });
+
+test('a deal shows the website submissions behind it as a tile (RFC 0022 step 2)', async () => {
+  const form = await call('maria', 'GET', '/api/v1/views/crm.deal.form');
+  expect(form.status, JSON.stringify(form.json)).toBe(200);
+  expect(form.json.view.sheet[0].children.map((c: { id: string }) => c.id)).toEqual([
+    'deal_submissions',
+  ]);
+});

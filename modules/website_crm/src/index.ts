@@ -6,6 +6,7 @@
  */
 import { crm } from '@kosh/crm';
 import { defineModule } from '@kosh/modules-sdk';
+import { stat } from '@kosh/views';
 import { website } from '@kosh/website';
 import { websiteCrmShutro } from './module.js';
 
@@ -19,4 +20,22 @@ export const websiteCrm: ReturnType<typeof defineModule> = defineModule({
   accessLevels: {
     user: { label: 'Website deals', groups: ['website_crm.user'] },
   },
+  viewExtensions: [
+    {
+      view: 'crm.deal.form',
+      operations: [
+        {
+          append: 'related',
+          nodes: [
+            stat({
+              id: 'deal_submissions',
+              label: 'Website submissions',
+              model: 'website.submission',
+              where: { resModel: 'crm.deal', resId: { $record: 'id' } },
+            }),
+          ],
+        },
+      ],
+    },
+  ],
 });
