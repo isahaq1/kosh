@@ -202,6 +202,19 @@ export const product: ReturnType<typeof defineModule> = defineModule({
     })),
   },
   search: {
+    'uom.uom': search(UomUom, { fields: ['name'], groupBy: ['category'] }),
+    'product.category': search(ProductCategory, {
+      fields: ['name', 'parent.name'],
+      groupBy: ['parent'],
+    }),
+    'account.tax': search(AccountTax, {
+      fields: ['name'],
+      filters: {
+        sale: { label: 'On sales', domain: { use: 'sale' }, group: 'use' },
+        purchase: { label: 'On purchases', domain: { use: 'purchase' }, group: 'use' },
+      },
+      groupBy: ['use', 'amountType'],
+    }),
     'product.product': search(ProductProduct, {
       fields: ['name', 'code', 'barcode'],
       filters: {

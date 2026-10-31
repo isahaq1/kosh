@@ -459,6 +459,20 @@ export interface ModuleInput {
   readonly hooks?: ModuleHooks;
   /** Translations per locale, loaded lazily. */
   readonly i18n?: Readonly<Record<string, () => Promise<unknown>>>;
+  /**
+   * Exceptions to the module standard (RFC 0023), each with its reason: `pnpm lint` (`scripts/check-modules.ts`)
+   * refuses a module that breaks an enforced rule for a model it has not waived here.
+   */
+  readonly standard?: { readonly waive: readonly StandardWaiver[] };
+}
+
+/** A rule of the module standard a module does not meet for one model (or at all), and why. */
+export interface StandardWaiver {
+  /** The rule's code (`M2`, `V1`, `P1`…), as RFC 0023 §3 names them. */
+  readonly rule: string;
+  /** The model the waiver is for; none: the whole module. */
+  readonly model?: string;
+  readonly reason: string;
 }
 
 /**

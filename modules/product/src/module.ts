@@ -45,6 +45,7 @@ export const UomUom = defineModel('uom.uom', {
 
 export const ProductCategory = defineModel('product.category', {
   label: 'Product category',
+  archivable: true,
   order: ['name asc'],
   access: { 'product.user': READ, 'product.manager': ALL },
   fields: {
@@ -149,7 +150,7 @@ const uom = (id: string, name: string, category: string, ratio: string, rounding
 
 export const productShutro = defineModule({
   name: 'product',
-  version: '0.3.0',
+  version: '0.4.0',
   migrations: [
     {
       version: '0.2.0',

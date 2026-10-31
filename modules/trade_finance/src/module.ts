@@ -312,6 +312,7 @@ export const TradeLc = defineModel('trade.lc', {
 
 export const TradeAmendment = defineModel('trade.lc.amendment', {
   label: 'LC amendment',
+  tracking: ['state'],
   order: ['id asc'],
   access: {
     'trade_finance.user': ['read', 'write', 'create'],
@@ -367,6 +368,7 @@ export const TradeAmendment = defineModel('trade.lc.amendment', {
 
 export const TradePresentation = defineModel('trade.lc.presentation', {
   label: 'Presentation',
+  tracking: ['state', 'amount'],
   order: ['date asc', 'id asc'],
   access: {
     'trade_finance.user': ['read', 'write', 'create'],

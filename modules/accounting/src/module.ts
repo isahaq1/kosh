@@ -237,6 +237,7 @@ export const ResBankAccount = defineModel('res.bank.account', {
 
 export const AccountFiscalYear = defineModel('account.fiscal.year', {
   label: 'Fiscal year',
+  tracking: ['state', 'lockDate'],
   order: ['dateFrom desc'],
   companyScoped: { required: true },
   access: { 'account.invoicing': READ, 'account.user': READ, 'account.manager': ALL },

@@ -22,6 +22,7 @@ const me = { $env: 'uid' } as const;
 
 export const HiringStage = defineModel('hiring.stage', {
   label: 'Hiring stage',
+  archivable: true,
   recName: 'name',
   order: ['sequence asc', 'id asc'],
   access: { 'hiring.user': READ, 'hiring.manager': ALL },
@@ -204,7 +205,7 @@ export const HiringScorecard = defineModel('hiring.scorecard', {
 
 export const recruitmentShutro = defineModule({
   name: 'recruitment',
-  version: '0.1.0',
+  version: '0.2.0',
   depends: [hrShutro],
   groups: [
     orm.defineGroup({ code: 'hiring.user', label: 'Interviewer', implies: ['hr.user'] }),

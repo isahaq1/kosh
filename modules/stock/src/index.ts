@@ -167,6 +167,16 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       (env as Env).asSuperuser({ reason: 'main warehouses' }, (su) => mainWarehouses(su)),
     demo: stockDemo,
   },
+  // Exceptions to the module standard (RFC 0023), each with its reason.
+  standard: {
+    waive: [
+      {
+        rule: 'M3',
+        model: 'stock.quant',
+        reason: 'Stock levels, written by moves only; a level is never archived.',
+      },
+    ],
+  },
   depends: [product, contacts, messaging, reporting],
   app: {
     code: 'stockroom',

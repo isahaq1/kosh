@@ -67,6 +67,16 @@ function registerValuationRoutes({ app }: ModuleContext): void {
 export const stockAccount: ReturnType<typeof defineModule> = defineModule({
   shutro: stockAccountShutro,
   kosh: '^0.1.0',
+  // Exceptions to the module standard (RFC 0023), each with its reason.
+  standard: {
+    waive: [
+      {
+        rule: 'V1',
+        model: 'stock.valuation.layer',
+        reason: 'A ledger read in lists and pivots; layers are written by transfers.',
+      },
+    ],
+  },
   depends: [stock, accounting, product],
   bridge: [stock, accounting],
   hooks: { defaults: async (env) => stockDefaults(env as Env) },

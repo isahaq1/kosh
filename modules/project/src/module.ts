@@ -43,12 +43,22 @@ const STEPS: Readonly<Record<string, ReturnType<typeof orm.toDecimal>>> = {
 
 /** The current company's project settings. */
 async function projectSettings(env: Env): Promise<{ plannedHours: string | null; step: string }> {
-  const [company] = (
-    await env
-      .model('res.company')
-      .browse([env.companyId])
-      .load(['projectPlannedHoursDefault', 'projectTimesheetStep'])
-  ).read(['projectPlannedHoursDefault', 'projectTimesheetStep']);
+  // Read as the writer; a system or portal scope without the right to companies reads it with the narrow grant.
+  const read = async (e: Env) =>
+    (
+      await e
+        .model('res.company')
+        .browse([e.companyId])
+        .load(['projectPlannedHoursDefault', 'projectTimesheetStep'])
+    ).read(['projectPlannedHoursDefault', 'projectTimesheetStep']);
+  let rows: Awaited<ReturnType<typeof read>>;
+  try {
+    rows = await read(env);
+  } catch (error) {
+    if (!(error instanceof Error && error.name === 'AccessError')) throw error;
+    rows = await env.withGrants({ grants: ['res.company:read'], reason: 'project settings' }, read);
+  }
+  const [company] = rows;
   const planned = company?.['projectPlannedHoursDefault'];
   return {
     plannedHours: planned === null || planned === undefined ? null : String(planned),
@@ -61,6 +71,7 @@ async function projectSettings(env: Env): Promise<{ plannedHours: string | null;
 
 export const ProjectTaskStage = defineModel('project.task.stage', {
   label: 'Task stage',
+  archivable: true,
   order: ['sequence asc', 'id asc'],
   access: { 'project.user': READ, 'project.manager': ALL },
   fields: {
@@ -236,7 +247,7 @@ export const ProjectTimesheet = defineModel('project.timesheet', {
 
 export const projectShutro = defineModule({
   name: 'project',
-  version: '0.2.0',
+  version: '0.3.0',
   depends: [contactsShutro, messagingShutro],
   groups: [
     orm.defineGroup({

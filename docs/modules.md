@@ -35,6 +35,19 @@ export const contacts = defineModule({
 
 Version ranges: `1.2.3`, `^1.2.0`, `~1.2.0`, `>=1.2.0 <2.0.0`, `*`.
 
+**The module standard** (RFC 0023, `pnpm check:modules`, run by `pnpm lint`) measures every module in `modules/`
+against one list and fails on a rule a module breaks without a waiver: every model with a list has a search spec
+(M2), master data is archivable rather than deleted (M3), documents have a chatter and track their state (M4), every
+public model has a list and a form (V1); a print template (P1), an import template (I1), named events (E1), help on
+states, selections and computed amounts (M5) and Bangla labels (T1) are reported until their passes make them
+required. An exception is declared in the manifest with its reason, so it stays traceable:
+
+```ts
+standard: {
+  waive: [{ rule: 'V1', model: 'stock.valuation.layer', reason: 'A ledger read in lists and pivots.' }],
+},
+```
+
 ## App settings (RFC 0020)
 
 An app declares its own settings in its manifest; they appear in **Settings › App settings**, found by the Settings

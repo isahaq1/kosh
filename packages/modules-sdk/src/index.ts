@@ -44,5 +44,6 @@ export {
   type SettingsSectionSpec,
   type SettingsSpec,
   type ShutroModuleShape,
+  type StandardWaiver,
 } from './manifest.js';
 export { compareVersions, satisfies } from './semver.js';

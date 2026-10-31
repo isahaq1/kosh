@@ -199,6 +199,7 @@ export const StockLocation = defineModel('stock.location', {
 
 export const StockLot = defineModel('stock.lot', {
   label: 'Lot / serial number',
+  archivable: true,
   recName: 'name',
   order: ['expiryDate asc', 'name asc'],
   companyScoped: { required: true },
@@ -1485,7 +1486,7 @@ const shared = (
 
 export const stockShutro = defineModule({
   name: 'stock',
-  version: '0.1.0',
+  version: '0.2.0',
   depends: [productShutro, contactsShutro, messagingShutro],
   groups: [
     orm.defineGroup({ code: 'stock.user', label: 'Stockroom user', implies: ['product.user'] }),

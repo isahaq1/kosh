@@ -229,6 +229,26 @@ export async function reverseMove(
 export const accounting: ReturnType<typeof defineModule> = defineModule({
   shutro: accountingShutro,
   kosh: '^0.1.0',
+  // Exceptions to the module standard (RFC 0023), each with its reason.
+  standard: {
+    waive: [
+      {
+        rule: 'M3',
+        model: 'account.full.reconcile',
+        reason: 'Made by reconciling; undone by unreconciling, never archived.',
+      },
+      {
+        rule: 'V1',
+        model: 'account.partial.reconcile',
+        reason: 'Reconciliation records, seen from the lines they match.',
+      },
+      {
+        rule: 'V1',
+        model: 'account.full.reconcile',
+        reason: 'Reconciliation records, seen from the lines they match.',
+      },
+    ],
+  },
   depends: [contacts, product, messaging, permissions, reporting],
   app: {
     code: 'accounting',
@@ -1141,6 +1161,7 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       columns: ['name', 'dateFrom', 'dateTo', { field: 'state', widget: 'badge' }, 'lockDate'],
     }),
     'account.fiscal.year.form': form(AccountFiscalYear, (k) => ({
+      chatter: true,
       header: { buttons: [] },
       sheet: [k.group('main', ['name', 'dateFrom', 'dateTo', 'state', 'lockDate'])],
     })),
@@ -1173,6 +1194,40 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
     })),
   },
   search: {
+    'account.payment.term': search(AccountPaymentTerm, { fields: ['name'] }),
+    'account.journal': search(AccountJournal, { fields: ['name', 'code'], groupBy: ['type'] }),
+    'account.fiscal.year': search(AccountFiscalYear, {
+      fields: ['name'],
+      filters: {
+        open: { label: 'Open', domain: { state: 'open' }, group: 'state' },
+        closed: { label: 'Closed', domain: { state: 'closed' }, group: 'state' },
+      },
+      groupBy: ['state'],
+    }),
+    'account.withholding': search(AccountWithholding, {
+      fields: ['name'],
+      filters: {
+        vendor: {
+          label: 'When paying vendors',
+          domain: { direction: 'vendor' },
+          group: 'direction',
+        },
+        customer: {
+          label: 'Withheld by customers',
+          domain: { direction: 'customer' },
+          group: 'direction',
+        },
+      },
+      groupBy: ['direction', 'base'],
+    }),
+    'res.bank.account': search(ResBankAccount, {
+      fields: ['bank', 'branch', 'number', 'holder'],
+      groupBy: ['currency'],
+    }),
+    'res.currency.rate': search(ResCurrencyRate, {
+      fields: ['currency.name'],
+      groupBy: ['currency', 'date:month'],
+    }),
     'account.move': search(AccountMove, {
       fields: ['name', 'ref', 'partner.name'],
       filters: {

@@ -22,7 +22,7 @@ import { defineModule, type InboundWebhookSpec, type KoshModule } from '@kosh/mo
 import { portalDocuments } from '@kosh/portal';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import { type Env as CoreEnv, orm } from '@kosh/server/orm';
-import { action, form, list } from '@kosh/views';
+import { action, form, list, search } from '@kosh/views';
 import type { FastifyInstance } from 'fastify';
 import type { Env } from './.kosh/bindings.js';
 import { bkashFromEnvironment } from './bkash.js';
@@ -546,11 +546,27 @@ export function paymentModule(options: PaymentOptions = {}): KoshModule {
         sequence: 3.7,
       },
     ],
+    search: {
+      'payment.provider': search(PaymentProvider, {
+        fields: ['name'],
+        groupBy: ['code', 'state'],
+      }),
+      'payment.transaction': search(PaymentTransaction, {
+        fields: ['reference', 'providerReference', 'partner.name'],
+        filters: {
+          done: { label: 'Done', domain: { state: 'done' }, group: 'state' },
+          pending: { label: 'Pending', domain: { state: 'pending' }, group: 'state' },
+          failed: { label: 'Failed', domain: { state: 'failed' }, group: 'state' },
+        },
+        groupBy: ['provider', 'state', 'doneAt:month'],
+      }),
+    },
     views: {
       'payment.provider.list': list(PaymentProvider, {
         columns: ['name', 'code', 'state', 'journal'],
       }),
       'payment.provider.form': form(PaymentProvider, (k) => ({
+        chatter: true,
         sheet: [
           k.group('main', ['name', 'code', 'state']),
           k.group('accounting', ['journal', 'sequence', 'endpoint']),
@@ -560,6 +576,7 @@ export function paymentModule(options: PaymentOptions = {}): KoshModule {
         columns: ['reference', 'move', 'partner', 'provider', 'amount', 'state', 'doneAt'],
       }),
       'payment.transaction.form': form(PaymentTransaction, (k) => ({
+        chatter: true,
         sheet: [
           k.group('main', ['reference', 'move', 'partner', 'provider']),
           k.group('outcome', [

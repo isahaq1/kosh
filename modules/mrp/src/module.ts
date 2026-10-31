@@ -329,6 +329,7 @@ export function schedule(
  */
 export const MrpWorkorder = defineModel('mrp.workorder', {
   label: 'Work order',
+  tracking: ['state', 'plannedStart', 'workcenter'],
   recName: 'name',
   order: ['plannedStart asc', 'id asc'],
   companyScoped: { required: true },

@@ -357,6 +357,13 @@ export const project: ReturnType<typeof defineModule> = defineModule({
     })),
   },
   search: {
+    'project.task.stage': search(ProjectTaskStage, {
+      fields: ['name'],
+      filters: {
+        closing: { label: 'Closes the task', domain: { done: true }, group: 'done' },
+        folded: { label: 'Folded on the board', domain: { fold: true }, group: 'fold' },
+      },
+    }),
     'project.project': search(ProjectProject, {
       fields: ['name', 'partner.name'],
       groupBy: ['manager', 'partner'],

@@ -350,6 +350,7 @@ export const mrp: ReturnType<typeof defineModule> = defineModule({
       ],
     }),
     'mrp.workorder.form': form(MrpWorkorder, (k) => ({
+      chatter: true,
       header: {
         statusbar: 'state',
         buttons: [

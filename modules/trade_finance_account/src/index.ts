@@ -46,6 +46,7 @@ export const tradeFinanceAccount: ReturnType<typeof defineModule> = defineModule
       columns: ['lc', 'date', 'name', 'amount', { field: 'state', widget: 'badge' }],
     }),
     'trade.lc.charge.form': form(TradeCharge, (k) => ({
+      chatter: true,
       header: {
         statusbar: 'state',
         buttons: [k.button('post', { primary: true, label: 'Post' })],

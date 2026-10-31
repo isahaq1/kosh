@@ -236,6 +236,7 @@ export const PresentationPayment = extendModel('trade.lc.presentation', {
 /** A bank charge on an LC (commission, amendment, acceptance, SWIFT): posted to LC charges, an expense. */
 export const TradeCharge = defineModel('trade.lc.charge', {
   label: 'LC charge',
+  tracking: ['state', 'amount'],
   order: ['date asc', 'id asc'],
   access: {
     'trade_finance.user': ['read', 'write', 'create'],

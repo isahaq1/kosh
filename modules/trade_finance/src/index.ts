@@ -361,6 +361,7 @@ export const tradeFinance: ReturnType<typeof defineModule> = defineModule({
       ],
     }),
     'trade.lc.presentation.form': form(TradePresentation, (k) => ({
+      chatter: true,
       header: {
         statusbar: 'state',
         buttons: [
@@ -386,6 +387,7 @@ export const tradeFinance: ReturnType<typeof defineModule> = defineModule({
       ],
     }),
     'trade.lc.amendment.form': form(TradeAmendment, (k) => ({
+      chatter: true,
       header: {
         statusbar: 'state',
         buttons: [

@@ -388,6 +388,10 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
     }),
   },
   search: {
+    'sale.order.line': search(SaleOrderLine, {
+      fields: ['name', 'product.name', 'order.name'],
+      groupBy: ['product', 'order'],
+    }),
     'sale.order': search(SaleOrder, {
       fields: ['name', 'partner.name', 'clientReference'],
       filters: {

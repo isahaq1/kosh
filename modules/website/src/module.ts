@@ -288,6 +288,7 @@ export const HONEYPOT = 'website_url';
 /** What a visitor sent through a form, and what it became. */
 export const WebsiteSubmission = defineModel('website.submission', {
   label: 'Submission',
+  tracking: ['state'],
   order: ['id desc'],
   companyScoped: { required: true },
   access: {

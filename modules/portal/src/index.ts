@@ -52,7 +52,7 @@ export function createPortal(
     depends: [base, contacts, messaging, reporting],
     accessLevels: { manager: { label: 'Portal access', groups: ['portal.manager'] } },
     externalGroups: ['portal.user'],
-    privateModels: ['portal.invitation', 'portal.signature'],
+    privateModels: ['portal.invitation', 'portal.signature', 'portal.announcement'],
     // "Portal access" on the contact form, under the ways to reach them.
     viewExtensions: [
       {

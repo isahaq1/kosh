@@ -39,12 +39,22 @@ export const CompanyContacts = extendModel('res.company', {
 async function contactSettings(
   env: Env,
 ): Promise<{ taxIdRequired: boolean; uniqueEmail: boolean }> {
-  const [company] = (
-    await env
-      .model('res.company')
-      .browse([env.companyId])
-      .load(['contactTaxIdRequired', 'contactUniqueEmail'])
-  ).read(['contactTaxIdRequired', 'contactUniqueEmail']);
+  // Read as the writer; a system or portal scope without the right to companies reads it with the narrow grant.
+  const read = async (e: Env) =>
+    (
+      await e
+        .model('res.company')
+        .browse([e.companyId])
+        .load(['contactTaxIdRequired', 'contactUniqueEmail'])
+    ).read(['contactTaxIdRequired', 'contactUniqueEmail']);
+  let rows: Awaited<ReturnType<typeof read>>;
+  try {
+    rows = await read(env);
+  } catch (error) {
+    if (!(error instanceof Error && error.name === 'AccessError')) throw error;
+    rows = await env.withGrants({ grants: ['res.company:read'], reason: 'contact settings' }, read);
+  }
+  const [company] = rows;
   return {
     taxIdRequired: company?.['contactTaxIdRequired'] === true,
     uniqueEmail: company?.['contactUniqueEmail'] === true,

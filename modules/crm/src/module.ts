@@ -24,6 +24,7 @@ const ALL = ['read', 'write', 'create', 'unlink'] as const;
 
 export const CrmStage = defineModel('crm.stage', {
   label: 'Stage',
+  archivable: true,
   recName: 'name',
   order: ['sequence asc', 'id asc'],
   access: { 'crm.user': READ, 'crm.manager': [...ALL, 'export', 'import'] },
@@ -195,7 +196,7 @@ export const CrmDeal = defineModel('crm.deal', {
 
 export const crmShutro = defineModule({
   name: 'crm',
-  version: '0.1.0',
+  version: '0.2.0',
   depends: [contactsShutro, messagingShutro],
   groups: [
     orm.defineGroup({

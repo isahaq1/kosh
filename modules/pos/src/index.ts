@@ -341,6 +341,10 @@ export function posModule(options: CounterOptions = {}): ReturnType<typeof defin
       }),
     },
     search: {
+      'pos.payment.method': search(PosPaymentMethod, {
+        fields: ['name', 'shop.name'],
+        groupBy: ['shop', 'kind'],
+      }),
       'pos.session': search(PosSession, {
         fields: ['name', 'shop.name', 'cashier.name'],
         filters: {

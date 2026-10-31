@@ -230,6 +230,7 @@ export function websiteModule(options: SitesOptions = {}): ReturnType<typeof def
         columns: ['id', 'form', 'site', 'resName', 'resModel', { field: 'state', widget: 'badge' }],
       }),
       'website.submission.form': form(WebsiteSubmission, (k) => ({
+        chatter: true,
         header: { buttons: [] },
         sheet: [
           k.group('main', ['form', 'site', 'state', 'resModel', 'resId', 'resName']),
