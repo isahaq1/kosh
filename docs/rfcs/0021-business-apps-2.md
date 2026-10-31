@@ -818,3 +818,63 @@ reviewed steps.
 - **Event Hub complete** (steps 1–3). Later: registration from Sites and the portal, online payment of tickets
   (RFC 0017's providers), seat maps.
 
+
+## Design note: Sites (`modules/website`, app code `sites`)
+
+Decided earlier: content, forms and an API now; the public rendering in the Next.js site later. Sites holds what a
+website says and takes what its visitors send; it does not lock the design.
+
+- **Sites** (`website.site`): a name, a **key** (the slug the public API names it by, unique), a domain, the default
+  language (English or Bangla), per company.
+- **Pages** (`website.page`): a site, a **path** (`/`, `/about`; unique per site and language), a language, a title and
+  a description (for search engines), shown in the site's menu or not, *Draft* → *Published* (and back), and a
+  **translation of** another page. Their content is **blocks** (`website.block`, lines in order): a hero, text, an
+  image, a call to action, or a form. The page form shows a **live preview** (`GET /api/v1/sites/pages/:id/preview`,
+  the same HTML for draft and published pages, for the people who edit them).
+- **Forms** (`website.form`): a key, the **model a submission becomes** and **fields** (`website.form.field`: the
+  input's name and label, text / email / phone / long text / number / date, required or not, and the field of the
+  record it fills), a success message. What a form may create is an allow-list, `targets()` on `website.form`: Sites
+  allows contacts (`res.partner`); a bridge adds its own (`website_crm`: a lead in Pipeline). The fields a form fills
+  must be plain fields of that model (text, numbers, dates, no relations), checked when a visitor submits.
+- **Submissions** (`website.submission`): the form, what was sent, the record it became, *received* or *spam* (a
+  hidden honeypot field filled in: kept, nothing created, and the visitor told it went through). `website.form.submitted`
+  goes through the outbox (webhooks, automation).
+- **The public API**, without a sign-in but rate limited per address (`config: { auth: false }`):
+  `GET /api/v1/public/sites/:site` (the site and its menu), `GET /api/v1/public/sites/:site/page?path=&lang=` (a
+  published page with its blocks and its translations; drafts are not found), and
+  `POST /api/v1/public/sites/:site/forms/:key` (a submission). Reads run in a system scope of the site's company and are
+  cached for 30 seconds per server (`Cache-Control: public, max-age=30`); a submission creates its record in an
+  audited system scope, with every value checked (required, email, lengths, at most 50 fields).
+- **Access**: *Editor* (pages and blocks, submissions read) and *Manager* (sites, forms, everything).
+- **Later**: `website_crm` (forms to leads), product pages from Products, Event Hub registration from a page, the
+  Next.js site.
+
+## Implementation notes (2026-10-31): Sites, step 1
+
+- **Module** `modules/website` (`@kosh/website`, export `website`; `websiteModule({ cacheMs })` for tests), app
+  **Sites** (code `sites`); access levels *Editor* (pages and their blocks; sites, forms and submissions read) and
+  *Manager* (sites, forms, everything).
+- **Pages** have a path unique per site and language (`/`, `/about`; checked), *Publish* / *Unpublish* with the date,
+  and a translation link within the site. **Blocks** link only to a path of the site or an http(s) address (never
+  `javascript:` or `data:`); a form block names its form. The page form's **preview** is the page rendered as HTML
+  with every text escaped, in a frame that runs no scripts.
+- **Forms**: `targets()` on `website.form` (overridable by bridges) is the allow-list of models a form may create —
+  contacts here; a form for anything else is refused when saved. When a visitor submits, each input's field must be
+  a plain field of that model (text, numbers, dates; not computed, not read-only), or the form is "not available"
+  (409) and nothing is created. Values are checked by kind (required, email lower-cased, phone, number, date, at most
+  200 characters, 5,000 for a long text); inputs the form does not have are dropped. A filled-in honeypot
+  (`website_url`) is answered as a success and kept as *spam*, creating nothing. A submission emits
+  `website.form.submitted` (webhooks, automation).
+- **The public API** (`auth: false`: no sign-in, rate limited per address) reads in a system scope across companies,
+  published pages only; reads — misses too — are kept 30 seconds per server (500 at most) and sent with
+  `Cache-Control: public, max-age=30`, so a crawler costs one read per page and interval. A submission runs in an
+  audited system scope of the site's company.
+- **Demo**: Padma Traders' site with a home page (hero, text, the contact form), its Bangla translation and an About
+  page, all published.
+- **Tests**: on real PostgreSQL — the menu and a published page with its blocks, form and translation without a
+  sign-in, a draft and an unknown site not found; a submission becoming a contact (email lower-cased, an unknown input
+  dropped), a missing required value, a bad email and a too-long name refused; the honeypot kept as spam with no
+  contact; a form for users refused, an input filling a boolean field refused at submission; the preview escaping a
+  script tag; unsafe links, a path without `/` and a second page at a path refused; editors cannot make sites or
+  forms, others see nothing. E2E (apps): a site and a page with a block, previewed, published, read by a visitor.
+- **Next**: `website_crm` (forms to Pipeline leads), Event Hub registration from a page, product pages.

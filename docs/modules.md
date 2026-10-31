@@ -281,6 +281,23 @@ else on a waiting list that moves up in order when a seat frees; check-in once b
 check-in box takes a scanner, the keyboard or the phone's camera. Attendees get a confirmation with their code and
 thanks after the event (SMTP from `SMTP_URL`); with Accounting, `event_account` invoices paid places.
 
+### Sites (`modules/website`, RFC 0021)
+
+Websites per company: pages built from blocks (a hero, text, an image, a call to action, a form) with a live preview
+on the page form, published or draft, in English or Bangla with their translations linked; forms whose submissions
+become contacts (or what another app adds to `targets()` on `website.form`), a bot's caught by a honeypot and kept
+as spam. Install it with `shutro-erp apps install website`. The public site — the Next.js site later, or any other —
+reads the public API, which needs no sign-in and is rate limited per address:
+
+```
+GET  /api/v1/public/sites/padma?lang=bn                 the site and its menu
+GET  /api/v1/public/sites/padma/page?path=/about&lang=en a published page: blocks, forms, translations
+POST /api/v1/public/sites/padma/forms/contact            { "name": "…", "email": "…" } → 201 { "message" }
+```
+
+A form fills plain fields only (text, numbers, dates) of the model it creates; each value is checked (required,
+email, phone, date, length). Public reads are kept 30 seconds per server and sent with `Cache-Control`.
+
 ## Demo data (RFC 0008 §5.8)
 
 `npx shutro-erp init --demo` (or a yes to the question after the apps) loads every installed app's demo data: a sample
