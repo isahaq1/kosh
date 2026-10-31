@@ -982,3 +982,21 @@ receipts as documents (RFC 0005), notifications for receipts by SMS or email (RF
 - Tests: Counter on real PostgreSQL (the entry posted and balanced from a card-and-cash sale and a count, the
   receipt by email with the document and by text), `pos_stock` (one done delivery of the sold quantities, the shelf
   down by them). The UI's queue replays requests.
+
+## Implementation notes (2026-10-31): Counter, step 3 — refunds and quantities
+
+- **Refunds**: `POST /api/v1/counter/orders/:id/refund` `{ session, reason, lines?, method? }` makes a **negative
+  sale** in the open session — the lines taken back (all of them, or the quantities given, never more than sold)
+  at the original prices, discounts and taxes, paid back by the method asked (the shop's cash by default) —
+  linked to the original (`refundOf`, shown as *Refunds* on the sale) with its **reason**, which is required. A
+  refund is paid when its payments equal its (negative) total; it gives no change. Cashiers refund the sales of
+  **their own open session**; the permission `pos.refund_any` (managers) refunds any sale, into the manager's own
+  open session. The register refunds the last sale in full after a reason. The books net refunds in the session's
+  entry (the untaxed amounts and taxes lower, the cash lower), and `pos_stock`'s delivery of a session carries
+  the net quantities.
+- **Quantities typed**: a line's quantity on the register is a box (decimal, for weighed goods sold by the kilo)
+  as well as the plus and minus; a weight read from a scale goes into the same box.
+- **Not in this step**: payment providers at the counter (bKash, cards) — they need a push or QR flow the RFC 0017
+  adapters do not have yet — and Mushak 6.3 receipts for `l10n_bd` shops (the receipt template is where it goes).
+- Tests: the refund refused without a reason or beyond what was sold, made with its link and reason, refused to
+  a cashier for another session's sale and made by a manager, the expected cash and the entry net of it.

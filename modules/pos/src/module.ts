@@ -297,6 +297,9 @@ export const PosOrder = defineModel('pos.order', {
     pricesIncludeTax: f.boolean({ default: true, label: 'Prices include taxes' }),
     /** The sale this one refunds, if any (its quantities are negative). */
     refundOf: f.many2one('pos.order', { ondelete: 'set null', label: 'Refund of' }),
+    refunds: f.one2many('pos.order', 'refundOf'),
+    /** Why the customer brought it back (a refund). */
+    refundReason: f.char({ size: 200, label: 'Refund reason' }),
     note: f.char({ size: 200 }),
     amountUntaxed: f.decimal({
       scale: 2,
@@ -341,7 +344,7 @@ export const PosOrder = defineModel('pos.order', {
       ...compute('pos.order', 'change', ['amountPaid', 'total'], (orders) => {
         for (const o of orders) {
           const over = (o.amountPaid ?? ZERO).minus(o.total ?? ZERO);
-          o.change = over.gt(0) ? over : ZERO;
+          o.change = over.gt(0) && (o.total ?? ZERO).gte(0) ? over : ZERO;
         }
       }),
     }),
@@ -356,7 +359,9 @@ export const PosOrder = defineModel('pos.order', {
             (await orders.load({ lines: true, session: true })).filter(
               (o) =>
                 [...o.lines].length === 0 ||
-                (o.amountPaid ?? ZERO).lt(o.total ?? ZERO) ||
+                ((o.total ?? ZERO).gte(0)
+                  ? (o.amountPaid ?? ZERO).lt(o.total ?? ZERO)
+                  : !(o.amountPaid ?? ZERO).eq(o.total ?? ZERO)) ||
                 o.session.state !== 'open',
             ),
           ),
@@ -473,6 +478,13 @@ export const posShutro = defineModule({
       implies: ['product.user', 'contacts.user', 'reporting.user'],
     }),
     orm.defineGroup({ code: 'pos.manager', label: 'Counter manager', implies: ['pos.cashier'] }),
+  ],
+  permissions: [
+    orm.definePermission({
+      code: 'pos.refund_any',
+      label: 'Refund any sale (not only those of one’s own open session)',
+      groups: ['pos.manager'],
+    }),
   ],
   sequences: [
     orm.defineSequence({ code: 'pos.session', prefix: 'S/{year}/', padding: 5, reset: 'yearly' }),

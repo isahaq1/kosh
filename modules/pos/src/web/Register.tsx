@@ -154,8 +154,10 @@ export function Register({ api }: PageProps): ReactElement {
     setCart((lines) =>
       lines
         .map((l) => (l.product.id === id ? { product: l.product, quantity } : l))
-        .filter((l) => l.quantity > 0),
+        .filter((l) => l.quantity > 0 || l.quantity === 0),
     );
+  const removeLine = (id: number): void =>
+    setCart((lines) => lines.filter((l) => l.product.id !== id));
   // A scanner types the barcode and sends Enter: the exact match goes to the cart, the box clears.
   const onSearchKey = (key: string): void => {
     if (key !== 'Enter') return;
@@ -242,6 +244,22 @@ export function Register({ api }: PageProps): ReactElement {
   });
   const [closedInfo, setClosedInfo] = useState<Session | null>(null);
   const [sendTo, setSendTo] = useState('');
+  const [refundReason, setRefundReason] = useState('');
+  // The whole last sale taken back, paid back in cash, with its reason.
+  const refund = useMutation({
+    mutationFn: (id: number) =>
+      api.call<{ order: Sale }>('POST', `/api/v1/counter/orders/${id}/refund`, {
+        session: session.data?.id,
+        reason: refundReason.trim(),
+      }),
+    onSuccess: (r) => {
+      setLastSale(r.order);
+      setRefundReason('');
+      setError(null);
+      void queryClient.invalidateQueries({ queryKey: ['counter', 'session'] });
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : String(e)),
+  });
   const [sentNote, setSentNote] = useState<string | null>(null);
   // The receipt by email or text: an address with an @ is an email, anything else a phone number.
   const sendReceipt = useMutation({
@@ -393,11 +411,24 @@ export function Register({ api }: PageProps): ReactElement {
                   size="icon"
                   variant="ghost"
                   aria-label={t('less', { name: l.product.name })}
-                  onClick={() => setQuantity(l.product.id, l.quantity - 1)}
+                  onClick={() =>
+                    l.quantity <= 1
+                      ? removeLine(l.product.id)
+                      : setQuantity(l.product.id, l.quantity - 1)
+                  }
                 >
                   −
                 </Button>
-                <span className="w-6 text-center tabular-nums">{l.quantity}</span>
+                <input
+                  aria-label={t('quantityOf', { name: l.product.name })}
+                  inputMode="decimal"
+                  className="w-14 rounded border bg-surface px-1 text-center tabular-nums"
+                  value={String(l.quantity)}
+                  onChange={(e) => {
+                    const q = Number(e.target.value);
+                    if (Number.isFinite(q) && q >= 0) setQuantity(l.product.id, q);
+                  }}
+                />
                 <Button
                   size="icon"
                   variant="ghost"
@@ -460,6 +491,23 @@ export function Register({ api }: PageProps): ReactElement {
             {sentNote === null ? null : (
               <span className="text-xs text-muted-foreground">{sentNote}</span>
             )}
+            <div className="grid grid-cols-[1fr_auto] gap-1">
+              <Input
+                aria-label={t('refundReason')}
+                placeholder={t('refundReasonHint')}
+                value={refundReason}
+                onChange={(e) => setRefundReason(e.target.value)}
+              />
+              <Button
+                size="sm"
+                variant="ghost"
+                busy={refund.isPending}
+                disabled={refundReason.trim() === ''}
+                onClick={() => refund.mutate(lastSale.id)}
+              >
+                {t('refund')}
+              </Button>
+            </div>
           </div>
         )}
         {error === null ? null : <Alert>{error}</Alert>}

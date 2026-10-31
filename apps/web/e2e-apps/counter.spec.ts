@@ -1,7 +1,7 @@
 /**
  * Counter end to end (RFC 0021): a manager makes a shop with a cash method; at the register a session opens with
- * the drawer's cash, a product is found and sold, the cash prefilled and the sale confirmed; the session closes
- * with the count.
+ * the drawer's cash, a product is found, its quantity typed and sold, the cash prefilled and the sale confirmed,
+ * then refunded with a reason; the session closes with the count.
  */
 import { expect, type Page, test } from '@playwright/test';
 
@@ -38,11 +38,19 @@ test('a shop, a session, a sale paid in cash, the session closed', async ({ page
     .first()
     .click();
   await expect(page.getByRole('complementary', { name: 'Sale' })).toContainText('Steel beam');
+  // The quantity typed (weighed goods are sold the same way).
+  await page.getByRole('textbox', { name: /Quantity of Steel beam/ }).fill('2');
   await page.getByRole('button', { name: 'Pay', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Cash').focus();
   await dialog.getByRole('button', { name: 'Confirm the sale' }).click();
   await expect(page.getByRole('status')).toContainText(/R\//);
+  const soldAs = (await page.getByRole('status').textContent()) ?? '';
+  // The sale taken back, with its reason: a negative sale in the same session.
+  await page.getByLabel('Why it comes back').fill('Wrong item');
+  await page.getByRole('button', { name: 'Refund', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText(/-|−/);
+  await expect(page.getByRole('status')).not.toHaveText(soldAs);
 
   await page.getByRole('button', { name: 'Close the session' }).click();
   const closing = page.getByRole('dialog');

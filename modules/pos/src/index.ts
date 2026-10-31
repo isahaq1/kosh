@@ -290,7 +290,15 @@ export function posModule(options: CounterOptions = {}): ReturnType<typeof defin
           ],
         },
         sheet: [
-          k.group('main', ['name', 'session', 'date', 'partner', 'refundOf', 'note']),
+          k.group('main', [
+            'name',
+            'session',
+            'date',
+            'partner',
+            'refundOf',
+            'refundReason',
+            'note',
+          ]),
           k.lines('lines', [
             'product',
             { field: 'name', id: 'line_name' },
@@ -305,6 +313,12 @@ export function posModule(options: CounterOptions = {}): ReturnType<typeof defin
           k.group('totals', ['amountUntaxed', 'amountTax', 'total', 'amountPaid', 'change'], {
             label: 'Totals',
           }),
+          k.lines('refunds', [
+            { field: 'name', id: 'refund_name' },
+            { field: 'date', id: 'refund_date' },
+            { field: 'refundReason', id: 'refund_reason' },
+            { field: 'total', id: 'refund_total' },
+          ]),
         ],
         chatter: true,
       })),

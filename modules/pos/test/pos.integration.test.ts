@@ -355,3 +355,102 @@ test('step 2: a closed session books one posted entry; the receipt goes by email
   expect(messenger.sent).toHaveLength(1);
   expect(messenger.sent[0]?.text).toContain('Total 500');
 });
+
+test('step 3: a refund with its reason is a negative sale paid back, linked; only the own open session or a manager; the entry nets it', async () => {
+  // Sam's new session: a sale of two teas, one brought back.
+  const opened = await call('sam', 'POST', '/api/v1/counter/sessions', {
+    shop: ids['shop'],
+    openingCash: '0',
+  });
+  expect(opened.status, JSON.stringify(opened.json)).toBe(201);
+  const session = opened.json.session.id;
+  const sale = await call('sam', 'POST', '/api/v1/counter/orders', {
+    session,
+    lines: [{ product: ids['tea'], quantity: '2' }],
+    payments: [{ method: ids['cash'], amount: '500' }],
+  });
+  expect(sale.status, JSON.stringify(sale.json)).toBe(201);
+  const noReason = await call(
+    'sam',
+    'POST',
+    `/api/v1/counter/orders/${sale.json.order.id}/refund`,
+    {
+      session,
+      lines: [{ product: ids['tea'], quantity: '1' }],
+    },
+  );
+  expect(noReason.status).toBe(422);
+  const tooMany = await call('sam', 'POST', `/api/v1/counter/orders/${sale.json.order.id}/refund`, {
+    session,
+    reason: 'Broken seal',
+    lines: [{ product: ids['tea'], quantity: '3' }],
+  });
+  expect(tooMany.status).toBe(422);
+  const refund = await call('sam', 'POST', `/api/v1/counter/orders/${sale.json.order.id}/refund`, {
+    session,
+    reason: 'Broken seal',
+    lines: [{ product: ids['tea'], quantity: '1' }],
+  });
+  expect(refund.status, JSON.stringify(refund.json)).toBe(201);
+  expect(refund.json.order).toMatchObject({ state: 'paid' });
+  expect(Number(refund.json.order.total)).toBe(-250);
+  expect(Number(refund.json.order.change)).toBe(0);
+  const linked = await call(
+    'sam',
+    'GET',
+    `/api/v1/models/pos.order/${refund.json.order.id}?fields=refundOf,refundReason`,
+  );
+  expect(linked.json.refundOf?.id ?? linked.json.refundOf).toBe(sale.json.order.id);
+  expect(linked.json.refundReason).toBe('Broken seal');
+  // A sale of Sam's earlier, closed session: not this session's, and Sam is no manager.
+  const earlier = (
+    await call(
+      'sam',
+      'GET',
+      `/api/v1/models/pos.order?filter=${encodeURIComponent(JSON.stringify({ state: 'paid', 'session.state': 'closed' }))}&fields=name`,
+    )
+  ).json.items as { id: number }[];
+  expect(earlier.length).toBeGreaterThan(0);
+  const other = earlier[0] as { id: number };
+  const forbidden = await call('sam', 'POST', `/api/v1/counter/orders/${other.id}/refund`, {
+    session,
+    reason: 'Changed mind',
+  });
+  expect(forbidden.status, JSON.stringify(forbidden.json)).toBe(403);
+  // Maria, a manager, refunds it in full into her own open session.
+  const hers = await call('maria', 'POST', '/api/v1/counter/sessions', {
+    shop: ids['shop'],
+    openingCash: '1000',
+  });
+  expect(hers.status, JSON.stringify(hers.json)).toBe(201);
+  const managerRefund = await call('maria', 'POST', `/api/v1/counter/orders/${other.id}/refund`, {
+    session: hers.json.session.id,
+    reason: 'Changed mind',
+  });
+  expect(managerRefund.status, JSON.stringify(managerRefund.json)).toBe(201);
+  expect(Number(managerRefund.json.order.total)).toBeLessThan(0);
+  // Sam's session expects 250 in the drawer (500 taken, 250 given back) and books the net.
+  const read = await call(
+    'maria',
+    'GET',
+    `/api/v1/models/pos.session/${session}?fields=expectedCash`,
+  );
+  expect(Number(read.json.expectedCash)).toBe(250);
+  const closed = await call('sam', 'POST', `/api/v1/counter/sessions/${session}/close`, {
+    closingCash: '250',
+  });
+  expect(closed.status, JSON.stringify(closed.json)).toBe(200);
+  const booked = await call('maria', 'GET', `/api/v1/models/pos.session/${session}?fields=entry`);
+  const entryId = booked.json.entry?.id ?? booked.json.entry;
+  expect(entryId).toBeTruthy();
+  const lines = (
+    await call(
+      'maria',
+      'GET',
+      `/api/v1/models/account.move.line?filter=${encodeURIComponent(JSON.stringify({ move: entryId }))}&fields=debit,credit`,
+    )
+  ).json.items as { debit: unknown; credit: unknown }[];
+  const amount = (v: unknown) => Number((v as { amount?: unknown })?.amount ?? v);
+  expect(lines.reduce((sum, l) => sum + amount(l.debit), 0)).toBeCloseTo(250, 2);
+  expect(lines.reduce((sum, l) => sum + amount(l.credit), 0)).toBeCloseTo(250, 2);
+});

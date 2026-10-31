@@ -296,6 +296,133 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
     return reply.status(outcome.repeated ? 200 : 201).send(outcome);
   });
 
+  // `POST /api/v1/counter/orders/:id/refund` `{ session, reason, lines?: [{ product, quantity }], method? }`:
+  // the sale (or part of it) taken back — a negative sale in the open session, paid back by the method given
+  // (the shop's cash by default), linked to the original. Cashiers refund the sales of their own open session;
+  // `pos.refund_any` (managers) refunds any sale.
+  app.post('/api/v1/counter/orders/:id/refund', async (request, reply) => {
+    const id = idOf((request.params as { id?: unknown }).id, 'id');
+    const body = (request.body ?? {}) as {
+      session?: unknown;
+      reason?: unknown;
+      method?: unknown;
+      lines?: { product?: unknown; quantity?: unknown }[];
+    };
+    const session = idOf(body.session, 'session');
+    const reason = text(body.reason);
+    if (reason === '')
+      throw new HttpProblem(422, 'reason-missing', 'Say why', 'A refund needs its reason.');
+    const made = await request.env(
+      async (raw) => {
+        const env = raw as unknown as Env;
+        const [original] = await env
+          .model('pos.order')
+          .browse([id as Id<'pos.order'>])
+          .load({ lines: { taxes: true }, payments: { method: true }, session: true });
+        if (original === undefined || original.state !== 'paid')
+          throw new HttpProblem(404, 'missing-record', 'Not found', 'No paid sale with this id.');
+        const [current] = await env
+          .model('pos.session')
+          .browse([session as Id<'pos.session'>])
+          .load({ shop: { methods: true } });
+        if (current === undefined || current.state !== 'open')
+          throw new HttpProblem(
+            409,
+            'session-closed',
+            'Session closed',
+            'Refund in an open session.',
+          );
+        const mine = original.session.id === current.id;
+        let may = mine;
+        if (!may) {
+          try {
+            may = env.access.has('pos.refund_any');
+          } catch {
+            may = false;
+          }
+        }
+        if (!may)
+          throw new HttpProblem(
+            403,
+            'refund-forbidden',
+            'Not yours to refund',
+            'Cashiers refund the sales of their own open session; a manager refunds any sale.',
+          );
+        const wanted = new Map<number, string>();
+        for (const l of body.lines ?? [])
+          wanted.set(idOf(l.product, 'product'), text(l.quantity) || '0');
+        const lines = [...original.lines]
+          .map((l) => {
+            const qty =
+              wanted.size === 0 ? l.quantity : orm.toDecimal(wanted.get(l.product.id) ?? '0');
+            return { line: l, qty };
+          })
+          .filter(({ qty }) => qty.gt(0));
+        if (lines.length === 0)
+          throw new HttpProblem(
+            422,
+            'nothing-to-refund',
+            'Nothing to refund',
+            'Give the quantities taken back.',
+          );
+        for (const { line, qty } of lines)
+          if (qty.gt(line.quantity))
+            throw new HttpProblem(
+              422,
+              'too-much',
+              'More than sold',
+              `${line.name}: ${qty.toString()} of ${line.quantity.toString()} sold.`,
+            );
+        const methodId =
+          body.method === undefined
+            ? (
+                [...current.shop.methods].find((mm) => mm.kind === 'cash') ??
+                [...current.shop.methods][0]
+              )?.id
+            : idOf(body.method, 'method');
+        if (methodId === undefined)
+          throw new HttpProblem(
+            409,
+            'no-method',
+            'No payment method',
+            'The shop has no payment method.',
+          );
+        const created = await env.model('pos.order').create([
+          {
+            session: session as Id<'pos.session'>,
+            pricesIncludeTax: original.pricesIncludeTax,
+            partner: original.partner?.id ?? null,
+            refundOf: original.id,
+            refundReason: reason,
+            note: `Refund of ${original.name}: ${reason}`,
+            lines: {
+              create: lines.map(({ line, qty }) => ({
+                product: line.product.id,
+                name: line.name,
+                quantity: qty.neg(),
+                priceUnit: line.priceUnit,
+                discount: line.discount,
+                taxes: { set: [...line.taxes].map((t) => t.id) },
+              })),
+            },
+          } as never,
+        ]);
+        await env.flush();
+        const [draft] = await env.model('pos.order').browse(created.ids);
+        const total = draft?.total ?? orm.toDecimal(0);
+        await env
+          .model('pos.order.payment')
+          .create([{ order: created.ids[0], method: methodId, amount: total } as never]);
+        await env.flush();
+        await env.model('pos.order').browse(created.ids).pay();
+        await env.flush();
+        return orderOut(env, created.ids[0] as Id<'pos.order'>);
+      },
+      { write: true },
+    );
+    return reply.status(201).send({ order: made });
+  });
+
   app.post('/api/v1/counter/sessions/:id/close', async (request) => {
     const id = idOf((request.params as { id?: unknown }).id, 'id');
     const body = (request.body ?? {}) as { closingCash?: unknown; differenceReason?: unknown };

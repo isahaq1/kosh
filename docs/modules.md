@@ -327,7 +327,9 @@ reference. The register (*Counter › Register*) sells from a tablet or a phone:
 barcode box, the cart, the payment dialog, the receipt. Install it with `shutro-erp apps install pos`.
 A sale made offline waits on the device and goes when the network is back; a closed session books one entry in
 the shop's sales journal and, with Stockroom (`pos_stock`), leaves stock as one delivery; receipts go by email or
-text from the register.
+text from the register. A refund is a negative sale with a reason, linked to the original: cashiers refund the
+sales of their own open session, managers (`pos.refund_any`) any sale. Quantities are typed on the register for
+weighed goods.
 
 ## Demo data (RFC 0008 §5.8)
 
