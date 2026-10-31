@@ -269,7 +269,8 @@ and expiry dates; amendments applied once accepted; presentations whose discrepa
 their maturity, drawn within the LC and paid until it is settled; limits per bank and currency that issuing never
 passes; alerts on shipment and expiry dates (`GET /api/v1/trade/alerts`). Install it with
 `shutro-erp apps install trade_finance`. With Accounting, `trade_finance_account` posts LC margins (and their
-release), payments and bank charges (expensed) in the LC's bank journal.
+release), payments and bank charges (expensed) in the LC's bank journal. Shipments are recorded against an LC;
+with Purchase or Sales, an LC is opened from its order (`trade_finance_purchase`, `trade_finance_sale`).
 
 ## Demo data (RFC 0008 §5.8)
 

@@ -728,5 +728,20 @@ reviewed steps.
   expensed, the 100,000 payment on the vendor's payable with the vendor, the LC settled and the margin released (1160
   back to 0, the bank −101,500); an export paid into the bank against the customer's receivable; an LC without its
   journal taking the company's.
-- **Next** (step 3): LCs linked to purchase and sales orders, shipments against an LC, alerts on the home page.
+- **Then** (step 3): LCs linked to purchase and sales orders, shipments against an LC, alerts on the home page.
+
+## Implementation notes (2026-10-31): Trade Finance, step 3 — shipments and orders (complete)
+
+- **Shipments** (`trade.lc.shipment`, Trade Finance › Shipments and on the LC): the date shipped, the bill of lading
+  or airway bill, the vessel or flight, the ports, when it arrives, the value. Refused after the latest shipment
+  date, beyond what the LC allows (its amount and tolerance), or as a second shipment when partial shipments are not
+  allowed (UCP 600 art. 31); the LC shows what is shipped.
+- **`trade_finance_purchase`** and **`trade_finance_sale`** (proposed with Purchase or Sales): an LC names its
+  purchase or sales order; choosing it fills the direction (import / export), the counterparty, the currency, the
+  amount (the order's total) and the source document; the order's form lists its LCs.
+- **Tests**: a shipment after the latest date refused, a second one refused without partial shipments, two allowed
+  with them, beyond the amount refused; an LC from a purchase order (and from a sales order) filled from it and listed
+  on it; the bridges proposed.
+- **Trade Finance complete** (steps 1–3). Later: alerts on the home page and by notification, back-to-back LCs, the
+  bank's SWIFT messages (MT700 / MT707) as documents.
 
