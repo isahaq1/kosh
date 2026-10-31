@@ -11,7 +11,7 @@ import { defineModule } from '@kosh/modules-sdk';
 import { product } from '@kosh/product';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import { type Id, orm } from '@kosh/server/orm';
-import { action, field, form, kanban, list, search } from '@kosh/views';
+import { action, field, form, kanban, list, search, stat } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import { stockDemo } from './demo.js';
 import {
@@ -588,6 +588,24 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
   },
   // Products show what they have in stock, where, and what is reserved.
   viewExtensions: [
+    {
+      view: 'product.product.form',
+      operations: [
+        {
+          append: 'related',
+          nodes: [
+            stat({
+              id: 'product_on_hand',
+              label: 'On hand',
+              model: 'stock.quant',
+              where: { product: { $record: 'id' }, 'location.usage': 'internal' },
+              measure: { sum: 'quantity' },
+              action: 'stockroom.action_stock',
+            }),
+          ],
+        },
+      ],
+    },
     {
       view: 'product.product.form',
       operations: [

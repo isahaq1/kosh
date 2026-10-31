@@ -211,6 +211,31 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
   },
   viewExtensions: [
     {
+      view: 'product.product.form',
+      operations: [
+        {
+          append: 'related',
+          nodes: [
+            stat({
+              id: 'product_sold',
+              label: 'Sold',
+              model: SaleOrderLine,
+              where: { product: { $record: 'id' }, 'order.state': { in: ['sale', 'done'] } },
+              measure: { sum: 'quantity' },
+            }),
+            stat({
+              id: 'product_revenue',
+              label: 'Sales',
+              model: SaleOrderLine,
+              where: { product: { $record: 'id' }, 'order.state': { in: ['sale', 'done'] } },
+              measure: { sum: 'subtotal' },
+              tone: 'success',
+            }),
+          ],
+        },
+      ],
+    },
+    {
       view: 'res.partner.form',
       operations: [
         {

@@ -4,6 +4,7 @@
  * categories, units of measure and taxes. Sales and Purchase sell and buy them.
  */
 import { defineModule } from '@kosh/modules-sdk';
+import { reporting } from '@kosh/reporting';
 import { base } from '@kosh/server';
 import { storage } from '@kosh/storage';
 import { action, form, kanban, list, search } from '@kosh/views';
@@ -24,7 +25,7 @@ export const product: ReturnType<typeof defineModule> = defineModule({
   shutro: productShutro,
   kosh: '^0.1.0',
   hooks: { demo: productDemo },
-  depends: [base, storage],
+  depends: [base, storage, reporting],
   app: {
     code: 'product',
     label: 'Products',
@@ -36,6 +37,63 @@ export const product: ReturnType<typeof defineModule> = defineModule({
   accessLevels: {
     user: { label: 'User', groups: ['product.user'] },
     manager: { label: 'Manager', groups: ['product.manager'], implies: ['user'] },
+  },
+  // The Overview (RFC 0022 step 2): the catalogue at a glance.
+  overview: {
+    cards: [
+      {
+        id: 'products_all',
+        title: 'Products',
+        kind: 'kpi',
+        model: 'product.product',
+        measure: 'count',
+        w: 3,
+      },
+      {
+        id: 'goods',
+        title: 'Goods',
+        kind: 'kpi',
+        model: 'product.product',
+        measure: 'count',
+        filter: { kind: 'goods' },
+        w: 3,
+      },
+      {
+        id: 'services',
+        title: 'Services',
+        kind: 'kpi',
+        model: 'product.product',
+        measure: 'count',
+        filter: { kind: 'service' },
+        w: 3,
+      },
+      {
+        id: 'average_price',
+        title: 'Average sales price',
+        kind: 'kpi',
+        model: 'product.product',
+        measure: 'avg:listPrice',
+        w: 3,
+      },
+      {
+        id: 'by_category',
+        title: 'By category',
+        kind: 'chart',
+        model: 'product.product',
+        measure: 'count',
+        groupBy: 'category',
+        chart: 'pie',
+        w: 6,
+      },
+      {
+        id: 'priciest',
+        title: 'Highest sales prices',
+        kind: 'list',
+        model: 'product.product',
+        measure: 'sum:listPrice',
+        w: 6,
+      },
+    ],
   },
   actions: {
     'product.action_products': action(ProductProduct, {
@@ -98,6 +156,8 @@ export const product: ReturnType<typeof defineModule> = defineModule({
     }),
     'product.product.form': form(ProductProduct, (k) => ({
       sheet: [
+        // Sold, bought, on hand: Sales, Purchase and Stockroom append their tiles (RFC 0022 §3.1).
+        k.stats('related', []),
         k.group('identity', [
           { field: 'image', widget: 'image' },
           'name',

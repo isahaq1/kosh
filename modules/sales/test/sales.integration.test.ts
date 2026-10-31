@@ -349,3 +349,14 @@ test('the next step (RFC 0022 §3.4): Confirm refused by its guard with the mess
   });
   expect((await call('GET', '/api/v1/models/sale.order/999999/next', 'rahim')).status).toBe(404);
 });
+
+test('the product form gets the Sold and Sales tiles from Sales (RFC 0022 step 2)', async () => {
+  const form = await call('GET', '/api/v1/views?model=product.product&type=form', 'rahim');
+  expect(form.status, JSON.stringify(form.json)).toBe(200);
+  const [row] = form.json.view.sheet;
+  expect(row.kind).toBe('stats');
+  expect(row.children.map((c: { id: string }) => c.id)).toEqual([
+    'product_sold',
+    'product_revenue',
+  ]);
+});

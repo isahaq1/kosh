@@ -236,3 +236,13 @@ step 3 last. Performance budgets apply (an overview with eight tiles < 300 ms se
 - Tests: Contacts on real PostgreSQL (tags by managers only, one name once, set on a contact and searched; the
   overview to a user; the action's kanban and map; the Tags menu to managers only). E2E (apps): the overview, a
   tag made and set on a contact, its chip on the board, the map view.
+
+## Implementation notes (2026-10-31): step 2 — Products
+
+- **Tiles on the product** (`related`, empty in Products itself): Sales appends *Sold* (the quantity of confirmed
+  order lines) and *Sales* (their subtotal), Purchase *Bought*, Stockroom *On hand* (the quants in internal
+  locations, opening the Stock list). Filters through relations (`order.state`, `location.usage`).
+- **The Overview**: products, goods, services, the average sales price, by category, the highest sales prices.
+  Products now depends on `reporting`. Pictures, the board with them and the avatar on the list came with 3.3.
+- Tests: Products on real PostgreSQL (the overview to a user; the empty row served on the form); Sales' test
+  checks the tiles it appends. E2E (apps): the overview; a product's *Sold*, *Bought* and *On hand* tiles.
