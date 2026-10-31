@@ -18,7 +18,7 @@ import { permissions } from '@kosh/permissions';
 import { product } from '@kosh/product';
 import { reporting } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
-import { action, field, form, list, pivot, search } from '@kosh/views';
+import { action, field, form, list, pivot, search, stat } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import {
   ChartInstalledError,
@@ -574,6 +574,53 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
   ],
   // Which withholdings apply to a contact (VDS, TDS), next to their roles (RFC 0016).
   viewExtensions: [
+    // The contact's invoices, what they still owe, and their bills (RFC 0022 §3.1).
+    {
+      view: 'res.partner.form',
+      operations: [
+        {
+          append: 'related',
+          nodes: [
+            stat({
+              id: 'customer_invoices',
+              label: 'Invoices',
+              model: AccountMove,
+              where: {
+                partner: { $record: 'id' },
+                kind: { in: ['out_invoice', 'out_refund', 'out_debit'] },
+                state: 'posted',
+              },
+              action: 'accounting.action_customer_invoices',
+            }),
+            stat({
+              id: 'customer_due',
+              label: 'Due from them',
+              model: AccountMove,
+              where: {
+                partner: { $record: 'id' },
+                kind: { in: ['out_invoice', 'out_debit'] },
+                state: 'posted',
+                paymentState: { ne: 'paid' },
+              },
+              measure: { sum: 'amountResidual' },
+              action: 'accounting.action_customer_invoices',
+              tone: 'warning',
+            }),
+            stat({
+              id: 'vendor_bills',
+              label: 'Bills',
+              model: AccountMove,
+              where: {
+                partner: { $record: 'id' },
+                kind: { in: ['in_invoice', 'in_refund', 'in_debit'] },
+                state: 'posted',
+              },
+              action: 'accounting.action_vendor_bills',
+            }),
+          ],
+        },
+      ],
+    },
     // A tax's accounts, reverse charge's payable account, and its components (CGST / SGST / IGST).
     {
       view: 'account.tax.form',

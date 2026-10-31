@@ -7,7 +7,7 @@
 import { accounting } from '@kosh/accounting';
 import { defineModule } from '@kosh/modules-sdk';
 import { purchase } from '@kosh/purchase';
-import { field } from '@kosh/views';
+import { field, stat } from '@kosh/views';
 import { purchaseAccountDemo } from './demo.js';
 import { purchaseAccountShutro } from './module.js';
 
@@ -23,6 +23,31 @@ export const purchaseAccount: ReturnType<typeof defineModule> = defineModule({
     user: { label: 'Bill purchase orders', groups: ['purchase_account.user'] },
   },
   viewExtensions: [
+    {
+      view: 'purchase.order.form',
+      operations: [
+        {
+          append: 'related',
+          nodes: [
+            stat({
+              id: 'order_bills',
+              label: 'Bills',
+              model: 'account.move',
+              where: { purchaseOrder: { $record: 'id' } },
+              action: 'accounting.action_vendor_bills',
+            }),
+            stat({
+              id: 'order_billed',
+              label: 'Billed total',
+              model: 'account.move',
+              where: { purchaseOrder: { $record: 'id' }, state: 'posted' },
+              measure: { sum: 'amountTotal' },
+              action: 'accounting.action_vendor_bills',
+            }),
+          ],
+        },
+      ],
+    },
     {
       view: 'purchase.order.form',
       operations: [

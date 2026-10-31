@@ -9,7 +9,7 @@ import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
 import { permissions } from '@kosh/permissions';
 import { product } from '@kosh/product';
-import { action, form, kanban, list, search } from '@kosh/views';
+import { action, form, kanban, list, search, stat } from '@kosh/views';
 import { purchaseDemo } from './demo.js';
 import { PurchaseOrder, purchaseShutro } from './module.js';
 
@@ -72,6 +72,33 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
           name: 'Purchase director',
           condition: { amountTotal: { gt: '1000000' } },
           approverRole: 'purchase.director',
+        },
+      ],
+    },
+  ],
+  viewExtensions: [
+    {
+      view: 'res.partner.form',
+      operations: [
+        {
+          append: 'related',
+          nodes: [
+            stat({
+              id: 'purchase_orders',
+              label: 'Purchase orders',
+              model: PurchaseOrder,
+              where: { partner: { $record: 'id' }, state: { in: ['purchase', 'done'] } },
+              action: 'purchase.action_orders',
+            }),
+            stat({
+              id: 'purchase_spend',
+              label: 'Purchases',
+              model: PurchaseOrder,
+              where: { partner: { $record: 'id' }, state: { in: ['purchase', 'done'] } },
+              measure: { sum: 'amountTotal' },
+              action: 'purchase.action_orders',
+            }),
+          ],
         },
       ],
     },
@@ -163,6 +190,8 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
         ],
       },
       sheet: [
+        // Bills and receipts: the bridges append their tiles (RFC 0022 §3.1).
+        k.stats('related', []),
         k.group('vendor', ['partner', 'partnerReference', 'currency']),
         k.group('dates', ['name', 'dateOrder', 'datePlanned', 'user', 'origin']),
         k.lines(

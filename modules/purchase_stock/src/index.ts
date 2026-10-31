@@ -11,7 +11,7 @@ import { purchase } from '@kosh/purchase';
 import type { ModuleContext } from '@kosh/server';
 import type { Worker } from '@kosh/server/orm';
 import { stock } from '@kosh/stock';
-import { field } from '@kosh/views';
+import { field, stat } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import { createReceiptFor, purchaseStockShutro } from './module.js';
 
@@ -63,6 +63,23 @@ export const purchaseStock: ReturnType<typeof defineModule> = defineModule({
     user: { label: 'Purchase with receipts', groups: ['purchase_stock.user'] },
   },
   viewExtensions: [
+    {
+      view: 'purchase.order.form',
+      operations: [
+        {
+          append: 'related',
+          nodes: [
+            stat({
+              id: 'order_receipts',
+              label: 'Receipts',
+              model: 'stock.picking',
+              where: { purchaseOrder: { $record: 'id' } },
+              action: 'stockroom.action_receipts',
+            }),
+          ],
+        },
+      ],
+    },
     {
       view: 'purchase.order.form',
       operations: [

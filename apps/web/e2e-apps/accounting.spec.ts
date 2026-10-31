@@ -37,6 +37,13 @@ test('a confirmed sales order is invoiced from its form; the invoice is a draft 
   await expect(page.getByRole('cell', { name: 'Steel beam' }).first()).toBeVisible();
   await page.getByRole('button', { name: 'Create invoice' }).click();
   await expect(page.getByText('Invoiced', { exact: true })).toBeVisible();
+  // The order's related records as tiles (RFC 0022 §3.1): one invoice, which the tile opens, filtered.
+  const related = page.getByRole('region', { name: 'related' });
+  await expect(related.getByText('Invoices', { exact: true })).toBeVisible();
+  await expect(related.getByRole('button', { name: /^Invoices 1$/ })).toBeVisible();
+  await related.getByRole('button', { name: /^Invoices 1$/ }).click();
+  await expect(page).toHaveURL(/accounting\.action_customer_invoices\?.*q=/);
+  await expect(page.getByRole('row', { name: /Bengal Steel/ })).toHaveCount(1);
   await page.goto('/accounting/a/accounting.action_customer_invoices');
   const rows = page.getByRole('row', { name: /Bengal Steel/ });
   await expect(rows).toHaveCount(2); // the seeded posted one, and the draft from the order

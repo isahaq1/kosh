@@ -11,7 +11,7 @@ import { sales } from '@kosh/sales';
 import type { ModuleContext } from '@kosh/server';
 import type { Worker } from '@kosh/server/orm';
 import { stock } from '@kosh/stock';
-import { field } from '@kosh/views';
+import { field, stat } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import { createDeliveryFor, saleStockShutro } from './module.js';
 
@@ -67,6 +67,18 @@ export const saleStock: ReturnType<typeof defineModule> = defineModule({
       view: 'sale.order.form',
       operations: [
         { append: 'dates', nodes: [field({ field: 'deliveryState', id: 'delivery_state' })] },
+        {
+          append: 'related',
+          nodes: [
+            stat({
+              id: 'order_deliveries',
+              label: 'Deliveries',
+              model: 'stock.picking',
+              where: { saleOrder: { $record: 'id' } },
+              action: 'stockroom.action_deliveries',
+            }),
+          ],
+        },
       ],
     },
     {

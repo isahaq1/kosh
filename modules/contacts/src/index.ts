@@ -77,6 +77,8 @@ export const contacts: ReturnType<typeof defineModule> = defineModule({
     }),
     'res.partner.form': form(ResPartner, (k) => ({
       sheet: [
+        // What relates to this contact: Sales, Purchase and Accounting append their tiles (RFC 0022 §3.1).
+        k.stats('related', []),
         k.group('identity', ['name', 'isCompany', 'parent', 'taxId']),
         k.group('reach', ['email', 'phone', 'mobile', 'website']),
         k.notebook('more', [

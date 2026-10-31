@@ -7,7 +7,7 @@
 import { accounting } from '@kosh/accounting';
 import { defineModule } from '@kosh/modules-sdk';
 import { sales } from '@kosh/sales';
-import { field } from '@kosh/views';
+import { field, stat } from '@kosh/views';
 import { saleAccountDemo } from './demo.js';
 import { saleAccountShutro } from './module.js';
 
@@ -39,6 +39,27 @@ export const saleAccount: ReturnType<typeof defineModule> = defineModule({
           ],
         },
         { append: 'dates', nodes: [field({ field: 'invoiceState', id: 'invoice_state' })] },
+        {
+          append: 'related',
+          nodes: [
+            stat({
+              id: 'order_invoices',
+              label: 'Invoices',
+              model: 'account.move',
+              where: { saleOrder: { $record: 'id' } },
+              action: 'accounting.action_customer_invoices',
+            }),
+            stat({
+              id: 'order_invoiced',
+              label: 'Invoiced total',
+              model: 'account.move',
+              where: { saleOrder: { $record: 'id' }, state: 'posted' },
+              measure: { sum: 'amountTotal' },
+              action: 'accounting.action_customer_invoices',
+              tone: 'success',
+            }),
+          ],
+        },
       ],
     },
     {

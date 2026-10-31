@@ -8,7 +8,7 @@ import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
 import { product } from '@kosh/product';
-import { action, form, kanban, list, search } from '@kosh/views';
+import { action, form, kanban, list, search, stat } from '@kosh/views';
 import { salesDemo } from './demo.js';
 import { SaleOrder, SaleOrderLine, salesShutro } from './module.js';
 
@@ -124,6 +124,34 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
       },
     },
   ],
+  viewExtensions: [
+    {
+      view: 'res.partner.form',
+      operations: [
+        {
+          append: 'related',
+          nodes: [
+            stat({
+              id: 'sale_orders',
+              label: 'Sales orders',
+              model: SaleOrder,
+              where: { partner: { $record: 'id' }, state: { in: ['sale', 'done'] } },
+              action: 'sales.action_orders',
+            }),
+            stat({
+              id: 'sale_revenue',
+              label: 'Sales',
+              model: SaleOrder,
+              where: { partner: { $record: 'id' }, state: { in: ['sale', 'done'] } },
+              measure: { sum: 'amountTotal' },
+              action: 'sales.action_orders',
+              tone: 'success',
+            }),
+          ],
+        },
+      ],
+    },
+  ],
   actions: {
     'sales.action_quotations': action(SaleOrder, {
       label: 'Quotations',
@@ -195,6 +223,8 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
         ],
       },
       sheet: [
+        // Invoices, deliveries, tasks: the bridges append their tiles (RFC 0022 §3.1).
+        k.stats('related', []),
         k.group('customer', ['partner', 'clientReference', 'currency']),
         k.group('dates', ['name', 'dateOrder', 'validityDate', 'user']),
         k.lines(
