@@ -50,6 +50,9 @@ importers:
       '@kosh/event':
         specifier: workspace:*
         version: link:../../modules/event
+      '@kosh/event_account':
+        specifier: workspace:*
+        version: link:../../modules/event_account
       '@kosh/hr':
         specifier: workspace:*
         version: link:../../modules/hr
@@ -308,6 +311,9 @@ importers:
       '@kosh/event':
         specifier: workspace:*
         version: link:../../modules/event
+      '@kosh/event_account':
+        specifier: workspace:*
+        version: link:../../modules/event_account
       '@kosh/hr':
         specifier: workspace:*
         version: link:../../modules/hr
@@ -577,6 +583,9 @@ importers:
       '@kosh/contacts':
         specifier: workspace:*
         version: link:../contacts
+      '@kosh/mail':
+        specifier: workspace:*
+        version: link:../../packages/mail
       '@kosh/messaging':
         specifier: workspace:*
         version: link:../../packages/messaging
@@ -617,6 +626,46 @@ importers:
       react-i18next:
         specifier: ^17.0.21
         version: 17.0.21(i18next@26.4.7(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
+
+  modules/event_account:
+    dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../accounting
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/event':
+        specifier: workspace:*
+        version: link:../event
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/mail':
+        specifier: workspace:*
+        version: link:../../packages/mail
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
 
   modules/hr:
     dependencies:
@@ -1726,6 +1775,9 @@ importers:
       '@kosh/event':
         specifier: workspace:*
         version: link:../../modules/event
+      '@kosh/event_account':
+        specifier: workspace:*
+        version: link:../../modules/event_account
       '@kosh/hr':
         specifier: workspace:*
         version: link:../../modules/hr

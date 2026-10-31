@@ -8,6 +8,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { contacts } from '@kosh/contacts';
+import { createMemoryMailer } from '@kosh/mail';
 import { messaging } from '@kosh/messaging';
 import { permissions } from '@kosh/permissions';
 import { reporting } from '@kosh/reporting';
@@ -26,7 +27,11 @@ import { type Driver, orm, pg } from '@kosh/server/orm';
 import { settings } from '@kosh/settings';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { event } from '../src/index.js';
+import { eventMailers, eventModule } from '../src/index.js';
+
+const mailer = createMemoryMailer();
+// The emails are drained by the tests, sent to memory.
+const event = eventModule({ mailer, workers: false });
 
 const PASSWORD = 'correct horse battery';
 const catalogue = [base, settings, contacts, messaging, permissions, reporting, event];
@@ -244,6 +249,53 @@ test('sessions happen during their event; access', async () => {
       .status,
   ).toBe(403);
   expect((await call('GET', R, 'bob')).status).toBe(403);
+});
+
+test('emails: the confirmation with the code, once; the thanks to those who came when the event ends', async () => {
+  const [confirmations, thanks] = eventMailers({ shutro: host.server.shutro }, mailer);
+  if (confirmations === undefined || thanks === undefined) throw new Error('two workers');
+  await confirmations.drain(); // the earlier registrations' (no email)
+  mailer.sent.length = 0;
+  const workshop = (
+    await call('POST', E, 'maria', {
+      name: 'Workshop',
+      dateBegin: `${day(40)}T03:00:00Z`,
+      dateEnd: `${day(40)}T06:00:00Z`,
+    })
+  ).json.id as number;
+  await call('POST', `${E}/${workshop}/transitions/publish`, 'maria');
+  const mina = (
+    await call('POST', R, 'rahim', {
+      event: workshop,
+      name: 'Mina',
+      email: 'mina@example.test',
+      lang: 'bn',
+    })
+  ).json.id as number;
+  const silent = (await call('POST', R, 'rahim', { event: workshop, name: 'No email' })).json
+    .id as number;
+  await run(mina, 'confirm');
+  await run(silent, 'confirm');
+  expect(await confirmations.drain()).toBe(2);
+  expect(mailer.sent.map((m) => m.to)).toEqual(['mina@example.test']);
+  const { code } = (await call('GET', `${R}/${mina}`, 'rahim')).json;
+  expect(mailer.sent[0]?.subject).toContain('Workshop');
+  expect(mailer.sent[0]?.text).toContain(code);
+  expect(mailer.sent[0]?.text).toContain('চেক-ইন কোড'); // in Bangla
+  expect((await call('GET', `${R}/${mina}`, 'rahim')).json.confirmationSentAt).toBeTruthy();
+  // Once: the event delivered again sends nothing more.
+  await host.server.shutro.bootstrap({ reason: 'test: replay', company }, (env) =>
+    env.emit('event.registration.confirmed', { id: mina }),
+  );
+  await confirmations.drain();
+  expect(mailer.sent).toHaveLength(1);
+
+  await call('POST', '/api/v1/eventhub/checkin', 'rahim', { code });
+  await call('POST', `${E}/${workshop}/transitions/close`, 'maria');
+  expect(await thanks.drain()).toBe(1);
+  expect(mailer.sent).toHaveLength(2); // only Mina came
+  expect(mailer.sent[1]).toMatchObject({ to: 'mina@example.test' });
+  expect(mailer.sent[1]?.text).toContain('ধন্যবাদ');
 });
 
 test('the demo data loads', async () => {

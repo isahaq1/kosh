@@ -7,6 +7,7 @@
  * - `POST /api/v1/eventhub/checkin`   `{ code }`: the attendee checked in, once (a phone scanning the QR sends it)
  */
 import { contacts } from '@kosh/contacts';
+import { type Mailer, mailerFromEnv } from '@kosh/mail';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
 import { reporting } from '@kosh/reporting';
@@ -14,8 +15,10 @@ import { HttpProblem, type ModuleContext } from '@kosh/server';
 import { action, calendar, form, kanban, list, search } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import { eventDemo } from './demo.js';
+import { CONFIRMED, ENDED, eventMailers } from './mails.js';
 import { EventEvent, EventRegistration, EventSession, EventTicket, eventShutro } from './module.js';
 
+export { CONFIRMED, ENDED, eventMailers } from './mails.js';
 export {
   EventEvent,
   EventRegistration,
@@ -72,187 +75,219 @@ function registerEventRoutes({ app }: ModuleContext): void {
   });
 }
 
-export const event: ReturnType<typeof defineModule> = defineModule({
-  shutro: eventShutro,
-  kosh: '^0.1.0',
-  hooks: { demo: eventDemo },
-  depends: [contacts, messaging, reporting],
-  // The ticket and badge: the attendee, the event, and the QR the door scans.
-  documents: [
-    {
-      key: 'ticket',
-      name: 'Ticket and badge',
-      model: 'event.registration',
-      layout: {
-        paper: 'A4',
-        header: '{{company.name}}',
-        blocks: [
-          { kind: 'heading', id: 'event_name', text: '{{event.name}}', level: 1 },
-          { kind: 'heading', id: 'attendee', text: '{{name}}', level: 2 },
-          {
-            kind: 'fields',
-            id: 'details',
-            items: [
-              { label: 'Ticket', bind: 'ticket.name' },
-              { label: 'Starts', bind: 'event.dateBegin' },
-              { label: 'Venue', bind: 'event.venue' },
-              { label: 'Code', bind: 'code' },
-            ],
-          },
-          { kind: 'qr', id: 'qr', bind: 'code', size: 45, label: 'Show this at the door' },
-        ],
+export interface EventOptions {
+  /** Who sends the emails; default: SMTP from the environment (`SMTP_URL`), none without it. */
+  readonly mailer?: Mailer | undefined;
+  /** Start the email workers (default: unless `KOSH_SCHEDULES=off`). */
+  readonly workers?: boolean | undefined;
+}
+
+/** Event Hub with explicit options (tests: a memory mailer, workers drained by hand). */
+export function eventModule(options: EventOptions = {}): ReturnType<typeof defineModule> {
+  const mailer = 'mailer' in options ? options.mailer : mailerFromEnv();
+  return defineModule({
+    shutro: eventShutro,
+    kosh: '^0.1.0',
+    hooks: { demo: eventDemo },
+    depends: [contacts, messaging, reporting],
+    // The ticket and badge: the attendee, the event, and the QR the door scans.
+    documents: [
+      {
+        key: 'ticket',
+        name: 'Ticket and badge',
+        model: 'event.registration',
+        layout: {
+          paper: 'A4',
+          header: '{{company.name}}',
+          blocks: [
+            { kind: 'heading', id: 'event_name', text: '{{event.name}}', level: 1 },
+            { kind: 'heading', id: 'attendee', text: '{{name}}', level: 2 },
+            {
+              kind: 'fields',
+              id: 'details',
+              items: [
+                { label: 'Ticket', bind: 'ticket.name' },
+                { label: 'Starts', bind: 'event.dateBegin' },
+                { label: 'Venue', bind: 'event.venue' },
+                { label: 'Code', bind: 'code' },
+              ],
+            },
+            { kind: 'qr', id: 'qr', bind: 'code', size: 45, label: 'Show this at the door' },
+          ],
+        },
+      },
+    ],
+    app: {
+      code: 'eventhub',
+      label: 'Event Hub',
+      icon: 'eventhub',
+      sequence: 41,
+      category: 'Marketing',
+      summary: 'Events, tickets and seats, waiting lists, check-in by QR',
+    },
+    accessLevels: {
+      user: { label: 'User (registrations, check-in)', groups: ['event.user'] },
+      manager: {
+        label: 'Manager (events, tickets, everything)',
+        groups: ['event.manager'],
+        implies: ['user'],
       },
     },
-  ],
-  app: {
-    code: 'eventhub',
-    label: 'Event Hub',
-    icon: 'eventhub',
-    sequence: 41,
-    category: 'Marketing',
-    summary: 'Events, tickets and seats, waiting lists, check-in by QR',
-  },
-  accessLevels: {
-    user: { label: 'User (registrations, check-in)', groups: ['event.user'] },
-    manager: {
-      label: 'Manager (events, tickets, everything)',
-      groups: ['event.manager'],
-      implies: ['user'],
+    events: [
+      { topic: CONFIRMED, model: 'event.registration', label: 'Registration confirmed' },
+      { topic: ENDED, model: 'event.event', label: 'Event ended' },
+    ],
+    routes: (context: ModuleContext) => {
+      registerEventRoutes(context);
+      if (!(options.workers ?? process.env['KOSH_SCHEDULES'] !== 'off')) return;
+      const workers = eventMailers(
+        {
+          shutro: context.shutro,
+          log: (message, error) => context.app.log.error({ err: error }, message),
+        },
+        mailer,
+      );
+      for (const w of workers) w.start();
+      context.app.addHook('onClose', async () => {
+        for (const w of workers) await w.stop();
+      });
     },
-  },
-  routes: (context: ModuleContext) => registerEventRoutes(context),
-  actions: {
-    'eventhub.action_events': action(EventEvent, {
-      label: 'Events',
-      views: ['kanban', 'list', 'calendar', 'form'],
-    }),
-    'eventhub.action_registrations': action(EventRegistration, {
-      label: 'Registrations',
-      views: ['list', 'form'],
-    }),
-  },
-  menus: [
-    { id: 'eventhub.root', label: 'Event Hub', app: 'eventhub' },
-    {
-      id: 'eventhub.events',
-      parent: 'eventhub.root',
-      label: 'Events',
-      action: 'eventhub.action_events',
-      sequence: 1,
+    actions: {
+      'eventhub.action_events': action(EventEvent, {
+        label: 'Events',
+        views: ['kanban', 'list', 'calendar', 'form'],
+      }),
+      'eventhub.action_registrations': action(EventRegistration, {
+        label: 'Registrations',
+        views: ['list', 'form'],
+      }),
     },
-    {
-      id: 'eventhub.registrations',
-      parent: 'eventhub.root',
-      label: 'Registrations',
-      action: 'eventhub.action_registrations',
-      sequence: 2,
-    },
-  ],
-  views: {
-    'event.event.kanban': kanban(EventEvent, {
-      groupBy: 'state',
-      card: { title: 'name', subtitle: 'venue', footer: ['dateBegin', 'seatsAvailable'] },
-    }),
-    'event.event.list': list(EventEvent, {
-      columns: [
-        'name',
-        'dateBegin',
-        'venue',
-        'seatsMax',
-        'seatsTaken',
-        'attended',
-        { field: 'state', widget: 'badge' },
-      ],
-    }),
-    'event.event.calendar': calendar(EventEvent, {
-      dateStart: 'dateBegin',
-      dateStop: 'dateEnd',
-      title: 'name',
-      mode: 'month',
-    }),
-    'event.event.form': form(EventEvent, (k) => ({
-      header: {
-        statusbar: 'state',
-        buttons: [
-          k.button('publish', { primary: true, label: 'Open registrations' }),
-          k.button('close', { label: 'End' }),
-          k.button('cancel', { label: 'Cancel', confirm: 'Cancel this event?' }),
-          k.button('redraft', { label: 'Back to draft' }),
-        ],
+    menus: [
+      { id: 'eventhub.root', label: 'Event Hub', app: 'eventhub' },
+      {
+        id: 'eventhub.events',
+        parent: 'eventhub.root',
+        label: 'Events',
+        action: 'eventhub.action_events',
+        sequence: 1,
       },
-      sheet: [
-        k.group('main', ['name', 'dateBegin', 'dateEnd', 'venue', 'organizer']),
-        k.group('seats', [
+      {
+        id: 'eventhub.registrations',
+        parent: 'eventhub.root',
+        label: 'Registrations',
+        action: 'eventhub.action_registrations',
+        sequence: 2,
+      },
+    ],
+    views: {
+      'event.event.kanban': kanban(EventEvent, {
+        groupBy: 'state',
+        card: { title: 'name', subtitle: 'venue', footer: ['dateBegin', 'seatsAvailable'] },
+      }),
+      'event.event.list': list(EventEvent, {
+        columns: [
+          'name',
+          'dateBegin',
+          'venue',
           'seatsMax',
           'seatsTaken',
-          'seatsAvailable',
           'attended',
-          'waitingList',
-          'currency',
-        ]),
-        k.component('checkin', 'event.CheckIn'),
-        k.lines('tickets', [
-          { field: 'name', id: 'ticket_name' },
-          { field: 'price', id: 'ticket_price' },
-          { field: 'seatsMax', id: 'ticket_seats' },
-          { field: 'saleEnd', id: 'ticket_sale_end' },
-          { field: 'seatsTaken', id: 'ticket_sold' },
-        ]),
-        k.lines('sessions', [
-          { field: 'name', id: 'session_name' },
-          { field: 'dateBegin', id: 'session_begin' },
-          { field: 'dateEnd', id: 'session_end' },
-          { field: 'room', id: 'session_room' },
-          { field: 'speaker', id: 'session_speaker' },
-        ]),
-        k.group('about', ['description'], { columns: 1 }),
-      ],
-      chatter: true,
-    })),
-    'event.registration.list': list(EventRegistration, {
-      columns: ['name', 'event', 'ticket', 'email', 'code', { field: 'state', widget: 'badge' }],
-    }),
-    'event.registration.form': form(EventRegistration, (k) => ({
-      header: {
-        statusbar: 'state',
-        buttons: [
-          k.button('confirm', { primary: true, label: 'Confirm' }),
-          k.button('wait', { label: 'Waiting list' }),
-          k.button('attend', { primary: true, label: 'Check in' }),
-          k.button('cancel', { label: 'Cancel' }),
+          { field: 'state', widget: 'badge' },
         ],
-      },
-      sheet: [
-        k.group('main', ['event', 'ticket', 'name', 'email', 'phone', 'partner']),
-        k.group('ticket_info', ['code', 'price', 'checkedInAt']),
-      ],
-      chatter: true,
-    })),
-    'event.ticket.list': list(EventTicket, {
-      columns: ['event', 'name', 'price', 'seatsMax', 'seatsTaken'],
-    }),
-    'event.session.list': list(EventSession, {
-      columns: ['event', 'name', 'dateBegin', 'dateEnd', 'room', 'speaker'],
-    }),
-  },
-  search: {
-    'event.event': search(EventEvent, {
-      fields: ['name', 'venue'],
-      filters: {
-        open: { label: 'Open for registration', domain: { state: 'published' } },
-      },
-      groupBy: ['state', 'organizer'],
-    }),
-    'event.registration': search(EventRegistration, {
-      fields: ['name', 'email', 'code', 'event.name'],
-      filters: {
-        confirmed: { label: 'Confirmed', domain: { state: 'confirmed' }, group: 'state' },
-        waiting: { label: 'Waiting list', domain: { state: 'waiting' }, group: 'state' },
-        attended: { label: 'Checked in', domain: { state: 'attended' }, group: 'state' },
-      },
-      groupBy: ['event', 'ticket', 'state'],
-    }),
-    'event.ticket': search(EventTicket, { fields: ['name', 'event.name'] }),
-    'event.session': search(EventSession, { fields: ['name', 'speaker', 'event.name'] }),
-  },
-});
+      }),
+      'event.event.calendar': calendar(EventEvent, {
+        dateStart: 'dateBegin',
+        dateStop: 'dateEnd',
+        title: 'name',
+        mode: 'month',
+      }),
+      'event.event.form': form(EventEvent, (k) => ({
+        header: {
+          statusbar: 'state',
+          buttons: [
+            k.button('publish', { primary: true, label: 'Open registrations' }),
+            k.button('close', { label: 'End' }),
+            k.button('cancel', { label: 'Cancel', confirm: 'Cancel this event?' }),
+            k.button('redraft', { label: 'Back to draft' }),
+          ],
+        },
+        sheet: [
+          k.group('main', ['name', 'dateBegin', 'dateEnd', 'venue', 'organizer']),
+          k.group('seats', [
+            'seatsMax',
+            'seatsTaken',
+            'seatsAvailable',
+            'attended',
+            'waitingList',
+            'currency',
+          ]),
+          k.component('checkin', 'event.CheckIn'),
+          k.lines('tickets', [
+            { field: 'name', id: 'ticket_name' },
+            { field: 'price', id: 'ticket_price' },
+            { field: 'seatsMax', id: 'ticket_seats' },
+            { field: 'saleEnd', id: 'ticket_sale_end' },
+            { field: 'seatsTaken', id: 'ticket_sold' },
+          ]),
+          k.lines('sessions', [
+            { field: 'name', id: 'session_name' },
+            { field: 'dateBegin', id: 'session_begin' },
+            { field: 'dateEnd', id: 'session_end' },
+            { field: 'room', id: 'session_room' },
+            { field: 'speaker', id: 'session_speaker' },
+          ]),
+          k.group('about', ['description'], { columns: 1 }),
+        ],
+        chatter: true,
+      })),
+      'event.registration.list': list(EventRegistration, {
+        columns: ['name', 'event', 'ticket', 'email', 'code', { field: 'state', widget: 'badge' }],
+      }),
+      'event.registration.form': form(EventRegistration, (k) => ({
+        header: {
+          statusbar: 'state',
+          buttons: [
+            k.button('confirm', { primary: true, label: 'Confirm' }),
+            k.button('wait', { label: 'Waiting list' }),
+            k.button('attend', { primary: true, label: 'Check in' }),
+            k.button('cancel', { label: 'Cancel' }),
+          ],
+        },
+        sheet: [
+          k.group('main', ['event', 'ticket', 'name', 'email', 'phone', 'partner', 'lang']),
+          k.group('ticket_info', ['code', 'price', 'checkedInAt']),
+        ],
+        chatter: true,
+      })),
+      'event.ticket.list': list(EventTicket, {
+        columns: ['event', 'name', 'price', 'seatsMax', 'seatsTaken'],
+      }),
+      'event.session.list': list(EventSession, {
+        columns: ['event', 'name', 'dateBegin', 'dateEnd', 'room', 'speaker'],
+      }),
+    },
+    search: {
+      'event.event': search(EventEvent, {
+        fields: ['name', 'venue'],
+        filters: {
+          open: { label: 'Open for registration', domain: { state: 'published' } },
+        },
+        groupBy: ['state', 'organizer'],
+      }),
+      'event.registration': search(EventRegistration, {
+        fields: ['name', 'email', 'code', 'event.name'],
+        filters: {
+          confirmed: { label: 'Confirmed', domain: { state: 'confirmed' }, group: 'state' },
+          waiting: { label: 'Waiting list', domain: { state: 'waiting' }, group: 'state' },
+          attended: { label: 'Checked in', domain: { state: 'attended' }, group: 'state' },
+        },
+        groupBy: ['event', 'ticket', 'state'],
+      }),
+      'event.ticket': search(EventTicket, { fields: ['name', 'event.name'] }),
+      'event.session': search(EventSession, { fields: ['name', 'speaker', 'event.name'] }),
+    },
+  });
+}
+
+/** Event Hub: SMTP from the environment for its emails. */
+export const event: ReturnType<typeof defineModule> = eventModule();

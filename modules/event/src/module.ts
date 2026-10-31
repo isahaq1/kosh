@@ -14,6 +14,7 @@ import {
   defineModule,
   type Env,
   f,
+  method,
   records,
 } from './.kosh/bindings.js';
 
@@ -87,7 +88,14 @@ export const EventEvent = defineModel('event.event', {
       initial: 'draft',
       transitions: {
         publish: { from: ['draft'], to: 'published' },
-        close: { from: ['published'], to: 'done' },
+        close: {
+          from: ['published'],
+          to: 'done',
+          // Those who came are thanked (the outbox: Event Hub's emails).
+          after: records('event.event', async (events): Promise<void> => {
+            for (const id of events.ids) await events.env.emit('event.event.ended', { id });
+          }),
+        },
         cancel: { from: ['draft', 'published'], to: 'cancel' },
         redraft: { from: ['cancel'], to: 'draft' },
       },
@@ -196,6 +204,12 @@ async function seatFor(
   });
 }
 
+/** What follows a confirmed place: other apps' hook, and the confirmation email (through the outbox). */
+async function placeConfirmed(env: Env, ids: readonly Id<'event.registration'>[]): Promise<void> {
+  await env.model('event.registration').browse(ids).confirmed();
+  for (const id of ids) await env.emit('event.registration.confirmed', { id });
+}
+
 /** Promotes the first waiting registrations of these events while seats are free (in the order they came). */
 async function promoteWaiting(env: Env, events: readonly Id<'event.event'>[]): Promise<void> {
   await env.asSuperuser({ reason: 'event waiting list' }, async (su) => {
@@ -231,6 +245,11 @@ export const EventRegistration = defineModel('event.registration', {
     email: f.char(),
     phone: f.char(),
     partner: f.many2one('res.partner', { ondelete: 'set null', label: 'Contact' }),
+    /** The attendee's language, for their emails. */
+    lang: f.selection(
+      { en: 'English', bn: 'Bangla' },
+      { required: true, default: 'en', label: 'Language' },
+    ),
     /** What the attendee's QR carries; checked in once with it. */
     code: f.char({
       required: true,
@@ -240,6 +259,10 @@ export const EventRegistration = defineModel('event.registration', {
     }),
     price: f.decimal({ scale: 2, default: '0' }),
     checkedInAt: f.datetime({ label: 'Checked in at' }),
+    /** When the confirmation email went (once). */
+    confirmationSentAt: f.datetime({ label: 'Confirmation sent' }),
+    /** When the thanks went, after the event (once). */
+    thanksSentAt: f.datetime({ label: 'Thanks sent' }),
     state: f.state({
       states: {
         draft: 'Draft',
@@ -275,6 +298,7 @@ export const EventRegistration = defineModel('event.registration', {
           after: records('event.registration', async (registrations): Promise<void> => {
             for (const r of await registrations.load({ ticket: true }))
               if (r.ticket !== null) await r.write({ price: r.ticket.price } as never);
+            await placeConfirmed(registrations.env as unknown as Env, registrations.ids);
           }),
         },
         wait: {
@@ -288,7 +312,15 @@ export const EventRegistration = defineModel('event.registration', {
           message: 'This event has no waiting list, or does not take registrations.',
         },
         /** A seat freed: the first waiting takes it. */
-        promote: { from: ['waiting'], to: 'confirmed' },
+        promote: {
+          from: ['waiting'],
+          to: 'confirmed',
+          after: records('event.registration', async (registrations): Promise<void> => {
+            for (const r of await registrations.load({ ticket: true }))
+              if (r.ticket !== null) await r.write({ price: r.ticket.price } as never);
+            await placeConfirmed(registrations.env as unknown as Env, registrations.ids);
+          }),
+        },
         attend: {
           from: ['confirmed'],
           to: 'attended',
@@ -308,6 +340,10 @@ export const EventRegistration = defineModel('event.registration', {
         },
       },
     }),
+  },
+  methods: {
+    /** Runs once these registrations hold a confirmed place. Nothing here; `event_account` invoices them. */
+    confirmed: method('event.registration', async (): Promise<void> => undefined),
   },
   constraints: {
     ticketOfTheEvent: {
