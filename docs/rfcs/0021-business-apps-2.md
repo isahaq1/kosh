@@ -796,5 +796,25 @@ reviewed steps.
 - **Tests**: the QR as SVG matches the encoder's modules, is stable, and sizes and labels in a layout, nothing for an
   empty value; the ticket rendered for a registration with its QR; E2E (apps): a code checked in at the event's box,
   a second scan refused.
-- **Step 3**: revenue to Accounting (`event_account`), follow-up emails, registration from Sites and the portal.
+- **Then** (step 3): revenue to Accounting (`event_account`), follow-up emails, registration from Sites and the portal.
+
+## Implementation notes (2026-10-31): Event Hub, step 3 — emails and revenue (complete)
+
+- **Emails** (`modules/event/src/mails.ts`): a confirmed place (confirmed, or moved up from the waiting list) emits
+  `event.registration.confirmed`; an event ended emits `event.event.ended` (both offered to webhooks). Two outbox
+  workers send the confirmation (the event, when and where, the ticket, the check-in code) and the thanks to those who
+  checked in — once each (the time is kept on the registration), after the commit, in the attendee's language
+  (English or Bangla, on the registration). The mailer is SMTP from the environment (`SMTP_URL`), or none;
+  `eventModule({ mailer, workers })` takes another (tests: a memory mailer, drained by hand).
+- **`event_account`** (proposed with Accounting): Event Hub's `confirmed()` hook (empty by default) is overridden so
+  a place confirmed at a price gets a draft customer invoice in the sales journal — a line for the event and the ticket
+  — with the attendee as the customer: their contact, else the contact with their email, else a new one. The
+  registration links its invoice; free places get none.
+- **The demo** now invoices the paid places of its supplier day (its test counts three more drafts).
+- **Tests**: a confirmation sent once to the attendee with an email (in Bangla), none for one without, nothing more
+  when the event is delivered again; the thanks to the one who came, once the event ended; a paid place invoiced
+  (1,500, a draft) to a new customer, a second place with the same email to the same customer, a free place not
+  invoiced.
+- **Event Hub complete** (steps 1–3). Later: registration from Sites and the portal, online payment of tickets
+  (RFC 0017's providers), seat maps.
 

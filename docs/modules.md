@@ -278,7 +278,8 @@ Events with sessions and ticket types; registrations confirmed while seats remai
 else on a waiting list that moves up in order when a seat frees; check-in once by the code on the ticket
 (`POST /api/v1/eventhub/checkin`, what a phone scanning the QR sends). Install it with
 `shutro-erp apps install event`. Tickets print with their QR (the `qr` block of document layouts); the event's
-check-in box takes a scanner, the keyboard or the phone's camera.
+check-in box takes a scanner, the keyboard or the phone's camera. Attendees get a confirmation with their code and
+thanks after the event (SMTP from `SMTP_URL`); with Accounting, `event_account` invoices paid places.
 
 ## Demo data (RFC 0008 §5.8)
 
