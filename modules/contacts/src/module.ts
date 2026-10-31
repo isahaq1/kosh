@@ -10,6 +10,23 @@ import { check, defineModel, defineModule, f } from './.kosh/bindings.js';
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const ALL = ['read', 'write', 'create', 'unlink', 'export', 'import'] as const;
 
+/** A tag on contacts (RFC 0022 step 2): shared by every company, kept by Contacts managers. */
+export const ResPartnerTag = defineModel('res.partner.tag', {
+  label: 'Contact tag',
+  recName: 'name',
+  order: ['name asc'],
+  access: {
+    'contacts.user': ['read'],
+    'contacts.manager': ['read', 'write', 'create', 'unlink'],
+  },
+  fields: {
+    name: f.char({ required: true }),
+  },
+  sqlConstraints: {
+    oneName: { unique: ['name'], message: 'A tag with this name exists.' },
+  },
+});
+
 export const ResPartner = defineModel('res.partner', {
   label: 'Contact',
   archivable: true,
@@ -24,6 +41,10 @@ export const ResPartner = defineModel('res.partner', {
     name: f.char({ required: true }),
     /** A photo or logo: an attachment of the contact (RFC 0022 §3.3), with its 256 px thumbnail. */
     image: f.many2one('storage.attachment', { ondelete: 'set null', label: 'Photo' }),
+    tags: f.many2many('res.partner.tag', { label: 'Tags' }),
+    /** Where the contact is on a map (decimal degrees); filled by hand for now. */
+    latitude: f.decimal({ scale: 6, help: 'Decimal degrees, e.g. 23.8103 for Dhaka' }),
+    longitude: f.decimal({ scale: 6, help: 'Decimal degrees, e.g. 90.4125 for Dhaka' }),
     isCompany: f.boolean({ default: false, label: 'Is a company' }),
     /** The company a person works for. */
     parent: f.many2one('res.partner', { ondelete: 'set null', label: 'Company' }),
@@ -74,5 +95,5 @@ export const contactsShutro = defineModule({
       implies: ['contacts.user'],
     }),
   ],
-  models: [ResPartner],
+  models: [ResPartnerTag, ResPartner],
 });

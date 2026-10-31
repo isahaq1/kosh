@@ -14,8 +14,17 @@ const COMPANIES = [
     isVendor: true,
     email: 'orders@bengalsteel.example',
     phone: '+880 31 710000',
+    latitude: '22.3569',
+    longitude: '91.7832',
   },
-  { name: 'Acme Trading', city: 'Dhaka', isCustomer: true, email: 'hello@acme.example' },
+  {
+    name: 'Acme Trading',
+    city: 'Dhaka',
+    isCustomer: true,
+    email: 'hello@acme.example',
+    latitude: '23.8103',
+    longitude: '90.4125',
+  },
   { name: 'Padma Cement', city: 'Narayanganj', isVendor: true, email: 'sales@padmacement.example' },
   { name: 'Meghna Electronics', city: 'Dhaka', isCustomer: true, isVendor: true },
   { name: 'Sylhet Tea Estates', city: 'Sylhet', isCustomer: true },
@@ -38,6 +47,25 @@ export async function contactsDemo(context: DemoContext): Promise<string> {
       COMPANIES.map((c) => ({ ...c, isCompany: true, country: 'BD' })),
     );
     const byName = new Map(COMPANIES.map((c, i) => [c.name, companies.ids[i] as number]));
+    // Tags (RFC 0022 step 2): key accounts and the partners we both buy from and sell to.
+    const tags = await env
+      .model('res.partner.tag')
+      .create([{ name: 'Key account' }, { name: 'Both ways' }, { name: 'Prospect' }]);
+    const [keyAccount, bothWays] = tags.ids;
+    for (const c of COMPANIES) {
+      const id = byName.get(c.name);
+      if (id === undefined) continue;
+      const wanted = [
+        ...((c as { isCustomer?: boolean; isVendor?: boolean }).isCustomer === true &&
+        (c as { isVendor?: boolean }).isVendor === true &&
+        bothWays !== undefined
+          ? [bothWays]
+          : []),
+        ...(c.name === 'Bengal Steel Ltd' && keyAccount !== undefined ? [keyAccount] : []),
+      ];
+      if (wanted.length > 0)
+        await partners.browse([id as never]).write({ tags: { set: wanted } } as never);
+    }
     await partners.create(
       PEOPLE.map(({ company, ...p }) => ({
         ...p,

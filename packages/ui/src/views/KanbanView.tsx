@@ -135,8 +135,17 @@ function Card({
       <div className="flex items-start justify-between gap-2">
         {view.card.avatar === undefined ? null : (
           <Avatar
-            name={String(nameOfValue(row[view.card.avatar]) ?? '')}
-            src={null}
+            name={String(
+              (fields[view.card.avatar]?.target === 'storage.attachment'
+                ? (row['displayName'] ?? row['name'])
+                : nameOfValue(row[view.card.avatar])) ?? '',
+            )}
+            src={
+              fields[view.card.avatar]?.target === 'storage.attachment' &&
+              idOfValue(row[view.card.avatar]) !== null
+                ? `/api/v1/attachments/${idOfValue(row[view.card.avatar])}/download?inline=true&w=256`
+                : null
+            }
             className="mt-0.5"
           />
         )}

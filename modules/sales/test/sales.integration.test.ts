@@ -305,7 +305,7 @@ test('the Sales overview (RFC 0022 §3.2): installed once as a dashboard, served
   expect((await call('GET', '/api/v1/reports/overview?app=sales', 'rahim')).json.id).toBe(
     overview.json.id,
   );
-  expect((await call('GET', '/api/v1/reports/overview?app=contacts', 'rahim')).status).toBe(404);
+  expect((await call('GET', '/api/v1/reports/overview?app=nowhere', 'rahim')).status).toBe(404);
 });
 
 test('the next step (RFC 0022 §3.4): Confirm refused by its guard with the message, Send allowed; with a line, Confirm allowed', async () => {

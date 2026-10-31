@@ -222,3 +222,17 @@ step 3 last. Performance budgets apply (an overview with eight tiles < 300 ms se
   record's own picture. No separate gallery block for now.
 - Tests: the PDF export on real PostgreSQL (a PDF back, the filename, export access); E2E: *Print as PDF*
   downloads from a list; the *Print* button on a posted invoice.
+
+## Implementation notes (2026-10-31): step 2 — Contacts
+
+- **Tags** (`res.partner.tag`, shared across companies, kept by managers from *Contacts › Tags*): set on contacts,
+  shown as tinted chips on the list, the board and the form, searched (`tags.name`).
+- **The board** (`kanban` by city): the photo as the avatar, the company, the email as a link, the tags; kanban
+  cards now show an attachment field's picture as the avatar. **The map**: `latitude` / `longitude` on contacts
+  (decimal degrees, under *Address › On the map*), the Map view of those that have them.
+- **The Overview**: contacts, customers, vendors, new this month against last month, by country, companies by city.
+  Contacts now depends on `reporting`.
+- Demo: three tags (Bengal Steel a key account, the two-way partners "Both ways"), Bengal Steel and Acme on the map.
+- Tests: Contacts on real PostgreSQL (tags by managers only, one name once, set on a contact and searched; the
+  overview to a user; the action's kanban and map; the Tags menu to managers only). E2E (apps): the overview, a
+  tag made and set on a contact, its chip on the board, the map view.

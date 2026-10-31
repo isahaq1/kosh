@@ -4,20 +4,21 @@
  * Purchase and Accounting deal with.
  */
 import { defineModule } from '@kosh/modules-sdk';
+import { reporting } from '@kosh/reporting';
 import { base } from '@kosh/server';
 import { storage } from '@kosh/storage';
-import { action, form, hierarchy, list, search } from '@kosh/views';
+import { action, form, hierarchy, kanban, list, map, search } from '@kosh/views';
 import { contactsDemo } from './demo.js';
-import { contactsShutro, ResPartner } from './module.js';
+import { contactsShutro, ResPartner, ResPartnerTag } from './module.js';
 
 export { contactsDemo, DINA } from './demo.js';
-export { contactsShutro, ResPartner } from './module.js';
+export { contactsShutro, ResPartner, ResPartnerTag } from './module.js';
 
 export const contacts: ReturnType<typeof defineModule> = defineModule({
   shutro: contactsShutro,
   kosh: '^0.1.0',
   hooks: { demo: contactsDemo },
-  depends: [base, storage],
+  depends: [base, storage, reporting],
   app: {
     code: 'contacts',
     label: 'Contacts',
@@ -54,8 +55,70 @@ export const contacts: ReturnType<typeof defineModule> = defineModule({
   actions: {
     'contacts.action_partners': action(ResPartner, {
       label: 'Contacts',
-      views: ['list', 'hierarchy', 'form'],
+      views: ['list', 'kanban', 'map', 'hierarchy', 'form'],
     }),
+    'contacts.action_tags': action(ResPartnerTag, { label: 'Tags', views: ['list', 'form'] }),
+  },
+  // The Overview (RFC 0022 step 2): how many, who buys and who sells, where they are, the month's new ones.
+  overview: {
+    cards: [
+      {
+        id: 'contacts_all',
+        title: 'Contacts',
+        kind: 'kpi',
+        model: 'res.partner',
+        measure: 'count',
+        w: 3,
+      },
+      {
+        id: 'customers',
+        title: 'Customers',
+        kind: 'kpi',
+        model: 'res.partner',
+        measure: 'count',
+        filter: { isCustomer: true },
+        w: 3,
+      },
+      {
+        id: 'vendors',
+        title: 'Vendors',
+        kind: 'kpi',
+        model: 'res.partner',
+        measure: 'count',
+        filter: { isVendor: true },
+        w: 3,
+      },
+      {
+        id: 'new_month',
+        title: 'New this month',
+        kind: 'kpi',
+        model: 'res.partner',
+        measure: 'count',
+        comparison: { field: 'createdAt', mode: 'previous' },
+        w: 3,
+      },
+      {
+        id: 'by_country',
+        title: 'By country',
+        kind: 'chart',
+        model: 'res.partner',
+        measure: 'count',
+        groupBy: 'country',
+        chart: 'pie',
+        w: 6,
+      },
+      {
+        id: 'by_city',
+        title: 'Companies by city',
+        kind: 'chart',
+        model: 'res.partner',
+        measure: 'count',
+        groupBy: 'city',
+        filter: { isCompany: true },
+        chart: 'bar',
+        w: 6,
+      },
+    ],
   },
   menus: [
     { id: 'contacts.root', label: 'Contacts', app: 'contacts' },
@@ -64,6 +127,14 @@ export const contacts: ReturnType<typeof defineModule> = defineModule({
       parent: 'contacts.root',
       label: 'Contacts',
       action: 'contacts.action_partners',
+    },
+    {
+      id: 'contacts.tags',
+      parent: 'contacts.root',
+      label: 'Tags',
+      action: 'contacts.action_tags',
+      sequence: 9,
+      visibleTo: ['contacts.manager'],
     },
   ],
   views: {
@@ -75,11 +146,34 @@ export const contacts: ReturnType<typeof defineModule> = defineModule({
         { field: 'phone', widget: 'phone' },
         'city',
         'country',
+        { field: 'tags', widget: 'tags' },
         'isCustomer',
         'isVendor',
       ],
       defaultOrder: ['name asc'],
     }),
+    'res.partner.kanban': kanban(ResPartner, {
+      groupBy: 'city',
+      card: {
+        title: 'name',
+        subtitle: 'parent',
+        avatar: 'image',
+        footer: [
+          { field: 'email', widget: 'email' },
+          { field: 'tags', widget: 'tags' },
+        ],
+      },
+    }),
+    'res.partner.map': map(ResPartner, {
+      latitude: 'latitude',
+      longitude: 'longitude',
+      title: 'name',
+      subtitle: 'city',
+    }),
+    'res.partner.tag.list': list(ResPartnerTag, { columns: ['name'], inlineEdit: ['name'] }),
+    'res.partner.tag.form': form(ResPartnerTag, (k) => ({
+      sheet: [k.group('main', ['name'])],
+    })),
     'res.partner.hierarchy': hierarchy(ResPartner, {
       parent: 'parent',
       title: 'name',
@@ -95,6 +189,7 @@ export const contacts: ReturnType<typeof defineModule> = defineModule({
           'isCompany',
           'parent',
           'taxId',
+          { field: 'tags', widget: 'tags' },
         ]),
         k.group('reach', [
           { field: 'email', widget: 'email' },
@@ -105,6 +200,10 @@ export const contacts: ReturnType<typeof defineModule> = defineModule({
         k.notebook('more', [
           k.page('address', 'Address', [
             k.group('where', ['street', 'city', 'zip', 'state', 'country']),
+            k.group('position', ['latitude', 'longitude'], {
+              label: 'On the map',
+              description: 'Decimal degrees; the Map view shows contacts that have them.',
+            }),
           ]),
           k.page('sales', 'Sales & purchase', [
             k.group('roles', ['isCustomer', 'isVendor', 'currency']),
@@ -115,8 +214,9 @@ export const contacts: ReturnType<typeof defineModule> = defineModule({
     })),
   },
   search: {
+    'res.partner.tag': search(ResPartnerTag, { fields: ['name'] }),
     'res.partner': search(ResPartner, {
-      fields: ['name', 'email', 'phone', 'city', 'taxId'],
+      fields: ['name', 'email', 'phone', 'city', 'taxId', 'tags.name'],
       filters: {
         companies: { label: 'Companies', domain: { isCompany: true }, group: 'kind' },
         people: { label: 'People', domain: { isCompany: false }, group: 'kind' },

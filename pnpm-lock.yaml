@@ -554,6 +554,9 @@ importers:
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
       '@kosh/server':
         specifier: workspace:*
         version: link:../../packages/server
@@ -564,6 +567,15 @@ importers:
         specifier: workspace:*
         version: link:../../packages/views
     devDependencies:
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
       '@testcontainers/postgresql':
         specifier: ^12.2.1
         version: 12.2.1
