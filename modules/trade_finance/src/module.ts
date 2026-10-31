@@ -142,6 +142,16 @@ export const TradeLc = defineModel('trade.lc', {
     origin: f.char({ label: 'Source document' }),
     amendments: f.one2many('trade.lc.amendment', 'lc'),
     presentations: f.one2many('trade.lc.presentation', 'lc'),
+    shipments: f.one2many('trade.lc.shipment', 'lc'),
+    shipped: f.decimal({
+      scale: 2,
+      store: true,
+      label: 'Shipped',
+      ...compute('trade.lc', 'shipped', ['shipments.value'], (lcs) => {
+        for (const lc of lcs)
+          lc.shipped = [...lc.shipments].reduce((s, x) => s.plus(amountOf(x.value)), zero);
+      }),
+    }),
     /** At most the amount plus the tolerance. */
     maxDrawable: f.decimal({
       scale: 2,
@@ -454,6 +464,60 @@ export const TradePresentation = defineModel('trade.lc.presentation', {
   },
 });
 
+/**
+ * A shipment under an LC: when, the bill of lading, the vessel and ports, when it arrives, and the value shipped.
+ * On or before the latest shipment date, within what the LC allows, and once only unless partial shipments are
+ * allowed (UCP 600 art. 31).
+ */
+export const TradeShipment = defineModel('trade.lc.shipment', {
+  label: 'Shipment',
+  order: ['date asc', 'id asc'],
+  access: {
+    'trade_finance.user': ['read', 'write', 'create'],
+    'trade_finance.manager': [...ALL, 'export'],
+  },
+  fields: {
+    lc: f.many2one('trade.lc', { required: true, ondelete: 'cascade', label: 'LC' }),
+    currency: f.many2one('res.currency', {
+      store: true,
+      readonly: true,
+      ...compute('trade.lc.shipment', 'currency', ['lc.currency'], (shipments) => {
+        for (const x of shipments) x.currency = x.lc.currency.id;
+      }),
+    }),
+    date: f.date({ required: true, default: (env: Env) => env.today(), label: 'Shipped on' }),
+    blNumber: f.char({ label: 'Bill of lading / airway bill' }),
+    vessel: f.char({ label: 'Vessel / flight' }),
+    portLoading: f.char({ label: 'Port of loading' }),
+    portDischarge: f.char({ label: 'Port of discharge' }),
+    eta: f.date({ label: 'Arrives on' }),
+    value: f.monetary({ currency: 'currency', required: true, label: 'Value shipped' }),
+    note: f.text(),
+  },
+  constraints: {
+    withinTheLc: {
+      ...check('trade.lc.shipment', ['lc', 'date', 'value'], async (shipments) => {
+        const failing: number[] = [];
+        for (const x of await shipments.load({ lc: { shipments: true } })) {
+          const lc = x.lc;
+          const total = [...lc.shipments].reduce((s, y) => s.plus(amountOf(y.value)), zero);
+          if (
+            lc.state !== 'issued' ||
+            amountOf(x.value).lte(0) ||
+            iso(x.date) > iso(lc.latestShipmentDate) ||
+            total.gt(amountOf(lc.maxDrawable)) ||
+            (!lc.partialShipment && lc.shipments.length > 1)
+          )
+            failing.push(x.id);
+        }
+        return failing;
+      }),
+      message:
+        'A shipment is under an issued LC, on or before its latest shipment date, within what it allows — and the only one unless partial shipments are allowed.',
+    },
+  },
+});
+
 export const tradeFinanceShutro = defineModule({
   name: 'trade_finance',
   version: '0.1.0',
@@ -481,5 +545,5 @@ export const tradeFinanceShutro = defineModule({
   sequences: [
     orm.defineSequence({ code: 'trade.lc', prefix: 'LC/{year}/', padding: 5, reset: 'yearly' }),
   ],
-  models: [TradeLimit, TradeLc, TradeAmendment, TradePresentation],
+  models: [TradeLimit, TradeLc, TradeAmendment, TradePresentation, TradeShipment],
 });

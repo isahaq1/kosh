@@ -21,6 +21,7 @@ import {
   TradeLc,
   TradeLimit,
   TradePresentation,
+  TradeShipment,
   tradeFinanceShutro,
 } from './module.js';
 
@@ -31,6 +32,7 @@ export {
   TradeLc,
   TradeLimit,
   TradePresentation,
+  TradeShipment,
   tradeFinanceShutro,
 } from './module.js';
 
@@ -136,6 +138,10 @@ export const tradeFinance: ReturnType<typeof defineModule> = defineModule({
       label: 'Presentations',
       views: ['list', 'form'],
     }),
+    'tradefinance.action_shipments': action(TradeShipment, {
+      label: 'Shipments',
+      views: ['list', 'form'],
+    }),
     'tradefinance.action_amendments': action(TradeAmendment, {
       label: 'Amendments',
       views: ['list', 'form'],
@@ -159,6 +165,13 @@ export const tradeFinance: ReturnType<typeof defineModule> = defineModule({
       parent: 'tradefinance.root',
       label: 'Presentations',
       action: 'tradefinance.action_presentations',
+      sequence: 2,
+    },
+    {
+      id: 'tradefinance.shipments',
+      parent: 'tradefinance.root',
+      label: 'Shipments',
+      action: 'tradefinance.action_shipments',
       sequence: 2,
     },
     {
@@ -228,8 +241,15 @@ export const tradeFinance: ReturnType<typeof defineModule> = defineModule({
           'expiryPlace',
         ]),
         k.group('shipping', ['incoterm', 'partialShipment', 'transshipment']),
-        k.group('drawings', ['maxDrawable', 'drawn', 'paid', 'outstanding']),
+        k.group('drawings', ['maxDrawable', 'shipped', 'drawn', 'paid', 'outstanding']),
         k.group('docs', ['documents'], { columns: 1 }),
+        k.lines('shipments', [
+          { field: 'date', id: 'shipment_date' },
+          { field: 'blNumber', id: 'shipment_bl' },
+          { field: 'vessel', id: 'shipment_vessel' },
+          { field: 'eta', id: 'shipment_eta' },
+          { field: 'value', id: 'shipment_value' },
+        ]),
         k.lines('presentations', [
           { field: 'date', id: 'presentation_date' },
           { field: 'amount', id: 'presentation_amount' },
@@ -296,6 +316,17 @@ export const tradeFinance: ReturnType<typeof defineModule> = defineModule({
         k.group('about', ['note'], { columns: 1 }),
       ],
     })),
+    'trade.lc.shipment.list': list(TradeShipment, {
+      columns: ['lc', 'date', 'blNumber', 'vessel', 'portDischarge', 'eta', 'value'],
+    }),
+    'trade.lc.shipment.form': form(TradeShipment, (k) => ({
+      header: { buttons: [] },
+      sheet: [
+        k.group('main', ['lc', 'date', 'value']),
+        k.group('transport', ['blNumber', 'vessel', 'portLoading', 'portDischarge', 'eta']),
+        k.group('about', ['note'], { columns: 1 }),
+      ],
+    })),
     'trade.lc.limit.list': list(TradeLimit, { columns: ['bank', 'currency', 'amount'] }),
     'trade.lc.limit.form': form(TradeLimit, (k) => ({
       header: { buttons: [] },
@@ -328,6 +359,10 @@ export const tradeFinance: ReturnType<typeof defineModule> = defineModule({
       groupBy: ['lc', 'state'],
     }),
     'trade.lc.amendment': search(TradeAmendment, { fields: ['lc.name'], groupBy: ['lc', 'state'] }),
+    'trade.lc.shipment': search(TradeShipment, {
+      fields: ['blNumber', 'vessel', 'lc.name', 'lc.bankReference'],
+      groupBy: ['lc', 'portDischarge'],
+    }),
     'trade.lc.limit': search(TradeLimit, { fields: ['bank.name'], groupBy: ['bank'] }),
   },
 });

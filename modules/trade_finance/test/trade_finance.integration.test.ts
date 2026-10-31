@@ -222,6 +222,26 @@ test('presentations: discrepancies waived before acceptance, maturity, the toler
   expect(settled).toMatchObject({ state: 'settled', paid: '94500', outstanding: '0' });
 });
 
+test('shipments: before the latest shipment date, within the LC, once unless partial shipments are allowed', async () => {
+  const S = '/api/v1/models/trade.lc.shipment';
+  const once = (await lc('20000')).json.id;
+  await go(`${L}/${once}/transitions/apply`, 'rahim');
+  await go(`${L}/${once}/transitions/issue`);
+  const ship = (id: number, value: string, date = day(10)) =>
+    call('POST', S, 'rahim', { lc: id, value, date, blNumber: `BL-${value}`, vessel: 'MV Padma' });
+  expect((await ship(once, '20000', day(25))).status).toBe(422); // after the latest shipment date
+  expect((await ship(once, '15000')).status).toBe(201);
+  expect((await ship(once, '5000')).status).toBe(422); // a second shipment: partial shipments not allowed
+  expect((await call('GET', `${L}/${once}`, 'rahim')).json.shipped).toBe('15000');
+
+  const partial = (await lc('10000', { partialShipment: true })).json.id;
+  await go(`${L}/${partial}/transitions/apply`, 'rahim');
+  await go(`${L}/${partial}/transitions/issue`);
+  expect((await ship(partial, '6000')).status).toBe(201);
+  expect((await ship(partial, '4000')).status).toBe(201);
+  expect((await ship(partial, '1')).status).toBe(422); // beyond the amount (no tolerance)
+});
+
 test('alerts within the window (the setting); access', async () => {
   const c = (await lc('5000', { latestShipmentDate: day(5), expiryDate: day(10) })).json.id;
   await go(`${L}/${c}/transitions/apply`, 'rahim');

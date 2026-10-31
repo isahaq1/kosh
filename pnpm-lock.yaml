@@ -140,6 +140,12 @@ importers:
       '@kosh/trade_finance_account':
         specifier: workspace:*
         version: link:../../modules/trade_finance_account
+      '@kosh/trade_finance_purchase':
+        specifier: workspace:*
+        version: link:../../modules/trade_finance_purchase
+      '@kosh/trade_finance_sale':
+        specifier: workspace:*
+        version: link:../../modules/trade_finance_sale
     devDependencies:
       '@testcontainers/postgresql':
         specifier: ^12.2.1
@@ -383,6 +389,12 @@ importers:
       '@kosh/trade_finance_account':
         specifier: workspace:*
         version: link:../../modules/trade_finance_account
+      '@kosh/trade_finance_purchase':
+        specifier: workspace:*
+        version: link:../../modules/trade_finance_purchase
+      '@kosh/trade_finance_sale':
+        specifier: workspace:*
+        version: link:../../modules/trade_finance_sale
       '@kosh/views':
         specifier: workspace:*
         version: link:../../packages/views
@@ -1467,6 +1479,80 @@ importers:
         specifier: ^12.2.1
         version: 12.2.1
 
+  modules/trade_finance_purchase:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/purchase':
+        specifier: workspace:*
+        version: link:../purchase
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/trade_finance':
+        specifier: workspace:*
+        version: link:../trade_finance
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/trade_finance_sale:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/sales':
+        specifier: workspace:*
+        version: link:../sales
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/trade_finance':
+        specifier: workspace:*
+        version: link:../trade_finance
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   packages/assistant:
     dependencies:
       '@anthropic-ai/sdk':
@@ -1693,6 +1779,12 @@ importers:
       '@kosh/trade_finance_account':
         specifier: workspace:*
         version: link:../../modules/trade_finance_account
+      '@kosh/trade_finance_purchase':
+        specifier: workspace:*
+        version: link:../../modules/trade_finance_purchase
+      '@kosh/trade_finance_sale':
+        specifier: workspace:*
+        version: link:../../modules/trade_finance_sale
     devDependencies:
       '@testcontainers/postgresql':
         specifier: ^12.2.1
