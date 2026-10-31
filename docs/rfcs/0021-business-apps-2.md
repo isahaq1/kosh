@@ -894,3 +894,68 @@ website says and takes what its visitors send; it does not lock the design.
   contact, company, email, budget and notes from the inputs, from the website, in *New*, for no salesperson, its
   submission linking it; a form filling the name itself wins over the default.
 
+
+## Design note: Counter (`modules/pos`, app code `counter`)
+
+Sells at a shop counter from a browser or a tablet. Built on what exists: products and barcodes (Products), stock
+(Stockroom), invoices, payments and VAT (Accounting), payment providers (RFC 0017), the offline queue (RFC 0010),
+receipts as documents (RFC 0005), notifications for receipts by SMS or email (RFC 0006).
+
+- **Shops** (`pos.shop`): a name, the company, the warehouse and stock location it sells from, the sales journal
+  and the cash journal, the receipt template, the default taxes' treatment (prices tax-included or not), the
+  **payment methods** it takes (`pos.payment.method`: cash, card, bKash / Nagad through a provider of RFC 0017,
+  or a bank transfer; each with its accounting journal).
+- **Sessions** (`pos.session`): a cashier opens a session at a shop with the **opening cash count**; sales belong
+  to the open session; *Close* asks for the **closing count** per cash method, shows the expected amount, the
+  **difference** and asks for a reason when it is not zero; a closed session is what Accounting books.
+- **Orders** (`pos.order`): lines (product, quantity, unit price, discount, taxes), the customer (optional; needed
+  for an invoice), **payments** (`pos.order.payment`: method and amount; several per order; change given), a
+  state *draft → paid*, and a **client id** given by the device so a sale queued offline is accepted **once**
+  (the idempotency key). Refunds are orders with negative quantities that reference the original.
+- **The register** (a client page, `counter.Register`, phone and tablet first): the shop's products as tiles with
+  pictures, search and **barcode** input (scanner or camera, as Stockroom's), quantities and a scale's weight for
+  weighed products, the cart with totals and taxes, the customer picker, the payment screen (split payments,
+  cash change), the receipt (printed from the document engine, or sent by SMS / email). **Offline-first**: the
+  shop's catalogue and prices are kept on the device; sales made offline wait in the device's queue and are sent
+  when back online, in order, each once.
+- **Receipts**: a document template (`receipt`, 80 mm) with the shop, the lines, the taxes, the payments and a QR
+  of the order's reference; **Mushak 6.3** where `l10n_bd` applies, through the same template mechanism.
+- **To Stockroom** (`pos_stock`, step 2): a closed session's sold quantities leave the shop's location in **one
+  delivery per session** (validated at once; returns come back the same way).
+- **To Accounting** (`pos_account`, step 2): a closed session books **one entry**: revenue and VAT per tax, the
+  payments per method into their journals, the cash difference to a gains / losses account; an order with a
+  customer who asks for an invoice gets a posted invoice instead, paid by its payments.
+- **Permissions**: *Cashier* (sell in a session, their own sessions), *Manager* (shops, methods, close any session,
+  refunds beyond a limit, reports). Every price change and refund is in the audit log.
+- **Reports and the overview**: sales today and this month against last, by shop, by cashier, by product and
+  category, by hour of day, payment methods, differences at closing.
+- **Steps**: 1 — shops, methods, sessions, orders, the register online (products, barcode, cart, payments,
+  change), receipts as documents; 2 — the offline queue, receipts by SMS / email, bKash / cards through providers,
+  `pos_stock` and `pos_account`; 3 — the overview and reports, weighed products, refunds with reasons, Mushak 6.3.
+
+## Implementation notes (2026-10-31): Counter, step 1
+
+- **Module** `modules/pos` (`@kosh/pos`, export `pos`), app **Counter** (code `counter`); access levels *Cashier*
+  (sell in own sessions) and *Manager* (shops, methods, every session). Depends on Products, Contacts, Accounting
+  (the methods' and shops' journals, for `pos_account`), Messaging and Reporting (the receipt).
+- **Models**: shops with their payment methods (cash, card, mobile money, transfer; each with a journal) and
+  whether prices include taxes; sessions (one open per cashier) with the opening cash, the expected cash (opening
+  + cash payments − change), the closing count, the difference and its reason (required when not zero); sales
+  with lines (taxes of the product, included in the price or added), several payments, the change, a device
+  reference unique per session, *pay* guarded (lines, payments covering the total, the session open), *void*;
+  payments keep their method's kind.
+- **Routes** for the register in few calls: the shops and their methods, the catalogue, the cashier's open session,
+  a session opened, a sale posted whole and paid at once (the same device reference answers with the first sale),
+  a session closed with its count.
+- **The register** (`counter.Register`, a client page): the shop's products as tiles with pictures, search and the
+  barcode box (Enter adds the exact match), the cart with the register's own totals, the payment dialog (an amount
+  per method, prefilled with what remains, the change), the receipt opened as a document, the session closed with
+  the count and the difference.
+- **The receipt**: the `receipt` document (A4 for now; 80 mm paper comes with the document engine's paper sizes)
+  with the lines, the totals, the payments, a QR of the reference and the shop's footer.
+- **Tests**: on real PostgreSQL — a session and its cash, one open per cashier, the catalogue; a sale with two
+  payments and the change, the same device reference accepted once, the drawer's expected cash; a sale short of
+  its total refused; a cashier sees only their own sessions; closing needs the count and a reason for a
+  difference, the difference kept; the receipt. E2E (apps): a shop, a session, a sale paid in cash, the close.
+- **Next**: step 2 — the offline queue, receipts by SMS / email, bKash / cards through the providers, `pos_stock`
+  and `pos_account`; step 3 — refunds with reasons, weighed products, Mushak 6.3.

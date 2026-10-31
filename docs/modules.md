@@ -319,6 +319,13 @@ module gets an *Overview* action and menu, first in the app; `reporting` install
 keyed by the module (once; a changed dashboard is kept), and the page shows them to any user of the app, each card
 computed with that user's rights.
 
+### Counter (`modules/pos`, RFC 0021)
+
+Point of sale: shops with their payment methods, cashiers' sessions with opening and closing counts (a difference
+needs a reason), sales with lines, taxes, several payments and the change, each accepted once by the device's
+reference. The register (*Counter › Register*) sells from a tablet or a phone: products as tiles, search and a
+barcode box, the cart, the payment dialog, the receipt. Install it with `shutro-erp apps install pos`.
+
 ## Demo data (RFC 0008 §5.8)
 
 `npx shutro-erp init --demo` (or a yes to the question after the apps) loads every installed app's demo data: a sample
