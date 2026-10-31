@@ -300,6 +300,25 @@ email, phone, date, length). Public reads are kept 30 seconds per server and sen
 Pipeline, `website_crm` lets a form create deals: they arrive from the website in the first stage, for no
 salesperson yet, so every Pipeline user sees them.
 
+## An app's overview (RFC 0022 §3.2)
+
+```ts
+overview: {
+  cards: [
+    { id: 'sales_month', title: 'Sales this month', kind: 'kpi', model: 'sale.order', measure: 'sum:amountTotal',
+      filter: { state: { in: ['sale', 'done'] } }, comparison: { field: 'dateOrder', mode: 'previous' }, w: 3 },
+    { id: 'by_month', title: 'Sales by month', kind: 'chart', model: 'sale.order', measure: 'sum:amountTotal',
+      groupBy: 'dateOrder:month', chart: 'bar', w: 8 },
+  ],
+},
+```
+
+An app that depends on `reporting` declares its overview: KPI, chart, pivot and list cards (`count` or `op:field`
+measures, a filter, a group-by, a comparison with the previous period or last year, a width in twelfths). The
+module gets an *Overview* action and menu, first in the app; `reporting` installs the cards as a shared dashboard
+keyed by the module (once; a changed dashboard is kept), and the page shows them to any user of the app, each card
+computed with that user's rights.
+
 ## Demo data (RFC 0008 §5.8)
 
 `npx shutro-erp init --demo` (or a yes to the question after the apps) loads every installed app's demo data: a sample

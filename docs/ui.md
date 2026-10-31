@@ -62,6 +62,27 @@ Operations: `insertAfter`, `insertBefore`, `append` (into a group, a page or a r
 `setAttrs`. They apply in module dependency order; an unknown anchor or a duplicate id fails at startup.
 `resolveView()` records the module behind every node and the chain of modules that changed the view.
 
+## Widgets, cards and rows (RFC 0022 §3.3)
+
+Widgets by name on any field node (`{ field: 'email', widget: 'email' }`): `badge`, `email`, `phone`, `url`
+(links in display), `progress` (0–100 as a bar), `percentage`, `rating` (0–5 as stars), `priority` (a selection as
+stars), `color` (a tinted dot), `daysLeft` ("in 3 days", toned), `tags` (many2many chips), `image` and `avatar`
+(an attachment of the record: the browser shrinks the picture and makes its 256 px thumbnail, both uploaded;
+`GET /api/v1/attachments/:id/download?w=256` serves the thumbnail). A model gives an image field with
+`f.many2one('storage.attachment')` and depends on `storage`.
+
+Kanban cards take `image` (a cover), `avatar`, `progress` and `color` (a tinted edge); lists take
+`decorations: { danger: { state: 'cancel' }, success: { state: 'done' } }`, a tone for the rows a condition holds
+on. Both are checked when the server starts.
+
+## Guidance on a record (RFC 0022 §3.4)
+
+`GET /api/v1/models/:model/:id/next` says what comes next: the transitions from the record's state the user may
+run, each `allowed` or not with the guard's `message` (the guard runs read-only; nothing changes). The form shows
+it as a banner — "Next step: Confirm" with the button, or "Before Confirm: …" — and lists the required fields
+still empty in the right rail. A field's `help` from the model shows under its input; `k.group(id, children,
+{ description })` and `k.page(id, label, children, { description })` put a sentence under a section's title.
+
 ## Related records on a record page (RFC 0022 §3.1)
 
 ```ts

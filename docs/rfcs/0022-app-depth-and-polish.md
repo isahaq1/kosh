@@ -143,3 +143,60 @@ step 3 last. Performance budgets apply (an overview with eight tiles < 300 ms se
   `purchase_stock` *Deliveries* / *Receipts*.
 - **E2E**: the accounting flow checks the order's *Invoices 1* tile after *Create invoice* and that it opens the
   invoices filtered to that order.
+
+## Implementation notes (2026-10-31): step 1, part 3.2 — app overviews
+
+- **Declared in the manifest**: `overview: { cards: [...] }` — KPI (with `comparison: { field, mode }` for this
+  month against the previous one or last year), chart, pivot and list cards, each a report query the viewer's
+  rights and record rules apply to (`OverviewCardSpec` in `@kosh/modules-sdk`). `defineModule` checks it (an app,
+  a dependency on `reporting`, unique snake_case card ids, `count` or `op:field` measures) and generates the action
+  `<module>.action_overview` (the page `reporting.Overview`) and the menu `<module>.overview` first under the app's
+  root menu.
+- **Installed as a dashboard**: `report.dashboard` gained a `key` (the module; one overview per app) and reporting's
+  `defaults` hook creates the app's shared dashboard once, from the cards (a dashboard a user later changes is left
+  alone). `GET /api/v1/reports/overview?app=` returns the label and the cards for any signed-in user — the dashboard
+  record itself needs the reports' access, which app users may not have, so the route reads it as the system; the
+  cards then query as the user.
+- **The page** reuses the dashboards' cards (`CardFrame`, the drill-down to records) read-only: the layout belongs
+  to the app; personal layouts come with step 3.
+- **Sales** is the first app with one: sales and orders this month against last month, open quotations, the
+  average order, sales by month, top customers, by salesperson, the biggest open quotations.
+- **Tests**: the SDK's generation and checks; Sales' route on real PostgreSQL; E2E (apps): the Overview menu of
+  Sales opens the page with its cards and no Edit.
+
+## Implementation notes (2026-10-31): step 1, part 3.3 — widgets, cards and rows
+
+- **Widgets** added to `@kosh/ui`, usable from any view by name: `email`, `phone`, `url` (links in display, the
+  text input to edit), `progress` (0–100 as a bar), `percentage`, `rating` (0–5 as stars, click to set),
+  `priority` (a selection as stars, its options in order), `color` (a dot tinted by the value), `daysLeft` (a date
+  as "in 3 days" / "2 days late", toned), `tags` (many2many chips tinted by name), `image` and `avatar`.
+- **Images are attachments** (decided: files in storage): an `image` field is a `many2one('storage.attachment')`.
+  The widget shrinks the chosen file in the browser (at most 1,600 px) and makes its 256 px thumbnail, uploads
+  both to the record — the thumbnail with `X-Variant-Of` and `X-Width`, kept on `storage.attachment` as
+  `variantOf` / `width` — and the field holds the image; `GET /api/v1/attachments/:id/download?w=256` serves the
+  variant when there is one. Variants stay out of a record's attachment list. Thumbnails come from the browser,
+  not a job: no native image dependency on the server, and the avatar already works this way; a job (with `sharp`)
+  can make variants for imported images later.
+- **Kanban cards** take `image` (a cover), `avatar` (a person's initials), `progress` (a bar) and `color` (a
+  tinted edge from a selection or text); **lists** take `decorations: { danger: { … }, success: { … } }`, a
+  tone for the rows a condition holds on (the browser evaluates it on the row), checked at load like the rest.
+- **Shipped**: contacts get a photo (`image`), their email, phones and website as links, the avatar on the list;
+  products a picture on the form, the list and the cards; Pipeline's deals show their priority as stars, the
+  salesperson on the card, the stage as the card's tint, won deals in green and lost ones muted; locked sales
+  orders in green, cancelled ones muted. Contacts and Products now depend on `storage`.
+
+## Implementation notes (2026-10-31): step 1, part 3.4 — guidance on a record
+
+- **The next step** — `GET /api/v1/models/:model/:id/next`: the transitions from the record's state the user may
+  run (write access, the `requires` permission), each with whether its **guard** lets this record go and the
+  guard's `message` when not. The guard runs read-only on the record (Shutro guards return the records that may
+  not go); nothing is changed. The form shows a banner above the actions: "Next step: Confirm" with the button
+  when it may run, or "Before Confirm: Add at least one line…" in amber when the guard refuses; refetched with
+  the record's version. `before` hooks that throw are not predicted (their error still shows when tried).
+- **Hints**: a field's `help` (Shutro) is served with the field metadata and shown under the input when the view
+  gives none; groups and pages take a `description` shown under their title or tab.
+- **The checklist**: the required fields of the form still empty, counted in the right rail ("3 things to fill
+  in"), from the field metadata; nothing is sent.
+- **Tests**: Sales on real PostgreSQL — a quotation without lines: Confirm refused with its message, Send allowed;
+  with a line, Confirm allowed; a manager-only transition hidden from a user. E2E (apps): the banner on a new
+  quotation, then the next step offered and taken.
