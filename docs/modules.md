@@ -77,6 +77,12 @@ Code reads company settings as the company's fields; installation settings with
 section has a value (`visibleWhen: { key, equals }`). A wrong declaration (an unknown company field, a type that is
 not a setting type, an unknown editor group, a duplicate key) stops the server at start.
 
+Every setting has its **history** (who, when, old → new, from the audit log). Administrators **copy** a company's
+settings to another company, **export** them as a JSON file and **import** such a file — each previewed before
+anything is written, each change audited like one made by hand (`POST /api/v1/settings/app-settings/copy`,
+`GET …/export`, `POST …/import`). A setting that a model must obey (a required tax ID, timesheet steps) is enforced
+by a constraint reading the company's field, so the API and imports obey it too (see Contacts and Projects).
+
 ## Installing, disabling and enabling apps (RFC 0008)
 
 `src/modules.ts` lists the **catalogue**: the modules this installation can install. The database records which of

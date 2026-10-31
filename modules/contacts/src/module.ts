@@ -5,7 +5,7 @@
 import { baseShutro } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
 import { storageShutro } from '@kosh/storage';
-import { check, defineModel, defineModule, f } from './.kosh/bindings.js';
+import { check, defineModel, defineModule, type Env, extendModel, f } from './.kosh/bindings.js';
 
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const ALL = ['read', 'write', 'create', 'unlink', 'export', 'import'] as const;
@@ -26,6 +26,30 @@ export const ResPartnerTag = defineModel('res.partner.tag', {
     oneName: { unique: ['name'], message: 'A tag with this name exists.' },
   },
 });
+
+/** The company's contact settings (RFC 0020): what a contact needs before it is saved. */
+export const CompanyContacts = extendModel('res.company', {
+  fields: {
+    contactTaxIdRequired: f.boolean({ default: false, label: 'Customers need a tax ID' }),
+    contactUniqueEmail: f.boolean({ default: false, label: 'One contact per email address' }),
+  },
+});
+
+/** The current company's contact settings. */
+async function contactSettings(
+  env: Env,
+): Promise<{ taxIdRequired: boolean; uniqueEmail: boolean }> {
+  const [company] = (
+    await env
+      .model('res.company')
+      .browse([env.companyId])
+      .load(['contactTaxIdRequired', 'contactUniqueEmail'])
+  ).read(['contactTaxIdRequired', 'contactUniqueEmail']);
+  return {
+    taxIdRequired: company?.['contactTaxIdRequired'] === true,
+    uniqueEmail: company?.['contactUniqueEmail'] === true,
+  };
+}
 
 export const ResPartner = defineModel('res.partner', {
   label: 'Contact',
@@ -75,12 +99,39 @@ export const ResPartner = defineModel('res.partner', {
       ),
       message: 'An email address must look like name@example.com.',
     },
+    // The company's settings (App settings › Contacts): a customer's tax ID, one contact per email.
+    taxIdOfCustomers: {
+      ...check('res.partner', ['isCustomer', 'taxId'], async (partners) => {
+        const { taxIdRequired } = await contactSettings(partners.env as unknown as Env);
+        if (!taxIdRequired) return [];
+        return partners.filter((p) => p.isCustomer && (p.taxId === null || p.taxId.trim() === ''));
+      }),
+      message: 'Customers need a tax ID in this company (App settings › Contacts).',
+    },
+    oneContactPerEmail: {
+      ...check('res.partner', ['email'], async (partners) => {
+        const env = partners.env as unknown as Env;
+        const { uniqueEmail } = await contactSettings(env);
+        if (!uniqueEmail) return [];
+        const refused = [];
+        for (const p of partners) {
+          if (p.email === null || p.email === '') continue;
+          const others = await env
+            .model('res.partner')
+            .search({ where: { email: p.email, id: { ne: p.id } } });
+          if (others.length > 0) refused.push(p);
+        }
+        return refused;
+      }),
+      message:
+        'Another contact has this email address (App settings › Contacts: one contact per email).',
+    },
   },
 });
 
 export const contactsShutro = defineModule({
   name: 'contacts',
-  version: '0.2.0',
+  version: '0.3.0',
   depends: [baseShutro, storageShutro],
   groups: [
     orm.defineGroup({
@@ -96,4 +147,5 @@ export const contactsShutro = defineModule({
     }),
   ],
   models: [ResPartnerTag, ResPartner],
+  extensions: [CompanyContacts],
 });

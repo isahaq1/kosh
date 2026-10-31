@@ -228,6 +228,140 @@ test('editors change them, checked and audited; others refused; reset to the def
   expect(resetAll.json.settings.map((s: Json) => s.value)).toEqual(['a', null]);
 });
 
+test('step 2: history per setting; copy to another company previewed then made; export and import', async () => {
+  // History of the company section: the change (7 → 14) and the reset (14 → 7), newest first, by Dana.
+  const history = await call('GET', `${D}/demo/planning/history?key=demoDays`, 'bob');
+  expect(history.status, JSON.stringify(history.json)).toBe(200);
+  expect(history.json.events.length).toBeGreaterThanOrEqual(2);
+  expect(history.json.events[0]).toMatchObject({
+    how: 'changed',
+    actor: { name: 'dana' },
+    changes: [{ key: 'demoDays', label: 'Days ahead', from: 14, to: 7 }],
+  });
+  expect((await call('GET', `${D}/demo/planning/history`, 'eve')).status).toBe(404);
+
+  // A second company: Dana sets 21 days here; the administrator copies the section to the new one.
+  const [bdt] = await server.driver.query<{ id: number }>({
+    text: 'SELECT id FROM res_currency ORDER BY id ASC LIMIT 1',
+    params: [],
+  });
+  const second = await call('POST', '/api/v1/settings/companies', 'admin', {
+    name: 'Meghna Mills',
+    currency: bdt?.id,
+  });
+  expect(second.status, JSON.stringify(second.json)).toBe(201);
+  const other = second.json.id ?? second.json.company?.id;
+  expect(other).toBeTruthy();
+  expect(
+    (await call('PATCH', `${D}/demo/planning`, 'dana', { values: { demoDays: 21 } })).status,
+  ).toBe(200);
+  const companyOf = async (): Promise<number> =>
+    (
+      await server.driver.query<{ id: number }>({
+        text: 'SELECT id FROM res_company ORDER BY id ASC LIMIT 1',
+        params: [],
+      })
+    )[0]?.id as number;
+  const first = await companyOf();
+  expect(
+    (await call('POST', `${D}/copy`, 'dana', { from: first, to: other, preview: true })).status,
+  ).toBe(403);
+  const previewed = await call('POST', `${D}/copy`, 'admin', {
+    from: first,
+    to: other,
+    preview: true,
+  });
+  expect(previewed.status, JSON.stringify(previewed.json)).toBe(200);
+  expect(previewed.json).toMatchObject({
+    preview: true,
+    from: { id: first, name: 'Padma Traders' },
+    to: { id: other, name: 'Meghna Mills' },
+    sections: [
+      {
+        app: 'demo',
+        section: 'planning',
+        changes: [{ key: 'demoDays', from: 7, to: 21 }],
+      },
+    ],
+  });
+  const [untouched] = await server.driver.query<{ days: number }>({
+    text: 'SELECT demo_days AS days FROM res_company WHERE id = $1',
+    params: [other],
+  });
+  expect(untouched?.days).toBe(7);
+  const copied = await call('POST', `${D}/copy`, 'admin', { from: first, to: other });
+  expect(copied.status, JSON.stringify(copied.json)).toBe(200);
+  const [now] = await server.driver.query<{ days: number }>({
+    text: 'SELECT demo_days AS days FROM res_company WHERE id = $1',
+    params: [other],
+  });
+  expect(now?.days).toBe(21);
+  const [copyEvent] = await server.driver.query<{ details: Json; company: number }>({
+    text: "SELECT details, company_id AS company FROM audit_event WHERE kind = 'settings.changed' ORDER BY id DESC LIMIT 1",
+    params: [],
+  });
+  expect(copyEvent?.company).toBe(other);
+  expect(copyEvent?.details).toMatchObject({
+    copiedFrom: first,
+    changes: { demoDays: { from: 7, to: 21 } },
+  });
+  // Nothing left to copy.
+  expect(
+    (await call('POST', `${D}/copy`, 'admin', { from: first, to: other })).json.sections,
+  ).toEqual([]);
+
+  // Export: the installation's and the company's settings; import: checked, previewed, applied, the unknown skipped.
+  expect((await call('GET', `${D}/export`, 'dana')).status).toBe(403);
+  const exported = await call('GET', `${D}/export`, 'admin');
+  expect(exported.status, JSON.stringify(exported.json)).toBe(200);
+  expect(exported.json).toMatchObject({
+    kosh: 'app-settings',
+    version: 1,
+    company: { id: first },
+    installation: { 'demo.display': { mode: 'a', banner: null } },
+    companySettings: { 'demo.planning': { demoDays: 21 } },
+  });
+  const file = {
+    ...exported.json,
+    installation: {
+      'demo.display': { mode: 'b', banner: 'Imported', nope: 1 },
+      'gone.section': {},
+    },
+    companySettings: { 'demo.planning': { demoDays: 9 } },
+  };
+  expect((await call('POST', `${D}/import`, 'admin', { file: { hello: 1 } })).status).toBe(422);
+  expect(
+    (
+      await call('POST', `${D}/import`, 'admin', {
+        file: { ...file, companySettings: { 'demo.planning': { demoDays: 99 } } },
+        preview: true,
+      })
+    ).status,
+  ).toBe(422);
+  const dry = await call('POST', `${D}/import`, 'admin', { file, preview: true });
+  expect(dry.status, JSON.stringify(dry.json)).toBe(200);
+  expect(dry.json.skipped).toEqual(['demo.display.nope', 'gone.section']);
+  expect(
+    dry.json.sections.map((x: Json) => [x.section, x.changes.map((c: Json) => c.key)]),
+  ).toEqual([
+    ['display', ['mode', 'banner']],
+    ['planning', ['demoDays']],
+  ]);
+  expect((await call('GET', `${D}/demo`, 'admin')).json.sections[0].settings[0].value).toBe(21);
+  const done = await call('POST', `${D}/import`, 'admin', { file });
+  expect(done.status, JSON.stringify(done.json)).toBe(200);
+  const after = (await call('GET', `${D}/demo`, 'admin')).json;
+  expect(after.sections.find((x: Json) => x.key === 'planning').settings[0].value).toBe(9);
+  expect(
+    after.sections.find((x: Json) => x.key === 'display').settings.map((x: Json) => x.value),
+  ).toEqual(['b', 'Imported']);
+  const imported = await call('GET', `${D}/demo/planning/history`, 'admin');
+  expect(imported.json.events[0]).toMatchObject({
+    how: 'imported',
+    changes: [{ from: 21, to: 9 }],
+  });
+});
+
 test('a wrong declaration stops the server', async () => {
   const wrong = demo({
     sections: [{ key: 'bad', label: 'Bad', scope: 'company', fields: [{ key: 'noSuchField' }] }],

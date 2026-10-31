@@ -169,3 +169,51 @@ test('the Overview and the views (RFC 0022 step 2): a user gets the cards; the a
     'contacts.tags',
   );
 });
+
+test('App settings › Contacts (RFC 0020 step 2): customers need a tax ID; one contact per email', async () => {
+  const S = '/api/v1/settings/app-settings/contacts/contacts';
+  expect((await call('sam', 'PATCH', S, { values: { contactTaxIdRequired: true } })).status).toBe(
+    403,
+  );
+  const on = await call('maria', 'PATCH', S, {
+    values: { contactTaxIdRequired: true, contactUniqueEmail: true },
+  });
+  expect(on.status, JSON.stringify(on.json)).toBe(200);
+  const noTaxId = await call('sam', 'POST', '/api/v1/models/res.partner', {
+    name: 'Meghna Mills',
+    isCustomer: true,
+    email: 'buy@meghna.test',
+  });
+  expect(noTaxId.status, JSON.stringify(noTaxId.json)).toBe(422);
+  expect(JSON.stringify(noTaxId.json)).toContain('tax ID');
+  const made = await call('sam', 'POST', '/api/v1/models/res.partner', {
+    name: 'Meghna Mills',
+    isCustomer: true,
+    taxId: 'BIN-0001',
+    email: 'buy@meghna.test',
+  });
+  expect(made.status, JSON.stringify(made.json)).toBe(201);
+  const twice = await call('sam', 'POST', '/api/v1/models/res.partner', {
+    name: 'Meghna Mills (again)',
+    email: 'buy@meghna.test',
+  });
+  expect(twice.status, JSON.stringify(twice.json)).toBe(422);
+  expect(JSON.stringify(twice.json)).toContain('email');
+  // Off again: both go through.
+  expect(
+    (
+      await call('maria', 'POST', `${S}/reset`, {
+        keys: ['contactTaxIdRequired', 'contactUniqueEmail'],
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await call('sam', 'POST', '/api/v1/models/res.partner', {
+        name: 'Meghna Mills (again)',
+        isCustomer: true,
+        email: 'buy@meghna.test',
+      })
+    ).status,
+  ).toBe(201);
+});

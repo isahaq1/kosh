@@ -256,3 +256,38 @@ test('the Projects overview (RFC 0022 step 2) to a user; the project form has it
   const gantt = await call('GET', '/api/v1/views?model=project.project&type=gantt', 'rahim');
   expect(gantt.status, JSON.stringify(gantt.json)).toBe(200);
 });
+
+test('App settings › Projects (RFC 0020 step 2): timesheets on the step; planned hours on new tasks', async () => {
+  // Set as the company's fields (the Settings app is not in this catalogue).
+  await driver.query({
+    text: "UPDATE res_company SET project_timesheet_step = 'half', project_planned_hours_default = 8",
+    params: [],
+  });
+  const p = (await call('POST', '/api/v1/models/project.project', 'maria', { name: 'Steps' })).json;
+  const t = (
+    await call('POST', '/api/v1/models/project.task', 'maria', {
+      name: 'Measured',
+      project: p.id,
+      stage: stages['In progress'],
+    })
+  ).json;
+  expect(
+    (await call('POST', '/api/v1/models/project.timesheet', 'rahim', { task: t.id, hours: '1.25' }))
+      .status,
+  ).toBe(422);
+  expectStatus(
+    await call('POST', '/api/v1/models/project.timesheet', 'rahim', { task: t.id, hours: '1.5' }),
+    201,
+  );
+  // The onchange: a task's project chosen fills the planned hours when empty.
+  const changed = await call('POST', '/api/v1/models/project.task/onchange', 'maria', {
+    values: { name: 'New', project: p.id },
+    changed: ['project'],
+  });
+  expect(changed.status, JSON.stringify(changed.json)).toBe(200);
+  expect(Number(changed.json.values?.plannedHours ?? changed.json.plannedHours)).toBe(8);
+  await driver.query({
+    text: "UPDATE res_company SET project_timesheet_step = 'none', project_planned_hours_default = NULL",
+    params: [],
+  });
+});

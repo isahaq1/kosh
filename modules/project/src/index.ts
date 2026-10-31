@@ -32,6 +32,30 @@ export const project: ReturnType<typeof defineModule> = defineModule({
   shutro: projectShutro,
   kosh: '^0.1.0',
   hooks: { demo: projectDemo },
+  // Defaults for tasks and timesheets (RFC 0020), per company.
+  settings: {
+    sections: [
+      {
+        key: 'work',
+        label: 'Tasks and timesheets',
+        description: 'What new tasks start with, and the steps timesheets are entered in.',
+        keywords: 'planned hours timesheet rounding step quarter half',
+        scope: 'company',
+        editors: ['project.manager'],
+        fields: [
+          {
+            key: 'projectPlannedHoursDefault',
+            min: 0,
+            help: 'Filled in on a new task when its project is chosen; each task can still be changed.',
+          },
+          {
+            key: 'projectTimesheetStep',
+            help: 'Hours that are not a multiple of the step are refused.',
+          },
+        ],
+      },
+    ],
+  },
   // support@<inbound domain>: a task in the support project (RFC 0006 §7.1), or the first project there is.
   inboundAliases: [
     {

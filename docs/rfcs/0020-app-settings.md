@@ -169,3 +169,32 @@ defineModule({
   with the date. E2E (apps): found by the Settings search, changed, kept after a reload, marked, reset; Accounting's
   section.
 
+## Implementation notes (2026-10-31): step 2 — history, copy, export / import; Contacts and Projects
+
+- **History**: `GET …/:app/:section/history?key=` reads the audit log (`settings.changed`, of the current company
+  for company sections) and returns who changed what and when — old → new per key, and how: changed by hand,
+  copied from another company, imported. Each setting on the page opens its history in a dialog; a setting never
+  changed says so.
+- **Copy to another company** (administrators, both companies theirs): `POST …/copy` `{ from, to, sections?,
+  preview? }` compares each company section (or the ones named as `app.section`) and returns what would change;
+  without `preview` it writes the differences to the target company and audits them there (`copiedFrom`). The page's
+  *Copy to another company…* previews on choosing the company and writes on confirmation.
+- **Export / import** (administrators): `GET …/export` gives one JSON file — `{ kosh: 'app-settings', version: 1,
+  company, installation: { 'app.section': { key: value } }, companySettings: { … } }` — of every installed app's
+  settings for the current company (audited `settings.exported`). `POST …/import` `{ file, preview? }` checks the
+  file's shape, matches sections and keys to the installed declarations (unknown ones are listed as skipped, nothing
+  else is refused for them), checks every value as a change by hand would be, and returns the differences; without
+  `preview` it writes them to the current company and audits them (`imported`). The page downloads the export and
+  previews an import before *Import the settings*.
+- **Contacts** (*New contacts*, per company, Contacts managers): customers need a tax ID; one contact per email
+  address — both enforced by model constraints, so the API and imports obey them too.
+- **Projects** (*Tasks and timesheets*, per company, Project managers): planned hours of a new task, filled in when
+  its project is chosen; timesheets in steps of a quarter, half or whole hour — hours off the step are refused.
+- **Not here**: copying installation-wide settings (they are the same for every company by definition); a copy
+  across installations goes through export / import. Numbering is step 3 (Shutro request #31).
+- **Tests**: on real PostgreSQL — the history with its actor and old → new, copy refused to non-administrators,
+  previewed without writing, applied and audited in the target company, nothing left to copy afterwards; export's
+  shape; import refused for a wrong file or a value out of bounds, previewed with the skipped unknowns, applied,
+  and in the history as imported. Contacts' and Projects' constraints and the onchange. E2E: the history dialog, the
+  export downloaded and re-imported with a change, previewed and applied.
+

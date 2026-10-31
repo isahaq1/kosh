@@ -9,6 +9,11 @@
  * - `GET   /api/v1/settings/app-settings/:app`                  its sections, values, defaults, what may be changed
  * - `PATCH /api/v1/settings/app-settings/:app/:section`         `{ values: { key: value } }`
  * - `POST  /api/v1/settings/app-settings/:app/:section/reset`   `{ keys }`: back to the defaults
+ * - `GET   /api/v1/settings/app-settings/:app/:section/history?key=`  who changed what and when (the audit log)
+ * - `POST  /api/v1/settings/app-settings/copy`     `{ from, to, sections?, preview? }`: a company's settings to another
+ * - `GET   /api/v1/settings/app-settings/export`   the installation's and the current company's settings as a file
+ * - `POST  /api/v1/settings/app-settings/import`   `{ file, preview? }`: such a file, checked, into the current company
+ * Copy, export and import are for administrators; every change they make is audited like a change by hand.
  */
 import type { KoshModule, SettingFieldSpec, SettingsSectionSpec } from '@kosh/modules-sdk';
 import {
@@ -275,6 +280,7 @@ export function registerAppSettingsRoutes(context: ModuleContext): void {
     request.env(async (env) => {
       const apps = [...new Set(sections.map((s) => s.app))].filter((m) => mayView(env, m));
       return {
+        administrator: env.administrator,
         apps: apps.map((m) => ({
           app: m,
           ...label(m),
@@ -316,6 +322,44 @@ export function registerAppSettingsRoutes(context: ModuleContext): void {
     );
   });
 
+  type Changes = Record<string, { from: Value; to: Value }>;
+  /** Writes `changes` to the section's store for `companyId` and audits them with the old and new values. */
+  const apply = async (
+    env: Env,
+    su: Env,
+    section: Section,
+    changes: Changes,
+    companyId: number,
+    how: string,
+    extra: Row,
+    ip: string,
+  ): Promise<void> => {
+    if (section.spec.scope === 'company')
+      await ref(su, 'res.company')
+        .browse([companyId])
+        .write(Object.fromEntries(Object.entries(changes).map(([k, c]) => [k, c.to])));
+    else
+      for (const [k, c] of Object.entries(changes)) {
+        const key = storedKey(section, k);
+        const existing = await ref(su, 'kosh.setting').search({ where: { key } });
+        if (existing.length > 0) await existing.write({ value: c.to });
+        else await ref(su, 'kosh.setting').create([{ key, value: c.to }]);
+      }
+    await audit(env, {
+      kind: 'settings.changed',
+      summary: `${label(section.app).label} › ${section.spec.label}: ${Object.keys(changes).join(', ')} ${how}.`,
+      details: {
+        app: section.app,
+        section: section.spec.key,
+        scope: section.spec.scope,
+        changes,
+        ...extra,
+      },
+      company: companyId,
+      ip,
+    });
+  };
+
   /** Writes `next` (only the keys that changed), audited with the old and new values. */
   const save = (
     request: FastifyRequest,
@@ -344,28 +388,7 @@ export function registerAppSettingsRoutes(context: ModuleContext): void {
               .map(([k, v]) => [k, { from: old[k] ?? null, to: v }]),
           );
           if (Object.keys(changes).length > 0) {
-            if (section.spec.scope === 'company')
-              await ref(su, 'res.company')
-                .browse([env.companyId])
-                .write(Object.fromEntries(Object.entries(changes).map(([k, c]) => [k, c.to])));
-            else
-              for (const [k, c] of Object.entries(changes)) {
-                const key = storedKey(section, k);
-                const existing = await ref(su, 'kosh.setting').search({ where: { key } });
-                if (existing.length > 0) await existing.write({ value: c.to });
-                else await ref(su, 'kosh.setting').create([{ key, value: c.to }]);
-              }
-            await audit(env, {
-              kind: 'settings.changed',
-              summary: `${label(section.app).label} › ${section.spec.label}: ${Object.keys(changes).join(', ')} changed.`,
-              details: {
-                app: section.app,
-                section: section.spec.key,
-                scope: section.spec.scope,
-                changes,
-              },
-              ip: request.ip,
-            });
+            await apply(env, su, section, changes, env.companyId, 'changed', {}, request.ip);
             await su.flush();
           }
           return shape(section, { ...old, ...wanted }, true);
@@ -412,6 +435,285 @@ export function registerAppSettingsRoutes(context: ModuleContext): void {
       defaults[key] = s.default;
     }
     return save(request, section, () => defaults);
+  });
+
+  // ---- step 2: history, copy between companies, export and import.
+  const administrators = (env: Env): void => {
+    if (!env.administrator)
+      throw new HttpProblem(403, 'access', 'App settings', 'This needs the Administrator role.');
+  };
+  /** Whether `companyId` is one of the user's companies. */
+  const memberOf = async (su: Env, uid: number, companyId: number): Promise<boolean> =>
+    (
+      await ref(su, 'res.users').search({
+        where: { id: uid, companies: { any: { id: companyId } } },
+      })
+    ).length > 0;
+  const companyOf = async (su: Env, id: number): Promise<{ id: number; name: string }> => {
+    const [row] = (await ref(su, 'res.company').browse([id]).load(['name'])).read(['name']);
+    if (row === undefined)
+      throw new HttpProblem(404, 'missing-record', 'Not found', `There is no company ${id}.`);
+    return { id, name: String(row['name']) };
+  };
+  const sectionKey = (s: Section) => `${s.app}.${s.spec.key}`;
+  const describeChanges = (s: Section, changes: Changes) => ({
+    app: s.app,
+    appLabel: label(s.app).label,
+    section: s.spec.key,
+    label: s.spec.label,
+    scope: s.spec.scope,
+    changes: Object.entries(changes).map(([key, c]) => ({
+      key,
+      label: s.settings.find((x) => x.key === key)?.label ?? key,
+      from: c.from,
+      to: c.to,
+    })),
+  });
+
+  app.get('/api/v1/settings/app-settings/export', async (request) =>
+    request.env(
+      async (env) => {
+        administrators(env);
+        return env.asSuperuser({ reason: 'app settings export' }, async (su) => {
+          const installation: Record<string, Record<string, Value>> = {};
+          const companySettings: Record<string, Record<string, Value>> = {};
+          for (const s of sections)
+            (s.spec.scope === 'company' ? companySettings : installation)[sectionKey(s)] =
+              await valuesOf(su, s, env.companyId);
+          await audit(env, {
+            kind: 'settings.exported',
+            summary: 'App settings exported.',
+            ip: request.ip,
+          });
+          return {
+            kosh: 'app-settings',
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            company: await companyOf(su, env.companyId),
+            installation,
+            companySettings,
+          };
+        });
+      },
+      { write: true },
+    ),
+  );
+
+  app.get('/api/v1/settings/app-settings/:app/:section/history', async (request) => {
+    const section = sectionOf(request);
+    const key = (request.query as { key?: string }).key;
+    return request.env(
+      async (env) => {
+        if (!mayView(env, section.app))
+          throw new HttpProblem(404, 'missing-record', 'Not found', 'There are no such settings.');
+        return env.asSuperuser({ reason: 'app settings history' }, async (su) => {
+          const found = await ref(su, 'audit.event').search({
+            where: {
+              kind: 'settings.changed',
+              ...(section.spec.scope === 'company' ? { company: env.companyId } : {}),
+            },
+            order: ['id desc'],
+            limit: 500,
+          });
+          const rows =
+            found.length === 0
+              ? []
+              : (await found.load(['actor', 'createdAt', 'details'])).read([
+                  'actor',
+                  'createdAt',
+                  'details',
+                ]);
+          const events = rows
+            .map((r) => {
+              const details = (r['details'] ?? {}) as {
+                app?: string;
+                section?: string;
+                changes?: Changes;
+                copiedFrom?: number;
+                imported?: boolean;
+              };
+              const actor = r['actor'] as number | { id: number; name?: string } | null;
+              return {
+                actor: typeof actor === 'object' && actor !== null ? actor.id : actor,
+                actorName:
+                  typeof actor === 'object' && actor !== null ? (actor.name ?? null) : null,
+                at:
+                  r['createdAt'] instanceof Date
+                    ? r['createdAt'].toISOString()
+                    : String(r['createdAt']),
+                details,
+              };
+            })
+            .filter(
+              (e) =>
+                e.details.app === section.app &&
+                e.details.section === section.spec.key &&
+                (key === undefined || key in (e.details.changes ?? {})),
+            )
+            .slice(0, 50);
+          const unnamed = [
+            ...new Set(
+              events
+                .filter((e) => e.actor !== null && e.actorName === null)
+                .map((e) => e.actor as number),
+            ),
+          ];
+          const users = ref(su, 'res.users').browse(unnamed);
+          const names = new Map(
+            unnamed.length === 0
+              ? []
+              : (await users.load(['name']))
+                  .read(['name'])
+                  .map((r, i) => [users.ids[i] as number, String(r['name'])] as const),
+          );
+          return {
+            events: events.map((e) => ({
+              at: e.at,
+              actor:
+                e.actor === null
+                  ? null
+                  : { id: e.actor, name: e.actorName ?? names.get(e.actor) ?? String(e.actor) },
+              how:
+                e.details.copiedFrom !== undefined
+                  ? 'copied'
+                  : e.details.imported === true
+                    ? 'imported'
+                    : 'changed',
+              changes: Object.entries(e.details.changes ?? {})
+                .filter(([k]) => key === undefined || k === key)
+                .map(([k, c]) => ({
+                  key: k,
+                  label: section.settings.find((x) => x.key === k)?.label ?? k,
+                  from: c.from,
+                  to: c.to,
+                })),
+            })),
+          };
+        });
+      },
+      { write: true },
+    );
+  });
+
+  app.post('/api/v1/settings/app-settings/copy', async (request) => {
+    const body = (request.body ?? {}) as Row;
+    const from = Number(body['from']);
+    const to = Number(body['to']);
+    const preview = body['preview'] === true;
+    const chosen = Array.isArray(body['sections']) ? body['sections'].map(String) : null;
+    if (!Number.isInteger(from) || !Number.isInteger(to) || from === to)
+      throw new HttpProblem(422, 'invalid-copy', 'Copy settings', 'Give two different companies.');
+    return request.env(
+      async (env) => {
+        administrators(env);
+        return env.asSuperuser({ reason: 'app settings copy' }, async (su) => {
+          for (const c of [from, to])
+            if (!(await memberOf(su, env.uid, c)))
+              throw new HttpProblem(
+                403,
+                'access',
+                'Copy settings',
+                `Company ${c} is not one of yours.`,
+              );
+          const source = await companyOf(su, from);
+          const target = await companyOf(su, to);
+          const picked = sections.filter(
+            (s) =>
+              s.spec.scope === 'company' && (chosen === null || chosen.includes(sectionKey(s))),
+          );
+          const out = [];
+          for (const s of picked) {
+            const a = await valuesOf(su, s, from);
+            const b = await valuesOf(su, s, to);
+            const changes: Changes = Object.fromEntries(
+              s.settings
+                .filter((x) => (a[x.key] ?? null) !== (b[x.key] ?? null))
+                .map((x) => [x.key, { from: b[x.key] ?? null, to: a[x.key] ?? null }]),
+            );
+            if (Object.keys(changes).length === 0) continue;
+            out.push(describeChanges(s, changes));
+            if (!preview)
+              await apply(
+                env,
+                su,
+                s,
+                changes,
+                to,
+                `copied from ${source.name}`,
+                { copiedFrom: from },
+                request.ip,
+              );
+          }
+          if (!preview) await su.flush();
+          return { preview, from: source, to: target, sections: out };
+        });
+      },
+      { write: true },
+    );
+  });
+
+  app.post('/api/v1/settings/app-settings/import', async (request) => {
+    const body = (request.body ?? {}) as Row;
+    const file = body['file'] as Row | null | undefined;
+    const preview = body['preview'] === true;
+    if (typeof file !== 'object' || file === null || file['kosh'] !== 'app-settings')
+      throw new HttpProblem(422, 'invalid-file', 'Import settings', 'Not an app settings export.');
+    const given: [SettingsSectionSpec['scope'], unknown][] = [
+      ['installation', file['installation']],
+      ['company', file['companySettings']],
+    ];
+    return request.env(
+      async (env) => {
+        administrators(env);
+        return env.asSuperuser({ reason: 'app settings import' }, async (su) => {
+          const skipped: string[] = [];
+          const plan: { section: Section; changes: Changes }[] = [];
+          for (const [scope, part] of given) {
+            if (typeof part !== 'object' || part === null) continue;
+            for (const [k, values] of Object.entries(part as Row)) {
+              const s = sections.find((x) => sectionKey(x) === k && x.spec.scope === scope);
+              if (s === undefined || typeof values !== 'object' || values === null) {
+                skipped.push(k);
+                continue;
+              }
+              const current = await valuesOf(su, s, env.companyId);
+              const changes: Changes = {};
+              for (const [key, value] of Object.entries(values as Row)) {
+                const setting = s.settings.find((x) => x.key === key);
+                if (setting === undefined) {
+                  skipped.push(`${k}.${key}`);
+                  continue;
+                }
+                const checked = check(setting, value);
+                if (checked !== (current[key] ?? null))
+                  changes[key] = { from: current[key] ?? null, to: checked };
+              }
+              if (Object.keys(changes).length > 0) plan.push({ section: s, changes });
+            }
+          }
+          if (!preview) {
+            for (const { section, changes } of plan)
+              await apply(
+                env,
+                su,
+                section,
+                changes,
+                env.companyId,
+                'imported',
+                { imported: true },
+                request.ip,
+              );
+            await su.flush();
+          }
+          return {
+            preview,
+            skipped,
+            sections: plan.map(({ section, changes }) => describeChanges(section, changes)),
+          };
+        });
+      },
+      { write: true },
+    );
   });
 }
 

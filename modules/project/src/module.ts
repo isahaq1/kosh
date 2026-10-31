@@ -7,13 +7,58 @@
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
 import { orm } from '@kosh/server/orm';
-import { compute, defineModel, defineModule, type Env, f, record } from './.kosh/bindings.js';
+import {
+  check,
+  compute,
+  defineModel,
+  defineModule,
+  type Env,
+  extendModel,
+  f,
+  record,
+} from './.kosh/bindings.js';
 
 const READ = ['read'] as const;
 const WRITE = ['read', 'write', 'create', 'unlink'] as const;
 const ALL = ['read', 'write', 'create', 'unlink', 'export', 'import'] as const;
 
 /** A column of the task kanban, shared by every project (per company later, if asked for). */
+/** The company's project settings (RFC 0020): new tasks' planned hours, the step timesheets are entered in. */
+export const CompanyProject = extendModel('res.company', {
+  fields: {
+    projectPlannedHoursDefault: f.decimal({ scale: 2, label: 'Planned hours of a new task' }),
+    projectTimesheetStep: f.selection(
+      { none: 'Any', quarter: 'Quarter hours', half: 'Half hours', whole: 'Whole hours' },
+      { default: 'none', label: 'Timesheets in steps of' },
+    ),
+  },
+});
+
+/** The timesheet steps as hours. */
+const STEPS: Readonly<Record<string, ReturnType<typeof orm.toDecimal>>> = {
+  quarter: orm.toDecimal('0.25'),
+  half: orm.toDecimal('0.5'),
+  whole: orm.toDecimal('1'),
+};
+
+/** The current company's project settings. */
+async function projectSettings(env: Env): Promise<{ plannedHours: string | null; step: string }> {
+  const [company] = (
+    await env
+      .model('res.company')
+      .browse([env.companyId])
+      .load(['projectPlannedHoursDefault', 'projectTimesheetStep'])
+  ).read(['projectPlannedHoursDefault', 'projectTimesheetStep']);
+  const planned = company?.['projectPlannedHoursDefault'];
+  return {
+    plannedHours: planned === null || planned === undefined ? null : String(planned),
+    step:
+      typeof company?.['projectTimesheetStep'] === 'string'
+        ? company['projectTimesheetStep']
+        : 'none',
+  };
+}
+
 export const ProjectTaskStage = defineModel('project.task.stage', {
   label: 'Task stage',
   order: ['sequence asc', 'id asc'],
@@ -130,13 +175,17 @@ export const ProjectTask = defineModel('project.task', {
     timesheets: f.one2many('project.timesheet', 'task'),
   },
   onchange: {
-    // A task of a project takes the project's customer.
-    project: async (d) => {
+    // A task of a project takes the project's customer, and the company's planned hours when it has none.
+    project: async (d, env) => {
       const p = await (
         d as { record(key: string): Promise<{ partner: { id: number } | null } | null> }
       ).record('project');
-      if (p?.partner)
-        (d as { set(key: string, value: unknown): void }).set('partner', p.partner.id);
+      const draft = d as { get(key: string): unknown; set(key: string, value: unknown): void };
+      if (p?.partner) draft.set('partner', p.partner.id);
+      if ((draft.get('plannedHours') ?? null) === null) {
+        const { plannedHours } = await projectSettings(env as unknown as Env);
+        if (plannedHours !== null) draft.set('plannedHours', plannedHours);
+      }
     },
   },
 });
@@ -171,11 +220,23 @@ export const ProjectTimesheet = defineModel('project.timesheet', {
   sqlConstraints: {
     hoursPositive: { check: orm.sql`hours > 0`, message: 'Hours are positive.' },
   },
+  constraints: {
+    // The company's step (App settings › Projects): quarter, half or whole hours.
+    hoursOnTheStep: {
+      ...check('project.timesheet', ['hours'], async (lines) => {
+        const { step } = await projectSettings(lines.env as unknown as Env);
+        const unit = STEPS[step];
+        if (unit === undefined) return [];
+        return lines.filter((l) => !l.hours.mod(unit).isZero());
+      }),
+      message: 'Timesheet hours are entered in the company’s steps (App settings › Projects).',
+    },
+  },
 });
 
 export const projectShutro = defineModule({
   name: 'project',
-  version: '0.1.0',
+  version: '0.2.0',
   depends: [contactsShutro, messagingShutro],
   groups: [
     orm.defineGroup({
@@ -190,6 +251,7 @@ export const projectShutro = defineModule({
     }),
   ],
   models: [ProjectTaskStage, ProjectProject, ProjectTask, ProjectTimesheet],
+  extensions: [CompanyProject],
   // The kanban every installation starts with (theirs to change afterwards).
   data: [
     record('project.task.stage', 'stage_new', { name: 'New', sequence: 1 }, { noupdate: true }),

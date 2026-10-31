@@ -18,6 +18,29 @@ export const contacts: ReturnType<typeof defineModule> = defineModule({
   shutro: contactsShutro,
   kosh: '^0.1.0',
   hooks: { demo: contactsDemo },
+  // What a new contact needs (RFC 0020), per company.
+  settings: {
+    sections: [
+      {
+        key: 'contacts',
+        label: 'New contacts',
+        description: 'What a contact needs before it is saved, in this company.',
+        keywords: 'tax id BIN TIN GSTIN required duplicate email unique',
+        scope: 'company',
+        editors: ['contacts.manager'],
+        fields: [
+          {
+            key: 'contactTaxIdRequired',
+            help: 'A customer cannot be saved without a tax ID (BIN, TIN, GSTIN…).',
+          },
+          {
+            key: 'contactUniqueEmail',
+            help: 'Two contacts cannot share an email address.',
+          },
+        ],
+      },
+    ],
+  },
   depends: [base, storage, reporting],
   app: {
     code: 'contacts',
