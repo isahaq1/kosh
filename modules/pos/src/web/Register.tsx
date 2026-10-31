@@ -4,7 +4,17 @@
  * several methods and the change, the receipt to print, the session opened with its cash and closed with its
  * count. Totals here are the register's own arithmetic for the cashier's eye; the server computes the sale.
  */
-import { Alert, Button, Dialog, Input, Label, type PageProps, Spinner, useKosh } from '@kosh/ui';
+import {
+  Alert,
+  Button,
+  Dialog,
+  Input,
+  Label,
+  NetworkError,
+  type PageProps,
+  Spinner,
+  useKosh,
+} from '@kosh/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactElement, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -74,8 +84,9 @@ function lineAmount(line: CartLine, pricesIncludeTax: boolean): number {
 
 export function Register({ api }: PageProps): ReactElement {
   const { t } = useTranslation('pos');
-  const { format } = useKosh();
+  const { format, offline } = useKosh();
   const queryClient = useQueryClient();
+  const [queued, setQueued] = useState(0);
   const shops = useQuery({
     queryKey: ['counter', 'shops'],
     queryFn: () => api.call<{ shops: Shop[] }>('GET', '/api/v1/counter/shops').then((r) => r.shops),
@@ -171,16 +182,38 @@ export function Register({ api }: PageProps): ReactElement {
     onError: (e) => setError(e instanceof Error ? e.message : String(e)),
   });
   const sell = useMutation({
-    mutationFn: () =>
-      api.call<{ order: Sale }>('POST', '/api/v1/counter/orders', {
+    mutationFn: async (): Promise<{ order: Sale | null; queued: boolean }> => {
+      const body = {
         session: session.data?.id,
         clientId: clientId.current,
         lines: cart.map((l) => ({ product: l.product.id, quantity: String(l.quantity) })),
         payments: Object.entries(payments)
           .filter(([, amount]) => Number(amount) > 0)
           .map(([method, amount]) => ({ method: Number(method), amount })),
-      }),
+      };
+      try {
+        const r = await api.call<{ order: Sale }>('POST', '/api/v1/counter/orders', body);
+        return { order: r.order, queued: false };
+      } catch (error) {
+        // Offline: the sale waits on the device, sent in order when the network is back, accepted once by
+        // its device reference (offline/queue.ts).
+        if (!(error instanceof NetworkError) || offline === undefined) throw error;
+        await offline.add({
+          kind: 'request',
+          method: 'POST',
+          path: '/api/v1/counter/orders',
+          model: 'pos.order',
+          modelLabel: t('cart'),
+          recordId: null,
+          title: `${t('cart')} ${format.decimal(money(total))}`,
+          values: body,
+          etag: null,
+        });
+        return { order: null, queued: true };
+      }
+    },
     onSuccess: (r) => {
+      if (r.queued) setQueued((n) => n + 1);
       setLastSale(r.order);
       setCart([]);
       setPayments({});
@@ -208,6 +241,20 @@ export function Register({ api }: PageProps): ReactElement {
     onError: (e) => setError(e instanceof Error ? e.message : String(e)),
   });
   const [closedInfo, setClosedInfo] = useState<Session | null>(null);
+  const [sendTo, setSendTo] = useState('');
+  const [sentNote, setSentNote] = useState<string | null>(null);
+  // The receipt by email or text: an address with an @ is an email, anything else a phone number.
+  const sendReceipt = useMutation({
+    mutationFn: (id: number) =>
+      api.call<{ sent: string[] }>('POST', `/api/v1/counter/orders/${id}/receipt`, {
+        ...(sendTo.includes('@') ? { email: sendTo.trim() } : { phone: sendTo.trim() }),
+      }),
+    onSuccess: (r) => {
+      setSentNote(t('sent', { how: r.sent.join(', ') }));
+      setSendTo('');
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : String(e)),
+  });
   const printReceipt = async (sale: Sale): Promise<void> => {
     try {
       const { templates } = await api.call<{
@@ -375,6 +422,11 @@ export function Register({ api }: PageProps): ReactElement {
         <Button variant="primary" disabled={cart.length === 0} onClick={() => setPaying(true)}>
           {t('pay')}
         </Button>
+        {queued === 0 ? null : (
+          <p role="status" className="text-xs text-muted-foreground">
+            {t('queued', { count: queued })}
+          </p>
+        )}
         {lastSale === null ? null : (
           <div role="status" className="grid gap-1 rounded-md border bg-muted/40 p-2 text-sm">
             <span>
@@ -388,6 +440,26 @@ export function Register({ api }: PageProps): ReactElement {
             <Button size="sm" variant="secondary" onClick={() => void printReceipt(lastSale)}>
               {t('printReceipt')}
             </Button>
+            <div className="grid grid-cols-[1fr_auto] gap-1">
+              <Input
+                aria-label={t('sendTo')}
+                placeholder={t('sendToHint')}
+                value={sendTo}
+                onChange={(e) => setSendTo(e.target.value)}
+              />
+              <Button
+                size="sm"
+                variant="ghost"
+                busy={sendReceipt.isPending}
+                disabled={sendTo.trim() === ''}
+                onClick={() => sendReceipt.mutate(lastSale.id)}
+              >
+                {t('send')}
+              </Button>
+            </div>
+            {sentNote === null ? null : (
+              <span className="text-xs text-muted-foreground">{sentNote}</span>
+            )}
           </div>
         )}
         {error === null ? null : <Alert>{error}</Alert>}

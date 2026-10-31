@@ -14,8 +14,12 @@ export type ChangeStatus = 'pending' | 'conflict' | 'refused';
 export interface QueuedChange {
   readonly id: string;
   readonly at: number;
-  readonly kind: 'create' | 'update';
+  /** A record created or updated through the generated API, or a module's route replayed as sent (`request`). */
+  readonly kind: 'create' | 'update' | 'request';
   readonly model: string;
+  /** `request` only: the method and path, with `values` as the body. */
+  readonly method?: 'POST' | 'PATCH' | 'PUT' | undefined;
+  readonly path?: string | undefined;
   /** The list's label, for people (e.g. "Contacts"). */
   readonly modelLabel: string;
   readonly recordId: number | null;
@@ -180,6 +184,8 @@ export class OfflineQueue {
   ): Promise<'synced' | 'offline' | { status: ChangeStatus; error: string }> {
     try {
       if (item.kind === 'create') await this.api.create(item.model, { ...item.values });
+      else if (item.kind === 'request')
+        await this.api.call(item.method ?? 'POST', item.path ?? '', { ...item.values });
       else
         await this.api.update(item.model, item.recordId as number, { ...item.values }, item.etag);
       return 'synced';

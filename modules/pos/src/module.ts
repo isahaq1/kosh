@@ -19,6 +19,7 @@ import {
   method,
   records,
 } from './.kosh/bindings.js';
+import { bookSessions } from './accounting.js';
 
 const ALL = ['read', 'write', 'create', 'unlink'] as const;
 const me = { $env: 'uid' } as const;
@@ -47,6 +48,11 @@ export const PosShop = defineModel('pos.shop', {
     sessions: f.one2many('pos.session', 'shop'),
     /** The receipt's footer line (thanks, the return policy). */
     receiptFooter: f.char({ size: 200, label: 'Receipt footer' }),
+    /** Where a closing's cash difference goes (a gain or a loss); the income account otherwise. */
+    differenceAccount: f.many2one('account.account', {
+      ondelete: 'restrict',
+      label: 'Cash difference account',
+    }),
   },
 });
 
@@ -134,6 +140,8 @@ export const PosSession = defineModel('pos.session', {
       ),
     }),
     differenceReason: f.char({ size: 200, label: 'Difference explained' }),
+    /** The journal entry of the closed session (one per session; none without a sales journal). */
+    entry: f.many2one('account.move', { ondelete: 'set null', label: 'Journal entry' }),
     orders: f.one2many('pos.order', 'session'),
     orderCount: f.integer({
       store: true,
@@ -179,10 +187,13 @@ export const PosSession = defineModel('pos.session', {
           }),
           after: records('pos.session', async (sessions): Promise<void> => {
             await sessions.write({ closedAt: new Date() } as never);
-            await (sessions.env as unknown as Env)
-              .model('pos.session')
-              .browse(sessions.ids)
-              .closed();
+            const env = sessions.env as unknown as Env;
+            await env.flush();
+            // The entry reads journals, accounts and taxes a cashier may not: booked as the system, audited.
+            await env.asSuperuser({ reason: 'counter session books' }, (su) =>
+              bookSessions(su, sessions.ids),
+            );
+            await env.model('pos.session').browse(sessions.ids).closed();
           }),
         },
       },

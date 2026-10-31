@@ -10,7 +10,10 @@
  * - `POST /api/v1/counter/orders`                  a sale: `{ session, clientId, partner?, lines, payments, note? }`
  * - `POST /api/v1/counter/sessions/:id/close`      `{ closingCash, differenceReason? }`: the count, then closed
  */
-import { HttpProblem, type ModuleContext } from '@kosh/server';
+import { type Mailer, mailerFromEnv } from '@kosh/mail';
+import { type Messenger, messengerFromEnv } from '@kosh/notify';
+import { documentFields, renderDocument } from '@kosh/reporting';
+import { HttpProblem, type ModuleContext, publicApiModels } from '@kosh/server';
 import { type Id, orm } from '@kosh/server/orm';
 import type { Env } from './.kosh/bindings.js';
 
@@ -40,7 +43,92 @@ export interface SaleInput {
   }[];
 }
 
-export function registerCounterRoutes({ app }: ModuleContext): void {
+export interface CounterOptions {
+  /** Who sends receipts by email; default: SMTP from the environment (`SMTP_URL`), none without it. */
+  readonly mailer?: Mailer | undefined;
+  /** Who sends receipts by text; default: the messenger from the environment, none without it. */
+  readonly messenger?: Messenger | undefined;
+}
+
+export function registerCounterRoutes(context: ModuleContext, options: CounterOptions = {}): void {
+  const { app } = context;
+  const mailer = 'mailer' in options ? options.mailer : mailerFromEnv();
+  const messenger = 'messenger' in options ? options.messenger : messengerFromEnv();
+  const models = publicApiModels(context.registry);
+  const fields = documentFields(models);
+
+  // `POST /api/v1/counter/orders/:id/receipt` `{ email?, phone? }`: the receipt sent — the document by email,
+  // a summary by text; what was sent is said back.
+  app.post('/api/v1/counter/orders/:id/receipt', async (request) => {
+    const id = idOf((request.params as { id?: unknown }).id, 'id');
+    const body = (request.body ?? {}) as { email?: unknown; phone?: unknown };
+    const email = text(body.email);
+    const phone = text(body.phone);
+    if (email === '' && phone === '')
+      throw new HttpProblem(
+        422,
+        'no-address',
+        'Nowhere to send',
+        'Give an email address or a phone number.',
+      );
+    const model = models.get('pos.order');
+    if (model === undefined)
+      throw new HttpProblem(404, 'unknown-model', 'Unknown model', 'pos.order');
+    return request.env(async (raw) => {
+      const env = raw as unknown as Env;
+      const order = await orderOut(env, id as Id<'pos.order'>);
+      const sent: string[] = [];
+      if (email !== '') {
+        if (mailer === undefined)
+          throw new HttpProblem(
+            409,
+            'no-mailer',
+            'No email set up',
+            'Set SMTP_URL to send receipts by email.',
+          );
+        const [template] = (
+          await (
+            await env.model('report.template').search({ where: { key: 'pos.receipt' }, limit: 1 })
+          ).load([])
+        ).read(['id', 'name', 'layout', 'scope']);
+        if (template === undefined)
+          throw new HttpProblem(
+            409,
+            'no-template',
+            'No receipt template',
+            'Run the apps\u2019 defaults.',
+          );
+        const rendered = await renderDocument(
+          env as never,
+          model,
+          template as never,
+          fields,
+          { ids: [id] },
+          'html',
+        );
+        await mailer.send({
+          to: email,
+          subject: `Receipt ${String(order['name'])}`,
+          text: receiptText(order),
+          html: rendered.content.toString('utf8'),
+        });
+        sent.push('email');
+      }
+      if (phone !== '') {
+        if (messenger === undefined)
+          throw new HttpProblem(
+            409,
+            'no-messenger',
+            'No text messaging set up',
+            'Set up Twilio to send receipts by text.',
+          );
+        await messenger.send({ channel: 'sms', to: phone, text: receiptText(order) });
+        sent.push('sms');
+      }
+      return { sent };
+    });
+  });
+
   app.get('/api/v1/counter/shops', async (request) =>
     request.env(async (raw) => {
       const env = raw as unknown as Env;
@@ -242,6 +330,20 @@ export function registerCounterRoutes({ app }: ModuleContext): void {
 
 const textOrNull = (v: unknown): string | null =>
   v === null || v === undefined ? null : String(v);
+
+/** The receipt in a few lines of text (a text message, an email's plain part). */
+function receiptText(order: Record<string, unknown>): string {
+  const lines = (order['lines'] as { name: string; quantity: string; subtotal: string }[]).map(
+    (l) => `${l.name} × ${l.quantity}: ${l.subtotal}`,
+  );
+  return [
+    `Receipt ${String(order['name'])}`,
+    ...lines,
+    `Total ${String(order['total'])} (taxes ${String(order['amountTax'])})`,
+    `Paid ${String(order['amountPaid'])}, change ${String(order['change'])}`,
+  ].join(NEWLINE);
+}
+const NEWLINE = String.fromCharCode(10);
 
 function sessionOut(raw: unknown): Record<string, unknown> {
   const s = raw as Record<string, unknown>;

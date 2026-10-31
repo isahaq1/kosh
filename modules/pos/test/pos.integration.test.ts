@@ -9,7 +9,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { accounting } from '@kosh/accounting';
 import { contacts } from '@kosh/contacts';
+import { createMemoryMailer } from '@kosh/mail';
 import { messaging } from '@kosh/messaging';
+import { createMemoryMessenger } from '@kosh/notify';
 import { permissions } from '@kosh/permissions';
 import { product } from '@kosh/product';
 import { reporting } from '@kosh/reporting';
@@ -27,9 +29,12 @@ import { type Driver, orm, pg } from '@kosh/server/orm';
 import { settings } from '@kosh/settings';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { pos } from '../src/index.js';
+import { posModule } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
+const mailer = createMemoryMailer();
+const messenger = createMemoryMessenger();
+const pos = posModule({ mailer, messenger });
 const catalogue = [
   base,
   settings,
@@ -107,7 +112,7 @@ beforeAll(async () => {
   });
   await installDefaults(host.server.shutro, host.server.registry.loaded.modules, { company });
   for (const [login, groups] of [
-    ['maria', ['pos.manager', 'product.manager']],
+    ['maria', ['pos.manager', 'product.manager', 'account.manager']],
     ['rahim', ['pos.cashier']],
     ['sam', ['pos.cashier']],
   ] as const)
@@ -260,4 +265,93 @@ test('closing: the count is needed, a difference needs a reason; closed with the
   });
   expect(receipt.statusCode, receipt.body.slice(0, 200)).toBe(200);
   expect(receipt.body).toContain('Tea 500 g');
+});
+
+test('step 2: a closed session books one posted entry; the receipt goes by email and by text', async () => {
+  // The chart, the shop's sales journal and the methods' journals.
+  const me = await call('maria', 'GET', '/api/v1/auth/me');
+  const installed = await call('maria', 'POST', '/api/v1/accounting/charts/install', {
+    template: 'generic',
+  });
+  expect(installed.status, `${JSON.stringify(installed.json)} as ${JSON.stringify(me.json)}`).toBe(
+    200,
+  );
+  const journals = (await call('maria', 'GET', '/api/v1/models/account.journal?fields=code')).json
+    .items as { id: number; code: string }[];
+  const journal = (code: string) => journals.find((j) => j.code === code)?.id;
+  expect(journal('INV')).toBeTruthy();
+  expect(
+    (
+      await call('maria', 'PATCH', `/api/v1/models/pos.shop/${ids['shop']}`, {
+        salesJournal: journal('INV'),
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await call('maria', 'PATCH', `/api/v1/models/pos.payment.method/${ids['cash']}`, {
+        journal: journal('CSH'),
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await call('maria', 'PATCH', `/api/v1/models/pos.payment.method/${ids['card']}`, {
+        journal: journal('BNK'),
+      })
+    ).status,
+  ).toBe(200);
+  // Another cashier's session: a sale half by card, half in cash, then closed on the count.
+  const opened = await call('sam', 'POST', '/api/v1/counter/sessions', {
+    shop: ids['shop'],
+    openingCash: '100',
+  });
+  expect(opened.status, JSON.stringify(opened.json)).toBe(201);
+  const session = opened.json.session.id;
+  const sale = await call('sam', 'POST', '/api/v1/counter/orders', {
+    session,
+    lines: [{ product: ids['tea'], quantity: '2' }],
+    payments: [
+      { method: ids['card'], amount: '300' },
+      { method: ids['cash'], amount: '200' },
+    ],
+  });
+  expect(sale.status, JSON.stringify(sale.json)).toBe(201);
+  const closed = await call('sam', 'POST', `/api/v1/counter/sessions/${session}/close`, {
+    closingCash: '300',
+  });
+  expect(closed.status, JSON.stringify(closed.json)).toBe(200);
+  const read = await call('maria', 'GET', `/api/v1/models/pos.session/${session}?fields=entry`);
+  const entryId = read.json.entry?.id ?? read.json.entry;
+  expect(entryId).toBeTruthy();
+  const entry = await call(
+    'maria',
+    'GET',
+    `/api/v1/models/account.move/${entryId}?fields=state,kind,ref`,
+  );
+  expect(entry.json).toMatchObject({ state: 'posted', kind: 'entry' });
+  const lines = (
+    await call(
+      'maria',
+      'GET',
+      `/api/v1/models/account.move.line?filter=${encodeURIComponent(JSON.stringify({ move: entryId }))}&fields=debit,credit,name`,
+    )
+  ).json.items as { debit: unknown; credit: unknown; name: string }[];
+  const amount = (v: unknown) => Number((v as { amount?: unknown })?.amount ?? v);
+  const debit = lines.reduce((sum, l) => sum + amount(l.debit), 0);
+  const credit = lines.reduce((sum, l) => sum + amount(l.credit), 0);
+  expect(debit).toBeCloseTo(500, 2);
+  expect(debit).toBeCloseTo(credit, 2);
+  // The receipt by email (the document) and by text (a summary).
+  const sent = await call('sam', 'POST', `/api/v1/counter/orders/${sale.json.order.id}/receipt`, {
+    email: 'buyer@example.test',
+    phone: '+8801711000000',
+  });
+  expect(sent.status, JSON.stringify(sent.json)).toBe(200);
+  expect(sent.json.sent).toEqual(['email', 'sms']);
+  expect(mailer.sent).toHaveLength(1);
+  expect(mailer.sent[0]?.subject).toMatch(/^Receipt R/);
+  expect(mailer.sent[0]?.html).toContain('Tea 500 g');
+  expect(messenger.sent).toHaveLength(1);
+  expect(messenger.sent[0]?.text).toContain('Total 500');
 });

@@ -55,7 +55,9 @@
     "@kosh/accounting": "workspace:*",
     "@kosh/reporting": "workspace:*",
     "@kosh/ui": "workspace:*",
-    "@tanstack/react-query": "^5.104.3"
+    "@tanstack/react-query": "^5.104.3",
+    "@kosh/mail": "workspace:*",
+    "@kosh/notify": "workspace:*"
   },
   "devDependencies": {
     "@kosh/settings": "workspace:*",
