@@ -1,6 +1,7 @@
 /**
  * Event Hub end to end (RFC 0021): Dina sets up an event with a ticket and opens registrations; Rahim registers an
- * attendee, confirms them — a check-in code is on the registration — and checks them in.
+ * attendee and confirms them — a check-in code is on the registration —; at the door, the code goes into the event's
+ * check-in box: checked in, and a second scan is refused.
  */
 import { expect, type Page, test } from '@playwright/test';
 
@@ -22,7 +23,7 @@ const inAMonth = (hour: number) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(hour)}:00`;
 };
 
-test('an event opened, an attendee registered, confirmed and checked in', async ({
+test('an event opened, an attendee registered and confirmed, checked in at the door once', async ({
   page,
   browser,
 }) => {
@@ -44,6 +45,7 @@ test('an event opened, an attendee registered, confirmed and checked in', async 
   await expect(page).toHaveURL(/eventhub\.action_events\/\d+$/);
   await page.getByRole('button', { name: 'Open registrations' }).click();
   await expect(page.getByRole('button', { name: /^State: Open for registration/ })).toBeVisible();
+  const eventPage = page.url().replace(/^https?:\/\/[^/]+/, '');
 
   const context = await browser.newContext();
   const rahim = await context.newPage();
@@ -54,10 +56,19 @@ test('an event opened, an attendee registered, confirmed and checked in', async 
   await rahim.getByRole('textbox', { name: 'Attendee' }).fill('Nusrat Jahan');
   await rahim.getByRole('button', { name: 'Save' }).click();
   await expect(rahim).toHaveURL(/eventhub\.action_registrations\/\d+$/);
-  await expect(rahim.getByRole('textbox', { name: 'Check-in code' })).not.toHaveValue('');
+  const codeBox = rahim.getByRole('textbox', { name: 'Check-in code' });
+  await expect(codeBox).not.toHaveValue('');
+  const code = await codeBox.inputValue();
   await rahim.getByRole('button', { name: 'Confirm' }).click();
   await expect(rahim.getByRole('button', { name: /^State: Confirmed/ })).toBeVisible();
-  await rahim.getByRole('button', { name: 'Check in' }).click();
-  await expect(rahim.getByRole('button', { name: /^State: Checked in/ })).toBeVisible();
   await context.close();
+
+  // At the door: the code scanned (here typed) into the event's check-in box.
+  await page.goto(eventPage);
+  await page.getByRole('textbox', { name: 'Ticket code' }).fill(code);
+  await page.getByRole('textbox', { name: 'Ticket code' }).press('Enter');
+  await expect(page.getByText('Nusrat Jahan checked in')).toBeVisible();
+  await page.getByRole('textbox', { name: 'Ticket code' }).fill(code);
+  await page.getByRole('button', { name: 'Check in', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'was checked in at' })).toBeVisible();
 });

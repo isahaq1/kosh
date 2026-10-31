@@ -9,6 +9,7 @@
 import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
+import { reporting } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import { action, calendar, form, kanban, list, search } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
@@ -75,7 +76,34 @@ export const event: ReturnType<typeof defineModule> = defineModule({
   shutro: eventShutro,
   kosh: '^0.1.0',
   hooks: { demo: eventDemo },
-  depends: [contacts, messaging],
+  depends: [contacts, messaging, reporting],
+  // The ticket and badge: the attendee, the event, and the QR the door scans.
+  documents: [
+    {
+      key: 'ticket',
+      name: 'Ticket and badge',
+      model: 'event.registration',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        blocks: [
+          { kind: 'heading', id: 'event_name', text: '{{event.name}}', level: 1 },
+          { kind: 'heading', id: 'attendee', text: '{{name}}', level: 2 },
+          {
+            kind: 'fields',
+            id: 'details',
+            items: [
+              { label: 'Ticket', bind: 'ticket.name' },
+              { label: 'Starts', bind: 'event.dateBegin' },
+              { label: 'Venue', bind: 'event.venue' },
+              { label: 'Code', bind: 'code' },
+            ],
+          },
+          { kind: 'qr', id: 'qr', bind: 'code', size: 45, label: 'Show this at the door' },
+        ],
+      },
+    },
+  ],
   app: {
     code: 'eventhub',
     label: 'Event Hub',
@@ -162,6 +190,7 @@ export const event: ReturnType<typeof defineModule> = defineModule({
           'waitingList',
           'currency',
         ]),
+        k.component('checkin', 'event.CheckIn'),
         k.lines('tickets', [
           { field: 'name', id: 'ticket_name' },
           { field: 'price', id: 'ticket_price' },

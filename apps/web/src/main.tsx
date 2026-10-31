@@ -6,6 +6,7 @@ import './index.css';
 import { accountingMessages, registerAccountingWeb } from '@kosh/accounting/web';
 import { assistantMessages, registerAssistantWeb } from '@kosh/assistant/web';
 import { automationMessages, registerAutomationWeb } from '@kosh/automation/web';
+import { eventMessages, registerEventWeb } from '@kosh/event/web';
 import { importMessages, registerImportWeb } from '@kosh/import/web';
 import { integrationsMessages, registerIntegrationsWeb } from '@kosh/integrations/web';
 import { l10n_bdMessages, registerL10nBdWeb } from '@kosh/l10n_bd/web';
@@ -42,6 +43,7 @@ registerL10nBdWeb(registry);
 registerL10nInWeb(registry);
 registerRecruitmentWeb(registry);
 registerStockWeb(registry);
+registerEventWeb(registry);
 const messages = {
   accounting: accountingMessages,
   assistant: assistantMessages,
@@ -55,6 +57,7 @@ const messages = {
   portal: portalMessages,
   recruitment: recruitmentMessages,
   stock: stockMessages,
+  event: eventMessages,
   reporting: reportingMessages,
   messaging: messagingMessages,
   settings: settingsMessages,

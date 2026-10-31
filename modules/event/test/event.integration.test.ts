@@ -9,12 +9,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
+import { permissions } from '@kosh/permissions';
+import { reporting } from '@kosh/reporting';
 import {
   type AppHost,
   applyApps,
   base,
   createAppHost,
   installBase,
+  installDefaults,
   installDemo,
   prepareApps,
   recordInstalledApps,
@@ -26,7 +29,7 @@ import { afterAll, beforeAll, expect, test } from 'vitest';
 import { event } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
-const catalogue = [base, settings, contacts, messaging, event];
+const catalogue = [base, settings, contacts, messaging, permissions, reporting, event];
 const E = '/api/v1/models/event.event';
 const R = '/api/v1/models/event.registration';
 
@@ -107,9 +110,10 @@ beforeAll(async () => {
     company: { name: 'Padma Traders', currency: 'BDT' },
     admin: { login: 'admin', name: 'Administrator', password: PASSWORD },
   }));
+  await installDefaults(host.server.shutro, host.server.registry.loaded.modules, { company });
   for (const [login, groups] of [
-    ['maria', ['event.manager']],
-    ['rahim', ['event.user']],
+    ['maria', ['event.manager', 'reporting.user']],
+    ['rahim', ['event.user', 'reporting.user']],
     ['bob', ['base.user']],
   ] as const)
     await auth.createUser({
@@ -198,6 +202,26 @@ test('check-in by code, once, for confirmed registrations', async () => {
   expect((await checkin(waiting)).status).toBe(409);
   expect((await checkin('NOPE')).status).toBe(404);
   expect((await call('GET', `${E}/${ids['event']}`, 'rahim')).json.attended).toBe(1);
+});
+
+test('the ticket and badge: the attendee, the event and the QR the door scans', async () => {
+  const listed = await call('GET', '/api/v1/models/event.registration/documents', 'rahim');
+  expect(listed.status, JSON.stringify(listed.json)).toBe(200);
+  const ticket = (listed.json.templates as Json[]).find((t) => t.name === 'Ticket and badge');
+  expect(ticket).toBeDefined();
+  const host_ = host.server.app;
+  const token = tokens.get('rahim') as string;
+  const html = await host_.inject({
+    method: 'POST',
+    url: `/api/v1/models/event.registration/documents/${ticket.id}?format=html`,
+    headers: { authorization: `Bearer ${token}` },
+    payload: { ids: [ids['arif']] },
+  });
+  expect(html.statusCode, html.body).toBe(200);
+  expect(html.body).toContain('<h1>Supplier day</h1>');
+  expect(html.body).toContain('<h2>Arif</h2>');
+  expect(html.body).toContain('<div class="qr" style="width:45mm"><svg');
+  expect(html.body).toContain('Show this at the door');
 });
 
 test('sessions happen during their event; access', async () => {

@@ -165,6 +165,7 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     label: 'Event Hub: events, tickets and seats, waiting lists, check-in by QR',
     icon: '🎟️',
     server: 'event',
+    web: 'registerEventWeb',
   },
   sale_project: {
     label: 'Bridge: tasks and projects from sales orders (Sales ↔ Projects)',
