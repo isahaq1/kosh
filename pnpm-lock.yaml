@@ -1119,6 +1119,9 @@ importers:
       '@kosh/product':
         specifier: workspace:*
         version: link:../product
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
       '@kosh/server':
         specifier: workspace:*
         version: link:../../packages/server

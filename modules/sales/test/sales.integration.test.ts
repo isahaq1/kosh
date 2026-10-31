@@ -295,6 +295,7 @@ test('the Sales overview (RFC 0022 §3.2): installed once as a dashboard, served
     'orders_month',
     'open_quotations',
     'average_order',
+    'margin_month',
     'sales_by_month',
     'top_customers',
     'by_salesperson',
@@ -359,4 +360,25 @@ test('the product form gets the Sold and Sales tiles from Sales (RFC 0022 step 2
     'product_sold',
     'product_revenue',
   ]);
+});
+
+test('the margin (RFC 0022 step 2): a line earns its untaxed amount less its cost; the order sums it, with the percentage', async () => {
+  const customer = await call('POST', '/api/v1/models/res.partner', 'rahim', {
+    name: 'Margin Ltd',
+    isCustomer: true,
+  });
+  const order = await call('POST', '/api/v1/models/sale.order', 'rahim', {
+    partner: customer.json.id,
+    currency,
+    lines: { create: [{ product, name: 'Jute bag', quantity: '2', priceUnit: '1000' }] },
+  });
+  expect(order.status, JSON.stringify(order.json)).toBe(201);
+  const read = await call(
+    'GET',
+    `/api/v1/models/sale.order/${order.json.id}?fields=margin,marginPercent,amountUntaxed`,
+    'rahim',
+  );
+  // 2 × 1,000 untaxed, the product costs 600: 800 earned, 40 %.
+  expect(Number(read.json.margin?.amount ?? read.json.margin)).toBe(800);
+  expect(Number(read.json.marginPercent)).toBe(40);
 });

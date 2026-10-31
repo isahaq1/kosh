@@ -218,3 +218,9 @@ test('buyers see their own orders, managers all, others none', async () => {
   const managers = await call('GET', '/api/v1/menus?app=purchase', 'dina');
   expect(JSON.stringify(managers.json)).toContain('purchase.action_to_approve');
 });
+
+test('the Purchase overview (RFC 0022 step 2) is served to a purchase user', async () => {
+  const overview = await call('GET', '/api/v1/reports/overview?app=purchase', 'farid');
+  expect(overview.status, JSON.stringify(overview.json)).toBe(200);
+  expect(overview.json.cards.map((c: { id: string }) => c.id)).toContain('spend_month');
+});

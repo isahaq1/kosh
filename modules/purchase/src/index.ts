@@ -9,7 +9,8 @@ import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
 import { permissions } from '@kosh/permissions';
 import { product } from '@kosh/product';
-import { action, form, kanban, list, search, stat } from '@kosh/views';
+import { reporting } from '@kosh/reporting';
+import { action, calendar, form, kanban, list, search, stat } from '@kosh/views';
 import { purchaseDemo } from './demo.js';
 import { PurchaseOrder, purchaseShutro } from './module.js';
 
@@ -19,7 +20,7 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
   shutro: purchaseShutro,
   kosh: '^0.1.0',
   hooks: { demo: purchaseDemo },
-  depends: [contacts, product, messaging, permissions],
+  depends: [contacts, product, messaging, permissions, reporting],
   events: [
     {
       topic: 'purchase.order.confirmed',
@@ -76,6 +77,90 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
       ],
     },
   ],
+  // The Overview (RFC 0022 step 2): spend against last month, what waits, who we buy from.
+  overview: {
+    cards: [
+      {
+        id: 'spend_month',
+        title: 'Purchases this month',
+        kind: 'kpi',
+        model: 'purchase.order',
+        measure: 'sum:amountTotal',
+        filter: { state: { in: ['purchase', 'done'] } },
+        comparison: { field: 'dateOrder', mode: 'previous' },
+        w: 3,
+      },
+      {
+        id: 'orders_month',
+        title: 'Orders this month',
+        kind: 'kpi',
+        model: 'purchase.order',
+        measure: 'count',
+        filter: { state: { in: ['purchase', 'done'] } },
+        comparison: { field: 'dateOrder', mode: 'previous' },
+        w: 3,
+      },
+      {
+        id: 'open_rfqs',
+        title: 'Open requests',
+        kind: 'kpi',
+        model: 'purchase.order',
+        measure: 'count',
+        filter: { state: { in: ['draft', 'sent'] } },
+        w: 3,
+      },
+      {
+        id: 'to_approve',
+        title: 'Waiting approval',
+        kind: 'kpi',
+        model: 'purchase.order',
+        measure: 'count',
+        filter: { state: 'to_approve' },
+        w: 3,
+      },
+      {
+        id: 'spend_by_month',
+        title: 'Purchases by month',
+        kind: 'chart',
+        model: 'purchase.order',
+        measure: 'sum:amountTotal',
+        groupBy: 'dateOrder:month',
+        filter: { state: { in: ['purchase', 'done'] } },
+        chart: 'bar',
+        w: 6,
+      },
+      {
+        id: 'top_vendors',
+        title: 'Top vendors',
+        kind: 'pivot',
+        model: 'purchase.order',
+        measure: 'sum:amountTotal',
+        groupBy: 'partner',
+        filter: { state: { in: ['purchase', 'done'] } },
+        w: 6,
+      },
+      {
+        id: 'by_buyer',
+        title: 'By buyer',
+        kind: 'chart',
+        model: 'purchase.order',
+        measure: 'sum:amountTotal',
+        groupBy: 'user',
+        filter: { state: { in: ['purchase', 'done'] } },
+        chart: 'pie',
+        w: 6,
+      },
+      {
+        id: 'biggest_open',
+        title: 'Biggest open requests',
+        kind: 'list',
+        model: 'purchase.order',
+        measure: 'sum:amountTotal',
+        filter: { state: { in: ['draft', 'sent', 'to_approve'] } },
+        w: 6,
+      },
+    ],
+  },
   viewExtensions: [
     {
       view: 'product.product.form',
@@ -128,7 +213,7 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
     }),
     'purchase.action_orders': action(PurchaseOrder, {
       label: 'Purchase orders',
-      views: ['list', 'kanban', 'form'],
+      views: ['list', 'kanban', 'calendar', 'form'],
       defaultFilters: ['orders'],
     }),
     'purchase.action_to_approve': action(PurchaseOrder, {
@@ -232,6 +317,12 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
       readonlyWhen: { state: { in: ['done', 'cancel'] } },
       chatter: true,
     })),
+    'purchase.order.calendar': calendar(PurchaseOrder, {
+      dateStart: 'datePlanned',
+      title: 'name',
+      color: 'state',
+      mode: 'month',
+    }),
   },
   search: {
     'purchase.order': search(PurchaseOrder, {

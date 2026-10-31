@@ -246,3 +246,14 @@ step 3 last. Performance budgets apply (an overview with eight tiles < 300 ms se
   Products now depends on `reporting`. Pictures, the board with them and the avatar on the list came with 3.3.
 - Tests: Products on real PostgreSQL (the overview to a user; the empty row served on the form); Sales' test
   checks the tiles it appends. E2E (apps): the overview; a product's *Sold*, *Bought* and *On hand* tiles.
+
+## Implementation notes (2026-10-31): step 2 — Sales and Purchase
+
+- **Margin** on sales: each line earns its untaxed amount less its product's cost (`margin`), the order sums it
+  and shows the percentage; in the totals, on the list (summed) and as *Margin this month* on the overview.
+- **Calendars**: quotations by the day they expire (*Quotations › Calendar*), purchase orders by their expected
+  arrival (*Purchase orders › Calendar*).
+- **The Purchase overview**: purchases and orders this month against last month, open requests, waiting approval,
+  purchases by month, top vendors, by buyer, the biggest open requests. Purchase now depends on `reporting`.
+- Tests: Sales on real PostgreSQL (the margin of a line and the order, 40 %); Purchase (the overview to a user).
+  E2E (apps): the Purchase overview, the arrivals calendar, the margin on an order.

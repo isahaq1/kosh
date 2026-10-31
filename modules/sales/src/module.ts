@@ -6,7 +6,7 @@
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
 import { computeTaxes, productShutro, taxRule } from '@kosh/product';
-import { orm } from '@kosh/server/orm';
+import { type Decimal, orm } from '@kosh/server/orm';
 import {
   check,
   compute,
@@ -28,6 +28,13 @@ function taxesOf(l: {
 }) {
   const amount = l.quantity.times(l.priceUnit).times(orm.toDecimal(100).minus(l.discount)).div(100);
   return computeTaxes(amount, l.quantity, [...l.taxes].map(taxRule));
+}
+
+/** A monetary value's amount (a Money object or a plain Decimal), or null. */
+function amountOf(value: unknown): Decimal | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'object' && 'amount' in value) return (value as { amount: Decimal }).amount;
+  return value as Decimal;
 }
 
 const amounts = compute(
@@ -87,6 +94,31 @@ export const SaleOrder = defineModel('sale.order', {
     amountUntaxed: f.monetary({ currency: 'currency', store: true, label: 'Untaxed', ...amounts }),
     amountTax: f.monetary({ currency: 'currency', store: true, label: 'Taxes', ...amounts }),
     amountTotal: f.monetary({ currency: 'currency', store: true, label: 'Total', ...amounts }),
+    /** RFC 0022 step 2: what the order earns — the lines' untaxed amounts less their products' cost. */
+    margin: f.monetary({
+      currency: 'currency',
+      store: true,
+      label: 'Margin',
+      ...compute('sale.order', 'margin', ['lines.margin', 'currency'], (orders) => {
+        for (const o of orders)
+          o.margin = o.currency === null ? null : o.lines.sum('margin', o.currency);
+      }),
+    }),
+    marginPercent: f.decimal({
+      scale: 1,
+      store: true,
+      label: 'Margin (%)',
+      ...compute('sale.order', 'marginPercent', ['margin', 'amountUntaxed'], (orders) => {
+        for (const o of orders) {
+          const untaxed = amountOf(o.amountUntaxed);
+          const margin = amountOf(o.margin);
+          o.marginPercent =
+            untaxed === null || margin === null || untaxed.isZero()
+              ? null
+              : margin.times(100).div(untaxed).toDecimalPlaces(1);
+        }
+      }),
+    }),
     state: f.state({
       states: {
         draft: 'Quotation',
@@ -216,6 +248,26 @@ export const SaleOrderLine = defineModel('sale.order.line', {
         ],
         (lines) => {
           for (const l of lines) l.subtotal = taxesOf(l).untaxed;
+        },
+      ),
+    }),
+    /** The line's untaxed amount less its product's cost at the time (RFC 0022 step 2). */
+    margin: f.monetary({
+      currency: 'currency',
+      store: true,
+      label: 'Margin',
+      ...compute(
+        'sale.order.line',
+        'margin',
+        ['subtotal', 'quantity', 'product.standardPrice'],
+        (lines) => {
+          for (const l of lines) {
+            const untaxed = amountOf(l.subtotal);
+            l.margin =
+              untaxed === null || l.product === null
+                ? null
+                : untaxed.minus(l.quantity.times(l.product.standardPrice));
+          }
         },
       ),
     }),

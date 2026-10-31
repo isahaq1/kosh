@@ -9,7 +9,7 @@ import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
 import { product } from '@kosh/product';
 import { reporting } from '@kosh/reporting';
-import { action, form, kanban, list, search, stat } from '@kosh/views';
+import { action, calendar, form, kanban, list, search, stat } from '@kosh/views';
 import { salesDemo } from './demo.js';
 import { SaleOrder, SaleOrderLine, salesShutro } from './module.js';
 
@@ -167,6 +167,16 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
         w: 3,
       },
       {
+        id: 'margin_month',
+        title: 'Margin this month',
+        kind: 'kpi',
+        model: 'sale.order',
+        measure: 'sum:margin',
+        filter: { state: { in: ['sale', 'done'] } },
+        comparison: { field: 'dateOrder', mode: 'previous' },
+        w: 3,
+      },
+      {
         id: 'sales_by_month',
         title: 'Sales by month',
         kind: 'chart',
@@ -265,7 +275,7 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
   actions: {
     'sales.action_quotations': action(SaleOrder, {
       label: 'Quotations',
-      views: ['list', 'kanban', 'form'],
+      views: ['list', 'kanban', 'calendar', 'form'],
       defaultFilters: ['quotations'],
     }),
     'sales.action_orders': action(SaleOrder, {
@@ -312,6 +322,8 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
         'partner',
         'user',
         { field: 'amountTotal', sum: true },
+        { field: 'margin', sum: true },
+        { field: 'marginPercent', widget: 'percentage' },
         { field: 'state', widget: 'badge' },
       ],
       defaultOrder: ['dateOrder desc'],
@@ -352,12 +364,25 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
           ],
           { readonlyWhen: { state: { in: ['done', 'cancel'] } } },
         ),
-        k.group('totals', ['amountUntaxed', 'amountTax', 'amountTotal'], { label: 'Totals' }),
+        k.group(
+          'totals',
+          ['amountUntaxed', 'amountTax', 'amountTotal', 'margin', 'marginPercent'],
+          {
+            label: 'Totals',
+          },
+        ),
         k.group('terms', ['note'], { columns: 1 }),
       ],
       readonlyWhen: { state: { in: ['done', 'cancel'] } },
       chatter: true,
     })),
+    // Quotations by the day they expire: what to chase this week.
+    'sale.order.calendar': calendar(SaleOrder, {
+      dateStart: 'validityDate',
+      title: 'name',
+      color: 'state',
+      mode: 'month',
+    }),
     'sale.order.line.list': list(SaleOrderLine, {
       columns: ['order', 'product', 'quantity', 'priceUnit', 'subtotal'],
     }),
