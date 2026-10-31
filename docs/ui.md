@@ -75,6 +75,12 @@ Kanban cards take `image` (a cover), `avatar`, `progress` and `color` (a tinted 
 `decorations: { danger: { state: 'cancel' }, success: { state: 'done' } }`, a tone for the rows a condition holds
 on. Both are checked when the server starts.
 
+## Columns resized and pinned (RFC 0022 §3.5)
+
+Drag the handle at a header's end to resize a column (double-click resets it; with the keyboard, the arrows change
+the width and Home resets it); the Columns menu pins columns at the start and resets the widths. Both are
+remembered per user and view, with the hidden columns and the density.
+
 ## Guidance on a record (RFC 0022 §3.4)
 
 `GET /api/v1/models/:model/:id/next` says what comes next: the transitions from the record's state the user may

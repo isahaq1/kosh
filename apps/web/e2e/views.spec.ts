@@ -130,3 +130,29 @@ test('kanban: dragging a card to the next column runs the transition', async ({ 
   await expect(page.getByRole('alert')).toBeVisible();
   await expect(customers.getByRole('button', { name: 'Bengal Steel', exact: true })).toBeVisible();
 });
+
+test('list: a column resized with the keyboard and pinned, remembered per user (RFC 0022 §3.5)', async ({
+  page,
+}) => {
+  await signIn(page, 'dina');
+  await page.goto(CONTACTS);
+  const name = page.getByRole('columnheader', { name: 'Name' });
+  await expect(name).toBeVisible();
+  const before = (await name.boundingBox())?.width ?? 0;
+  const handle = page.getByRole('separator', { name: 'Resize Name' });
+  await handle.focus();
+  for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight');
+  await expect
+    .poll(async () => (await name.boundingBox())?.width ?? 0)
+    .toBeGreaterThan(before + 40);
+  const widened = (await name.boundingBox())?.width ?? 0;
+  await page.reload();
+  await expect.poll(async () => (await name.boundingBox())?.width ?? 0).toBe(widened);
+  // Pinned at the start: the column sticks while the rest scrolls.
+  await page.getByRole('button', { name: 'Columns' }).click();
+  await page.getByRole('menuitemcheckbox', { name: 'Name' }).nth(1).click();
+  await page.keyboard.press('Escape');
+  await expect(name).toHaveCSS('position', 'sticky');
+  await page.reload();
+  await expect(page.getByRole('columnheader', { name: 'Name' })).toHaveCSS('position', 'sticky');
+});

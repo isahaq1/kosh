@@ -200,3 +200,12 @@ step 3 last. Performance budgets apply (an overview with eight tiles < 300 ms se
 - **Tests**: Sales on real PostgreSQL — a quotation without lines: Confirm refused with its message, Send allowed;
   with a line, Confirm allowed; a manager-only transition hidden from a user. E2E (apps): the banner on a new
   quotation, then the next step offered and taken.
+
+## Implementation notes (2026-10-31): step 1, part 3.5 (part 1) — columns resized and pinned
+
+- A handle at each header cell's end resizes the column by dragging (double-click resets), or with the keyboard
+  (the arrows by 16 px, Home resets; RTL-aware); the Columns menu pins columns at the start (sticky while the rest
+  scrolls, after the selection column) and resets the widths. Widths and pins are remembered per user and view in
+  the browser, like the hidden columns and the density. Grouped lists share the layout.
+- E2E (chromium): a column widened with the keyboard keeps its width after a reload; pinned, it is sticky.
+- Next (part 2): printing a list and a record as PDF through the reporting engine; attachment galleries.

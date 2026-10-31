@@ -24,6 +24,7 @@ import {
   X,
 } from 'lucide-react';
 import {
+  type CSSProperties,
   type ReactElement,
   type KeyboardEvent as ReactKeyboardEvent,
   useEffect,
@@ -44,6 +45,7 @@ import {
   MenuContent,
   MenuItem,
   MenuLabel,
+  MenuSeparator,
   MenuTrigger,
   Skeleton,
 } from '../components/primitives.js';
@@ -118,6 +120,76 @@ async function each(
     }
   }
   return { done, failed, reason };
+}
+
+const MIN_WIDTH = 64;
+const MAX_WIDTH = 960;
+const DEFAULT_WIDTH = 160;
+const SELECT_WIDTH = 40;
+
+/**
+ * The handle at a header cell's end (RFC 0022 §3.5): drag it to resize the column, double-click to reset; with the
+ * keyboard, the arrows change the width by 16 px and Home resets it.
+ */
+function ResizeHandle({
+  label,
+  width,
+  onResize,
+  onReset,
+}: {
+  readonly label: string;
+  readonly width: number | null;
+  readonly onResize: (width: number) => void;
+  readonly onReset: () => void;
+}): ReactElement {
+  const drag = useRef<{ x: number; width: number } | null>(null);
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: a separator is the role of a column resizer
+    <span
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={label}
+      aria-valuenow={width ?? undefined}
+      tabIndex={0}
+      className="absolute inset-y-0 end-0 w-2 cursor-col-resize touch-none select-none hover:bg-primary/30 focus-visible:bg-primary/40 focus-visible:outline-none"
+      onPointerDown={(e) => {
+        const cell = (e.currentTarget as HTMLElement).parentElement;
+        if (cell === null) return;
+        drag.current = { x: e.clientX, width: cell.getBoundingClientRect().width };
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        e.preventDefault();
+      }}
+      onPointerMove={(e) => {
+        if (drag.current === null) return;
+        onResize(
+          drag.current.width + (e.clientX - drag.current.x) * (document.dir === 'rtl' ? -1 : 1),
+        );
+      }}
+      onPointerUp={() => {
+        drag.current = null;
+      }}
+      onDoubleClick={onReset}
+      onKeyDown={(e) => {
+        const cell = (e.currentTarget as HTMLElement).parentElement;
+        const current = width ?? cell?.getBoundingClientRect().width ?? DEFAULT_WIDTH;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+          const grow = (e.key === 'ArrowRight') !== (document.dir === 'rtl');
+          onResize(current + (grow ? 16 : -16));
+          e.preventDefault();
+        } else if (e.key === 'Home') {
+          onReset();
+          e.preventDefault();
+        }
+      }}
+    />
+  );
+}
+
+/** Column widths and pinned columns of a list, per user and view (RFC 0022 §3.5). */
+interface ColumnLayout {
+  readonly widths: Readonly<Record<string, number>>;
+  readonly pinned: readonly string[];
+  readonly setWidth: (id: string, width: number | null) => void;
 }
 
 const stored = {
@@ -328,8 +400,10 @@ function Rows({
   onCount,
   onRows,
   filtered,
+  layout,
 }: {
   readonly props: ViewProps;
+  readonly layout: ColumnLayout;
   readonly where: Condition | undefined;
   readonly columns: readonly FieldNode[];
   readonly fields: Readonly<Record<string, ViewField>>;
@@ -345,6 +419,22 @@ function Rows({
   readonly filtered?: boolean;
 }): ReactElement {
   const { api, uid, companyId } = useKosh();
+  const { widths, pinned, setWidth } = layout;
+  // A column's cells: its width, and when pinned, stuck to the start after the pinned ones before it.
+  const colStyle = (id: string): CSSProperties => {
+    const width = widths[id];
+    const style: CSSProperties =
+      width === undefined ? {} : { width, minWidth: width, maxWidth: width };
+    if (!pinned.includes(id)) return style;
+    let left = selection === undefined ? 0 : SELECT_WIDTH;
+    for (const c of columns) {
+      if (c.id === id) break;
+      if (pinned.includes(c.id)) left += widths[c.id] ?? DEFAULT_WIDTH;
+    }
+    return { ...style, position: 'sticky', left, zIndex: 1 };
+  };
+  const pinnedClass = (id: string): string | undefined =>
+    pinned.includes(id) ? 'bg-surface shadow-[1px_0_0_0_var(--border)]' : undefined;
   // Row decorations (RFC 0022 §3.3): the first tone whose condition holds on the row, danger first.
   const decorations = props.served.view.type === 'list' ? props.served.view.decorations : undefined;
   const rowTone = (row: Readonly<Record<string, unknown>>): string | undefined => {
@@ -785,6 +875,7 @@ function Rows({
                     <th
                       key={header.id}
                       scope="col"
+                      style={colStyle(node.id)}
                       aria-sort={
                         direction === 'asc'
                           ? 'ascending'
@@ -792,7 +883,10 @@ function Rows({
                             ? 'descending'
                             : 'none'
                       }
-                      className="px-3 py-2 text-start font-medium text-muted-foreground"
+                      className={cn(
+                        'relative px-3 py-2 text-start font-medium text-muted-foreground',
+                        pinnedClass(node.id),
+                      )}
                     >
                       <button
                         type="button"
@@ -806,6 +900,14 @@ function Rows({
                           <ArrowDown className="size-3" aria-hidden />
                         ) : null}
                       </button>
+                      <ResizeHandle
+                        label={t('views.resize', {
+                          column: node.label ?? fields[node.field]?.label ?? node.field,
+                        })}
+                        width={widths[node.id] ?? null}
+                        onResize={(w) => setWidth(node.id, w)}
+                        onReset={() => setWidth(node.id, null)}
+                      />
                     </th>
                   );
                 })}
@@ -880,9 +982,11 @@ function Rows({
                         data-row={v.index}
                         data-col={colIndex}
                         tabIndex={isActive ? 0 : -1}
+                        style={colStyle(node.id)}
                         className={cn(
                           cellPad,
                           'outline-none',
+                          pinnedClass(node.id),
                           isActive && 'outline-2 -outline-offset-2 outline-primary',
                           inSelection && 'bg-accent/40',
                         )}
@@ -997,11 +1101,13 @@ function Groups({
   columns,
   fields,
   height,
+  layout,
 }: {
   readonly props: ViewProps;
   readonly columns: readonly FieldNode[];
   readonly fields: Readonly<Record<string, ViewField>>;
   readonly height: number;
+  readonly layout: ColumnLayout;
 }): ReactElement {
   const { api } = useKosh();
   const { t } = useTranslation();
@@ -1075,6 +1181,7 @@ function Groups({
                 offset={0}
                 limit={200}
                 height={height}
+                layout={layout}
               />
             ) : null}
           </section>
@@ -1119,9 +1226,31 @@ export function ListView(props: ViewProps): ReactElement {
   const [hidden, setHidden] = useState<ReadonlySet<string>>(
     () => new Set(stored.get<string[]>(columnsKey, [])),
   );
+  // RFC 0022 §3.5: column widths (dragged or set with the keyboard) and pinned columns, per user and view.
+  const widthsKey = `kosh.widths.${uid}.${view.id}`;
+  const pinnedKey = `kosh.pinned.${uid}.${view.id}`;
+  const [widths, setWidths] = useState<Readonly<Record<string, number>>>(() =>
+    stored.get<Record<string, number>>(widthsKey, {}),
+  );
+  const [pinned, setPinned] = useState<readonly string[]>(() =>
+    stored.get<string[]>(pinnedKey, []),
+  );
+  const setWidth = (id: string, width: number | null): void => {
+    const next = { ...widths };
+    if (width === null) delete next[id];
+    else next[id] = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.round(width)));
+    setWidths(next);
+    stored.set(widthsKey, next);
+  };
+  const togglePin = (id: string): void => {
+    const next = pinned.includes(id) ? pinned.filter((p) => p !== id) : [...pinned, id];
+    setPinned(next);
+    stored.set(pinnedKey, next);
+  };
   const { density, setDensity } = useKosh();
   const height = HEIGHTS[density];
   const columns = allColumns.filter((c) => !hidden.has(c.id));
+  const layout: ColumnLayout = { widths, pinned, setWidth };
   const design = useDesign();
   const [offset, setOffset] = useState(0);
   const [count, setCount] = useState<number | null>(null);
@@ -1388,6 +1517,30 @@ export function ListView(props: ViewProps): ReactElement {
                 {c.label ?? fields[c.field]?.label ?? c.field}
               </MenuCheckboxItem>
             ))}
+            <MenuSeparator />
+            <MenuLabel>{t('views.pinned')}</MenuLabel>
+            {columns.map((c) => (
+              <MenuCheckboxItem
+                key={`pin-${c.id}`}
+                checked={pinned.includes(c.id)}
+                onCheckedChange={() => togglePin(c.id)}
+              >
+                {c.label ?? fields[c.field]?.label ?? c.field}
+              </MenuCheckboxItem>
+            ))}
+            {Object.keys(widths).length === 0 ? null : (
+              <>
+                <MenuSeparator />
+                <MenuItem
+                  onSelect={() => {
+                    setWidths({});
+                    stored.set(widthsKey, {});
+                  }}
+                >
+                  {t('views.resetWidths')}
+                </MenuItem>
+              </>
+            )}
           </MenuContent>
         </Menu>
         {canExport ? (
@@ -1417,13 +1570,14 @@ export function ListView(props: ViewProps): ReactElement {
   return (
     <div className="rounded-lg border bg-surface">
       {props.groupBy.length > 0 ? (
-        <Groups props={props} columns={columns} fields={fields} height={height} />
+        <Groups props={props} columns={columns} fields={fields} height={height} layout={layout} />
       ) : (
         <>
           {toolbar}
           <Rows
             props={props}
             where={props.where}
+            layout={layout}
             columns={columns}
             fields={fields}
             offset={offset}
