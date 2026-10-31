@@ -35,6 +35,7 @@ import { mrpAccount } from '@kosh/mrp_account';
 import { notify } from '@kosh/notify';
 import { installApprovalPolicies, permissions } from '@kosh/permissions';
 import { portal } from '@kosh/portal';
+import { pos } from '@kosh/pos';
 import { product } from '@kosh/product';
 import { project } from '@kosh/project';
 import { purchase } from '@kosh/purchase';
@@ -137,6 +138,7 @@ const CATALOGUE = [
   tradeFinance,
   event,
   website,
+  pos,
   saleAccount,
   purchaseAccount,
   saleProject,
@@ -188,6 +190,7 @@ await applyApps(
         'trade_finance',
         'event',
         'website',
+        'pos',
         'assistant',
         'import',
         'l10n_bd',
@@ -252,6 +255,7 @@ for (const [login, name, groups] of [
       'trade_finance.manager',
       'event.manager',
       'website.manager',
+      'pos.manager',
       'messaging.user',
       'reporting.user',
       'assistant.user',

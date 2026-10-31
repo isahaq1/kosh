@@ -16,6 +16,7 @@ import { messagingMessages, registerMessagingWeb } from '@kosh/messaging/web';
 import { notifyMessages, registerNotifyWeb } from '@kosh/notify/web';
 import { registerPermissionsWeb } from '@kosh/permissions/web';
 import { portalMessages, registerPortalWeb } from '@kosh/portal/web';
+import { posMessages, registerPosWeb } from '@kosh/pos/web';
 import { recruitmentMessages, registerRecruitmentWeb } from '@kosh/recruitment/web';
 import { registerReportingWeb, reportingMessages } from '@kosh/reporting/web';
 import { registerSettingsWeb, settingsMessages } from '@kosh/settings/web';
@@ -46,6 +47,7 @@ registerRecruitmentWeb(registry);
 registerStockWeb(registry);
 registerEventWeb(registry);
 registerWebsiteWeb(registry);
+registerPosWeb(registry);
 const messages = {
   accounting: accountingMessages,
   assistant: assistantMessages,
@@ -61,6 +63,7 @@ const messages = {
   stock: stockMessages,
   event: eventMessages,
   website: websiteMessages,
+  pos: posMessages,
   reporting: reportingMessages,
   messaging: messagingMessages,
   settings: settingsMessages,

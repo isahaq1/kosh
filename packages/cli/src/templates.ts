@@ -26,6 +26,7 @@ export type AppName =
   | 'trade_finance'
   | 'event'
   | 'website'
+  | 'pos'
   | 'sale_project'
   | 'sale_stock'
   | 'purchase_stock'
@@ -175,6 +176,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🌐',
     server: 'website',
     web: 'registerWebsiteWeb',
+  },
+  pos: {
+    label: 'Counter: point of sale with sessions, split payments, receipts and the register',
+    icon: '🧾',
+    server: 'pos',
+    web: 'registerPosWeb',
   },
   sale_project: {
     label: 'Bridge: tasks and projects from sales orders (Sales ↔ Projects)',

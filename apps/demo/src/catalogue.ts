@@ -17,6 +17,7 @@ import { mrp } from '@kosh/mrp';
 import { mrpAccount } from '@kosh/mrp_account';
 import { notify } from '@kosh/notify';
 import { permissions } from '@kosh/permissions';
+import { pos } from '@kosh/pos';
 import { product } from '@kosh/product';
 import { project } from '@kosh/project';
 import { purchase } from '@kosh/purchase';
@@ -64,6 +65,7 @@ export const DEMO_APPS: readonly string[] = [
   'trade_finance',
   'event',
   'website',
+  'pos',
   'l10n_bd',
 ];
 
@@ -95,6 +97,7 @@ export function demoCatalogue(): KoshModule[] {
     tradeFinance,
     event,
     website,
+    pos,
     saleAccount,
     purchaseAccount,
     saleProject,
