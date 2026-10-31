@@ -780,3 +780,21 @@ reviewed steps.
 - **Step 2**: the QR from a phone's camera at the door (the scan box of Stockroom counts, reused), badges and tickets
   as PDF, follow-up emails, revenue to Accounting (`event_account`), registration from Sites and the portal.
 
+## Implementation notes (2026-10-31): Event Hub, step 2 — tickets with a QR, check-in at the door
+
+- **QR codes in documents** (decided 2026-10-31: the `qrcode` package, MIT, no native parts — it also serves India's
+  e-invoice QR): document layouts gain a `qr` block (`{ kind: 'qr', bind, size?, label? }`) that draws a field's value
+  as an SVG QR code (medium error correction, a quiet zone) in the HTML and the PDF; empty values draw nothing; the
+  designer offers it; bindings are checked like a field's. `qrSvg` is exported by `@kosh/reporting`.
+- **The ticket and badge** (`event.ticket` document of `event.registration`): the event, the attendee, the ticket,
+  the start and the venue, the code, and its QR to show at the door — printed from the registration, as HTML or PDF.
+  Event Hub now depends on Reporting.
+- **Check-in at the door**: the event form has a check-in box while it is open — a scanner or the keyboard types the
+  code (Enter checks in), and where the browser reads codes, the phone's camera scans the QR; the answer (who, which
+  ticket) or the refusal (a second scan with when the first was) is announced; the counts reload.
+  (`@kosh/event/web`, registered in the back-office and in new projects.)
+- **Tests**: the QR as SVG matches the encoder's modules, is stable, and sizes and labels in a layout, nothing for an
+  empty value; the ticket rendered for a registration with its QR; E2E (apps): a code checked in at the event's box,
+  a second scan refused.
+- **Step 3**: revenue to Accounting (`event_account`), follow-up emails, registration from Sites and the portal.
+

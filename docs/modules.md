@@ -277,7 +277,8 @@ with Purchase or Sales, an LC is opened from its order (`trade_finance_purchase`
 Events with sessions and ticket types; registrations confirmed while seats remain (the event's and the ticket's),
 else on a waiting list that moves up in order when a seat frees; check-in once by the code on the ticket
 (`POST /api/v1/eventhub/checkin`, what a phone scanning the QR sends). Install it with
-`shutro-erp apps install event`.
+`shutro-erp apps install event`. Tickets print with their QR (the `qr` block of document layouts); the event's
+check-in box takes a scanner, the keyboard or the phone's camera.
 
 ## Demo data (RFC 0008 §5.8)
 
