@@ -24,6 +24,7 @@
     "@kosh/mrp": "workspace:*",
     "@kosh/maintenance": "workspace:*",
     "@kosh/trade_finance": "workspace:*",
+    "@kosh/trade_finance_account": "workspace:*",
     "@kosh/maintenance_stock": "workspace:*",
     "@kosh/mrp_account": "workspace:*",
     "@kosh/sale_stock": "workspace:*",
