@@ -4,6 +4,7 @@ import { automation } from '@kosh/automation';
 import { calendarApp } from '@kosh/calendar';
 import { contacts } from '@kosh/contacts';
 import { crm } from '@kosh/crm';
+import { event } from '@kosh/event';
 import { hr } from '@kosh/hr';
 import { l10nBd } from '@kosh/l10n_bd';
 import { mail } from '@kosh/mail';
@@ -58,6 +59,7 @@ export const DEMO_APPS: readonly string[] = [
   'mrp',
   'maintenance',
   'trade_finance',
+  'event',
   'l10n_bd',
 ];
 
@@ -87,6 +89,7 @@ export function demoCatalogue(): KoshModule[] {
     mrp,
     maintenance,
     tradeFinance,
+    event,
     saleAccount,
     purchaseAccount,
     saleProject,

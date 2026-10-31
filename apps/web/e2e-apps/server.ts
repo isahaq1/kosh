@@ -20,6 +20,7 @@ import { automation } from '@kosh/automation';
 import { calendarApp } from '@kosh/calendar';
 import { contacts } from '@kosh/contacts';
 import { crm } from '@kosh/crm';
+import { event } from '@kosh/event';
 import { hr } from '@kosh/hr';
 import { dataImport } from '@kosh/import';
 import { l10nBd } from '@kosh/l10n_bd';
@@ -131,6 +132,7 @@ const CATALOGUE = [
   mrp,
   maintenance,
   tradeFinance,
+  event,
   saleAccount,
   purchaseAccount,
   saleProject,
@@ -178,6 +180,7 @@ await applyApps(
         'mrp',
         'maintenance',
         'trade_finance',
+        'event',
         'assistant',
         'import',
         'l10n_bd',
@@ -240,6 +243,7 @@ for (const [login, name, groups] of [
       'mrp.manager',
       'maintenance.manager',
       'trade_finance.manager',
+      'event.manager',
       'messaging.user',
       'reporting.user',
       'assistant.user',
@@ -266,6 +270,7 @@ for (const [login, name, groups] of [
       'mrp.user',
       'maintenance.user',
       'trade_finance.user',
+      'event.user',
     ],
   ],
 ] as const)

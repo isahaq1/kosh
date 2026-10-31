@@ -24,6 +24,7 @@ export type AppName =
   | 'mrp'
   | 'maintenance'
   | 'trade_finance'
+  | 'event'
   | 'sale_project'
   | 'sale_stock'
   | 'purchase_stock'
@@ -159,6 +160,11 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
       'Trade Finance: letters of credit, amendments, presentations and discrepancies, bank limits',
     icon: '🏦',
     server: 'tradeFinance',
+  },
+  event: {
+    label: 'Event Hub: events, tickets and seats, waiting lists, check-in by QR',
+    icon: '🎟️',
+    server: 'event',
   },
   sale_project: {
     label: 'Bridge: tasks and projects from sales orders (Sales ↔ Projects)',
