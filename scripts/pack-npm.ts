@@ -76,6 +76,7 @@ const PACKAGES = [
   'trade_finance_account',
   'trade_finance_purchase',
   'trade_finance_sale',
+  'event_account',
   'portal',
   'sale_portal',
   'account_portal',

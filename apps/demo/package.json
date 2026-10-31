@@ -25,6 +25,7 @@
     "@kosh/maintenance": "workspace:*",
     "@kosh/trade_finance": "workspace:*",
     "@kosh/event": "workspace:*",
+    "@kosh/event_account": "workspace:*",
     "@kosh/trade_finance_account": "workspace:*",
     "@kosh/trade_finance_purchase": "workspace:*",
     "@kosh/trade_finance_sale": "workspace:*",

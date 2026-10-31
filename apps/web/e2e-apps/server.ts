@@ -21,6 +21,7 @@ import { calendarApp } from '@kosh/calendar';
 import { contacts } from '@kosh/contacts';
 import { crm } from '@kosh/crm';
 import { event } from '@kosh/event';
+import { eventAccount } from '@kosh/event_account';
 import { hr } from '@kosh/hr';
 import { dataImport } from '@kosh/import';
 import { l10nBd } from '@kosh/l10n_bd';
@@ -145,6 +146,7 @@ const CATALOGUE = [
   tradeFinanceAccount,
   tradeFinancePurchase,
   tradeFinanceSale,
+  eventAccount,
   assistant,
   dataImport,
   l10nBd,

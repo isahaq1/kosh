@@ -160,11 +160,15 @@ test('the salesperson sees the orders and the invoices made from them; the buyer
     `/api/v1/models/account.move?fields=state,paymentState&${filter({ kind: 'out_invoice' })}&order=id+asc`,
     'rahim',
   );
-  // Three posted by the accounting demo (one paid, one in part), three drafts from the confirmed orders.
+  // Three posted by the accounting demo (one paid, one in part), three drafts from the confirmed orders, and three
+  // for the paid places at Event Hub's supplier day.
   expect(invoices.items.map((i: Json) => i.state)).toEqual([
     'posted',
     'posted',
     'posted',
+    'draft',
+    'draft',
+    'draft',
     'draft',
     'draft',
     'draft',

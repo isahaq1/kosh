@@ -35,6 +35,7 @@ export type AppName =
   | 'trade_finance_account'
   | 'trade_finance_purchase'
   | 'trade_finance_sale'
+  | 'event_account'
   | 'l10n_bd'
   | 'l10n_in';
 export interface AppSpec {
@@ -229,6 +230,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'tradeFinanceSale',
     bridge: ['trade_finance', 'sales'],
+  },
+  event_account: {
+    label: 'Bridge: paid event places invoiced (Event Hub ↔ Accounting)',
+    icon: '🔗',
+    server: 'eventAccount',
+    bridge: ['event', 'accounting'],
   },
   l10n_bd: {
     label: 'Bangladesh: chart of accounts, VAT and SD, VDS and TDS, BIN and TIN, July–June year',
