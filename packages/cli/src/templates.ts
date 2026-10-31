@@ -25,6 +25,7 @@ export type AppName =
   | 'maintenance'
   | 'trade_finance'
   | 'event'
+  | 'website'
   | 'sale_project'
   | 'sale_stock'
   | 'purchase_stock'
@@ -167,6 +168,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🎟️',
     server: 'event',
     web: 'registerEventWeb',
+  },
+  website: {
+    label: 'Sites: website pages from blocks, forms that create records, a public API',
+    icon: '🌐',
+    server: 'website',
+    web: 'registerWebsiteWeb',
   },
   sale_project: {
     label: 'Bridge: tasks and projects from sales orders (Sales ↔ Projects)',

@@ -22,6 +22,7 @@ import { registerSettingsWeb, settingsMessages } from '@kosh/settings/web';
 import { registerStockWeb, stockMessages } from '@kosh/stock/web';
 import { registerStudioWeb, studioMessages } from '@kosh/studio/web';
 import { createDefaultRegistry, createKoshApi, KoshApp } from '@kosh/ui';
+import { registerWebsiteWeb, websiteMessages } from '@kosh/website/web';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -44,6 +45,7 @@ registerL10nInWeb(registry);
 registerRecruitmentWeb(registry);
 registerStockWeb(registry);
 registerEventWeb(registry);
+registerWebsiteWeb(registry);
 const messages = {
   accounting: accountingMessages,
   assistant: assistantMessages,
@@ -58,6 +60,7 @@ const messages = {
   recruitment: recruitmentMessages,
   stock: stockMessages,
   event: eventMessages,
+  website: websiteMessages,
   reporting: reportingMessages,
   messaging: messagingMessages,
   settings: settingsMessages,

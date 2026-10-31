@@ -39,6 +39,7 @@ import { tradeFinance } from '@kosh/trade_finance';
 import { tradeFinanceAccount } from '@kosh/trade_finance_account';
 import { tradeFinancePurchase } from '@kosh/trade_finance_purchase';
 import { tradeFinanceSale } from '@kosh/trade_finance_sale';
+import { website } from '@kosh/website';
 
 /** What the demo installs; the bridges come as proposals of the plan. */
 export const DEMO_APPS: readonly string[] = [
@@ -61,6 +62,7 @@ export const DEMO_APPS: readonly string[] = [
   'maintenance',
   'trade_finance',
   'event',
+  'website',
   'l10n_bd',
 ];
 
@@ -91,6 +93,7 @@ export function demoCatalogue(): KoshModule[] {
     maintenance,
     tradeFinance,
     event,
+    website,
     saleAccount,
     purchaseAccount,
     saleProject,

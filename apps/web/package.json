@@ -26,7 +26,8 @@
     "@kosh/studio": "workspace:*",
     "@kosh/assistant": "workspace:*",
     "@kosh/import": "workspace:*",
-    "@kosh/portal": "workspace:*"
+    "@kosh/portal": "workspace:*",
+    "@kosh/website": "workspace:*"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

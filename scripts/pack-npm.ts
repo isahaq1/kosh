@@ -66,6 +66,7 @@ const PACKAGES = [
   'maintenance',
   'trade_finance',
   'event',
+  'website',
   'sale_project',
   'sale_stock',
   'purchase_stock',
