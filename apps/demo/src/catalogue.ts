@@ -18,6 +18,7 @@ import { mrpAccount } from '@kosh/mrp_account';
 import { notify } from '@kosh/notify';
 import { permissions } from '@kosh/permissions';
 import { pos } from '@kosh/pos';
+import { posStock } from '@kosh/pos_stock';
 import { product } from '@kosh/product';
 import { project } from '@kosh/project';
 import { purchase } from '@kosh/purchase';
@@ -112,6 +113,7 @@ export function demoCatalogue(): KoshModule[] {
     tradeFinanceSale,
     eventAccount,
     websiteCrm,
+    posStock,
     l10nBd,
   ];
 }

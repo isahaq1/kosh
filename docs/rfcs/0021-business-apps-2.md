@@ -959,3 +959,26 @@ receipts as documents (RFC 0005), notifications for receipts by SMS or email (RF
   difference, the difference kept; the receipt. E2E (apps): a shop, a session, a sale paid in cash, the close.
 - **Next**: step 2 — the offline queue, receipts by SMS / email, bKash / cards through the providers, `pos_stock`
   and `pos_account`; step 3 — refunds with reasons, weighed products, Mushak 6.3.
+
+## Implementation notes (2026-10-31): Counter, step 2
+
+- **Offline sales**: the UI's offline queue gained a `request` kind — a module's route replayed as it was sent —
+  and the register puts a sale that cannot reach the server there (the device's reference keeps it from being
+  accepted twice); the register says how many wait, and the queue sends them in order when the network is back.
+- **The books**: closing a session writes **one entry** in the shop's sales journal — the untaxed sales to the
+  journal's income account, each tax to its account (a line's tax shared between its taxes by rate), the payments
+  per method to their journals' accounts (cash less the change given), the closing difference to the shop's
+  difference account (the income account otherwise) — posted as the system with the posting grant; a shop without
+  a sales journal books nothing. The session links its entry.
+- **Receipts by email or text**: `POST /api/v1/counter/orders/:id/receipt` `{ email?, phone? }` sends the receipt
+  document by email (SMTP from the environment) and a summary by text (the messenger from the environment); the
+  register asks for an email or a phone after a sale. `posModule({ mailer, messenger })` takes others (tests).
+- **`pos_stock`** (proposed with Stockroom): a closed session's sold goods leave the shop's warehouse (the
+  company's first, or the shop's own) as one delivery, done at once when the stock is there, else left confirmed
+  for a manager; the session links its delivery.
+- **Not in this step**: bKash and cards through the payment providers — the adapters are redirect flows made for
+  the portal; at a counter they need a push or a QR to the customer's phone, which comes with step 3 together
+  with refunds, weighed products and Mushak 6.3.
+- Tests: Counter on real PostgreSQL (the entry posted and balanced from a card-and-cash sale and a count, the
+  receipt by email with the document and by text), `pos_stock` (one done delivery of the sold quantities, the shelf
+  down by them). The UI's queue replays requests.

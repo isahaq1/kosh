@@ -36,6 +36,7 @@ import { notify } from '@kosh/notify';
 import { installApprovalPolicies, permissions } from '@kosh/permissions';
 import { portal } from '@kosh/portal';
 import { pos } from '@kosh/pos';
+import { posStock } from '@kosh/pos_stock';
 import { product } from '@kosh/product';
 import { project } from '@kosh/project';
 import { purchase } from '@kosh/purchase';
@@ -153,6 +154,7 @@ const CATALOGUE = [
   tradeFinanceSale,
   eventAccount,
   websiteCrm,
+  posStock,
   assistant,
   dataImport,
   l10nBd,

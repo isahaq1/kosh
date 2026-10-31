@@ -24,5 +24,5 @@ Design documents written before implementation. An RFC is implemented only after
 | 0018 | [Workspace back-office](0018-workspace-ui.md) | Accepted, implemented |
 | 0019 | [Settings](0019-settings.md) | Accepted, implemented |
 | 0020 | [App settings](0020-app-settings.md) | Accepted; step 1 implemented (the declaration, the API, the per-app page; Sales, Purchase, Accounting) |
-| 0021 | [Business apps, part 2](0021-business-apps-2.md) | Accepted; Focus, Agenda, Pipeline, Workforce and Hiring step 1 implemented; Stockroom, Production, Asset Care, Trade Finance and Event Hub complete; Sites step 1, `website_crm` and Counter step 1 implemented |
+| 0021 | [Business apps, part 2](0021-business-apps-2.md) | Accepted; Focus, Agenda, Pipeline, Workforce and Hiring step 1 implemented; Stockroom, Production, Asset Care, Trade Finance and Event Hub complete; Sites step 1, `website_crm` and Counter steps 1–2 implemented |
 | 0022 | [App depth and polish](0022-app-depth-and-polish.md) | Complete: tiles, overviews, widgets, guidance, columns and printing on the platform; a depth pass on every app; overviews per person and `requiredWhen` |

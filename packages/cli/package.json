@@ -92,7 +92,8 @@
     "@kosh/integrations": "workspace:*",
     "@kosh/website": "workspace:*",
     "@kosh/website_crm": "workspace:*",
-    "@kosh/pos": "workspace:*"
+    "@kosh/pos": "workspace:*",
+    "@kosh/pos_stock": "workspace:*"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1"

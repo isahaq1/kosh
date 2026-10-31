@@ -39,6 +39,7 @@ export type AppName =
   | 'trade_finance_sale'
   | 'event_account'
   | 'website_crm'
+  | 'pos_stock'
   | 'l10n_bd'
   | 'l10n_in';
 export interface AppSpec {
@@ -257,6 +258,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'websiteCrm',
     bridge: ['website', 'crm'],
+  },
+  pos_stock: {
+    label: 'Bridge: a closed Counter session leaves stock as one delivery (Counter ↔ Stockroom)',
+    icon: '🔗',
+    server: 'posStock',
+    bridge: ['pos', 'stock'],
   },
   l10n_bd: {
     label: 'Bangladesh: chart of accounts, VAT and SD, VDS and TDS, BIN and TIN, July–June year',

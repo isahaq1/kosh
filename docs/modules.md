@@ -325,6 +325,9 @@ Point of sale: shops with their payment methods, cashiers' sessions with opening
 needs a reason), sales with lines, taxes, several payments and the change, each accepted once by the device's
 reference. The register (*Counter › Register*) sells from a tablet or a phone: products as tiles, search and a
 barcode box, the cart, the payment dialog, the receipt. Install it with `shutro-erp apps install pos`.
+A sale made offline waits on the device and goes when the network is back; a closed session books one entry in
+the shop's sales journal and, with Stockroom (`pos_stock`), leaves stock as one delivery; receipts go by email or
+text from the register.
 
 ## Demo data (RFC 0008 §5.8)
 
