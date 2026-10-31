@@ -48,7 +48,8 @@
     "@kosh/mail": "workspace:*",
     "@kosh/automation": "workspace:*",
     "@kosh/l10n_bd": "workspace:*",
-    "@kosh/website": "workspace:*"
+    "@kosh/website": "workspace:*",
+    "@kosh/website_crm": "workspace:*"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1",

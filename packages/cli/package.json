@@ -90,7 +90,8 @@
     "@kosh/l10n_bd": "workspace:*",
     "@kosh/l10n_in": "workspace:*",
     "@kosh/integrations": "workspace:*",
-    "@kosh/website": "workspace:*"
+    "@kosh/website": "workspace:*",
+    "@kosh/website_crm": "workspace:*"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1"

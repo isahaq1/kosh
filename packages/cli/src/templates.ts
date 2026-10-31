@@ -37,6 +37,7 @@ export type AppName =
   | 'trade_finance_purchase'
   | 'trade_finance_sale'
   | 'event_account'
+  | 'website_crm'
   | 'l10n_bd'
   | 'l10n_in';
 export interface AppSpec {
@@ -243,6 +244,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'eventAccount',
     bridge: ['event', 'accounting'],
+  },
+  website_crm: {
+    label: 'Bridge: website forms that create deals (Sites ↔ Pipeline)',
+    icon: '🔗',
+    server: 'websiteCrm',
+    bridge: ['website', 'crm'],
   },
   l10n_bd: {
     label: 'Bangladesh: chart of accounts, VAT and SD, VDS and TDS, BIN and TIN, July–June year',

@@ -69,6 +69,7 @@ import { tradeFinanceAccount } from '@kosh/trade_finance_account';
 import { tradeFinancePurchase } from '@kosh/trade_finance_purchase';
 import { tradeFinanceSale } from '@kosh/trade_finance_sale';
 import { website } from '@kosh/website';
+import { websiteCrm } from '@kosh/website_crm';
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
 
 export const ADMIN_TOTP_SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
@@ -149,6 +150,7 @@ const CATALOGUE = [
   tradeFinancePurchase,
   tradeFinanceSale,
   eventAccount,
+  websiteCrm,
   assistant,
   dataImport,
   l10nBd,

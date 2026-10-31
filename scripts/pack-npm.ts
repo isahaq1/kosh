@@ -78,6 +78,7 @@ const PACKAGES = [
   'trade_finance_purchase',
   'trade_finance_sale',
   'event_account',
+  'website_crm',
   'portal',
   'sale_portal',
   'account_portal',
