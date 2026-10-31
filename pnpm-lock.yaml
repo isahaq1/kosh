@@ -47,6 +47,9 @@ importers:
       '@kosh/crm':
         specifier: workspace:*
         version: link:../../modules/crm
+      '@kosh/event':
+        specifier: workspace:*
+        version: link:../../modules/event
       '@kosh/hr':
         specifier: workspace:*
         version: link:../../modules/hr
@@ -302,6 +305,9 @@ importers:
       '@kosh/crm':
         specifier: workspace:*
         version: link:../../modules/crm
+      '@kosh/event':
+        specifier: workspace:*
+        version: link:../../modules/event
       '@kosh/hr':
         specifier: workspace:*
         version: link:../../modules/hr
@@ -542,6 +548,31 @@ importers:
         version: 12.2.1
 
   modules/crm:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/event:
     dependencies:
       '@kosh/contacts':
         specifier: workspace:*
@@ -1671,6 +1702,9 @@ importers:
       '@kosh/crm':
         specifier: workspace:*
         version: link:../../modules/crm
+      '@kosh/event':
+        specifier: workspace:*
+        version: link:../../modules/event
       '@kosh/hr':
         specifier: workspace:*
         version: link:../../modules/hr
