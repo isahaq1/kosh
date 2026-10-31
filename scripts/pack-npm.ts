@@ -73,6 +73,8 @@ const PACKAGES = [
   'mrp_account',
   'maintenance_stock',
   'trade_finance_account',
+  'trade_finance_purchase',
+  'trade_finance_sale',
   'portal',
   'sale_portal',
   'account_portal',

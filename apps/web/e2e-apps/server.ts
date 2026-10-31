@@ -64,6 +64,8 @@ import { stockAccount } from '@kosh/stock_account';
 import { todo } from '@kosh/todo';
 import { tradeFinance } from '@kosh/trade_finance';
 import { tradeFinanceAccount } from '@kosh/trade_finance_account';
+import { tradeFinancePurchase } from '@kosh/trade_finance_purchase';
+import { tradeFinanceSale } from '@kosh/trade_finance_sale';
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
 
 export const ADMIN_TOTP_SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
@@ -139,6 +141,8 @@ const CATALOGUE = [
   mrpAccount,
   maintenanceStock,
   tradeFinanceAccount,
+  tradeFinancePurchase,
+  tradeFinanceSale,
   assistant,
   dataImport,
   l10nBd,

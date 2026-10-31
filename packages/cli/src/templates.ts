@@ -32,6 +32,8 @@ export type AppName =
   | 'mrp_account'
   | 'maintenance_stock'
   | 'trade_finance_account'
+  | 'trade_finance_purchase'
+  | 'trade_finance_sale'
   | 'l10n_bd'
   | 'l10n_in';
 export interface AppSpec {
@@ -208,6 +210,18 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'tradeFinanceAccount',
     bridge: ['trade_finance', 'accounting'],
+  },
+  trade_finance_purchase: {
+    label: 'Bridge: import LCs from purchase orders (Trade Finance ↔ Purchase)',
+    icon: '🔗',
+    server: 'tradeFinancePurchase',
+    bridge: ['trade_finance', 'purchase'],
+  },
+  trade_finance_sale: {
+    label: 'Bridge: export LCs for sales orders (Trade Finance ↔ Sales)',
+    icon: '🔗',
+    server: 'tradeFinanceSale',
+    bridge: ['trade_finance', 'sales'],
   },
   l10n_bd: {
     label: 'Bangladesh: chart of accounts, VAT and SD, VDS and TDS, BIN and TIN, July–June year',
