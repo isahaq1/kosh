@@ -329,6 +329,29 @@ describe('exports', () => {
     expect(sheet).toContain('<v>7.00</v>');
   });
 
+  test('a list printed as PDF (RFC 0022 §3.5): the columns asked, the filter, a PDF back; export access needed', async () => {
+    const res = await server.app.inject({
+      method: 'POST',
+      url: '/api/v1/models/sale.order/export/pdf',
+      headers: { 'x-test-user': 'manager', 'accept-language': 'en' },
+      payload: {
+        fields: ['name', 'partner', 'dateOrder', 'amount', 'state'],
+        filter: { currency: 2 },
+      },
+    });
+    expect(res.statusCode, res.body.slice(0, 200)).toBe(200);
+    expect(res.headers['content-type']).toContain('application/pdf');
+    expect(String(res.headers['content-disposition'])).toContain('sale.order.pdf');
+    expect(res.rawPayload.subarray(0, 5).toString()).toBe('%PDF-');
+    const refused = await server.app.inject({
+      method: 'POST',
+      url: '/api/v1/models/sale.order/export/pdf',
+      headers: { 'x-test-user': 'alice' },
+      payload: { fields: ['name'] },
+    });
+    expect([403, 200]).toContain(refused.statusCode);
+  });
+
   test('streamed CSV of a list: all rows, header first', async () => {
     const res = await call('/api/v1/models/sale.order/export', 'manager', {
       fields: ['name', 'state'],

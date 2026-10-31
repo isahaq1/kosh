@@ -1379,7 +1379,7 @@ export function ListView(props: ViewProps): ReactElement {
     [api, model, queryClient],
   );
   const exportAs = useMutation({
-    mutationFn: async (format: 'csv' | 'xlsx') => {
+    mutationFn: async (format: 'csv' | 'xlsx' | 'pdf') => {
       const where = ids.length === 0 ? props.where : and(props.where, { id: { in: ids } });
       const keys = columns.map((c) => c.field);
       const file =
@@ -1389,7 +1389,7 @@ export function ListView(props: ViewProps): ReactElement {
               ...(where === undefined ? {} : { filter: where }),
               ...(props.order.length === 0 ? {} : { order: props.order }),
             })
-          : await api.download(`/api/v1/models/${encodeURIComponent(model)}/export/xlsx`, {
+          : await api.download(`/api/v1/models/${encodeURIComponent(model)}/export/${format}`, {
               fields: keys,
               ...(where === undefined ? {} : { filter: where }),
             });
@@ -1559,6 +1559,7 @@ export function ListView(props: ViewProps): ReactElement {
               <MenuLabel>{t('views.export')}</MenuLabel>
               <MenuItem onSelect={() => exportAs.mutate('csv')}>{t('views.exportCsv')}</MenuItem>
               <MenuItem onSelect={() => exportAs.mutate('xlsx')}>{t('views.exportXlsx')}</MenuItem>
+              <MenuItem onSelect={() => exportAs.mutate('pdf')}>{t('views.exportPdf')}</MenuItem>
             </MenuContent>
           </Menu>
         ) : null}

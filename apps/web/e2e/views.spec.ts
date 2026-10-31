@@ -156,3 +156,15 @@ test('list: a column resized with the keyboard and pinned, remembered per user (
   await page.reload();
   await expect(page.getByRole('columnheader', { name: 'Name' })).toHaveCSS('position', 'sticky');
 });
+
+test('list: Print as PDF downloads the list as shown (RFC 0022 §3.5)', async ({ page }) => {
+  await signIn(page, 'dina');
+  await page.goto(CONTACTS);
+  await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
+  await page.getByRole('button', { name: 'Export' }).click();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('menuitem', { name: 'Print as PDF' }).click(),
+  ]);
+  expect(download.suggestedFilename()).toMatch(/\.pdf$/);
+});

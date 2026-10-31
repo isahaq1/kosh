@@ -80,6 +80,8 @@ on. Both are checked when the server starts.
 Drag the handle at a header's end to resize a column (double-click resets it; with the keyboard, the arrows change
 the width and Home resets it); the Columns menu pins columns at the start and resets the widths. Both are
 remembered per user and view, with the hidden columns and the density.
+*Export › Print as PDF* prints the list as shown (`POST /api/v1/models/:model/export/pdf`; export access); a
+record's document templates print from the *Print* menu beside its actions, on every form.
 
 ## Guidance on a record (RFC 0022 §3.4)
 

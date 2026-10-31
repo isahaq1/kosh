@@ -61,6 +61,8 @@ test('register payment on a posted invoice marks it paid; the aging and the tria
     .click();
   await expect(page.getByRole('heading', { level: 1 })).toContainText('INV/');
   await expect(page.getByText('Not paid')).toBeVisible();
+  // RFC 0022 §3.5: the record's document templates print from the Print menu beside its actions.
+  await expect(page.getByRole('button', { name: 'Print' })).toBeVisible();
   await page.getByRole('button', { name: 'Register payment' }).click();
   const dialog = page.getByRole('dialog', { name: 'Register a payment' });
   await dialog.getByRole('combobox', { name: 'Journal' }).click();

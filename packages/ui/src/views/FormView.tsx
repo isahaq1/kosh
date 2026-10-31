@@ -841,6 +841,8 @@ export function FormView({
           (v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0))
         );
       });
+  // RFC 0022 §3.5: the record's document templates as a Print menu, when reporting's web is registered.
+  const Print = registry.component('reporting.Documents');
   const buttons = view.header.buttons.filter((b) => {
     const spec = served.transitions.find((tr) => tr.name === b.transition);
     return (
@@ -1233,12 +1235,23 @@ export function FormView({
               </Alert>
             )}
 
-            {buttons.length === 0 ? null : (
+            {buttons.length === 0 && (isNew || Print === undefined) ? null : (
               <div
                 role="toolbar"
                 aria-label={t('views.recordActions')}
                 className="flex flex-wrap gap-2"
               >
+                {isNew || Print === undefined ? null : (
+                  <Print
+                    node={{ kind: 'component', id: 'print', component: 'reporting.Documents' }}
+                    record={record ?? null}
+                    model={model}
+                    served={served}
+                    api={api}
+                    version={loaded.data?.etag ?? null}
+                    reload={() => void loaded.refetch()}
+                  />
+                )}
                 <div className="contents">
                   {buttons.map((b, i) => (
                     <Button

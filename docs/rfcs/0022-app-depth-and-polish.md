@@ -209,3 +209,16 @@ step 3 last. Performance budgets apply (an overview with eight tiles < 300 ms se
   the browser, like the hidden columns and the density. Grouped lists share the layout.
 - E2E (chromium): a column widened with the keyboard keeps its width after a reload; pinned, it is sticky.
 - Next (part 2): printing a list and a record as PDF through the reporting engine; attachment galleries.
+
+## Implementation notes (2026-10-31): step 1, part 3.5 (part 2) — printing
+
+- **A list as PDF**: *Export › Print as PDF* sends the columns shown and the filter to
+  `POST /api/v1/models/:model/export/pdf` (export access, audited like the other exports, up to 2,000 rows): the
+  rows the XLSX export builds — many2one names, dates, money — laid out as a table with the header repeated on
+  every page, numbers right-aligned, landscape beyond six columns, rendered by the document engine (Playwright).
+- **A record's documents**: the *Print* menu of the record's templates (`reporting.Documents`) now appears with
+  the record's actions on every form when reporting's web is registered, without each module placing it.
+- **Galleries**: the chatter already shows a record's image attachments as thumbnails; the image widget covers the
+  record's own picture. No separate gallery block for now.
+- Tests: the PDF export on real PostgreSQL (a PDF back, the filename, export access); E2E: *Print as PDF*
+  downloads from a list; the *Print* button on a posted invoice.

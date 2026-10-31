@@ -14,6 +14,7 @@ import {
 } from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
 import type { FastifyRequest } from 'fastify';
+import { renderPdf } from './documents.js';
 import {
   type FieldInfo,
   type Header,
@@ -26,6 +27,7 @@ import {
 import { type Cell, moneyFormat, workbook } from './xlsx.js';
 
 const LIST_XLSX_LIMIT = 100_000;
+const LIST_PDF_LIMIT = 2000;
 
 type Row = Record<string, unknown>;
 interface Rows {
@@ -269,102 +271,38 @@ export function registerReportRoutes(context: ModuleContext): void {
     const limit = raw['limit'] === undefined ? LIST_XLSX_LIMIT : Number(raw['limit']);
     if (!Number.isInteger(limit) || limit < 1 || limit > LIST_XLSX_LIMIT)
       throw bad(`limit must be 1–${LIST_XLSX_LIMIT}.`);
-    const sheet = await request.env(async (env) => {
-      env.access.check(model.name as never, 'export');
-      const fields = (
-        keys.length > 0
-          ? keys
-          : model.fields
-              .filter(
-                (f) =>
-                  f.stored &&
-                  f.kind !== 'binary' &&
-                  f.kind !== 'one2many' &&
-                  f.kind !== 'many2many',
-              )
-              .map((f) => f.key)
-      )
-        .map((k) => model.byKey.get(k))
-        .filter((f) => f !== undefined && env.access.canField(model.name as never, f.key, 'read'));
-      const found = await search(env, model.name, {
-        ...(where === undefined ? {} : { where }),
-        order: ['id asc'],
-        limit,
-      });
-      const loaded =
-        found.length === 0
-          ? []
-          : (await found.load(['id', ...fields.map((f) => f?.key as string)])).read(
-              fields.map((f) => f?.key as string),
-            );
-      // many2one columns show names, not ids.
-      const names = new Map<string, ReadonlyMap<number, string>>();
-      for (const f of fields)
-        if (f?.kind === 'many2one' && f.target !== null) {
-          const ids = [
-            ...new Set(
-              loaded.map((r) => r[f.key]).filter((v): v is number => typeof v === 'number'),
-            ),
-          ];
-          names.set(f.key, ids.length === 0 ? new Map() : await displayNames(env, f.target, ids));
-        }
-      await audit(env, {
-        kind: 'data.export',
-        summary: `Exported ${loaded.length} ${model.name} record(s) as xlsx.`,
-        targetModel: model.name,
-        details: { fields: fields.map((f) => f?.key), count: loaded.length, filter: where ?? null },
-        ip: request.ip,
-      });
-      const header: Cell[] = fields.map((f) => f?.label ?? '');
-      const body: Cell[][] = loaded.map((r) =>
-        fields.map((f): Cell => {
-          if (f === undefined) return null;
-          const v = r[f.key];
-          if (v === null || v === undefined) return null;
-          switch (f.kind) {
-            case 'many2one':
-              return names.get(f.key)?.get(v as number) ?? `#${String(v)}`;
-            case 'decimal':
-            case 'float':
-              return { decimal: String(v) };
-            case 'monetary': {
-              const m = (
-                typeof (v as { toJSON?: unknown }).toJSON === 'function'
-                  ? (v as { toJSON(): unknown }).toJSON()
-                  : v
-              ) as { amount?: unknown; currency?: unknown };
-              return {
-                decimal: String(m.amount ?? v),
-                format: moneyFormat(String(m.currency ?? '')),
-              };
-            }
-            case 'date':
-              return new Date(`${String(v).slice(0, 10)}T00:00:00Z`);
-            case 'datetime':
-              return v instanceof Date ? v : new Date(String(v));
-            case 'selection':
-            case 'state':
-              return f.options?.find(([value]) => value === v)?.[1] ?? String(v);
-            case 'boolean':
-              return v === true;
-            case 'integer':
-            case 'bigint':
-              return Number(v);
-            default:
-              return String(v);
-          }
-        }),
-      );
-      return {
-        name: model.label,
-        rows: [header, ...body],
-        widths: fields.map((f) => Math.min(48, Math.max(10, (f?.label.length ?? 10) + 4))),
-      };
-    });
+    const sheet = await request.env((env) =>
+      listSheet(env, model, keys, where, limit, request.ip, 'xlsx'),
+    );
     await reply
       .type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
       .header('content-disposition', `attachment; filename="${model.name}.xlsx"`)
       .send(workbook([sheet]));
+  });
+
+  // RFC 0022 §3.5: a list printed as PDF — the columns shown, the filter, up to LIST_PDF_LIMIT rows.
+  app.post('/api/v1/models/:model/export/pdf', async (request, reply) => {
+    const model = modelOf(request.params);
+    const raw = bodyOf(request);
+    const keys = strings(raw['fields'], 'fields');
+    const where = raw['filter'];
+    const limit = raw['limit'] === undefined ? LIST_PDF_LIMIT : Number(raw['limit']);
+    if (!Number.isInteger(limit) || limit < 1 || limit > LIST_PDF_LIMIT)
+      throw bad(`limit must be 1–${LIST_PDF_LIMIT}.`);
+    const sheet = await request.env((env) =>
+      listSheet(env, model, keys, where, limit, request.ip, 'pdf'),
+    );
+    const lang = String(request.headers['accept-language'] ?? 'en').slice(0, 2);
+    const html = listHtml(sheet, { lang, dir: lang === 'ar' || lang === 'he' ? 'rtl' : 'ltr' });
+    const pdf = await renderPdf(html, {
+      paper: 'A4',
+      orientation: (sheet.rows[0]?.length ?? 0) > 6 ? 'landscape' : 'portrait',
+      blocks: [],
+    });
+    await reply
+      .type('application/pdf')
+      .header('content-disposition', `attachment; filename="${model.name}.pdf"`)
+      .send(pdf);
   });
 }
 
@@ -372,4 +310,149 @@ function csvCell(value: string): string {
   let t = value;
   if (/^[=+\-@\t\r]/.test(t) && !/^-?\d+(\.\d+)?$/.test(t)) t = `'${t}`;
   return /[",\r\n]/.test(t) ? `"${t.replaceAll('"', '""')}"` : t;
+}
+
+/** The rows of a list for an export: the columns the user may read, many2one names, typed cells; audited. */
+async function listSheet(
+  env: Env,
+  model: ApiModel,
+  keys: readonly string[],
+  where: unknown,
+  limit: number,
+  ip: string,
+  format: 'xlsx' | 'pdf',
+): Promise<{ name: string; rows: Cell[][]; widths: number[] }> {
+  env.access.check(model.name as never, 'export');
+  const fields = (
+    keys.length > 0
+      ? keys
+      : model.fields
+          .filter(
+            (f) =>
+              f.stored && f.kind !== 'binary' && f.kind !== 'one2many' && f.kind !== 'many2many',
+          )
+          .map((f) => f.key)
+  )
+    .map((k) => model.byKey.get(k))
+    .filter((f) => f !== undefined && env.access.canField(model.name as never, f.key, 'read'));
+  const found = await search(env, model.name, {
+    ...(where === undefined ? {} : { where }),
+    order: ['id asc'],
+    limit,
+  });
+  const loaded =
+    found.length === 0
+      ? []
+      : (await found.load(['id', ...fields.map((f) => f?.key as string)])).read(
+          fields.map((f) => f?.key as string),
+        );
+  // many2one columns show names, not ids.
+  const names = new Map<string, ReadonlyMap<number, string>>();
+  for (const f of fields)
+    if (f?.kind === 'many2one' && f.target !== null) {
+      const ids = [
+        ...new Set(loaded.map((r) => r[f.key]).filter((v): v is number => typeof v === 'number')),
+      ];
+      names.set(f.key, ids.length === 0 ? new Map() : await displayNames(env, f.target, ids));
+    }
+  await audit(env, {
+    kind: 'data.export',
+    summary: `Exported ${loaded.length} ${model.name} record(s) as ${format}.`,
+    targetModel: model.name,
+    details: { fields: fields.map((f) => f?.key), count: loaded.length, filter: where ?? null },
+    ip,
+  });
+  const header: Cell[] = fields.map((f) => f?.label ?? '');
+  const body: Cell[][] = loaded.map((r) =>
+    fields.map((f): Cell => {
+      if (f === undefined) return null;
+      const v = r[f.key];
+      if (v === null || v === undefined) return null;
+      switch (f.kind) {
+        case 'many2one':
+          return names.get(f.key)?.get(v as number) ?? `#${String(v)}`;
+        case 'decimal':
+        case 'float':
+          return { decimal: String(v) };
+        case 'monetary': {
+          const m = (
+            typeof (v as { toJSON?: unknown }).toJSON === 'function'
+              ? (v as { toJSON(): unknown }).toJSON()
+              : v
+          ) as { amount?: unknown; currency?: unknown };
+          return {
+            decimal: String(m.amount ?? v),
+            format: moneyFormat(String(m.currency ?? '')),
+          };
+        }
+        case 'date':
+          return new Date(`${String(v).slice(0, 10)}T00:00:00Z`);
+        case 'datetime':
+          return v instanceof Date ? v : new Date(String(v));
+        case 'selection':
+        case 'state':
+          return f.options?.find(([value]) => value === v)?.[1] ?? String(v);
+        case 'boolean':
+          return v === true;
+        case 'integer':
+        case 'bigint':
+          return Number(v);
+        default:
+          return String(v);
+      }
+    }),
+  );
+  return {
+    name: model.label,
+    rows: [header, ...body],
+    widths: fields.map((f) => Math.min(48, Math.max(10, (f?.label.length ?? 10) + 4))),
+  };
+}
+
+const escapeHtml = (text: string): string =>
+  text.replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c,
+  );
+
+/** A cell as text on paper. */
+function cellText(cell: Cell): string {
+  if (cell === null) return '';
+  if (cell instanceof Date) return cell.toISOString().slice(0, 10);
+  if (typeof cell === 'boolean') return cell ? '✓' : '';
+  if (typeof cell === 'object') return 'decimal' in cell ? cell.decimal : cell.text;
+  return String(cell);
+}
+
+/** A list as a printable page: the title, the count, a table with the header on every page. */
+function listHtml(
+  sheet: { readonly name: string; readonly rows: readonly Cell[][] },
+  options: { readonly lang: string; readonly dir: 'ltr' | 'rtl' },
+): string {
+  const [header = [], ...body] = sheet.rows;
+  const numeric = header.map((_, i) =>
+    body.every((row) => {
+      const c = row[i];
+      return (
+        c === null ||
+        c === undefined ||
+        typeof c === 'number' ||
+        (typeof c === 'object' && 'decimal' in c)
+      );
+    }),
+  );
+  const th = header.map((h) => `<th>${escapeHtml(cellText(h))}</th>`).join('');
+  const tr = body
+    .map(
+      (row) =>
+        `<tr>${row.map((c, i) => `<td${numeric[i] ? ' class="n"' : ''}>${escapeHtml(cellText(c))}</td>`).join('')}</tr>`,
+    )
+    .join('\n');
+  return `<!doctype html><html lang="${escapeHtml(options.lang)}" dir="${options.dir}"><head><meta charset="utf-8"><title>${escapeHtml(sheet.name)}</title><style>
+body{font:10pt/1.4 "Inter","Noto Sans Bengali",system-ui,sans-serif;color:#111;margin:0}
+h1{font-size:14pt;margin:0 0 2mm}p{margin:0 0 4mm;color:#555}
+table{width:100%;border-collapse:collapse}thead{display:table-header-group}
+th,td{padding:1.2mm 2mm;border-bottom:0.2mm solid #ccc;text-align:start;vertical-align:top}
+th{font-weight:600;background:#f3f4f6}td.n,th.n{text-align:end;font-variant-numeric:tabular-nums}
+tr{break-inside:avoid}</style></head><body><h1>${escapeHtml(sheet.name)}</h1><p>${body.length}</p><table><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table></body></html>`;
 }
