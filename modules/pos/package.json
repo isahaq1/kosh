@@ -1,0 +1,75 @@
+{
+  "name": "@kosh/pos",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Counter: point of sale with sessions, split payments, receipts and the register (RFC 0021)",
+  "keywords": [
+    "kosh",
+    "erp",
+    "typescript",
+    "postgresql",
+    "shutro"
+  ],
+  "author": "Isahaq <hmisahaq01@gmail.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/isahaq1/kosh/tree/main/modules/pos#readme",
+  "bugs": {
+    "url": "https://github.com/isahaq1/kosh/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isahaq1/kosh.git",
+    "directory": "modules/pos"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "@kosh/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./web": {
+      "@kosh/source": "./src/web/index.ts",
+      "types": "./dist/web/index.d.ts",
+      "default": "./dist/web/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node ../../scripts/copy-views.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@kosh/modules-sdk": "workspace:*",
+    "@kosh/server": "workspace:*",
+    "@kosh/views": "workspace:*",
+    "@kosh/messaging": "workspace:*",
+    "@kosh/contacts": "workspace:*",
+    "@kosh/product": "workspace:*",
+    "@kosh/accounting": "workspace:*",
+    "@kosh/reporting": "workspace:*",
+    "@kosh/ui": "workspace:*",
+    "@tanstack/react-query": "^5.104.3"
+  },
+  "devDependencies": {
+    "@kosh/settings": "workspace:*",
+    "@kosh/permissions": "workspace:*",
+    "@testcontainers/postgresql": "^12.2.1",
+    "@types/react": "^19.3.0",
+    "i18next": "^26.4.7",
+    "react": "^19.3.1",
+    "react-i18next": "^17.0.21"
+  },
+  "peerDependencies": {
+    "i18next": "^26.4.7",
+    "react": "^19.3.1",
+    "react-i18next": "^17.0.21",
+    "@tanstack/react-query": "^5.104.3"
+  }
+}
