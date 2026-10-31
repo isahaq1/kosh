@@ -5,6 +5,7 @@
  */
 import { defineModule } from '@kosh/modules-sdk';
 import { base } from '@kosh/server';
+import { storage } from '@kosh/storage';
 import { action, form, kanban, list, search } from '@kosh/views';
 import { productDemo } from './demo.js';
 import { AccountTax, ProductCategory, ProductProduct, productShutro, UomUom } from './module.js';
@@ -23,7 +24,7 @@ export const product: ReturnType<typeof defineModule> = defineModule({
   shutro: productShutro,
   kosh: '^0.1.0',
   hooks: { demo: productDemo },
-  depends: [base],
+  depends: [base, storage],
   app: {
     code: 'product',
     label: 'Products',
@@ -80,15 +81,31 @@ export const product: ReturnType<typeof defineModule> = defineModule({
   views: {
     'product.product.kanban': kanban(ProductProduct, {
       groupBy: 'kind',
-      card: { title: 'name', subtitle: 'code', footer: ['listPrice', 'uom'] },
+      card: { title: 'name', subtitle: 'code', footer: ['listPrice', 'uom'], image: 'image' },
     }),
     'product.product.list': list(ProductProduct, {
-      columns: ['code', 'name', 'kind', 'category', 'listPrice', 'standardPrice', 'uom'],
+      columns: [
+        { field: 'image', widget: 'avatar' },
+        'code',
+        'name',
+        'kind',
+        'category',
+        'listPrice',
+        'standardPrice',
+        'uom',
+      ],
       defaultOrder: ['name asc'],
     }),
     'product.product.form': form(ProductProduct, (k) => ({
       sheet: [
-        k.group('identity', ['name', 'code', 'kind', 'category', 'barcode']),
+        k.group('identity', [
+          { field: 'image', widget: 'image' },
+          'name',
+          'code',
+          'kind',
+          'category',
+          'barcode',
+        ]),
         k.group('prices', ['listPrice', 'standardPrice', 'uom'], { label: 'Prices' }),
         k.notebook('more', [
           k.page('sales', 'Sales & purchase', [

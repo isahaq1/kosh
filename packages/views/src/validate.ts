@@ -97,12 +97,22 @@ export function validateView(view: ViewDefinition, models: ModelLookup): string[
       problems.push(
         `kanban groupBy '${view.groupBy}' is not a stored selection, state, many2one or char field`,
       );
-    for (const key of [view.card.title, view.card.subtitle].filter(
-      (k): k is string => k !== undefined,
-    ))
+    for (const key of [
+      view.card.title,
+      view.card.subtitle,
+      view.card.image,
+      view.card.avatar,
+      view.card.progress,
+      view.card.color,
+    ].filter((k): k is string => k !== undefined))
       if (pathProblem(models, view.model, key) !== null)
         problems.push(`unknown card field '${key}'`);
   }
+  if (view.type === 'list')
+    for (const [tone, condition] of Object.entries(view.decorations ?? {}))
+      for (const key of Object.keys(condition ?? {}))
+        if (!['and', 'or', 'not'].includes(key) && !key.includes('.') && !info.fields.has(key))
+          problems.push(`decoration '${tone}': no field '${key}' on ${view.model}`);
   problems.push(...reportProblems(view, info, models));
   if (view.type === 'list')
     for (const term of view.defaultOrder ?? []) {

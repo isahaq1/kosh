@@ -4,6 +4,7 @@
  */
 import { baseShutro } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
+import { storageShutro } from '@kosh/storage';
 import { check, defineModel, defineModule, f } from './.kosh/bindings.js';
 
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -21,6 +22,8 @@ export const ResPartner = defineModel('res.partner', {
   tracking: ['name', 'email', 'phone', 'taxId'],
   fields: {
     name: f.char({ required: true }),
+    /** A photo or logo: an attachment of the contact (RFC 0022 §3.3), with its 256 px thumbnail. */
+    image: f.many2one('storage.attachment', { ondelete: 'set null', label: 'Photo' }),
     isCompany: f.boolean({ default: false, label: 'Is a company' }),
     /** The company a person works for. */
     parent: f.many2one('res.partner', { ondelete: 'set null', label: 'Company' }),
@@ -57,7 +60,7 @@ export const ResPartner = defineModel('res.partner', {
 export const contactsShutro = defineModule({
   name: 'contacts',
   version: '0.2.0',
-  depends: [baseShutro],
+  depends: [baseShutro, storageShutro],
   groups: [
     orm.defineGroup({ code: 'contacts.user', label: 'Contacts user', implies: ['base.user'] }),
     orm.defineGroup({

@@ -38,12 +38,20 @@ const call = (method: Method, url: string, as: string, body?: unknown) =>
     headers: { 'x-test-user': as },
     ...(body === undefined ? {} : { payload: body as object }),
   });
-const upload = (as: string, url: string, name: string, type: string, data: string | Buffer) =>
+const upload = (
+  as: string,
+  url: string,
+  name: string,
+  type: string,
+  data: string | Buffer,
+  extra: Record<string, string> = {},
+) =>
   server.app.inject({
     method: 'POST',
     url,
     headers: {
       ...(as === '' ? {} : { 'x-test-user': as }),
+      ...extra,
       'content-type': type,
       'x-filename': encodeURIComponent(name),
     },
@@ -293,6 +301,38 @@ describe('access', () => {
 });
 
 describe('attachments', () => {
+  test("an image's thumbnail is a variant: served by ?w=, out of the record's list (RFC 0022 §3.3)", async () => {
+    const id = await deal('alice', { name: 'Deal with a picture' });
+    const image = (
+      await upload('alice', `/api/v1/attachments/crm.deal/${id}`, 'logo.webp', 'image/webp', 'FULL')
+    ).json() as { id: number };
+    const thumb = await upload(
+      'alice',
+      `/api/v1/attachments/crm.deal/${id}`,
+      'logo-256.webp',
+      'image/webp',
+      'SMALL',
+      { 'x-variant-of': String(image.id), 'x-width': '256' },
+    );
+    expect(thumb.statusCode, thumb.body).toBe(201);
+    const small = await call(
+      'GET',
+      `/api/v1/attachments/${image.id}/download?inline=true&w=256`,
+      'alice',
+    );
+    expect(small.statusCode).toBe(200);
+    expect(small.body).toBe('SMALL');
+    expect(small.headers['content-type']).toBe('image/webp');
+    // No variant of that width: the image itself.
+    expect(
+      (await call('GET', `/api/v1/attachments/${image.id}/download?w=512`, 'alice')).body,
+    ).toBe('FULL');
+    const listed = (await call('GET', `/api/v1/attachments/crm.deal/${id}`, 'alice')).json() as {
+      attachments: { id: number }[];
+    };
+    expect(listed.attachments.map((f) => f.id)).toEqual([image.id]);
+  });
+
   test('upload, list, download as an attachment; attach to a message; deleting the message removes them', async () => {
     const id = await deal('alice', { name: 'Deal F' });
     const json = await upload(

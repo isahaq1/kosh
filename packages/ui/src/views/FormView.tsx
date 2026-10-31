@@ -643,6 +643,7 @@ export function FormView({
             field={field}
             value={values[node.field]}
             record={values}
+            model={model}
             readonly={readonly}
             onChange={(v) => change(node.field, v)}
             invalid={invalid}

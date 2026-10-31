@@ -71,6 +71,15 @@ const helper = createColumnHelper<typeof features, Row>();
 type Density = import('../context.js').Density;
 const HEIGHTS: Record<Density, number> = { comfortable: 40, compact: 32 };
 /** The record's page in a new tab: the list's address with the record's id (`/<app>/a/<action>/<id>`). */
+/** A decorated row (RFC 0022 §3.3): its text in the tone; `neutral` mutes it (done, cancelled). */
+const ROW_TONES = {
+  danger: 'text-danger',
+  warning: 'text-warning-text',
+  success: 'text-success',
+  info: 'text-primary',
+  neutral: 'text-muted-foreground',
+} as const;
+
 function openInNewTab(id: number): void {
   const path = window.location.pathname.replace(/\/$/, '');
   window.open(`${path}/${id}`, '_blank', 'noopener');
@@ -336,6 +345,14 @@ function Rows({
   readonly filtered?: boolean;
 }): ReactElement {
   const { api, uid, companyId } = useKosh();
+  // Row decorations (RFC 0022 §3.3): the first tone whose condition holds on the row, danger first.
+  const decorations = props.served.view.type === 'list' ? props.served.view.decorations : undefined;
+  const rowTone = (row: Readonly<Record<string, unknown>>): string | undefined => {
+    if (decorations === undefined) return undefined;
+    for (const tone of ['danger', 'warning', 'success', 'info', 'neutral'] as const)
+      if (holds(decorations[tone], row, { uid, companyId })) return ROW_TONES[tone];
+    return undefined;
+  };
   const { t } = useTranslation();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -815,6 +832,7 @@ function Rows({
                   className={cn(
                     'cursor-pointer border-b hover:bg-muted/60 focus-visible:bg-muted',
                     isSelected && 'bg-accent/60 hover:bg-accent/70',
+                    rowTone(row.original),
                   )}
                   // Ctrl / Cmd + click or the middle button: the record in a new tab, the list stays.
                   onClick={(e) => {

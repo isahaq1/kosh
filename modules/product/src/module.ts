@@ -5,6 +5,7 @@
  */
 import { baseShutro } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
+import { storageShutro } from '@kosh/storage';
 import { check, defineModel, defineModule, f, record } from './.kosh/bindings.js';
 
 const ALL = ['read', 'write', 'create', 'unlink', 'export', 'import'] as const;
@@ -105,6 +106,8 @@ export const ProductProduct = defineModel('product.product', {
     category: f.many2one('product.category'),
     uom: f.many2one('uom.uom', { label: 'Unit of measure' }),
     barcode: f.char({ index: 'unique' }),
+    /** A picture: an attachment of the product (RFC 0022 §3.3), with its 256 px thumbnail. */
+    image: f.many2one('storage.attachment', { ondelete: 'set null', label: 'Picture' }),
     /** The sales price, in the company currency. */
     listPrice: f.decimal({ scale: 2, required: true, default: '0', label: 'Sales price' }),
     /** The cost: the default purchase price. */
@@ -164,7 +167,7 @@ export const productShutro = defineModule({
       },
     },
   ],
-  depends: [baseShutro],
+  depends: [baseShutro, storageShutro],
   groups: [
     orm.defineGroup({ code: 'product.user', label: 'Products user', implies: ['base.user'] }),
     orm.defineGroup({

@@ -212,6 +212,10 @@ export function kanban<M extends ModelRef>(
       readonly subtitle?: FieldKey<M>;
       readonly footer?: readonly FieldInput<FieldKey<M>>[];
       readonly badges?: readonly FieldInput<FieldKey<M>>[];
+      readonly image?: FieldKey<M>;
+      readonly avatar?: FieldKey<M>;
+      readonly progress?: FieldKey<M>;
+      readonly color?: FieldKey<M>;
     };
   },
 ): KanbanView {
@@ -225,6 +229,10 @@ export function kanban<M extends ModelRef>(
       ...(spec.card.subtitle === undefined ? {} : { subtitle: spec.card.subtitle }),
       footer: (spec.card.footer ?? []).map(fieldNode),
       badges: (spec.card.badges ?? []).map(fieldNode),
+      ...(spec.card.image === undefined ? {} : { image: spec.card.image }),
+      ...(spec.card.avatar === undefined ? {} : { avatar: spec.card.avatar }),
+      ...(spec.card.progress === undefined ? {} : { progress: spec.card.progress }),
+      ...(spec.card.color === undefined ? {} : { color: spec.card.color }),
     },
   };
 }

@@ -112,6 +112,9 @@ export async function saveAttachment(
     readonly name: string;
     readonly mime?: string | undefined;
     readonly data: Uint8Array;
+    /** A variant (a thumbnail) of an attachment of the same record, `width` pixels wide. */
+    readonly variantOf?: number | undefined;
+    readonly width?: number | undefined;
   },
 ): Promise<AttachmentInfo> {
   canAttach(env);
@@ -131,10 +134,22 @@ export async function saveAttachment(
       key,
       resModel: input.model,
       resId: input.id,
+      ...(input.variantOf === undefined
+        ? {}
+        : { variantOf: input.variantOf, width: input.width ?? null }),
     },
   ]);
   const [row] = (await created.load(KEYS)).read(['id', ...KEYS]);
   return info(row as Row);
+}
+
+/** The variant of attachment `id` that is `width` pixels wide, if one was uploaded; else `id` itself. */
+export async function variantOf(env: Env, id: number, width: number): Promise<number> {
+  const found = await ref(env, 'storage.attachment').search({
+    where: { variantOf: id, width },
+    limit: 1,
+  });
+  return (found.ids[0] as number | undefined) ?? id;
 }
 
 /** The attachments of a record `env` may read, newest first. */
@@ -146,7 +161,7 @@ export async function attachmentsOf(
 ): Promise<AttachmentInfo[]> {
   await checkRecord(env, models, model, id);
   const found = await ref(env, 'storage.attachment').search({
-    where: { resModel: model, resId: id },
+    where: { resModel: model, resId: id, variantOf: null },
     order: ['id desc'],
   });
   return found.length === 0 ? [] : (await found.load(KEYS)).read(['id', ...KEYS]).map(info);

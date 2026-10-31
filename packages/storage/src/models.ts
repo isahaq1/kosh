@@ -25,6 +25,9 @@ const Attachment = defineModel('storage.attachment', {
     key: f.char({ required: true, index: 'unique' }),
     resModel: f.char({ required: true, label: 'Model' }),
     resId: f.integer({ required: true, label: 'Record' }),
+    /** A smaller rendering of another attachment (RFC 0022 §3.3: an image's thumbnail), `width` pixels wide. */
+    variantOf: f.many2one('storage.attachment', { ondelete: 'cascade', label: 'Variant of' }),
+    width: f.integer({ label: 'Width (px)' }),
   },
 });
 

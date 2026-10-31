@@ -214,7 +214,12 @@ export interface KoshApi {
     method?: 'GET' | 'POST',
   ): Promise<{ readonly blob: Blob; readonly filename: string }>;
   /** Sends a file as the raw body (`Content-Type` from the file, `X-Filename` URI-encoded); the JSON answer. */
-  upload<T>(path: string, file: Blob, filename: string): Promise<T>;
+  upload<T>(
+    path: string,
+    file: Blob,
+    filename: string,
+    extra?: Readonly<Record<string, string>>,
+  ): Promise<T>;
   /**
    * POSTs `body` and reads the server-sent events of the answer (`event:` and JSON `data:` lines), calling
    * `onEvent` for each (`message` when the event has no name) until the stream ends. @throws {ApiError} when the
@@ -458,8 +463,14 @@ export function createKoshApi(options: ApiOptions = {}): KoshApi {
       }
       if (buffered.trim() !== '') flush(buffered);
     },
-    async upload<T>(path: string, file: Blob, filename: string): Promise<T> {
+    async upload<T>(
+      path: string,
+      file: Blob,
+      filename: string,
+      extra: Readonly<Record<string, string>> = {},
+    ): Promise<T> {
       const headers: Record<string, string> = {
+        ...extra,
         'content-type': file.type === '' ? 'application/octet-stream' : file.type,
         'x-filename': encodeURIComponent(filename),
       };

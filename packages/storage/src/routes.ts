@@ -16,6 +16,7 @@ import {
   openAttachment,
   removeAttachments,
   saveAttachment,
+  variantOf,
 } from './attachments.js';
 import { type Storage, StorageError, storageFromEnv } from './backends.js';
 
@@ -122,6 +123,7 @@ export function registerAttachmentRoutes(context: ModuleContext): void {
               name,
               mime: request.headers['content-type'],
               data: body,
+              ...variantHeaders(request.headers),
             }),
           { write: true },
         )
@@ -142,8 +144,17 @@ export function registerAttachmentRoutes(context: ModuleContext): void {
     const id = positive((request.params as { id?: unknown }).id, 'id');
     const inline = (request.query as { inline?: unknown }).inline === 'true';
     const storage = storageOf(app);
+    // `?w=256`: the variant of that width when one was uploaded (an image's thumbnail), else the file itself.
+    const width = Number((request.query as { w?: unknown }).w);
     const opened = await request
-      .env((env) => openAttachment(env, storage, models, id))
+      .env(async (env) =>
+        openAttachment(
+          env,
+          storage,
+          models,
+          Number.isInteger(width) && width > 0 ? await variantOf(env, id, width) : id,
+        ),
+      )
       .catch((e: unknown) => storageProblem(e, request));
     const shown = inline && INLINE_TYPES.has(opened.info.mime);
     return reply
@@ -176,4 +187,15 @@ export async function deleteObjects(
     await storage.delete(key).catch((err: unknown) => {
       request.log.warn({ err, key }, 'attachment object left behind');
     });
+}
+
+/** `X-Variant-Of` and `X-Width` on an upload: the file is a thumbnail of that attachment, that wide. */
+function variantHeaders(headers: Record<string, unknown>): {
+  readonly variantOf?: number;
+  readonly width?: number;
+} {
+  const of = Number(headers['x-variant-of']);
+  const width = Number(headers['x-width']);
+  if (!Number.isInteger(of) || of <= 0) return {};
+  return { variantOf: of, ...(Number.isInteger(width) && width > 0 ? { width } : {}) };
 }

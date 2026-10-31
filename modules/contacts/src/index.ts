@@ -5,6 +5,7 @@
  */
 import { defineModule } from '@kosh/modules-sdk';
 import { base } from '@kosh/server';
+import { storage } from '@kosh/storage';
 import { action, form, hierarchy, list, search } from '@kosh/views';
 import { contactsDemo } from './demo.js';
 import { contactsShutro, ResPartner } from './module.js';
@@ -16,7 +17,7 @@ export const contacts: ReturnType<typeof defineModule> = defineModule({
   shutro: contactsShutro,
   kosh: '^0.1.0',
   hooks: { demo: contactsDemo },
-  depends: [base],
+  depends: [base, storage],
   app: {
     code: 'contacts',
     label: 'Contacts',
@@ -67,7 +68,16 @@ export const contacts: ReturnType<typeof defineModule> = defineModule({
   ],
   views: {
     'res.partner.list': list(ResPartner, {
-      columns: ['name', 'email', 'phone', 'city', 'country', 'isCustomer', 'isVendor'],
+      columns: [
+        { field: 'image', widget: 'avatar' },
+        'name',
+        { field: 'email', widget: 'email' },
+        { field: 'phone', widget: 'phone' },
+        'city',
+        'country',
+        'isCustomer',
+        'isVendor',
+      ],
       defaultOrder: ['name asc'],
     }),
     'res.partner.hierarchy': hierarchy(ResPartner, {
@@ -79,8 +89,19 @@ export const contacts: ReturnType<typeof defineModule> = defineModule({
       sheet: [
         // What relates to this contact: Sales, Purchase and Accounting append their tiles (RFC 0022 §3.1).
         k.stats('related', []),
-        k.group('identity', ['name', 'isCompany', 'parent', 'taxId']),
-        k.group('reach', ['email', 'phone', 'mobile', 'website']),
+        k.group('identity', [
+          { field: 'image', widget: 'image' },
+          'name',
+          'isCompany',
+          'parent',
+          'taxId',
+        ]),
+        k.group('reach', [
+          { field: 'email', widget: 'email' },
+          { field: 'phone', widget: 'phone' },
+          { field: 'mobile', widget: 'phone' },
+          { field: 'website', widget: 'url' },
+        ]),
         k.notebook('more', [
           k.page('address', 'Address', [
             k.group('where', ['street', 'city', 'zip', 'state', 'country']),

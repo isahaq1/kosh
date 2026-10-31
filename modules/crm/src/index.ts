@@ -208,8 +208,9 @@ export const crm: ReturnType<typeof defineModule> = defineModule({
       card: {
         title: 'name',
         subtitle: 'partner',
-        footer: ['expectedRevenue', 'salesperson'],
-        badges: [{ field: 'priority', widget: 'badge' }],
+        footer: ['expectedRevenue', { field: 'priority', widget: 'priority' }],
+        avatar: 'salesperson',
+        color: 'stage',
       },
     }),
     'crm.deal.list': list(CrmDeal, {
@@ -222,10 +223,12 @@ export const crm: ReturnType<typeof defineModule> = defineModule({
         { field: 'expectedRevenue', sum: true },
         'probability',
         { field: 'weightedRevenue', sum: true },
+        { field: 'priority', widget: 'priority' },
         'closeDate',
         { field: 'status', widget: 'badge' },
       ],
       inlineEdit: ['stage', 'salesperson', 'closeDate'],
+      decorations: { success: { status: 'won' }, neutral: { status: 'lost' } },
     }),
     'crm.deal.form': form(CrmDeal, (k) => ({
       header: { buttons: [] },

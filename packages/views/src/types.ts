@@ -122,6 +122,8 @@ export interface ListView extends ViewBase {
   /** Columns editable in the list. */
   readonly inlineEdit?: readonly string[];
   readonly pageSize?: number;
+  /** RFC 0022 §3.3: rows in a tone when a condition holds on them (overdue in danger, done muted). */
+  readonly decorations?: Readonly<Partial<Record<Tone, Condition>>>;
 }
 
 export interface FormView extends ViewBase {
@@ -141,11 +143,20 @@ export interface FormView extends ViewBase {
   readonly summary?: readonly string[];
 }
 
+/** A semantic tone (RFC 0018 §4.5): meaning only, never decoration. */
+export type Tone = 'info' | 'success' | 'warning' | 'danger' | 'neutral';
+
 export interface KanbanCard {
   readonly title: string;
   readonly subtitle?: string;
   readonly footer?: readonly FieldNode[];
   readonly badges?: readonly FieldNode[];
+  /** RFC 0022 §3.3: a cover image (an `image` field), a person (a many2one with a photo), a progress (0–100). */
+  readonly image?: string;
+  readonly avatar?: string;
+  readonly progress?: string;
+  /** A selection or char field whose value tints the card's edge. */
+  readonly color?: string;
 }
 
 export interface KanbanView extends ViewBase {

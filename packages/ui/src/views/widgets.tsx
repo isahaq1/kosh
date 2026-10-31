@@ -15,7 +15,8 @@ import {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Checkbox, Input, Select, Textarea } from '../components/primitives.js';
+import { Avatar } from '../components/Avatar.js';
+import { Badge, Button, Checkbox, Input, Select, Textarea } from '../components/primitives.js';
 import { useKosh } from '../context.js';
 import { cn } from '../lib/cn.js';
 import type { Registry, WidgetProps } from '../registry.js';
@@ -460,6 +461,352 @@ function JsonWidget({ id, value, readonly, onChange, invalid }: WidgetProps): Re
 }
 
 /** Registers the default widgets. */
+
+// ---- Richer widgets (RFC 0022 §3.3) ------------------------------------------------------------------------
+
+const idOfValue = (v: unknown): number | null =>
+  typeof v === 'number'
+    ? v
+    : typeof v === 'object' && v !== null && 'id' in v
+      ? Number((v as { id: unknown }).id)
+      : null;
+
+/** A link in display, the text input otherwise: `mailto:`, `tel:` or the address itself. */
+function linkWidget(kind: 'email' | 'phone' | 'url') {
+  return function LinkWidget(props: WidgetProps): ReactElement {
+    const value = text(props.value);
+    if (props.onChange !== undefined && !props.readonly) return <CharWidget {...props} />;
+    if (value === '') return <span />;
+    const href =
+      kind === 'email'
+        ? `mailto:${value}`
+        : kind === 'phone'
+          ? `tel:${value.replace(/[^\d+]/g, '')}`
+          : /^https?:\/\//i.test(value)
+            ? value
+            : `https://${value}`;
+    return (
+      <a
+        href={href}
+        className="text-primary underline-offset-2 hover:underline"
+        {...(kind === 'url' ? { target: '_blank', rel: 'noreferrer' } : {})}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {kind === 'url' ? value.replace(/^https?:\/\//i, '') : value}
+      </a>
+    );
+  };
+}
+
+/** 0–100 as a bar with the number; the integer input to edit. */
+function ProgressWidget(props: WidgetProps): ReactElement {
+  const { format } = useKosh();
+  if (props.onChange !== undefined && !props.readonly) return <IntegerWidget {...props} />;
+  const n = typeof props.value === 'number' ? Math.max(0, Math.min(100, props.value)) : null;
+  if (n === null) return <span />;
+  return (
+    <span className="inline-flex w-full max-w-40 items-center gap-2">
+      <span
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={n}
+        aria-label={props.field.label}
+        className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"
+      >
+        <span className="block h-full rounded-full bg-primary" style={{ width: `${n}%` }} />
+      </span>
+      <span className="tabular-nums text-xs text-muted-foreground">{format.number(n)}%</span>
+    </span>
+  );
+}
+
+/** A number as a percentage. */
+function PercentageWidget(props: WidgetProps): ReactElement {
+  const { format } = useKosh();
+  if (props.onChange !== undefined && !props.readonly) return <DecimalWidget {...props} />;
+  const v =
+    typeof props.value === 'number'
+      ? props.value
+      : typeof props.value === 'string' && props.value !== ''
+        ? Number(props.value)
+        : null;
+  return (
+    <span className="tabular-nums">
+      {v === null || Number.isNaN(v) ? '' : `${format.number(v)}%`}
+    </span>
+  );
+}
+
+/** Stars in a row: read-only as one image, editable as radios (a visually hidden input under each star). */
+function Stars({
+  label,
+  options,
+  selected,
+  editable,
+  onPick,
+}: {
+  readonly label: string;
+  readonly options: readonly { readonly key: string; readonly label: string }[];
+  readonly selected: number;
+  readonly editable: boolean;
+  readonly onPick: (index: number) => void;
+}): ReactElement {
+  const group = useId();
+  if (!editable)
+    return (
+      <span role="img" aria-label={label} className="inline-flex gap-0.5 text-warning-text">
+        {options.map((o, i) => (
+          <span key={o.key} aria-hidden>
+            {i <= selected ? '★' : '☆'}
+          </span>
+        ))}
+      </span>
+    );
+  return (
+    <fieldset className="inline-flex gap-0.5 text-warning-text">
+      <legend className="sr-only">{label}</legend>
+      {options.map((o, i) => (
+        <label key={o.key} className="cursor-pointer leading-none" title={o.label}>
+          <input
+            type="radio"
+            name={group}
+            className="sr-only"
+            checked={i === selected}
+            onChange={() => onPick(i)}
+          />
+          <span aria-hidden>{i <= selected ? '★' : '☆'}</span>
+          <span className="sr-only">{o.label}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+/** Stars out of five for a 0–5 number; click a star to set it. */
+function RatingWidget({ value, readonly, onChange, field }: WidgetProps): ReactElement {
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : 0;
+  const rounded = Number.isNaN(n) ? 0 : Math.round(n);
+  return (
+    <Stars
+      label={`${field.label}: ${Number.isNaN(n) ? 0 : n} / 5`}
+      options={[1, 2, 3, 4, 5].map((s) => ({ key: String(s), label: `${s} / 5` }))}
+      selected={rounded - 1}
+      editable={onChange !== undefined && !readonly}
+      onPick={(i) => onChange?.(i + 1)}
+    />
+  );
+}
+
+/** A selection shown as stars (its options in order: the first is one star); click to set it. */
+function PriorityWidget({ value, readonly, onChange, field }: WidgetProps): ReactElement {
+  const options = field.options ?? [];
+  const index = options.findIndex((o) => o.value === value);
+  return (
+    <Stars
+      label={`${field.label}: ${options[index]?.label ?? ''}`}
+      options={options.map((o) => ({ key: o.value, label: o.label }))}
+      selected={index}
+      editable={onChange !== undefined && !readonly}
+      onPick={(i) => onChange?.(options[i]?.value ?? null)}
+    />
+  );
+}
+
+/** A stable tint for a value (a stage, a tag): a hue from its text. */
+export const tintOf = (key: string): string => {
+  let h = 0;
+  for (const c of key) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return `oklch(0.7 0.14 ${h})`;
+};
+
+/** A selection or text as a coloured dot with its label; the select to edit. */
+function ColorWidget(props: WidgetProps): ReactElement {
+  if (props.onChange !== undefined && !props.readonly)
+    return props.field.kind === 'selection' ? (
+      <SelectionWidget {...props} />
+    ) : (
+      <CharWidget {...props} />
+    );
+  const value = text(props.value);
+  if (value === '') return <span />;
+  const label = (props.field.options ?? []).find((o) => o.value === value)?.label ?? value;
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span aria-hidden className="size-2.5 rounded-full" style={{ background: tintOf(value) }} />
+      {label}
+    </span>
+  );
+}
+
+/** A date as "in 3 days" / "2 days late", toned; the date field to edit. */
+function DaysLeftWidget(props: WidgetProps): ReactElement {
+  const { t } = useTranslation();
+  const { format } = useKosh();
+  if (props.onChange !== undefined && !props.readonly) return <DateWidget {...props} />;
+  const value = text(props.value);
+  if (value === '') return <span />;
+  const day = new Date(`${value.slice(0, 10)}T00:00:00Z`).getTime();
+  const today = new Date();
+  const now = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  const days = Math.round((day - now) / 86_400_000);
+  const label =
+    days === 0
+      ? t('views.daysLeft.today')
+      : days > 0
+        ? t('views.daysLeft.in', { count: days })
+        : t('views.daysLeft.late', { count: -days });
+  return (
+    <span
+      title={format.date(value)}
+      className={cn(
+        'tabular-nums',
+        days < 0 ? 'text-danger' : days <= 3 ? 'text-warning-text' : 'text-muted-foreground',
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
+/** Many2many chips tinted by their name; the picker to edit. */
+function TagsWidget(props: WidgetProps): ReactElement {
+  const ids = Array.isArray(props.value)
+    ? (props.value as unknown[]).map(idOf).filter((v): v is number => v !== null)
+    : [];
+  const names = useDisplayNames(props.field.target, ids);
+  if (props.onChange !== undefined && !props.readonly) return <Many2manyWidget {...props} />;
+  return (
+    <span className="flex flex-wrap gap-1">
+      {ids.map((i) => {
+        const name = names.get(i) ?? `#${i}`;
+        return (
+          <span
+            key={i}
+            className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs"
+          >
+            <span
+              aria-hidden
+              className="size-2 rounded-full"
+              style={{ background: tintOf(name) }}
+            />
+            {name}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+/** Draws `file` at most `max` pixels wide or high, as a WebP blob. */
+async function shrinkTo(file: Blob, max: number): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const ctx = canvas.getContext('2d');
+  if (ctx === null) throw new Error('No canvas');
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  return new Promise((resolve, reject) =>
+    canvas.toBlob(
+      (b) => (b === null ? reject(new Error('No image')) : resolve(b)),
+      'image/webp',
+      0.86,
+    ),
+  );
+}
+
+/**
+ * An image kept as an attachment of the record (RFC 0022 §3.3): shown from its 256 px thumbnail, uploaded from a
+ * file the browser first shrinks (at most 1600 px, and the thumbnail), both attached to the record; the field then
+ * holds the image. A new record has to be saved first (its attachments need it).
+ */
+function imageWidget(shape: 'image' | 'avatar') {
+  return function ImageWidget({
+    value,
+    readonly,
+    onChange,
+    field,
+    record,
+    model,
+  }: WidgetProps): ReactElement {
+    const { api } = useKosh();
+    const { t } = useTranslation();
+    const inputId = useId();
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const id = idOfValue(value);
+    const recordId = typeof record['id'] === 'number' ? record['id'] : null;
+    const src = id === null ? null : `/api/v1/attachments/${id}/download?inline=true&w=256`;
+    const name = String(record['displayName'] ?? record['name'] ?? '');
+    const editable = onChange !== undefined && !readonly;
+    const pick = async (file: File): Promise<void> => {
+      if (model === undefined || recordId === null) return setError(t('views.image.saveFirst'));
+      setBusy(true);
+      setError(null);
+      try {
+        const [full, thumb] = await Promise.all([shrinkTo(file, 1600), shrinkTo(file, 256)]);
+        const path = `/api/v1/attachments/${model}/${recordId}`;
+        const stem = file.name.replace(/\.[^.]+$/, '') || field.label;
+        const made = await api.upload<{ id: number }>(path, full, `${stem}.webp`);
+        await api.upload(path, thumb, `${stem}-256.webp`, {
+          'x-variant-of': String(made.id),
+          'x-width': '256',
+        });
+        onChange?.(made.id);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(false);
+      }
+    };
+    const picture =
+      shape === 'avatar' ? (
+        <Avatar name={name} src={src} shape="circle" />
+      ) : src === null ? (
+        <span className="grid size-24 place-items-center rounded-md border border-dashed text-xs text-muted-foreground">
+          {t('views.image.none')}
+        </span>
+      ) : (
+        <img src={src} alt={name} className="size-24 rounded-md border object-cover" />
+      );
+    if (!editable) return picture;
+    return (
+      <span className="inline-flex items-center gap-3">
+        {picture}
+        <span className="grid gap-1">
+          <input
+            id={inputId}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file !== undefined) void pick(file);
+              e.target.value = '';
+            }}
+          />
+          <Button asChild size="sm" variant="secondary" busy={busy}>
+            <label htmlFor={inputId}>{t('views.image.choose')}</label>
+          </Button>
+          {id === null ? null : (
+            <Button type="button" size="sm" variant="ghost" onClick={() => onChange?.(null)}>
+              {t('views.image.remove')}
+            </Button>
+          )}
+          {error === null ? null : (
+            <span role="alert" className="text-xs text-danger">
+              {error}
+            </span>
+          )}
+        </span>
+      </span>
+    );
+  };
+}
+
 export function registerDefaultWidgets(registry: Registry): Registry {
   for (const [name, widget] of [
     ['char', CharWidget],
@@ -482,6 +829,18 @@ export function registerDefaultWidgets(registry: Registry): Registry {
     ['many2one', Many2oneWidget],
     ['many2many', Many2manyWidget],
     ['one2many', One2manyWidget],
+    ['email', linkWidget('email')],
+    ['phone', linkWidget('phone')],
+    ['url', linkWidget('url')],
+    ['progress', ProgressWidget],
+    ['percentage', PercentageWidget],
+    ['rating', RatingWidget],
+    ['priority', PriorityWidget],
+    ['color', ColorWidget],
+    ['daysLeft', DaysLeftWidget],
+    ['tags', TagsWidget],
+    ['image', imageWidget('image')],
+    ['avatar', imageWidget('avatar')],
   ] as const)
     registry.registerWidget(name, widget);
   return registry;

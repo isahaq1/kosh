@@ -359,3 +359,31 @@ describe('stat tiles (RFC 0022 §3.1)', () => {
     ).toEqual({ partner: 7, state: { in: ['sale'] }, or: [{ order: 42 }] });
   });
 });
+
+describe('richer cards and rows (RFC 0022 §3.3)', () => {
+  test('card image, avatar, progress and colour fields, and row decorations, are checked', () => {
+    const board = {
+      ...kanban(PurchaseOrder, {
+        groupBy: 'state',
+        card: { title: 'name', avatar: 'partner', progress: 'amountTotal', color: 'state' },
+      }),
+      id: 'k',
+    };
+    expect(validateView(board, lookup)).toEqual([]);
+    const bad = {
+      ...kanban('purchase.order', { groupBy: 'state', card: { title: 'name', image: 'photo' } }),
+      id: 'k',
+    };
+    expect(validateView(bad, lookup)).toEqual(["unknown card field 'photo'"]);
+    const rows = {
+      ...list(PurchaseOrder, {
+        columns: ['name'],
+        decorations: { danger: { state: 'cancel' }, success: { paid: true } },
+      }),
+      id: 'l',
+    };
+    expect(validateView(rows, lookup)).toEqual([
+      "decoration 'success': no field 'paid' on purchase.order",
+    ]);
+  });
+});

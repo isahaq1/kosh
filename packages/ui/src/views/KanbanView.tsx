@@ -22,6 +22,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactElement, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, type Row, type ServedView, type ViewField } from '../api.js';
+import { Avatar } from '../components/Avatar.js';
 import { Alert, Input, Skeleton } from '../components/primitives.js';
 import { useKosh } from '../context.js';
 import { cn } from '../lib/cn.js';
@@ -48,6 +49,26 @@ function amountOf(v: unknown): string {
     return String((v as { amount: unknown }).amount);
   return v === null || v === undefined ? '0' : String(v);
 }
+
+const idOfValue = (v: unknown): number | null =>
+  typeof v === 'number'
+    ? v
+    : typeof v === 'object' && v !== null && 'id' in v
+      ? Number((v as { id: unknown }).id)
+      : null;
+const nameOfValue = (v: unknown): string | null =>
+  typeof v === 'object' && v !== null && 'displayName' in v
+    ? String((v as { displayName: unknown }).displayName)
+    : typeof v === 'string'
+      ? v
+      : null;
+/** A stable tint for a value (a stage, a tag): a hue from its text, in the theme's saturation. */
+export const tintOf = (v: unknown): string => {
+  const key = String(nameOfValue(v) ?? idOfValue(v) ?? v ?? '');
+  let h = 0;
+  for (const c of key) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return `oklch(0.7 0.14 ${h})`;
+};
 
 function Card({
   row,
@@ -90,17 +111,35 @@ function Card({
   return (
     <li
       ref={setNodeRef}
-      style={
-        transform === null
-          ? undefined
-          : { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
-      }
       className={cn(
         'rounded-md border bg-surface p-3 text-sm shadow-sm transition-shadow hover:shadow-md',
         isDragging && 'opacity-70 shadow-lg',
+        view.card.color !== undefined && 'border-s-4',
       )}
+      style={{
+        ...(transform === null
+          ? {}
+          : { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }),
+        ...(view.card.color === undefined
+          ? {}
+          : { borderInlineStartColor: tintOf(row[view.card.color]) }),
+      }}
     >
+      {view.card.image === undefined || idOfValue(row[view.card.image]) === null ? null : (
+        <img
+          src={`/api/v1/attachments/${idOfValue(row[view.card.image])}/download?inline=true&w=256`}
+          alt=""
+          className="mb-2 aspect-[4/3] w-full rounded object-cover"
+        />
+      )}
       <div className="flex items-start justify-between gap-2">
+        {view.card.avatar === undefined ? null : (
+          <Avatar
+            name={String(nameOfValue(row[view.card.avatar]) ?? '')}
+            src={null}
+            className="mt-0.5"
+          />
+        )}
         <button
           type="button"
           className="text-start font-medium hover:underline"
@@ -127,6 +166,20 @@ function Card({
       {(view.card.footer ?? []).length === 0 ? null : (
         <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
           {(view.card.footer ?? []).map(show)}
+        </div>
+      )}
+      {view.card.progress === undefined || typeof row[view.card.progress] !== 'number' ? null : (
+        <div
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={row[view.card.progress] as number}
+          className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted"
+        >
+          <div
+            className="h-full rounded-full bg-primary"
+            style={{ width: `${Math.max(0, Math.min(100, row[view.card.progress] as number))}%` }}
+          />
         </div>
       )}
     </li>
