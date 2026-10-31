@@ -257,3 +257,13 @@ step 3 last. Performance budgets apply (an overview with eight tiles < 300 ms se
   purchases by month, top vendors, by buyer, the biggest open requests. Purchase now depends on `reporting`.
 - Tests: Sales on real PostgreSQL (the margin of a line and the order, 40 %); Purchase (the overview to a user).
   E2E (apps): the Purchase overview, the arrivals calendar, the margin on an order.
+
+## Implementation notes (2026-10-31): step 2 — Accounting
+
+- **The Overview**: receivable and payable (posted, not or partly paid), invoiced and billed this month against
+  last month, invoiced by month, who owes most, payments this month, drafts, waiting approval, the biggest open
+  invoices.
+- **Invoices**: the due date as days left (overdue in red), rows toned by payment (paid green, partial amber,
+  cancelled muted); the invoice's posted **payments** as tiles (count and amount) opening the payments list.
+- Tests: Accounting on real PostgreSQL (the overview to a user; the tiles on the invoice form). E2E (apps): the
+  overview.

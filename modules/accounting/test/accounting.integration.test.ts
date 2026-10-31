@@ -461,3 +461,12 @@ test('invoicing users cannot post entries; outsiders see nothing', async () => {
   expect((await call('GET', '/api/v1/models/account.account', 'bob')).status).toBe(403);
   expect((await call('GET', '/api/v1/accounting/charts', 'bob')).status).toBe(200); // the templates: public to signed-in users
 });
+
+test('the Accounting overview (RFC 0022 step 2) is served to an accounting user', async () => {
+  const overview = await call('GET', '/api/v1/reports/overview?app=accounting', 'rahim');
+  expect(overview.status, JSON.stringify(overview.json)).toBe(200);
+  expect(overview.json.cards.map((c: { id: string }) => c.id)).toContain('receivable');
+  const form = await call('GET', '/api/v1/views/account.move.invoice.form', 'rahim');
+  expect(form.status, JSON.stringify(form.json)).toBe(200);
+  expect(form.json.view.sheet[0]).toMatchObject({ kind: 'stats', id: 'related' });
+});

@@ -167,3 +167,13 @@ test('the settings page shows the chart and takes a lock date; the reconciliatio
   await expect(page.getByText('1 match made.')).toBeVisible();
   await expect(page.getByText('Nothing open on this account.')).toBeVisible();
 });
+
+test('the Accounting overview (RFC 0022 step 2): what is owed, the month, who owes most', async ({
+  page,
+}) => {
+  await signIn(page, 'dina');
+  await page.goto('/accounting/a/accounting.action_overview');
+  await expect(page.getByRole('heading', { name: 'Accounting · Overview' })).toBeVisible();
+  for (const title of ['Receivable', 'Payable', 'Invoiced this month', 'Who owes most'])
+    await expect(page.getByRole('region', { name: title, exact: true })).toBeVisible();
+});
