@@ -11,6 +11,7 @@ import type { Env } from '@kosh/server/orm';
 import { dashboard, form, list, spreadsheet } from '@kosh/views';
 import { closeDocuments } from './documents.js';
 import { reportingShutro } from './models.js';
+import { installOverviews, registerOverviewRoutes } from './overviews.js';
 import { registerReportRoutes } from './routes.js';
 import { installTemplates, registerDocumentRoutes } from './routes-documents.js';
 import type { ScheduleEngine } from './schedules.js';
@@ -174,10 +175,11 @@ export const reporting: ReturnType<typeof defineModule> = defineModule({
   },
   hooks: {
     defaults: async (env, modules) =>
-      `${await installTemplates(env as Env, modules)} document template(s) installed`,
+      `${await installTemplates(env as Env, modules)} document template(s), ${await installOverviews(env as Env, modules)} overview(s) installed`,
   },
   routes: (context: ModuleContext) => {
     registerReportRoutes(context);
+    registerOverviewRoutes(context);
     const engine = registerDocumentRoutes(context);
     engines.set(context.app, engine);
     if (process.env['KOSH_SCHEDULES'] !== 'off') engine.start();

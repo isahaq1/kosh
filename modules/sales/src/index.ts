@@ -8,6 +8,7 @@ import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
 import { product } from '@kosh/product';
+import { reporting } from '@kosh/reporting';
 import { action, form, kanban, list, search, stat } from '@kosh/views';
 import { salesDemo } from './demo.js';
 import { SaleOrder, SaleOrderLine, salesShutro } from './module.js';
@@ -18,7 +19,7 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
   shutro: salesShutro,
   kosh: '^0.1.0',
   hooks: { demo: salesDemo },
-  depends: [contacts, product, messaging],
+  depends: [contacts, product, messaging, reporting],
   // What webhooks may subscribe to besides record changes (RFC 0017 §5.3).
   events: [{ topic: 'sale.order.confirmed', model: 'sale.order', label: 'Sales order confirmed' }],
   app: {
@@ -124,6 +125,90 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
       },
     },
   ],
+  // The Overview page (RFC 0022 §3.2): this month against the last, the year's curve, who buys, what to chase.
+  overview: {
+    cards: [
+      {
+        id: 'sales_month',
+        title: 'Sales this month',
+        kind: 'kpi',
+        model: 'sale.order',
+        measure: 'sum:amountTotal',
+        filter: { state: { in: ['sale', 'done'] } },
+        comparison: { field: 'dateOrder', mode: 'previous' },
+        w: 3,
+      },
+      {
+        id: 'orders_month',
+        title: 'Orders this month',
+        kind: 'kpi',
+        model: 'sale.order',
+        measure: 'count',
+        filter: { state: { in: ['sale', 'done'] } },
+        comparison: { field: 'dateOrder', mode: 'previous' },
+        w: 3,
+      },
+      {
+        id: 'open_quotations',
+        title: 'Open quotations',
+        kind: 'kpi',
+        model: 'sale.order',
+        measure: 'count',
+        filter: { state: { in: ['draft', 'sent'] } },
+        w: 3,
+      },
+      {
+        id: 'average_order',
+        title: 'Average order',
+        kind: 'kpi',
+        model: 'sale.order',
+        measure: 'avg:amountTotal',
+        filter: { state: { in: ['sale', 'done'] } },
+        w: 3,
+      },
+      {
+        id: 'sales_by_month',
+        title: 'Sales by month',
+        kind: 'chart',
+        model: 'sale.order',
+        measure: 'sum:amountTotal',
+        groupBy: 'dateOrder:month',
+        filter: { state: { in: ['sale', 'done'] } },
+        chart: 'bar',
+        w: 6,
+      },
+      {
+        id: 'top_customers',
+        title: 'Top customers',
+        kind: 'pivot',
+        model: 'sale.order',
+        measure: 'sum:amountTotal',
+        groupBy: 'partner',
+        filter: { state: { in: ['sale', 'done'] } },
+        w: 6,
+      },
+      {
+        id: 'by_salesperson',
+        title: 'By salesperson',
+        kind: 'chart',
+        model: 'sale.order',
+        measure: 'sum:amountTotal',
+        groupBy: 'user',
+        filter: { state: { in: ['sale', 'done'] } },
+        chart: 'pie',
+        w: 6,
+      },
+      {
+        id: 'quotations_to_chase',
+        title: 'Biggest open quotations',
+        kind: 'list',
+        model: 'sale.order',
+        measure: 'sum:amountTotal',
+        filter: { state: { in: ['draft', 'sent'] } },
+        w: 6,
+      },
+    ],
+  },
   viewExtensions: [
     {
       view: 'res.partner.form',
@@ -205,6 +290,7 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
         { field: 'state', widget: 'badge' },
       ],
       defaultOrder: ['dateOrder desc'],
+      decorations: { success: { state: 'done' }, neutral: { state: 'cancel' } },
     }),
     'sale.order.kanban': kanban(SaleOrder, {
       groupBy: 'state',

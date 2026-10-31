@@ -242,3 +242,67 @@ describe('satisfies', () => {
     expect(() => satisfies('1.0.0', 'latest')).toThrow(RangeError);
   });
 });
+
+describe('overviews (RFC 0022 §3.2)', () => {
+  const sReporting = shutro('reporting', [sBase], ['reporting.user']);
+  const reporting = defineModule({
+    shutro: sReporting,
+    kosh: '^0.1.0',
+    depends: [base],
+    accessLevels: { user: { label: 'User', groups: ['reporting.user'] } },
+  });
+  const card = {
+    id: 'spend_month',
+    title: 'Spend this month',
+    kind: 'kpi',
+    model: 'purchase.order',
+    measure: 'sum:amountTotal',
+    w: 3,
+  } as const;
+  const purchase = (input: Partial<ModuleInput>) =>
+    defineModule({
+      shutro: sPurchase,
+      kosh: '^0.1.0',
+      depends: [contacts, reporting],
+      app: { code: 'purchase', label: 'Purchase' },
+      accessLevels: { user: { label: 'User', groups: ['purchase.user'] } },
+      menus: [{ id: 'purchase.root', label: 'Purchase', app: 'purchase' }],
+      ...input,
+    } as ModuleInput);
+
+  test('an overview generates the action and the first menu of the app', () => {
+    const m = purchase({ overview: { cards: [card] } });
+    expect(m.actions?.['purchase.action_overview']).toEqual({
+      type: 'client',
+      page: 'reporting.Overview',
+      label: 'Overview',
+    });
+    expect(m.menus?.find((menu) => menu.id === 'purchase.overview')).toEqual({
+      id: 'purchase.overview',
+      parent: 'purchase.root',
+      label: 'Overview',
+      action: 'purchase.action_overview',
+      sequence: 0,
+    });
+  });
+
+  test('an overview needs an app, reporting, cards with unique ids and valid measures', () => {
+    expect(() =>
+      defineModule({
+        shutro: sPurchase,
+        kosh: '^0.1.0',
+        depends: [contacts, reporting],
+        accessLevels: { user: { label: 'User', groups: ['purchase.user'] } },
+        overview: { cards: [card] },
+      }),
+    ).toThrow(/without an app/);
+    expect(() => purchase({ overview: { cards: [card] }, depends: [contacts] })).toThrow(
+      /depending on reporting/,
+    );
+    expect(() => purchase({ overview: { cards: [] } })).toThrow(/no cards/);
+    expect(() => purchase({ overview: { cards: [card, card] } })).toThrow(/unique snake_case/);
+    expect(() => purchase({ overview: { cards: [{ ...card, measure: 'total' }] } })).toThrow(
+      /measure 'total'/,
+    );
+  });
+});

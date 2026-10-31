@@ -804,9 +804,17 @@ interface ActionSearch {
 function ClientPage({ action }: { readonly action: ClientAction }): ReactElement {
   const { registry, api } = useServices();
   const { t } = useTranslation();
+  const params = useParams({ strict: false }) as { app?: string; action?: string };
   const Page = registry.page(action.page);
   if (Page === undefined) return <Alert>{t('app.unknownPage', { page: action.page })}</Alert>;
-  return <Page api={api} {...(action.label === undefined ? {} : { label: action.label })} />;
+  return (
+    <Page
+      api={api}
+      {...(action.label === undefined ? {} : { label: action.label })}
+      {...(params.app === undefined ? {} : { app: params.app })}
+      {...(params.action === undefined ? {} : { action: params.action })}
+    />
+  );
 }
 
 function ActionPage(): ReactElement {

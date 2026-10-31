@@ -18,6 +18,8 @@ export interface WidgetProps {
   /** Absent in display-only contexts (list cells, cards). */
   readonly onChange?: (value: unknown) => void;
   readonly invalid?: boolean;
+  /** The record's model, on forms (an image widget attaches its file to the record). */
+  readonly model?: string;
 }
 
 /** Props of a registered node component (`{ kind: 'component', component: 'approvals.Panel' }`). */
@@ -105,6 +107,9 @@ export interface PageProps {
   readonly api: KoshApi;
   /** The action's label. */
   readonly label?: string;
+  /** The app and action the page was opened from (a client action's page; absent for user pages). */
+  readonly app?: string;
+  readonly action?: string;
 }
 
 export class RegistryError extends Error {

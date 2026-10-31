@@ -53,7 +53,7 @@ function thisMonth(): { from: string; to: string } {
   return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
 }
 
-function Records({
+export function Records({
   model,
   domain,
   onClose,
@@ -197,7 +197,7 @@ const SPAN = {
   12: 'lg:col-span-12',
 } as const;
 
-function CardFrame({
+export function CardFrame({
   card,
   editing,
   onRemove,

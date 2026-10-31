@@ -13,6 +13,7 @@ import {
   base,
   createAppHost,
   installBase,
+  installDefaults,
   prepareApps,
   recordInstalledApps,
 } from '@kosh/server';
@@ -59,6 +60,8 @@ async function call(
   return { status: res.statusCode, json: res.body === '' ? null : res.json() };
 }
 
+let company: number;
+
 beforeAll(async () => {
   container = await new PostgreSqlContainer('postgres:18').start();
   driver = pg.createDriver({
@@ -84,10 +87,11 @@ beforeAll(async () => {
   });
   const auth = host.server.auth;
   if (auth === undefined) throw new Error('base is installed');
-  const { company } = await installBase(host.server.shutro, auth, {
+  ({ company } = await installBase(host.server.shutro, auth, {
     company: { name: 'Padma Traders', currency: 'BDT' },
     admin: { login: 'admin', name: 'Administrator', password: PASSWORD },
-  });
+  }));
+  await installDefaults(host.server.shutro, host.server.registry.loaded.modules, { company });
   for (const [login, groups] of [
     ['rahim', ['sales.user']],
     ['karim', ['sales.user']],
@@ -280,4 +284,68 @@ test('the company’s quotation settings (RFC 0020): validity from the order dat
     changed: ['partner'],
   });
   expect(open.json.values.validityDate ?? null).toBeNull();
+});
+
+test('the Sales overview (RFC 0022 §3.2): installed once as a dashboard, served with its cards to a sales user', async () => {
+  const overview = await call('GET', '/api/v1/reports/overview?app=sales', 'rahim');
+  expect(overview.status, JSON.stringify(overview.json)).toBe(200);
+  expect(overview.json.label).toBe('Sales');
+  expect(overview.json.cards.map((c: { id: string }) => c.id)).toEqual([
+    'sales_month',
+    'orders_month',
+    'open_quotations',
+    'average_order',
+    'sales_by_month',
+    'top_customers',
+    'by_salesperson',
+    'quotations_to_chase',
+  ]);
+  // Running the defaults again adds nothing.
+  await installDefaults(host.server.shutro, host.server.registry.loaded.modules, { company });
+  expect((await call('GET', '/api/v1/reports/overview?app=sales', 'rahim')).json.id).toBe(
+    overview.json.id,
+  );
+  expect((await call('GET', '/api/v1/reports/overview?app=contacts', 'rahim')).status).toBe(404);
+});
+
+test('the next step (RFC 0022 §3.4): Confirm refused by its guard with the message, Send allowed; with a line, Confirm allowed', async () => {
+  const customer = await call('POST', '/api/v1/models/res.partner', 'rahim', {
+    name: 'Next Step Ltd',
+    isCustomer: true,
+  });
+  const empty = await call('POST', '/api/v1/models/sale.order', 'rahim', {
+    partner: customer.json.id,
+    currency,
+  });
+  expect(empty.status, JSON.stringify(empty.json)).toBe(201);
+  const next = await call('GET', `/api/v1/models/sale.order/${empty.json.id}/next`, 'rahim');
+  expect(next.status, JSON.stringify(next.json)).toBe(200);
+  expect(next.json.transitions).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        name: 'confirm',
+        to: 'sale',
+        allowed: false,
+        message: 'Add at least one line before confirming the order.',
+      }),
+      expect.objectContaining({ name: 'send', allowed: true, message: null }),
+    ]),
+  );
+  // Nothing changed by asking.
+  expect(
+    (await call('GET', `/api/v1/models/sale.order/${empty.json.id}`, 'rahim')).json.state,
+  ).toBe('draft');
+  const quote = await call('POST', '/api/v1/models/sale.order', 'rahim', {
+    partner: customer.json.id,
+    currency,
+    lines: { create: [{ product, name: 'Jute bag', quantity: '1', priceUnit: '100' }] },
+  });
+  const ready = await call('GET', `/api/v1/models/sale.order/${quote.json.id}/next`, 'rahim');
+  expect(
+    ready.json.transitions.find((tr: { name: string }) => tr.name === 'confirm'),
+  ).toMatchObject({
+    allowed: true,
+    message: null,
+  });
+  expect((await call('GET', '/api/v1/models/sale.order/999999/next', 'rahim')).status).toBe(404);
 });

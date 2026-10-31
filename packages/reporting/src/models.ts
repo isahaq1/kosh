@@ -30,6 +30,15 @@ const Dashboard = defineModel('report.dashboard', {
     name: f.char({ required: true }),
     items: f.json({ required: true, default: [] as never }),
     shared: f.boolean({ default: false }),
+    /** The module whose overview this is (RFC 0022 §3.2); empty for a user's own dashboard. */
+    key: f.char({ size: 100 }),
+  },
+  sqlConstraints: {
+    oneOverview: {
+      unique: ['key'],
+      where: orm.sql`key IS NOT NULL`,
+      message: 'An app has one overview.',
+    },
   },
 });
 

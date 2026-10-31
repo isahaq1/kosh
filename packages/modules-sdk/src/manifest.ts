@@ -449,6 +449,8 @@ export interface ModuleInput {
   readonly portal?: { readonly documents: readonly PortalDocumentSpec[] };
   /** Import templates for the module's models (RFC 0014 §5.4), offered when `import` is installed. */
   readonly importTemplates?: readonly ImportTemplateSpec[];
+  /** The app's overview page: KPIs, charts and lists on its first menu (RFC 0022 §3.2). Needs `reporting`. */
+  readonly overview?: OverviewSpec;
   /**
    * Server routes of this module (admin APIs, custom endpoints). Called once at startup with the server context
    * (`ModuleContext` of `@kosh/server`); typed by the server, so modules declare the parameter type they use.
@@ -457,6 +459,34 @@ export interface ModuleInput {
   readonly hooks?: ModuleHooks;
   /** Translations per locale, loaded lazily. */
   readonly i18n?: Readonly<Record<string, () => Promise<unknown>>>;
+}
+
+/**
+ * A card of an app's overview (RFC 0022 §3.2): a live report query within the viewer's rules — a KPI (with the
+ * change against the previous period or last year), a chart, a small pivot, or the top records.
+ */
+export interface OverviewCardSpec {
+  readonly id: string;
+  readonly title: string;
+  readonly kind: 'kpi' | 'chart' | 'pivot' | 'list';
+  readonly model: string;
+  /** `count`, or `op:field` (`sum:amountTotal`, `avg:amountTotal`). */
+  readonly measure: string;
+  readonly groupBy?: string;
+  readonly filter?: Readonly<Record<string, unknown>>;
+  /** KPIs: this month against the previous one, or the same month last year, over this date field. */
+  readonly comparison?: { readonly field: string; readonly mode: 'previous' | 'yoy' };
+  readonly chart?: 'bar' | 'line' | 'area' | 'pie';
+  /** Width in twelfths of the page. */
+  readonly w: 3 | 4 | 6 | 12;
+}
+
+/**
+ * An app's overview page (RFC 0022 §3.2): installed by `reporting` as a shared dashboard keyed by the module, and
+ * opened by the app's first menu (`<module>.action_overview`, generated). The module depends on `reporting`.
+ */
+export interface OverviewSpec {
+  readonly cards: readonly OverviewCardSpec[];
 }
 
 /** A defined module: frozen, with its name and version taken from the Shutro module. */
@@ -634,12 +664,60 @@ export function defineModule(input: ModuleInput): KoshModule {
     if (template.columns.length === 0)
       fail(`import template '${template.key}' has no columns.`, 'List the columns of the file.');
   }
+  // The overview (RFC 0022 §3.2): an action and a menu of its own, generated; reporting installs the dashboard.
+  const overviewActions: Record<string, Action> = {};
+  const overviewMenus: MenuSpec[] = [];
+  if (input.overview !== undefined) {
+    if (input.app === undefined)
+      fail('declares an overview without an app.', 'An overview is the first page of an app.');
+    if (!(input.depends ?? []).some((d) => d.name === 'reporting'))
+      fail(
+        'declares an overview without depending on reporting.',
+        "Add `reporting` (from '@kosh/reporting') to `depends`.",
+      );
+    if (input.overview.cards.length === 0)
+      fail(
+        'declares an overview with no cards.',
+        'Give at least one KPI, chart, pivot or list card.',
+      );
+    const cardIds = new Set<string>();
+    for (const card of input.overview.cards) {
+      if (!LEVEL.test(card.id) || cardIds.has(card.id))
+        fail(
+          `overview card id '${card.id}' is not a unique snake_case name.`,
+          "Use e.g. id: 'sales_month'.",
+        );
+      cardIds.add(card.id);
+      if (!/^(count|(sum|avg|min|max):[A-Za-z_][A-Za-z0-9_]*)$/.test(card.measure))
+        fail(
+          `overview card '${card.id}' has the measure '${card.measure}'.`,
+          "Use 'count' or 'sum:field'.",
+        );
+    }
+    overviewActions[`${name}.action_overview`] = {
+      type: 'client',
+      page: 'reporting.Overview',
+      label: 'Overview',
+    };
+    const root = (input.menus ?? []).find(
+      (menu) => menu.parent === undefined && menu.app !== undefined,
+    );
+    if (root !== undefined)
+      overviewMenus.push({
+        id: `${name}.overview`,
+        parent: root.id,
+        label: 'Overview',
+        action: `${name}.action_overview`,
+        sequence: 0,
+      });
+  }
   return Object.freeze({
     ...input,
     name,
     version: input.shutro.version,
     depends: Object.freeze([...(input.depends ?? [])]),
     accessLevels: Object.freeze({ ...input.accessLevels }),
-    menus: Object.freeze([...(input.menus ?? [])]),
+    actions: Object.freeze({ ...overviewActions, ...(input.actions ?? {}) }),
+    menus: Object.freeze([...(input.menus ?? []), ...overviewMenus]),
   });
 }

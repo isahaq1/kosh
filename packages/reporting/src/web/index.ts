@@ -16,6 +16,7 @@ import { GraphView } from './GraphView.js';
 import { HierarchyView } from './HierarchyView.js';
 import { MapView } from './MapView.js';
 import { messages } from './messages.js';
+import { Overview } from './Overview.js';
 import { PivotView } from './PivotView.js';
 import { SpreadsheetView } from './SpreadsheetView.js';
 
@@ -29,6 +30,7 @@ export { GanttView, windowOf } from './GanttView.js';
 export { chartData, GraphView, ReportChart, type ReportChartProps } from './GraphView.js';
 export { HierarchyView } from './HierarchyView.js';
 export { DEFAULT_MAP_STYLE, MapView } from './MapView.js';
+export { Overview } from './Overview.js';
 export { PivotView } from './PivotView.js';
 export { SpreadsheetView } from './SpreadsheetView.js';
 
@@ -46,7 +48,8 @@ export function registerReportingWeb(registry: Registry, i18n?: i18n): Registry 
     .registerView('dashboard', DashboardView)
     .registerView('designer', DesignerView)
     .registerComponent('reporting.Documents', Documents)
-    .registerComponent('reporting.ScheduleOutputs', ScheduleOutputs);
+    .registerComponent('reporting.ScheduleOutputs', ScheduleOutputs)
+    .registerPage('reporting.Overview', Overview);
   if (i18n !== undefined) addMessages(i18n, 'reporting', messages);
   return registry;
 }
