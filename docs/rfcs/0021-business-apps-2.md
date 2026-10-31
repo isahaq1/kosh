@@ -745,3 +745,38 @@ reviewed steps.
 - **Trade Finance complete** (steps 1–3). Later: alerts on the home page and by notification, back-to-back LCs, the
   bank's SWIFT messages (MT700 / MT707) as documents.
 
+
+## Design note: Event Hub (`modules/event`, app code `eventhub`)
+
+- **Events** (`event.event`): when, where, the organiser, the seats (0: no limit), a waiting list or not, its
+  **sessions** (`event.session`, within the event's times) and **ticket types** (`event.ticket`: a price, seats of
+  their own, sold until a date). *Open registrations* → *End*; *Cancel*.
+- **Registrations** (`event.registration`): the attendee, the ticket, a **check-in code** (what the ticket's QR
+  carries). *Confirm* only while the event is open, the ticket on sale, and a seat left (the event's and the
+  ticket's); a full event offers its **waiting list**, and a confirmed seat cancelled goes to the first waiting, in
+  order. *Check in* once — `POST /api/v1/eventhub/checkin` `{ code }` is what a phone scanning the QR sends, refused for
+  an unknown code, a second scan (with when it was first), or an unconfirmed registration.
+- **Access**: *User* (registrations, check-in) and *Manager* (events, tickets, everything).
+- **Step 2**: the QR scanned from a phone's camera, badges and tickets as PDF, follow-up emails, revenue to Accounting
+  (`event_account`), registration from Sites and the portal.
+
+## Implementation notes (2026-10-31): Event Hub, step 1
+
+- **Module** `modules/event` (`@kosh/event`, export `event`), app **Event Hub** (code `eventhub`); access levels
+  *User* (registrations, check-in; users see contacts) and *Manager* (events, tickets, sessions).
+- **Seats** counted by the registrations that hold one (confirmed and checked in), per event and per ticket type;
+  the event shows seats taken, left and checked in. *Confirm* is refused (409) while the event is not open, the ticket
+  no longer sold, or no seat is left; the registration takes its ticket's price. *Waiting list* only when the event
+  has one; cancelling a confirmed registration promotes the first waiting that finds a seat, in the order they came.
+- **Check-in** by code (12 hexadecimal characters, unique, case-insensitive at the door) through
+  `POST /api/v1/eventhub/checkin` or the registration's *Check in*: once — a second scan says when the first was —,
+  and only for confirmed registrations. Transition names are single words (`attend`): Shutro makes them methods.
+- **Sessions** fall within their event's times.
+- **Tests**: on real PostgreSQL — registration refused before the event opens; a VIP ticket's single seat; a ticket
+  past its sale date; the third of three seats, then the waiting list, the first waiting promoted when a seat is
+  cancelled; the price from the ticket; check-in once by a lower-case code, a second scan refused with its time, a
+  waiting registration and an unknown code refused; a session outside its event refused; access; the demo. E2E (apps):
+  an event opened with a ticket, an attendee registered, confirmed and checked in.
+- **Step 2**: the QR from a phone's camera at the door (the scan box of Stockroom counts, reused), badges and tickets
+  as PDF, follow-up emails, revenue to Accounting (`event_account`), registration from Sites and the portal.
+

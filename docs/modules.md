@@ -272,6 +272,13 @@ passes; alerts on shipment and expiry dates (`GET /api/v1/trade/alerts`). Instal
 release), payments and bank charges (expensed) in the LC's bank journal. Shipments are recorded against an LC;
 with Purchase or Sales, an LC is opened from its order (`trade_finance_purchase`, `trade_finance_sale`).
 
+### Event Hub (`modules/event`, RFC 0021)
+
+Events with sessions and ticket types; registrations confirmed while seats remain (the event's and the ticket's),
+else on a waiting list that moves up in order when a seat frees; check-in once by the code on the ticket
+(`POST /api/v1/eventhub/checkin`, what a phone scanning the QR sends). Install it with
+`shutro-erp apps install event`.
+
 ## Demo data (RFC 0008 §5.8)
 
 `npx shutro-erp init --demo` (or a yes to the question after the apps) loads every installed app's demo data: a sample
