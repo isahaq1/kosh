@@ -54,6 +54,8 @@ export function Button({
   const Comp = asChild === true ? Slot.Root : 'button';
   return (
     <Comp
+      // A button inside a record's form must not save it: only `type="submit"` submits.
+      {...(asChild === true ? {} : { type: 'button' as const })}
       className={cn(buttonVariants({ variant, size }), className)}
       disabled={disabled === true || busy === true}
       aria-busy={busy === true ? true : undefined}
