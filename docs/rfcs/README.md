@@ -25,3 +25,4 @@ Design documents written before implementation. An RFC is implemented only after
 | 0019 | [Settings](0019-settings.md) | Accepted, implemented |
 | 0020 | [App settings](0020-app-settings.md) | Accepted; step 1 implemented (the declaration, the API, the per-app page; Sales, Purchase, Accounting) |
 | 0021 | [Business apps, part 2](0021-business-apps-2.md) | Accepted; Focus, Agenda, Pipeline, Workforce and Hiring step 1 implemented; Stockroom, Production, Asset Care, Trade Finance and Event Hub complete; Sites step 1 and `website_crm` implemented |
+| 0022 | [App depth and polish](0022-app-depth-and-polish.md) | Draft: stats on record pages, app overviews, richer widgets, guidance; then one pass per app |
