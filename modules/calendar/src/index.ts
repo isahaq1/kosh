@@ -11,6 +11,7 @@
 import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
+import { reporting } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
 import { action, calendar, form, list, search } from '@kosh/views';
@@ -153,7 +154,7 @@ export const calendarApp: ReturnType<typeof defineModule> = defineModule({
   shutro: calendarShutro,
   kosh: '^0.1.0',
   hooks: { demo: calendarDemo },
-  depends: [contacts, messaging],
+  depends: [contacts, messaging, reporting],
   app: {
     code: 'agenda',
     label: 'Agenda',
@@ -194,6 +195,62 @@ export const calendarApp: ReturnType<typeof defineModule> = defineModule({
     ],
   },
   routes: (context: ModuleContext) => registerAgendaRoutes(context),
+  // The Overview (RFC 0022 step 2).
+  overview: {
+    cards: [
+      {
+        id: 'month',
+        title: 'Meetings this month',
+        kind: 'kpi',
+        model: 'calendar.event',
+        measure: 'count',
+        filter: { state: 'confirmed' },
+        comparison: { field: 'start', mode: 'previous' },
+        w: 3,
+      },
+      {
+        id: 'cancelled_month',
+        title: 'Cancelled this month',
+        kind: 'kpi',
+        model: 'calendar.event',
+        measure: 'count',
+        filter: { state: 'cancelled' },
+        comparison: { field: 'start', mode: 'previous' },
+        w: 3,
+      },
+      { id: 'rooms', title: 'Rooms', kind: 'kpi', model: 'calendar.room', measure: 'count', w: 3 },
+      {
+        id: 'attendees',
+        title: 'Attendee answers',
+        kind: 'kpi',
+        model: 'calendar.attendee',
+        measure: 'count',
+        w: 3,
+      },
+      {
+        id: 'by_room',
+        title: 'Meetings by room',
+        kind: 'chart',
+        model: 'calendar.event',
+        measure: 'count',
+        groupBy: 'room',
+        filter: { state: 'confirmed' },
+        chart: 'bar',
+        w: 6,
+      },
+      {
+        id: 'by_organizer',
+        title: 'By organiser',
+        kind: 'chart',
+        model: 'calendar.event',
+        measure: 'count',
+        groupBy: 'organizer',
+        filter: { state: 'confirmed' },
+        chart: 'pie',
+        w: 6,
+      },
+    ],
+  },
   actions: {
     'agenda.action_events': action(CalendarEvent, {
       label: 'Calendar',

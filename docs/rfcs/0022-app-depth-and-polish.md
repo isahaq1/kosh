@@ -295,3 +295,18 @@ step 3 last. Performance budgets apply (an overview with eight tiles < 300 ms se
   scheduled date as days left on the list and the board, rows toned by status, cards tinted by kind.
 - All three now depend on `reporting`. Tests: each overview to a user; the employee's and the opening's tiles.
   E2E (apps): the three overviews.
+
+## Implementation notes (2026-10-31): step 2 — Production, Asset Care, Trade Finance, Event Hub, Sites, Focus, Agenda
+
+- Each app got its **Overview**: Production (orders confirmed, made this month, work orders in progress, work
+  centres, orders by state, made by product, work waiting by work centre, the biggest open orders); Asset Care
+  (open requests, done and downtime hours this month against last, equipment, requests by state, by equipment, by
+  priority, the most downtime); Trade Finance (LCs issued, outstanding, applied, settled this month, outstanding by
+  bank, import and export, expiring by month, the biggest open LCs); Event Hub (open events, places confirmed, on
+  waiting lists, ticket revenue, places by event, by ticket type, checked in, events by registrations); Sites
+  (pages published, drafts, submissions and spam this month against last, by form, by month); Focus (open to-dos,
+  urgent, done this month, shared lists, by list, by priority); Agenda (meetings this month against last,
+  cancelled, rooms, attendee answers, by room, by organiser).
+- All of them now depend on `reporting`. **Step 2 complete**: every business app has an overview; the record
+  pages of the apps that relate to each other carry tiles.
+- Tests: each overview served to a user of the app (seven files). E2E (apps): the seven overviews.

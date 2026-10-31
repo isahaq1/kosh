@@ -57,3 +57,11 @@ test('a page made from a block, previewed, published and served by the public AP
   expect(body.page.blocks[0]?.title).toBe('Fresh rice every week');
   await anonymous.dispose();
 });
+
+test('the Sites overview (RFC 0022 step 2)', async ({ page }) => {
+  await signIn(page, 'dina');
+  await page.goto('/sites/a/website.action_overview');
+  await expect(page.getByRole('heading', { name: 'Sites · Overview' })).toBeVisible();
+  for (const title of ['Pages published', 'Drafts', 'Submissions by form'])
+    await expect(page.getByRole('region', { name: title, exact: true })).toBeVisible();
+});

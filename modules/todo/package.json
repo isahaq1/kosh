@@ -44,7 +44,8 @@
     "@kosh/modules-sdk": "workspace:*",
     "@kosh/server": "workspace:*",
     "@kosh/views": "workspace:*",
-    "@kosh/messaging": "workspace:*"
+    "@kosh/messaging": "workspace:*",
+    "@kosh/reporting": "workspace:*"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1"

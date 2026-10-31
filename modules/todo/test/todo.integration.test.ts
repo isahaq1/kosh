@@ -195,3 +195,9 @@ test('the demo data loads: a shared list and its to-dos', async () => {
   });
   expect(count?.n).toBe(1);
 });
+
+test('the overview of the app (RFC 0022 step 2) is served to a user', async () => {
+  const overview = await call('GET', '/api/v1/reports/overview?app=focus', 'rahim');
+  expect(overview.status, JSON.stringify(overview.json)).toBe(200);
+  expect(overview.json.cards.map((c: { id: string }) => c.id)).toContain('open');
+});

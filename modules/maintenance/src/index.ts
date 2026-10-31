@@ -10,6 +10,7 @@
 import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
+import { reporting } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
 import { action, calendar, form, kanban, list, search } from '@kosh/views';
@@ -129,7 +130,7 @@ export const maintenance: ReturnType<typeof defineModule> = defineModule({
   shutro: maintenanceShutro,
   kosh: '^0.1.0',
   hooks: { demo: maintenanceDemo },
-  depends: [contacts, messaging],
+  depends: [contacts, messaging, reporting],
   app: {
     code: 'assetcare',
     label: 'Asset Care',
@@ -175,6 +176,88 @@ export const maintenance: ReturnType<typeof defineModule> = defineModule({
             help: 'A plan by time gets its order this many days before it is due.',
           },
         ],
+      },
+    ],
+  },
+  // The Overview (RFC 0022 step 2).
+  overview: {
+    cards: [
+      {
+        id: 'open_requests',
+        title: 'Open requests',
+        kind: 'kpi',
+        model: 'maintenance.request',
+        measure: 'count',
+        filter: { state: { in: ['new', 'progress'] } },
+        w: 3,
+      },
+      {
+        id: 'done_month',
+        title: 'Done this month',
+        kind: 'kpi',
+        model: 'maintenance.request',
+        measure: 'count',
+        filter: { state: 'done' },
+        comparison: { field: 'reportedAt', mode: 'previous' },
+        w: 3,
+      },
+      {
+        id: 'downtime_month',
+        title: 'Downtime hours this month',
+        kind: 'kpi',
+        model: 'maintenance.request',
+        measure: 'sum:downtimeHours',
+        filter: { state: 'done' },
+        comparison: { field: 'reportedAt', mode: 'previous' },
+        w: 3,
+      },
+      {
+        id: 'equipment',
+        title: 'Equipment',
+        kind: 'kpi',
+        model: 'maintenance.equipment',
+        measure: 'count',
+        w: 3,
+      },
+      {
+        id: 'by_state',
+        title: 'Requests by state',
+        kind: 'chart',
+        model: 'maintenance.request',
+        measure: 'count',
+        groupBy: 'state',
+        chart: 'bar',
+        w: 6,
+      },
+      {
+        id: 'by_equipment',
+        title: 'Open requests by equipment',
+        kind: 'pivot',
+        model: 'maintenance.request',
+        measure: 'count',
+        groupBy: 'equipment',
+        filter: { state: { in: ['new', 'progress'] } },
+        w: 6,
+      },
+      {
+        id: 'by_priority',
+        title: 'Open requests by priority',
+        kind: 'chart',
+        model: 'maintenance.request',
+        measure: 'count',
+        groupBy: 'priority',
+        filter: { state: { in: ['new', 'progress'] } },
+        chart: 'pie',
+        w: 6,
+      },
+      {
+        id: 'most_downtime',
+        title: 'Most downtime',
+        kind: 'list',
+        model: 'maintenance.request',
+        measure: 'sum:downtimeHours',
+        filter: { state: 'done' },
+        w: 6,
       },
     ],
   },

@@ -57,3 +57,11 @@ test('an import LC applied, issued, documents presented and accepted', async ({ 
   await expect(page.getByRole('button', { name: /^State: Accepted/ })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Due on' })).not.toHaveValue('');
 });
+
+test('the Trade Finance overview (RFC 0022 step 2)', async ({ page }) => {
+  await signIn(page, 'dina');
+  await page.goto('/tradefinance/a/trade_finance.action_overview');
+  await expect(page.getByRole('heading', { name: 'Trade Finance · Overview' })).toBeVisible();
+  for (const title of ['LCs issued', 'Outstanding', 'Outstanding by bank'])
+    await expect(page.getByRole('region', { name: title, exact: true })).toBeVisible();
+});

@@ -13,6 +13,7 @@
 import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
+import { reporting } from '@kosh/reporting';
 import type { ModuleContext } from '@kosh/server';
 import { action, form, list, search } from '@kosh/views';
 import { websiteDemo } from './demo.js';
@@ -46,7 +47,7 @@ export function websiteModule(options: SitesOptions = {}): ReturnType<typeof def
     shutro: websiteShutro,
     kosh: '^0.1.0',
     hooks: { demo: websiteDemo },
-    depends: [contacts, messaging],
+    depends: [contacts, messaging, reporting],
     app: {
       code: 'sites',
       label: 'Sites',
@@ -65,6 +66,70 @@ export function websiteModule(options: SitesOptions = {}): ReturnType<typeof def
     },
     events: [{ topic: SUBMITTED, model: 'website.submission', label: 'Website form submitted' }],
     routes: (context: ModuleContext) => registerSitesRoutes(context, options),
+    // The Overview (RFC 0022 step 2).
+    overview: {
+      cards: [
+        {
+          id: 'published',
+          title: 'Pages published',
+          kind: 'kpi',
+          model: 'website.page',
+          measure: 'count',
+          filter: { state: 'published' },
+          w: 3,
+        },
+        {
+          id: 'drafts',
+          title: 'Drafts',
+          kind: 'kpi',
+          model: 'website.page',
+          measure: 'count',
+          filter: { state: 'draft' },
+          w: 3,
+        },
+        {
+          id: 'submissions_month',
+          title: 'Submissions this month',
+          kind: 'kpi',
+          model: 'website.submission',
+          measure: 'count',
+          filter: { state: 'received' },
+          comparison: { field: 'createdAt', mode: 'previous' },
+          w: 3,
+        },
+        {
+          id: 'spam_month',
+          title: 'Spam caught this month',
+          kind: 'kpi',
+          model: 'website.submission',
+          measure: 'count',
+          filter: { state: 'spam' },
+          comparison: { field: 'createdAt', mode: 'previous' },
+          w: 3,
+        },
+        {
+          id: 'by_form',
+          title: 'Submissions by form',
+          kind: 'pivot',
+          model: 'website.submission',
+          measure: 'count',
+          groupBy: 'form',
+          filter: { state: 'received' },
+          w: 6,
+        },
+        {
+          id: 'by_month',
+          title: 'Submissions by month',
+          kind: 'chart',
+          model: 'website.submission',
+          measure: 'count',
+          groupBy: 'createdAt:month',
+          filter: { state: 'received' },
+          chart: 'bar',
+          w: 6,
+        },
+      ],
+    },
     actions: {
       'sites.action_pages': action(WebsitePage, {
         label: 'Pages',

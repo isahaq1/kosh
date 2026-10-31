@@ -7,6 +7,7 @@
  */
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
+import { reporting } from '@kosh/reporting';
 import { action, calendar, form, kanban, list, search } from '@kosh/views';
 import { todoDemo } from './demo.js';
 import { TodoList, TodoTask, todoShutro } from './module.js';
@@ -17,7 +18,7 @@ export const todo: ReturnType<typeof defineModule> = defineModule({
   shutro: todoShutro,
   kosh: '^0.1.0',
   hooks: { demo: todoDemo },
-  depends: [messaging],
+  depends: [messaging, reporting],
   app: {
     code: 'focus',
     label: 'Focus',
@@ -28,6 +29,69 @@ export const todo: ReturnType<typeof defineModule> = defineModule({
   },
   accessLevels: {
     user: { label: 'User (own to-dos and shared lists)', groups: ['todo.user'] },
+  },
+  // The Overview (RFC 0022 step 2).
+  overview: {
+    cards: [
+      {
+        id: 'open',
+        title: 'Open to-dos',
+        kind: 'kpi',
+        model: 'todo.task',
+        measure: 'count',
+        filter: { state: 'open' },
+        w: 3,
+      },
+      {
+        id: 'urgent',
+        title: 'Urgent or high',
+        kind: 'kpi',
+        model: 'todo.task',
+        measure: 'count',
+        filter: { state: 'open', priority: { in: ['urgent', 'high'] } },
+        w: 3,
+      },
+      {
+        id: 'done_month',
+        title: 'Done this month',
+        kind: 'kpi',
+        model: 'todo.task',
+        measure: 'count',
+        filter: { state: 'done' },
+        comparison: { field: 'updatedAt', mode: 'previous' },
+        w: 3,
+      },
+      {
+        id: 'lists',
+        title: 'Shared lists',
+        kind: 'kpi',
+        model: 'todo.list',
+        measure: 'count',
+        w: 3,
+      },
+      {
+        id: 'by_list',
+        title: 'Open by list',
+        kind: 'chart',
+        model: 'todo.task',
+        measure: 'count',
+        groupBy: 'list',
+        filter: { state: 'open' },
+        chart: 'pie',
+        w: 6,
+      },
+      {
+        id: 'by_priority',
+        title: 'Open by priority',
+        kind: 'chart',
+        model: 'todo.task',
+        measure: 'count',
+        groupBy: 'priority',
+        filter: { state: 'open' },
+        chart: 'bar',
+        w: 6,
+      },
+    ],
   },
   actions: {
     'focus.action_tasks': action(TodoTask, {

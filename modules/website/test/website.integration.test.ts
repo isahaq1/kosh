@@ -364,3 +364,9 @@ test('the preview escapes what editors type; links only to the site or http(s); 
   expect((await call('sam', 'GET', '/api/v1/models/website.page')).status).toBe(403);
   expect((await call('sam', 'GET', `/api/v1/sites/pages/${page}/preview`)).status).toBe(403);
 });
+
+test('the Sites overview (RFC 0022 step 2) is served to an editor', async () => {
+  const overview = await call('ed', 'GET', '/api/v1/reports/overview?app=sites');
+  expect(overview.status, JSON.stringify(overview.json)).toBe(200);
+  expect(overview.json.cards.map((c: { id: string }) => c.id)).toContain('submissions_month');
+});

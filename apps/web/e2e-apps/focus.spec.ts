@@ -48,3 +48,11 @@ test('a to-do due today: listed, on the home page, done from there', async ({ pa
   await page.goto('/focus/a/focus.action_tasks?view=list');
   await expect(page.getByRole('row', { name: /Call the bank about the LC/ })).toHaveCount(0); // To do only
 });
+
+test('the Focus overview (RFC 0022 step 2)', async ({ page }) => {
+  await signIn(page, 'rahim');
+  await page.goto('/focus/a/todo.action_overview');
+  await expect(page.getByRole('heading', { name: 'Focus · Overview' })).toBeVisible();
+  for (const title of ['Open to-dos', 'Shared lists', 'Open by list'])
+    await expect(page.getByRole('region', { name: title, exact: true })).toBeVisible();
+});

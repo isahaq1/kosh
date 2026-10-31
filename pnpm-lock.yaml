@@ -535,6 +535,9 @@ importers:
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
       '@kosh/server':
         specifier: workspace:*
         version: link:../../packages/server
@@ -828,6 +831,9 @@ importers:
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
       '@kosh/server':
         specifier: workspace:*
         version: link:../../packages/server
@@ -890,6 +896,9 @@ importers:
       '@kosh/product':
         specifier: workspace:*
         version: link:../product
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
       '@kosh/server':
         specifier: workspace:*
         version: link:../../packages/server
@@ -1573,6 +1582,9 @@ importers:
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
       '@kosh/server':
         specifier: workspace:*
         version: link:../../packages/server
@@ -1595,6 +1607,9 @@ importers:
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
       '@kosh/server':
         specifier: workspace:*
         version: link:../../packages/server
@@ -1725,6 +1740,9 @@ importers:
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
       '@kosh/server':
         specifier: workspace:*
         version: link:../../packages/server

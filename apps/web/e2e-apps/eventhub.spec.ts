@@ -72,3 +72,11 @@ test('an event opened, an attendee registered and confirmed, checked in at the d
   await page.getByRole('button', { name: 'Check in', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'was checked in at' })).toBeVisible();
 });
+
+test('the Event Hub overview (RFC 0022 step 2)', async ({ page }) => {
+  await signIn(page, 'dina');
+  await page.goto('/eventhub/a/event.action_overview');
+  await expect(page.getByRole('heading', { name: 'Event Hub · Overview' })).toBeVisible();
+  for (const title of ['Open for registration', 'Places confirmed', 'Places by event'])
+    await expect(page.getByRole('region', { name: title, exact: true })).toBeVisible();
+});

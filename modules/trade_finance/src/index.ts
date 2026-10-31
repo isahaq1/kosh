@@ -9,6 +9,7 @@
 import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
+import { reporting } from '@kosh/reporting';
 import type { ModuleContext } from '@kosh/server';
 import { action, form, kanban, list, search } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
@@ -87,7 +88,7 @@ export const tradeFinance: ReturnType<typeof defineModule> = defineModule({
   shutro: tradeFinanceShutro,
   kosh: '^0.1.0',
   hooks: { demo: tradeFinanceDemo },
-  depends: [contacts, messaging],
+  depends: [contacts, messaging, reporting],
   app: {
     code: 'tradefinance',
     label: 'Trade Finance',
@@ -125,6 +126,88 @@ export const tradeFinance: ReturnType<typeof defineModule> = defineModule({
             help: 'Issued LCs whose latest shipment or expiry is this close are flagged.',
           },
         ],
+      },
+    ],
+  },
+  // The Overview (RFC 0022 step 2).
+  overview: {
+    cards: [
+      {
+        id: 'issued',
+        title: 'LCs issued',
+        kind: 'kpi',
+        model: 'trade.lc',
+        measure: 'count',
+        filter: { state: 'issued' },
+        w: 3,
+      },
+      {
+        id: 'outstanding',
+        title: 'Outstanding',
+        kind: 'kpi',
+        model: 'trade.lc',
+        measure: 'sum:amount',
+        filter: { state: 'issued' },
+        w: 3,
+      },
+      {
+        id: 'applied',
+        title: 'Applied, not issued',
+        kind: 'kpi',
+        model: 'trade.lc',
+        measure: 'count',
+        filter: { state: 'applied' },
+        w: 3,
+      },
+      {
+        id: 'settled_month',
+        title: 'Settled this month',
+        kind: 'kpi',
+        model: 'trade.lc',
+        measure: 'sum:amount',
+        filter: { state: 'settled' },
+        comparison: { field: 'expiryDate', mode: 'previous' },
+        w: 3,
+      },
+      {
+        id: 'by_bank',
+        title: 'Outstanding by bank',
+        kind: 'pivot',
+        model: 'trade.lc',
+        measure: 'sum:amount',
+        groupBy: 'bank',
+        filter: { state: 'issued' },
+        w: 6,
+      },
+      {
+        id: 'by_direction',
+        title: 'Import and export',
+        kind: 'chart',
+        model: 'trade.lc',
+        measure: 'count',
+        groupBy: 'direction',
+        chart: 'pie',
+        w: 6,
+      },
+      {
+        id: 'expiring',
+        title: 'Expiring by month',
+        kind: 'chart',
+        model: 'trade.lc',
+        measure: 'sum:amount',
+        groupBy: 'expiryDate:month',
+        filter: { state: 'issued' },
+        chart: 'bar',
+        w: 6,
+      },
+      {
+        id: 'biggest',
+        title: 'Biggest open LCs',
+        kind: 'list',
+        model: 'trade.lc',
+        measure: 'sum:amount',
+        filter: { state: { in: ['applied', 'issued'] } },
+        w: 6,
       },
     ],
   },

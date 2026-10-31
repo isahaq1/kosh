@@ -52,3 +52,11 @@ test('a breakdown reported, the equipment down, repaired, operational again', as
   await page.goto(press);
   await expect(page.getByText('Operational', { exact: true }).first()).toBeVisible();
 });
+
+test('the Asset Care overview (RFC 0022 step 2)', async ({ page }) => {
+  await signIn(page, 'dina');
+  await page.goto('/assetcare/a/maintenance.action_overview');
+  await expect(page.getByRole('heading', { name: 'Asset Care · Overview' })).toBeVisible();
+  for (const title of ['Open requests', 'Equipment', 'Requests by state'])
+    await expect(page.getByRole('region', { name: title, exact: true })).toBeVisible();
+});

@@ -56,3 +56,11 @@ test('a room booked for a meeting today; the same slot refused; the meeting on t
   await expect(meetings.getByText('Weekly review')).toBeVisible();
   await expect(meetings.getByText('Clash')).toHaveCount(0);
 });
+
+test('the Agenda overview (RFC 0022 step 2)', async ({ page }) => {
+  await signIn(page, 'dina');
+  await page.goto('/agenda/a/calendar.action_overview');
+  await expect(page.getByRole('heading', { name: 'Agenda · Overview' })).toBeVisible();
+  for (const title of ['Meetings this month', 'Rooms', 'Meetings by room'])
+    await expect(page.getByRole('region', { name: title, exact: true })).toBeVisible();
+});

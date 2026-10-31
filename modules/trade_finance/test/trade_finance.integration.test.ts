@@ -278,3 +278,9 @@ test('the demo data loads', async () => {
   });
   expect(JSON.stringify(summary)).toContain('Trade Finance');
 });
+
+test('the overview of the app (RFC 0022 step 2) is served to a user', async () => {
+  const overview = await call('GET', '/api/v1/reports/overview?app=tradefinance', 'rahim');
+  expect(overview.status, JSON.stringify(overview.json)).toBe(200);
+  expect(overview.json.cards.map((c: { id: string }) => c.id)).toContain('issued');
+});

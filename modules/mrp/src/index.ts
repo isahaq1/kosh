@@ -11,6 +11,7 @@ import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
 import { product } from '@kosh/product';
+import { reporting } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import { stock } from '@kosh/stock';
 import { action, form, gantt, kanban, list, search } from '@kosh/views';
@@ -113,7 +114,7 @@ export const mrp: ReturnType<typeof defineModule> = defineModule({
   shutro: mrpShutro,
   kosh: '^0.1.0',
   hooks: { demo: mrpDemo },
-  depends: [product, stock, contacts, messaging],
+  depends: [product, stock, contacts, messaging, reporting],
   app: {
     code: 'production',
     label: 'Production',
@@ -130,6 +131,86 @@ export const mrp: ReturnType<typeof defineModule> = defineModule({
       groups: ['mrp.manager'],
       implies: ['user'],
     },
+  },
+  // The Overview (RFC 0022 step 2).
+  overview: {
+    cards: [
+      {
+        id: 'confirmed',
+        title: 'Orders confirmed',
+        kind: 'kpi',
+        model: 'mrp.production',
+        measure: 'count',
+        filter: { state: 'confirmed' },
+        w: 3,
+      },
+      {
+        id: 'done_month',
+        title: 'Made this month',
+        kind: 'kpi',
+        model: 'mrp.production',
+        measure: 'count',
+        filter: { state: 'done' },
+        comparison: { field: 'createdAt', mode: 'previous' },
+        w: 3,
+      },
+      {
+        id: 'work_in_progress',
+        title: 'Work orders in progress',
+        kind: 'kpi',
+        model: 'mrp.workorder',
+        measure: 'count',
+        filter: { state: 'progress' },
+        w: 3,
+      },
+      {
+        id: 'workcenters',
+        title: 'Work centres',
+        kind: 'kpi',
+        model: 'mrp.workcenter',
+        measure: 'count',
+        w: 3,
+      },
+      {
+        id: 'by_state',
+        title: 'Orders by state',
+        kind: 'chart',
+        model: 'mrp.production',
+        measure: 'count',
+        groupBy: 'state',
+        chart: 'bar',
+        w: 6,
+      },
+      {
+        id: 'made_by_product',
+        title: 'Made, by product',
+        kind: 'pivot',
+        model: 'mrp.production',
+        measure: 'sum:quantity',
+        groupBy: 'product',
+        filter: { state: 'done' },
+        w: 6,
+      },
+      {
+        id: 'load_by_workcenter',
+        title: 'Work waiting by work centre',
+        kind: 'pivot',
+        model: 'mrp.workorder',
+        measure: 'count',
+        groupBy: 'workcenter',
+        filter: { state: { in: ['ready', 'progress'] } },
+        w: 6,
+      },
+      {
+        id: 'biggest_open',
+        title: 'Biggest open orders',
+        kind: 'list',
+        model: 'mrp.production',
+        measure: 'sum:quantity',
+        filter: { state: 'confirmed' },
+        w: 6,
+      },
+    ],
   },
   actions: {
     'production.action_orders': action(MrpProduction, {
