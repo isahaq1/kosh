@@ -28,6 +28,8 @@ export interface GroupNode {
   readonly kind: 'group';
   readonly id: string;
   readonly label?: string;
+  /** A sentence under the title saying what the section is for (RFC 0022 §3.4). */
+  readonly description?: string;
   readonly columns?: 1 | 2 | 3;
   readonly children: readonly FormNode[];
   readonly visibleWhen?: Condition;
@@ -37,6 +39,7 @@ export interface PageNode {
   readonly kind: 'page';
   readonly id: string;
   readonly label: string;
+  readonly description?: string;
   readonly children: readonly FormNode[];
   readonly visibleWhen?: Condition;
 }

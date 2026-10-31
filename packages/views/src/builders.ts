@@ -113,7 +113,12 @@ export interface FormKit<K extends string> {
     options?: Omit<GroupNode, 'kind' | 'id' | 'children'>,
   ): GroupNode;
   notebook(id: string, pages: readonly PageNode[]): NotebookNode;
-  page(id: string, label: string, children: readonly (FieldInput<K> | FormNode)[]): PageNode;
+  page(
+    id: string,
+    label: string,
+    children: readonly (FieldInput<K> | FormNode)[],
+    options?: { readonly description?: string; readonly visibleWhen?: Condition },
+  ): PageNode;
   /** An editable one2many; its columns are keys of the related model (checked at load). */
   lines(
     field: K,
@@ -150,7 +155,13 @@ function kit<K extends string>(): FormKit<K> {
       children: children.map(child),
     }),
     notebook: (id, pages) => ({ kind: 'notebook', id, pages }),
-    page: (id, label, children) => ({ kind: 'page', id, label, children: children.map(child) }),
+    page: (id, label, children, options = {}) => ({
+      kind: 'page',
+      id,
+      label,
+      ...options,
+      children: children.map(child),
+    }),
     lines: (key, columns, options = {}) => ({
       kind: 'lines',
       id: key,

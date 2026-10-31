@@ -21,6 +21,8 @@ export interface ApiField {
   /** `[value, label]` for selection and state fields with a static list. */
   readonly options: readonly (readonly [string, string])[] | null;
   readonly translate: boolean;
+  /** The field's help text, for hints on forms (RFC 0022 §3.4). */
+  readonly help: string | null;
 }
 
 /** A state transition. */
@@ -31,6 +33,9 @@ export interface TransitionSpec {
   readonly to: string;
   /** A feature permission the user needs (`definePermission`), or `null`. */
   readonly requires: string | null;
+  /** The transition's guard (the records that may not go) and the message when it refuses (RFC 0022 §3.4). */
+  readonly guard: ((records: unknown) => unknown) | null;
+  readonly message: string | null;
 }
 
 /** One model as the API exposes it. */
@@ -93,6 +98,11 @@ export function apiModels(registry: Registry): ReadonlyMap<string, ApiModel> {
             from: Array.isArray(spec['from']) ? (spec['from'] as string[]) : [],
             to: String(spec['to'] ?? ''),
             requires: typeof spec['requires'] === 'string' ? spec['requires'] : null,
+            guard:
+              typeof spec['guard'] === 'function'
+                ? (spec['guard'] as (records: unknown) => unknown)
+                : null,
+            message: typeof spec['message'] === 'string' ? spec['message'] : null,
           });
         }
       const computedReadonly = d.computed && raw['inverse'] === undefined;
@@ -100,6 +110,7 @@ export function apiModels(registry: Registry): ReadonlyMap<string, ApiModel> {
         key,
         kind: d.kind,
         label: d.label,
+        help: d.help ?? null,
         required: d.required,
         readonly:
           d.readonly || computedReadonly || IMPLICIT_READONLY.has(key) || d.kind === 'state',

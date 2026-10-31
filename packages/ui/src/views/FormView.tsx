@@ -326,6 +326,19 @@ function Lines({
   );
 }
 
+/** The keys of every field node of a sheet, in order (groups, pages and loose fields; not line columns). */
+function flatFieldKeys(nodes: readonly FormNode[]): string[] {
+  return nodes.flatMap((n) =>
+    n.kind === 'field'
+      ? [n.field]
+      : n.kind === 'group'
+        ? flatFieldKeys(n.children)
+        : n.kind === 'notebook'
+          ? n.pages.flatMap((p) => flatFieldKeys(p.children))
+          : [],
+  );
+}
+
 /** The default form renderer. */
 export function FormView({
   served,
@@ -435,6 +448,15 @@ export function FormView({
   const record = loaded.data?.record;
   const values = useMemo<Values>(() => ({ ...(record ?? {}), ...changes }), [record, changes]);
   const env = { uid, companyId };
+  // RFC 0022 §3.4: the next step — the transitions the record may take now, and what blocks the others.
+  const next = useQuery({
+    queryKey: ['next', model, recordId, loaded.data?.etag ?? null],
+    queryFn: () =>
+      api.call<{
+        transitions: { name: string; to: string; allowed: boolean; message: string | null }[];
+      }>('GET', `/api/v1/models/${model}/${recordId}/next`),
+    enabled: !isNew && recordId !== null && served.transitions.length > 0,
+  });
   const dirty = Object.keys(changes).length > 0 || lines.size > 0;
   // Leaving with unsaved changes asks first (in-app navigation and closing the tab). A ref, not the render's
   // value: a save clears it before navigating to the saved record, ahead of the next render.
@@ -496,6 +518,8 @@ export function FormView({
       setChanges({});
       setLines(new Map());
       setProblem(null);
+      // The next step may have changed with the lines, which leave the record's version as it was.
+      void queryClient.invalidateQueries({ queryKey: ['next', model] });
       if (result.queued === true) {
         unsaved.current = false;
         toast({
@@ -532,6 +556,7 @@ export function FormView({
         queryClient.invalidateQueries({ queryKey: ['record', model, recordId] }),
         queryClient.invalidateQueries({ queryKey: ['lines'] }),
         queryClient.invalidateQueries({ queryKey: ['list', model] }),
+        queryClient.invalidateQueries({ queryKey: ['next', model] }),
       ]);
       const button =
         view.type === 'form' ? view.header.buttons.find((b) => b.transition === name) : undefined;
@@ -649,8 +674,8 @@ export function FormView({
             invalid={invalid}
           />
         </div>
-        {node.help === undefined ? null : (
-          <p className="text-xs text-muted-foreground">{node.help}</p>
+        {(node.help ?? field.help) === undefined ? null : (
+          <p className="text-xs text-muted-foreground">{node.help ?? field.help}</p>
         )}
       </div>
     );
@@ -666,6 +691,11 @@ export function FormView({
             <fieldset key={node.id} className="col-span-full">
               {node.label === undefined ? null : (
                 <legend className="mb-2 text-sm font-semibold">{node.label}</legend>
+              )}
+              {node.description === undefined ? null : (
+                <p className="col-span-full mb-3 text-sm text-muted-foreground">
+                  {node.description}
+                </p>
               )}
               <div
                 className={cn(
@@ -715,6 +745,9 @@ export function FormView({
               </TabsList>
               {pages.map((p) => (
                 <TabsContent key={p.id} value={p.id}>
+                  {p.description === undefined ? null : (
+                    <p className="mb-3 text-sm text-muted-foreground">{p.description}</p>
+                  )}
                   <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
                     {renderNodes(p.children)}
                   </div>
@@ -781,6 +814,33 @@ export function FormView({
 
   const statusbar = view.header.statusbar;
   const state = statusbar === undefined ? undefined : values[statusbar];
+  // The step to show: the primary action when it is one of the record's next transitions (blocked or not),
+  // else the first the record may take, else the first blocked one.
+  const candidates = (next.data?.transitions ?? []).filter((tr) =>
+    view.header.buttons.some((b) => b.transition === tr.name),
+  );
+  const nextStep =
+    candidates.find(
+      (tr) => view.header.buttons.find((b) => b.transition === tr.name)?.primary === true,
+    ) ??
+    candidates.find((tr) => tr.allowed) ??
+    candidates[0];
+  const nextButton =
+    nextStep === undefined
+      ? undefined
+      : view.header.buttons.find((b) => b.transition === nextStep.name);
+  // The required fields still empty (new and draft records): the checklist in the rail.
+  const missing = isNew
+    ? []
+    : flatFieldKeys(view.sheet).filter((key) => {
+        const meta = fields[key];
+        const v = values[key];
+        return (
+          meta?.required === true &&
+          !meta.readonly &&
+          (v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0))
+        );
+      });
   const buttons = view.header.buttons.filter((b) => {
     const spec = served.transitions.find((tr) => tr.name === b.transition);
     return (
@@ -837,6 +897,21 @@ export function FormView({
             {t('views.summary')}
           </h2>
           <dl className="divide-y">{summaryNodes.map(row)}</dl>
+        </section>
+      )}
+      {missing.length === 0 ? null : (
+        <section className="rounded-lg border bg-surface p-4" aria-labelledby={`${formId}-missing`}>
+          <h2 id={`${formId}-missing`} className="mb-1 text-sm font-semibold">
+            {t('views.nextStep.missing', { count: missing.length })}
+          </h2>
+          <ul className="grid gap-1 text-sm">
+            {missing.map((key) => (
+              <li key={key} className="flex items-center gap-2">
+                <span aria-hidden className="size-1.5 rounded-full bg-warning" />
+                {fields[key]?.label ?? key}
+              </li>
+            ))}
+          </ul>
         </section>
       )}
       {isNew || detailNodes.length === 0 ? null : (
@@ -1150,6 +1225,13 @@ export function FormView({
                 {w}
               </Alert>
             ))}
+            {nextStep === undefined || nextButton === undefined || locked ? null : (
+              <Alert tone={nextStep.allowed ? 'info' : 'warning'}>
+                {nextStep.allowed
+                  ? t('views.nextStep.ready', { step: nextButton.label ?? nextButton.transition })
+                  : `${t('views.nextStep.before', { step: nextButton.label ?? nextButton.transition })} ${nextStep.message ?? ''}`.trim()}
+              </Alert>
+            )}
 
             {buttons.length === 0 ? null : (
               <div

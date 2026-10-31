@@ -168,6 +168,12 @@ export const en = {
     none: 'None',
     lines: 'Lines',
     addLine: 'Add a line',
+    nextStep: {
+      ready: 'Next step: {{step}}.',
+      before: 'Before {{step}}:',
+      missing_one: '{{count}} thing to fill in',
+      missing_other: '{{count}} things to fill in',
+    },
     daysLeft: { today: 'Today', in: 'In {{count}} days', late: '{{count}} days late' },
     image: {
       choose: 'Choose a picture',
@@ -493,6 +499,12 @@ export const bn: DeepPartial<Messages> = {
     none: 'কিছু না',
     lines: 'লাইন',
     addLine: 'লাইন যোগ করুন',
+    nextStep: {
+      ready: 'পরের ধাপ: {{step}}।',
+      before: '{{step}}-এর আগে:',
+      missing_one: '{{count}}টি ঘর পূরণ করতে হবে',
+      missing_other: '{{count}}টি ঘর পূরণ করতে হবে',
+    },
     daysLeft: { today: 'আজ', in: '{{count}} দিনে', late: '{{count}} দিন দেরি' },
     image: {
       choose: 'ছবি বাছুন',

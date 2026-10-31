@@ -58,6 +58,7 @@ export interface ViewField {
   readonly label: string;
   readonly required: boolean;
   readonly readonly: boolean;
+  readonly help?: string;
   readonly target?: string;
   readonly options?: readonly { readonly value: string; readonly label: string }[];
 }

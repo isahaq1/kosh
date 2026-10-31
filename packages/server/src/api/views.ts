@@ -398,6 +398,7 @@ function describe(env: Env, model: ApiModel, field: ApiField): ViewField {
     kind: field.kind,
     label: field.label,
     required: field.required,
+    ...(field.help === null ? {} : { help: field.help }),
     // Field-level only: the UI combines it with `operations` (create for new records, write for existing ones).
     readonly: field.readonly || !env.access.canField(model.name as never, field.key, 'write'),
     ...(field.target === null ? {} : { target: field.target }),

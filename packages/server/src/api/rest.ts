@@ -405,6 +405,55 @@ export function registerRestApi(
     return request.env((env) => ref(env, model.name).onchange({ ...input, values }));
   });
 
+  // RFC 0022 §3.4: what comes next for a record — the transitions from its state the user may run, and for
+  // each whether its guard lets this record go, with the guard's message when not (nothing is changed).
+  app.get('/api/v1/models/:model/:id/next', async (request) => {
+    const model = modelOf(request.params);
+    const id = idOf(request.params);
+    return request.env(
+      async (env) => {
+        const stateFields = [...new Set(model.transitionSpecs.map((t) => t.field))];
+        const set = await ref(env, model.name)
+          .browse([id])
+          .load(['id', ...stateFields]);
+        const [current] = set.read(['id', ...stateFields]);
+        if (current === undefined)
+          throw new HttpProblem(
+            404,
+            'missing-record',
+            'Not found',
+            `No ${model.name} has the id ${id}.`,
+          );
+        const canWrite = env.access.can(model.name as never, 'write');
+        const transitions: {
+          name: string;
+          field: string;
+          to: string;
+          allowed: boolean;
+          message: string | null;
+        }[] = [];
+        for (const t of model.transitionSpecs) {
+          if (!canWrite || (t.requires !== null && !permitted(env, t.requires))) continue;
+          if (!t.from.includes(String(current[t.field] ?? ''))) continue;
+          let allowed = true;
+          if (t.guard !== null) {
+            const refused = idsIn(await t.guard(set));
+            allowed = !refused.includes(id);
+          }
+          transitions.push({
+            name: t.name,
+            field: t.field,
+            to: t.to,
+            allowed,
+            message: allowed ? null : t.message,
+          });
+        }
+        return { transitions };
+      },
+      { write: true },
+    ); // guards that read through asSuperuser audit the scope
+  });
+
   app.post('/api/v1/models/:model/:id/transitions/:name', async (request, reply) => {
     const model = modelOf(request.params);
     const id = idOf(request.params);
@@ -641,4 +690,25 @@ export function registerRestApi(
       );
     return options.openapi();
   });
+}
+
+/** Whether `env` holds the feature permission `code` (an unknown code: no). */
+function permitted(env: Env, code: string): boolean {
+  try {
+    return env.access.has(code);
+  } catch {
+    return false;
+  }
+}
+
+/** The ids a guard returned: a recordset (`ids`), records (`id`), ids, or lists of those; anything else, none. */
+function idsIn(value: unknown): number[] {
+  if (Array.isArray(value)) return value.flatMap(idsIn);
+  if (typeof value === 'number') return [value];
+  if (typeof value !== 'object' || value === null) return [];
+  if ('ids' in value && Array.isArray((value as { ids: unknown }).ids))
+    return ((value as { ids: unknown[] }).ids as unknown[]).flatMap(idsIn);
+  if ('id' in value) return idsIn((value as { id: unknown }).id);
+  if (Symbol.iterator in value) return [...(value as Iterable<unknown>)].flatMap(idsIn);
+  return [];
 }
