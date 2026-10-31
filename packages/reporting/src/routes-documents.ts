@@ -98,7 +98,7 @@ export function layoutProblems(layout: Layout, model: string, fields: DocumentFi
   };
   const walk = (blocks: Layout['blocks']) => {
     for (const b of blocks) {
-      if (b.kind === 'field') check(b.bind, model);
+      if (b.kind === 'field' || b.kind === 'qr') check(b.bind, model);
       else if (b.kind === 'fields') for (const i of b.items) check(i.bind, model);
       else if (b.kind === 'heading' || b.kind === 'text') texts(b.text, model);
       else if (b.kind === 'table') {

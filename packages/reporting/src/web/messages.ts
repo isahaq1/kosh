@@ -87,6 +87,7 @@ export const messages: Readonly<Record<string, object>> = {
         divider: 'Divider',
         pageBreak: 'Page break',
         signature: 'Signatures',
+        qr: 'QR code',
       },
     },
   },

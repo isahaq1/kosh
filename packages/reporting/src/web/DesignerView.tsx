@@ -42,6 +42,7 @@ const KINDS = [
   'divider',
   'pageBreak',
   'signature',
+  'qr',
 ] as const;
 
 function newBlock(kind: Block['kind'], n: number): Block {
@@ -61,6 +62,8 @@ function newBlock(kind: Block['kind'], n: number): Block {
       return { kind, id, left: [], right: [] };
     case 'signature':
       return { kind, id, labels: ['Prepared by', 'Approved by'] };
+    case 'qr':
+      return { kind, id, bind: 'name' };
     default:
       return { kind, id } as Block;
   }
@@ -100,6 +103,15 @@ function BlockEditor({
       );
     case 'text':
       return text(t('designer.text'), block.text, (v) => onChange({ ...block, text: v }), true);
+    case 'qr':
+      return (
+        <div className="grid gap-2">
+          {text(t('designer.bind'), block.bind, (v) => onChange({ ...block, bind: v }))}
+          {text(t('designer.label'), block.label ?? '', (v) =>
+            onChange({ ...block, label: v === '' ? undefined : v } as Block),
+          )}
+        </div>
+      );
     case 'field':
       return (
         <div className="grid gap-2">

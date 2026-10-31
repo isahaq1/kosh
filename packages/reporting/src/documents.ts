@@ -7,6 +7,7 @@
 
 import type { Env } from '@kosh/server/orm';
 import type { Block, Layout } from '@kosh/views';
+import QRCode from 'qrcode';
 import { amountInWords } from './words.js';
 
 export type { Block, Layout };
@@ -199,6 +200,22 @@ function text(data: DocumentData, fields: DocumentFields, template: string): str
   );
 }
 
+/**
+ * A QR code as SVG (one path of dark modules, a quiet zone of 4), from `qrcode`'s synchronous matrix — rendering
+ * stays synchronous. Medium error correction: a printed ticket survives a crease.
+ */
+export function qrSvg(content: string): string {
+  const { modules } = QRCode.create(content, { errorCorrectionLevel: 'M' });
+  const size = modules.size;
+  const quiet = 4;
+  let d = '';
+  for (let y = 0; y < size; y += 1)
+    for (let x = 0; x < size; x += 1)
+      if (modules.get(y, x)) d += `M${x + quiet} ${y + quiet}h1v1h-1z`;
+  const box = size + quiet * 2;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${box} ${box}" shape-rendering="crispEdges" role="img" aria-label="QR code"><rect width="${box}" height="${box}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+}
+
 function blockHtml(
   block: Block,
   data: DocumentData,
@@ -264,6 +281,14 @@ function blockHtml(
       return '<hr>';
     case 'pageBreak':
       return '<div class="page-break"></div>';
+    case 'qr': {
+      const value = resolve(data, fields, block.bind).value;
+      const content = value === null || value === undefined ? '' : String(value);
+      if (content === '') return '';
+      const label =
+        block.label === undefined ? '' : `<div class="qr-label">${esc(block.label)}</div>`;
+      return `<div class="qr" style="width:${block.size ?? 32}mm">${qrSvg(content)}${label}</div>`;
+    }
     case 'signature':
       return `<div class="signatures">${block.labels.map((l) => `<div class="signature"><div class="line"></div><div>${esc(l)}</div></div>`).join('')}</div>`;
     case 'columns':
@@ -291,6 +316,8 @@ hr { border: 0; border-top: 1px solid #ccc; margin: 5mm 0; }
 .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 10mm; }
 .signatures { display: grid; grid-auto-flow: column; gap: 12mm; margin-top: 18mm; text-align: center; font-size: 9.5pt; }
 .signature .line { border-top: 1px solid #111; margin-bottom: 2mm; }
+.qr { margin: 2mm 0; } .qr svg { width: 100%; height: auto; display: block; }
+.qr-label { font-size: 8.5pt; color: #555; text-align: center; margin-top: 1mm; }
 tr, .field { break-inside: avoid; }
 `;
 
@@ -371,7 +398,7 @@ export async function loadDocumentData(
   const paths = new Set<string>();
   const collect = (blocks: readonly Block[], prefix = ''): void => {
     for (const b of blocks) {
-      if (b.kind === 'field') paths.add(prefix + b.bind);
+      if (b.kind === 'field' || b.kind === 'qr') paths.add(prefix + b.bind);
       else if (b.kind === 'fields') for (const i of b.items) paths.add(prefix + i.bind);
       else if (b.kind === 'table') {
         if (b.bind !== '$records') paths.add(b.bind);

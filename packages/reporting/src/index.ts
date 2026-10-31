@@ -24,6 +24,7 @@ export {
   formatValue as formatDocumentValue,
   type Layout,
   loadDocumentData,
+  qrSvg,
   renderHtml,
   renderPdf,
 } from './documents.js';

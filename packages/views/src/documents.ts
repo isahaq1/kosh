@@ -33,6 +33,14 @@ export type Block =
   | { readonly kind: 'divider'; readonly id: string }
   | { readonly kind: 'pageBreak'; readonly id: string }
   | { readonly kind: 'signature'; readonly id: string; readonly labels: readonly string[] }
+  /** A QR code of a field's value (a ticket's check-in code, an e-invoice's signed QR), `size` millimetres wide. */
+  | {
+      readonly kind: 'qr';
+      readonly id: string;
+      readonly bind: string;
+      readonly size?: number;
+      readonly label?: string;
+    }
   | {
       readonly kind: 'columns';
       readonly id: string;
