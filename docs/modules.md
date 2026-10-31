@@ -268,7 +268,8 @@ Import and export letters of credit under UCP 600: the amount with its tolerance
 and expiry dates; amendments applied once accepted; presentations whose discrepancies are waived or refused, with
 their maturity, drawn within the LC and paid until it is settled; limits per bank and currency that issuing never
 passes; alerts on shipment and expiry dates (`GET /api/v1/trade/alerts`). Install it with
-`shutro-erp apps install trade_finance`.
+`shutro-erp apps install trade_finance`. With Accounting, `trade_finance_account` posts LC margins (and their
+release), payments and bank charges (expensed) in the LC's bank journal.
 
 ## Demo data (RFC 0008 §5.8)
 

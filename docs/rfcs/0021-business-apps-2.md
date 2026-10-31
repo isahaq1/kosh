@@ -698,3 +698,35 @@ reviewed steps.
 - **Step 2**: margin and bank charges posted to Accounting (`trade_finance_account`), LCs linked to purchase and sales
   orders, shipments against an LC, alerts on the home page and by notification.
 
+
+## Design note: Trade Finance step 2 — `trade_finance_account` (decided 2026-10-30: LC charges are expensed)
+
+- **Bridge** Trade Finance ↔ Accounting. An LC names the **bank journal** of its issuing bank.
+- **Margin**: recording an LC issued posts its margin (amount × margin %) — Dr *LC margin deposits* (1160) / Cr the
+  bank — in the LC's currency (Accounting converts at the day's rate); settling or cancelling an issued LC releases it
+  (the reverse entry).
+- **Payments**: a presentation paid posts the payment — an import: Dr the vendor's payable / Cr the bank; an export:
+  Dr the bank / Cr the customer's receivable — with the counterparty, to be matched with the bill or the invoice.
+- **Charges** (`trade.lc.charge`: opening commission, amendment, acceptance, SWIFT…): *Post* — Dr *LC charges*
+  (6510, an expense, as decided) / Cr the bank, the bank as partner. Landed costs come later as their own feature.
+- **Hooks in Trade Finance**, empty by default: `issued()` and `closed()` on LCs, `paid()` on presentations.
+
+## Implementation notes (2026-10-30): Trade Finance, step 2 — `trade_finance_account`
+
+- **Module** `modules/trade_finance_account`, proposed when Trade Finance and Accounting are installed.
+- **The bank journal**: an LC names it; one without takes the company's first bank journal when something is first
+  posted (written on the LC), and is refused only when the company has none.
+- **Entries** (in the LC's or the charge's currency, converted by Accounting at the day's rate — refused without one),
+  posted at once with Accounting's rules: the margin on issue (Dr 1160 *LC margin deposits* / Cr the bank) and its
+  release on settlement or cancellation; a paid presentation (import: Dr the vendor's payable / Cr the bank; export:
+  Dr the bank / Cr the customer's receivable, the counterparty on the lines); bank charges (`trade.lc.charge`, *Post*:
+  Dr 6510 *LC charges* / Cr the bank). The accounts are added to the chart when missing.
+- **Hooks in Trade Finance**: `issued()`, `closed()` on LCs and `paid()` on presentations, empty by default.
+- **The demo** keeps its issued USD LC without a margin and puts the margin on the application being prepared: an
+  issued margin in USD would need the day's rate, which a fresh installation does not have.
+- **Tests**: the bridge proposed; a 10 % margin of 100,000 posted (1160 10,000, the bank −10,000), a 1,500 charge
+  expensed, the 100,000 payment on the vendor's payable with the vendor, the LC settled and the margin released (1160
+  back to 0, the bank −101,500); an export paid into the bank against the customer's receivable; an LC without its
+  journal taking the company's.
+- **Next** (step 3): LCs linked to purchase and sales orders, shipments against an LC, alerts on the home page.
+
