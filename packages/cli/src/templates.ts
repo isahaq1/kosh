@@ -27,6 +27,7 @@ export type AppName =
   | 'event'
   | 'website'
   | 'pos'
+  | 'expense'
   | 'sale_project'
   | 'sale_stock'
   | 'purchase_stock'
@@ -40,6 +41,7 @@ export type AppName =
   | 'event_account'
   | 'website_crm'
   | 'pos_stock'
+  | 'expense_account'
   | 'l10n_bd'
   | 'l10n_in';
 export interface AppSpec {
@@ -184,6 +186,11 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     server: 'pos',
     web: 'registerPosWeb',
   },
+  expense: {
+    label: 'Spend: expenses with receipts, policies, approvals and cash advances',
+    icon: '💳',
+    server: 'expense',
+  },
   sale_project: {
     label: 'Bridge: tasks and projects from sales orders (Sales ↔ Projects)',
     icon: '🔗',
@@ -264,6 +271,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'posStock',
     bridge: ['pos', 'stock'],
+  },
+  expense_account: {
+    label: 'Bridge: expense reports booked and reimbursed, advances paid out (Spend ↔ Accounting)',
+    icon: '🔗',
+    server: 'expenseAccount',
+    bridge: ['expense', 'accounting'],
   },
   l10n_bd: {
     label: 'Bangladesh: chart of accounts, VAT and SD, VDS and TDS, BIN and TIN, July–June year',

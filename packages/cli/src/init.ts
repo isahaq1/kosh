@@ -681,6 +681,7 @@ async function modulesFor(apps: readonly AppName[]): Promise<KoshModule[]> {
     if (app === 'event') modules.push((await import('@kosh/event')).event);
     if (app === 'website') modules.push((await import('@kosh/website')).website);
     if (app === 'pos') modules.push((await import('@kosh/pos')).pos);
+    if (app === 'expense') modules.push((await import('@kosh/expense')).expense);
     if (app === 'trade_finance') modules.push((await import('@kosh/trade_finance')).tradeFinance);
     if (app === 'recruitment') modules.push((await import('@kosh/recruitment')).recruitment);
     if (app === 'sale_project') modules.push((await import('@kosh/sale_project')).saleProject);
@@ -702,6 +703,8 @@ async function modulesFor(apps: readonly AppName[]): Promise<KoshModule[]> {
     if (app === 'event_account') modules.push((await import('@kosh/event_account')).eventAccount);
     if (app === 'website_crm') modules.push((await import('@kosh/website_crm')).websiteCrm);
     if (app === 'pos_stock') modules.push((await import('@kosh/pos_stock')).posStock);
+    if (app === 'expense_account')
+      modules.push((await import('@kosh/expense_account')).expenseAccount);
     if (app === 'l10n_bd') modules.push((await import('@kosh/l10n_bd')).l10nBd);
     if (app === 'l10n_in') modules.push((await import('@kosh/l10n_in')).l10nIn);
   }

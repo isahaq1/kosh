@@ -6,6 +6,8 @@ import { contacts } from '@kosh/contacts';
 import { crm } from '@kosh/crm';
 import { event } from '@kosh/event';
 import { eventAccount } from '@kosh/event_account';
+import { expense } from '@kosh/expense';
+import { expenseAccount } from '@kosh/expense_account';
 import { hr } from '@kosh/hr';
 import { l10nBd } from '@kosh/l10n_bd';
 import { mail } from '@kosh/mail';
@@ -67,6 +69,7 @@ export const DEMO_APPS: readonly string[] = [
   'event',
   'website',
   'pos',
+  'expense',
   'l10n_bd',
 ];
 
@@ -99,6 +102,7 @@ export function demoCatalogue(): KoshModule[] {
     event,
     website,
     pos,
+    expense,
     saleAccount,
     purchaseAccount,
     saleProject,
@@ -114,6 +118,7 @@ export function demoCatalogue(): KoshModule[] {
     eventAccount,
     websiteCrm,
     posStock,
+    expenseAccount,
     l10nBd,
   ];
 }

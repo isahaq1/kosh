@@ -338,6 +338,15 @@ module gets an *Overview* action and menu, first in the app; `reporting` install
 keyed by the module (once; a changed dashboard is kept), and the page shows them to any user of the app, each card
 computed with that user's rights.
 
+### Spend (`modules/expense`, RFC 0024)
+
+Expenses with their receipts, categories with a policy the server enforces at submission (a receipt above an amount,
+limits per expense and per month that need a reason and a manager's approval when passed, rates per day or per
+kilometre), reports approved through the approval engine with likely duplicates flagged, and cash advances that later
+reports settle. With Accounting (`expense_account`), an approved report is booked as one entry and reimbursed from
+the cash or bank journal chosen on it; advances are paid out and returned through their journal. Install it with
+`shutro-erp apps install expense`.
+
 ### Counter (`modules/pos`, RFC 0021)
 
 Point of sale: shops with their payment methods, cashiers' sessions with opening and closing counts (a difference

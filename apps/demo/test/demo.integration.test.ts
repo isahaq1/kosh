@@ -109,6 +109,7 @@ test('every app with demo data loaded it, once', async () => {
     'contacts',
     'crm',
     'event',
+    'expense',
     'hr',
     'maintenance',
     'mrp',
@@ -136,6 +137,7 @@ test('every app with demo data loaded it, once', async () => {
     ['stock', 'mrp'],
     ['purchase', 'purchase_stock'],
     ['contacts', 'sales'],
+    ['hr', 'expense'],
   ])
     expect(order.indexOf(app as string)).toBeLessThan(order.indexOf(bridge as string));
   const auth = host.server.auth;
@@ -152,7 +154,7 @@ test('every app with demo data loaded it, once', async () => {
     text: 'SELECT count(*)::text AS n FROM kosh_module WHERE demo_at IS NOT NULL',
     params: [],
   });
-  expect(Number(marks[0]?.n)).toBe(23);
+  expect(Number(marks[0]?.n)).toBe(24);
 });
 
 test('the salesperson sees the orders and the invoices made from them; the buyer the approvals', async () => {
@@ -194,7 +196,17 @@ test('the salesperson sees the orders and the invoices made from them; the buyer
   );
   expect(bills.items).toHaveLength(2 + 3); // two posted bills, three drafts from the confirmed orders
   const inbox = await get('/api/v1/approvals/inbox', 'dina');
-  expect(inbox.requests).toHaveLength(1); // the generator waits for the purchase manager
+  const waitingPurchases = (inbox.requests as Json[]).filter(
+    (r) => r.targetModel === 'purchase.order',
+  );
+  expect(waitingPurchases).toHaveLength(1); // the generator waits for the purchase manager
+  // Spend's demo: the field-visit report and the cash advance wait for an approver (Dina manages Spend).
+  expect(
+    (inbox.requests as Json[])
+      .filter((r) => r.targetModel.startsWith('expense.'))
+      .map((r) => r.targetModel)
+      .sort(),
+  ).toEqual(['expense.advance', 'expense.sheet']);
 });
 
 test('projects, tasks and the timesheets of their authors; the service products create tasks', async () => {

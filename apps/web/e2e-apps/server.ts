@@ -22,6 +22,8 @@ import { contacts } from '@kosh/contacts';
 import { crm } from '@kosh/crm';
 import { event } from '@kosh/event';
 import { eventAccount } from '@kosh/event_account';
+import { expense } from '@kosh/expense';
+import { expenseAccount } from '@kosh/expense_account';
 import { hr } from '@kosh/hr';
 import { dataImport } from '@kosh/import';
 import { l10nBd } from '@kosh/l10n_bd';
@@ -155,6 +157,8 @@ const CATALOGUE = [
   eventAccount,
   websiteCrm,
   posStock,
+  expense,
+  expenseAccount,
   assistant,
   dataImport,
   l10nBd,
@@ -193,6 +197,7 @@ await applyApps(
         'event',
         'website',
         'pos',
+        'expense',
         'assistant',
         'import',
         'l10n_bd',
@@ -258,6 +263,7 @@ for (const [login, name, groups] of [
       'event.manager',
       'website.manager',
       'pos.manager',
+      'expense.manager',
       'messaging.user',
       'reporting.user',
       'assistant.user',
@@ -266,6 +272,7 @@ for (const [login, name, groups] of [
       'portal.manager',
     ],
   ],
+  ['nadia', 'Nadia Islam', ['expense.user', 'messaging.user']],
   [
     'rahim',
     'Rahim Uddin',
@@ -316,6 +323,16 @@ const as = async (login: string, method: 'GET' | 'POST', url: string, payload?: 
   if (res.statusCode >= 400) throw new Error(`${method} ${url}: ${res.statusCode} ${res.body}`);
   return res.json() as Record<string, unknown>;
 };
+// Nadia's employee, for Spend.
+await server.shutro.bootstrap({ reason: 'e2e seed', company }, async (env) => {
+  const [nadia] = await env.sql<{ id: number }>`SELECT id FROM res_users WHERE login = 'nadia'`;
+  await env.asSuperuser({ reason: 'e2e seed' }, async (su) => {
+    await (
+      su.model('hr.employee' as never) as unknown as { create(rows: unknown[]): Promise<unknown> }
+    ).create([{ name: 'Nadia Islam', user: nadia?.id }]);
+    await su.flush();
+  });
+});
 // The Bangladesh chart, taxes and withholdings came with l10n_bd (its defaults, on install).
 const [bdt] = (await server.shutro.bootstrap(
   { reason: 'e2e seed', company },

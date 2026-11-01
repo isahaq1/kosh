@@ -53,6 +53,12 @@ importers:
       '@kosh/event_account':
         specifier: workspace:*
         version: link:../../modules/event_account
+      '@kosh/expense':
+        specifier: workspace:*
+        version: link:../../modules/expense
+      '@kosh/expense_account':
+        specifier: workspace:*
+        version: link:../../modules/expense_account
       '@kosh/hr':
         specifier: workspace:*
         version: link:../../modules/hr
@@ -265,6 +271,12 @@ importers:
       '@kosh/assistant':
         specifier: workspace:*
         version: link:../../packages/assistant
+      '@kosh/expense':
+        specifier: workspace:*
+        version: link:../../modules/expense
+      '@kosh/expense_account':
+        specifier: workspace:*
+        version: link:../../modules/expense_account
       '@kosh/import':
         specifier: workspace:*
         version: link:../../packages/import
@@ -708,6 +720,80 @@ importers:
       '@kosh/settings':
         specifier: workspace:*
         version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/expense:
+    dependencies:
+      '@kosh/hr':
+        specifier: workspace:*
+        version: link:../hr
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@kosh/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/expense_account:
+    dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../accounting
+      '@kosh/expense':
+        specifier: workspace:*
+        version: link:../expense
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/hr':
+        specifier: workspace:*
+        version: link:../hr
+      '@kosh/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@kosh/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@testcontainers/postgresql':
         specifier: ^12.2.1
         version: 12.2.1
@@ -2049,6 +2135,12 @@ importers:
       '@kosh/event_account':
         specifier: workspace:*
         version: link:../../modules/event_account
+      '@kosh/expense':
+        specifier: workspace:*
+        version: link:../../modules/expense
+      '@kosh/expense_account':
+        specifier: workspace:*
+        version: link:../../modules/expense_account
       '@kosh/hr':
         specifier: workspace:*
         version: link:../../modules/hr
