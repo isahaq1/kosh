@@ -158,7 +158,10 @@ test('Company details saved; Companies: a new company, switched to and back', as
   await page.reload();
   await expect(page.getByLabel('City', { exact: true })).toHaveValue('Chattogram');
 
-  await page.goto('/settings/a/settings.action_companies');
+  // The sidebar's company menu leads administrators to the Companies page, one company or several.
+  await page.getByRole('button', { name: /^Company: / }).click();
+  await page.getByRole('menuitem', { name: /^(Companies…|Add a company…)$/ }).click();
+  await expect(page).toHaveURL(/settings\.action_companies/);
   await expect(page.getByRole('heading', { name: 'Companies', level: 1 })).toBeVisible();
   await expect(page.getByText('Current')).toBeVisible();
   await page.getByRole('button', { name: 'New company' }).click();

@@ -31,6 +31,7 @@ import {
 } from '@tanstack/react-router';
 import type { i18n } from 'i18next';
 import {
+  Building2,
   CalendarDays,
   ChartColumn,
   ChartGantt,
@@ -289,6 +290,7 @@ function CompanyBlock({
 }): ReactElement {
   const { t } = useTranslation();
   const { api } = useServices();
+  const navigate = useNavigate();
   const names = useQuery({
     queryKey: ['names', 'res.company', me.companies],
     queryFn: () => api.names('res.company', { ids: me.companies }),
@@ -304,26 +306,39 @@ function CompanyBlock({
       className="font-semibold"
     />
   );
-  if (collapsed) return <span title={name}>{badge}</span>;
-  if (me.companies.length < 2)
-    return (
+  const several = me.companies.length > 1;
+  // Nothing to switch to and nothing to manage: the company's name only.
+  if (!several && !me.administrator)
+    return collapsed ? (
+      <span title={name}>{badge}</span>
+    ) : (
       <div className="flex items-center gap-2.5 px-1 py-1">
         {badge}
         <span className="truncate text-sm font-semibold">{name}</span>
       </div>
     );
-  // Several companies: a switcher (also in the palette: "Switch to …").
+  // A menu: the companies to switch to (also in the palette: "Switch to …"), and for administrators the Companies
+  // page, where companies are added — so a one-company installation still shows where multi-company starts.
   return (
     <Menu>
       <MenuTrigger asChild>
         <button
           type="button"
-          aria-label={t('shell.switchCompany', { name })}
-          className="flex w-full items-center gap-2.5 rounded-md px-1 py-1 text-start hover:bg-muted"
+          aria-label={t(several ? 'shell.switchCompany' : 'shell.companyMenu', { name })}
+          title={collapsed ? name : undefined}
+          className={
+            collapsed
+              ? 'rounded-md hover:bg-muted'
+              : 'flex w-full items-center gap-2.5 rounded-md px-1 py-1 text-start hover:bg-muted'
+          }
         >
           {badge}
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold">{name}</span>
-          <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+          {collapsed ? null : (
+            <>
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold">{name}</span>
+              <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            </>
+          )}
         </button>
       </MenuTrigger>
       <MenuContent align="start" className="w-64">
@@ -347,6 +362,22 @@ function CompanyBlock({
             </span>
           </MenuCheckboxItem>
         ))}
+        {me.administrator ? (
+          <>
+            <MenuSeparator />
+            <MenuItem
+              onSelect={() =>
+                void navigate({
+                  to: '/$app/a/$action',
+                  params: { app: 'settings', action: 'settings.action_companies' },
+                })
+              }
+            >
+              <Building2 aria-hidden />
+              {t(several ? 'shell.manageCompanies' : 'shell.addCompany')}
+            </MenuItem>
+          </>
+        ) : null}
       </MenuContent>
     </Menu>
   );
@@ -414,21 +445,36 @@ function UserMenu({
         ))}
         {corner === undefined ? null : (
           <>
-            {corner.companies.length < 2 ? null : (
+            {corner.companies.length < 2 && !user.administrator ? null : (
               <>
                 <MenuSeparator />
                 <MenuLabel>{t('shell.company')}</MenuLabel>
-                {corner.companies.map((c) => (
-                  <MenuCheckboxItem
-                    key={c.id}
-                    checked={c.id === corner.current}
-                    onCheckedChange={() => {
-                      if (c.id !== corner.current) corner.onSwitch(c.id);
-                    }}
+                {corner.companies.length < 2
+                  ? null
+                  : corner.companies.map((c) => (
+                      <MenuCheckboxItem
+                        key={c.id}
+                        checked={c.id === corner.current}
+                        onCheckedChange={() => {
+                          if (c.id !== corner.current) corner.onSwitch(c.id);
+                        }}
+                      >
+                        {c.name}
+                      </MenuCheckboxItem>
+                    ))}
+                {user.administrator ? (
+                  <MenuItem
+                    onSelect={() =>
+                      void navigate({
+                        to: '/$app/a/$action',
+                        params: { app: 'settings', action: 'settings.action_companies' },
+                      })
+                    }
                   >
-                    {c.name}
-                  </MenuCheckboxItem>
-                ))}
+                    <Building2 aria-hidden />
+                    {t(corner.companies.length < 2 ? 'shell.addCompany' : 'shell.manageCompanies')}
+                  </MenuItem>
+                ) : null}
               </>
             )}
             <MenuSeparator />
