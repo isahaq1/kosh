@@ -34,6 +34,7 @@ export {
   HrLeaveType,
   hrShutro,
   WEEKENDS,
+  weekendOf,
   workingDays,
 } from './module.js';
 
