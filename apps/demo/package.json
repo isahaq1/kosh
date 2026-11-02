@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@kosh/accounting": "workspace:*",
+    "@kosh/attendance": "workspace:*",
     "@kosh/automation": "workspace:*",
     "@kosh/calendar": "workspace:*",
     "@kosh/contacts": "workspace:*",

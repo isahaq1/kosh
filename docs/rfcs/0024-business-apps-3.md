@@ -235,3 +235,38 @@ data, an overview, docs and an E2E.
   advances back at zero. E2E: an allowance at the rate, a report submitted, approved by a Spend manager in the
   approvals panel; the overview.
 
+## Implementation notes (2026-11-02): step 2 — Attendance
+
+- **Shifts** (`attendance.shift`, shared by every company): start and end as `HH:MM` (an end earlier than the start
+  is the next day: night shifts), the break, the grace before an arrival is late, overtime after so many minutes and
+  counted in steps (30: half hours), the overtime rate (2: the Labour Act's twice the hourly basic, for Payroll).
+  General (09:00–18:00) and Night (22:00–06:00) ship. **Rosters** assign a shift for a period, never overlapping;
+  without one, the person's usual shift (on the employee) applies.
+- **Punches** (`attendance.record`): from the **phone** (`POST /api/v1/attendance/punch`: the nearest site with
+  coordinates decides — within its radius, else refused when its geofence is on; only on site or not and the
+  distance are kept), the **kiosk** (a device signed in with the kiosk role: a badge scanned, or a name and a PIN on
+  the pad — PINs are stored hashed, five wrong ones lock the person for 15 minutes on that node, each wrong one is
+  audited), a **device file** (`POST /api/v1/attendance/import`: ZKTeco's attendance log or a CSV, behind a format
+  adapter; each person's punches of a day in pairs; a punch already imported is skipped; one left alone is a
+  check-in on the person's last day and reported otherwise), or by hand. One open check-in per person, no overlaps;
+  a second tap within a minute is not a check-out.
+- **Days** (`attendance.day`), computed in the installation's time zone (App settings › Attendance, Asia/Dhaka by
+  default) whenever a punch lands and on request (`POST /api/v1/attendance/days/compute`, three months at most):
+  worked time (the shift's break deducted, less the breaks the punches show), expected time, late after the grace,
+  early leave, absent on a working day without punches, on leave (approved Workforce leave), holiday, weekend
+  (Workforce's week), check-out missing; overtime past the threshold in whole steps, and every hour on weekends and
+  holidays. Approved overtime starts as the overtime and may be lowered; **approving** (an Attendance manager, never
+  for oneself) locks the day — recomputing leaves it — and emits `attendance.day.approved` for Payroll.
+- **Screens**: the phone check-in page (one button, the location sent with it, today's hours), the kiosk (badge box
+  and PIN pad, a greeting that clears itself), the PIN set from the employee's form (managers only: the badge, device
+  number and PIN are readable by Attendance managers only), days with list, calendar and pivot, the attendance
+  register as a printed list, rosters on a calendar, an overtime tile on employees, the overview.
+- **Limits**: the PIN lock is per server node (a shared lock with Valkey when there are several); face photos at the
+  kiosk are not taken; seed data cannot go into company-scoped models during installation, so shifts are shared by
+  every company; ZKTeco's network protocol (pulling from the device) is not here — its exported log is.
+- **Tests**: the day rule without a database (on time with overtime in steps, late, early, the break, a night shift,
+  weekends, absence, leave, holidays, a missing check-out, the time zone, the ZKTeco and CSV files, distances); on
+  real PostgreSQL the phone's geofence, the kiosk's badge and PIN with the lock, badges and PINs hidden from people,
+  a ZKTeco file imported once, days with a holiday, approval by a manager only and kept on recomputing, own days
+  only, the demo. E2E: a PIN set on the employee form, a check-in at the kiosk, seen on the phone; the overview.
+

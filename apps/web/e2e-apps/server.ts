@@ -16,6 +16,7 @@ import { join } from 'node:path';
 import { accountPortal } from '@kosh/account_portal';
 import { accounting } from '@kosh/accounting';
 import { createAssistant, fakeClient } from '@kosh/assistant';
+import { attendance } from '@kosh/attendance';
 import { automation } from '@kosh/automation';
 import { calendarApp } from '@kosh/calendar';
 import { contacts } from '@kosh/contacts';
@@ -159,6 +160,7 @@ const CATALOGUE = [
   posStock,
   expense,
   expenseAccount,
+  attendance,
   assistant,
   dataImport,
   l10nBd,
@@ -198,6 +200,7 @@ await applyApps(
         'website',
         'pos',
         'expense',
+        'attendance',
         'assistant',
         'import',
         'l10n_bd',
@@ -264,6 +267,7 @@ for (const [login, name, groups] of [
       'website.manager',
       'pos.manager',
       'expense.manager',
+      'attendance.manager',
       'messaging.user',
       'reporting.user',
       'assistant.user',
@@ -272,7 +276,8 @@ for (const [login, name, groups] of [
       'portal.manager',
     ],
   ],
-  ['nadia', 'Nadia Islam', ['expense.user', 'messaging.user']],
+  ['nadia', 'Nadia Islam', ['expense.user', 'attendance.user', 'messaging.user']],
+  ['gate', 'Main gate kiosk', ['attendance.kiosk']],
   [
     'rahim',
     'Rahim Uddin',

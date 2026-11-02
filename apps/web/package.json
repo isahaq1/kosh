@@ -16,6 +16,7 @@
   "dependencies": {
     "@kosh/accounting": "workspace:*",
     "@kosh/assistant": "workspace:*",
+    "@kosh/attendance": "workspace:*",
     "@kosh/expense": "workspace:*",
     "@kosh/expense_account": "workspace:*",
     "@kosh/import": "workspace:*",

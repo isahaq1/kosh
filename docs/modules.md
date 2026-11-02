@@ -347,6 +347,15 @@ reports settle. With Accounting (`expense_account`), an approved report is booke
 the cash or bank journal chosen on it; advances are paid out and returned through their journal. Install it with
 `shutro-erp apps install expense`.
 
+### Attendance (`modules/attendance`, RFC 0024)
+
+Shifts (night shifts included) and rosters; check-in from the phone inside a site's geofence, at a kiosk by badge or
+PIN (set on the employee's form; five wrong PINs lock the person for 15 minutes), or from a device file (ZKTeco's log
+or a CSV, each punch once); public holidays; and each person's day — worked time with the break deducted, late,
+early, absent, on leave, overtime past the shift's threshold in its steps and all of it on weekends and holidays —
+approved by an Attendance manager before Payroll reads it. Days follow the time zone in App settings › Attendance.
+Install it with `shutro-erp apps install attendance`.
+
 ### Counter (`modules/pos`, RFC 0021)
 
 Point of sale: shops with their payment methods, cashiers' sessions with opening and closing counts (a difference

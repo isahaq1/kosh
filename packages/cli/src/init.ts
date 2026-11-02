@@ -682,6 +682,7 @@ async function modulesFor(apps: readonly AppName[]): Promise<KoshModule[]> {
     if (app === 'website') modules.push((await import('@kosh/website')).website);
     if (app === 'pos') modules.push((await import('@kosh/pos')).pos);
     if (app === 'expense') modules.push((await import('@kosh/expense')).expense);
+    if (app === 'attendance') modules.push((await import('@kosh/attendance')).attendance);
     if (app === 'trade_finance') modules.push((await import('@kosh/trade_finance')).tradeFinance);
     if (app === 'recruitment') modules.push((await import('@kosh/recruitment')).recruitment);
     if (app === 'sale_project') modules.push((await import('@kosh/sale_project')).saleProject);

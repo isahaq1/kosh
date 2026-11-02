@@ -28,6 +28,7 @@ export type AppName =
   | 'website'
   | 'pos'
   | 'expense'
+  | 'attendance'
   | 'sale_project'
   | 'sale_stock'
   | 'purchase_stock'
@@ -190,6 +191,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     label: 'Spend: expenses with receipts, policies, approvals and cash advances',
     icon: '💳',
     server: 'expense',
+  },
+  attendance: {
+    label: 'Attendance: shifts, check-in by phone, kiosk or device, overtime',
+    icon: '⏱️',
+    server: 'attendance',
+    web: 'registerAttendanceWeb',
   },
   sale_project: {
     label: 'Bridge: tasks and projects from sales orders (Sales ↔ Projects)',

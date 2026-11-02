@@ -69,6 +69,7 @@ const PACKAGES = [
   'website',
   'pos',
   'expense',
+  'attendance',
   'sale_project',
   'sale_stock',
   'purchase_stock',
