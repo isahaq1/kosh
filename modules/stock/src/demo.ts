@@ -1,12 +1,14 @@
 /**
  * Stockroom's demo data (RFC 0008 §5.8): a receipt from Padma Cement and Meghna Electronics into the main warehouse,
  * validated (cement bags, LED panels counted in dozens, copper cable); a delivery to Acme Trading that is ready (its
- * stock reserved); and a larger one waiting for stock, partly reserved.
+ * stock reserved); a larger one waiting for stock, partly reserved; and reorder rules for cement and cable, the
+ * cable's forecast below its minimum.
  */
 import type { DemoContext } from '@kosh/modules-sdk';
 import { idByName } from '@kosh/modules-sdk';
 import type { Env } from './.kosh/bindings.js';
 import { defaultLocations } from './module.js';
+import { refreshRules } from './replenish.js';
 
 const DINA = { login: 'dina', name: 'Dina Rahman', groups: ['stock.manager'] } as const;
 
@@ -63,6 +65,34 @@ export async function stockDemo(ctx: DemoContext): Promise<string> {
       { product: cable, quantity: '800' },
     ]);
     await waiting?.write({ origin: 'Site Banani, phase 2' });
+    const places = await defaultLocations(env, 'internal');
+    if (places.warehouse !== null) {
+      const rules = await env.model('stock.reorder').create([
+        {
+          product: cement,
+          warehouse: places.warehouse,
+          vendor: await id('res.partner', 'Padma Cement'),
+          minimum: '100',
+          maximum: '300',
+          multiple: '50',
+          leadDays: 3,
+        },
+        {
+          product: cable,
+          warehouse: places.warehouse,
+          vendor: await id('res.partner', 'Meghna Electronics'),
+          minimum: '500',
+          maximum: '1500',
+          multiple: '100',
+          leadDays: 7,
+        },
+      ]);
+      await env.flush();
+      // Other apps' documents count as on order: read them all.
+      await env.asSuperuser({ reason: 'demo replenishment figures' }, (su) =>
+        refreshRules(su, rules.ids),
+      );
+    }
   });
-  return 'Stockroom: 2 receipts validated, a delivery ready, a delivery waiting for stock.';
+  return 'Stockroom: 2 receipts validated, a delivery ready, a delivery waiting for stock, 2 reorder rules.';
 }

@@ -151,6 +151,7 @@ beforeAll(async () => {
   for (const [login, groups] of [
     ['sumi', ['purchase_stock.user', 'product.manager', 'contacts.manager']],
     ['rahim', ['purchase.user']],
+    ['mona', ['stock.manager', 'purchase_stock.user']],
   ] as const)
     await auth.createUser({
       login,
@@ -251,4 +252,87 @@ test('a buyer without Stockroom rights still gets the receipt made', async () =>
   expect((await call('GET', T, 'rahim')).status).toBe(403);
   expect(await worker.drain()).toBe(1);
   expect(await find('stock.picking', { purchaseOrder: id }, 'status')).toHaveLength(1);
+});
+
+test('reorder rules that buy: a request for quotation to the vendor, into the rule’s warehouse, counted as on order', async () => {
+  const worker = purchaseStockWorker({ shutro: host.server.shutro });
+  const R = '/api/v1/models/stock.reorder';
+  const north = (
+    await call('POST', '/api/v1/models/stock.warehouse', 'mona', { name: 'North', code: 'NW' })
+  ).json.id;
+  const northStock = (
+    await call('POST', '/api/v1/models/stock.location', 'mona', {
+      name: 'Stock',
+      usage: 'internal',
+      warehouse: north,
+    })
+  ).json.id;
+  await call('PATCH', `/api/v1/models/product.product/${ids['Steel beam']}`, 'sumi', {
+    standardPrice: '650',
+  });
+  const rule = async (productId: number | undefined, minimum: string, maximum: string) => {
+    const made = await call('POST', R, 'mona', {
+      product: productId,
+      warehouse: north,
+      method: 'buy',
+      vendor: ids['vendor'],
+      minimum,
+      maximum,
+      leadDays: 5,
+    });
+    expect(made.status, JSON.stringify(made.json)).toBe(201);
+    return made.json.id as number;
+  };
+  const beams = await rule(ids['Steel beam'], '10', '40');
+  const panels = await rule(ids['LED panel'], '5', '12');
+  const ordered = await call('POST', '/api/v1/stockroom/replenishment/order', 'mona', {
+    rules: [beams],
+  });
+  expect(ordered.status, JSON.stringify(ordered.json)).toBe(200);
+  const rfq = ordered.json.ordered[0].document as string;
+  const [made] = await find(
+    'purchase.order',
+    { name: rfq },
+    'state,origin,warehouse,dateOrder,datePlanned',
+    'mona',
+  );
+  expect(made).toMatchObject({ state: 'draft', origin: 'Replenishment' });
+  expect(made.warehouse?.id ?? made.warehouse).toBe(north);
+  expect((Date.parse(made.datePlanned) - Date.parse(made.dateOrder)) / 86_400_000).toBe(5);
+  // A second rule for the same vendor and warehouse adds to the draft request.
+  const second = await call('POST', '/api/v1/stockroom/replenishment/order', 'mona', {
+    rules: [panels],
+    quantities: { [panels]: '15' },
+  });
+  expect(second.json.ordered[0].document).toBe(rfq);
+  const lines = await find(
+    'purchase.order.line',
+    { order: made.id },
+    'name,quantity,priceUnit',
+    'mona',
+  );
+  expect(lines.map((l) => [l.name, Number(l.quantity), Number(l.priceUnit)])).toEqual([
+    ['Steel beam', 40, 650],
+    ['LED panel', 15, 0],
+  ]);
+  const onOrder = (await call('GET', `${R}/${beams}`, 'mona')).json;
+  expect(onOrder.explanation).toBe(
+    `On hand 0 + on order 40 (${rfq}) = forecast 40; not below the minimum 10: nothing to order.`,
+  );
+
+  // Confirmed and received into North: the receipt is coming in, the order no longer counted twice.
+  await run(`${O}/${made.id}/transitions/submit`, 'mona');
+  await run(`${O}/${made.id}/transitions/confirm`, 'mona');
+  expect(await worker.drain()).toBe(1);
+  const [receipt] = await find(
+    'stock.picking',
+    { purchaseOrder: made.id },
+    'name,destination',
+    'mona',
+  );
+  expect(receipt.destination?.id ?? receipt.destination).toBe(northStock);
+  await call('POST', '/api/v1/stockroom/replenishment/refresh', 'mona', { rules: [beams] });
+  const coming = (await call('GET', `${R}/${beams}`, 'mona')).json;
+  expect(Number(coming.forecast)).toBe(40);
+  expect(coming.explanation).toContain(`coming in 40 (${receipt.name})`);
 });

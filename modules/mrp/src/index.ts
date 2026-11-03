@@ -38,6 +38,7 @@ export {
   MrpWorkcenter,
   MrpWorkorder,
   mrpShutro,
+  ReorderMake,
   ScrapProduction,
   schedule,
   validBom,

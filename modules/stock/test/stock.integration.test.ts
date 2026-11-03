@@ -124,7 +124,7 @@ beforeAll(async () => {
   }));
   await installDefaults(host.server.shutro, host.server.registry.loaded.modules, { company });
   for (const [login, groups] of [
-    ['dina', ['stock.manager', 'product.manager']],
+    ['dina', ['stock.manager', 'product.manager', 'contacts.user']],
     ['rahim', ['stock.user']],
     ['bob', ['base.user']],
   ] as const)
@@ -625,6 +625,119 @@ test('the setting: reserve only with Check availability', async () => {
   await call('PATCH', '/api/v1/settings/app-settings/stock/reservations', 'dina', {
     values: { reserveOnConfirm: true },
   });
+});
+
+test('replenishment: a rule below its minimum proposes enough for its maximum, says why, and is ordered by transfer', async () => {
+  const R = '/api/v1/models/stock.reorder';
+  const [main] = await find('stock.warehouse', { code: 'WH' }, 'id');
+  ids['Bulb'] = (
+    await call('POST', '/api/v1/models/product.product', 'dina', { name: 'Bulb', kind: 'goods' })
+  ).json.id;
+  const stocked = await transfer('receipt', [{ product: ids['Bulb'], quantity: '100' }]);
+  await run(stocked, 'confirm');
+  await run(stocked, 'validate');
+  const east = (
+    await call('POST', '/api/v1/models/stock.warehouse', 'dina', { name: 'East', code: 'EW' })
+  ).json.id;
+  await call('POST', '/api/v1/models/stock.location', 'dina', {
+    name: 'Stock',
+    usage: 'internal',
+    warehouse: east,
+  });
+  // A transfer needs another warehouse to take from; buying needs a vendor.
+  const same = await call('POST', R, 'dina', {
+    product: ids['Bulb'],
+    warehouse: east,
+    method: 'transfer',
+    sourceWarehouse: east,
+    minimum: '20',
+    maximum: '50',
+  });
+  expect(same.status).toBe(422);
+  expect((await call('POST', R, 'rahim', { product: ids['Bulb'], warehouse: east })).status).toBe(
+    403,
+  );
+  const rule = (
+    await call('POST', R, 'dina', {
+      product: ids['Bulb'],
+      warehouse: east,
+      method: 'transfer',
+      sourceWarehouse: main.id,
+      minimum: '20',
+      maximum: '50',
+      multiple: '12',
+    })
+  ).json.id as number;
+
+  expect(
+    (await call('POST', '/api/v1/stockroom/replenishment/refresh', 'rahim', { rules: [rule] }))
+      .status,
+  ).toBe(200);
+  const before = (await call('GET', `${R}/${rule}`, 'rahim')).json;
+  expect(Number(before.forecast)).toBe(0);
+  expect(Number(before.proposed)).toBe(60);
+  expect(before.explanation).toBe(
+    'On hand 0 = forecast 0; below the minimum 20: 50 to reach the maximum 50, ordered in steps of 12: 60.',
+  );
+
+  // Ordering is for managers; a Stockroom user sees the figures only.
+  expect(
+    (await call('POST', '/api/v1/stockroom/replenishment/order', 'rahim', { rules: [rule] }))
+      .status,
+  ).toBe(403);
+  const ordered = await call('POST', '/api/v1/stockroom/replenishment/order', 'dina', {
+    rules: [rule],
+  });
+  expect(ordered.status, JSON.stringify(ordered.json)).toBe(200);
+  const [made] = ordered.json.ordered;
+  expect(made.quantity).toBe('60');
+  const [picking] = await find(
+    'stock.picking',
+    { name: made.document },
+    'kind,status,origin',
+    'rahim',
+  );
+  expect(picking).toMatchObject({ kind: 'internal', status: 'ready', origin: 'Replenishment' });
+  const after = (await call('GET', `${R}/${rule}`, 'rahim')).json;
+  expect(after.lastOrder).toBe(made.document);
+  expect(Number(after.proposed)).toBe(0);
+  expect(after.explanation).toBe(
+    `On hand 0 + coming in 60 (${made.document}) = forecast 60; not below the minimum 20: nothing to order.`,
+  );
+  const again = await call('POST', '/api/v1/stockroom/replenishment/order', 'dina', {
+    rules: [rule],
+  });
+  expect(again.json.ordered).toHaveLength(0);
+  expect(again.json.skipped[0].reason).toContain('Nothing to order');
+
+  // The main warehouse sees the transfer going out.
+  const partner = await call('POST', '/api/v1/models/res.partner', 'dina', { name: 'Lamp House' });
+  expect(partner.status, JSON.stringify(partner.json)).toBe(201);
+  const vendor = partner.json.id;
+  const buyRule = await call('POST', R, 'dina', {
+    product: ids['Bulb'],
+    warehouse: main.id,
+    vendor,
+    minimum: '50',
+    maximum: '80',
+  });
+  expect(buyRule.status, JSON.stringify(buyRule.json)).toBe(201);
+  const buy = buyRule.json.id as number;
+  await call('POST', '/api/v1/stockroom/replenishment/refresh', 'rahim', {});
+  const mainRule = (await call('GET', `${R}/${buy}`, 'rahim')).json;
+  expect(mainRule.explanation).toContain(`On hand 100 − going out 60 (${made.document})`);
+  expect(Number(mainRule.proposed)).toBe(40);
+  // Without Purchase, buying is not possible yet: said so.
+  const skipped = await call('POST', '/api/v1/stockroom/replenishment/order', 'dina', {
+    rules: [buy],
+  });
+  expect(skipped.json.skipped[0].reason).toContain('Purchase');
+  const snoozed = await call('POST', '/api/v1/stockroom/replenishment/snooze', 'dina', {
+    rules: [buy],
+    days: 7,
+  });
+  expect(snoozed.status).toBe(200);
+  expect((await call('GET', `${R}/${buy}`, 'rahim')).json.snoozedUntil).toBeTruthy();
 });
 
 test('the demo data loads', async () => {

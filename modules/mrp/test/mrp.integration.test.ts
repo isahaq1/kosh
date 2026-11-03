@@ -411,6 +411,55 @@ test('work orders: scheduled at their centre after what it has, on the Gantt; ca
   ).toBe(400);
 });
 
+test('reorder rules that make: a confirmed production order with the valid bill, counted as on order', async () => {
+  const R = '/api/v1/models/stock.reorder';
+  const [main] = await find('stock.warehouse', {}, 'id');
+  const rule = await call('POST', R, 'maria', {
+    product: ids['Fixture'],
+    warehouse: main.id,
+    method: 'make',
+    minimum: '50',
+    maximum: '60',
+    multiple: '5',
+  });
+  expect(rule.status, JSON.stringify(rule.json)).toBe(201);
+  await call('POST', '/api/v1/stockroom/replenishment/refresh', 'maria', {
+    rules: [rule.json.id],
+  });
+  const before = (await call('GET', `${R}/${rule.json.id}`, 'maria')).json;
+  expect(Number(before.proposed)).toBeGreaterThan(0);
+  const ordered = await call('POST', '/api/v1/stockroom/replenishment/order', 'maria', {
+    rules: [rule.json.id],
+  });
+  expect(ordered.status, JSON.stringify(ordered.json)).toBe(200);
+  const [made] = ordered.json.ordered;
+  expect(made.document).toMatch(/^MO\//);
+  const [production] = await find('mrp.production', { name: made.document }, 'state,quantity,bom');
+  expect(production.state).toBe('confirmed');
+  expect(Number(production.quantity)).toBe(Number(before.proposed));
+  expect(production.bom?.id ?? production.bom).toBeTruthy();
+  const after = (await call('GET', `${R}/${rule.json.id}`, 'maria')).json;
+  expect(Number(after.proposed)).toBe(0);
+  expect(after.explanation).toContain(made.document);
+
+  // Without a bill of materials, making is refused with the reason.
+  const bracket = (
+    await call('POST', '/api/v1/models/product.product', 'maria', { name: 'Bracket' })
+  ).json.id;
+  const brackets = await call('POST', R, 'maria', {
+    product: bracket,
+    warehouse: main.id,
+    method: 'make',
+    minimum: '1000',
+    maximum: '1000',
+  });
+  const refused = await call('POST', '/api/v1/stockroom/replenishment/order', 'maria', {
+    rules: [brackets.json.id],
+  });
+  expect(refused.status).toBe(422);
+  expect(JSON.stringify(refused.json)).toContain('no bill of materials');
+});
+
 test('the demo data loads', async () => {
   const auth = host.server.auth;
   if (auth === undefined) throw new Error('base is installed');

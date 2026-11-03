@@ -18,6 +18,7 @@ import {
   extendModel,
   f,
   onchange,
+  type Records,
   records,
 } from './.kosh/bindings.js';
 
@@ -760,9 +761,84 @@ export const ScrapProduction = extendModel('stock.scrap', {
   },
 });
 
+/**
+ * Reorder rules that make (RFC 0024 §2.6): production orders not produced yet are on order; ordering makes one
+ * production order per rule with the bill valid on its date, confirmed (its components reserved, its work planned).
+ */
+export const ReorderMake = extendModel('stock.reorder', {
+  overrides: {
+    pending: async function (
+      this: unknown,
+      next: () => Promise<Map<number, { quantity: string; document: string }[]>>,
+    ): Promise<Map<number, { quantity: string; document: string }[]>> {
+      const out = await next();
+      const rules = this as Records<'stock.reorder'>;
+      const env = rules.env as unknown as Env;
+      for (const r of await rules.load({})) {
+        const main = (await defaultLocations(env as never, 'internal', null, r.company.id))
+          .warehouse;
+        const orders = await (
+          await env.model('mrp.production').search({
+            where: {
+              product: r.product.id,
+              company: r.company.id,
+              state: { in: ['draft', 'confirmed'] },
+            },
+          })
+        ).load({});
+        const found = out.get(r.id) ?? [];
+        for (const o of orders)
+          if ((o.warehouse?.id ?? main) === r.warehouse.id)
+            found.push({ quantity: o.quantity.toString(), document: o.name });
+        out.set(r.id, found);
+      }
+      return out;
+    },
+    procure: async function (
+      this: unknown,
+      next: (quantities: ReadonlyMap<number, string>) => Promise<Map<number, string>>,
+      quantities: ReadonlyMap<number, string>,
+    ): Promise<Map<number, string>> {
+      const out = await next(quantities);
+      const rules = this as Records<'stock.reorder'>;
+      const env = rules.env as unknown as Env;
+      for (const r of await rules.load({ product: true })) {
+        const qty = quantities.get(r.id);
+        if (r.method !== 'make' || qty === undefined) continue;
+        const date = new Date(`${env.today()}T00:00:00Z`);
+        date.setUTCDate(date.getUTCDate() + r.leadDays);
+        const when = date.toISOString().slice(0, 10);
+        const bom = await validBom(env, r.product.id, when);
+        if (bom === null)
+          throw new orm.ValidationError(
+            'stock.reorder',
+            ['method'],
+            `${r.product.name} has no bill of materials valid on ${when}.`,
+            'Add one in Production › Bills of materials, or replenish it another way.',
+          );
+        const made = await env.model('mrp.production').create([
+          {
+            product: r.product.id,
+            quantity: qty,
+            bom,
+            date: when,
+            warehouse: r.warehouse.id,
+            company: r.company.id,
+            note: 'Replenishment',
+          },
+        ]);
+        await made.confirm();
+        const [order] = await made.load({});
+        out.set(r.id, order?.name ?? '');
+      }
+      return out;
+    },
+  },
+});
+
 export const mrpShutro = defineModule({
   name: 'mrp',
-  version: '0.1.0',
+  version: '0.2.0',
   depends: [productShutro, stockShutro, contactsShutro, messagingShutro],
   groups: [
     orm.defineGroup({ code: 'mrp.user', label: 'Production user', implies: ['stock.user'] }),
@@ -786,5 +862,5 @@ export const mrpShutro = defineModule({
     MrpProductionComponent,
     MrpWorkorder,
   ],
-  extensions: [ScrapProduction],
+  extensions: [ScrapProduction, ReorderMake],
 });

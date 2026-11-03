@@ -11,7 +11,7 @@ import { defineModule } from '@kosh/modules-sdk';
 import { product } from '@kosh/product';
 import { reporting } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
-import { type Id, orm } from '@kosh/server/orm';
+import { type Decimal, type Id, orm } from '@kosh/server/orm';
 import { action, field, form, kanban, list, search, stat } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import { stockDemo } from './demo.js';
@@ -25,11 +25,13 @@ import {
   StockMove,
   StockPicking,
   StockQuant,
+  StockReorder,
   StockReservation,
   StockScrap,
   StockWarehouse,
   stockShutro,
 } from './module.js';
+import { orderAutomatic, orderRules, refreshRules } from './replenish.js';
 
 export {
   defaultLocations,
@@ -46,11 +48,14 @@ export {
   StockMove,
   StockPicking,
   StockQuant,
+  StockReorder,
   StockReservation,
   StockScrap,
   StockWarehouse,
   stockShutro,
+  warehouseStock,
 } from './module.js';
+export { orderAutomatic, orderRules, reckon, refreshRules } from './replenish.js';
 
 /** Every company without a warehouse gets its main one, `WH`, with its stock location `WH/Stock`. */
 async function mainWarehouses(env: Env): Promise<string | undefined> {
@@ -159,6 +164,126 @@ function registerCountRoutes({ app }: ModuleContext): void {
   });
 }
 
+const ruleIds = (body: unknown): number[] | undefined => {
+  const given = (body as Record<string, unknown> | null)?.['rules'];
+  if (given === undefined) return undefined;
+  if (!Array.isArray(given) || !given.every((v) => Number.isSafeInteger(v) && Number(v) > 0))
+    throw new HttpProblem(400, 'invalid-rules', 'Invalid rules', 'A list of reorder rule ids.');
+  return given.map(Number);
+};
+const needs = (env: Env, group: 'stock.user' | 'stock.manager', who: string) => {
+  if (!env.administrator && !env.groups.has(group))
+    throw new HttpProblem(403, 'access', who, `This needs the ${who} role.`);
+};
+
+/**
+ * Replenishment (RFC 0024 §2.6): the rules' figures refreshed now, the rules chosen ordered (what they propose, or
+ * the quantities given), snoozed for some days. Ordering makes documents in other apps (requests for quotation,
+ * production orders), so it runs in an audited superuser scope for Stockroom managers; the rules are read as the
+ * user first, so their record rules apply. Hourly on the server: every rule refreshed, the automatic ones ordered.
+ */
+function registerReplenishmentRoutes(context: ModuleContext): void {
+  const { app } = context;
+  const visible = async (env: Env, ids: readonly number[] | undefined) =>
+    (
+      await env
+        .model('stock.reorder')
+        .search(ids === undefined ? {} : { where: { id: { in: ids as never } } })
+    ).ids;
+  app.post('/api/v1/stockroom/replenishment/refresh', async (request) => {
+    const ids = ruleIds(request.body);
+    return request.env(
+      async (raw) => {
+        const env = raw as Env;
+        needs(env, 'stock.user', 'Stockroom user');
+        const rules = await visible(env, ids);
+        return {
+          rules: await env.asSuperuser({ reason: 'replenishment figures' }, (su) =>
+            refreshRules(su, rules),
+          ),
+        };
+      },
+      { write: true },
+    );
+  });
+  app.post('/api/v1/stockroom/replenishment/order', async (request) => {
+    const ids = ruleIds(request.body);
+    if (ids === undefined || ids.length === 0)
+      throw new HttpProblem(400, 'invalid-rules', 'No rules', 'Choose the rules to order.');
+    const given = (request.body as Record<string, unknown>)['quantities'];
+    const quantities = new Map<number, Decimal>();
+    if (given !== undefined && given !== null) {
+      if (typeof given !== 'object')
+        throw new HttpProblem(400, 'invalid-quantity', 'Invalid quantities', 'Rule id → quantity.');
+      for (const [k, v] of Object.entries(given as Record<string, unknown>)) {
+        let q: Decimal;
+        try {
+          q = orm.toDecimal(String(v));
+        } catch {
+          throw new HttpProblem(400, 'invalid-quantity', 'Invalid quantity', 'A positive number.');
+        }
+        if (q.lte(0))
+          throw new HttpProblem(400, 'invalid-quantity', 'Invalid quantity', 'A positive number.');
+        quantities.set(Number(k), q);
+      }
+    }
+    return request.env(
+      async (raw) => {
+        const env = raw as Env;
+        needs(env, 'stock.manager', 'Stockroom manager');
+        const rules = await visible(env, ids);
+        if (rules.length !== ids.length)
+          throw new HttpProblem(404, 'missing-record', 'Not found', 'A rule is not there.');
+        return env.asSuperuser({ reason: 'replenishment ordered' }, (su) =>
+          orderRules(su, rules, quantities),
+        );
+      },
+      { write: true },
+    );
+  });
+  app.post('/api/v1/stockroom/replenishment/snooze', async (request) => {
+    const ids = ruleIds(request.body);
+    const days = Number((request.body as Record<string, unknown> | null)?.['days'] ?? 7);
+    if (ids === undefined || ids.length === 0)
+      throw new HttpProblem(400, 'invalid-rules', 'No rules', 'Choose the rules to snooze.');
+    if (!Number.isSafeInteger(days) || days < 0 || days > 365)
+      throw new HttpProblem(400, 'invalid-days', 'Invalid days', 'From 0 (wake up) to 365 days.');
+    return request.env(
+      async (raw) => {
+        const env = raw as Env;
+        needs(env, 'stock.manager', 'Stockroom manager');
+        const until = new Date(`${env.today()}T00:00:00Z`);
+        until.setUTCDate(until.getUTCDate() + days);
+        const rules = env.model('stock.reorder').browse((await visible(env, ids)) as never);
+        await rules.write({ snoozedUntil: days === 0 ? null : until.toISOString().slice(0, 10) });
+        await env.flush();
+        return { rules: rules.length, until: days === 0 ? null : until.toISOString().slice(0, 10) };
+      },
+      { write: true },
+    );
+  });
+  if (process.env['KOSH_SCHEDULES'] === 'off') return;
+  const run = async () => {
+    try {
+      const companies = await context.shutro.bootstrap(
+        { reason: 'replenishment' },
+        async (env) => (await (env as unknown as Env).model('res.company').search({})).ids,
+      );
+      for (const company of companies)
+        await context.shutro.bootstrap({ reason: 'replenishment', company }, (env) =>
+          (env as unknown as Env).asSuperuser({ reason: 'replenishment' }, (su) =>
+            orderAutomatic(su),
+          ),
+        );
+    } catch (error) {
+      app.log.error({ err: error }, 'replenishment');
+    }
+  };
+  const timer = setInterval(() => void run(), 3_600_000);
+  timer.unref();
+  app.addHook('onClose', async () => clearInterval(timer));
+}
+
 export const stock: ReturnType<typeof defineModule> = defineModule({
   shutro: stockShutro,
   kosh: '^0.1.0',
@@ -194,7 +319,10 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       implies: ['user'],
     },
   },
-  routes: (context: ModuleContext) => registerCountRoutes(context),
+  routes: (context: ModuleContext) => {
+    registerCountRoutes(context);
+    registerReplenishmentRoutes(context);
+  },
   settings: {
     sections: [
       {
@@ -253,6 +381,15 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
         kind: 'kpi',
         model: 'stock.reservation',
         measure: 'count',
+        w: 3,
+      },
+      {
+        id: 'to_reorder',
+        title: 'Products to reorder',
+        kind: 'kpi',
+        model: 'stock.reorder',
+        measure: 'count',
+        filter: { proposed: { gt: 0 } },
         w: 3,
       },
       {
@@ -339,6 +476,15 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       views: ['list', 'form'],
       defaultFilters: ['open'],
     }),
+    'stockroom.action_replenishment': {
+      type: 'client',
+      page: 'stock.Replenishment',
+      label: 'Replenishment',
+    },
+    'stockroom.action_reorder': action(StockReorder, {
+      label: 'Reorder rules',
+      views: ['list', 'form'],
+    }),
     'stockroom.action_warehouses': action(StockWarehouse, {
       label: 'Warehouses',
       views: ['list', 'form'],
@@ -401,6 +547,13 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       sequence: 6,
     },
     {
+      id: 'stockroom.replenishment',
+      parent: 'stockroom.root',
+      label: 'Replenishment',
+      action: 'stockroom.action_replenishment',
+      sequence: 7,
+    },
+    {
       id: 'stockroom.scraps',
       parent: 'stockroom.root',
       label: 'Scrap',
@@ -426,6 +579,13 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       label: 'Locations',
       action: 'stockroom.action_locations',
       sequence: 2,
+    },
+    {
+      id: 'stockroom.reorder',
+      parent: 'stockroom.configuration',
+      label: 'Reorder rules',
+      action: 'stockroom.action_reorder',
+      sequence: 3,
     },
   ],
   views: {
@@ -619,6 +779,42 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       header: { buttons: [] },
       sheet: [k.group('main', ['name', 'parent', 'warehouse', 'usage', 'fullName'])],
     })),
+    'stock.reorder.list': list(StockReorder, {
+      columns: [
+        'product',
+        'warehouse',
+        'method',
+        'minimum',
+        'maximum',
+        'forecast',
+        'proposed',
+        'lastOrder',
+      ],
+      decorations: { warning: { proposed: { gt: 0 } } },
+    }),
+    'stock.reorder.form': form(StockReorder, (k) => ({
+      sheet: [
+        k.group('rule', ['product', 'warehouse', 'minimum', 'maximum', 'multiple'], {
+          description:
+            'Below the minimum, the forecast proposes enough to reach the maximum, in steps of the multiple.',
+        }),
+        k.group(
+          'how',
+          ['method', 'vendor', 'sourceWarehouse', 'leadDays', 'auto', 'snoozedUntil'],
+          {
+            label: 'How it is ordered',
+          },
+        ),
+        k.group(
+          'figures',
+          ['onHand', 'forecast', 'proposed', 'explanation', 'refreshedAt', 'lastOrder'],
+          {
+            label: 'Forecast',
+          },
+        ),
+      ],
+      chatter: true,
+    })),
     'stock.move.list': list(StockMove, {
       columns: ['picking', 'product', 'quantity', 'uom', 'reserved'],
     }),
@@ -683,6 +879,15 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       groupBy: ['warehouse', 'usage'],
     }),
     'stock.move': search(StockMove, { fields: ['product.name', 'picking.name'] }),
+    'stock.reorder': search(StockReorder, {
+      fields: ['product.name', 'warehouse.name', 'vendor.name'],
+      filters: {
+        to_order: { label: 'To order', domain: { proposed: { gt: 0 } }, group: 'state' },
+        snoozed: { label: 'Snoozed', domain: { snoozedUntil: { isNull: false } }, group: 'state' },
+        automatic: { label: 'Ordered automatically', domain: { auto: true } },
+      },
+      groupBy: ['warehouse', 'method', 'vendor'],
+    }),
   },
   // Products show what they have in stock, where, and what is reserved.
   viewExtensions: [
@@ -699,6 +904,13 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
               where: { product: { $record: 'id' }, 'location.usage': 'internal' },
               measure: { sum: 'quantity' },
               action: 'stockroom.action_stock',
+            }),
+            stat({
+              id: 'product_reorder',
+              label: 'Reorder rules',
+              model: 'stock.reorder',
+              where: { product: { $record: 'id' } },
+              action: 'stockroom.action_reorder',
             }),
           ],
         },

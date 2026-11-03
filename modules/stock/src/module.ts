@@ -1478,6 +1478,183 @@ export const ProductStock = extendModel('product.product', {
   },
 });
 
+/** What a warehouse's stock location holds: the location and every one inside it. */
+export async function warehouseStock(
+  env: Env,
+  warehouse: Id<'stock.warehouse'>,
+  company: Id<'res.company'>,
+): Promise<{ root: Id<'stock.location'> | null; inside: Set<number> }> {
+  const root = (await defaultLocations(env, 'internal', warehouse, company)).source;
+  if (root === null) return { root, inside: new Set() };
+  const inside = await env.model('stock.location').search({ where: { id: { childOf: root } } });
+  return { root, inside: new Set(inside.ids) };
+}
+
+/**
+ * A reorder rule (RFC 0024 §2.6): keep `product` in `warehouse` between a minimum and a maximum. Its forecast — on
+ * hand, less what is going out, plus what is coming in and what is on order — is refreshed hourly and on demand;
+ * below the minimum it proposes enough to reach the maximum, in steps of `multiple`, with the reckoning spelled out.
+ * How it is ordered is its method: **transfer** from another warehouse (here), **buy** from its vendor
+ * (`purchase_stock`), **make** with the product's bill of materials (`mrp`).
+ */
+export const StockReorder = defineModel('stock.reorder', {
+  label: 'Reorder rule',
+  recName: 'name',
+  order: ['warehouse asc', 'name asc'],
+  archivable: true,
+  companyScoped: { required: true },
+  tracking: ['minimum', 'maximum', 'method', 'vendor'],
+  access: { 'stock.user': READ, 'stock.manager': [...ALL, 'export', 'import'] },
+  fields: {
+    name: f.char({
+      store: true,
+      label: 'Rule',
+      ...compute('stock.reorder', 'name', ['product.name', 'warehouse.code'], (rules) => {
+        for (const r of rules) r.name = `${r.product.name} (${r.warehouse.code})`;
+      }),
+    }),
+    product: f.many2one('product.product', { required: true, ondelete: 'cascade' }),
+    warehouse: f.many2one('stock.warehouse', { required: true, ondelete: 'cascade' }),
+    minimum: f.decimal({ scale: 4, required: true, default: '0', label: 'Minimum' }),
+    maximum: f.decimal({ scale: 4, required: true, default: '0', label: 'Maximum' }),
+    /** Ordered in steps of this (a box of 12): the proposal is rounded up to it. */
+    multiple: f.decimal({ scale: 4, required: true, default: '1', label: 'Order in steps of' }),
+    /** Days from ordering to having it: the expected date of what is ordered. */
+    leadDays: f.integer({ required: true, default: 0, label: 'Lead time (days)' }),
+    method: f.selection(
+      { buy: 'Buy', make: 'Make', transfer: 'Transfer' },
+      { required: true, default: 'buy', label: 'Replenish by' },
+    ),
+    vendor: f.many2one('res.partner', { ondelete: 'set null', label: 'Vendor' }),
+    sourceWarehouse: f.many2one('stock.warehouse', {
+      ondelete: 'set null',
+      label: 'From warehouse',
+    }),
+    /** Ordered by the server, hourly, whenever the forecast falls below the minimum. */
+    auto: f.boolean({ default: false, label: 'Order automatically' }),
+    snoozedUntil: f.date({ label: 'Snoozed until' }),
+    onHand: f.decimal({ scale: 4, label: 'On hand' }),
+    forecast: f.decimal({ scale: 4, label: 'Forecast' }),
+    proposed: f.decimal({ scale: 4, label: 'To order' }),
+    /** How the proposal was reckoned, in words. */
+    explanation: f.text({ label: 'Why' }),
+    refreshedAt: f.datetime({ label: 'Refreshed' }),
+    /** The document the last order made (`P00012`, `TR/2026/00031`, `MO/2026/00007`). */
+    lastOrder: f.char({ label: 'Last ordered' }),
+  },
+  methods: {
+    /**
+     * What is on order for these rules beyond the transfers (which the forecast reads itself), in the product's
+     * unit (decimal strings), with the documents. Nothing here; a bridge adds its documents (`purchase_stock`: requests for quotation,
+     * `mrp`: production orders).
+     */
+    pending: method('stock.reorder', async function (): Promise<
+      Map<number, { quantity: string; document: string }[]>
+    > {
+      return new Map(this.ids.map((id) => [id, []]));
+    }),
+    /**
+     * Orders `quantities` (decimal strings, in the product's unit) for these rules; returns the document each one made. Transfers
+     * are made here, one per pair of warehouses, confirmed; a bridge orders its method (`purchase_stock`: buy,
+     * `mrp`: make) after `next()`.
+     */
+    procure: method(
+      'stock.reorder',
+      async function (quantities: ReadonlyMap<number, string>): Promise<Map<number, string>> {
+        const out = new Map<number, string>();
+        const groups = new Map<
+          string,
+          { rules: number[]; from: number; to: number; company: number }
+        >();
+        for (const r of await this.load({})) {
+          if (r.method !== 'transfer' || !orm.toDecimal(quantities.get(r.id) ?? '0').gt(0))
+            continue;
+          if (r.sourceWarehouse === null) continue;
+          const key = `${r.company.id}:${r.sourceWarehouse.id}:${r.warehouse.id}`;
+          const g = groups.get(key) ?? {
+            rules: [],
+            from: r.sourceWarehouse.id,
+            to: r.warehouse.id,
+            company: r.company.id,
+          };
+          g.rules.push(r.id);
+          groups.set(key, g);
+        }
+        for (const g of groups.values()) {
+          const company = g.company as Id<'res.company'>;
+          const from = await defaultLocations(this.env, 'internal', g.from as never, company);
+          const to = await defaultLocations(this.env, 'internal', g.to as never, company);
+          if (from.source === null || to.source === null) continue;
+          const rules = await this.env
+            .model('stock.reorder')
+            .browse(g.rules as never)
+            .load({ product: true });
+          const made = await this.env.model('stock.picking').create([
+            {
+              kind: 'internal',
+              company,
+              warehouse: g.to as never,
+              source: from.source,
+              destination: to.source,
+              origin: 'Replenishment',
+              scheduledDate: this.env.today(),
+              moves: {
+                create: rules.map((r) => ({
+                  product: r.product.id,
+                  quantity: quantities.get(r.id) ?? '0',
+                  uom: r.product.uom?.id ?? null,
+                })),
+              },
+            },
+          ]);
+          await made.confirm();
+          const [picking] = await made.load({});
+          for (const r of rules) out.set(r.id, picking?.name ?? '');
+        }
+        return out;
+      },
+    ),
+  },
+  sqlConstraints: {
+    oneRule: {
+      unique: ['product', 'warehouse'],
+      message: 'This product already has a reorder rule in this warehouse.',
+    },
+    levels: {
+      check: orm.sql`minimum >= 0 AND maximum >= minimum AND multiple > 0 AND lead_days >= 0`,
+      message:
+        'The minimum is zero or more, the maximum at least the minimum, the step and the lead time positive.',
+    },
+  },
+  constraints: {
+    howToOrder: {
+      ...check(
+        'stock.reorder',
+        ['method', 'vendor', 'sourceWarehouse', 'warehouse', 'product'],
+        async (rules) =>
+          (
+            await rules.load({
+              product: true,
+              warehouse: true,
+              vendor: true,
+              sourceWarehouse: true,
+            })
+          )
+            .filter(
+              (r) =>
+                r.product.kind !== 'goods' ||
+                (r.method === 'buy' && r.vendor === null) ||
+                (r.method === 'transfer' &&
+                  (r.sourceWarehouse === null || r.sourceWarehouse.id === r.warehouse.id)),
+            )
+            .map((r) => r.id),
+      ),
+      message:
+        'A rule keeps goods in stock; buying needs a vendor, a transfer another warehouse to take from.',
+    },
+  },
+});
+
 const shared = (
   id: string,
   name: string,
@@ -1486,7 +1663,7 @@ const shared = (
 
 export const stockShutro = defineModule({
   name: 'stock',
-  version: '0.2.0',
+  version: '0.3.0',
   depends: [productShutro, contactsShutro, messagingShutro],
   groups: [
     orm.defineGroup({ code: 'stock.user', label: 'Stockroom user', implies: ['product.user'] }),
@@ -1531,6 +1708,7 @@ export const stockShutro = defineModule({
     StockCount,
     StockCountLine,
     StockScrap,
+    StockReorder,
   ],
   extensions: [ProductStock],
   data: [

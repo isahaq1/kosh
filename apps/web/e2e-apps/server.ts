@@ -427,6 +427,22 @@ const beam = (await as('dina', 'POST', '/api/v1/models/product.product', {
   standardPrice: '700',
   taxes: { set: vat[0] === undefined ? [] : [vat[0].id] },
 })) as { id: number };
+// Replenishment (RFC 0024 §2.6): anchor bolts kept between 100 and 200 in the main warehouse, bought from Bengal Steel.
+const bolt = (await as('dina', 'POST', '/api/v1/models/product.product', {
+  name: 'Anchor bolt',
+  standardPrice: '12',
+})) as { id: number };
+const [mainWarehouse] = (await as('dina', 'GET', '/api/v1/models/stock.warehouse?fields=id'))[
+  'items'
+] as { id: number }[];
+await as('dina', 'POST', '/api/v1/models/stock.reorder', {
+  product: bolt.id,
+  warehouse: mainWarehouse?.id,
+  vendor: partners.id,
+  minimum: '100',
+  maximum: '200',
+  multiple: '50',
+});
 const order = (await as('rahim', 'POST', '/api/v1/models/sale.order', {
   partner: partners.id,
   currency: bdt?.id,

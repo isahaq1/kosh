@@ -22,6 +22,7 @@ export {
   OrderReceipts,
   PickingPurchase,
   purchaseStockShutro,
+  ReorderBuy,
 } from './module.js';
 
 /** The subscriber that makes the receipts of confirmed orders; tests `drain()` it, the server starts it. */
@@ -83,7 +84,13 @@ export const purchaseStock: ReturnType<typeof defineModule> = defineModule({
     {
       view: 'purchase.order.form',
       operations: [
-        { append: 'dates', nodes: [field({ field: 'receiptState', id: 'receipt_state' })] },
+        {
+          append: 'dates',
+          nodes: [
+            field({ field: 'receiptState', id: 'receipt_state' }),
+            field({ field: 'warehouse', id: 'order_deliver_to' }),
+          ],
+        },
       ],
     },
     {
