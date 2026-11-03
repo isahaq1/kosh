@@ -17,6 +17,7 @@ import {
   type Env,
   extendModel,
   f,
+  method,
   onchange,
   records,
 } from './.kosh/bindings.js';
@@ -108,6 +109,11 @@ export const PurchaseOrder = defineModel('purchase.order', {
             return loaded.filter((o) => o.lines.length === 0);
           }),
           message: 'Add at least one line before submitting the order.',
+          // Other apps check the order first (account_budget: its budgets); then the approvals are asked for.
+          before: records('purchase.order', async (orders) => {
+            const env = orders.env as unknown as Env;
+            await env.model('purchase.order').browse(orders.ids).submitting();
+          }),
           after: records('purchase.order', (orders) => requestApprovals(orders)),
         },
         confirm: {
@@ -129,6 +135,10 @@ export const PurchaseOrder = defineModel('purchase.order', {
       },
       extensible: true, // Accounting adds billing through its bridge
     }),
+  },
+  methods: {
+    /** Before the approvals of a submission: nothing here; account_budget checks the budgets. */
+    submitting: method('purchase.order', async () => undefined),
   },
   onchange: {
     // The vendor's currency, else the company's; empty terms from the company's settings.

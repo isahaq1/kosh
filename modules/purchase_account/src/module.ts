@@ -15,6 +15,17 @@ export const MovePurchaseOrder = extendModel('account.move', {
   },
 });
 
+/** The cost centre of each order line, carried onto the bill (RFC 0024 §2.5): budgets commit and spend by it. */
+export const PurchaseLineAnalytic = extendModel('purchase.order.line', {
+  fields: {
+    analytic: f.many2one('account.analytic', {
+      ondelete: 'restrict',
+      label: 'Cost centre',
+      help: 'The department, project or branch the purchase is for; the bill line keeps it.',
+    }),
+  },
+});
+
 export const PurchaseOrderBilling = extendModel('purchase.order', {
   fields: {
     bills: f.one2many('account.move', 'purchaseOrder'),
@@ -86,6 +97,7 @@ export const PurchaseOrderBilling = extendModel('purchase.order', {
                       quantity: l.quantity,
                       priceUnit: l.priceUnit,
                       taxes: { set: [...l.taxes].map((t) => t.id) },
+                      analytic: l.analytic?.id ?? null,
                       debit: '0',
                       credit: '0',
                     })),
@@ -102,7 +114,7 @@ export const PurchaseOrderBilling = extendModel('purchase.order', {
 
 export const purchaseAccountShutro = defineModule({
   name: 'purchase_account',
-  version: '0.1.0',
+  version: '0.2.0',
   depends: [purchaseShutro, accountingShutro],
   groups: [
     orm.defineGroup({
@@ -112,5 +124,5 @@ export const purchaseAccountShutro = defineModule({
     }),
   ],
   models: [],
-  extensions: [MovePurchaseOrder, PurchaseOrderBilling],
+  extensions: [MovePurchaseOrder, PurchaseLineAnalytic, PurchaseOrderBilling],
 });

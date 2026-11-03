@@ -64,6 +64,7 @@ export const purchaseAccount: ReturnType<typeof defineModule> = defineModule({
           ],
         },
         { append: 'dates', nodes: [field({ field: 'billState', id: 'bill_state' })] },
+        { insertAfter: 'taxes', nodes: [field({ field: 'analytic', id: 'line_analytic' })] },
       ],
     },
     {
