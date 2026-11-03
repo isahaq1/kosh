@@ -41,12 +41,14 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@kosh/mail": "workspace:*",
     "@kosh/modules-sdk": "workspace:*",
     "@kosh/payment": "workspace:*",
     "@kosh/product": "workspace:*",
     "@kosh/sale_account": "workspace:*",
     "@kosh/sales": "workspace:*",
     "@kosh/server": "workspace:*",
+    "@kosh/storage": "workspace:*",
     "@kosh/views": "workspace:*",
     "@kosh/website": "workspace:*"
   },

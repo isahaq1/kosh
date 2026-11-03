@@ -8,6 +8,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { webhookWorkers } from '@kosh/integrations';
+import { createMemoryMailer } from '@kosh/mail';
 import {
   type AppHost,
   applyApps,
@@ -23,10 +24,11 @@ import { type Driver, orm, pg } from '@kosh/server/orm';
 import { settings } from '@kosh/settings';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { shipmentWorker, testCourier, websiteSale } from '../src/index.js';
+import { remindAbandoned, shipmentWorker, testCourier, websiteSaleModule } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
-const catalogue = [base, settings, websiteSale];
+const mailer = createMemoryMailer();
+const catalogue = [base, settings, websiteSaleModule({ mailer })];
 const SHOP = '/api/v1/public/shop/bazar';
 
 let container: StartedPostgreSqlContainer;
@@ -144,6 +146,7 @@ beforeAll(async () => {
     codLimit: '3000',
   });
   expect(site.status, JSON.stringify(site.json)).toBe(201);
+  ids['site'] = site.json.id;
   ids['grocery'] = (
     await call('POST', '/api/v1/models/product.category', 'dina', { name: 'Grocery' })
   ).json.id;
@@ -409,6 +412,110 @@ test('a courier: the confirmed order’s shipment drafted once, booked, tracked 
   // Delivered: no longer cancellable.
   expect((await call('POST', `${S}/${draft.id}/transitions/cancel`, 'dina')).status).toBe(409);
 }, 30_000);
+
+test('coupons: a percentage off each line, an amount off, free delivery; minimums, use limits, once per customer', async () => {
+  const C = '/api/v1/models/shop.coupon';
+  for (const coupon of [
+    { code: 'EID10', kind: 'percent', value: '10', minimum: '500' },
+    { code: 'FLAT50', kind: 'amount', value: '50' },
+    { code: 'FREESHIP', kind: 'free_delivery', maxUses: 1 },
+    { code: 'ONCE', kind: 'amount', value: '20', oncePerCustomer: true },
+    { code: 'OLD', kind: 'percent', value: '5', validTo: '2020-01-31' },
+  ])
+    expect((await call('POST', C, 'dina', coupon)).status).toBe(201);
+  expect((await call('POST', C, 'dina', { code: 'lower', kind: 'percent' })).status).toBe(422);
+  const coupon = (cart: string, code: string) =>
+    visit('PUT', `${SHOP}/cart/coupon`, cart, { code });
+
+  const cart = await newCart();
+  await put(cart, ids['Rice 5 kg'], '2');
+  const off = await coupon(cart, 'eid10');
+  expect(off.status, JSON.stringify(off.json)).toBe(200);
+  expect(off.json).toMatchObject({ coupon: 'EID10', discount: '100.00', total: '900.00' });
+  // Below its minimum, the coupon comes off.
+  await put(cart, ids['Rice 5 kg'], '0');
+  const small = await put(cart, ids['Mustard oil 1 L'], '1');
+  expect(small.json).toMatchObject({ coupon: null, total: '200.00' });
+  expect(JSON.stringify((await coupon(cart, 'EID10')).json)).toContain('500.00 or more');
+  expect((await coupon(cart, 'FLAT50')).json).toMatchObject({ discount: '50.00', total: '150.00' });
+  expect(JSON.stringify((await coupon(cart, 'OLD')).json)).toContain('ended on 2020-01-31');
+  expect((await coupon(cart, 'NOPE')).status).toBe(422);
+
+  // Free delivery, used once.
+  expect((await coupon(cart, 'FREESHIP')).status).toBe(200);
+  await visit('GET', `${SHOP}/carriers?city=Dhaka`, cart);
+  const placed = await visit('POST', `${SHOP}/checkout`, cart, customer(ids['zone'], 'cod'));
+  expect(placed.json).toMatchObject({ total: '200.00' });
+  const next = await newCart();
+  await put(next, ids['Mustard oil 1 L'], '1');
+  expect(JSON.stringify((await coupon(next, 'FREESHIP')).json)).toContain('used up');
+
+  // Once per customer: the same email twice.
+  for (const [i, expected] of [
+    [0, 201],
+    [1, 422],
+  ] as const) {
+    const c = await newCart();
+    await put(c, ids['Mustard oil 1 L'], '1');
+    expect((await coupon(c, 'ONCE')).status).toBe(200);
+    const out = await visit('POST', `${SHOP}/checkout`, c, customer(ids['zone'], 'cod'));
+    expect(out.status, `${i} ${JSON.stringify(out.json)}`).toBe(expected);
+  }
+}, 30_000);
+
+test('a cart left with an email: one reminder with a code that restores it, once; the old token stops', async () => {
+  await call('PATCH', `/api/v1/models/website.site/${ids['site']}`, 'dina', {
+    domain: 'shop.bazar.example',
+    abandonedHours: 1,
+  });
+  const cart = await newCart();
+  await put(cart, ids['Rice 5 kg'], '1');
+  expect((await visit('PUT', `${SHOP}/cart/contact`, cart, { email: 'not-an-email' })).status).toBe(
+    422,
+  );
+  expect(
+    (await visit('PUT', `${SHOP}/cart/contact`, cart, { email: 'lina@example.com' })).status,
+  ).toBe(200);
+  const remind = () =>
+    host.server.shutro.bootstrap({ reason: 'test: reminders', company }, (env) =>
+      (
+        env as never as {
+          asSuperuser: (o: unknown, f: (su: never) => Promise<number>) => Promise<number>;
+        }
+      ).asSuperuser({ reason: 'test' }, (su) =>
+        remindAbandoned(su, new Date(Date.now() + 2 * 3_600_000)),
+      ),
+    );
+  expect(await remind()).toBe(1);
+  expect(await remind()).toBe(0); // once
+  const mail = mailer.sent.find((m) => m.to === 'lina@example.com');
+  expect(mail?.text).toContain('1 × Rice 5 kg');
+  const code = new URL(
+    /https:\/\/shop\.bazar\.example\/cart\/recover\?code=[^\s)]+/.exec(mail?.text ?? '')?.[0] ??
+      'https://x',
+  ).searchParams.get('code');
+  const back = await visit('POST', `${SHOP}/cart/recover`, undefined, { code });
+  expect(back.status, JSON.stringify(back.json)).toBe(200);
+  expect((await visit('GET', `${SHOP}/cart`, back.json.token)).json.lines[0].name).toBe(
+    'Rice 5 kg',
+  );
+  expect((await visit('GET', `${SHOP}/cart`, cart)).status).toBe(404);
+  expect((await visit('POST', `${SHOP}/cart/recover`, undefined, { code })).status).toBe(404);
+});
+
+test('search engines: the sitemap with the shop’s products only, a product’s search title; pictures only of products on the shop', async () => {
+  const res = await host.server.app.inject({ method: 'GET', url: `${SHOP}/sitemap.xml` });
+  expect(res.statusCode).toBe(200);
+  expect(res.headers['content-type']).toContain('application/xml');
+  expect(res.body).toContain(`<loc>https://shop.bazar.example/shop/p/${ids['Rice 5 kg']}</loc>`);
+  expect(res.body).not.toContain(`/shop/p/${ids['Warehouse pallet']}<`);
+  const rice = await visit('GET', `${SHOP}/products/${ids['Rice 5 kg']}`);
+  expect(rice.json.seo).toEqual({ title: 'Rice 5 kg', description: 'Fine aromatic rice.' });
+  expect((await visit('GET', `${SHOP}/products/${ids['Rice 5 kg']}/image`)).status).toBe(404);
+  expect((await visit('GET', `${SHOP}/products/${ids['Warehouse pallet']}/image`)).status).toBe(
+    404,
+  );
+});
 
 test('the demo data loads', async () => {
   const auth = host.server.auth;

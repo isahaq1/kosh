@@ -2308,6 +2308,9 @@ importers:
 
   modules/website_sale:
     dependencies:
+      '@kosh/mail':
+        specifier: workspace:*
+        version: link:../../packages/mail
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
@@ -2326,6 +2329,9 @@ importers:
       '@kosh/server':
         specifier: workspace:*
         version: link:../../packages/server
+      '@kosh/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@kosh/views':
         specifier: workspace:*
         version: link:../../packages/views

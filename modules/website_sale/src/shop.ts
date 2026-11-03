@@ -168,6 +168,10 @@ export async function productPage(
   return {
     ...self,
     description: p.websiteDescription,
+    seo: {
+      title: p.seoTitle ?? p.name,
+      description: p.seoDescription ?? (p.websiteDescription ?? '').slice(0, 160),
+    },
     weight: p.weight === null ? null : p.weight.toString(),
     related: await withAvailability(env, site, [...related].map(card)),
   };
@@ -274,9 +278,9 @@ export async function cartView(env: Env, id: Id<'sale.order'>): Promise<Record<s
   const [o] = await env
     .model('sale.order')
     .browse([id])
-    .load({ lines: { product: true }, currency: true, carrier: true });
+    .load({ lines: { product: true }, currency: true, carrier: true, coupon: true });
   if (o === undefined) throw new HttpProblem(404, 'not-found', 'Not found', 'There is no cart.');
-  const goods = [...o.lines].filter((l) => !l.isDelivery);
+  const goods = [...o.lines].filter((l) => !l.isDelivery && !l.isDiscount);
   const fee = [...o.lines]
     .filter((l) => l.isDelivery)
     .reduce((s, l) => s.plus(l.priceUnit.times(l.quantity)), zero);
@@ -304,6 +308,16 @@ export async function cartView(env: Env, id: Id<'sale.order'>): Promise<Record<s
     untaxed: money(o.amountUntaxed?.amount),
     tax: money(o.amountTax?.amount),
     total: money(o.amountTotal?.amount),
+    coupon: o.coupon === null ? null : o.coupon.code,
+    discount: money(
+      [...o.lines].reduce(
+        (s, l) =>
+          l.isDiscount
+            ? s.minus(l.priceUnit.times(l.quantity))
+            : s.plus(l.priceUnit.times(l.quantity).times(l.discount).div(100)),
+        zero,
+      ),
+    ),
     payment: o.shopPayment,
     paymentState: [...payments][0]?.state ?? null,
   };
@@ -314,7 +328,7 @@ const goodsOf = async (env: Env, id: Id<'sale.order'>) => {
     .model('sale.order')
     .browse([id])
     .load({ lines: { product: true }, carrier: true, partner: true });
-  const goods = [...(o?.lines ?? [])].filter((l) => !l.isDelivery);
+  const goods = [...(o?.lines ?? [])].filter((l) => !l.isDelivery && !l.isDiscount);
   return {
     order: o,
     amount: goods.reduce((s, l) => s.plus(l.priceUnit.times(l.quantity)), zero),
@@ -351,7 +365,9 @@ export async function setLine(
       );
   }
   const lines = await (
-    await env.model('sale.order.line').search({ where: { order: id, isDelivery: false } })
+    await env
+      .model('sale.order.line')
+      .search({ where: { order: id, isDelivery: false, isDiscount: false } })
   ).load({ product: true });
   const line = [...lines].find((l) => l.product.id === p.id);
   if (line !== undefined) {
@@ -372,9 +388,167 @@ export async function setLine(
     ] as never);
   }
   await env.flush();
+  await reprice(env, id);
+}
+
+/** The cart's fee and coupon again, after a change. */
+async function reprice(env: Env, id: Id<'sale.order'>, city?: string | null): Promise<void> {
   const [o] = await env.model('sale.order').browse([id]).load({ carrier: true, partner: true });
   if (o?.carrier !== null && o?.carrier !== undefined)
-    await setDelivery(env, id, o.carrier.id, o.partner.city);
+    await setDelivery(env, id, o.carrier.id, city === undefined ? o.partner.city : city);
+  else await refreshCoupon(env, id);
+}
+
+type CouponRow = {
+  readonly id: number;
+  readonly code: string;
+  readonly kind: string;
+  readonly value: Decimal;
+  readonly minimum: Decimal;
+  readonly validFrom: unknown;
+  readonly validTo: unknown;
+  readonly maxUses: number | null;
+  readonly uses: number;
+  readonly oncePerCustomer: boolean;
+  readonly active?: boolean;
+};
+
+const day = (v: unknown): string | null =>
+  v === null || v === undefined
+    ? null
+    : v instanceof Date
+      ? `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`
+      : String(v).slice(0, 10);
+
+/** Why `coupon` does not apply to goods worth `amount` today (null: it applies). */
+function couponProblem(env: Env, coupon: CouponRow, amount: Decimal): string | null {
+  const today = env.today();
+  const from = day(coupon.validFrom);
+  const to = day(coupon.validTo);
+  if (from !== null && today < from) return `The coupon ${coupon.code} starts on ${from}.`;
+  if (to !== null && today > to) return `The coupon ${coupon.code} ended on ${to}.`;
+  if (coupon.maxUses !== null && coupon.uses >= coupon.maxUses)
+    return `The coupon ${coupon.code} has been used up.`;
+  if (amount.lt(coupon.minimum))
+    return `The coupon ${coupon.code} is for orders of ${money(coupon.minimum)} or more.`;
+  return null;
+}
+
+/**
+ * Applies the cart's coupon: a percentage off each goods line, or an amount off as a line of its own (never more than
+ * the goods), or the delivery fee (`setDelivery`); a coupon that no longer applies (the cart fell below its minimum)
+ * is taken off.
+ */
+async function refreshCoupon(env: Env, id: Id<'sale.order'>): Promise<void> {
+  const [o] = await env.model('sale.order').browse([id]).load({ coupon: true, lines: true });
+  if (o === undefined) return;
+  const goods = [...o.lines].filter((l) => !l.isDelivery && !l.isDiscount);
+  const amount = goods.reduce((s, l) => s.plus(l.priceUnit.times(l.quantity)), zero);
+  let coupon = o.coupon as CouponRow | null;
+  if (coupon !== null && couponProblem(env, coupon, amount) !== null) {
+    await env.model('sale.order').browse([id]).write({ coupon: null });
+    coupon = null;
+  }
+  const percent = coupon?.kind === 'percent' ? coupon.value : zero;
+  for (const l of goods)
+    if (!l.discount.eq(percent))
+      await env.model('sale.order.line').browse([l.id]).write({ discount: percent });
+  const old = await env.model('sale.order.line').search({ where: { order: id, isDiscount: true } });
+  if (old.length > 0) await old.unlink();
+  if (coupon?.kind === 'amount' && coupon.value.gt(0) && amount.gt(0)) {
+    const off = coupon.value.lt(amount) ? coupon.value : amount;
+    await env.model('sale.order.line').create([
+      {
+        order: id,
+        product: await discountProduct(env, coupon.id),
+        name: `Coupon ${coupon.code}`,
+        quantity: '1',
+        priceUnit: off.negated(),
+        isDiscount: true,
+      },
+    ] as never);
+  }
+  await env.flush();
+}
+
+/** The service product an amount off is charged as, made the first time. */
+async function discountProduct(env: Env, coupon: number): Promise<number> {
+  const [c] = await env
+    .model('shop.coupon')
+    .browse([coupon as never])
+    .load({ product: true });
+  if (c?.product !== null && c?.product !== undefined) return c.product.id;
+  const made = await env
+    .model('product.product')
+    .create([
+      { name: `Coupon ${c?.code ?? ''}`, kind: 'service', saleOk: false, purchaseOk: false },
+    ]);
+  const product = made.ids[0] as number;
+  await env
+    .model('shop.coupon')
+    .browse([coupon as never])
+    .write({ product: product as never });
+  return product;
+}
+
+/** Puts a coupon on the cart (an empty code takes it off). @throws 422 with why it does not apply */
+export async function setCoupon(
+  env: Env,
+  site: Site,
+  id: Id<'sale.order'>,
+  code: string,
+): Promise<void> {
+  const clean = code.trim().toUpperCase();
+  if (clean === '') {
+    await env.model('sale.order').browse([id]).write({ coupon: null });
+    await reprice(env, id);
+    return;
+  }
+  const [coupon] = await (
+    await env.model('shop.coupon').search({
+      where: { code: clean.slice(0, 40), company: site.company as never },
+      limit: 1,
+    })
+  ).load({});
+  if (coupon === undefined) throw invalid('coupon', `There is no coupon ${clean}.`);
+  const { amount } = await goodsOf(env, id);
+  const problem = couponProblem(env, coupon as CouponRow, amount);
+  if (problem !== null) throw invalid('coupon', problem);
+  await env.model('sale.order').browse([id]).write({ coupon: coupon.id });
+  await reprice(env, id);
+}
+
+/** At checkout: the coupon still applies, and once per customer means once for this email. */
+async function checkCouponAtCheckout(
+  env: Env,
+  site: Site,
+  id: Id<'sale.order'>,
+  email: string,
+): Promise<number | null> {
+  const [o] = await env.model('sale.order').browse([id]).load({ coupon: true });
+  const coupon = o?.coupon as CouponRow | null | undefined;
+  if (coupon === null || coupon === undefined) return null;
+  const { amount } = await goodsOf(env, id);
+  const problem = couponProblem(env, coupon, amount);
+  if (problem !== null) throw invalid('coupon', problem);
+  if (coupon.oncePerCustomer) {
+    const before = await env.model('sale.order').search({
+      where: {
+        coupon: coupon.id,
+        website: site.id,
+        placedAt: { isNull: false },
+        state: { ne: 'cancel' },
+        'partner.email': email,
+      } as never,
+      limit: 1,
+    });
+    if (before.length > 0)
+      throw invalid(
+        'coupon',
+        `The coupon ${coupon.code} is once per customer: it was used already.`,
+      );
+  }
+  return coupon.id;
 }
 
 /** The company's delivery methods with their fee for the cart, delivered to `city`. */
@@ -433,7 +607,11 @@ export async function setDelivery(
     })
   ).load({});
   if (c === undefined) throw invalid('delivery method', 'Choose one of the methods offered.');
-  const fee = feeOf(c, amount, weight, city);
+  const [withCoupon] = await env.model('sale.order').browse([id]).load({ coupon: true });
+  const free =
+    withCoupon?.coupon?.kind === 'free_delivery' &&
+    couponProblem(env, withCoupon.coupon as CouponRow, amount) === null;
+  const fee = free ? zero : feeOf(c, amount, weight, city);
   const old = await env.model('sale.order.line').search({ where: { order: id, isDelivery: true } });
   if (old.length > 0) await old.unlink();
   await env.model('sale.order.line').create([
@@ -448,6 +626,7 @@ export async function setDelivery(
   ] as never);
   await env.model('sale.order').browse([id]).write({ carrier: c.id });
   await env.flush();
+  await refreshCoupon(env, id);
 }
 
 export interface CheckoutInput {
@@ -553,6 +732,17 @@ export async function checkout(
     .browse([site.id as never])
     .load({});
   const order = env.model('sale.order').browse([id]);
+  const coupon = await checkCouponAtCheckout(env, site, id, input.email);
+  if (coupon !== null) {
+    const [c] = await env
+      .model('shop.coupon')
+      .browse([coupon as never])
+      .load({});
+    await env
+      .model('shop.coupon')
+      .browse([coupon as never])
+      .write({ uses: (c?.uses ?? 0) + 1 });
+  }
   if (input.payment === 'cod') {
     if (c?.cod !== true)
       throw invalid('payment', 'This delivery method does not take cash on delivery.');

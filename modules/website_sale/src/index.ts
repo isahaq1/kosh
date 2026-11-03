@@ -18,7 +18,14 @@
  * - `POST /api/v1/public/shop/:site/checkout`                   `{ name, email, phone, street, city, carrier,
  *                                                                  payment: 'cod' | provider id, note?, returnUrl? }`
  * - `GET  /api/v1/public/shop/:site/order`                      the placed order of the token: its state, payment
+ *                                                                  and shipments
+ * - `PUT  /api/v1/public/shop/:site/cart/coupon`                `{ code }` (empty takes it off)
+ * - `PUT  /api/v1/public/shop/:site/cart/contact`               `{ email }`: one reminder if the cart is left
+ * - `POST /api/v1/public/shop/:site/cart/recover`               `{ code }` from the reminder → `{ token }`
+ * - `GET  /api/v1/public/shop/:site/products/:id/image?w=256`   a published product's picture
+ * - `GET  /api/v1/public/shop/:site/sitemap.xml`                the site's pages and products for search engines
  */
+import { type Mailer, mailerFromEnv } from '@kosh/mail';
 import { defineModule } from '@kosh/modules-sdk';
 import { payment } from '@kosh/payment';
 import { product } from '@kosh/product';
@@ -26,12 +33,21 @@ import { saleAccount } from '@kosh/sale_account';
 import { sales } from '@kosh/sales';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import { type Decimal, type Id, orm, type Worker } from '@kosh/server/orm';
+import { storageOf } from '@kosh/storage';
 import { action, field, form, list, search, stat } from '@kosh/views';
 import { website } from '@kosh/website';
 import type { Env } from './.kosh/bindings.js';
 import { type CourierAdapter, setCouriers, testCourier } from './couriers.js';
 import { shopDemo } from './demo.js';
-import { DeliveryCarrier, DeliveryShipment, websiteSaleShutro } from './module.js';
+import {
+  productImage,
+  recoverCart,
+  remindAbandoned,
+  setContact,
+  setShopMailer,
+  sitemap,
+} from './growth.js';
+import { DeliveryCarrier, DeliveryShipment, ShopCoupon, websiteSaleShutro } from './module.js';
 import { draftShipments, refreshShipments, trackingOf } from './shipments.js';
 import {
   carriersFor,
@@ -45,6 +61,7 @@ import {
   orderOf,
   productPage,
   type Site,
+  setCoupon,
   setLine,
 } from './shop.js';
 
@@ -60,6 +77,7 @@ export {
   type Tracking,
   testCourier,
 } from './couriers.js';
+export { recoverCart, remindAbandoned, setContact, sitemap } from './growth.js';
 export {
   COURIERS,
   DeliveryCarrier,
@@ -70,6 +88,7 @@ export {
   LineShop,
   OrderShop,
   ProductShop,
+  ShopCoupon,
   SiteShop,
   TransactionOrder,
   websiteSaleShutro,
@@ -214,6 +233,53 @@ function registerShopRoutes(context: ModuleContext): void {
     );
     return reply.status(201).send(placed);
   });
+  app.put(`${base}/cart/coupon`, pub, async (request) => {
+    const code = String(((request.body ?? {}) as Row)['code'] ?? '');
+    return inShop(request.params, 'coupon', async (env, site) => {
+      const id = await cartOr404(env, site, tokenOf(request.headers));
+      await setCoupon(env, site, id, code);
+      return cartView(env, id);
+    });
+  });
+  app.put(`${base}/cart/contact`, pub, async (request) => {
+    const email = String(((request.body ?? {}) as Row)['email'] ?? '');
+    return inShop(request.params, 'cart email', async (env, site) => {
+      const id = await cartOr404(env, site, tokenOf(request.headers));
+      await setContact(env, id, email);
+      return { saved: true };
+    });
+  });
+  app.post(`${base}/cart/recover`, pub, async (request) => {
+    const code = String(((request.body ?? {}) as Row)['code'] ?? '');
+    const token = await inShop(request.params, 'cart recovery', (env, site) =>
+      recoverCart(env, site, code),
+    );
+    if (token === null) throw notFound('cart for this code (it may be used or checked out)');
+    return { token };
+  });
+  app.get(`${base}/sitemap.xml`, pub, async (request, reply) => {
+    const xml = await inShop(request.params, 'sitemap', (env, site) => sitemap(env, site));
+    if (xml === null) throw notFound('sitemap: the site has no domain');
+    return reply
+      .type('application/xml; charset=utf-8')
+      .header('cache-control', 'public, max-age=3600')
+      .send(xml);
+  });
+  app.get(`${base}/products/:id/image`, pub, async (request, reply) => {
+    const id = positive((request.params as Row)['id']);
+    const width = positive((request.query as Row | null)?.['w']);
+    if (id === undefined) throw notFound('such product');
+    const image = await inShop(request.params, 'picture', (env) => productImage(env, id, width));
+    if (image === null) throw notFound('picture of this product on the shop');
+    const body = await storageOf(app).read(image.key);
+    return reply
+      .header('content-type', image.mime)
+      .header('content-length', String(image.size))
+      .header('x-content-type-options', 'nosniff')
+      .header('content-security-policy', "default-src 'none'; sandbox")
+      .header('cache-control', 'public, max-age=3600')
+      .send(body);
+  });
   app.get(`${base}/order`, pub, async (request) =>
     inShop(request.params, 'order', async (env, site) => {
       const id = await orderOf(env, site, tokenOf(request.headers), true);
@@ -245,6 +311,27 @@ export function shipmentWorker(context: Pick<ModuleContext, 'shutro'>): Worker {
  */
 function registerShipmentRoutes(context: ModuleContext): void {
   const { app } = context;
+  // The reminders of abandoned carts, now (Sales managers; hourly on the server).
+  app.post('/api/v1/shop/carts/remind', async (request) =>
+    request.env(
+      async (raw) => {
+        const env = raw as unknown as Env;
+        if (!env.administrator && !env.groups.has('sales.manager'))
+          throw new HttpProblem(
+            403,
+            'access',
+            'Sales managers',
+            'This needs the Sales manager role.',
+          );
+        return {
+          reminded: await env.asSuperuser({ reason: 'abandoned carts' }, (su) =>
+            remindAbandoned(su),
+          ),
+        };
+      },
+      { write: true },
+    ),
+  );
   app.post('/api/v1/shop/shipments/refresh', async (request) => {
     const given = ((request.body ?? {}) as Row)['shipments'];
     const ids = Array.isArray(given) ? given.map(Number).filter(Number.isSafeInteger) : undefined;
@@ -278,9 +365,10 @@ function registerShipmentRoutes(context: ModuleContext): void {
       );
       for (const company of companies)
         await context.shutro.bootstrap({ reason: 'shipment tracking', company }, (env) =>
-          (env as unknown as Env).asSuperuser({ reason: 'shipment tracking' }, (su) =>
-            refreshShipments(su),
-          ),
+          (env as unknown as Env).asSuperuser({ reason: 'shipment tracking' }, async (su) => {
+            await refreshShipments(su);
+            await remindAbandoned(su);
+          }),
         );
     } catch (error) {
       app.log.error({ err: error }, 'shipment tracking');
@@ -297,11 +385,14 @@ function registerShipmentRoutes(context: ModuleContext): void {
 export interface ShopOptions {
   /** The couriers by code (tests; default: the test courier). */
   readonly couriers?: ReadonlyMap<string, CourierAdapter>;
+  /** Who sends the reminders; default: SMTP from the environment (`SMTP_URL`), none without it. */
+  readonly mailer?: Mailer | undefined;
 }
 
 /** The Shop with explicit options (tests, installations wiring their couriers). */
 export function websiteSaleModule(options: ShopOptions = {}): ReturnType<typeof defineModule> {
   setCouriers(options.couriers ?? new Map([['fake', testCourier]]));
+  setShopMailer('mailer' in options ? options.mailer : mailerFromEnv());
   return defineModule({
     shutro: websiteSaleShutro,
     kosh: '^0.1.0',
@@ -325,6 +416,7 @@ export function websiteSaleModule(options: ShopOptions = {}): ReturnType<typeof 
         views: ['list', 'form'],
         defaultFilters: ['open'],
       }),
+      'shop.action_coupons': action(ShopCoupon, { label: 'Coupons', views: ['list', 'form'] }),
       'shop.action_carriers': action(DeliveryCarrier, {
         label: 'Delivery methods',
         views: ['list', 'form'],
@@ -358,6 +450,13 @@ export function websiteSaleModule(options: ShopOptions = {}): ReturnType<typeof 
         sequence: 0.55,
       },
       {
+        id: 'sites.coupons',
+        parent: 'sites.root',
+        label: 'Coupons',
+        action: 'shop.action_coupons',
+        sequence: 0.7,
+      },
+      {
         id: 'sites.carriers',
         parent: 'sites.root',
         label: 'Delivery methods',
@@ -366,6 +465,19 @@ export function websiteSaleModule(options: ShopOptions = {}): ReturnType<typeof 
       },
     ],
     views: {
+      'shop.coupon.list': list(ShopCoupon, {
+        columns: ['code', 'name', 'kind', 'value', 'minimum', 'validTo', 'uses', 'maxUses'],
+      }),
+      'shop.coupon.form': form(ShopCoupon, (k) => ({
+        sheet: [
+          k.group('main', ['code', 'name', 'kind', 'value', 'minimum'], {
+            description:
+              'A percentage off the goods, an amount off, or free delivery — from a minimum, typed at checkout.',
+          }),
+          k.group('limits', ['validFrom', 'validTo', 'maxUses', 'uses', 'oncePerCustomer']),
+        ],
+        chatter: true,
+      })),
       'delivery.shipment.list': list(DeliveryShipment, {
         columns: [
           'name',
@@ -455,6 +567,8 @@ export function websiteSaleModule(options: ShopOptions = {}): ReturnType<typeof 
                   field({ field: 'weight', id: 'shop_weight' }),
                   field({ field: 'related', id: 'shop_related', widget: 'tags' }),
                   field({ field: 'websiteDescription', id: 'shop_description' }),
+                  field({ field: 'seoTitle', id: 'shop_seo_title' }),
+                  field({ field: 'seoDescription', id: 'shop_seo_description' }),
                 ],
               },
             ],
@@ -471,6 +585,7 @@ export function websiteSaleModule(options: ShopOptions = {}): ReturnType<typeof 
               field({ field: 'codLimit', id: 'site_cod_limit' }),
               field({ field: 'fewLeft', id: 'site_few_left' }),
               field({ field: 'allowBackorders', id: 'site_backorders' }),
+              field({ field: 'abandonedHours', id: 'site_abandoned_hours' }),
               field({ field: 'salesperson', id: 'site_salesperson' }),
             ],
           },
@@ -511,12 +626,19 @@ export function websiteSaleModule(options: ShopOptions = {}): ReturnType<typeof 
               field({ field: 'shopPayment', id: 'order_shop_payment' }),
               field({ field: 'placedAt', id: 'order_placed_at' }),
               field({ field: 'shopNote', id: 'order_shop_note' }),
+              field({ field: 'coupon', id: 'order_coupon' }),
+              field({ field: 'contactEmail', id: 'order_contact_email' }),
+              field({ field: 'remindedAt', id: 'order_reminded_at' }),
             ],
           },
         ],
       },
     ],
     search: {
+      'shop.coupon': search(ShopCoupon, {
+        fields: ['code', 'name'],
+        groupBy: ['kind'],
+      }),
       'delivery.shipment': search(DeliveryShipment, {
         fields: ['name', 'trackingRef', 'recipient', 'phone', 'order.name'],
         filters: {

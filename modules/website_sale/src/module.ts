@@ -13,6 +13,7 @@ import { salesShutro } from '@kosh/sales';
 import { type Decimal, orm } from '@kosh/server/orm';
 import { websiteShutro } from '@kosh/website';
 import {
+  check,
   defineModel,
   defineModule,
   type Env,
@@ -56,6 +57,9 @@ export const ProductShop = extendModel('product.product', {
     }),
     /** The order on the shop (lowest first). */
     shopSequence: f.integer({ required: true, default: 10, label: 'Shop order' }),
+    /** What search engines show (the name when empty), in English and Bangla. */
+    seoTitle: f.char({ translate: true, label: 'Search title' }),
+    seoDescription: f.text({ translate: true, label: 'Search description' }),
   },
   methods: {
     /**
@@ -82,6 +86,12 @@ export const SiteShop = extendModel('website.site', {
     fewLeft: f.integer({ required: true, default: 5, label: 'Few left from' }),
     /** With stock shown: whether more than is available may be ordered. */
     allowBackorders: f.boolean({ default: true, label: 'Sell beyond stock' }),
+    /** Carts left this many hours with an email get one reminder (0: never). */
+    abandonedHours: f.integer({
+      required: true,
+      default: 24,
+      label: 'Remind abandoned carts after (h)',
+    }),
     /** Who carts belong to before checkout (made with the first cart). */
     visitor: f.many2one('res.partner', { ondelete: 'set null', label: 'Shop visitor' }),
   },
@@ -158,6 +168,59 @@ export function feeOf(
   return carrier.price;
 }
 
+/**
+ * A coupon of the shop (RFC 0024 §2.7): a code that takes a percentage off the goods, an amount off, or the delivery
+ * fee — from a minimum, between two dates, up to a number of uses, once per customer if it says so.
+ */
+export const ShopCoupon = defineModel('shop.coupon', {
+  label: 'Coupon',
+  recName: 'code',
+  order: ['code asc'],
+  archivable: true,
+  companyScoped: { required: true },
+  tracking: ['value', 'validTo', 'maxUses'],
+  access: { 'sales.user': ['read'], 'sales.manager': ALL, 'website.manager': ALL },
+  fields: {
+    /** What the customer types (upper case). */
+    code: f.char({ required: true, size: 40 }),
+    name: f.char({ translate: true, label: 'What it gives' }),
+    kind: f.selection(
+      { percent: 'Percentage off the goods', amount: 'Amount off', free_delivery: 'Free delivery' },
+      { required: true, default: 'percent', label: 'Gives' },
+    ),
+    value: f.decimal({ scale: 2, required: true, default: '0', label: 'Value' }),
+    /** The goods must come to this much. */
+    minimum: f.decimal({ scale: 2, required: true, default: '0', label: 'From' }),
+    validFrom: f.date({ label: 'Valid from' }),
+    validTo: f.date({ label: 'Valid until' }),
+    /** Empty: as often as it is used. */
+    maxUses: f.integer({ label: 'Uses at most' }),
+    uses: f.integer({ required: true, default: 0, label: 'Used' }),
+    oncePerCustomer: f.boolean({ default: false, label: 'Once per customer' }),
+    /** The service product an amount off is charged as (made with its first use). */
+    product: f.many2one('product.product', { ondelete: 'set null', label: 'Discount product' }),
+  },
+  sqlConstraints: {
+    oneCode: { unique: ['company', 'code'], message: 'Another coupon has this code.' },
+    values: {
+      check: orm.sql`value >= 0 AND minimum >= 0 AND (kind <> 'percent' OR value <= 100) AND (max_uses IS NULL OR max_uses > 0)`,
+      message: 'A coupon gives zero or more (a percentage up to 100), from zero or more.',
+    },
+    period: {
+      check: orm.sql`valid_from IS NULL OR valid_to IS NULL OR valid_to >= valid_from`,
+      message: 'A coupon ends on or after it starts.',
+    },
+  },
+  constraints: {
+    upperCase: {
+      ...check('shop.coupon', ['code'], async (coupons) =>
+        coupons.filter((c) => !/^[A-Z0-9_-]{2,40}$/.test(c.code)).map((c) => c.id),
+      ),
+      message: 'A code is 2 to 40 capital letters, digits, dashes or underscores (EID10).',
+    },
+  },
+});
+
 export const OrderShop = extendModel('sale.order', {
   fields: {
     /** The site the order was placed on. */
@@ -172,6 +235,12 @@ export const OrderShop = extendModel('sale.order', {
     /** Placed by the customer (checked out); a cart before that. */
     placedAt: f.datetime({ label: 'Placed at' }),
     shopNote: f.text({ label: 'Customer note' }),
+    coupon: f.many2one('shop.coupon', { ondelete: 'set null', label: 'Coupon' }),
+    /** The email a visitor left on their cart (reminded once if they leave it). */
+    contactEmail: f.char({ label: 'Cart email' }),
+    /** The hash of the cart's recovery code, sent with the reminder. */
+    recoveryToken: f.char({ index: true, label: 'Recovery code' }),
+    remindedAt: f.datetime({ label: 'Reminded at' }),
   },
 });
 
@@ -179,6 +248,8 @@ export const LineShop = extendModel('sale.order.line', {
   fields: {
     /** The delivery fee's line (replaced when the method or the cart changes). */
     isDelivery: f.boolean({ default: false, label: 'Delivery fee' }),
+    /** A coupon's amount off (replaced when the cart or the coupon changes). */
+    isDiscount: f.boolean({ default: false, label: 'Coupon discount' }),
   },
 });
 
@@ -364,7 +435,7 @@ export const DeliveryShipmentEvent = defineModel('delivery.shipment.event', {
 
 export const websiteSaleShutro = defineModule({
   name: 'website_sale',
-  version: '0.2.0',
+  version: '0.3.0',
   depends: [websiteShutro, salesShutro, saleAccountShutro, paymentShutro, productShutro],
   groups: [
     orm.defineGroup({
@@ -381,6 +452,6 @@ export const websiteSaleShutro = defineModule({
       reset: 'yearly',
     }),
   ],
-  models: [DeliveryCarrier, DeliveryShipment, DeliveryShipmentEvent],
+  models: [DeliveryCarrier, DeliveryShipment, DeliveryShipmentEvent, ShopCoupon],
   extensions: [ProductShop, SiteShop, OrderShop, LineShop, TransactionOrder],
 });
