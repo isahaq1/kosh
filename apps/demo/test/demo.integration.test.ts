@@ -104,6 +104,7 @@ test('every app with demo data loaded it, once', async () => {
   // In dependency order (the registry's): an app after the apps it reads from, a bridge after both of its apps.
   const order = loaded.map((l) => l.module);
   expect([...order].sort()).toEqual([
+    'account_asset',
     'accounting',
     'attendance',
     'calendar',
@@ -159,7 +160,7 @@ test('every app with demo data loaded it, once', async () => {
     text: 'SELECT count(*)::text AS n FROM kosh_module WHERE demo_at IS NOT NULL',
     params: [],
   });
-  expect(Number(marks[0]?.n)).toBe(27);
+  expect(Number(marks[0]?.n)).toBe(28);
 });
 
 test('the salesperson sees the orders and the invoices made from them; the buyer the approvals', async () => {

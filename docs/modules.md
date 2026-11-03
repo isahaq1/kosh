@@ -388,6 +388,15 @@ in business hours, with the resolution clock paused while waiting on the custome
 the status on track, at risk, breached or met; canned replies; merging; and the customer's rating through a one-time
 link. Install it with `shutro-erp apps install helpdesk`.
 
+### Fixed assets (`modules/account_asset`, RFC 0024)
+
+In Accounting: asset categories with their accounts, method and life; assets from posted bills (a line on a
+category's asset account becomes a draft asset) or by hand; depreciation boards — straight line from the date of use,
+declining balance switching to straight line, units of production by usage — posted month by month, once each, with
+the asset's cost centre; disposal and sale with the gain or loss; revaluation and impairment; and a tax book at each
+category's tax rate beside the accounting book. Journal lines carry an optional **cost centre** (Accounting ›
+Configuration › Cost centres), with a *By cost centre* report. Install it with `shutro-erp apps install account_asset`.
+
 ### Counter (`modules/pos`, RFC 0021)
 
 Point of sale: shops with their payment methods, cashiers' sessions with opening and closing counts (a difference

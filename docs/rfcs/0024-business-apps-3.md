@@ -368,3 +368,35 @@ data, an overview, docs and an E2E.
   (refused to an agent who cannot see both), a canned reply filled in, tickets from email with the sender as one
   contact, the demo. E2E: a ticket opened, put on waiting and solved; the overview.
 
+## Implementation notes (2026-11-03): step 5 part 1 — cost centres and fixed assets
+
+- **Cost centres** (`account.analytic`, in Accounting, which moves to 0.4.0): code, name, a parent for a tree; an
+  optional **cost centre on every journal line** (invoice lines included), shown on the lines and the ledger, and a
+  *By cost centre* pivot (balance by account type, against the previous period). Budgets read it (part 2).
+- **`account_asset`**: **categories** (the asset, accumulated depreciation, expense, gain and loss accounts, the
+  journal, the method, the life, the declining rate, prorata, and the tax book's rate) and **assets** — from a
+  posted bill's line on a category's asset account (a subscriber of `account.move.posted` makes a draft asset,
+  once per bill line, with the vendor and the line's cost centre) or by hand, or imported as an opening register.
+- **Boards** (`board.ts`, pure): straight line over the life with the first month from the date of use and the rest
+  in one more month; declining balance on what remains, switching to straight line over the months left when that
+  is more, ending at the salvage value; units of production from each month's usage. Planned on confirmation; the
+  lines due are **posted once each** (daily on the server, `POST /api/v1/assets/post-due`), Depreciation against
+  Accumulated depreciation with the asset's cost centre on the expense; a fully depreciated asset closes.
+- **Disposal and sale** (`POST /api/v1/assets/:id/dispose`): depreciation up to the date, then one entry taking the
+  cost out, the accumulated depreciation back, the proceeds in and the **gain or loss** booked; the rest of the board
+  dropped. **Revaluation and impairment** (`POST /api/v1/assets/:id/revalue`): a lower value impairs (the loss
+  against accumulated depreciation), a higher one revalues (against Revaluation surplus, 3150, made when missing);
+  the rest of the board is planned again from the new value.
+- **The tax book** (`GET /api/v1/assets/tax-book?year=`): reducing balance at the category's tax rate, a full year
+  in the year of acquisition (Bangladesh's Third Schedule as last known — **verify the rates and the first-year rule
+  for the year**), the opening and closing written-down values beside the year's accounting depreciation and book
+  value, and the difference for deferred tax. Odoo keeps one book.
+- **Not in this part**: budgets (part 2), the tax book's screen (the API and its rows for now), deferred tax entries
+  from the difference, assets split from one bill line by quantity, and asset counts by tag.
+- **Tests**: the boards without a database (straight line in full and prorated months, declining balance to the
+  salvage value, units capped, the tax book's reducing balance); on real PostgreSQL a 120 000 asset over twelve months
+  — three posted once each with the cost centre, an impairment from 80 000 to 60 000 replanning eight months at
+  7 500, a sale for 50 000 on a 45 000 book value booking a 5 000 gain in one balanced entry —, its tax-book row
+  (24 000 against 55 000 in the books), a bill above the approval threshold approved and its asset line made a draft
+  asset once, only managers posting, the demo.
+

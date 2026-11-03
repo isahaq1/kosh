@@ -45,6 +45,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@kosh/account_asset": "workspace:*",
     "@kosh/accounting": "workspace:*",
     "@kosh/attendance": "workspace:*",
     "@kosh/automation": "workspace:*",

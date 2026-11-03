@@ -72,6 +72,7 @@ const PACKAGES = [
   'attendance',
   'payroll',
   'helpdesk',
+  'account_asset',
   'sale_project',
   'sale_stock',
   'purchase_stock',

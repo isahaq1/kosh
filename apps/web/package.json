@@ -14,6 +14,7 @@
     "api:check": "node ../../packages/cli/dist/bin.js generate client --modules @kosh/server --out src/api/kosh.gen.ts --check"
   },
   "dependencies": {
+    "@kosh/account_asset": "workspace:*",
     "@kosh/accounting": "workspace:*",
     "@kosh/assistant": "workspace:*",
     "@kosh/attendance": "workspace:*",
