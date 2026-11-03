@@ -422,3 +422,40 @@ data, an overview, docs and an E2E.
   refused to its buyer's confirmation and confirmed by the manager's approval, an order beyond the block line refused
   with its 10 000 beyond, billing moving the commitment to the actual with the cost centre on the bill, the demo.
 
+## Implementation notes (2026-11-03): step 6 part 1 — reorder rules and replenishment
+
+- **Reorder rules** (`stock.reorder`, Stockroom 0.3.0): a product in a warehouse with a minimum, a maximum, a step
+  (`multiple`), a lead time, a method — **buy** from a vendor, **make**, **transfer** from another warehouse — and
+  whether the server orders it on its own; one rule per product and warehouse; edited by Stockroom managers.
+- **The forecast** of a rule: on hand in the warehouse's stock location and those inside it, less what confirmed
+  transfers take out of it, plus what they bring in, plus what other apps have **on order** (the rules' `pending()`
+  method, extended by bridges). Reservations are not subtracted again: a reserved quantity is already on a transfer
+  going out. Every open document counts, whatever its date (the RFC said "over the lead time": a later delivery is
+  still stock that will be needed, and a later arrival would otherwise be ordered twice).
+- **The proposal**: below the minimum, enough to reach the maximum, rounded up to the step; written on the rule with
+  the reckoning in words — *On hand 100 − going out 60 (TR/2026/00004) + on order 40 (PO/2026/00012) = forecast 80;
+  below the minimum 100: 120 to reach the maximum 200, ordered in steps of 50: 150.*
+- **Ordering** goes through the rules' `procure()` method, by method: Stockroom makes one internal transfer per pair
+  of warehouses, confirmed (reserved at the source); `purchase_stock` (0.2.0) adds the lines to a draft request for
+  quotation from replenishment to the vendor for that warehouse, or makes one (the product's cost and purchase
+  taxes, the arrival after the lead time); `mrp` (0.2.0) makes a production order with the bill valid on its date,
+  confirmed — refused, with the reason, when there is none. A method no installed app orders is skipped with the
+  reason. Purchase orders now say which warehouse they are **delivered to** (the main one when empty); the receipt
+  goes there.
+- **The Replenishment screen** (Stockroom › Replenishment): the rules with something to order (or all), their
+  figures and the reckoning, the quantity editable, Order, Snooze for a week, Refresh. `POST
+  /api/v1/stockroom/replenishment/refresh` (Stockroom users), `…/order` and `…/snooze` (Stockroom managers; ordering
+  runs in an audited superuser scope after the rules are read as the user). Hourly on the server every rule is
+  refreshed and the automatic ones ordered. Products show their rules as a tile; the Overview counts the products
+  to reorder.
+- **Not in this part**: rules per location inside a warehouse, vendors' price lists and lead times per product
+  (the rule's vendor and the product's cost for now), forecasts by date (a chart of the projected stock), and the
+  routes of part 2.
+- **Tests**: on real PostgreSQL a transfer rule's reckoning word for word, a Stockroom user refused the ordering, the
+  transfer ready at the source and counted as coming in, nothing ordered twice, the source warehouse seeing it go
+  out, buying skipped without Purchase, snoozing; in `purchase_stock` a request for quotation to the vendor into the
+  rule's warehouse after the lead time, a second rule adding to it, counted as on order, received into that
+  warehouse and then counted once as coming in; in `mrp` a confirmed production order with the valid bill and its
+  quantity, counted as on order, and a product without a bill refused; the demo's rules; end to end, the reckoning
+  on screen, a changed quantity ordered on a request for quotation.
+

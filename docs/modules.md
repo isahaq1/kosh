@@ -262,6 +262,13 @@ adjustment at once; Stockroom › Valuation shows the stock's value. With Purcha
 values receipts at the order's price and has vendor bills clear Goods received not billed, the difference going
 to Price differences.
 
+**Replenishment** (RFC 0024): reorder rules keep a product between a minimum and a maximum in a warehouse. Each
+rule's forecast — on hand, less what is going out, plus what is coming in and what is on order — is refreshed hourly;
+below the minimum, Stockroom › Replenishment proposes enough to reach the maximum (in steps of the rule's multiple)
+and says why, in words. The chosen rules are ordered by their method: a transfer from another warehouse, a request
+for quotation to the vendor (with `purchase_stock`; purchase orders say which warehouse they are delivered to), or a
+production order with the valid bill (with `mrp`); a rule may be ordered automatically, or snoozed.
+
 ### Production (`modules/mrp`, RFC 0021)
 
 Bills of materials with versions and effective dates, work centres with their cost per hour, and production orders
