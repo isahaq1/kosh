@@ -3,6 +3,7 @@
  * follow Lucide; an unknown name shows a neutral grid, never a broken image.
  */
 import {
+  Banknote,
   BookOpen,
   Boxes,
   Briefcase,
@@ -92,6 +93,7 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   counter: Store,
   spend: Wallet,
   attendance: Clock,
+  payroll: Banknote,
   event: Ticket,
   trade_finance: Landmark,
   maintenance: Wrench,

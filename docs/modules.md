@@ -356,6 +356,21 @@ early, absent, on leave, overtime past the shift's threshold in its steps and al
 approved by an Attendance manager before Payroll reads it. Days follow the time zone in App settings › Attendance.
 Install it with `shutro-erp apps install attendance`.
 
+### Payroll (`modules/payroll`, RFC 0024)
+
+A country-neutral engine: salary structures of rules written in a small, safe formula language (`WAGE * 0.6`,
+`BASIC / 30 * ABSENT_DAYS`, `slab('TAX', …)`), parameters and slab tables kept as data with effective dates, monthly
+runs whose payslips explain every line, Attendance's approved days and overtime, one-off inputs, loans repaid run by
+run, corrections that never edit an approved run, and payment files for banks, bKash, Nagad and Rocket. With
+Accounting (`payroll_account`) an approved run is booked as one entry and paid from the bank. Install it with
+`shutro-erp apps install payroll`.
+
+```ts
+// A rule (Payroll › Configuration › Salary rules)
+{ code: 'OVERTIME', category: 'allowance', formula: 'BASIC / 208 * OVERTIME_RATE * OVERTIME_HOURS',
+  condition: 'OVERTIME_HOURS > 0' }
+```
+
 ### Counter (`modules/pos`, RFC 0021)
 
 Point of sale: shops with their payment methods, cashiers' sessions with opening and closing counts (a difference

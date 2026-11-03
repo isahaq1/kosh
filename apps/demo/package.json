@@ -28,6 +28,8 @@
     "@kosh/mrp": "workspace:*",
     "@kosh/mrp_account": "workspace:*",
     "@kosh/notify": "workspace:*",
+    "@kosh/payroll": "workspace:*",
+    "@kosh/payroll_account": "workspace:*",
     "@kosh/permissions": "workspace:*",
     "@kosh/pos": "workspace:*",
     "@kosh/pos_stock": "workspace:*",

@@ -36,6 +36,8 @@ import { installActivityTypes, messaging } from '@kosh/messaging';
 import { mrp } from '@kosh/mrp';
 import { mrpAccount } from '@kosh/mrp_account';
 import { notify } from '@kosh/notify';
+import { payroll } from '@kosh/payroll';
+import { payrollAccount } from '@kosh/payroll_account';
 import { installApprovalPolicies, permissions } from '@kosh/permissions';
 import { portal } from '@kosh/portal';
 import { pos } from '@kosh/pos';
@@ -161,6 +163,8 @@ const CATALOGUE = [
   expense,
   expenseAccount,
   attendance,
+  payroll,
+  payrollAccount,
   assistant,
   dataImport,
   l10nBd,
@@ -201,6 +205,7 @@ await applyApps(
         'pos',
         'expense',
         'attendance',
+        'payroll',
         'assistant',
         'import',
         'l10n_bd',
@@ -268,6 +273,7 @@ for (const [login, name, groups] of [
       'pos.manager',
       'expense.manager',
       'attendance.manager',
+      'payroll.manager',
       'messaging.user',
       'reporting.user',
       'assistant.user',
@@ -276,7 +282,7 @@ for (const [login, name, groups] of [
       'portal.manager',
     ],
   ],
-  ['nadia', 'Nadia Islam', ['expense.user', 'attendance.user', 'messaging.user']],
+  ['nadia', 'Nadia Islam', ['expense.user', 'attendance.user', 'payroll.user', 'messaging.user']],
   ['gate', 'Main gate kiosk', ['attendance.kiosk']],
   [
     'rahim',
@@ -332,9 +338,49 @@ const as = async (login: string, method: 'GET' | 'POST', url: string, payload?: 
 await server.shutro.bootstrap({ reason: 'e2e seed', company }, async (env) => {
   const [nadia] = await env.sql<{ id: number }>`SELECT id FROM res_users WHERE login = 'nadia'`;
   await env.asSuperuser({ reason: 'e2e seed' }, async (su) => {
+    type Creates = { create(rows: unknown[]): Promise<{ ids: readonly number[] }> };
+    const employee = (
+      await (su.model('hr.employee' as never) as unknown as Creates).create([
+        { name: 'Nadia Islam', user: nadia?.id },
+      ])
+    ).ids[0];
+    const structure = (
+      await (su.model('payroll.structure' as never) as unknown as Creates).create([
+        {
+          name: 'E2E structure',
+          rules: {
+            create: [
+              {
+                sequence: 10,
+                code: 'BASIC',
+                name: 'Basic',
+                category: 'basic',
+                formula: 'WAGE * 0.6',
+              },
+              {
+                sequence: 20,
+                code: 'HOUSE_RENT',
+                name: 'House rent',
+                category: 'allowance',
+                formula: 'BASIC * 0.5',
+              },
+            ],
+          },
+        },
+      ])
+    ).ids[0];
+    const contract = (
+      await (su.model('hr.contract' as never) as unknown as Creates).create([
+        { name: 'Nadia — employment', employee, dateStart: '2025-01-01', wage: '50000', structure },
+      ])
+    ).ids;
     await (
-      su.model('hr.employee' as never) as unknown as { create(rows: unknown[]): Promise<unknown> }
-    ).create([{ name: 'Nadia Islam', user: nadia?.id }]);
+      su.model('hr.contract' as never) as unknown as {
+        browse(ids: readonly number[]): { start(): Promise<void> };
+      }
+    )
+      .browse(contract)
+      .start();
     await su.flush();
   });
 });

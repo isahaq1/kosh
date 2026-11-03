@@ -22,6 +22,8 @@
     "@kosh/import": "workspace:*",
     "@kosh/messaging": "workspace:*",
     "@kosh/notify": "workspace:*",
+    "@kosh/payroll": "workspace:*",
+    "@kosh/payroll_account": "workspace:*",
     "@kosh/permissions": "workspace:*",
     "@kosh/portal": "workspace:*",
     "@kosh/pos": "workspace:*",

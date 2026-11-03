@@ -92,6 +92,12 @@ importers:
       '@kosh/notify':
         specifier: workspace:*
         version: link:../../packages/notify
+      '@kosh/payroll':
+        specifier: workspace:*
+        version: link:../../modules/payroll
+      '@kosh/payroll_account':
+        specifier: workspace:*
+        version: link:../../modules/payroll_account
       '@kosh/permissions':
         specifier: workspace:*
         version: link:../../packages/permissions
@@ -292,6 +298,12 @@ importers:
       '@kosh/notify':
         specifier: workspace:*
         version: link:../../packages/notify
+      '@kosh/payroll':
+        specifier: workspace:*
+        version: link:../../modules/payroll
+      '@kosh/payroll_account':
+        specifier: workspace:*
+        version: link:../../modules/payroll_account
       '@kosh/permissions':
         specifier: workspace:*
         version: link:../../packages/permissions
@@ -1133,6 +1145,68 @@ importers:
         specifier: ^5.12.7
         version: 5.12.7
     devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/payroll:
+    dependencies:
+      '@kosh/attendance':
+        specifier: workspace:*
+        version: link:../attendance
+      '@kosh/hr':
+        specifier: workspace:*
+        version: link:../hr
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/payroll_account:
+    dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../accounting
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/payroll':
+        specifier: workspace:*
+        version: link:../payroll
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/attendance':
+        specifier: workspace:*
+        version: link:../attendance
+      '@kosh/hr':
+        specifier: workspace:*
+        version: link:../hr
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
       '@testcontainers/postgresql':
         specifier: ^12.2.1
         version: 12.2.1
@@ -2232,6 +2306,12 @@ importers:
       '@kosh/notify':
         specifier: workspace:*
         version: link:../notify
+      '@kosh/payroll':
+        specifier: workspace:*
+        version: link:../../modules/payroll
+      '@kosh/payroll_account':
+        specifier: workspace:*
+        version: link:../../modules/payroll_account
       '@kosh/permissions':
         specifier: workspace:*
         version: link:../permissions

@@ -114,6 +114,7 @@ test('every app with demo data loaded it, once', async () => {
     'hr',
     'maintenance',
     'mrp',
+    'payroll',
     'pos',
     'product',
     'project',
@@ -140,6 +141,7 @@ test('every app with demo data loaded it, once', async () => {
     ['contacts', 'sales'],
     ['hr', 'expense'],
     ['hr', 'attendance'],
+    ['attendance', 'payroll'],
   ])
     expect(order.indexOf(app as string)).toBeLessThan(order.indexOf(bridge as string));
   const auth = host.server.auth;
@@ -156,7 +158,7 @@ test('every app with demo data loaded it, once', async () => {
     text: 'SELECT count(*)::text AS n FROM kosh_module WHERE demo_at IS NOT NULL',
     params: [],
   });
-  expect(Number(marks[0]?.n)).toBe(25);
+  expect(Number(marks[0]?.n)).toBe(26);
 });
 
 test('the salesperson sees the orders and the invoices made from them; the buyer the approvals', async () => {

@@ -270,3 +270,41 @@ data, an overview, docs and an E2E.
   a ZKTeco file imported once, days with a holiday, approval by a manager only and kept on recomputing, own days
   only, the demo. E2E: a PIN set on the employee form, a check-in at the kiosk, seen on the phone; the overview.
 
+## Implementation notes (2026-11-02): step 3 part 1 — the Payroll engine and `payroll_account`
+
+- **The formula language** (`formula.ts`): a hand-written parser, never `eval`; Decimals throughout; variables in
+  capitals, `+ - * /`, comparisons, `and` / `or` / `not`, `min`, `max`, `abs`, `round`, `floor`, `ceil`, `if`, and
+  `slab('CODE', amount)` for progressive tables; 500 characters at most. A rule whose formula or condition does not
+  parse is refused when saved; `POST /api/v1/payroll/formula` checks one and lists the variables it reads.
+- **Structures and rules** (`payroll.structure`, `payroll.rule`): rules in order, each a code, a category (basic,
+  allowance, deduction, company contribution, for information), a formula, an optional condition and effective
+  dates. **Parameters** (`payroll.parameter`, read as `P_CODE`) and **slab tables** (`payroll.slab` with bands) are
+  data with effective dates, each with a note of where the value comes from.
+- **Runs** (`payroll.run`): computed from every running contract with a structure (`hr.contract.structure`) — one
+  payslip a person, by their most recent contract, with a warning when they hold several. Each rule sees the
+  variables of `compute.ts` (the wage, the period's and contract's days, service, the fiscal month — App settings ›
+  Payroll, July by default —, Attendance's **approved** days with the approved overtime and its rate, the month's
+  inputs, loan instalments, year-to-date sums by code, parameters) and the codes before it; unset `INPUT_` and
+  `YTD_` read as zero. Every **line** keeps its explanation (`45000 × 0.6 × 31 ÷ 31 = 27000`). Payslips warn about
+  attendance days still waiting for approval. A formula that fails stops the run, naming the person and the rule.
+- **Approval** (`payroll.approve`, managers) locks the run and records each running loan's instalment; repaid loans
+  end. People read their **own** payslips, and only once the run is approved. A **correction**
+  (`POST /api/v1/payroll/runs/:id/correction`) is a new run of the same period whose payslips show what was paid
+  before and the difference to pay; the corrected run stays as it was; year-to-date sums read the latest payslip
+  of each period.
+- **Payment files** (`GET /api/v1/payroll/runs/:id/payment-file?format=`): a generic bank CSV, bKash, Nagad and
+  Rocket bulk-disbursement CSVs and a cash sheet, each taking the people paid that way (the employee's pay details,
+  readable by payroll officers only), behind a format adapter; every file made is audited.
+- **`payroll_account`** (proposed with Accounting): rules may name their account; an approved run is one posted entry
+  in the Payroll journal (`PAY`) — basic, allowances and contributions to their expense accounts (Salaries, 6000),
+  deductions to their payables (2191), contributions against 2192, the net to Salaries payable (2190); paying it
+  clears 2190 from the bank or cash journal chosen on the run; a correction books only its differences, line by line.
+- **Not in this part**: the Bangladesh rules (part 2, `l10n_bd_payroll`), reimbursing expenses with the next run,
+  each read of someone else's payslip in the audit log (generic reads are not audited one by one yet), and real bank
+  file formats (they need each bank's specification).
+- **Tests**: the language without a database (arithmetic, logic, functions, slabs, zero inputs, the explanation,
+  mistakes with reasons); on real PostgreSQL a broken rule refused, a month with approved overtime, an absence, a day
+  not approved, a loan and a bonus — each line's amount and explanation —, officers compute, managers approve, the
+  instalment recorded, a run locked, own payslips after approval, the bank and bKash files, a correction paying only
+  the difference, November's year-to-date, the demo; `payroll_account` booking, paying and a correction's entry.
+

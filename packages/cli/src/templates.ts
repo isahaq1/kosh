@@ -29,6 +29,7 @@ export type AppName =
   | 'pos'
   | 'expense'
   | 'attendance'
+  | 'payroll'
   | 'sale_project'
   | 'sale_stock'
   | 'purchase_stock'
@@ -43,6 +44,7 @@ export type AppName =
   | 'website_crm'
   | 'pos_stock'
   | 'expense_account'
+  | 'payroll_account'
   | 'l10n_bd'
   | 'l10n_in';
 export interface AppSpec {
@@ -198,6 +200,11 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     server: 'attendance',
     web: 'registerAttendanceWeb',
   },
+  payroll: {
+    label: 'Payroll: salary structures, explained payslips, loans, corrections and payment files',
+    icon: '💵',
+    server: 'payroll',
+  },
   sale_project: {
     label: 'Bridge: tasks and projects from sales orders (Sales ↔ Projects)',
     icon: '🔗',
@@ -284,6 +291,13 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'expenseAccount',
     bridge: ['expense', 'accounting'],
+  },
+  payroll_account: {
+    label:
+      'Bridge: payroll runs booked and paid, corrections by their differences (Payroll ↔ Accounting)',
+    icon: '🔗',
+    server: 'payrollAccount',
+    bridge: ['payroll', 'accounting'],
   },
   l10n_bd: {
     label: 'Bangladesh: chart of accounts, VAT and SD, VDS and TDS, BIN and TIN, July–June year',

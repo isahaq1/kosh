@@ -19,6 +19,8 @@ import type { KoshModule } from '@kosh/modules-sdk';
 import { mrp } from '@kosh/mrp';
 import { mrpAccount } from '@kosh/mrp_account';
 import { notify } from '@kosh/notify';
+import { payroll } from '@kosh/payroll';
+import { payrollAccount } from '@kosh/payroll_account';
 import { permissions } from '@kosh/permissions';
 import { pos } from '@kosh/pos';
 import { posStock } from '@kosh/pos_stock';
@@ -72,6 +74,7 @@ export const DEMO_APPS: readonly string[] = [
   'pos',
   'expense',
   'attendance',
+  'payroll',
   'l10n_bd',
 ];
 
@@ -106,6 +109,7 @@ export function demoCatalogue(): KoshModule[] {
     pos,
     expense,
     attendance,
+    payroll,
     saleAccount,
     purchaseAccount,
     saleProject,
@@ -122,6 +126,7 @@ export function demoCatalogue(): KoshModule[] {
     websiteCrm,
     posStock,
     expenseAccount,
+    payrollAccount,
     l10nBd,
   ];
 }
