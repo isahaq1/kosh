@@ -423,7 +423,12 @@ async function receiveForAlias(
     { reason: `inbound email: ${alias.alias}@`, company },
     async (su) => {
       const defaults =
-        typeof alias.defaults === 'function' ? await alias.defaults(su) : (alias.defaults ?? {});
+        typeof alias.defaults === 'function'
+          ? await alias.defaults(su, {
+              address: mail.from?.address ?? '',
+              name: mail.from?.name ?? null,
+            })
+          : (alias.defaults ?? {});
       if (defaults === null) return null;
       const values: Record<string, unknown> = { ...defaults, [alias.subjectField]: subject };
       if (alias.bodyField !== undefined) values[alias.bodyField] = text;

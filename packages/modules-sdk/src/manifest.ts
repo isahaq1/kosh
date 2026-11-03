@@ -319,9 +319,16 @@ export interface InboundAliasSpec {
   readonly subjectField: string;
   /** The field that takes the message text, when any. */
   readonly bodyField?: string;
+  /**
+   * The new record's values: fixed, or from the system scope and the sender (a helpdesk ticket names its customer by
+   * the sender's address); `null` quarantines the message.
+   */
   readonly defaults?:
     | Readonly<Record<string, unknown>>
-    | ((env: unknown) => Promise<Readonly<Record<string, unknown>> | null>);
+    | ((
+        env: unknown,
+        sender: { readonly address: string; readonly name: string | null },
+      ) => Promise<Readonly<Record<string, unknown>> | null>);
 }
 
 /** An action a module offers to automation rules (RFC 0011 §5.3). */
