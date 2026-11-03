@@ -1,5 +1,6 @@
 /** The demo's catalogue: every framework app and business app, with the bridges the planner proposes. */
 import { accountAsset } from '@kosh/account_asset';
+import { accountBudget } from '@kosh/account_budget';
 import { accounting } from '@kosh/accounting';
 import { attendance } from '@kosh/attendance';
 import { automation } from '@kosh/automation';
@@ -80,6 +81,7 @@ export const DEMO_APPS: readonly string[] = [
   'payroll',
   'helpdesk',
   'account_asset',
+  'account_budget',
   'l10n_bd',
 ];
 
@@ -119,6 +121,7 @@ export function demoCatalogue(): KoshModule[] {
     accountAsset,
     saleAccount,
     purchaseAccount,
+    accountBudget,
     saleProject,
     saleStock,
     purchaseStock,

@@ -32,6 +32,7 @@ export type AppName =
   | 'payroll'
   | 'helpdesk'
   | 'account_asset'
+  | 'account_budget'
   | 'sale_project'
   | 'sale_stock'
   | 'purchase_stock'
@@ -218,6 +219,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
       'Fixed assets: depreciation boards, disposals, revaluations and the tax book (in Accounting)',
     icon: '🏭',
     server: 'accountAsset',
+  },
+  account_budget: {
+    label:
+      'Budgets: actual and committed by cost centre, purchase orders warned or blocked (in Accounting)',
+    icon: '📐',
+    server: 'accountBudget',
   },
   sale_project: {
     label: 'Bridge: tasks and projects from sales orders (Sales ↔ Projects)',

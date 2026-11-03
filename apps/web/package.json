@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@kosh/account_asset": "workspace:*",
+    "@kosh/account_budget": "workspace:*",
     "@kosh/accounting": "workspace:*",
     "@kosh/assistant": "workspace:*",
     "@kosh/attendance": "workspace:*",

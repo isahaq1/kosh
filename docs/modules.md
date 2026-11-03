@@ -397,6 +397,13 @@ the asset's cost centre; disposal and sale with the gain or loss; revaluation an
 category's tax rate beside the accounting book. Journal lines carry an optional **cost centre** (Accounting ›
 Configuration › Cost centres), with a *By cost centre* report. Install it with `shutro-erp apps install account_asset`.
 
+### Budgets (`modules/account_budget`, RFC 0024)
+
+In Accounting: budgets for a period with lines by cost centre and / or account; each line's actual (posted), committed
+(confirmed purchase orders not billed yet), left and used; and a control on purchase orders — beyond a *warn* line an
+order needs an Accounting manager's approval as well, beyond a *block* line it is refused with the shortfall. Purchase
+order lines carry the cost centre, which their bills keep. Install it with `shutro-erp apps install account_budget`.
+
 ### Counter (`modules/pos`, RFC 0021)
 
 Point of sale: shops with their payment methods, cashiers' sessions with opening and closing counts (a difference

@@ -35,6 +35,9 @@ importers:
       '@kosh/account_asset':
         specifier: workspace:*
         version: link:../../modules/account_asset
+      '@kosh/account_budget':
+        specifier: workspace:*
+        version: link:../../modules/account_budget
       '@kosh/accounting':
         specifier: workspace:*
         version: link:../../modules/accounting
@@ -286,6 +289,9 @@ importers:
       '@kosh/account_asset':
         specifier: workspace:*
         version: link:../../modules/account_asset
+      '@kosh/account_budget':
+        specifier: workspace:*
+        version: link:../../modules/account_budget
       '@kosh/accounting':
         specifier: workspace:*
         version: link:../../modules/accounting
@@ -528,6 +534,46 @@ importers:
       '@kosh/product':
         specifier: workspace:*
         version: link:../product
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/account_budget:
+    dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../accounting
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/purchase_account':
+        specifier: workspace:*
+        version: link:../purchase_account
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/purchase':
+        specifier: workspace:*
+        version: link:../purchase
       '@kosh/reporting':
         specifier: workspace:*
         version: link:../../packages/reporting
@@ -2354,6 +2400,9 @@ importers:
       '@kosh/account_asset':
         specifier: workspace:*
         version: link:../../modules/account_asset
+      '@kosh/account_budget':
+        specifier: workspace:*
+        version: link:../../modules/account_budget
       '@kosh/accounting':
         specifier: workspace:*
         version: link:../../modules/accounting

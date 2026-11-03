@@ -400,3 +400,25 @@ data, an overview, docs and an E2E.
   (24 000 against 55 000 in the books), a bill above the approval threshold approved and its asset line made a draft
   asset once, only managers posting, the demo.
 
+## Implementation notes (2026-11-03): step 5 part 2 — budgets
+
+- **Budgets** (`account.budget`, `account_budget`): a period, approved, closed or set back to a draft by Accounting
+  managers (`account.budget`), with **lines** by cost centre and / or account — what for, the planned amount and a
+  **control**: report only, warn or block.
+- Each line's **actual** (posted journal lines of the period on its account — every expense account when none — and
+  its cost centre) and **committed** amount (the untaxed lines of the period's confirmed purchase orders with its cost
+  centre that are not billed yet; lines without an account or on the purchases account), what is **left** and how
+  much is **used**, refreshed on approval, hourly on the server and by `POST /api/v1/budgets/refresh`; the lines list
+  and pivot (by cost centre and budget), the printed *Budget against actuals*.
+- **Purchase orders** carry a cost centre on each line (`purchase_account`, 0.2.0, which carries it onto the bill).
+  When one is submitted (a `submitting` hook Purchase now calls before asking for approvals), the lines it touches
+  are checked against what is left: beyond a **block** line the submission is refused with the shortfall; beyond a
+  **warn** line the order is marked `overBudget` with the reason, and the *Purchases beyond a budget* approval policy
+  brings an Accounting manager in — the order is confirmed by the last approval, as any other.
+- **Not in this part**: budgets by month inside the year (a line per period for now), comparisons with last year's
+  budget in the period pivots, commitments from expense reports, and revisions of an approved budget with their history.
+- **Tests**: on real PostgreSQL the approval by a manager only, a posted bill as actual, an order within what is left
+  going on, the refreshed figures (30 000 actual, 60 000 committed, 10 000 left), an order beyond the warn line marked,
+  refused to its buyer's confirmation and confirmed by the manager's approval, an order beyond the block line refused
+  with its 10 000 beyond, billing moving the commitment to the actual with the cost centre on the bill, the demo.
+

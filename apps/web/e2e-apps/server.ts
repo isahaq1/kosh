@@ -14,6 +14,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { accountAsset } from '@kosh/account_asset';
+import { accountBudget } from '@kosh/account_budget';
 import { accountPortal } from '@kosh/account_portal';
 import { accounting } from '@kosh/accounting';
 import { createAssistant, fakeClient } from '@kosh/assistant';
@@ -170,6 +171,7 @@ const CATALOGUE = [
   payrollAccount,
   helpdesk,
   accountAsset,
+  accountBudget,
   l10nBdPayroll,
   assistant,
   dataImport,
@@ -214,6 +216,7 @@ await applyApps(
         'payroll',
         'helpdesk',
         'account_asset',
+        'account_budget',
         'assistant',
         'import',
         'l10n_bd',
