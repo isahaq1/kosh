@@ -30,6 +30,7 @@ export type AppName =
   | 'expense'
   | 'attendance'
   | 'payroll'
+  | 'helpdesk'
   | 'sale_project'
   | 'sale_stock'
   | 'purchase_stock'
@@ -205,6 +206,11 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     label: 'Payroll: salary structures, explained payslips, loans, corrections and payment files',
     icon: '💵',
     server: 'payroll',
+  },
+  helpdesk: {
+    label: 'Helpdesk: tickets from email, SLAs in business hours, assignment, ratings',
+    icon: '🛟',
+    server: 'helpdesk',
   },
   sale_project: {
     label: 'Bridge: tasks and projects from sales orders (Sales ↔ Projects)',

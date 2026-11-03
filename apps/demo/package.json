@@ -18,6 +18,7 @@
     "@kosh/event_account": "workspace:*",
     "@kosh/expense": "workspace:*",
     "@kosh/expense_account": "workspace:*",
+    "@kosh/helpdesk": "workspace:*",
     "@kosh/hr": "workspace:*",
     "@kosh/l10n_bd": "workspace:*",
     "@kosh/l10n_bd_payroll": "workspace:*",

@@ -62,6 +62,9 @@ importers:
       '@kosh/expense_account':
         specifier: workspace:*
         version: link:../../modules/expense_account
+      '@kosh/helpdesk':
+        specifier: workspace:*
+        version: link:../../modules/helpdesk
       '@kosh/hr':
         specifier: workspace:*
         version: link:../../modules/hr
@@ -292,6 +295,9 @@ importers:
       '@kosh/expense_account':
         specifier: workspace:*
         version: link:../../modules/expense_account
+      '@kosh/helpdesk':
+        specifier: workspace:*
+        version: link:../../modules/helpdesk
       '@kosh/import':
         specifier: workspace:*
         version: link:../../packages/import
@@ -861,6 +867,37 @@ importers:
       '@kosh/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/helpdesk:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/mail':
+        specifier: workspace:*
+        version: link:../../packages/mail
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
       '@testcontainers/postgresql':
         specifier: ^12.2.1
         version: 12.2.1
@@ -2307,6 +2344,9 @@ importers:
       '@kosh/expense_account':
         specifier: workspace:*
         version: link:../../modules/expense_account
+      '@kosh/helpdesk':
+        specifier: workspace:*
+        version: link:../../modules/helpdesk
       '@kosh/hr':
         specifier: workspace:*
         version: link:../../modules/hr

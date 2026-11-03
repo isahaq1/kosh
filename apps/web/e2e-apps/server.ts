@@ -25,6 +25,7 @@ import { event } from '@kosh/event';
 import { eventAccount } from '@kosh/event_account';
 import { expense } from '@kosh/expense';
 import { expenseAccount } from '@kosh/expense_account';
+import { helpdesk } from '@kosh/helpdesk';
 import { hr } from '@kosh/hr';
 import { dataImport } from '@kosh/import';
 import { l10nBd } from '@kosh/l10n_bd';
@@ -166,6 +167,7 @@ const CATALOGUE = [
   attendance,
   payroll,
   payrollAccount,
+  helpdesk,
   l10nBdPayroll,
   assistant,
   dataImport,
@@ -208,6 +210,7 @@ await applyApps(
         'expense',
         'attendance',
         'payroll',
+        'helpdesk',
         'assistant',
         'import',
         'l10n_bd',
@@ -276,6 +279,7 @@ for (const [login, name, groups] of [
       'expense.manager',
       'attendance.manager',
       'payroll.manager',
+      'helpdesk.manager',
       'messaging.user',
       'reporting.user',
       'assistant.user',

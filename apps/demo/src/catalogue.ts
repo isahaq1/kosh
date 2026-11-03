@@ -9,6 +9,7 @@ import { event } from '@kosh/event';
 import { eventAccount } from '@kosh/event_account';
 import { expense } from '@kosh/expense';
 import { expenseAccount } from '@kosh/expense_account';
+import { helpdesk } from '@kosh/helpdesk';
 import { hr } from '@kosh/hr';
 import { l10nBd } from '@kosh/l10n_bd';
 import { l10nBdPayroll } from '@kosh/l10n_bd_payroll';
@@ -76,6 +77,7 @@ export const DEMO_APPS: readonly string[] = [
   'expense',
   'attendance',
   'payroll',
+  'helpdesk',
   'l10n_bd',
 ];
 
@@ -111,6 +113,7 @@ export function demoCatalogue(): KoshModule[] {
     expense,
     attendance,
     payroll,
+    helpdesk,
     saleAccount,
     purchaseAccount,
     saleProject,

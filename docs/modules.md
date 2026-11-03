@@ -380,6 +380,14 @@ source from the year's projection, the exemption, the slab table in force, the i
 `INVESTMENT`) and the minimum tax, spread over the months left. Every rate is a parameter or a slab table with its
 dates and a note of its source — **verify them against the year's Finance Act and NBR circular before use**.
 
+### Helpdesk (`modules/helpdesk`, RFC 0024)
+
+Teams with business hours and assignment in turn or by load; tickets from the back-office or by email to `helpdesk@`
+(the sender becomes the customer; replies thread back into the ticket); SLA policies by team, priority and customer
+in business hours, with the resolution clock paused while waiting on the customer and resumed when they write back;
+the status on track, at risk, breached or met; canned replies; merging; and the customer's rating through a one-time
+link. Install it with `shutro-erp apps install helpdesk`.
+
 ### Counter (`modules/pos`, RFC 0021)
 
 Point of sale: shops with their payment methods, cashiers' sessions with opening and closing counts (a difference

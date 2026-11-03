@@ -55,6 +55,7 @@
     "@kosh/event_account": "workspace:*",
     "@kosh/expense": "workspace:*",
     "@kosh/expense_account": "workspace:*",
+    "@kosh/helpdesk": "workspace:*",
     "@kosh/hr": "workspace:*",
     "@kosh/import": "workspace:*",
     "@kosh/integrations": "workspace:*",

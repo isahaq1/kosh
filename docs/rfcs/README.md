@@ -26,5 +26,5 @@ Design documents written before implementation. An RFC is implemented only after
 | 0020 | [App settings](0020-app-settings.md) | Accepted; step 1 implemented (the declaration, the API, the per-app page; Sales, Purchase, Accounting) |
 | 0021 | [Business apps, part 2](0021-business-apps-2.md) | Accepted; Focus, Agenda, Pipeline, Workforce and Hiring step 1 implemented; Stockroom, Production, Asset Care, Trade Finance and Event Hub complete; Sites step 1, `website_crm` and Counter steps 1–2 implemented |
 | 0022 | [App depth and polish](0022-app-depth-and-polish.md) | Complete: tiles, overviews, widgets, guidance, columns and printing on the platform; a depth pass on every app; overviews per person and `requiredWhen` |
-| 0024 | [Business apps, part 3](0024-business-apps-3.md) | Accepted; steps 1–2 and 3 implemented (Spend and `expense_account`; Attendance; Payroll with `payroll_account` and `l10n_bd_payroll`) |
+| 0024 | [Business apps, part 3](0024-business-apps-3.md) | Accepted; steps 1–4 implemented (Spend and `expense_account`; Attendance; Payroll with `payroll_account` and `l10n_bd_payroll`; Helpdesk) |
 | 0023 | [The module standard](0023-module-standard.md) | Accepted; step 1 implemented (the checker in `pnpm lint` with waivers; search specs, archivable masters, chatter on every document, lists and forms) |

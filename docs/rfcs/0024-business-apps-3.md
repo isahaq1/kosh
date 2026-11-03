@@ -336,3 +336,35 @@ data, an overview, docs and an E2E.
   what is left over eleven months), garments (6 700 / 3 350 / 750 / 450 / 1 250 from 12 500, the Eid bonus after a
   year and not after six months, no tax).
 
+## Implementation notes (2026-11-03): step 4 — Helpdesk
+
+- **Teams** (`helpdesk.team`): agents, business hours (opening and closing, the weekend) and how new tickets are
+  assigned — by hand, in turn, or to the agent with the fewest open tickets; whether solved tickets ask for a
+  rating. **Stages** for the board, **types**, **canned replies** with `{{customer}}`, `{{ticket}}` and `{{agent}}`.
+- **Tickets** (`helpdesk.ticket`): from the back-office or by email to `helpdesk@` (a catch-all alias: the sender
+  is found among the contacts by address or added as one; replies come back into the chatter through the reply
+  address, RFC 0006). A life cycle of its own beside the board's stages — open, **waiting on the customer**,
+  solved, closed, merged — so the SLA clock is exact: waiting records its start, resuming adds its working minutes
+  to the pause.
+- **SLA policies** (`helpdesk.sla`): the first by sequence that matches the ticket's team, priority (this one or
+  higher) and customer gives the first-reply and resolution targets in business hours (the team's, in the time zone
+  of App settings › Helpdesk). The **clock** (`sla.ts`, every five minutes and `POST /api/v1/helpdesk/refresh`)
+  assigns, applies the policy, reads the **first reply** from the chatter (the first message, not a note, by an
+  agent), **resumes** a waiting ticket when the customer writes back by email, and sets the status — on track, at
+  risk (less than a fifth left), breached, met. Tickets are in the change feed, so automation rules act on a breach.
+- **Solving** asks the customer for a **rating** through a one-time link (`/api/v1/public/helpdesk/rate`, no sign-in,
+  rate limited, across companies by its token) sent by email when SMTP is set. **Merging**
+  (`POST /api/v1/helpdesk/tickets/:id/merge`) moves the conversation into the other ticket, both visible to the agent.
+  Drafted replies come from the chatter's assistant (RFC 0013), as on any record.
+- **Framework**: a catch-all alias's `defaults` now receives the sender (`{ address, name }`), so a module can name
+  the customer.
+- **Not in this step**: the portal page of a customer's tickets, tickets from Sites' forms (a `website_helpdesk`
+  bridge), public holidays in business hours, timesheets on tickets, and escalation rules shipped by the module
+  (automation rules can be made on the change feed today).
+- **Tests**: business hours without a database (across the weekend, before the opening, after the closing, every
+  day; minutes between); on real PostgreSQL assignment in turn, the matching policy (urgent's faster), agents of
+  the team only, the first reply, waiting two hours pushing the resolution back and the customer's email resuming
+  it, a breach after nine hours, met when solved, the rating link once and the token hidden from agents, merging
+  (refused to an agent who cannot see both), a canned reply filled in, tickets from email with the sender as one
+  contact, the demo. E2E: a ticket opened, put on waiting and solved; the overview.
+
