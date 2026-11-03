@@ -1,0 +1,65 @@
+{
+  "name": "@kosh/website_sale_stock",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bridge: stock shown on the shop and carts kept within it (Shop ↔ Stockroom, RFC 0024)",
+  "keywords": [
+    "kosh",
+    "erp",
+    "typescript",
+    "postgresql",
+    "shutro"
+  ],
+  "author": "Isahaq <hmisahaq01@gmail.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/isahaq1/kosh/tree/main/modules/website_sale_stock#readme",
+  "bugs": {
+    "url": "https://github.com/isahaq1/kosh/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isahaq1/kosh.git",
+    "directory": "modules/website_sale_stock"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "@kosh/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node ../../scripts/copy-views.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@kosh/modules-sdk": "workspace:*",
+    "@kosh/server": "workspace:*",
+    "@kosh/stock": "workspace:*",
+    "@kosh/website_sale": "workspace:*"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^12.2.1",
+    "@kosh/settings": "workspace:*",
+    "@kosh/permissions": "workspace:*",
+    "@kosh/contacts": "workspace:*",
+    "@kosh/reporting": "workspace:*",
+    "@kosh/accounting": "workspace:*",
+    "@kosh/messaging": "workspace:*",
+    "@kosh/integrations": "workspace:*",
+    "@kosh/account_portal": "workspace:*",
+    "@kosh/portal": "workspace:*",
+    "@kosh/website": "workspace:*",
+    "@kosh/sales": "workspace:*",
+    "@kosh/product": "workspace:*",
+    "@kosh/payment": "workspace:*"
+  }
+}
