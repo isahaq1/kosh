@@ -162,6 +162,31 @@ export const ResCurrencyRate = defineModel('res.currency.rate', {
   },
 });
 
+/**
+ * A cost centre (RFC 0024 §2.5): a department, a project, a branch — an optional dimension of journal lines that
+ * reports and budgets read. Kept small and explicit: one dimension, a tree, no distribution keys.
+ */
+export const AccountAnalytic = defineModel('account.analytic', {
+  label: 'Cost centre',
+  recName: 'name',
+  order: ['code asc', 'name asc'],
+  archivable: true,
+  companyScoped: { required: true },
+  access: { 'account.invoicing': READ, 'account.user': READ, 'account.manager': ALL },
+  fields: {
+    code: f.char({ size: 32, label: 'Code' }),
+    name: f.char({ required: true, translate: true }),
+    parent: f.many2one('account.analytic', { ondelete: 'restrict', label: 'Part of' }),
+    note: f.text(),
+  },
+  sqlConstraints: {
+    codeUnique: {
+      unique: ['company', 'code'],
+      message: 'A cost centre code is used once per company.',
+    },
+  },
+});
+
 export const AccountAccount = defineModel('account.account', {
   label: 'Account',
   order: ['code asc'],
@@ -876,6 +901,11 @@ export const AccountMoveLine = defineModel('account.move.line', {
       }),
     }),
     product: f.many2one('product.product'),
+    analytic: f.many2one('account.analytic', {
+      ondelete: 'restrict',
+      label: 'Cost centre',
+      help: 'The department, project or branch the amount belongs to; reports and budgets read it.',
+    }),
     quantity: f.decimal({ scale: 3, default: '1' }),
     priceUnit: f.decimal({ scale: 2, default: '0', label: 'Unit price' }),
     /** Percent off the unit price (0–100). */
@@ -1562,7 +1592,7 @@ const sequence = (type: JournalType, prefix: string) =>
 
 export const accountingShutro = defineModule({
   name: 'accounting',
-  version: '0.3.0',
+  version: '0.4.0',
   migrations: [
     {
       version: '0.2.0',
@@ -1598,6 +1628,7 @@ export const accountingShutro = defineModule({
     ResCurrencyRate,
     ResBankAccount,
     AccountWithholding,
+    AccountAnalytic,
     AccountAccount,
     AccountJournal,
     AccountFiscalYear,

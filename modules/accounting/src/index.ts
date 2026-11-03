@@ -18,7 +18,7 @@ import { permissions } from '@kosh/permissions';
 import { product } from '@kosh/product';
 import { reporting } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
-import { action, field, form, list, pivot, search, stat } from '@kosh/views';
+import { action, field, form, hierarchy, list, pivot, search, stat } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import {
   ChartInstalledError,
@@ -40,6 +40,7 @@ import {
 import { accountingDemo } from './demo.js';
 import {
   AccountAccount,
+  AccountAnalytic,
   AccountFiscalYear,
   AccountJournal,
   AccountMove,
@@ -91,6 +92,7 @@ export {
 export {
   ACCOUNT_TYPES,
   AccountAccount,
+  AccountAnalytic,
   AccountFiscalYear,
   AccountFullReconcile,
   AccountJournal,
@@ -518,6 +520,16 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       label: 'Chart of accounts',
       views: ['list', 'form'],
     }),
+    'accounting.action_analytics': action(AccountAnalytic, {
+      label: 'Cost centres',
+      views: ['list', 'form', 'hierarchy'],
+    }),
+    'accounting.action_by_analytic': action(AccountMoveLine, {
+      label: 'By cost centre',
+      views: ['pivot', 'list'],
+      viewIds: { pivot: 'account.move.line.by_analytic' },
+      domain: { posted: true },
+    }),
     'accounting.action_journals': action(AccountJournal, {
       label: 'Journals',
       views: ['list', 'form'],
@@ -592,6 +604,13 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       sequence: 2,
     },
     {
+      id: 'accounting.by_analytic',
+      parent: 'accounting.reporting',
+      label: 'By cost centre',
+      action: 'accounting.action_by_analytic',
+      sequence: 2.5,
+    },
+    {
       id: 'accounting.partner_ledger',
       parent: 'accounting.reporting',
       label: 'Partner ledger',
@@ -647,6 +666,13 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       sequence: 1,
     },
     {
+      id: 'accounting.analytics',
+      parent: 'accounting.configuration',
+      label: 'Cost centres',
+      action: 'accounting.action_analytics',
+      sequence: 2,
+    },
+    {
       id: 'accounting.journals',
       parent: 'accounting.configuration',
       label: 'Journals',
@@ -692,6 +718,18 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
   // What webhooks may subscribe to besides record changes (RFC 0017 §5.3).
   events: [
     { topic: 'account.move.posted', model: 'account.move', label: 'Entry, invoice or bill posted' },
+  ],
+  importTemplates: [
+    {
+      key: 'cost_centres',
+      model: 'account.analytic',
+      label: 'Cost centres',
+      columns: [
+        { header: 'Code', field: 'code' },
+        { header: 'Name', field: 'name' },
+        { header: 'Part of', field: 'parent' },
+      ],
+    },
   ],
   approvals: [
     {
@@ -959,6 +997,7 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
             'product',
             { field: 'name', id: 'line_name' },
             { field: 'account', id: 'line_account' },
+            { field: 'analytic', id: 'line_analytic' },
             'quantity',
             'priceUnit',
             'discount',
@@ -997,6 +1036,7 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
         'account',
         'partner',
         'name',
+        'analytic',
         { field: 'debit', sum: true },
         { field: 'credit', sum: true },
         { field: 'balance', sum: true },
@@ -1138,6 +1178,37 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       readonlyWhen: { state: { ne: 'draft' } },
       chatter: true,
     })),
+    'account.analytic.list': list(AccountAnalytic, {
+      columns: ['code', 'name', 'parent'],
+      defaultOrder: ['code asc'],
+      inlineEdit: ['name'],
+    }),
+    'account.analytic.form': form(AccountAnalytic, (k) => ({
+      header: { buttons: [] },
+      sheet: [
+        k.stats('related', [
+          stat({
+            id: 'analytic_lines',
+            label: 'Journal lines',
+            model: AccountMoveLine,
+            where: { analytic: { $record: 'id' } },
+            action: 'accounting.action_general_ledger',
+          }),
+        ]),
+        k.group('main', ['code', 'name', 'parent', 'note']),
+      ],
+    })),
+    'account.analytic.hierarchy': hierarchy(AccountAnalytic, {
+      parent: 'parent',
+      title: 'name',
+      subtitle: 'code',
+    }),
+    'account.move.line.by_analytic': pivot(AccountMoveLine, {
+      rows: ['analytic'],
+      cols: ['accountType'],
+      measures: [{ sum: 'balance' }],
+      comparison: { field: 'date', mode: 'previous' },
+    }),
     'account.account.list': list(AccountAccount, {
       columns: ['code', 'name', 'type', 'reconcile', 'currency'],
       defaultOrder: ['code asc'],
@@ -1281,6 +1352,10 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
         posted: { label: 'Posted', domain: { state: 'posted' }, group: 'state' },
       },
       groupBy: ['journal', 'partner', 'state', 'date:month'],
+    }),
+    'account.analytic': search(AccountAnalytic, {
+      fields: ['code', 'name'],
+      groupBy: ['parent'],
     }),
     'account.account': search(AccountAccount, {
       fields: ['code', 'name'],
