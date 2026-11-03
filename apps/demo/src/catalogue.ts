@@ -11,6 +11,7 @@ import { expense } from '@kosh/expense';
 import { expenseAccount } from '@kosh/expense_account';
 import { hr } from '@kosh/hr';
 import { l10nBd } from '@kosh/l10n_bd';
+import { l10nBdPayroll } from '@kosh/l10n_bd_payroll';
 import { mail } from '@kosh/mail';
 import { maintenance } from '@kosh/maintenance';
 import { maintenanceStock } from '@kosh/maintenance_stock';
@@ -128,5 +129,6 @@ export function demoCatalogue(): KoshModule[] {
     expenseAccount,
     payrollAccount,
     l10nBd,
+    l10nBdPayroll,
   ];
 }

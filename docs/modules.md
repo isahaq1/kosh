@@ -371,6 +371,15 @@ Accounting (`payroll_account`) an approved run is booked as one entry and paid f
   condition: 'OVERTIME_HOURS > 0' }
 ```
 
+### Bangladesh payroll (`modules/l10n_bd_payroll`, RFC 0024)
+
+Proposed with the Bangladesh localization and Payroll: the *standard* and *garments (RMG)* structures with overtime at
+the shift's rate of the basic ÷ 208, festival bonuses after a year's service in a run marked as a festival run,
+absence on the basic, provident fund for members (a per-person value `PF_MEMBER = 1`), and income tax deducted at
+source from the year's projection, the exemption, the slab table in force, the investment rebate (a per-person value
+`INVESTMENT`) and the minimum tax, spread over the months left. Every rate is a parameter or a slab table with its
+dates and a note of its source — **verify them against the year's Finance Act and NBR circular before use**.
+
 ### Counter (`modules/pos`, RFC 0021)
 
 Point of sale: shops with their payment methods, cashiers' sessions with opening and closing counts (a difference

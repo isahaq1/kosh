@@ -45,6 +45,7 @@ export type AppName =
   | 'pos_stock'
   | 'expense_account'
   | 'payroll_account'
+  | 'l10n_bd_payroll'
   | 'l10n_bd'
   | 'l10n_in';
 export interface AppSpec {
@@ -306,6 +307,13 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     web: 'registerL10nBdWeb',
     bridge: ['accounting'],
     country: 'BD',
+  },
+  l10n_bd_payroll: {
+    label:
+      'Bangladesh payroll: standard and garments structures, festival bonuses, provident fund, tax at source',
+    icon: '🇧🇩',
+    server: 'l10nBdPayroll',
+    bridge: ['l10n_bd', 'payroll'],
   },
   l10n_in: {
     label:

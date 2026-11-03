@@ -308,3 +308,31 @@ data, an overview, docs and an E2E.
   instalment recorded, a run locked, own payslips after approval, the bank and bKash files, a correction paying only
   the difference, November's year-to-date, the demo; `payroll_account` booking, paying and a correction's entry.
 
+## Implementation notes (2026-11-03): step 3 part 2 — `l10n_bd_payroll`, and the engine's last pieces
+
+- **The engine** gained what country rules need without any country in it: **per-person values**
+  (`payroll.employee.value`, read as `E_CODE`, with effective dates: a provident fund membership, the year's declared
+  investment, a fixed allowance), the run's **festival flag** (`FESTIVAL`), and the running **`GROSS`** and
+  **`DEDUCTIONS`** of the rules before (income tax reads the gross).
+- **`l10n_bd_payroll`** (proposed with the Bangladesh localization and Payroll) installs, once and shared by every
+  company, two **structures** — *standard* (basic as a share of the gross, house rent and medical on the basic,
+  conveyance the rest) and *garments (RMG)* (the minimum wage gazette's breakdown: the gross less medical 750,
+  transport 450 and food 1 250 is the basic and its 50% house rent) — with the same tail: **overtime** at the
+  shift's rate (twice, Labour Act s.108) of the basic ÷ 208 an hour, a **festival bonus** of the basic in a festival
+  run after twelve months' service, **absence** on the basic ÷ 30, **provident fund** (10% and 10%) for members,
+  loan instalments, and **income tax deducted at source**: the year's salary projected (this year's taxable pay so
+  far, this month's, the regular pay over the months left), the exempt part (the lower of a third and 4,50,000),
+  the slab table in force, the investment rebate (the lowest of 3% of the taxable income, 15% of the investment and
+  10,00,000), the minimum tax, less what was deducted, over the months left. Irregular pay is taxed when paid.
+- **Data, to verify**: the parameters and the two `BD_TAX` tables (income year 2025–26: 3,50,000 free then 5% to 30%;
+  2026–27 and 2027–28: 3,75,000 free, the 5% band gone) each carry a note to check them against the year's Finance
+  Act and NBR circular; company policies (the basic's share, provident fund rates) are marked as such. Installing
+  again adds what is missing and never overwrites a manager's change.
+- **Not in this part**: the yearly salary certificate and tax statement per employee, earned leave accrual into
+  Workforce's balances, the investment declaration's proofs, and the minimum tax by city (one value for now).
+- **Tests**: on real PostgreSQL the bridge proposed, the data installed once (a changed value kept), a standard
+  payslip worked by hand (60 000 / 30 000 / 6 000 / 4 000, provident fund 6 000 each side, 1 200 000 projected,
+  400 000 exempt, 48 750 on the slabs, a 24 000 rebate, 24 750 for the year, a twelfth deducted; August deducting
+  what is left over eleven months), garments (6 700 / 3 350 / 750 / 450 / 1 250 from 12 500, the Eid bonus after a
+  year and not after six months, no tax).
+

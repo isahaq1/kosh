@@ -86,6 +86,7 @@ const PACKAGES = [
   'pos_stock',
   'expense_account',
   'payroll_account',
+  'l10n_bd_payroll',
   'portal',
   'sale_portal',
   'account_portal',
