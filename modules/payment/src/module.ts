@@ -8,7 +8,7 @@
 import { randomBytes } from 'node:crypto';
 import { accountPortalShutro } from '@kosh/account_portal';
 import { integrationsShutro } from '@kosh/integrations';
-import { defineModel, defineModule, f } from './.kosh/bindings.js';
+import { defineModel, defineModule, f, method } from './.kosh/bindings.js';
 
 const ALL = ['read', 'write', 'create', 'unlink', 'export', 'import'] as const;
 
@@ -60,7 +60,8 @@ export const PaymentTransaction = defineModel('payment.transaction', {
   fields: {
     reference: f.char({ required: true, index: 'unique', default: newReference }),
     provider: f.many2one('payment.provider', { required: true, checkCompany: true }),
-    move: f.many2one('account.move', { required: true, label: 'Invoice', checkCompany: true }),
+    /** The invoice paid; empty while another app's document waits for the payment (a shop's order). */
+    move: f.many2one('account.move', { label: 'Invoice', checkCompany: true }),
     partner: f.many2one('res.partner', { label: 'Customer' }),
     currency: f.many2one('res.currency', { required: true }),
     amount: f.monetary({ currency: 'currency', required: true }),
@@ -78,12 +79,26 @@ export const PaymentTransaction = defineModel('payment.transaction', {
     payment: f.many2one('account.payment', { label: 'Payment' }),
     error: f.text(),
     doneAt: f.datetime({ label: 'Paid at' }),
+    /** Where the customer goes back to once the provider is done (the portal's document when empty). */
+    returnUrl: f.char({ label: 'Back to' }),
+  },
+  methods: {
+    /**
+     * The posted documents each of these transactions pays, once the provider confirmed it: its invoice. A module
+     * whose transactions pay something else first makes the invoice there (`website_sale`: the order confirmed and
+     * invoiced) by overriding it.
+     */
+    payable: method('payment.transaction', async function (): Promise<Map<number, number[]>> {
+      const out = new Map<number, number[]>();
+      for (const t of await this.load({})) out.set(t.id, t.move === null ? [] : [t.move.id]);
+      return out;
+    }),
   },
 });
 
 export const paymentShutro = defineModule({
   name: 'payment',
-  version: '0.1.0',
+  version: '0.2.0',
   depends: [accountPortalShutro, integrationsShutro],
   models: [PaymentProvider, PaymentTransaction],
 });

@@ -13,6 +13,8 @@
  * - `GET|POST /api/v1/payment/return/:reference`             back from the provider: on to the portal
  *
  * The callbacks arrive at `POST /api/v1/hooks/<token>` (the provider's endpoint, made with its first payment).
+ * Other apps start payments with `startPayment` (`website_sale`: a shop's checkout) and say what a transaction pays by
+ * overriding `payable()` on `payment.transaction`.
  */
 
 import { accountPortal } from '@kosh/account_portal';
@@ -21,7 +23,7 @@ import { integrations, receive } from '@kosh/integrations';
 import { defineModule, type InboundWebhookSpec, type KoshModule } from '@kosh/modules-sdk';
 import { portalDocuments } from '@kosh/portal';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
-import { type Env as CoreEnv, orm } from '@kosh/server/orm';
+import { type Env as CoreEnv, type Decimal, orm } from '@kosh/server/orm';
 import { action, form, list, search } from '@kosh/views';
 import type { FastifyInstance } from 'fastify';
 import type { Env } from './.kosh/bindings.js';
@@ -91,6 +93,174 @@ export interface PaymentOptions {
   readonly apiUrl?: string;
 }
 
+/** The adapters and addresses of the running server (set when the routes are registered). */
+let current: {
+  readonly adapters: ReadonlyMap<string, PaymentAdapter>;
+  readonly urls: { readonly portal: string; readonly api: string };
+} | null = null;
+
+const adapterOf = (code: string): PaymentAdapter => {
+  const adapter = current?.adapters.get(code);
+  if (adapter === undefined)
+    throw new HttpProblem(
+      409,
+      'no-adapter',
+      'Provider unavailable',
+      `The ${code} adapter is not installed.`,
+    );
+  return adapter;
+};
+
+/** The provider's callback endpoint (made on first use), with its token. */
+async function endpointOf(
+  su: Env,
+  provider: { id: number; name: string; code: string },
+): Promise<string> {
+  const [p] = await su
+    .model('payment.provider')
+    .browse([provider.id] as never)
+    .load({ endpoint: true });
+  if (p?.endpoint !== null && p?.endpoint !== undefined) return p.endpoint.token;
+  const made = await su
+    .model('webhook.endpoint')
+    .create([{ name: `${provider.name} callbacks`, hook: `payment.${provider.code}` }]);
+  await su
+    .model('payment.provider')
+    .browse([provider.id] as never)
+    .write({ endpoint: made.ids[0] as never });
+  const [e] = await made.load({});
+  return e?.token ?? '';
+}
+
+export interface StartPayment {
+  /** A provider of the company, enabled. */
+  readonly provider: number;
+  /** The invoice paid; null when another app's document waits for it (its link in `values`). */
+  readonly move?: number | null;
+  readonly partner: {
+    readonly id: number;
+    readonly name: string;
+    readonly email?: string | null;
+    readonly phone?: string | null;
+    readonly mobile?: string | null;
+    readonly street?: string | null;
+    readonly city?: string | null;
+    readonly zip?: string | null;
+    readonly country?: unknown;
+  } | null;
+  readonly currency: {
+    readonly id: number;
+    readonly name: string;
+    readonly decimalPlaces?: number | null;
+  };
+  readonly amount: Decimal;
+  readonly company: number;
+  readonly description: string;
+  /** Where the customer goes back to (the portal's document when absent). */
+  readonly returnUrl?: string;
+  /** More fields of the transaction (another app's link: `saleOrder`). */
+  readonly values?: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * Starts a payment as the system: a pending transaction for `amount` with the provider, and where to send the
+ * customer. The provider must be enabled, configured on this server, and the fake never live.
+ */
+export async function startPayment(
+  su: Env,
+  input: StartPayment,
+): Promise<{ reference: string; redirectUrl: string }> {
+  if (current === null)
+    throw new HttpProblem(503, 'no-payments', 'Payments unavailable', 'Payments are not set up.');
+  const urls = current.urls;
+  const [provider] = await (
+    await su.model('payment.provider').search({
+      where: {
+        id: orm.asId(input.provider, 'payment.provider'),
+        state: { in: ['test', 'live'] },
+        company: orm.asId(input.company, 'res.company'),
+      },
+      limit: 1,
+    })
+  ).load({});
+  if (provider === undefined)
+    throw new HttpProblem(
+      422,
+      'invalid-provider',
+      'No such provider',
+      'Choose one of the providers offered.',
+    );
+  const adapter = adapterOf(provider.code);
+  if (provider.code === 'fake' && provider.state === 'live')
+    throw new HttpProblem(
+      409,
+      'fake-live',
+      'Test provider',
+      'The test provider moves no money: it cannot be live.',
+    );
+  if (!adapter.configured(provider.state === 'live' ? 'live' : 'test'))
+    throw new HttpProblem(
+      409,
+      'not-configured',
+      'Provider not set up',
+      `The ${provider.name} provider has no credentials for ${provider.state} payments on this server.`,
+    );
+  const token = await endpointOf(su, provider);
+  const created = await (
+    su.model('payment.transaction' as never) as unknown as {
+      create(rows: readonly Record<string, unknown>[]): Promise<{ ids: number[] }>;
+    }
+  ).create([
+    {
+      ...input.values,
+      provider: provider.id,
+      move: input.move ?? null,
+      partner: input.partner?.id ?? null,
+      currency: input.currency.id,
+      amount: input.amount.toFixed(),
+      company: input.company,
+      returnUrl: input.returnUrl ?? null,
+    },
+  ]);
+  await su.flush(); // company checks run in this superuser scope, not at commit (Shutro request #11)
+  const tx = su.model('payment.transaction').browse(created.ids as never);
+  const [t] = await tx.load({});
+  const reference = t?.reference ?? '';
+  const p = input.partner;
+  let started: Awaited<ReturnType<PaymentAdapter['createPayment']>>;
+  try {
+    started = await adapter.createPayment({
+      reference,
+      amount: input.amount.toFixed(input.currency.decimalPlaces ?? 2),
+      currency: input.currency.name,
+      description: input.description,
+      customer: {
+        name: p?.name ?? '',
+        email: p?.email ?? null,
+        phone: p?.phone ?? p?.mobile ?? null,
+        street: p?.street ?? null,
+        city: p?.city ?? null,
+        zip: p?.zip ?? null,
+        country: (p?.country ?? null) as never,
+      },
+      returnUrl: `${urls.api}/api/v1/payment/return/${encodeURIComponent(reference)}`,
+      callbackUrl: `${urls.api}/api/v1/hooks/${token}`,
+      mode: provider.state === 'live' ? 'live' : 'test',
+    });
+  } catch (error) {
+    throw new HttpProblem(
+      502,
+      'provider-error',
+      'The payment could not start',
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+  if (started.providerReference !== undefined)
+    await tx.write({ providerReference: started.providerReference });
+  await su.flush();
+  return { reference, redirectUrl: started.redirectUrl };
+}
+
 function registerPaymentRoutes(
   context: ModuleContext,
   adapters: ReadonlyMap<string, PaymentAdapter>,
@@ -103,34 +273,7 @@ function registerPaymentRoutes(
     if (!env.groups.has('portal.user') || env.groups.has('base.user'))
       throw new HttpProblem(403, 'portal-only', 'Portal users only', 'This is the portal’s API.');
   };
-  const adapterOf = (code: string): PaymentAdapter => {
-    const adapter = adapters.get(code);
-    if (adapter === undefined)
-      throw new HttpProblem(
-        409,
-        'no-adapter',
-        'Provider unavailable',
-        `The ${code} adapter is not installed.`,
-      );
-    return adapter;
-  };
-  /** The provider's callback endpoint (made on first use), with its token. */
-  const endpointOf = async (su: Env, provider: { id: number; name: string; code: string }) => {
-    const [p] = await su
-      .model('payment.provider')
-      .browse([provider.id] as never)
-      .load({ endpoint: true });
-    if (p?.endpoint !== null && p?.endpoint !== undefined) return p.endpoint.token;
-    const made = await su
-      .model('webhook.endpoint')
-      .create([{ name: `${provider.name} callbacks`, hook: `payment.${provider.code}` }]);
-    await su
-      .model('payment.provider')
-      .browse([provider.id] as never)
-      .write({ endpoint: made.ids[0] as never });
-    const [e] = await made.load({});
-    return e?.token ?? '';
-  };
+  current = { adapters, urls };
 
   app.get('/api/portal/v1/payments/providers', async (request) =>
     request.env(
@@ -213,21 +356,6 @@ function registerPaymentRoutes(
             'No such provider',
             'Choose one of the providers offered.',
           );
-        const adapter = adapterOf(provider.code);
-        if (provider.code === 'fake' && provider.state === 'live')
-          throw new HttpProblem(
-            409,
-            'fake-live',
-            'Test provider',
-            'The test provider moves no money: it cannot be live.',
-          );
-        if (!adapter.configured(provider.state === 'live' ? 'live' : 'test'))
-          throw new HttpProblem(
-            409,
-            'not-configured',
-            'Provider not set up',
-            `The ${provider.name} provider has no credentials for ${provider.state} payments on this server.`,
-          );
         const [move] = await su
           .model('account.move')
           .browse([id] as never)
@@ -242,52 +370,15 @@ function registerPaymentRoutes(
             'Nothing to pay',
             'Nothing is due on this document.',
           );
-        const token = await endpointOf(su, provider);
-        const created = await su.model('payment.transaction').create([
-          {
-            provider: provider.id as never,
-            move: move.id as never,
-            partner: (move.partner?.id ?? null) as never,
-            currency: move.currency.id as never,
-            amount: due.toFixed(),
-            company: company as never,
-          },
-        ]);
-        await su.flush(); // company checks run in this superuser scope, not at commit (Shutro request #11)
-        const [tx] = await created.load({});
-        const reference = tx?.reference ?? '';
-        let started: Awaited<ReturnType<PaymentAdapter['createPayment']>>;
-        try {
-          started = await adapter.createPayment({
-            reference,
-            amount: due.toFixed(move.currency.decimalPlaces ?? 2),
-            currency: move.currency.name,
-            description: `${d.spec.label} ${move.name}`,
-            customer: {
-              name: move.partner?.name ?? '',
-              email: move.partner?.email ?? null,
-              phone: move.partner?.phone ?? move.partner?.mobile ?? null,
-              street: move.partner?.street ?? null,
-              city: move.partner?.city ?? null,
-              zip: move.partner?.zip ?? null,
-              country: move.partner?.country ?? null,
-            },
-            returnUrl: `${urls.api}/api/v1/payment/return/${encodeURIComponent(reference)}`,
-            callbackUrl: `${urls.api}/api/v1/hooks/${token}`,
-            mode: provider.state === 'live' ? 'live' : 'test',
-          });
-        } catch (error) {
-          throw new HttpProblem(
-            502,
-            'provider-error',
-            'The payment could not start',
-            error instanceof Error ? error.message : String(error),
-          );
-        }
-        if (started.providerReference !== undefined)
-          await created.write({ providerReference: started.providerReference });
-        await su.flush();
-        return { reference, redirectUrl: started.redirectUrl };
+        return startPayment(su, {
+          provider: provider.id,
+          move: move.id,
+          partner: move.partner,
+          currency: move.currency,
+          amount: due,
+          company,
+          description: `${d.spec.label} ${move.name}`,
+        });
       },
     );
     return reply.status(201).send(started);
@@ -310,7 +401,7 @@ function registerPaymentRoutes(
           return t === undefined
             ? null
             : {
-                move: t.move.id,
+                move: t.move?.id ?? 0,
                 state: t.state,
                 amount: t.amount.amount.toFixed(t.currency.decimalPlaces ?? 2),
                 currency: t.currency.name,
@@ -427,7 +518,8 @@ function registerPaymentRoutes(
             return t === undefined
               ? null
               : {
-                  move: t.move.id,
+                  move: t.move?.id ?? null,
+                  returnUrl: t.returnUrl,
                   company: t.company.id,
                   state: t.state,
                   code: t.provider.code,
@@ -463,6 +555,11 @@ function registerPaymentRoutes(
           }
         }
         const move = tx?.move ?? null;
+        if (tx?.returnUrl !== null && tx?.returnUrl !== undefined && tx.returnUrl !== '')
+          return reply.redirect(
+            `${tx.returnUrl}${tx.returnUrl.includes('?') ? '&' : '?'}payment=${encodeURIComponent(reference)}`,
+            303,
+          );
         return reply.redirect(
           move === null
             ? `${urls.portal}/`

@@ -55,8 +55,17 @@ export async function settle(env: Env, result: PaymentResult): Promise<Settled |
     await found.write({ state: 'failed', providerReference: result.providerReference, error });
     return { ...same, state: 'failed', changed: true, payment: null };
   }
+  const moves = (await found.payable()).get(tx.id) ?? [];
+  if (moves.length === 0) {
+    await found.write({
+      state: 'failed',
+      providerReference: result.providerReference,
+      error: 'Paid, but there is no document to register the payment against.',
+    });
+    return { ...same, state: 'failed', changed: true, payment: null };
+  }
   const payment = await registerPayment(env as never, {
-    moves: [tx.move.id],
+    moves,
     journal: tx.provider.journal.id,
     amount: amount.toFixed(),
     memo: `${tx.provider.name} ${result.providerReference ?? tx.reference}`,
