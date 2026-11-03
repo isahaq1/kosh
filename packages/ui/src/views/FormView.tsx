@@ -200,7 +200,7 @@ function Lines({
   readonly state: LineState | undefined;
   readonly onState: (state: LineState) => void;
 }): ReactElement | null {
-  const { api, registry } = useKosh();
+  const { api, registry, uid, companyId } = useKosh();
   const { t } = useTranslation();
   const field = served.fields[served.view.model]?.[node.field];
   const target = field?.target ?? '';
@@ -266,7 +266,11 @@ function Lines({
                         field={meta}
                         value={row.values[c.field]}
                         record={row.values}
-                        readonly={readonly || meta.readonly}
+                        readonly={
+                          readonly ||
+                          meta.readonly ||
+                          holds(c.readonlyWhen, row.values, { uid, companyId })
+                        }
                         onChange={(value) =>
                           set(
                             rows.map((r, i) =>
