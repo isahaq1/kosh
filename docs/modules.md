@@ -433,8 +433,13 @@ POST /api/v1/public/shop/padma/cart                          → { token }  (the
 PUT  /api/v1/public/shop/padma/cart/lines                    { "product": 7, "quantity": 2 }
 GET  /api/v1/public/shop/padma/carriers?city=Dhaka
 POST /api/v1/public/shop/padma/checkout                      { name, email, phone, street, city, carrier, payment: "cod" }
-GET  /api/v1/public/shop/padma/order                         the placed order and its payment
+GET  /api/v1/public/shop/padma/order                         the placed order, its payment and its shipments
 ```
+
+Delivery methods may name a courier: a confirmed shop order then gets a shipment to book (Sites › Shipments), tracked
+to delivery with the cash collected; couriers are adapters (the test courier now; Pathao, Steadfast and RedX with
+their credentials). With Stockroom, `website_sale_stock` shows in stock / few left / out of stock and can keep carts
+within what is available.
 
 ### Counter (`modules/pos`, RFC 0021)
 

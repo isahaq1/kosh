@@ -87,6 +87,7 @@ const PACKAGES = [
   'event_account',
   'website_crm',
   'website_sale',
+  'website_sale_stock',
   'pos_stock',
   'expense_account',
   'payroll_account',

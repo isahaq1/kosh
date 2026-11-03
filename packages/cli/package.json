@@ -103,7 +103,8 @@
     "@kosh/trade_finance_sale": "workspace:*",
     "@kosh/website": "workspace:*",
     "@kosh/website_crm": "workspace:*",
-    "@kosh/website_sale": "workspace:*"
+    "@kosh/website_sale": "workspace:*",
+    "@kosh/website_sale_stock": "workspace:*"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1"

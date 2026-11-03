@@ -39,6 +39,7 @@
     "@kosh/website": "workspace:*",
     "@kosh/website_crm": "workspace:*",
     "@kosh/website_sale": "workspace:*",
+    "@kosh/website_sale_stock": "workspace:*",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

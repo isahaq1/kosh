@@ -533,3 +533,28 @@ data, an overview, docs and an E2E.
   order once, the return to the storefront, the demo; end to end, a shop and its delivery method made on screen and
   a visitor's order in Shop orders.
 
+## Implementation notes (2026-11-03): step 7 part 2a — couriers and stock on the shop
+
+- **Couriers** behind one adapter each (`CourierAdapter`: book a parcel with the cash to collect, track it, cancel
+  it; credentials from the environment, never in records), registered with `websiteSaleModule({ couriers })`. The
+  test courier moves no parcel (tests and the demo move it with `advance`); Pathao, Steadfast and RedX adapters come
+  with their sandbox credentials, as decided.
+- **Shipments** (`delivery.shipment`, Sites › Shipments): a draft for each confirmed shop order whose delivery method
+  has a courier — once, through the outbox (`sale.order.confirmed`) — with the customer's name, phone and address,
+  the goods' weight and, paid on delivery, the cash to collect. *Book the courier* books it (the consignment id and
+  the label); what the courier says becomes its tracking events and moves it along — picked up, in transit,
+  delivered (the cash collected) or returned — hourly on the server and by `POST /api/v1/shop/shipments/refresh`.
+  Cancelling asks the courier first. The customer follows the shipments with their token (`GET …/order`). Orders show
+  their shipments as a tile.
+- **`website_sale_stock`** (the Shop ↔ Stockroom bridge): products show *in stock*, *few left* (with how many, by
+  the site's threshold) or *out of stock* from what Stockroom has available, services nothing (`shopAvailable()` on
+  products, which the bridge overrides); a site that does not sell beyond stock refuses a cart line beyond what is
+  available, saying how many are left.
+- **Not yet**: the courier's own callbacks (through inbound webhooks, with the real adapters), COD remittances
+  matched in Accounting, labels printed in bulk; then part 2b — coupons, abandoned carts, SEO and the sitemap,
+  product pictures served publicly.
+- **Tests**: on real PostgreSQL the shipment drafted once for a confirmed order (a replay makes no second one) with
+  its cash and weight, booked, tracked in transit and delivered with the cash collected, followed by the token, not
+  cancellable once delivered; few left with how many, out of stock, services without; beyond stock sold by default
+  and refused with what is left otherwise; end to end, a parcel booked from the shipment's form.
+
