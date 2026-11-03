@@ -44,6 +44,7 @@ export async function catalogue(
     readonly page?: number;
     readonly size?: number;
   },
+  site?: Site,
 ): Promise<{ products: Record<string, unknown>[]; total: number; page: number; pages: number }> {
   const size = Math.min(Math.max(query.size ?? 24, 1), 60);
   const page = Math.max(query.page ?? 1, 1);
@@ -86,7 +87,11 @@ export async function catalogue(
     limit: size,
     offset: (page - 1) * size,
   });
-  const products = [...(await found.load({ category: true, uom: true }))].map(card);
+  const products = await withAvailability(
+    env,
+    site,
+    [...(await found.load({ category: true, uom: true }))].map(card),
+  );
   return { products, total: all.length, page, pages: Math.max(Math.ceil(all.length / size), 1) };
 }
 
@@ -104,7 +109,45 @@ function card(p: any): Record<string, unknown> {
 }
 
 /** A published product's page: its card, description, weight and related products (published ones). */
-export async function productPage(env: Env, id: number): Promise<Record<string, unknown> | null> {
+/**
+ * The cards with what is available, when stock is followed (`website_sale_stock`): in stock, few left (with how
+ * many) or out of stock, by the site's "few left" threshold; null when it is not.
+ */
+async function withAvailability(
+  env: Env,
+  site: Site | undefined,
+  cards: Record<string, unknown>[],
+): Promise<Record<string, unknown>[]> {
+  if (cards.length === 0) return cards;
+  const available = await env
+    .model('product.product')
+    .browse(cards.map((c) => c['id']) as never)
+    .shopAvailable();
+  const [s] =
+    site === undefined
+      ? []
+      : await env
+          .model('website.site')
+          .browse([site.id as never])
+          .load({});
+  const few = orm.toDecimal(s?.fewLeft ?? 5);
+  return cards.map((c) => {
+    const raw = available.get(c['id'] as number) ?? null;
+    if (raw === null) return { ...c, availability: null };
+    const left = orm.toDecimal(raw);
+    return left.lte(0)
+      ? { ...c, availability: 'out_of_stock' }
+      : left.lte(few)
+        ? { ...c, availability: 'few_left', left: left.toString() }
+        : { ...c, availability: 'in_stock' };
+  });
+}
+
+export async function productPage(
+  env: Env,
+  id: number,
+  site?: Site,
+): Promise<Record<string, unknown> | null> {
   const [p] = await (
     await env.model('product.product').search({
       where: { id: orm.asId(id, 'product.product'), published: true, saleOk: true },
@@ -121,11 +164,12 @@ export async function productPage(env: Env, id: number): Promise<Record<string, 
       } as never,
     })
   ).load({ category: true, uom: true });
+  const [self] = await withAvailability(env, site, [card(p)]);
   return {
-    ...card(p),
+    ...self,
     description: p.websiteDescription,
     weight: p.weight === null ? null : p.weight.toString(),
-    related: [...related].map(card),
+    related: await withAvailability(env, site, [...related].map(card)),
   };
 }
 
@@ -294,6 +338,18 @@ export async function setLine(
     })
   ).load({ taxes: true, uom: true });
   if (p === undefined) throw invalid('product', 'This product is not on the shop.');
+  // Beyond what is available, unless the site sells beyond stock.
+  const [cart] = await env.model('sale.order').browse([id]).load({ website: true });
+  if (cart?.website !== null && cart?.website !== undefined && !cart.website.allowBackorders) {
+    const raw = (await env.model('product.product').browse([p.id]).shopAvailable()).get(p.id);
+    if (raw !== null && raw !== undefined && quantity.gt(orm.toDecimal(raw)))
+      throw invalid(
+        'quantity',
+        orm.toDecimal(raw).lte(0)
+          ? `${p.name} is out of stock.`
+          : `Only ${orm.toDecimal(raw).toString()} of ${p.name} left.`,
+      );
+  }
   const lines = await (
     await env.model('sale.order.line').search({ where: { order: id, isDelivery: false } })
   ).load({ product: true });

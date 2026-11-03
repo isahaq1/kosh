@@ -25,12 +25,14 @@ import { product } from '@kosh/product';
 import { saleAccount } from '@kosh/sale_account';
 import { sales } from '@kosh/sales';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
-import { type Decimal, type Id, orm } from '@kosh/server/orm';
+import { type Decimal, type Id, orm, type Worker } from '@kosh/server/orm';
 import { action, field, form, list, search, stat } from '@kosh/views';
 import { website } from '@kosh/website';
 import type { Env } from './.kosh/bindings.js';
+import { type CourierAdapter, setCouriers, testCourier } from './couriers.js';
 import { shopDemo } from './demo.js';
-import { DeliveryCarrier, websiteSaleShutro } from './module.js';
+import { DeliveryCarrier, DeliveryShipment, websiteSaleShutro } from './module.js';
+import { draftShipments, refreshShipments, trackingOf } from './shipments.js';
 import {
   carriersFor,
   cartView,
@@ -47,8 +49,22 @@ import {
 } from './shop.js';
 
 export {
+  type Booked,
+  type CourierAdapter,
+  courierOf,
+  type FakeCourier,
+  fakeCourier,
+  type Parcel,
+  type ParcelStatus,
+  setCouriers,
+  type Tracking,
+  testCourier,
+} from './couriers.js';
+export {
   COURIERS,
   DeliveryCarrier,
+  DeliveryShipment,
+  DeliveryShipmentEvent,
   feeOf,
   hashToken,
   LineShop,
@@ -58,6 +74,7 @@ export {
   TransactionOrder,
   websiteSaleShutro,
 } from './module.js';
+export { draftShipments, refreshShipments, trackingOf } from './shipments.js';
 export { type CheckoutInput, checkout, setDelivery, setLine } from './shop.js';
 
 type Row = Record<string, unknown>;
@@ -115,26 +132,30 @@ function registerShopRoutes(context: ModuleContext): void {
 
   app.get(`${base}/products`, pub, async (request) => {
     const q = (request.query ?? {}) as Row;
-    return inShop(request.params, 'catalogue', (env) =>
-      catalogue(inLang(env, langOf(q)), {
-        ...(typeof q['q'] === 'string' ? { q: q['q'] } : {}),
-        ...(positive(q['category']) === undefined ? {} : { category: positive(q['category']) }),
-        ...(decimal(q['min'], 'minimum') === undefined
-          ? {}
-          : { min: decimal(q['min'], 'minimum') }),
-        ...(decimal(q['max'], 'maximum') === undefined
-          ? {}
-          : { max: decimal(q['max'], 'maximum') }),
-        ...(typeof q['sort'] === 'string' ? { sort: q['sort'] } : {}),
-        ...(positive(q['page']) === undefined ? {} : { page: positive(q['page']) }),
-      } as never),
+    return inShop(request.params, 'catalogue', (env, site) =>
+      catalogue(
+        inLang(env, langOf(q)),
+        {
+          ...(typeof q['q'] === 'string' ? { q: q['q'] } : {}),
+          ...(positive(q['category']) === undefined ? {} : { category: positive(q['category']) }),
+          ...(decimal(q['min'], 'minimum') === undefined
+            ? {}
+            : { min: decimal(q['min'], 'minimum') }),
+          ...(decimal(q['max'], 'maximum') === undefined
+            ? {}
+            : { max: decimal(q['max'], 'maximum') }),
+          ...(typeof q['sort'] === 'string' ? { sort: q['sort'] } : {}),
+          ...(positive(q['page']) === undefined ? {} : { page: positive(q['page']) }),
+        } as never,
+        site,
+      ),
     );
   });
   app.get(`${base}/products/:id`, pub, async (request) => {
     const id = positive((request.params as Row)['id']);
     if (id === undefined) throw notFound('such product');
-    const page = await inShop(request.params, 'product', (env) =>
-      productPage(inLang(env, langOf(request.query)), id),
+    const page = await inShop(request.params, 'product', (env, site) =>
+      productPage(inLang(env, langOf(request.query)), id, site),
     );
     if (page === null) throw notFound('such product on this shop');
     return page;
@@ -197,164 +218,324 @@ function registerShopRoutes(context: ModuleContext): void {
     inShop(request.params, 'order', async (env, site) => {
       const id = await orderOf(env, site, tokenOf(request.headers), true);
       if (id === null) throw notFound('order for this token');
-      return cartView(env, id);
+      return { ...(await cartView(env, id)), shipments: await trackingOf(env, id) };
     }),
   );
 }
 
-export const websiteSale: ReturnType<typeof defineModule> = defineModule({
-  shutro: websiteSaleShutro,
-  kosh: '^0.1.0',
-  hooks: { demo: shopDemo },
-  depends: [website, sales, saleAccount, payment, product],
-  accessLevels: {
-    manager: { label: 'Shop manager', groups: ['website_sale.manager'] },
-  },
-  routes: (context: ModuleContext) => registerShopRoutes(context),
-  actions: {
-    'shop.action_orders': action('sale.order' as never, {
-      label: 'Shop orders',
-      views: ['list', 'form'],
-      domain: { website: { isNull: false }, placedAt: { isNull: false } },
-    }),
-    'shop.action_carriers': action(DeliveryCarrier, {
-      label: 'Delivery methods',
-      views: ['list', 'form'],
-    }),
-    'shop.action_products': action('product.product' as never, {
-      label: 'Shop products',
-      views: ['list', 'form'],
-      domain: { published: true },
-    }),
-  },
-  menus: [
-    {
-      id: 'sites.shop_orders',
-      parent: 'sites.root',
-      label: 'Shop orders',
-      action: 'shop.action_orders',
-      sequence: 0.5,
+/** The subscriber that makes the draft shipments of confirmed shop orders; tests `drain()` it, the server starts it. */
+export function shipmentWorker(context: Pick<ModuleContext, 'shutro'>): Worker {
+  return context.shutro.subscribe(
+    'website_sale.shipments',
+    'sale.order.confirmed',
+    async (event, env) => {
+      const id = Number(((event.payload ?? {}) as Row)['id']);
+      if (Number.isSafeInteger(id) && id > 0)
+        await (env as unknown as Env).asSuperuser({ reason: 'shop shipment' }, (su) =>
+          draftShipments(su, [id]),
+        );
     },
-    {
-      id: 'sites.shop_products',
-      parent: 'sites.root',
-      label: 'Shop products',
-      action: 'shop.action_products',
-      sequence: 0.6,
+    { pollMs: 5000 },
+  );
+}
+
+/**
+ * Shipments: `POST /api/v1/shop/shipments/refresh` `{ shipments? }` asks the couriers now (Sales users); hourly on the
+ * server every open shipment is asked; the subscriber makes the drafts of confirmed orders.
+ */
+function registerShipmentRoutes(context: ModuleContext): void {
+  const { app } = context;
+  app.post('/api/v1/shop/shipments/refresh', async (request) => {
+    const given = ((request.body ?? {}) as Row)['shipments'];
+    const ids = Array.isArray(given) ? given.map(Number).filter(Number.isSafeInteger) : undefined;
+    return request.env(
+      async (raw) => {
+        const env = raw as unknown as Env;
+        if (!env.administrator && !env.groups.has('sales.user'))
+          throw new HttpProblem(403, 'access', 'Sales users', 'This needs the Sales user role.');
+        const visible = (
+          await env
+            .model('delivery.shipment')
+            .search(ids === undefined ? {} : { where: { id: { in: ids as never } } })
+        ).ids;
+        return {
+          moved: await env.asSuperuser({ reason: 'shipment tracking' }, (su) =>
+            refreshShipments(su, visible),
+          ),
+        };
+      },
+      { write: true },
+    );
+  });
+  if (process.env['KOSH_SCHEDULES'] === 'off') return;
+  const worker = shipmentWorker(context);
+  worker.start();
+  const run = async () => {
+    try {
+      const companies = await context.shutro.bootstrap(
+        { reason: 'shipment tracking' },
+        async (env) => (await (env as unknown as Env).model('res.company').search({})).ids,
+      );
+      for (const company of companies)
+        await context.shutro.bootstrap({ reason: 'shipment tracking', company }, (env) =>
+          (env as unknown as Env).asSuperuser({ reason: 'shipment tracking' }, (su) =>
+            refreshShipments(su),
+          ),
+        );
+    } catch (error) {
+      app.log.error({ err: error }, 'shipment tracking');
+    }
+  };
+  const timer = setInterval(() => void run(), 3_600_000);
+  timer.unref();
+  app.addHook('onClose', async () => {
+    clearInterval(timer);
+    await worker.stop();
+  });
+}
+
+export interface ShopOptions {
+  /** The couriers by code (tests; default: the test courier). */
+  readonly couriers?: ReadonlyMap<string, CourierAdapter>;
+}
+
+/** The Shop with explicit options (tests, installations wiring their couriers). */
+export function websiteSaleModule(options: ShopOptions = {}): ReturnType<typeof defineModule> {
+  setCouriers(options.couriers ?? new Map([['fake', testCourier]]));
+  return defineModule({
+    shutro: websiteSaleShutro,
+    kosh: '^0.1.0',
+    hooks: { demo: shopDemo },
+    depends: [website, sales, saleAccount, payment, product],
+    accessLevels: {
+      manager: { label: 'Shop manager', groups: ['website_sale.manager'] },
     },
-    {
-      id: 'sites.carriers',
-      parent: 'sites.root',
-      label: 'Delivery methods',
-      action: 'shop.action_carriers',
-      sequence: 5,
+    routes: (context: ModuleContext) => {
+      registerShopRoutes(context);
+      registerShipmentRoutes(context);
     },
-  ],
-  views: {
-    'delivery.carrier.list': list(DeliveryCarrier, {
-      columns: [
-        'name',
-        'kind',
-        'price',
-        'priceInside',
-        'priceOutside',
-        'freeOver',
-        'cod',
-        'courier',
-      ],
-    }),
-    'delivery.carrier.form': form(DeliveryCarrier, (k) => ({
-      sheet: [
-        k.group('main', ['name', 'kind', 'courier', 'cod', 'sequence'], {
-          description:
-            'A fixed fee; by weight, the first kg and each one after it; by zone, a fee inside the listed cities and one outside.',
-        }),
-        k.group('fees', [
-          'price',
-          'pricePerKg',
-          'zoneCities',
-          'priceInside',
-          'priceOutside',
-          'freeOver',
-        ]),
-        k.group('about', ['description', 'product'], { columns: 1 }),
-      ],
-      chatter: true,
-    })),
-  },
-  viewExtensions: [
-    {
-      view: 'product.product.form',
-      operations: [
-        {
-          insertAfter: 'prices',
-          nodes: [
-            {
-              kind: 'group',
-              id: 'shop',
-              label: 'Shop',
-              children: [
-                field({ field: 'published', id: 'shop_published' }),
-                field({ field: 'shopSequence', id: 'shop_sequence' }),
-                field({ field: 'weight', id: 'shop_weight' }),
-                field({ field: 'related', id: 'shop_related', widget: 'tags' }),
-                field({ field: 'websiteDescription', id: 'shop_description' }),
-              ],
-            },
-          ],
-        },
-      ],
+    actions: {
+      'shop.action_orders': action('sale.order' as never, {
+        label: 'Shop orders',
+        views: ['list', 'form'],
+        domain: { website: { isNull: false }, placedAt: { isNull: false } },
+      }),
+      'shop.action_shipments': action(DeliveryShipment, {
+        label: 'Shipments',
+        views: ['list', 'form'],
+        defaultFilters: ['open'],
+      }),
+      'shop.action_carriers': action(DeliveryCarrier, {
+        label: 'Delivery methods',
+        views: ['list', 'form'],
+      }),
+      'shop.action_products': action('product.product' as never, {
+        label: 'Shop products',
+        views: ['list', 'form'],
+        domain: { published: true },
+      }),
     },
-    {
-      view: 'website.site.form',
-      operations: [
-        {
-          append: 'main',
-          nodes: [
-            field({ field: 'shop', id: 'site_shop' }),
-            field({ field: 'codLimit', id: 'site_cod_limit' }),
-            field({ field: 'salesperson', id: 'site_salesperson' }),
-          ],
-        },
-      ],
-    },
-    {
-      view: 'sale.order.form',
-      operations: [
-        {
-          append: 'related',
-          nodes: [
-            stat({
-              id: 'order_online_payments',
-              label: 'Online payments',
-              model: 'payment.transaction',
-              where: { saleOrder: { $record: 'id' } },
-              action: 'payment.action_transactions',
+    menus: [
+      {
+        id: 'sites.shop_orders',
+        parent: 'sites.root',
+        label: 'Shop orders',
+        action: 'shop.action_orders',
+        sequence: 0.5,
+      },
+      {
+        id: 'sites.shop_products',
+        parent: 'sites.root',
+        label: 'Shop products',
+        action: 'shop.action_products',
+        sequence: 0.6,
+      },
+      {
+        id: 'sites.shipments',
+        parent: 'sites.root',
+        label: 'Shipments',
+        action: 'shop.action_shipments',
+        sequence: 0.55,
+      },
+      {
+        id: 'sites.carriers',
+        parent: 'sites.root',
+        label: 'Delivery methods',
+        action: 'shop.action_carriers',
+        sequence: 5,
+      },
+    ],
+    views: {
+      'delivery.shipment.list': list(DeliveryShipment, {
+        columns: [
+          'name',
+          'order',
+          'recipient',
+          'city',
+          'courier',
+          'trackingRef',
+          'cod',
+          'codCollected',
+          { field: 'state', widget: 'badge' },
+        ],
+        decorations: { success: { state: 'delivered' }, danger: { state: 'returned' } },
+      }),
+      'delivery.shipment.form': form(DeliveryShipment, (k) => ({
+        header: {
+          statusbar: 'state',
+          buttons: [
+            k.button('book', { primary: true, label: 'Book the courier' }),
+            k.button('cancel', {
+              label: 'Cancel',
+              confirm: 'Cancel this shipment with the courier?',
             }),
           ],
         },
-      ],
+        sheet: [
+          k.group('parcel', ['order', 'carrier', 'courier', 'trackingRef', 'labelUrl'], {
+            description:
+              'Booked with the courier, then moved along by what it says; the cash to collect is collected on delivery.',
+          }),
+          k.group('deliver_to', ['recipient', 'phone', 'address', 'city'], { label: 'Deliver to' }),
+          k.group('cash_to_collect', ['cod', 'codCollected', 'codCollectedAt', 'weight']),
+          k.lines('events', [
+            { field: 'at', id: 'event_at' },
+            { field: 'status', id: 'event_status' },
+            { field: 'note', id: 'event_note' },
+          ]),
+          k.group('about', ['note'], { columns: 1 }),
+        ],
+        chatter: true,
+      })),
+      'delivery.carrier.list': list(DeliveryCarrier, {
+        columns: [
+          'name',
+          'kind',
+          'price',
+          'priceInside',
+          'priceOutside',
+          'freeOver',
+          'cod',
+          'courier',
+        ],
+      }),
+      'delivery.carrier.form': form(DeliveryCarrier, (k) => ({
+        sheet: [
+          k.group('main', ['name', 'kind', 'courier', 'cod', 'sequence'], {
+            description:
+              'A fixed fee; by weight, the first kg and each one after it; by zone, a fee inside the listed cities and one outside.',
+          }),
+          k.group('fees', [
+            'price',
+            'pricePerKg',
+            'zoneCities',
+            'priceInside',
+            'priceOutside',
+            'freeOver',
+          ]),
+          k.group('about', ['description', 'product'], { columns: 1 }),
+        ],
+        chatter: true,
+      })),
     },
-    {
-      view: 'sale.order.form',
-      operations: [
-        {
-          insertAfter: 'partner',
-          nodes: [
-            field({ field: 'website', id: 'order_site' }),
-            field({ field: 'carrier', id: 'order_carrier' }),
-            field({ field: 'shopPayment', id: 'order_shop_payment' }),
-            field({ field: 'placedAt', id: 'order_placed_at' }),
-            field({ field: 'shopNote', id: 'order_shop_note' }),
-          ],
+    viewExtensions: [
+      {
+        view: 'product.product.form',
+        operations: [
+          {
+            insertAfter: 'prices',
+            nodes: [
+              {
+                kind: 'group',
+                id: 'shop',
+                label: 'Shop',
+                children: [
+                  field({ field: 'published', id: 'shop_published' }),
+                  field({ field: 'shopSequence', id: 'shop_sequence' }),
+                  field({ field: 'weight', id: 'shop_weight' }),
+                  field({ field: 'related', id: 'shop_related', widget: 'tags' }),
+                  field({ field: 'websiteDescription', id: 'shop_description' }),
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        view: 'website.site.form',
+        operations: [
+          {
+            append: 'main',
+            nodes: [
+              field({ field: 'shop', id: 'site_shop' }),
+              field({ field: 'codLimit', id: 'site_cod_limit' }),
+              field({ field: 'fewLeft', id: 'site_few_left' }),
+              field({ field: 'allowBackorders', id: 'site_backorders' }),
+              field({ field: 'salesperson', id: 'site_salesperson' }),
+            ],
+          },
+        ],
+      },
+      {
+        view: 'sale.order.form',
+        operations: [
+          {
+            append: 'related',
+            nodes: [
+              stat({
+                id: 'order_shipments',
+                label: 'Shipments',
+                model: 'delivery.shipment',
+                where: { order: { $record: 'id' } },
+                action: 'shop.action_shipments',
+              }),
+              stat({
+                id: 'order_online_payments',
+                label: 'Online payments',
+                model: 'payment.transaction',
+                where: { saleOrder: { $record: 'id' } },
+                action: 'payment.action_transactions',
+              }),
+            ],
+          },
+        ],
+      },
+      {
+        view: 'sale.order.form',
+        operations: [
+          {
+            insertAfter: 'partner',
+            nodes: [
+              field({ field: 'website', id: 'order_site' }),
+              field({ field: 'carrier', id: 'order_carrier' }),
+              field({ field: 'shopPayment', id: 'order_shop_payment' }),
+              field({ field: 'placedAt', id: 'order_placed_at' }),
+              field({ field: 'shopNote', id: 'order_shop_note' }),
+            ],
+          },
+        ],
+      },
+    ],
+    search: {
+      'delivery.shipment': search(DeliveryShipment, {
+        fields: ['name', 'trackingRef', 'recipient', 'phone', 'order.name'],
+        filters: {
+          open: {
+            label: 'On the way',
+            domain: { state: { in: ['draft', 'booked', 'picked', 'in_transit'] } },
+            group: 'state',
+          },
+          cash: { label: 'Cash collected', domain: { codCollected: true } },
         },
-      ],
+        groupBy: ['state', 'courier', 'carrier'],
+      }),
+      'delivery.carrier': search(DeliveryCarrier, {
+        fields: ['name'],
+        groupBy: ['kind', 'courier'],
+      }),
     },
-  ],
-  search: {
-    'delivery.carrier': search(DeliveryCarrier, {
-      fields: ['name'],
-      groupBy: ['kind', 'courier'],
-    }),
-  },
-});
+  });
+}
+
+/** The Shop (the test courier; Pathao, Steadfast and RedX adapters come with their sandbox credentials). */
+export const websiteSale: ReturnType<typeof defineModule> = websiteSaleModule();

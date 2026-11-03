@@ -18,8 +18,11 @@ import {
   type Env,
   extendModel,
   f,
+  method,
   type Records,
+  records,
 } from './.kosh/bindings.js';
+import { courierOf } from './couriers.js';
 
 const ALL = ['read', 'write', 'create', 'unlink', 'export', 'import'] as const;
 const zero = orm.toDecimal(0);
@@ -54,6 +57,17 @@ export const ProductShop = extendModel('product.product', {
     /** The order on the shop (lowest first). */
     shopSequence: f.integer({ required: true, default: 10, label: 'Shop order' }),
   },
+  methods: {
+    /**
+     * What each of these products has available for the shop, in its unit (a decimal string), or null when stock is
+     * not followed. Null here; `website_sale_stock` says what Stockroom has.
+     */
+    shopAvailable: method('product.product', async function (): Promise<
+      Map<number, string | null>
+    > {
+      return new Map(this.ids.map((id) => [id, null]));
+    }),
+  },
 });
 
 export const SiteShop = extendModel('website.site', {
@@ -64,6 +78,10 @@ export const SiteShop = extendModel('website.site', {
     codLimit: f.decimal({ scale: 2, label: 'Cash on delivery up to' }),
     /** Who shop orders are assigned to (the site's creator when empty). */
     salesperson: f.many2one('res.users', { ondelete: 'set null', label: 'Shop orders for' }),
+    /** With stock shown (`website_sale_stock`): at most this many is "few left". */
+    fewLeft: f.integer({ required: true, default: 5, label: 'Few left from' }),
+    /** With stock shown: whether more than is available may be ordered. */
+    allowBackorders: f.boolean({ default: true, label: 'Sell beyond stock' }),
     /** Who carts belong to before checkout (made with the first cart). */
     visitor: f.many2one('res.partner', { ondelete: 'set null', label: 'Shop visitor' }),
   },
@@ -201,9 +219,152 @@ export const TransactionOrder = extendModel('payment.transaction', {
   },
 });
 
+/**
+ * A shipment (RFC 0024 §2.7): a shop order's parcel with its courier — made as a draft when an order whose delivery
+ * method has a courier is confirmed, booked by the team (the courier's consignment id and label), then moved along by
+ * what the courier says (picked, in transit, delivered or returned) with its events; delivered with the cash to
+ * collect, the cash is collected.
+ */
+export const DeliveryShipment = defineModel('delivery.shipment', {
+  label: 'Shipment',
+  recName: 'name',
+  order: ['id desc'],
+  companyScoped: { required: true },
+  tracking: ['state', 'trackingRef'],
+  access: { 'sales.user': ['read', 'write', 'create'], 'sales.manager': ALL },
+  fields: {
+    name: f.char({
+      required: true,
+      readonly: true,
+      sequence: { code: 'delivery.shipment' },
+      label: 'Reference',
+    }),
+    order: f.many2one('sale.order', { required: true, ondelete: 'restrict', label: 'Order' }),
+    carrier: f.many2one('delivery.carrier', { required: true, ondelete: 'restrict' }),
+    courier: f.selection(COURIERS, { required: true, default: 'fake' }),
+    recipient: f.char({ required: true }),
+    phone: f.char({ required: true }),
+    address: f.char({ required: true }),
+    city: f.char({ required: true }),
+    /** The cash the courier collects (0: paid online). */
+    cod: f.decimal({ scale: 2, required: true, default: '0', label: 'Cash to collect' }),
+    weight: f.decimal({ scale: 3, required: true, default: '0', label: 'Weight (kg)' }),
+    trackingRef: f.char({ index: true, label: 'Consignment' }),
+    labelUrl: f.char({ label: 'Label' }),
+    codCollected: f.boolean({ default: false, label: 'Cash collected' }),
+    codCollectedAt: f.datetime({ label: 'Collected at' }),
+    events: f.one2many('delivery.shipment.event', 'shipment', { label: 'Tracking' }),
+    note: f.text(),
+    state: f.state({
+      states: {
+        draft: 'To book',
+        booked: 'Booked',
+        picked: 'Picked up',
+        in_transit: 'In transit',
+        delivered: 'Delivered',
+        returned: 'Returned',
+        cancel: 'Cancelled',
+      },
+      initial: 'draft',
+      transitions: {
+        /** Books the parcel with the courier: its consignment id and label. */
+        book: {
+          from: ['draft'],
+          to: 'booked',
+          before: records('delivery.shipment', async (shipments): Promise<void> => {
+            for (const s of await shipments.load({})) {
+              const courier = courierOf(s.courier);
+              if (courier === null)
+                throw new orm.ValidationError(
+                  'delivery.shipment',
+                  ['courier'],
+                  `The ${COURIERS[s.courier as keyof typeof COURIERS] ?? s.courier} courier is not set up on this server.`,
+                  'Its credentials go in the server’s environment; the test courier always works.',
+                );
+              let booked: Awaited<ReturnType<typeof courier.book>>;
+              try {
+                booked = await courier.book({
+                  reference: s.name,
+                  recipient: {
+                    name: s.recipient,
+                    phone: s.phone,
+                    address: s.address,
+                    city: s.city,
+                  },
+                  cod: s.cod.toFixed(2),
+                  weightKg: s.weight.toFixed(3),
+                  note: s.note ?? '',
+                });
+              } catch (error) {
+                throw new orm.ValidationError(
+                  'delivery.shipment',
+                  ['courier'],
+                  `The courier refused the booking: ${error instanceof Error ? error.message : String(error)}`,
+                  'Check the address and phone number, then book again.',
+                );
+              }
+              await s.write({ trackingRef: booked.trackingRef, labelUrl: booked.labelUrl ?? null });
+              await shipments.env
+                .model('delivery.shipment.event')
+                .create([{ shipment: s.id, status: 'booked', note: 'Booked with the courier' }]);
+            }
+          }),
+        },
+        pick: { from: ['booked'], to: 'picked' },
+        transit: { from: ['booked', 'picked'], to: 'in_transit' },
+        deliver: {
+          from: ['booked', 'picked', 'in_transit'],
+          to: 'delivered',
+          after: records('delivery.shipment', async (shipments): Promise<void> => {
+            for (const s of await shipments.load({}))
+              if (s.cod.gt(0) && !s.codCollected)
+                await s.write({ codCollected: true, codCollectedAt: new Date() });
+          }),
+        },
+        bounce: { from: ['booked', 'picked', 'in_transit'], to: 'returned' },
+        cancel: {
+          from: ['draft', 'booked'],
+          to: 'cancel',
+          before: records('delivery.shipment', async (shipments): Promise<void> => {
+            for (const s of await shipments.load({})) {
+              if (s.trackingRef === null) continue;
+              const courier = courierOf(s.courier);
+              try {
+                await courier?.cancel(s.trackingRef);
+              } catch (error) {
+                throw new orm.ValidationError(
+                  'delivery.shipment',
+                  ['state'],
+                  `The courier did not cancel it: ${error instanceof Error ? error.message : String(error)}`,
+                  'Ask the courier to return the parcel instead.',
+                );
+              }
+            }
+          }),
+        },
+      },
+    }),
+  },
+  sqlConstraints: {
+    amounts: { check: orm.sql`cod >= 0 AND weight >= 0`, message: 'Amounts are zero or more.' },
+  },
+});
+
+export const DeliveryShipmentEvent = defineModel('delivery.shipment.event', {
+  label: 'Tracking event',
+  order: ['at asc', 'id asc'],
+  access: { 'sales.user': ['read', 'create'], 'sales.manager': ['read', 'create', 'unlink'] },
+  fields: {
+    shipment: f.many2one('delivery.shipment', { required: true, ondelete: 'cascade' }),
+    at: f.datetime({ required: true, default: () => new Date(), label: 'When' }),
+    status: f.char({ required: true }),
+    note: f.char(),
+  },
+});
+
 export const websiteSaleShutro = defineModule({
   name: 'website_sale',
-  version: '0.1.0',
+  version: '0.2.0',
   depends: [websiteShutro, salesShutro, saleAccountShutro, paymentShutro, productShutro],
   groups: [
     orm.defineGroup({
@@ -212,6 +373,14 @@ export const websiteSaleShutro = defineModule({
       implies: ['website.manager', 'sales.manager'],
     }),
   ],
-  models: [DeliveryCarrier],
+  sequences: [
+    orm.defineSequence({
+      code: 'delivery.shipment',
+      prefix: 'SHP/{year}/',
+      padding: 5,
+      reset: 'yearly',
+    }),
+  ],
+  models: [DeliveryCarrier, DeliveryShipment, DeliveryShipmentEvent],
   extensions: [ProductShop, SiteShop, OrderShop, LineShop, TransactionOrder],
 });

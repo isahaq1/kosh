@@ -1,7 +1,8 @@
 /**
  * The Shop end to end (RFC 0024 §2.7): Dina turns a new site into a shop and adds a delivery method on screen; a
  * visitor, with no session, fills a cart through the public API, sees the method's fee and checks out with cash on
- * delivery; the order is in Sites › Shop orders, confirmed, with how it is paid.
+ * delivery; the order is in Sites › Shop orders, confirmed, with how it is paid; its parcel is booked with the test
+ * courier from the shipment's form.
  */
 import { expect, type Page, test } from '@playwright/test';
 
@@ -89,4 +90,35 @@ test('a shop and its delivery method made on screen; a visitor checks out; the o
   await row.getByText(order.order).click();
   await expect(page.getByText('Cash on delivery').first()).toBeVisible();
   await expect(page.getByText('Rina Akter').first()).toBeVisible();
+
+  // The parcel, booked with the test courier on screen.
+  const [placedOrder] = (
+    (await (
+      await page.request.get(
+        `/api/v1/models/sale.order?fields=id,partner&filter=${encodeURIComponent(JSON.stringify({ name: order.order }))}`,
+      )
+    ).json()) as { items: { id: number }[] }
+  ).items;
+  const shipment = (await (
+    await page.request.post('/api/v1/models/delivery.shipment', {
+      headers: { 'x-csrf-token': csrf ?? '' },
+      data: {
+        order: placedOrder?.id,
+        carrier: express?.id,
+        courier: 'fake',
+        recipient: 'Rina Akter',
+        phone: '01700000000',
+        address: 'House 12, Road 5',
+        city: 'Dhaka',
+        cod: '2150',
+      },
+    })
+  ).json()) as { id: number };
+  await page.goto(`/sites/a/shop.action_shipments/${shipment.id}`);
+  await page.getByRole('button', { name: 'Book the courier' }).click();
+  await expect(page.getByRole('button', { name: /^State: Booked/ })).toBeVisible();
+  const booked = (await (
+    await page.request.get(`/api/v1/models/delivery.shipment/${shipment.id}`)
+  ).json()) as { trackingRef: string | null };
+  expect(booked.trackingRef).toMatch(/^FAKE-/);
 });

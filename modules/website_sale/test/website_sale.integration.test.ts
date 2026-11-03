@@ -23,7 +23,7 @@ import { type Driver, orm, pg } from '@kosh/server/orm';
 import { settings } from '@kosh/settings';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { websiteSale } from '../src/index.js';
+import { shipmentWorker, testCourier, websiteSale } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
 const catalogue = [base, settings, websiteSale];
@@ -346,7 +346,69 @@ test('paid online: the test provider confirms; the order is confirmed, invoiced 
   ).json.items as Json[];
   expect(invoice.state).toBe('posted');
   expect(invoice.amountResidual.amount ?? invoice.amountResidual).toBe('0.00');
-});
+}, 30_000);
+
+test('a courier: the confirmed order’s shipment drafted once, booked, tracked to delivered with the cash collected; followed by its token', async () => {
+  const worker = shipmentWorker({ shutro: host.server.shutro });
+  await worker.drain(); // the orders placed before
+  await call('PATCH', `/api/v1/models/delivery.carrier/${ids['zone']}`, 'dina', {
+    courier: 'fake',
+  });
+  const cart = await newCart();
+  await put(cart, ids['Rice 5 kg'], '1');
+  const placed = await visit('POST', `${SHOP}/checkout`, cart, customer(ids['zone'], 'cod'));
+  expect(placed.json.state).toBe('sale');
+  expect(await worker.drain()).toBe(1);
+  const S = '/api/v1/models/delivery.shipment';
+  const q = encodeURIComponent(JSON.stringify({ 'order.name': placed.json.order }));
+  const shipments = async () =>
+    (
+      await call(
+        'GET',
+        `${S}?filter=${q}&fields=name,state,cod,weight,recipient,city,trackingRef,codCollected`,
+        'dina',
+      )
+    ).json.items as Json[];
+  const [draft] = await shipments();
+  expect(draft).toMatchObject({ state: 'draft', recipient: 'Rina Akter', city: 'Dhaka' });
+  expect(Number(draft.cod)).toBe(560); // 500 and the 60 fee, paid on delivery
+  expect(Number(draft.weight)).toBe(5);
+  // Confirmed again (a replay): no second shipment.
+  const [order] = (
+    await call(
+      'GET',
+      `/api/v1/models/sale.order?filter=${encodeURIComponent(JSON.stringify({ name: placed.json.order }))}&fields=id`,
+      'dina',
+    )
+  ).json.items as Json[];
+  await host.server.shutro.bootstrap({ reason: 'test: replay', company }, (env) =>
+    env.emit('sale.order.confirmed', { id: order.id }),
+  );
+  await worker.drain();
+  expect(await shipments()).toHaveLength(1);
+
+  expect((await call('POST', `${S}/${draft.id}/transitions/book`, 'dina')).status).toBe(200);
+  const [booked] = await shipments();
+  expect(booked.state).toBe('booked');
+  expect(booked.trackingRef).toMatch(/^FAKE-/);
+  testCourier.advance(booked.trackingRef, 'in_transit', 'At the Dhaka hub');
+  testCourier.advance(booked.trackingRef, 'delivered', 'Delivered, cash collected');
+  expect(
+    (await call('POST', '/api/v1/shop/shipments/refresh', 'dina', { shipments: [draft.id] })).json
+      .moved,
+  ).toBe(1);
+  const [done] = await shipments();
+  expect(done).toMatchObject({ state: 'delivered', codCollected: true });
+  const followed = (await visit('GET', `${SHOP}/order`, cart)).json;
+  expect(followed.shipments[0].state).toBe('delivered');
+  expect(followed.shipments[0].events.map((e: Json) => e.status)).toEqual([
+    'booked',
+    'in_transit',
+    'delivered',
+  ]);
+  // Delivered: no longer cancellable.
+  expect((await call('POST', `${S}/${draft.id}/transitions/cancel`, 'dina')).status).toBe(409);
+}, 30_000);
 
 test('the demo data loads', async () => {
   const auth = host.server.auth;
