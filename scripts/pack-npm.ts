@@ -88,6 +88,7 @@ const PACKAGES = [
   'website_crm',
   'website_sale',
   'website_sale_stock',
+  'documents',
   'pos_stock',
   'expense_account',
   'payroll_account',

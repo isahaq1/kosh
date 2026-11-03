@@ -19,6 +19,7 @@
     "@kosh/accounting": "workspace:*",
     "@kosh/assistant": "workspace:*",
     "@kosh/attendance": "workspace:*",
+    "@kosh/documents": "workspace:*",
     "@kosh/expense": "workspace:*",
     "@kosh/expense_account": "workspace:*",
     "@kosh/helpdesk": "workspace:*",

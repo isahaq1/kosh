@@ -34,6 +34,7 @@ export type AppName =
   | 'account_asset'
   | 'account_budget'
   | 'website_sale'
+  | 'documents'
   | 'sale_project'
   | 'sale_stock'
   | 'purchase_stock'
@@ -233,6 +234,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
       'Shop: published products, delivery fees, cart and checkout with cash on delivery or online payment (in Sites)',
     icon: '🛒',
     server: 'websiteSale',
+  },
+  documents: {
+    label: 'Documents: folders, versions, share links and requests for files',
+    icon: '📁',
+    server: 'documents',
+    web: 'registerDocumentsWeb',
   },
   sale_project: {
     label: 'Bridge: tasks and projects from sales orders (Sales ↔ Projects)',

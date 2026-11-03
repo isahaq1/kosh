@@ -583,3 +583,33 @@ data, an overview, docs and an E2E.
   used code refused; the sitemap with the published products only; the search title; pictures refused for products
   without one or not on the shop.
 
+## Implementation notes (2026-11-03): step 8 part 1 — Documents
+
+- **Folders** (`documents.folder`) of a company, in a tree: open to everyone with Documents, or *members only* —
+  seen by their members and owner (and Documents managers). Access is by members rather than by group: groups are
+  codes on `auth.user_group`, which a record rule cannot follow from a folder; a Shutro request if group-based
+  folders are wanted.
+- **Documents** (`documents.document`) in a folder, with tags, an owner and the record they are about. Each upload is
+  a **version** — a stored file of the document (`POST /api/v1/documents/:id/versions`, the raw body as for
+  attachments); the latest is its file, with its type, size and the count of versions; the form lists every
+  version with its download. `POST /api/v1/documents/upload?folder=` makes a document from a file. Read in a folder
+  the user sees (or their own); made and changed only in a folder they see.
+- **One search** (`GET /api/v1/documents/search?q=`): documents, and the attachments of any record whose name
+  matches — each kept only when the user may read its record.
+- **Share links** (`POST /api/v1/documents/shares`): a document or a folder, for 1 to 90 days, with an optional
+  password; only the token's digest and the password's hash are kept; the link lists what it shares and serves its
+  files (each download counted) until it expires or is revoked.
+- **Requests** (`documents.request`): *Send the request* emails the person a link (only its digest kept) to a small
+  upload page served by the server (its script allowed by a nonce); the file becomes a document in the request's
+  folder, the request *Received*, once (`documents.request.received`). Late requests — past their due date, or a week
+  after sending — are reminded once with a new link, hourly on the server and by `POST /api/v1/documents/requests/remind`.
+  The RFC said "through the portal": a link works for employees and contacts alike, with or without a portal account.
+- **Not in this part**: previews in the browser, the assistant suggesting folders and tags, folder access by group
+  (above); then Sign (part 2).
+- **Tests**: on real PostgreSQL a members-only folder hidden from others with its documents, uploads and versions
+  (the count, the list), no upload into a folder one cannot see; the search over documents and record attachments
+  by what each user may read; share links needing their password, serving only what they share, refused once
+  expired, not made by someone who cannot see the document; a request emailed, its page, one reminder with a new
+  link (the first stopping), the file received once into the folder; the demo; end to end, a document made on screen
+  with two versions uploaded.
+

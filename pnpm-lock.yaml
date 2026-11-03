@@ -56,6 +56,9 @@ importers:
       '@kosh/crm':
         specifier: workspace:*
         version: link:../../modules/crm
+      '@kosh/documents':
+        specifier: workspace:*
+        version: link:../../modules/documents
       '@kosh/event':
         specifier: workspace:*
         version: link:../../modules/event
@@ -307,6 +310,9 @@ importers:
       '@kosh/attendance':
         specifier: workspace:*
         version: link:../../modules/attendance
+      '@kosh/documents':
+        specifier: workspace:*
+        version: link:../../modules/documents
       '@kosh/expense':
         specifier: workspace:*
         version: link:../../modules/expense
@@ -802,6 +808,64 @@ importers:
       '@testcontainers/postgresql':
         specifier: ^12.2.1
         version: 12.2.1
+
+  modules/documents:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/mail':
+        specifier: workspace:*
+        version: link:../../packages/mail
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
+      '@kosh/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+      fastify:
+        specifier: ^5.12.7
+        version: 5.12.7
+    devDependencies:
+      '@kosh/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@tanstack/react-query':
+        specifier: ^5.90.2
+        version: 5.104.3(react@19.3.1)
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+      '@types/react':
+        specifier: ^19.3.0
+        version: 19.3.0
+      i18next:
+        specifier: ^26.4.7
+        version: 26.4.7(typescript@7.0.2)
+      react:
+        specifier: ^19.3.1
+        version: 19.3.1
+      react-i18next:
+        specifier: ^17.0.21
+        version: 17.0.21(i18next@26.4.7(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
 
   modules/event:
     dependencies:
@@ -2555,6 +2619,9 @@ importers:
       '@kosh/crm':
         specifier: workspace:*
         version: link:../../modules/crm
+      '@kosh/documents':
+        specifier: workspace:*
+        version: link:../../modules/documents
       '@kosh/event':
         specifier: workspace:*
         version: link:../../modules/event

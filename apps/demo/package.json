@@ -16,6 +16,7 @@
     "@kosh/calendar": "workspace:*",
     "@kosh/contacts": "workspace:*",
     "@kosh/crm": "workspace:*",
+    "@kosh/documents": "workspace:*",
     "@kosh/event": "workspace:*",
     "@kosh/event_account": "workspace:*",
     "@kosh/expense": "workspace:*",

@@ -23,6 +23,7 @@ import { automation } from '@kosh/automation';
 import { calendarApp } from '@kosh/calendar';
 import { contacts } from '@kosh/contacts';
 import { crm } from '@kosh/crm';
+import { documents } from '@kosh/documents';
 import { event } from '@kosh/event';
 import { eventAccount } from '@kosh/event_account';
 import { expense } from '@kosh/expense';
@@ -174,6 +175,7 @@ const CATALOGUE = [
   payroll,
   payrollAccount,
   helpdesk,
+  documents,
   accountAsset,
   accountBudget,
   l10nBdPayroll,
@@ -219,6 +221,7 @@ await applyApps(
         'attendance',
         'payroll',
         'helpdesk',
+        'documents',
         'account_asset',
         'account_budget',
         'website_sale',
@@ -293,6 +296,7 @@ for (const [login, name, groups] of [
       'attendance.manager',
       'payroll.manager',
       'helpdesk.manager',
+      'documents.manager',
       'messaging.user',
       'reporting.user',
       'assistant.user',

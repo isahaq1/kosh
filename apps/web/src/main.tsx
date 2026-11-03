@@ -7,6 +7,7 @@ import { accountingMessages, registerAccountingWeb } from '@kosh/accounting/web'
 import { assistantMessages, registerAssistantWeb } from '@kosh/assistant/web';
 import { attendanceMessages, registerAttendanceWeb } from '@kosh/attendance/web';
 import { automationMessages, registerAutomationWeb } from '@kosh/automation/web';
+import { documentsMessages, registerDocumentsWeb } from '@kosh/documents/web';
 import { eventMessages, registerEventWeb } from '@kosh/event/web';
 import { importMessages, registerImportWeb } from '@kosh/import/web';
 import { integrationsMessages, registerIntegrationsWeb } from '@kosh/integrations/web';
@@ -50,6 +51,7 @@ registerEventWeb(registry);
 registerWebsiteWeb(registry);
 registerPosWeb(registry);
 registerAttendanceWeb(registry);
+registerDocumentsWeb(registry);
 const messages = {
   accounting: accountingMessages,
   assistant: assistantMessages,
@@ -67,6 +69,7 @@ const messages = {
   website: websiteMessages,
   pos: posMessages,
   attendance: attendanceMessages,
+  documents: documentsMessages,
   reporting: reportingMessages,
   messaging: messagingMessages,
   settings: settingsMessages,

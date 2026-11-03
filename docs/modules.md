@@ -443,6 +443,20 @@ within what is available. Coupons (a percentage, an amount or free delivery, wit
 one reminder for a cart left with an email (with a code that restores it), a sitemap of the site's pages and
 products, search titles, and product pictures served publicly complete the Shop.
 
+### Documents (`modules/documents`, RFC 0024)
+
+Folders (open, or kept to their members), documents with tags and versions — each upload a version, the latest the
+document's file —, one search over documents and every record's attachments the user may read, share links with
+an expiry and an optional password, and requests that email a person a link to upload a file into the right
+folder (reminded once when late). Install it with `shutro-erp apps install documents`.
+
+```
+POST /api/v1/documents/upload?folder=3        (the raw body is the file, X-Filename its name)
+POST /api/v1/documents/12/versions            a new version
+GET  /api/v1/documents/search?q=contract      documents and record attachments
+POST /api/v1/documents/shares                 { "document": 12, "days": 7, "password": "…" } → { url }
+```
+
 ### Counter (`modules/pos`, RFC 0021)
 
 Point of sale: shops with their payment methods, cashiers' sessions with opening and closing counts (a difference

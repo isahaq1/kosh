@@ -7,6 +7,7 @@ import { automation } from '@kosh/automation';
 import { calendarApp } from '@kosh/calendar';
 import { contacts } from '@kosh/contacts';
 import { crm } from '@kosh/crm';
+import { documents } from '@kosh/documents';
 import { event } from '@kosh/event';
 import { eventAccount } from '@kosh/event_account';
 import { expense } from '@kosh/expense';
@@ -82,6 +83,7 @@ export const DEMO_APPS: readonly string[] = [
   'attendance',
   'payroll',
   'helpdesk',
+  'documents',
   'account_asset',
   'account_budget',
   'website_sale',
@@ -121,6 +123,7 @@ export function demoCatalogue(): KoshModule[] {
     attendance,
     payroll,
     helpdesk,
+    documents,
     accountAsset,
     saleAccount,
     purchaseAccount,
