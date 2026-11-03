@@ -1,0 +1,544 @@
+/**
+ * The Shop's logic (RFC 0024 §2.7), run as the system in the site's company once the public routes know the site:
+ * the catalogue (published products in the visitor's language), carts (a quotation per secret token, its lines priced
+ * by the server from the product — never by the visitor), delivery methods with their fee for the cart, and checkout —
+ * the customer found by email or made, cash on delivery confirmed (or left for someone to confirm above the site's
+ * limit), or an online payment started whose confirmation confirms, invoices and pays the order.
+ */
+import { startPayment } from '@kosh/payment';
+import { HttpProblem } from '@kosh/server';
+import { type Decimal, type Id, orm } from '@kosh/server/orm';
+import type { Env } from './.kosh/bindings.js';
+import { feeOf, hashToken, newCartToken } from './module.js';
+
+const zero = orm.toDecimal(0);
+const LANGS: Readonly<Record<string, string>> = { en: 'en_US', bn: 'bn_BD' };
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** At most this many of one product in a cart, and this many lines. */
+const MAX_QUANTITY = orm.toDecimal(1000);
+const MAX_LINES = 100;
+
+export interface Site {
+  readonly id: number;
+  readonly key: string;
+  readonly company: number;
+}
+
+const invalid = (field: string, detail: string): HttpProblem =>
+  new HttpProblem(422, 'invalid-input', `Invalid ${field}`, detail);
+const money = (d: Decimal | null | undefined): string => (d ?? zero).toDecimalPlaces(2).toFixed(2);
+
+/** The environment reading in the visitor's language. */
+export const inLang = (env: Env, lang: string): Env =>
+  env.withLang(LANGS[lang] ?? 'en_US') as unknown as Env;
+
+/** Published products on sale, searched, filtered, sorted and paged. */
+export async function catalogue(
+  env: Env,
+  query: {
+    readonly q?: string;
+    readonly category?: number;
+    readonly min?: Decimal;
+    readonly max?: Decimal;
+    readonly sort?: string;
+    readonly page?: number;
+    readonly size?: number;
+  },
+): Promise<{ products: Record<string, unknown>[]; total: number; page: number; pages: number }> {
+  const size = Math.min(Math.max(query.size ?? 24, 1), 60);
+  const page = Math.max(query.page ?? 1, 1);
+  const where: Record<string, unknown> = { published: true, saleOk: true };
+  if (query.q !== undefined && query.q.trim() !== '') {
+    const q = query.q.trim().slice(0, 100);
+    where['or'] = [{ name: { ilike: `%${q}%` } }, { code: { ilike: `%${q}%` } }];
+  }
+  if (query.category !== undefined) {
+    // The category and those inside it.
+    const inside = new Set([query.category]);
+    let next = [query.category];
+    while (next.length > 0 && inside.size < 500) {
+      next = (
+        await env.model('product.category').search({ where: { parent: { in: next } } as never })
+      ).ids.filter((c) => !inside.has(c));
+      for (const c of next) inside.add(c);
+    }
+    where['category'] = { in: [...inside] };
+  }
+  if (query.min !== undefined || query.max !== undefined)
+    where['listPrice'] = {
+      ...(query.min === undefined ? {} : { gte: query.min.toString() }),
+      ...(query.max === undefined ? {} : { lte: query.max.toString() }),
+    };
+  const order =
+    query.sort === 'price'
+      ? ['listPrice asc', 'id asc']
+      : query.sort === '-price'
+        ? ['listPrice desc', 'id asc']
+        : query.sort === 'name'
+          ? ['name asc', 'id asc']
+          : query.sort === 'new'
+            ? ['id desc']
+            : ['shopSequence asc', 'name asc', 'id asc'];
+  const all = await env.model('product.product').search({ where: where as never });
+  const found = await env.model('product.product').search({
+    where: where as never,
+    order: order as never,
+    limit: size,
+    offset: (page - 1) * size,
+  });
+  const products = [...(await found.load({ category: true, uom: true }))].map(card);
+  return { products, total: all.length, page, pages: Math.max(Math.ceil(all.length / size), 1) };
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: a loaded product of any load spec
+function card(p: any): Record<string, unknown> {
+  return {
+    id: p.id,
+    name: p.name,
+    code: p.code,
+    price: money(p.listPrice),
+    category: p.category === null ? null : { id: p.category.id, name: p.category.name },
+    unit: p.uom?.name ?? null,
+    hasImage: p.image !== null,
+  };
+}
+
+/** A published product's page: its card, description, weight and related products (published ones). */
+export async function productPage(env: Env, id: number): Promise<Record<string, unknown> | null> {
+  const [p] = await (
+    await env.model('product.product').search({
+      where: { id: orm.asId(id, 'product.product'), published: true, saleOk: true },
+      limit: 1,
+    })
+  ).load({ category: true, uom: true, related: true });
+  if (p === undefined) return null;
+  const related = await (
+    await env.model('product.product').search({
+      where: {
+        id: { in: [...p.related.ids] },
+        published: true,
+        saleOk: true,
+      } as never,
+    })
+  ).load({ category: true, uom: true });
+  return {
+    ...card(p),
+    description: p.websiteDescription,
+    weight: p.weight === null ? null : p.weight.toString(),
+    related: [...related].map(card),
+  };
+}
+
+/** The product categories that hold published products, with their parents. */
+export async function categories(
+  env: Env,
+): Promise<{ id: number; name: string; parent: number | null }[]> {
+  const products = await (
+    await env.model('product.product').search({ where: { published: true, saleOk: true } })
+  ).load({ category: true });
+  const ids = new Set<number>();
+  for (const p of products) if (p.category !== null) ids.add(p.category.id);
+  const out = new Map<number, { id: number; name: string; parent: number | null }>();
+  let next = [...ids];
+  while (next.length > 0) {
+    const found = await env
+      .model('product.category')
+      .browse(next as never)
+      .load({ parent: true });
+    next = [];
+    for (const c of found) {
+      out.set(c.id, { id: c.id, name: c.name, parent: c.parent?.id ?? null });
+      if (c.parent !== null && !out.has(c.parent.id)) next.push(c.parent.id);
+    }
+  }
+  return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Who carts belong to before checkout: the site's visitor contact, made the first time. */
+async function visitorOf(env: Env, site: Site): Promise<number> {
+  const [s] = await env
+    .model('website.site')
+    .browse([site.id as never])
+    .load({ visitor: true });
+  if (s?.visitor !== null && s?.visitor !== undefined) return s.visitor.id;
+  const made = await env
+    .model('res.partner')
+    .create([{ name: `${s?.name ?? site.key} — shop visitor`, company: site.company as never }]);
+  const id = made.ids[0] as number;
+  await env
+    .model('website.site')
+    .browse([site.id as never])
+    .write({ visitor: id as never });
+  return id;
+}
+
+/** Who the site's orders are assigned to: its salesperson, else whoever made the site. */
+async function salespersonOf(env: Env, site: Site): Promise<number | null> {
+  const [s] = await env
+    .model('website.site')
+    .browse([site.id as never])
+    .load({ salesperson: true });
+  return s?.salesperson?.id ?? (s as { createdBy?: number | null } | undefined)?.createdBy ?? null;
+}
+
+/** A new cart: a quotation of the site's company for its visitor, with a new secret token. */
+export async function newCart(env: Env, site: Site): Promise<{ token: string; id: number }> {
+  const token = newCartToken();
+  const [company] = await env
+    .model('res.company')
+    .browse([site.company as never])
+    .load({ currency: true });
+  const made = await env.model('sale.order').create([
+    {
+      partner: (await visitorOf(env, site)) as never,
+      currency: company?.currency.id as never,
+      company: site.company as never,
+      website: site.id as never,
+      cartToken: hashToken(token),
+      user: (await salespersonOf(env, site)) as never,
+    },
+  ]);
+  await env.flush();
+  return { token, id: made.ids[0] as number };
+}
+
+/** The order of `token` on the site: a cart (not checked out) unless `placed`. */
+export async function orderOf(
+  env: Env,
+  site: Site,
+  token: string,
+  placed = false,
+): Promise<Id<'sale.order'> | null> {
+  if (token === '' || token.length > 100) return null;
+  const [id] = (
+    await env.model('sale.order').search({
+      where: {
+        website: site.id as never,
+        cartToken: hashToken(token),
+        ...(placed
+          ? { placedAt: { isNull: false } }
+          : { placedAt: { isNull: true }, state: 'draft' }),
+      } as never,
+      limit: 1,
+    })
+  ).ids;
+  return id ?? null;
+}
+
+/** What the visitor sees of a cart or an order. */
+export async function cartView(env: Env, id: Id<'sale.order'>): Promise<Record<string, unknown>> {
+  const [o] = await env
+    .model('sale.order')
+    .browse([id])
+    .load({ lines: { product: true }, currency: true, carrier: true });
+  if (o === undefined) throw new HttpProblem(404, 'not-found', 'Not found', 'There is no cart.');
+  const goods = [...o.lines].filter((l) => !l.isDelivery);
+  const fee = [...o.lines]
+    .filter((l) => l.isDelivery)
+    .reduce((s, l) => s.plus(l.priceUnit.times(l.quantity)), zero);
+  const payments = await (
+    await env.model('payment.transaction').search({
+      where: { saleOrder: id },
+      order: ['id desc'],
+      limit: 1,
+    })
+  ).load({});
+  return {
+    name: o.name,
+    state: o.state,
+    placed: o.placedAt !== null,
+    currency: o.currency.name,
+    lines: goods.map((l) => ({
+      product: l.product.id,
+      name: l.name,
+      quantity: l.quantity.toString(),
+      price: money(l.priceUnit),
+      subtotal: money(l.priceUnit.times(l.quantity)),
+    })),
+    carrier: o.carrier === null ? null : { id: o.carrier.id, name: o.carrier.name },
+    delivery: money(fee),
+    untaxed: money(o.amountUntaxed?.amount),
+    tax: money(o.amountTax?.amount),
+    total: money(o.amountTotal?.amount),
+    payment: o.shopPayment,
+    paymentState: [...payments][0]?.state ?? null,
+  };
+}
+
+const goodsOf = async (env: Env, id: Id<'sale.order'>) => {
+  const [o] = await env
+    .model('sale.order')
+    .browse([id])
+    .load({ lines: { product: true }, carrier: true, partner: true });
+  const goods = [...(o?.lines ?? [])].filter((l) => !l.isDelivery);
+  return {
+    order: o,
+    amount: goods.reduce((s, l) => s.plus(l.priceUnit.times(l.quantity)), zero),
+    weight: goods.reduce((s, l) => s.plus((l.product.weight ?? zero).times(l.quantity)), zero),
+  };
+};
+
+/** Sets how many of `product` the cart holds (0 removes it), at the product's price; the fee follows. */
+export async function setLine(
+  env: Env,
+  id: Id<'sale.order'>,
+  product: number,
+  quantity: Decimal,
+): Promise<void> {
+  if (quantity.lt(0) || quantity.gt(MAX_QUANTITY))
+    throw invalid('quantity', `From 0 to ${MAX_QUANTITY.toString()}.`);
+  const [p] = await (
+    await env.model('product.product').search({
+      where: { id: orm.asId(product, 'product.product'), published: true, saleOk: true },
+      limit: 1,
+    })
+  ).load({ taxes: true, uom: true });
+  if (p === undefined) throw invalid('product', 'This product is not on the shop.');
+  const lines = await (
+    await env.model('sale.order.line').search({ where: { order: id, isDelivery: false } })
+  ).load({ product: true });
+  const line = [...lines].find((l) => l.product.id === p.id);
+  if (line !== undefined) {
+    if (quantity.isZero()) await env.model('sale.order.line').browse([line.id]).unlink();
+    else await env.model('sale.order.line').browse([line.id]).write({ quantity });
+  } else if (!quantity.isZero()) {
+    if (lines.length >= MAX_LINES) throw invalid('cart', `At most ${MAX_LINES} products.`);
+    await env.model('sale.order.line').create([
+      {
+        order: id,
+        product: p.id,
+        name: p.name,
+        quantity,
+        uom: p.uom?.id ?? null,
+        priceUnit: p.listPrice,
+        taxes: { set: [...p.taxes.ids] },
+      },
+    ] as never);
+  }
+  await env.flush();
+  const [o] = await env.model('sale.order').browse([id]).load({ carrier: true, partner: true });
+  if (o?.carrier !== null && o?.carrier !== undefined)
+    await setDelivery(env, id, o.carrier.id, o.partner.city);
+}
+
+/** The company's delivery methods with their fee for the cart, delivered to `city`. */
+export async function carriersFor(
+  env: Env,
+  id: Id<'sale.order'>,
+  city: string | null,
+): Promise<{ id: number; name: string; fee: string; cod: boolean; description: string | null }[]> {
+  const { amount, weight, order } = await goodsOf(env, id);
+  const found = await (
+    await env.model('delivery.carrier').search({
+      where: { company: order?.company.id as never },
+    })
+  ).load({});
+  return [...found].map((c) => ({
+    id: c.id,
+    name: c.name,
+    fee: money(feeOf(c, amount, weight, city)),
+    cod: c.cod,
+    description: c.description,
+  }));
+}
+
+/** The fee's service product of a method, made the first time. */
+async function feeProduct(env: Env, carrier: number): Promise<number> {
+  const [c] = await env
+    .model('delivery.carrier')
+    .browse([carrier as never])
+    .load({ product: true });
+  if (c?.product !== null && c?.product !== undefined) return c.product.id;
+  const made = await env
+    .model('product.product')
+    .create([
+      { name: `Delivery: ${c?.name ?? ''}`, kind: 'service', saleOk: false, purchaseOk: false },
+    ]);
+  const product = made.ids[0] as number;
+  await env
+    .model('delivery.carrier')
+    .browse([carrier as never])
+    .write({ product: product as never });
+  return product;
+}
+
+/** Chooses the delivery method: its fee, for the cart and `city`, replaces the cart's fee line. */
+export async function setDelivery(
+  env: Env,
+  id: Id<'sale.order'>,
+  carrier: number,
+  city: string | null,
+): Promise<void> {
+  const { amount, weight, order } = await goodsOf(env, id);
+  const [c] = await (
+    await env.model('delivery.carrier').search({
+      where: { id: carrier as never, company: order?.company.id as never },
+      limit: 1,
+    })
+  ).load({});
+  if (c === undefined) throw invalid('delivery method', 'Choose one of the methods offered.');
+  const fee = feeOf(c, amount, weight, city);
+  const old = await env.model('sale.order.line').search({ where: { order: id, isDelivery: true } });
+  if (old.length > 0) await old.unlink();
+  await env.model('sale.order.line').create([
+    {
+      order: id,
+      product: await feeProduct(env, c.id),
+      name: c.name,
+      quantity: '1',
+      priceUnit: fee,
+      isDelivery: true,
+    },
+  ] as never);
+  await env.model('sale.order').browse([id]).write({ carrier: c.id });
+  await env.flush();
+}
+
+export interface CheckoutInput {
+  readonly name: string;
+  readonly email: string;
+  readonly phone: string;
+  readonly street: string;
+  readonly city: string;
+  readonly carrier: number;
+  /** `cod`, or a payment provider's id. */
+  readonly payment: string;
+  readonly note?: string;
+  /** Where the customer comes back to after paying online (http(s)). */
+  readonly returnUrl?: string;
+}
+
+const text = (v: unknown, field: string, max: number, required = true): string => {
+  const s = typeof v === 'string' ? v.trim() : '';
+  if (required && s === '') throw invalid(field, 'is required.');
+  if (s.length > max) throw invalid(field, `is at most ${max} characters.`);
+  return s;
+};
+
+/** Reads and checks a checkout's input. */
+export function checkoutInput(body: unknown): CheckoutInput {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const email = text(b['email'], 'email', 200);
+  if (!EMAIL.test(email)) throw invalid('email', 'is an email address.');
+  const returnUrl = text(b['returnUrl'], 'return address', 500, false);
+  if (returnUrl !== '' && !/^https?:\/\/[^\s]+$/i.test(returnUrl))
+    throw invalid('return address', 'is an http(s) address.');
+  const carrier = Number(b['carrier']);
+  if (!Number.isSafeInteger(carrier) || carrier <= 0)
+    throw invalid('delivery method', 'Choose one of the methods offered.');
+  return {
+    name: text(b['name'], 'name', 120),
+    email,
+    phone: text(b['phone'], 'phone', 30),
+    street: text(b['street'], 'address', 200),
+    city: text(b['city'], 'city', 80),
+    carrier,
+    payment: text(b['payment'], 'payment', 20),
+    note: text(b['note'], 'note', 1000, false),
+    ...(returnUrl === '' ? {} : { returnUrl }),
+  };
+}
+
+/**
+ * Places the cart: the customer (found by email in the company, else made), the delivery to their city, the note.
+ * Cash on delivery confirms it when the method takes cash and the total is within the site's limit (above it, it
+ * stays a quotation for the team to confirm); paying online starts a payment and returns where to send the visitor.
+ */
+export async function checkout(
+  env: Env,
+  site: Site,
+  id: Id<'sale.order'>,
+  input: CheckoutInput,
+): Promise<{
+  order: string;
+  state: string;
+  total: string;
+  redirectUrl?: string;
+  reference?: string;
+}> {
+  const lines = await env
+    .model('sale.order.line')
+    .search({ where: { order: id, isDelivery: false } });
+  if (lines.length === 0) throw invalid('cart', 'The cart is empty.');
+  const [existing] = (
+    await env.model('res.partner').search({
+      where: { email: input.email, company: site.company as never },
+      limit: 1,
+    })
+  ).ids;
+  const values = {
+    name: input.name,
+    email: input.email,
+    phone: input.phone,
+    street: input.street,
+    city: input.city,
+  };
+  let partner: number;
+  if (existing !== undefined) {
+    partner = existing;
+    // A known customer's address is not changed by a visitor: the order keeps it in its note.
+  } else
+    partner = (
+      await env.model('res.partner').create([{ ...values, company: site.company as never }])
+    ).ids[0] as number;
+  await env
+    .model('sale.order')
+    .browse([id])
+    .write({ partner: partner as never });
+  await setDelivery(env, id, input.carrier, input.city);
+  const [c] = await env
+    .model('delivery.carrier')
+    .browse([input.carrier as never])
+    .load({});
+  const deliverTo = `Deliver to: ${input.name}, ${input.phone}, ${input.street}, ${input.city}`;
+  const note = [deliverTo, input.note ?? ''].filter((s) => s !== '').join('\n');
+  const [s] = await env
+    .model('website.site')
+    .browse([site.id as never])
+    .load({});
+  const order = env.model('sale.order').browse([id]);
+  if (input.payment === 'cod') {
+    if (c?.cod !== true)
+      throw invalid('payment', 'This delivery method does not take cash on delivery.');
+    await order.write({ shopPayment: 'cod', shopNote: note, placedAt: new Date() });
+    await env.flush();
+    const [o] = await order.load({});
+    if (
+      s?.codLimit === null ||
+      s?.codLimit === undefined ||
+      (o?.amountTotal?.amount ?? zero).lte(s.codLimit)
+    )
+      await order.confirm();
+    const [placed] = await order.load({});
+    return {
+      order: placed?.name ?? '',
+      state: placed?.state ?? 'draft',
+      total: money(placed?.amountTotal?.amount),
+    };
+  }
+  const provider = Number(input.payment);
+  if (!Number.isSafeInteger(provider) || provider <= 0)
+    throw invalid('payment', 'Cash on delivery, or one of the providers offered.');
+  await order.write({ shopPayment: 'online', shopNote: note, placedAt: new Date() });
+  await env.flush();
+  const [o] = await order.load({ partner: true, currency: true });
+  if (o === undefined) throw new HttpProblem(404, 'not-found', 'Not found', 'There is no cart.');
+  const started = await startPayment(env as never, {
+    provider,
+    move: null,
+    partner: o.partner,
+    currency: o.currency,
+    amount: o.amountTotal?.amount ?? zero,
+    company: site.company,
+    description: `Order ${o.name}`,
+    ...(input.returnUrl === undefined ? {} : { returnUrl: input.returnUrl }),
+    values: { saleOrder: o.id },
+  });
+  return {
+    order: o.name,
+    state: o.state,
+    total: money(o.amountTotal?.amount),
+    redirectUrl: started.redirectUrl,
+    reference: started.reference,
+  };
+}
