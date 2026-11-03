@@ -38,6 +38,7 @@
     "@kosh/ui": "workspace:*",
     "@kosh/website": "workspace:*",
     "@kosh/website_crm": "workspace:*",
+    "@kosh/website_sale": "workspace:*",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

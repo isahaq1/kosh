@@ -33,6 +33,7 @@ export type AppName =
   | 'helpdesk'
   | 'account_asset'
   | 'account_budget'
+  | 'website_sale'
   | 'sale_project'
   | 'sale_stock'
   | 'purchase_stock'
@@ -225,6 +226,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
       'Budgets: actual and committed by cost centre, purchase orders warned or blocked (in Accounting)',
     icon: '📐',
     server: 'accountBudget',
+  },
+  website_sale: {
+    label:
+      'Shop: published products, delivery fees, cart and checkout with cash on delivery or online payment (in Sites)',
+    icon: '🛒',
+    server: 'websiteSale',
   },
   sale_project: {
     label: 'Bridge: tasks and projects from sales orders (Sales ↔ Projects)',

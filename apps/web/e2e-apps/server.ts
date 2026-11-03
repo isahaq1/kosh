@@ -81,6 +81,7 @@ import { tradeFinancePurchase } from '@kosh/trade_finance_purchase';
 import { tradeFinanceSale } from '@kosh/trade_finance_sale';
 import { website } from '@kosh/website';
 import { websiteCrm } from '@kosh/website_crm';
+import { websiteSale } from '@kosh/website_sale';
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
 
 export const ADMIN_TOTP_SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
@@ -163,6 +164,7 @@ const CATALOGUE = [
   tradeFinanceSale,
   eventAccount,
   websiteCrm,
+  websiteSale,
   posStock,
   expense,
   expenseAccount,
@@ -217,6 +219,7 @@ await applyApps(
         'helpdesk',
         'account_asset',
         'account_budget',
+        'website_sale',
         'assistant',
         'import',
         'l10n_bd',
@@ -281,6 +284,7 @@ for (const [login, name, groups] of [
       'trade_finance.manager',
       'event.manager',
       'website.manager',
+      'website_sale.manager',
       'pos.manager',
       'expense.manager',
       'attendance.manager',

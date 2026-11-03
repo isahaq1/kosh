@@ -418,6 +418,24 @@ In Accounting: budgets for a period with lines by cost centre and / or account; 
 order needs an Accounting manager's approval as well, beyond a *block* line it is refused with the shortfall. Purchase
 order lines carry the cost centre, which their bills keep. Install it with `shutro-erp apps install account_budget`.
 
+### Shop (`modules/website_sale`, RFC 0024)
+
+In Sites: a site marked *Shop* sells its published products through a public API for a storefront — the catalogue
+(search, categories, prices, sorting, English and Bangla), a cart held by a secret token and priced by the server,
+the delivery methods with their fee (fixed, by weight, or by zone such as Dhaka and outside; free from an amount) and
+checkout with cash on delivery (confirmed within the site's limit) or an online payment through the payment
+providers, which confirms, invoices and pays the order once the provider confirms. Install it with
+`shutro-erp apps install website_sale`.
+
+```
+GET  /api/v1/public/shop/padma/products?q=cement&sort=price&lang=bn
+POST /api/v1/public/shop/padma/cart                          → { token }  (then the x-cart-token header)
+PUT  /api/v1/public/shop/padma/cart/lines                    { "product": 7, "quantity": 2 }
+GET  /api/v1/public/shop/padma/carriers?city=Dhaka
+POST /api/v1/public/shop/padma/checkout                      { name, email, phone, street, city, carrier, payment: "cod" }
+GET  /api/v1/public/shop/padma/order                         the placed order and its payment
+```
+
 ### Counter (`modules/pos`, RFC 0021)
 
 Point of sale: shops with their payment methods, cashiers' sessions with opening and closing counts (a difference

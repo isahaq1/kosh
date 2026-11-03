@@ -133,6 +133,7 @@ test('every app with demo data loaded it, once', async () => {
     'todo',
     'trade_finance',
     'website',
+    'website_sale',
   ]);
   for (const [app, bridge] of [
     ['sales', 'sale_account'],
@@ -161,7 +162,7 @@ test('every app with demo data loaded it, once', async () => {
     text: 'SELECT count(*)::text AS n FROM kosh_module WHERE demo_at IS NOT NULL',
     params: [],
   });
-  expect(Number(marks[0]?.n)).toBe(29);
+  expect(Number(marks[0]?.n)).toBe(30);
 });
 
 test('the salesperson sees the orders and the invoices made from them; the buyer the approvals', async () => {
@@ -227,7 +228,7 @@ test('projects, tasks and the timesheets of their authors; the service products 
   const all = await get('/api/v1/models/project.timesheet?fields=hours', 'dina');
   expect(all.items).toHaveLength(5);
   const products = await get(
-    `/api/v1/models/product.product?fields=name,serviceTracking&${filter({ kind: 'service' })}&order=name+asc`,
+    `/api/v1/models/product.product?fields=name,serviceTracking&${filter({ kind: 'service', saleOk: true })}&order=name+asc`,
     'dina',
   );
   expect(products.items.map((p: Json) => [p.name, p.serviceTracking])).toEqual([

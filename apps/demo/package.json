@@ -60,7 +60,8 @@
     "@kosh/trade_finance_purchase": "workspace:*",
     "@kosh/trade_finance_sale": "workspace:*",
     "@kosh/website": "workspace:*",
-    "@kosh/website_crm": "workspace:*"
+    "@kosh/website_crm": "workspace:*",
+    "@kosh/website_sale": "workspace:*"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1",

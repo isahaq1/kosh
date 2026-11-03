@@ -52,6 +52,7 @@ import { tradeFinancePurchase } from '@kosh/trade_finance_purchase';
 import { tradeFinanceSale } from '@kosh/trade_finance_sale';
 import { website } from '@kosh/website';
 import { websiteCrm } from '@kosh/website_crm';
+import { websiteSale } from '@kosh/website_sale';
 
 /** What the demo installs; the bridges come as proposals of the plan. */
 export const DEMO_APPS: readonly string[] = [
@@ -82,6 +83,7 @@ export const DEMO_APPS: readonly string[] = [
   'helpdesk',
   'account_asset',
   'account_budget',
+  'website_sale',
   'l10n_bd',
 ];
 
@@ -134,6 +136,7 @@ export function demoCatalogue(): KoshModule[] {
     tradeFinanceSale,
     eventAccount,
     websiteCrm,
+    websiteSale,
     posStock,
     expenseAccount,
     payrollAccount,

@@ -495,3 +495,41 @@ data, an overview, docs and an E2E.
   comes; a dropship split from a delivery with its request, no receipt, received and stock unchanged; a dropship
   bill off Goods received not billed; end to end, a two-step delivery's pick validated on screen.
 
+## Implementation notes (2026-11-03): step 7 part 1 — the Shop: catalogue, cart, delivery fees and checkout
+
+- **Headless, as Sites is**: the Shop (`website_sale`) is a public API for a storefront (the Next.js site later, or
+  any other) beside the back-office screens. A site sells when it is marked *Shop*; every route is public, rate
+  limited per address, and runs as the system in the site's company once the site is known.
+- **Products**: *On the shop*, a shop description in English and Bangla (read in the visitor's `lang`), a weight,
+  related products and an order. The catalogue: published products for sale, searched by name or code, by category
+  (and those inside it), by price, sorted by the shop's order, price, name or newest, paged; a product's page with its
+  published related products; the categories that hold published products.
+- **Delivery methods** (`delivery.carrier`, Sites › Delivery methods): a fixed fee, by weight (the first kg, then
+  each kg or part of one), or by zone (a fee inside a list of cities — Dhaka — and one outside); free from an amount;
+  cash on delivery or not; the courier (the adapters come with part 2). The fee is a service product's line on the
+  order, replaced whenever the cart or the method changes.
+- **Carts** are quotations of the site's company for its visitor contact, with a secret token the visitor holds (only
+  its hash is kept) and the site's salesperson (or its creator). Lines are priced by the server from the product —
+  quantities only come from the visitor — with the product's taxes; at most 100 lines of up to 1 000 each.
+- **Checkout**: name, email, phone, address and city, the method and the payment. The customer is found by email in
+  the company, else made (a known customer's address is not changed by a visitor: the delivery address is written
+  in the order's note). **Cash on delivery** confirms the order when the method takes cash and the total is within
+  the site's limit; above it, the order is placed as a quotation for the team to confirm. **Online**, a payment
+  starts with one of the company's providers (RFC 0017): `payment` now lets a transaction wait for another app's
+  document (`startPayment`, `returnUrl`, and `payable()` on `payment.transaction`, overridden here) — once the
+  provider confirms, the order is confirmed and invoiced, the invoice posted and the payment registered against it,
+  once, and the visitor comes back to the storefront's address. The token then follows the order (`GET …/order`).
+- **Back office**: Sites › Shop orders (placed orders), Shop products, Delivery methods; the order form shows the
+  site, the method, how it is paid, when it was placed and the customer's note, with its online payments.
+- **Not in this part** (part 2): couriers' adapters (Pathao, Steadfast, RedX with fakes), tracking in the portal and
+  COD collection; `website_sale_stock` (availability, backorders); product variants with attributes; product pictures
+  served publicly; coupons and promotions; abandoned-cart emails; SEO and the sitemap; an Overview for the Shop
+  (overviews belong to apps, and the Shop is inside Sites).
+- **Tests**: on real PostgreSQL the catalogue (published only, search, price filter, categories, sort, the Bangla
+  description, related products published only, an unknown shop), the cart (no token, another token, a product not
+  on the shop, quantities changed and removed, priced by the server), fees by zone inside and outside and by weight,
+  cash on delivery confirmed within the limit and left as a quotation above it, a method without cash refused, the
+  customer made with their address, an online payment with the test provider that confirms, invoices and pays the
+  order once, the return to the storefront, the demo; end to end, a shop and its delivery method made on screen and
+  a visitor's order in Shop orders.
+
