@@ -24,6 +24,7 @@ import {
   StockLotLine,
   StockMove,
   StockPicking,
+  StockPutaway,
   StockQuant,
   StockReorder,
   StockReservation,
@@ -40,6 +41,7 @@ export {
   ProductStock,
   reserveOnConfirm,
   SCRAP_REASONS,
+  type Step,
   StockCount,
   StockCountLine,
   StockLocation,
@@ -47,11 +49,13 @@ export {
   StockLotLine,
   StockMove,
   StockPicking,
+  StockPutaway,
   StockQuant,
   StockReorder,
   StockReservation,
   StockScrap,
   StockWarehouse,
+  stepLocation,
   stockShutro,
   warehouseStock,
 } from './module.js';
@@ -481,6 +485,10 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       page: 'stock.Replenishment',
       label: 'Replenishment',
     },
+    'stockroom.action_putaway': action(StockPutaway, {
+      label: 'Putaway rules',
+      views: ['list', 'form'],
+    }),
     'stockroom.action_reorder': action(StockReorder, {
       label: 'Reorder rules',
       views: ['list', 'form'],
@@ -587,6 +595,13 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       action: 'stockroom.action_reorder',
       sequence: 3,
     },
+    {
+      id: 'stockroom.putaway',
+      parent: 'stockroom.configuration',
+      label: 'Putaway rules',
+      action: 'stockroom.action_putaway',
+      sequence: 4,
+    },
   ],
   views: {
     'stock.picking.list': list(StockPicking, {
@@ -640,6 +655,7 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
           'status',
           'availability',
           'backorderOf',
+          'next',
         ]),
         k.lines('moves', [
           'product',
@@ -649,6 +665,8 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
           { field: 'reserved', id: 'move_reserved' },
           { field: 'quantityDone', id: 'move_done' },
           { field: 'restrictLot', id: 'move_restrict_lot' },
+          { field: 'destination', id: 'move_put_away' },
+          { field: 'procurement', id: 'move_procurement', readonlyWhen: {} },
         ]),
         k.lines('lotLines', [
           { field: 'product', id: 'lot_line_product' },
@@ -765,16 +783,33 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       header: { buttons: [] },
       sheet: [
         k.group('main', ['name', 'code', 'address']),
+        k.group('routes', ['receptionSteps', 'deliverySteps'], {
+          label: 'Routes',
+          description:
+            'In two or three steps, a receipt goes into Input and on through Quality control to stock; a delivery leaves from Output after a pick (and a pack). Each step is its own transfer, made when the one before it is done.',
+        }),
         k.lines('locations', [
           { field: 'name', id: 'location_name' },
           { field: 'usage', id: 'location_usage' },
           { field: 'parent', id: 'location_parent' },
+          { field: 'step', id: 'location_step' },
         ]),
       ],
     })),
     'stock.location.list': list(StockLocation, {
-      columns: ['fullName', 'usage', 'warehouse'],
+      columns: ['fullName', 'usage', 'warehouse', 'step'],
     }),
+    'stock.putaway.list': list(StockPutaway, {
+      columns: ['location', 'product', 'category', 'destination', 'sequence'],
+    }),
+    'stock.putaway.form': form(StockPutaway, (k) => ({
+      sheet: [
+        k.group('main', ['location', 'product', 'category', 'destination', 'sequence'], {
+          description:
+            'What arrives in the location — this product, or any product of this category — is put away in the location inside it.',
+        }),
+      ],
+    })),
     'stock.location.form': form(StockLocation, (k) => ({
       header: { buttons: [] },
       sheet: [k.group('main', ['name', 'parent', 'warehouse', 'usage', 'fullName'])],
@@ -784,6 +819,7 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
         'product',
         'warehouse',
         'method',
+        'trigger',
         'minimum',
         'maximum',
         'forecast',
@@ -800,7 +836,7 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
         }),
         k.group(
           'how',
-          ['method', 'vendor', 'sourceWarehouse', 'leadDays', 'auto', 'snoozedUntil'],
+          ['method', 'trigger', 'vendor', 'sourceWarehouse', 'leadDays', 'auto', 'snoozedUntil'],
           {
             label: 'How it is ordered',
           },
@@ -833,7 +869,13 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
         done: { label: 'Done', domain: { state: 'done' }, group: 'state' },
         receipts: { label: 'Receipts', domain: { kind: 'receipt' }, group: 'kind' },
         deliveries: { label: 'Deliveries', domain: { kind: 'delivery' }, group: 'kind' },
+        dropships: { label: 'Dropships', domain: { kind: 'dropship' }, group: 'kind' },
         internal: { label: 'Internal moves', domain: { kind: 'internal' }, group: 'kind' },
+        steps: {
+          label: 'Steps of a route',
+          domain: { or: [{ next: { isNull: false } }, { 'source.step': { isNull: false } }] },
+          group: 'kind',
+        },
       },
       groupBy: ['kind', 'status', 'partner', 'scheduledDate'],
     }),
@@ -879,6 +921,10 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       groupBy: ['warehouse', 'usage'],
     }),
     'stock.move': search(StockMove, { fields: ['product.name', 'picking.name'] }),
+    'stock.putaway': search(StockPutaway, {
+      fields: ['location.fullName', 'product.name', 'category.name'],
+      groupBy: ['location', 'category'],
+    }),
     'stock.reorder': search(StockReorder, {
       fields: ['product.name', 'warehouse.name', 'vendor.name'],
       filters: {

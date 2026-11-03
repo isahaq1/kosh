@@ -88,7 +88,12 @@ export async function reckon(env: Env, ids?: readonly number[]): Promise<Map<num
       )}`;
     let proposed = zero;
     let verdict: string;
-    if (forecast.lt(r.minimum)) {
+    if (r.trigger === 'order')
+      verdict =
+        r.method === 'dropship'
+          ? 'dropshipped: the vendor delivers each order to the customer'
+          : 'ordered for each delivery (make to order)';
+    else if (forecast.lt(r.minimum)) {
       const need = r.maximum.minus(forecast);
       proposed = need.div(r.multiple).ceil().times(r.multiple);
       verdict = `below the minimum ${n(r.minimum)}: ${n(need)} to reach the maximum ${n(r.maximum)}`;

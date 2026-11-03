@@ -5,7 +5,9 @@
  * confirmed. The order shows its receipts and what is received; each line, its received quantity. An order may name
  * the warehouse it is delivered to (the main one otherwise). Reorder rules that buy (RFC 0024 §2.6) order on
  * requests for quotation to their vendor — a draft one from replenishment gets the new lines — and count what is
- * on requests and orders not received yet as on order.
+ * on requests and orders not received yet as on order. Dropshipped products leave a delivery as it is confirmed:
+ * a dropship transfer from the vendor to the customer, with its request for quotation (no receipt: the vendor
+ * delivers).
  */
 import { productShutro } from '@kosh/product';
 import { purchaseShutro } from '@kosh/purchase';
@@ -20,6 +22,12 @@ export const PickingPurchase = extendModel('stock.picking', {
     purchaseOrder: f.many2one('purchase.order', { ondelete: 'set null', label: 'Purchase order' }),
   },
   overrides: {
+    // Lines of products dropshipped from the warehouse leave the delivery for a dropship and its request.
+    routing: async function (this: unknown, next: () => Promise<void>): Promise<void> {
+      await next();
+      const pickings = this as Records<'stock.picking'>;
+      await dropship(pickings.env as unknown as Env, pickings.ids);
+    },
     // A backorder stays with its order.
     backorderValues: async function (
       this: unknown,
@@ -77,6 +85,8 @@ export const LineReceived = extendModel('purchase.order.line', {
 export const OrderReceipts = extendModel('purchase.order', {
   fields: {
     receipts: f.one2many('stock.picking', 'purchaseOrder'),
+    /** The vendor delivers to the customer: the order's transfer is a dropship, never received in stock. */
+    dropship: f.boolean({ default: false, label: 'Dropship' }),
     /** Where the goods are received (the company's main warehouse when empty). */
     warehouse: f.many2one('stock.warehouse', {
       ondelete: 'set null',
@@ -178,6 +188,132 @@ export async function createReceiptFor(env: Env, orderId: number): Promise<numbe
 
 const OPEN_RFQ = ['draft', 'sent', 'to_approve'];
 
+const isoPlus = (today: string, days: number): string => {
+  const d = new Date(`${today}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
+/**
+ * Draft deliveries' lines of products with a dropship rule in the warehouse they leave from go to a dropship
+ * transfer per vendor — vendors to the delivery's customer, with every link of the delivery and its lines (a sales
+ * order's) — and a request for quotation to that vendor, marked as a dropship, linked line by line. A delivery left
+ * with no lines becomes the dropship itself.
+ */
+async function dropship(env: Env, ids: readonly number[]): Promise<void> {
+  await env.asSuperuser({ reason: 'dropship' }, async (su) => {
+    const [vendors] = (
+      await su.model('stock.location').search({ where: { usage: 'vendor' }, limit: 1 })
+    ).ids;
+    if (vendors === undefined) return;
+    const pickings = await su
+      .model('stock.picking')
+      .browse(ids as never)
+      .load({
+        source: { warehouse: true },
+        company: true,
+        moves: { product: { purchaseTaxes: true }, uom: true },
+      });
+    for (const p of pickings) {
+      const wh = p.source.warehouse;
+      if (p.kind !== 'delivery' || p.state !== 'draft' || wh === null) continue;
+      const moves = [...p.moves];
+      const byVendor = new Map<number, { leadDays: number; moves: typeof moves }>();
+      for (const m of moves) {
+        const [rule] = await (
+          await su.model('stock.reorder').search({
+            where: { product: m.product.id, warehouse: wh.id, method: 'dropship' },
+            limit: 1,
+          })
+        ).load({ vendor: true });
+        if (rule?.vendor === null || rule?.vendor === undefined) continue;
+        const v = byVendor.get(rule.vendor.id) ?? { leadDays: rule.leadDays, moves: [] };
+        v.moves.push(m);
+        byVendor.set(rule.vendor.id, v);
+      }
+      if (byVendor.size === 0) continue;
+      const total = byVendor.size === 1 && [...byVendor.values()][0]?.moves.length === moves.length;
+      const pickingValues = (await su.model('stock.picking').browse([p.id]).backorderValues()).get(
+        p.id,
+      );
+      const today = su.today();
+      for (const [vendor, v] of byVendor) {
+        const made = await su.model('purchase.order').create([
+          {
+            partner: vendor,
+            company: p.company.id,
+            currency: p.company.currency.id,
+            warehouse: wh.id,
+            dropship: true,
+            dateOrder: today,
+            datePlanned: isoPlus(today, v.leadDays),
+            origin: p.origin ?? p.name,
+            lines: {
+              create: v.moves.map((m) => ({
+                product: m.product.id,
+                name: m.name ?? m.product.name,
+                quantity: m.quantity,
+                uom: m.uom?.id ?? m.product.uom?.id ?? null,
+                priceUnit: m.product.standardPrice,
+                taxes: { set: [...m.product.purchaseTaxes.ids] },
+              })),
+            },
+          },
+        ] as never);
+        const order = made.ids[0] as number;
+        const orderLines = (
+          await su.model('purchase.order.line').search({
+            where: { order: order as never },
+            order: ['id asc'],
+          })
+        ).ids;
+        if (total) {
+          await su
+            .model('stock.picking')
+            .browse([p.id])
+            .write({ kind: 'dropship', source: vendors, purchaseOrder: order } as never);
+          for (const [i, m] of v.moves.entries())
+            await su
+              .model('stock.move')
+              .browse([m.id])
+              .write({ purchaseLine: orderLines[i] ?? null } as never);
+          continue;
+        }
+        const lineValues = await su
+          .model('stock.move')
+          .browse(v.moves.map((m) => m.id) as never)
+          .backorderValues();
+        type Raw = { create(rows: readonly Record<string, unknown>[]): Promise<{ ids: number[] }> };
+        const split = await (su.model('stock.picking' as never) as unknown as Raw).create([
+          {
+            ...pickingValues,
+            kind: 'dropship',
+            source: vendors,
+            next: null,
+            purchaseOrder: order,
+            moves: {
+              create: v.moves.map((m, i) => ({
+                ...lineValues.get(m.id),
+                quantity: m.quantity,
+                purchaseLine: orderLines[i] ?? null,
+              })),
+            },
+          },
+        ]);
+        await su
+          .model('stock.move')
+          .browse(v.moves.map((m) => m.id) as never)
+          .unlink();
+        await su
+          .model('stock.picking')
+          .browse(split.ids as never)
+          .confirm();
+      }
+    }
+    await su.flush();
+  });
+}
+
 /** The warehouse an order is received into: its own, else the company's main one. */
 async function receivedInto(
   env: Env,
@@ -209,6 +345,7 @@ export const ReorderBuy = extendModel('stock.reorder', {
         ).load({ order: { receipts: true }, uom: true, product: { uom: true } });
         const found = out.get(r.id) ?? [];
         for (const l of lines) {
+          if (l.order.dropship) continue;
           if (!OPEN_RFQ.includes(l.order.state) && l.order.receipts.length > 0) continue;
           if (
             (await receivedInto(env, l.order.warehouse?.id ?? null, r.company.id)) !==

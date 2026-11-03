@@ -89,6 +89,7 @@ export const purchaseStock: ReturnType<typeof defineModule> = defineModule({
           nodes: [
             field({ field: 'receiptState', id: 'receipt_state' }),
             field({ field: 'warehouse', id: 'order_deliver_to' }),
+            field({ field: 'dropship', id: 'order_dropship' }),
           ],
         },
       ],

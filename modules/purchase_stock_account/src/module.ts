@@ -2,7 +2,8 @@
  * The data layer of the Purchase ↔ Stockroom ↔ Accounting bridge (RFC 0021 step 3, part 2): what is received on a
  * purchase order is valued at the order's price (converted to the product's unit and to the company's currency), a
  * vendor bill's goods are posted to Goods received not billed — where they meet the receipt — and what the bill
- * says differently from the receipt's value goes to Price differences, so the interim account is cleared.
+ * says differently from the receipt's value goes to Price differences, so the interim account is cleared. Bills of
+ * dropshipped orders keep the purchases account: those goods never enter stock.
  */
 import { accountingShutro } from '@kosh/accounting';
 import { purchaseShutro } from '@kosh/purchase';
@@ -64,8 +65,9 @@ export const BillGoods = extendModel('account.move', {
     ): Promise<Map<number, number>> {
       const out = await next();
       const bills = this as Records<'account.move'>;
-      for (const m of await bills.load({ lines: { product: true } })) {
-        if (!BILLS.has(m.kind)) continue;
+      for (const m of await bills.load({ lines: { product: true }, purchaseOrder: true })) {
+        // Dropshipped goods never enter stock: their bill keeps the purchases account (their cost).
+        if (!BILLS.has(m.kind) || m.purchaseOrder?.dropship === true) continue;
         const accounts = await stockAccountsOf(bills.env as never, m.company.id);
         if (accounts === null) continue;
         for (const l of m.lines)
@@ -89,8 +91,12 @@ export const BillGoods = extendModel('account.move', {
  */
 async function postPriceDifferences(bills: Records<'account.move'>): Promise<void> {
   const env = bills.env as unknown as Env;
-  for (const m of await bills.load({ lines: { product: true }, company: true })) {
-    if (m.kind !== 'in_invoice' || m.purchaseOrder === null) continue;
+  for (const m of await bills.load({
+    lines: { product: true },
+    company: true,
+    purchaseOrder: true,
+  })) {
+    if (m.kind !== 'in_invoice' || m.purchaseOrder === null || m.purchaseOrder.dropship) continue;
     const accounts = await stockAccountsOf(env as never, m.company.id);
     if (accounts === null) continue;
     const lines: {

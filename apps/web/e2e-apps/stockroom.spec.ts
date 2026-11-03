@@ -84,6 +84,7 @@ test('a count: started, an unknown barcode reported, a line counted and applied;
   await signIn(page, 'dina'); // Stockroom manager
   await page.goto('/stockroom/a/stockroom.action_counts/new');
   await page.getByRole('combobox', { name: 'Location' }).click();
+  await page.getByRole('textbox', { name: 'Location' }).fill('WH/Stock');
   await page.getByRole('option', { name: 'WH/Stock' }).click();
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page).toHaveURL(/stockroom\.action_counts\/\d+$/);

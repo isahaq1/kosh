@@ -81,23 +81,39 @@ export async function defaultLocations(
   const company = forCompany ?? (env.companyId as Id<'res.company'>);
   const wh =
     warehouse ??
-    (await env.model('stock.warehouse').search({ where: { company }, limit: 1 })).ids[0] ??
+    (await env.model('stock.warehouse').search({ where: { company }, order: ['id asc'], limit: 1 }))
+      .ids[0] ??
     null;
-  const stock =
+  const stock = wh === null ? null : await stockRoot(env, wh);
+  const shared = async (usage: 'vendor' | 'customer') =>
+    (await env.model('stock.location').search({ where: { usage }, limit: 1 })).ids[0] ?? null;
+  // In a warehouse with steps, receipts go into Input and deliveries leave from Output (once they exist; confirming
+  // routes them there in any case).
+  const [steps] = wh === null ? [] : await env.model('stock.warehouse').browse([wh]).load({});
+  const step = async (name: Step) =>
     wh === null
       ? null
       : ((
-          await env.model('stock.location').search({
-            where: { warehouse: wh, usage: 'internal', parent: { isNull: true } },
-            limit: 1,
-          })
+          await env
+            .model('stock.location')
+            .search({ where: { warehouse: wh, step: name }, limit: 1 })
         ).ids[0] ?? null);
-  const shared = async (usage: 'vendor' | 'customer') =>
-    (await env.model('stock.location').search({ where: { usage }, limit: 1 })).ids[0] ?? null;
   if (kind === 'receipt')
-    return { warehouse: wh, source: await shared('vendor'), destination: stock };
+    return {
+      warehouse: wh,
+      source: await shared('vendor'),
+      destination:
+        (steps !== undefined && steps.receptionSteps !== 'one' ? await step('input') : null) ??
+        stock,
+    };
   if (kind === 'delivery')
-    return { warehouse: wh, source: stock, destination: await shared('customer') };
+    return {
+      warehouse: wh,
+      source:
+        (steps !== undefined && steps.deliverySteps !== 'one' ? await step('output') : null) ??
+        stock,
+      destination: await shared('customer'),
+    };
   return { warehouse: wh, source: stock, destination: stock };
 }
 
@@ -114,6 +130,16 @@ export const StockWarehouse = defineModel('stock.warehouse', {
     code: f.char({ required: true, label: 'Short code' }),
     locations: f.one2many('stock.location', 'warehouse'),
     address: f.many2one('res.partner', { ondelete: 'set null' }),
+    /** Receipts in one step (into stock), two (Input, then stock) or three (Input, Quality control, then stock). */
+    receptionSteps: f.selection(
+      { one: 'In one step', two: 'Input, then stock', three: 'Input, quality control, then stock' },
+      { required: true, default: 'one', label: 'Receipts' },
+    ),
+    /** Deliveries in one step, two (a pick into Output, then the delivery) or three (pick, pack, deliver). */
+    deliverySteps: f.selection(
+      { one: 'In one step', two: 'Pick, then deliver', three: 'Pick, pack, then deliver' },
+      { required: true, default: 'one', label: 'Deliveries' },
+    ),
   },
   sqlConstraints: {
     oneCode: { unique: ['company', 'code'], message: 'Another warehouse has this short code.' },
@@ -145,6 +171,11 @@ export const StockLocation = defineModel('stock.location', {
         transit: 'In transit',
       },
       { required: true, default: 'internal' },
+    ),
+    /** The step of the warehouse's routes this location is for (its Input, Quality control, Packing or Output). */
+    step: f.selection(
+      { input: 'Input', quality: 'Quality control', packing: 'Packing', output: 'Output' },
+      { label: 'Step' },
     ),
     /**
      * `WH/Stock/Shelf 1`: the warehouse code and the names from the top (four levels by name; deeper ones start
@@ -413,6 +444,10 @@ export const StockMove = defineModel('stock.move', {
     }),
     /** Take this lot only (a customer's batch, a count's loss); otherwise the lots that expire first. */
     restrictLot: f.many2one('stock.lot', { ondelete: 'set null', label: 'Lot to take' }),
+    /** The document ordered for this line (make to order: `PO/2026/00012`, `MO/2026/00007`, `TR/2026/00031`). */
+    procurement: f.char({ label: 'Ordered on' }),
+    /** Where this line is put away inside the transfer's destination (a putaway rule's, or chosen). */
+    destination: f.many2one('stock.location', { ondelete: 'set null', label: 'Put away in' }),
     reservations: f.one2many('stock.reservation', 'move'),
     reserved: f.decimal({
       scale: 4,
@@ -575,7 +610,7 @@ async function applyMoves(ids: readonly Id<'stock.picking'>[], env: Env): Promis
         source: true,
         destination: true,
         company: true,
-        moves: { product: true, reservations: { quant: true } },
+        moves: { product: true, destination: true, reservations: { quant: true } },
         lotLines: { lot: true, product: true },
       });
     const out = new Map<Id<'stock.quant'>, Decimal>();
@@ -618,7 +653,7 @@ async function applyMoves(ids: readonly Id<'stock.picking'>[], env: Env): Promis
             if (p.destination.usage === 'internal')
               add({
                 product: m.product.id,
-                location: p.destination.id,
+                location: m.destination?.id ?? p.destination.id,
                 company,
                 lot,
                 quantity: take,
@@ -635,7 +670,7 @@ async function applyMoves(ids: readonly Id<'stock.picking'>[], env: Env): Promis
             if (done.gt(0))
               add({
                 product: m.product.id,
-                location: p.destination.id,
+                location: m.destination?.id ?? p.destination.id,
                 company,
                 lot: null,
                 quantity: done,
@@ -696,7 +731,9 @@ async function applyMoves(ids: readonly Id<'stock.picking'>[], env: Env): Promis
             }
             add({
               product: orm.asId(product, 'product.product'),
-              location: p.destination.id,
+              location:
+                [...p.moves].find((m) => m.product.id === product)?.destination?.id ??
+                p.destination.id,
               company,
               lot,
               quantity: l.quantity,
@@ -762,6 +799,378 @@ async function applyMoves(ids: readonly Id<'stock.picking'>[], env: Env): Promis
     }
   });
 }
+
+export type Step = 'input' | 'quality' | 'packing' | 'output';
+const STEP_NAMES: Record<Step, string> = {
+  input: 'Input',
+  quality: 'Quality control',
+  packing: 'Packing',
+  output: 'Output',
+};
+
+/** The warehouse's location for a step of its routes, made beside its stock location the first time it is needed. */
+export async function stepLocation(
+  env: Env,
+  warehouse: Id<'stock.warehouse'>,
+  step: Step,
+): Promise<Id<'stock.location'>> {
+  return env.asSuperuser({ reason: 'warehouse step location' }, async (su) => {
+    const found = await su
+      .withFlags({ activeTest: false })
+      .model('stock.location')
+      .search({ where: { warehouse, step }, limit: 1 });
+    if (found.ids[0] !== undefined) return found.ids[0];
+    const [wh] = await su.model('stock.warehouse').browse([warehouse]).load({});
+    const made = await su.model('stock.location').create([
+      {
+        name: STEP_NAMES[step],
+        usage: 'internal',
+        warehouse,
+        company: wh?.company.id ?? (su.companyId as Id<'res.company'>),
+        step,
+      },
+    ]);
+    await su.flush();
+    return made.ids[0] as Id<'stock.location'>;
+  });
+}
+
+/** A warehouse's stock location: its first top-level internal location that is not a step. */
+async function stockRoot(
+  env: Env,
+  warehouse: Id<'stock.warehouse'>,
+): Promise<Id<'stock.location'> | null> {
+  return (
+    (
+      await env.model('stock.location').search({
+        where: { warehouse, usage: 'internal', parent: { isNull: true }, step: { isNull: true } },
+        order: ['id asc'],
+        limit: 1,
+      })
+    ).ids[0] ?? null
+  );
+}
+
+/**
+ * Before transfers are confirmed: a receipt into a warehouse's stock location goes into its Input when the
+ * warehouse receives in two or three steps, a delivery out of it leaves from its Output when it delivers in two or
+ * three. A location chosen inside the stock location is kept.
+ */
+async function routeFirstStep(ids: readonly Id<'stock.picking'>[], env: Env): Promise<void> {
+  const pickings = await env
+    .model('stock.picking')
+    .browse(ids)
+    .load({ source: { warehouse: true }, destination: { warehouse: true } });
+  for (const p of pickings) {
+    if (p.kind === 'receipt' && p.destination.warehouse !== null) {
+      const wh = p.destination.warehouse;
+      if (wh.receptionSteps === 'one' || p.destination.id !== (await stockRoot(env, wh.id)))
+        continue;
+      await env
+        .model('stock.picking')
+        .browse([p.id])
+        .write({ destination: await stepLocation(env, wh.id, 'input') });
+    } else if (p.kind === 'delivery' && p.source.warehouse !== null) {
+      const wh = p.source.warehouse;
+      if (wh.deliverySteps === 'one' || p.source.id !== (await stockRoot(env, wh.id))) continue;
+      await env
+        .model('stock.picking')
+        .browse([p.id])
+        .write({ source: await stepLocation(env, wh.id, 'output') });
+    }
+  }
+  await env.flush();
+}
+
+type Raw = { create(rows: readonly Record<string, unknown>[]): Promise<{ ids: number[] }> };
+
+/** A chained step: an internal transfer of `lines` from `source` to `destination`, confirmed (reserving). */
+async function stepTransfer(
+  env: Env,
+  from: { company: number; warehouse: number; origin: string | null; partner: number | null },
+  source: Id<'stock.location'>,
+  destination: Id<'stock.location'>,
+  lines: readonly {
+    product: number;
+    name: string | null;
+    quantity: Decimal;
+    procurement?: string | null;
+  }[],
+  next: number | null,
+): Promise<number> {
+  const made = await (env.model('stock.picking' as never) as unknown as Raw).create([
+    {
+      kind: 'internal',
+      company: from.company,
+      warehouse: from.warehouse,
+      partner: from.partner,
+      source,
+      destination,
+      origin: from.origin,
+      next,
+      moves: { create: lines.map((l) => ({ ...l })) },
+    },
+  ]);
+  await env
+    .model('stock.picking')
+    .browse(made.ids as Id<'stock.picking'>[])
+    .confirm();
+  return made.ids[0] as number;
+}
+
+/**
+ * After deliveries are confirmed: one leaving from its warehouse's Output gets the steps before it — a pick from
+ * stock into Output (two steps), or a pick into Packing and a pack into Output (three) — confirmed, the pick
+ * reserving; each step is validated on its own and brings the next one its stock.
+ */
+async function chainDeliveries(ids: readonly Id<'stock.picking'>[], env: Env): Promise<void> {
+  await env.asSuperuser({ reason: 'delivery steps' }, async (su) => {
+    const pickings = await su
+      .model('stock.picking')
+      .browse(ids)
+      .load({ source: { warehouse: true }, moves: { product: true }, previousSteps: true });
+    for (const p of pickings) {
+      const wh = p.source.warehouse;
+      if (p.kind !== 'delivery' || p.source.step !== 'output' || wh === null) continue;
+      if (p.previousSteps.length > 0 || wh.deliverySteps === 'one') continue;
+      const stock = await stockRoot(su, wh.id);
+      if (stock === null) continue;
+      const lines = p.moves.map((m) => ({
+        product: m.product.id,
+        name: m.name,
+        quantity: m.productQty ?? m.quantity,
+        procurement: m.procurement,
+      }));
+      const from = {
+        company: p.company.id,
+        warehouse: wh.id,
+        origin: p.origin ?? p.name,
+        partner: p.partner?.id ?? null,
+      };
+      if (wh.deliverySteps === 'three') {
+        const packing = await stepLocation(su, wh.id, 'packing');
+        const pack = await stepTransfer(su, from, packing, p.source.id, lines, p.id);
+        await stepTransfer(su, from, stock, packing, lines, pack);
+      } else await stepTransfer(su, from, stock, p.source.id, lines, p.id);
+    }
+  });
+}
+
+/**
+ * After transfers are validated: what came into a warehouse's Input goes on to Quality control (three steps) or to
+ * stock, and what passed Quality control to stock — each a new transfer of what was done, confirmed; a step with a
+ * next one (a pick before its pack or delivery) reserves that one, now that its stock is there.
+ */
+async function chainOnValidate(ids: readonly Id<'stock.picking'>[], env: Env): Promise<void> {
+  await env.asSuperuser({ reason: 'transfer steps' }, async (su) => {
+    const pickings = await su
+      .model('stock.picking')
+      .browse(ids)
+      .load({ destination: { warehouse: true }, moves: { product: true }, next: true });
+    // What was ordered for a delivery has come: the transfers waiting for it reserve it.
+    const documents = [...new Set([...pickings].flatMap((p) => [p.name, p.origin ?? '']))].filter(
+      (d) => d !== '',
+    );
+    if (documents.length > 0) {
+      const waiting = await (
+        await su.model('stock.move').search({
+          where: { procurement: { in: documents }, 'picking.state': 'confirmed' } as never,
+        })
+      ).load({ picking: true });
+      const ids = [...new Set(waiting.map((m) => m.picking.id))];
+      if (ids.length > 0) await reserve(ids as Id<'stock.picking'>[], su);
+    }
+    for (const p of pickings) {
+      if (p.next !== null && p.next.state === 'confirmed')
+        await reserve([p.next.id as Id<'stock.picking'>], su);
+      const wh = p.destination.warehouse;
+      const step = p.destination.step;
+      if (wh === null || (step !== 'input' && step !== 'quality') || p.next !== null) continue;
+      const stock = await stockRoot(su, wh.id);
+      if (stock === null) continue;
+      const to =
+        step === 'input' && wh.receptionSteps === 'three'
+          ? await stepLocation(su, wh.id, 'quality')
+          : stock;
+      const lines = p.moves
+        .filter((m) => (m.doneQty ?? zero).gt(0))
+        .map((m) => ({ product: m.product.id, name: m.name, quantity: m.doneQty ?? zero }));
+      if (lines.length === 0) continue;
+      const next = await stepTransfer(
+        su,
+        {
+          company: p.company.id,
+          warehouse: wh.id,
+          origin: p.origin ?? p.name,
+          partner: p.partner?.id ?? null,
+        },
+        p.destination.id,
+        to,
+        lines,
+        null,
+      );
+      await su
+        .model('stock.picking')
+        .browse([p.id])
+        .write({ next: next as Id<'stock.picking'> });
+    }
+    await su.flush();
+  });
+}
+
+/**
+ * After deliveries are confirmed: each line of a product with a make-to-order rule in the warehouse it leaves from
+ * (other than dropshipping) gets what it needs ordered by that rule — on a transfer, a request for quotation or a
+ * production order — once; the line says on which document.
+ */
+async function orderOnDemand(ids: readonly Id<'stock.picking'>[], env: Env): Promise<void> {
+  await env.asSuperuser({ reason: 'make to order' }, async (su) => {
+    const pickings = await su
+      .model('stock.picking')
+      .browse(ids)
+      .load({ source: { warehouse: true }, moves: { product: true } });
+    const wanted = new Map<number, { quantity: Decimal; moves: number[] }>();
+    for (const p of pickings) {
+      const wh = p.source.warehouse;
+      if (p.kind !== 'delivery' || wh === null) continue;
+      for (const m of p.moves) {
+        if (m.procurement !== null) continue;
+        const [rule] = (
+          await su.model('stock.reorder').search({
+            where: {
+              product: m.product.id,
+              warehouse: wh.id,
+              trigger: 'order',
+              method: { ne: 'dropship' },
+            },
+            limit: 1,
+          })
+        ).ids;
+        if (rule === undefined) continue;
+        const w = wanted.get(rule) ?? { quantity: zero, moves: [] };
+        wanted.set(rule, {
+          quantity: w.quantity.plus(m.productQty ?? m.quantity),
+          moves: [...w.moves, m.id],
+        });
+      }
+    }
+    if (wanted.size === 0) return;
+    const made = await su
+      .model('stock.reorder')
+      .browse([...wanted.keys()] as Id<'stock.reorder'>[])
+      .procure(new Map([...wanted].map(([id, w]) => [id, w.quantity.toString()])));
+    for (const [rule, w] of wanted) {
+      const document = made.get(rule);
+      if (document === undefined) continue;
+      await su
+        .model('stock.move')
+        .browse(w.moves as Id<'stock.move'>[])
+        .write({ procurement: document });
+      await su
+        .model('stock.reorder')
+        .browse([rule as Id<'stock.reorder'>])
+        .write({ lastOrder: document });
+    }
+    await su.flush();
+  });
+}
+
+/** After transfers are cancelled: the steps before them that are not done are cancelled too. */
+async function cancelPreviousSteps(ids: readonly Id<'stock.picking'>[], env: Env): Promise<void> {
+  const before = await env.model('stock.picking').search({
+    where: { next: { in: [...ids] }, state: { in: ['draft', 'confirmed'] } },
+  });
+  if (before.length > 0) await before.cancel();
+}
+
+/**
+ * Before transfers into stock are validated: each line without a place of its own is put away where the most
+ * specific putaway rule of its destination says — the product's rule first, then its category's (or a parent
+ * category's), the lowest sequence first.
+ */
+async function putAway(ids: readonly Id<'stock.picking'>[], env: Env): Promise<void> {
+  await env.asSuperuser({ reason: 'putaway' }, async (su) => {
+    const pickings = await su
+      .model('stock.picking')
+      .browse(ids)
+      .load({ destination: true, moves: { product: { category: true } } });
+    for (const p of pickings) {
+      if (p.destination.usage !== 'internal') continue;
+      const rules = [
+        ...(await (
+          await su.model('stock.putaway').search({
+            where: { location: p.destination.id },
+            order: ['sequence asc', 'id asc'],
+          })
+        ).load({ category: true })),
+      ];
+      if (rules.length === 0) continue;
+      for (const m of p.moves) {
+        if (m.destination !== null) continue;
+        const categories: number[] = [];
+        let c = m.product.category;
+        while (c !== null && c !== undefined && categories.length < 10) {
+          categories.push(c.id);
+          const [up] = await su.model('product.category').browse([c.id]).load({ parent: true });
+          c = up?.parent ?? null;
+        }
+        const rule =
+          rules.find((r) => r.product?.id === m.product.id) ??
+          categories
+            .map((id) => rules.find((r) => r.product === null && r.category?.id === id))
+            .find((r) => r !== undefined);
+        if (rule !== undefined) await m.write({ destination: rule.destination.id });
+      }
+    }
+    await su.flush();
+  });
+}
+
+/**
+ * A putaway rule: what arrives in `location` — of `product`, or of `category` (and the categories inside it) — is
+ * put away in `destination`, a location inside it.
+ */
+export const StockPutaway = defineModel('stock.putaway', {
+  label: 'Putaway rule',
+  order: ['location asc', 'sequence asc', 'id asc'],
+  archivable: true,
+  companyScoped: { required: true },
+  access: { 'stock.user': READ, 'stock.manager': [...ALL, 'export', 'import'] },
+  fields: {
+    location: f.many2one('stock.location', {
+      required: true,
+      ondelete: 'cascade',
+      label: 'When it arrives in',
+    }),
+    product: f.many2one('product.product', { ondelete: 'cascade' }),
+    category: f.many2one('product.category', { ondelete: 'cascade', label: 'Product category' }),
+    destination: f.many2one('stock.location', {
+      required: true,
+      ondelete: 'cascade',
+      label: 'Put it away in',
+    }),
+    sequence: f.integer({ required: true, default: 10 }),
+  },
+  constraints: {
+    inside: {
+      ...check('stock.putaway', ['location', 'destination', 'product', 'category'], async (rules) =>
+        (await rules.load({ location: true, destination: true, product: true, category: true }))
+          .filter(
+            (r) =>
+              (r.product === null) === (r.category === null) ||
+              r.destination.usage !== 'internal' ||
+              r.destination.id === r.location.id ||
+              !String(r.destination.parentPath ?? '').startsWith(
+                String(r.location.parentPath ?? '\u0000'),
+              ),
+          )
+          .map((r) => r.id),
+      ),
+      message:
+        'A putaway rule is for a product or a category (one of them), into a location inside the one it arrives in.',
+    },
+  },
+});
 
 /**
  * The lots and serial numbers of a transfer: listed by hand on what comes into stock (an existing lot, or the name of
@@ -833,6 +1242,7 @@ export const StockPicking = defineModel('stock.picking', {
         internal: 'Internal move',
         adjustment: 'Inventory adjustment',
         production: 'Production',
+        dropship: 'Dropship',
       },
       { required: true, default: 'receipt', label: 'Type' },
     ),
@@ -860,6 +1270,9 @@ export const StockPicking = defineModel('stock.picking', {
     /** The transfer this one takes the rest of. */
     backorderOf: f.many2one('stock.picking', { ondelete: 'set null', label: 'Backorder of' }),
     backorders: f.one2many('stock.picking', 'backorderOf'),
+    /** The step this one brings its stock to (a pick's pack or delivery). */
+    next: f.many2one('stock.picking', { ondelete: 'set null', label: 'Next step' }),
+    previousSteps: f.one2many('stock.picking', 'next', { label: 'Steps before' }),
     /** How much of what leaves an internal location is reserved; receipts are always ready. */
     availability: f.selection(
       { none: 'Nothing reserved', partial: 'Partly reserved', full: 'Everything reserved' },
@@ -919,9 +1332,16 @@ export const StockPicking = defineModel('stock.picking', {
           // The lines' checks run while the transfer is still a draft (created and confirmed at once).
           before: records('stock.picking', async (pickings): Promise<void> => {
             await pickings.env.flush();
+            await (pickings.env as unknown as Env)
+              .model('stock.picking')
+              .browse(pickings.ids)
+              .routing();
+            await routeFirstStep(pickings.ids, pickings.env);
           }),
           after: records('stock.picking', async (pickings) => {
             if (await reserveOnConfirm(pickings.env)) await reserve(pickings.ids, pickings.env);
+            await orderOnDemand(pickings.ids, pickings.env);
+            await chainDeliveries(pickings.ids, pickings.env);
           }),
         },
         /** "Check availability": reserve what has come in since. */
@@ -955,7 +1375,11 @@ export const StockPicking = defineModel('stock.picking', {
           message:
             'Not everything done is reserved: check availability, wait for the stock, or lower the done quantities.',
           before: records('stock.picking', async (pickings): Promise<void> => {
+            await putAway(pickings.ids, pickings.env);
             await applyMoves(pickings.ids, pickings.env);
+          }),
+          after: records('stock.picking', async (pickings): Promise<void> => {
+            await chainOnValidate(pickings.ids, pickings.env);
           }),
         },
         cancel: {
@@ -963,6 +1387,7 @@ export const StockPicking = defineModel('stock.picking', {
           to: 'cancel',
           after: records('stock.picking', async (pickings): Promise<void> => {
             await unreserve(pickings.ids, pickings.env);
+            await cancelPreviousSteps(pickings.ids, pickings.env);
           }),
         },
         redraft: { from: ['cancel'], to: 'draft' },
@@ -977,6 +1402,12 @@ export const StockPicking = defineModel('stock.picking', {
      * (`stock_account`: the stock's value posted to Accounting).
      */
     validated: method('stock.picking', async (): Promise<void> => undefined),
+    /**
+     * Runs before these draft transfers are confirmed, in the confirmation's scope: where their lines go. Nothing
+     * here; a bridge overrides it (`purchase_stock`: lines of dropshipped products leave the delivery for a dropship
+     * from the vendor, on a request for quotation).
+     */
+    routing: method('stock.picking', async (): Promise<void> => undefined),
     /**
      * What a backorder copies from each of these transfers: the type, contact, places, company, source document,
      * date and note. A bridge adds its link by overriding it (`sale_stock`: the sales order).
@@ -996,6 +1427,7 @@ export const StockPicking = defineModel('stock.picking', {
           origin: p.origin,
           scheduledDate: p.scheduledDate,
           note: p.note,
+          next: p.next?.id ?? null,
         });
       return out;
     }),
@@ -1025,6 +1457,8 @@ export const StockPicking = defineModel('stock.picking', {
               p.source.id === p.destination.id ||
               (p.kind === 'receipt' && p.destination.usage !== 'internal') ||
               (p.kind === 'delivery' && p.source.usage !== 'internal') ||
+              (p.kind === 'dropship' &&
+                (p.source.usage !== 'vendor' || p.destination.usage !== 'customer')) ||
               (p.kind === 'internal' &&
                 (p.source.usage !== 'internal' || p.destination.usage !== 'internal')) ||
               (p.kind === 'adjustment' &&
@@ -1478,7 +1912,11 @@ export const ProductStock = extendModel('product.product', {
   },
 });
 
-/** What a warehouse's stock location holds: the location and every one inside it. */
+/**
+ * A warehouse's stock location, and every internal location of the warehouse — the stock location and those inside
+ * it, and the steps of its routes (Input, Quality control, Packing, Output): what is anywhere in them is the
+ * warehouse's.
+ */
 export async function warehouseStock(
   env: Env,
   warehouse: Id<'stock.warehouse'>,
@@ -1486,7 +1924,9 @@ export async function warehouseStock(
 ): Promise<{ root: Id<'stock.location'> | null; inside: Set<number> }> {
   const root = (await defaultLocations(env, 'internal', warehouse, company)).source;
   if (root === null) return { root, inside: new Set() };
-  const inside = await env.model('stock.location').search({ where: { id: { childOf: root } } });
+  const inside = await env
+    .model('stock.location')
+    .search({ where: { warehouse, usage: 'internal' } });
   return { root, inside: new Set(inside.ids) };
 }
 
@@ -1522,8 +1962,21 @@ export const StockReorder = defineModel('stock.reorder', {
     /** Days from ordering to having it: the expected date of what is ordered. */
     leadDays: f.integer({ required: true, default: 0, label: 'Lead time (days)' }),
     method: f.selection(
-      { buy: 'Buy', make: 'Make', transfer: 'Transfer' },
+      {
+        buy: 'Buy',
+        make: 'Make',
+        transfer: 'Transfer',
+        dropship: 'Dropship (the vendor delivers to the customer)',
+      },
       { required: true, default: 'buy', label: 'Replenish by' },
+    ),
+    /**
+     * When it orders: when the forecast falls below the minimum, or for each delivery, what it needs (make to
+     * order; dropshipping always is).
+     */
+    trigger: f.selection(
+      { minmax: 'Below the minimum', order: 'For each delivery (make to order)' },
+      { required: true, default: 'minmax', label: 'Orders' },
     ),
     vendor: f.many2one('res.partner', { ondelete: 'set null', label: 'Vendor' }),
     sourceWarehouse: f.many2one('stock.warehouse', {
@@ -1643,14 +2096,15 @@ export const StockReorder = defineModel('stock.reorder', {
             .filter(
               (r) =>
                 r.product.kind !== 'goods' ||
-                (r.method === 'buy' && r.vendor === null) ||
+                ((r.method === 'buy' || r.method === 'dropship') && r.vendor === null) ||
+                (r.method === 'dropship' && r.trigger !== 'order') ||
                 (r.method === 'transfer' &&
                   (r.sourceWarehouse === null || r.sourceWarehouse.id === r.warehouse.id)),
             )
             .map((r) => r.id),
       ),
       message:
-        'A rule keeps goods in stock; buying needs a vendor, a transfer another warehouse to take from.',
+        'A rule keeps goods in stock; buying and dropshipping need a vendor (dropshipping is for each delivery), a transfer another warehouse to take from.',
     },
   },
 });
@@ -1709,6 +2163,7 @@ export const stockShutro = defineModule({
     StockCountLine,
     StockScrap,
     StockReorder,
+    StockPutaway,
   ],
   extensions: [ProductStock],
   data: [

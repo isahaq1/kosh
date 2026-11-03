@@ -740,6 +740,154 @@ test('replenishment: a rule below its minimum proposes enough for its maximum, s
   expect((await call('GET', `${R}/${buy}`, 'rahim')).json.snoozedUntil).toBeTruthy();
 });
 
+test('routes in three steps: Input, Quality control and stock; pick, pack and deliver; putaway; cancelled together', async () => {
+  const W = '/api/v1/models/stock.warehouse';
+  const south = (await call('POST', W, 'dina', { name: 'South', code: 'SW' })).json.id;
+  const stock = (
+    await call('POST', '/api/v1/models/stock.location', 'dina', {
+      name: 'Stock',
+      usage: 'internal',
+      warehouse: south,
+    })
+  ).json.id;
+  const bay = (
+    await call('POST', '/api/v1/models/stock.location', 'dina', {
+      name: 'Bay 1',
+      parent: stock,
+      warehouse: south,
+    })
+  ).json.id;
+  expect(
+    (
+      await call('PATCH', `${W}/${south}`, 'dina', {
+        receptionSteps: 'three',
+        deliverySteps: 'three',
+      })
+    ).status,
+  ).toBe(200);
+  ids['Drum'] = (
+    await call('POST', '/api/v1/models/product.product', 'dina', { name: 'Cable drum' })
+  ).json.id;
+  const P = '/api/v1/models/stock.putaway';
+  expect(
+    (
+      await call('POST', P, 'dina', {
+        location: stock,
+        product: ids['Drum'],
+        destination: ids['customers'],
+      })
+    ).status,
+  ).toBe(422);
+  expect(
+    (await call('POST', P, 'dina', { location: stock, product: ids['Drum'], destination: bay }))
+      .status,
+  ).toBe(201);
+
+  // A receipt into South's stock goes into its Input, then on through Quality control.
+  const receipt = await transfer('receipt', [{ product: ids['Drum'], quantity: '10' }], {
+    destination: stock,
+  });
+  expect((await run(receipt, 'confirm')).status).toBe(200);
+  const step = async (id: number) =>
+    (await call('GET', `${T}/${id}?fields=name,status,next,source,destination`, 'rahim'))
+      .json as Json;
+  const fullName = async (id: number) =>
+    (await call('GET', `/api/v1/models/stock.location/${id}`, 'rahim')).json.fullName;
+  expect(await fullName(idOf((await step(receipt)).destination))).toBe('SW/Input');
+  expect((await run(receipt, 'validate')).status).toBe(200);
+  const toQuality = idOf((await step(receipt)).next);
+  expect(await step(toQuality)).toMatchObject({ status: 'ready' });
+  expect(await fullName(idOf((await step(toQuality)).destination))).toBe('SW/Quality control');
+  expect((await run(toQuality, 'validate')).status).toBe(200);
+  const toStock = idOf((await step(toQuality)).next);
+  expect(idOf((await step(toStock)).destination)).toBe(stock);
+  expect((await run(toStock, 'validate')).status).toBe(200);
+  // Put away in Bay 1 by the rule.
+  const [held] = await find(
+    'stock.quant',
+    { product: ids['Drum'], quantity: { gt: 0 } },
+    'location,quantity',
+  );
+  expect(idOf(held.location)).toBe(bay);
+  expect(Number(held.quantity)).toBe(10);
+
+  // A delivery from South's stock leaves from Output, after a pick and a pack.
+  const delivery = await transfer('delivery', [{ product: ids['Drum'], quantity: '4' }], {
+    source: stock,
+  });
+  expect((await run(delivery, 'confirm')).status).toBe(200);
+  expect(await fullName(idOf((await step(delivery)).source))).toBe('SW/Output');
+  expect((await step(delivery)).status).toBe('waiting');
+  const [pack] = await find('stock.picking', { next: delivery }, 'status', 'rahim');
+  const [pick] = await find('stock.picking', { next: pack.id }, 'status', 'rahim');
+  expect([pick.status, pack.status]).toEqual(['ready', 'waiting']);
+  expect((await run(pick.id, 'validate')).status).toBe(200);
+  expect((await step(pack.id)).status).toBe('ready');
+  expect((await run(pack.id, 'validate')).status).toBe(200);
+  expect((await step(delivery)).status).toBe('ready');
+  expect((await run(delivery, 'validate')).status).toBe(200);
+  expect(Number((await onHand('Drum')).qtyOnHand)).toBe(6);
+
+  // Cancelling a delivery cancels the steps before it.
+  const other = await transfer('delivery', [{ product: ids['Drum'], quantity: '1' }], {
+    source: stock,
+  });
+  await run(other, 'confirm');
+  const [otherPack] = await find('stock.picking', { next: other }, 'id', 'rahim');
+  expect((await run(other, 'cancel')).status).toBe(200);
+  expect((await step(otherPack.id)).status).toBe('cancelled');
+  const [otherPick] = await find('stock.picking', { next: otherPack.id }, 'status', 'rahim');
+  expect(otherPick.status).toBe('cancelled');
+});
+
+test('make to order: a delivery gets what it needs ordered by its rule, once, and reserves it when it comes', async () => {
+  const R = '/api/v1/models/stock.reorder';
+  const [main] = await find('stock.warehouse', { code: 'WH' }, 'id');
+  const [east] = await find('stock.warehouse', { code: 'EW' }, 'id');
+  const [eastStock] = await find('stock.location', { warehouse: east.id, usage: 'internal' }, 'id');
+  ids['Fuse'] = (
+    await call('POST', '/api/v1/models/product.product', 'dina', { name: 'Fuse' })
+  ).json.id;
+  const stocked = await transfer('receipt', [{ product: ids['Fuse'], quantity: '20' }]);
+  await run(stocked, 'confirm');
+  await run(stocked, 'validate');
+  const rule = await call('POST', R, 'dina', {
+    product: ids['Fuse'],
+    warehouse: east.id,
+    method: 'transfer',
+    sourceWarehouse: main.id,
+    trigger: 'order',
+  });
+  expect(rule.status, JSON.stringify(rule.json)).toBe(201);
+  const delivery = await transfer('delivery', [{ product: ids['Fuse'], quantity: '5' }], {
+    source: eastStock.id,
+  });
+  expect((await run(delivery, 'confirm')).status).toBe(200);
+  expect((await call('GET', `${T}/${delivery}`, 'rahim')).json.status).toBe('waiting');
+  const [line] = await find('stock.move', { picking: delivery }, 'procurement', 'rahim');
+  expect(line.procurement).toMatch(/^TR\//);
+  const [ordered] = await find('stock.picking', { name: line.procurement }, 'kind,status', 'rahim');
+  expect(ordered).toMatchObject({ kind: 'internal', status: 'ready' });
+  // Brought over: the delivery reserves it.
+  expect((await run(ordered.id, 'validate')).status).toBe(200);
+  expect((await call('GET', `${T}/${delivery}`, 'rahim')).json.status).toBe('ready');
+  await call('POST', '/api/v1/stockroom/replenishment/refresh', 'rahim', { rules: [rule.json.id] });
+  expect((await call('GET', `${R}/${rule.json.id}`, 'rahim')).json.explanation).toContain(
+    'ordered for each delivery (make to order)',
+  );
+  // Dropshipping needs a vendor and is for each delivery.
+  expect(
+    (
+      await call('POST', R, 'dina', {
+        product: ids['Fuse'],
+        warehouse: main.id,
+        method: 'dropship',
+        trigger: 'minmax',
+      })
+    ).status,
+  ).toBe(422);
+});
+
 test('the demo data loads', async () => {
   const auth = host.server.auth;
   if (auth === undefined) throw new Error('base is installed');

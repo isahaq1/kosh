@@ -443,6 +443,32 @@ await as('dina', 'POST', '/api/v1/models/stock.reorder', {
   maximum: '200',
   multiple: '50',
 });
+// Routes (RFC 0024 §2.6): the Depot delivers in two steps (a pick into Output, then the delivery); 20 bolts in stock.
+const depot = (await as('dina', 'POST', '/api/v1/models/stock.warehouse', {
+  name: 'Depot',
+  code: 'DP',
+  deliverySteps: 'two',
+})) as { id: number };
+const depotStock = (await as('dina', 'POST', '/api/v1/models/stock.location', {
+  name: 'Stock',
+  usage: 'internal',
+  warehouse: depot.id,
+})) as { id: number };
+const [vendorsAt] = (
+  await as(
+    'dina',
+    'GET',
+    `/api/v1/models/stock.location?fields=id&filter=${encodeURIComponent(JSON.stringify({ usage: 'vendor' }))}`,
+  )
+)['items'] as { id: number }[];
+const boltsIn = (await as('dina', 'POST', '/api/v1/models/stock.picking', {
+  kind: 'receipt',
+  source: vendorsAt?.id,
+  destination: depotStock.id,
+  moves: { create: [{ product: bolt.id, quantity: '20' }] },
+})) as { id: number };
+for (const t of ['confirm', 'validate'])
+  await as('dina', 'POST', `/api/v1/models/stock.picking/${boltsIn.id}/transitions/${t}`, {});
 const order = (await as('rahim', 'POST', '/api/v1/models/sale.order', {
   partner: partners.id,
   currency: bdt?.id,

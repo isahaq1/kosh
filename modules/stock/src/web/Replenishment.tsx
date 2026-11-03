@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 interface Rule {
   readonly id: number;
   readonly name: string;
-  readonly method: 'buy' | 'make' | 'transfer';
+  readonly method: 'buy' | 'make' | 'transfer' | 'dropship';
   readonly minimum: string;
   readonly maximum: string;
   readonly onHand: string | null;

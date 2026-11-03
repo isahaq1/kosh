@@ -336,3 +336,69 @@ test('reorder rules that buy: a request for quotation to the vendor, into the ru
   expect(Number(coming.forecast)).toBe(40);
   expect(coming.explanation).toContain(`coming in 40 (${receipt.name})`);
 });
+
+test('dropship: the vendor delivers to the customer — the lines leave the delivery, on a request marked as a dropship, never received', async () => {
+  const worker = purchaseStockWorker({ shutro: host.server.shutro });
+  const [main] = await find('stock.warehouse', { code: 'WH' }, 'id', 'mona');
+  const [stock] = await find(
+    'stock.location',
+    { warehouse: main.id, usage: 'internal', step: { isNull: true } },
+    'id',
+    'mona',
+  );
+  const [customers] = await find('stock.location', { usage: 'customer' }, 'id', 'mona');
+  const rule = await call('POST', '/api/v1/models/stock.reorder', 'mona', {
+    product: ids['Steel beam'],
+    warehouse: main.id,
+    method: 'dropship',
+    trigger: 'order',
+    vendor: ids['vendor'],
+    leadDays: 2,
+  });
+  expect(rule.status, JSON.stringify(rule.json)).toBe(201);
+  const delivery = await call('POST', T, 'mona', {
+    kind: 'delivery',
+    source: stock.id,
+    destination: customers.id,
+    origin: 'SO/2026/00042',
+    moves: {
+      create: [
+        { product: ids['Steel beam'], quantity: '3' },
+        { product: ids['LED panel'], quantity: '1' },
+      ],
+    },
+  });
+  expect(delivery.status, JSON.stringify(delivery.json)).toBe(201);
+  await run(`${T}/${delivery.json.id}/transitions/confirm`, 'mona');
+  const left = await find('stock.move', { picking: delivery.json.id }, 'product', 'mona');
+  expect(left.map((m) => m.product?.id ?? m.product)).toEqual([ids['LED panel']]);
+  const [shipped] = await find(
+    'stock.picking',
+    { kind: 'dropship' },
+    'status,origin,purchaseOrder',
+    'mona',
+  );
+  expect(shipped).toMatchObject({ status: 'ready', origin: 'SO/2026/00042' });
+  const po = shipped.purchaseOrder?.id ?? shipped.purchaseOrder;
+  const order = (await call('GET', `${O}/${po}`, 'mona')).json;
+  expect(order).toMatchObject({ dropship: true, state: 'draft', origin: 'SO/2026/00042' });
+  // Confirmed: no receipt into stock — the dropship is the order's transfer.
+  await run(`${O}/${po}/transitions/submit`, 'mona');
+  await run(`${O}/${po}/transitions/confirm`, 'mona');
+  await worker.drain();
+  expect(await find('stock.picking', { purchaseOrder: po }, 'kind', 'mona')).toEqual([
+    expect.objectContaining({ kind: 'dropship' }),
+  ]);
+  const before = Number(
+    (await call('GET', `/api/v1/models/product.product/${ids['Steel beam']}`, 'mona')).json
+      .qtyOnHand,
+  );
+  await run(`${T}/${shipped.id}/transitions/validate`, 'mona');
+  expect((await call('GET', `${O}/${po}`, 'mona')).json.receiptState).toBe('received');
+  expect(
+    Number(
+      (await call('GET', `/api/v1/models/product.product/${ids['Steel beam']}`, 'mona')).json
+        .qtyOnHand,
+    ),
+  ).toBe(before);
+});

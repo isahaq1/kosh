@@ -279,3 +279,33 @@ test('received at the order’s price; billed into Goods received not billed; th
   expect(await balanceOf('2150')).toBe('0.00');
   expect(await balanceOf('1200')).toBe('3600.00');
 });
+
+test('a dropshipped order: never valued in stock, its bill keeps the purchases account', async () => {
+  const made = await call('POST', O, 'maria', {
+    partner: ids['vendor'],
+    currency: ids['bdt'],
+    dropship: true,
+    lines: {
+      create: [{ product: ids['Cement'], name: 'Cement', quantity: '4', priceUnit: '110' }],
+    },
+  });
+  expect(made.status, JSON.stringify(made.json)).toBe(201);
+  const order = made.json.id as number;
+  await run(`${O}/${order}/transitions/submit`);
+  await run(`${O}/${order}/transitions/confirm`);
+  await run(`${O}/${order}/transitions/bill`);
+  const [bill] = await find('account.move', { purchaseOrder: order }, 'id');
+  await call('PATCH', `/api/v1/models/account.move/${bill.id}`, 'maria', {
+    date: new Date().toISOString().slice(0, 10),
+  });
+  const posted = await call(
+    'POST',
+    `/api/v1/models/account.move/${bill.id}/transitions/post`,
+    'maria',
+  );
+  expect(posted.status, JSON.stringify(posted.json)).toBe(200);
+  const [line] = await find('account.move.line', { move: bill.id, lineKind: 'product' }, 'account');
+  const [interim] = await find('account.account', { code: '2150' }, 'id');
+  expect(line.account?.id ?? line.account).not.toBe(interim.id);
+  expect(await balanceOf('2150')).toBe('0.00');
+});
