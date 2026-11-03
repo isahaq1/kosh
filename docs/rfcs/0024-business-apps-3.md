@@ -459,3 +459,39 @@ data, an overview, docs and an E2E.
   quantity, counted as on order, and a product without a bill refused; the demo's rules; end to end, the reckoning
   on screen, a changed quantity ordered on a request for quotation.
 
+## Implementation notes (2026-11-03): step 6 part 2 — routes, putaway, make to order, dropship
+
+- **Routes**: a warehouse receives in one step, two (Input, then stock) or three (Input, Quality control, then
+  stock), and delivers in one, two (a pick into Output, then the delivery) or three (pick into Packing, pack into
+  Output, deliver). The step locations are made beside the stock location when first needed. Shutro has no hook on
+  a model's writes, so routing happens where Stockroom already decides: **confirming** a receipt into the
+  warehouse's stock location sends it into Input, a delivery out of it leaves from Output and gets its pick (and
+  pack) — confirmed, the pick reserving; **validating** a step makes the next receipt step from what was done, or
+  reserves the next delivery step now that its stock is there. A location chosen inside the stock location is kept.
+  Each step is a transfer of its own (`next` / *Steps before*), validated, done in part with a backorder (which keeps
+  its next step) or cancelled — cancelling a delivery cancels the steps before it that are not done.
+- **Replenishment** counts the whole warehouse (its stock location and the steps), so a receipt into Input is
+  coming in, a pick inside the warehouse is neither in nor out, and a delivery from Output goes out once.
+- **Putaway rules** (`stock.putaway`, Stockroom › Configuration): what arrives in a location — a product, or a
+  category and those inside it — is put away in a location inside it; the product's rule first, then the closest
+  category's, by sequence. Applied as a transfer is validated, line by line (`Put away in` on the line, which can
+  also be chosen by hand).
+- **Make to order**: a reorder rule may order *for each delivery* (`trigger: order`). Confirming a delivery from
+  its warehouse orders what each of its lines needs through the rule's method — a transfer, a request for
+  quotation, a production order — once; the line says on which document (*Ordered on*), its pick and pack carry it,
+  and validating that document's transfer into the warehouse reserves the transfers that wait for it.
+- **Dropship** (`purchase_stock`): a dropship rule (with a vendor; always for each delivery) takes its product's
+  lines out of a delivery as it is confirmed, into a **dropship** transfer from the vendors to the customer — with the
+  delivery's links (a sales order's, so what is delivered on the order follows) — and a request for quotation to
+  the vendor marked *Dropship*, linked line by line. The order gets no receipt (the dropship is its transfer), is
+  received when the dropship is validated, is never counted as on order for the warehouse and never valued in
+  stock; its bill keeps the purchases account (`purchase_stock_account`), as the goods' cost.
+- **Not in this part**: cross-docking, routes chosen per product or per sales line (a rule per product and warehouse
+  for now), reservations for make to order that leave other stock alone (a make-to-order delivery also takes what
+  is free), and dropship valuation through an interim account.
+- **Tests**: on real PostgreSQL three-step receipts through Input and Quality control into a bay by a putaway rule,
+  an invalid putaway refused, a three-step delivery's pick, pack and delivery each reserving the next, the chain
+  cancelled with the delivery; a make-to-order transfer from another warehouse reserved for the delivery once it
+  comes; a dropship split from a delivery with its request, no receipt, received and stock unchanged; a dropship
+  bill off Goods received not billed; end to end, a two-step delivery's pick validated on screen.
+

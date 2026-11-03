@@ -269,6 +269,13 @@ and says why, in words. The chosen rules are ordered by their method: a transfer
 for quotation to the vendor (with `purchase_stock`; purchase orders say which warehouse they are delivered to), or a
 production order with the valid bill (with `mrp`); a rule may be ordered automatically, or snoozed.
 
+**Routes**: a warehouse may receive in two steps (Input, then stock) or three (with Quality control) and deliver in
+two (a pick into Output) or three (pick, pack, deliver); each step is a transfer of its own, made or reserved when
+the one before it is done. **Putaway rules** say where received products (or categories) go inside a location. A
+reorder rule may order **for each delivery** (make to order) — on a transfer, a request for quotation or a
+production order — or **dropship**: the vendor delivers to the customer on a dropship transfer, with its own request
+for quotation, never through stock.
+
 ### Production (`modules/mrp`, RFC 0021)
 
 Bills of materials with versions and effective dates, work centres with their cost per hour, and production orders
