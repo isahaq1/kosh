@@ -439,7 +439,9 @@ GET  /api/v1/public/shop/padma/order                         the placed order, i
 Delivery methods may name a courier: a confirmed shop order then gets a shipment to book (Sites › Shipments), tracked
 to delivery with the cash collected; couriers are adapters (the test courier now; Pathao, Steadfast and RedX with
 their credentials). With Stockroom, `website_sale_stock` shows in stock / few left / out of stock and can keep carts
-within what is available.
+within what is available. Coupons (a percentage, an amount or free delivery, with minimums, dates and use limits),
+one reminder for a cart left with an email (with a code that restores it), a sitemap of the site's pages and
+products, search titles, and product pictures served publicly complete the Shop.
 
 ### Counter (`modules/pos`, RFC 0021)
 

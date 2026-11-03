@@ -558,3 +558,28 @@ data, an overview, docs and an E2E.
   cancellable once delivered; few left with how many, out of stock, services without; beyond stock sold by default
   and refused with what is left otherwise; end to end, a parcel booked from the shipment's form.
 
+## Implementation notes (2026-11-03): step 7 part 2b — coupons, abandoned carts, search engines, pictures
+
+- **Coupons** (`shop.coupon`, Sites › Coupons): a code in capitals that takes a percentage off the goods (as each
+  line's discount, so taxes follow), an amount off (a line of its own, never more than the goods) or the delivery fee
+  — from a minimum, between two dates, up to a number of uses, once per customer (by email) if it says so. Put on the
+  cart with `PUT …/cart/coupon`; a cart that falls below the minimum loses it; checked again and counted at checkout.
+- **Abandoned carts**: a visitor may leave an email on their cart (`PUT …/cart/contact`). A cart left longer than
+  the site's *Remind abandoned carts after* hours, with goods, gets one reminder (in the site's language) with a
+  recovery code — the cart's token is never sent; only the code's hash is kept — in a link to the site's
+  `/cart/recover`; `POST …/cart/recover` gives the cart a new token (the old one stops). Hourly on the server and by
+  `POST /api/v1/shop/carts/remind`; sent after the commit through the mailer (`SMTP_URL`).
+- **Search engines**: products have a search title and description (English and Bangla; the product's page returns
+  them, falling back to the name and description); `GET …/sitemap.xml` lists the site's published pages (other
+  languages under `/<lang>`) and the shop's products (at `/shop/p/<id>`) with when they last changed — the
+  storefront's paths, documented.
+- **Pictures**: `GET …/products/:id/image?w=256` serves a product's picture (or its thumbnail) without a sign-in,
+  only of products on the shop, and only images.
+- **Not yet**: product variants with attributes, the courier adapters' real APIs and callbacks, COD remittances
+  matched in Accounting.
+- **Tests**: on real PostgreSQL a percentage, an amount and free delivery; the minimum (and the coupon taken off
+  below it), an ended coupon, an unknown one, a code not in capitals refused, a coupon used up, once per customer;
+  a reminder sent once with the cart's lines, the code restoring the cart with a new token, the old token and the
+  used code refused; the sitemap with the published products only; the search title; pictures refused for products
+  without one or not on the shop.
+
