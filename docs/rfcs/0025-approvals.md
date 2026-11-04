@@ -108,3 +108,28 @@ Policies declared in manifests and their conditions, `requestApprovals` / `appro
    audited with the address, never made by opening the link.
 3. **The requester's manager without Workforce**: a manager level names a fallback role, used when Workforce is not
    installed or the requester has no manager.
+
+## Implementation notes (2026-11-04): step 1 — the engine
+
+- **Approvers** per level (`approval.level.approverKind`): a role (the default), named people, the requester's
+  manager (Workforce's `hr.employee.manager`, read when Workforce is installed), or the user in a many-to-one field of
+  the record (`approverField`); a manager or a field with nobody — or the requester themself — uses the level's role
+  (the decision of §5). Never the requester (separation of duties).
+- **Quorum** (`quorum`: any, all, count): named people, or a role's holders in the record's company when all or a
+  number of them must approve; the request records who decides (`approvers`), how many approvals it needs
+  (`required`) and each **vote** (`approval.vote`, one per person); it is approved by the last vote it needs.
+- **Parallel levels**: levels with the same sequence were already decided side by side (a level waits only for lower
+  sequences); now documented.
+- **Send back for changes** (`POST …/send-back`): a third answer; the round's other open requests are cancelled and
+  the policy's `onSentBack` transition runs; a **round** number on every request — the next submission is the next
+  round, the earlier kept and served with the record's history. **Rejections and sendings back say why** unless the
+  policy's `reasonRequired` is off.
+- **Withdraw** (`POST /api/v1/approvals/:model/:id/withdraw`): by the requester (or an administrator); the pending
+  requests are cancelled, the policy's `onWithdrawn` transition runs, audited.
+- **Compatible**: manifests keep `approverRole` (now also the fallback); every existing policy, test and screen keeps
+  working; the inbox and the record's history carry `approvers`, `required`, `approvals` and `round`.
+- **Tests**: on real PostgreSQL named people who must all approve (each vote, a second vote refused, someone not
+  named refused, the inbox of each), sending back with a reason required and the second round, a rejection without a
+  reason refused, withdrawing by the requester only and its transition, a manager level falling back to its role, and
+  levels that do not name their approvers refused; the earlier approval tests unchanged.
+

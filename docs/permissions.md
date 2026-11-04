@@ -98,8 +98,27 @@ approvals: [{
   attributed to the approver in the audit log. Events `approval.requested` / `approval.decided` are emitted for
   notifications (RFC 0006).
 - `GET /api/v1/approvals/inbox`, `GET /api/v1/approvals/:model/:id` (needs read access to the record),
-  `POST /api/v1/approvals/requests/:id/approve|reject { comment? }`. Requests are private: the generated API does
-  not serve them.
+  `POST /api/v1/approvals/requests/:id/approve|reject|send-back { comment }`, `POST /api/v1/approvals/:model/:id/withdraw`.
+  Requests are private: the generated API does not serve them.
+
+**Who decides, and how many** (RFC 0025). A level is decided by a role's holders (the default), named people
+(`approverKind: 'users'`, `approverUsers`), the requester's manager in Workforce (`'manager'`) or the person in a
+many-to-one field of the record (`'field'`, `approverField`) — the last two use the level's role when there is
+nobody. `quorum` says how many: `any` one (the default), `all` of them, or a `count`; each decision is a vote
+(`approval.vote`), and a person votes once. Levels with the same sequence are decided side by side. In manifests:
+
+```ts
+levels: [
+  { name: 'Line manager', approver: 'manager', approverRole: 'purchase.approver' },
+  { name: 'Board', approverRole: 'company.director', quorum: 2 },
+],
+onSentBack: 'redraft', onWithdrawn: 'cancel',
+```
+
+- **Send back for changes** with what to change: the round ends, the policy's `onSentBack` transition runs (back to
+  draft); the next submission is round 2, round 1 kept. A rejection must say why too (`reasonRequired: false` on the
+  policy relaxes both).
+- **Withdraw**: the requester cancels their pending approvals; the policy's `onWithdrawn` transition runs.
 
 ## Tests
 
