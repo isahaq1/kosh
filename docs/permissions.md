@@ -79,7 +79,10 @@ state: f.state({
 ```
 
 Default policies come from the manifest and are installed as data (`installApprovalPolicies(env, modules)`);
-administrators then tune them through the generated API (`approval.policy`, `approval.level`):
+administrators then tune them through the generated API (`approval.policy`, `approval.level`). A policy may have a
+`condition` of its own (a domain on the model) and then covers only the records that meet it — the Approvals app's
+request categories use it; `GET /api/v1/approvals/policies/:id/preview` shows which of the last 50 records each
+level would have asked about:
 
 ```ts
 approvals: [{

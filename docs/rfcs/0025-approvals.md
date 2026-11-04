@@ -181,3 +181,44 @@ Policies declared in manifests and their conditions, `requestApprovals` / `appro
   after; an email link's page (nothing decided by opening it), a rejection without a reason and an unknown decision
   refused, the approval as its person, the link spent; when a request was decided; end to end, *Away* filled on screen.
 
+## Implementation notes (2026-11-04): step 4 — generic requests
+
+- **The engine** (`packages/permissions`): `approval.policy.condition`, a domain on the policy's model checked when
+  saved; a policy with one covers only the records that meet it, before its levels' own conditions.
+  `previewPolicy()` lists, for each level, which of the last 50 records within the policy's condition it would have
+  asked about (`GET /api/v1/approvals/policies/:id/preview`, Approvals managers; the policy form's
+  *What the levels would have asked about*).
+- **Categories** (`approval.category`, in the Approvals app, which now depends on Contacts):
+  - Name, code, an optional company, a description for whoever asks, and for each request field — amount, period,
+    contact, location, quantity, lines, attachment — not asked, optional or required.
+  - The outcome: a code an installed app offers, else refused.
+  - Its policy on `approval.ask`, with the category as the condition and one level, the requester's manager (else an
+    Approvals manager). It is made when the first request is submitted, or by *Set up its approvals* on the category
+    (`POST /api/v1/approvals/categories/:id/policy`), and its levels are edited on the policy.
+  - Business trip, Payment (a file required), Purchase request (lines required) and General ship as data.
+- **Requests** (`approval.ask`, `REQ-00001`):
+  - The category's fields, copied onto the request so the form shows and marks only those it asks for, and lines
+    with their total.
+  - Submitting checks the required ones (a file through the chatter's attachments), makes the category's policy
+    when missing, asks the approvals and names the **deciders**: the pending levels' approvers, role holders and
+    delegates. A record rule lets the deciders read the request; the requester reads theirs and changes them while
+    a draft or refused; Approvals managers see all.
+  - Approved, `runOutcome()` runs as the system; the event is `approval.ask.approved`.
+- **Outcomes through hooks**: `approval.ask.outcomes()` (code → label) and `runOutcome()`, which apps extend. The
+  `approvals_purchase` bridge (Approvals ↔ Purchase) adds a product to request lines and the `purchase` outcome: a
+  request for quotation to the request's contact from its lines with products, once, shown on the request. When
+  installed, it gives the shipped Purchase request category that outcome. Expense reports and leave as outcomes are
+  left for their apps' bridges.
+- **Tests**:
+  - On real PostgreSQL:
+    - the shipped categories;
+    - a category made by a manager and refused to a user, an unknown outcome refused;
+    - its policy made once with its condition, its level set to a named approver, a condition that is not a domain
+      refused;
+    - a request refused without its required amount, then submitted, asking only its category's policy, readable by
+      its decider and not by others, frozen for its requester, approved from the inbox;
+    - the preview;
+    - a payment refused without its file, with its lines totalled.
+  - With Purchase: an approved purchase request made into a request for quotation to its contact from its line with
+    a product.
+  - End to end: a business trip asked with the fields its category shows, then submitted.

@@ -517,7 +517,17 @@ wait; **What I decided**. Levels are decided by a role, named people, the reques
 record — any one, all, or a number of them —; a request may be sent back for changes (a new round when resubmitted).
 Levels may have a deadline (a reminder at half, then escalation to a role), approvers may say who decides for them
 while away, and each approver gets the request by email with a one-time link to a confirmation page. Approvals
-managers edit the policies on screen. Install it with `shutro-erp apps install approvals`.
+managers edit the policies on screen, with a preview of which of the last 50 records each level would have asked
+about. Install it with `shutro-erp apps install approvals`.
+
+**Requests** of any kind go through it too. A **category** (Business trip, Payment, Purchase request, General ship;
+Approvals managers add their own) says which fields a request asks for — amount, period, contact, location,
+quantity, lines, a file — each not asked, optional or required, and what an approved request leads to. Each category
+has its own policy on requests, made with its first request (the requester's manager, else an Approvals manager) and
+edited like any policy. Whoever may decide a request reads it; nobody else does. With Purchase, the bridge
+`approvals_purchase` lets request lines name products and turns an approved *Purchase request* into a request for
+quotation to its contact, shown on the request. An app offers an outcome by extending `approval.ask.outcomes()` and
+`runOutcome()`.
 
 ### Documents (`modules/documents`, RFC 0024)
 
