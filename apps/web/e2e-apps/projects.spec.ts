@@ -255,3 +255,20 @@ test('control and schedule (RFC 0026 step 5): a risk scored critical; the projec
   await expect(schedule.getByRole('img', { name: /Survey the site/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Open risks 1' })).toBeVisible();
 });
+
+test('duplicate from the form (RFC 0023 R1): the copy opens, with a new number', async ({
+  page,
+}) => {
+  await signIn(page, 'dina');
+  await page.goto('/projects/a/projects.action_projects/new');
+  await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Copy me');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/projects\.action_projects\/\d+$/);
+  const original = page.url();
+  await page.getByRole('button', { name: 'Actions' }).click();
+  await page.getByRole('menuitem', { name: 'Duplicate' }).click();
+  await expect(page.getByText('Duplicated: this is the copy').first()).toBeVisible();
+  await expect(page).not.toHaveURL(original);
+  await expect(page).toHaveURL(/projects\.action_projects\/\d+$/);
+  await expect(page.getByRole('heading', { name: 'Copy me' })).toBeVisible();
+});

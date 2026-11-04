@@ -284,6 +284,15 @@ function modelPaths(model: ApiModel): Record<string, Schema> {
       },
     },
   };
+  paths[`${base}/{id}/duplicate`] = {
+    post: {
+      operationId: `duplicate${s}`,
+      tags: tag,
+      summary: 'A copy made as the caller, its lines with it (states and numbers start again)',
+      parameters: [ID_PARAM, IDEMPOTENCY],
+      responses: responses(ref, '201'),
+    },
+  };
   for (const t of model.transitions)
     paths[`${base}/{id}/transitions/${t}`] = {
       post: {

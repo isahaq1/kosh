@@ -11,6 +11,7 @@
  * - `POST   /api/v1/models/:model/aggregate`                grouped totals
  * - `POST   /api/v1/models/:model/onchange`                 form assistance
  * - `POST   /api/v1/models/:model/:id/transitions/:name`    state transition (Idempotency-Key)
+ * - `POST   /api/v1/models/:model/:id/duplicate`            a copy made as the user, its lines with it (RFC 0023 R1)
  * - `POST   /api/v1/models/:model/export`                   export (needs `export`; audited)
  * - `POST   /api/v1/models/:model/import`                   import rows (needs `import` and `create`; audited)
  * - `GET    /api/v1/meta/:model`                            the caller's view of the model (needs `read`)
@@ -21,6 +22,7 @@ import { audit } from '../audit.js';
 import { HttpProblem } from '../errors.js';
 import type { Driver, Env } from '../orm.js';
 import { announceChange } from './changes.js';
+import { duplicateValues } from './duplicate.js';
 import { idempotent, type Outcome } from './idempotency.js';
 import { type ApiField, type ApiModel, defaultFields } from './metadata.js';
 
@@ -482,6 +484,34 @@ export function registerRestApi(
   });
 
   // Name search (many2one pickers, display names of ids): the model's record name, within ACL and rules.
+  app.post('/api/v1/models/:model/:id/duplicate', async (request, reply) => {
+    const model = modelOf(request.params);
+    const id = idOf(request.params);
+    const outcome = await request.env((env) =>
+      idempotent(request, env, driver, async () => {
+        await ref(env, model.name).browse([id]).load(['id']); // the original, as the user may read it
+        const values = await duplicateValues(env, models, model, id);
+        const created = await ref(env, model.name).create([coerceValues(model, values)]);
+        await env.flush();
+        announceChange(env, driver, {
+          model: model.name,
+          ids: [created.ids[0] as number],
+          op: 'create',
+        });
+        const result = await record(env, model, created.ids[0] as number);
+        return {
+          ...result,
+          status: 201,
+          headers: {
+            ...result.headers,
+            location: `/api/v1/models/${model.name}/${created.ids[0]}`,
+          },
+        };
+      }),
+    );
+    await send(reply, outcome);
+  });
+
   app.get('/api/v1/models/:model/names', async (request) => {
     const model = modelOf(request.params);
     const q = query(request);

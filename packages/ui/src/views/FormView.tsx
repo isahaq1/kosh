@@ -21,6 +21,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDot,
+  Copy,
   MoreHorizontal,
   PanelRight,
   Plus,
@@ -565,6 +566,17 @@ export function FormView({
       const button =
         view.type === 'form' ? view.header.buttons.find((b) => b.transition === name) : undefined;
       toast({ title: t('views.transitionDone', { action: button?.label ?? name }) });
+    },
+    onError: fail,
+  });
+  // Duplicate (RFC 0023 R1): a copy made by the server as the user; the form opens it.
+  const duplicate = useMutation({
+    mutationFn: () =>
+      api.call<{ id: number }>('POST', `/api/v1/models/${model}/${String(recordId)}/duplicate`, {}),
+    onSuccess: async (copy) => {
+      await queryClient.invalidateQueries({ queryKey: ['list', model] });
+      toast({ title: t('views.duplicated') });
+      onSaved(copy.id);
     },
     onError: fail,
   });
@@ -1161,18 +1173,26 @@ export function FormView({
             >
               <PanelRight className="rtl:-scale-x-100" aria-hidden />
             </Button>
-            {!isNew && served.operations.unlink ? (
+            {!isNew && (served.operations.unlink || served.operations.create) ? (
               <Menu>
                 <MenuTrigger asChild>
-                  <Button type="button" variant="ghost" size="icon" aria-label="Actions">
+                  <Button type="button" variant="ghost" size="icon" aria-label={t('views.actions')}>
                     <MoreHorizontal aria-hidden />
                   </Button>
                 </MenuTrigger>
                 <MenuContent>
-                  <MenuItem onSelect={() => setDeleting(true)}>
-                    <Trash2 className="size-4" aria-hidden />
-                    {t('views.delete')}
-                  </MenuItem>
+                  {served.operations.create ? (
+                    <MenuItem disabled={duplicate.isPending} onSelect={() => duplicate.mutate()}>
+                      <Copy className="size-4" aria-hidden />
+                      {t('views.duplicate')}
+                    </MenuItem>
+                  ) : null}
+                  {served.operations.unlink ? (
+                    <MenuItem onSelect={() => setDeleting(true)}>
+                      <Trash2 className="size-4" aria-hidden />
+                      {t('views.delete')}
+                    </MenuItem>
+                  ) : null}
                 </MenuContent>
               </Menu>
             ) : null}

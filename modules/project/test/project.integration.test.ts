@@ -1140,3 +1140,40 @@ test('the schedule (RFC 0026 step 5): the critical path, waiting tasks moved aft
   );
   expect(copies.json.items).toHaveLength(2);
 });
+
+test('duplicate (RFC 0023 R1): a copy as the user — lines with it, numbers new, unique fields left out', async () => {
+  const p = await call('POST', '/api/v1/models/project.project', 'maria', {
+    name: 'Template farm',
+    description: 'Copy me',
+    phases: { create: [{ name: 'Survey' }, { name: 'Build' }] },
+  });
+  expectStatus(p, 201);
+  const copy = await call('POST', `/api/v1/models/project.project/${p.json.id}/duplicate`, 'maria');
+  expectStatus(copy, 201);
+  expect(copy.json.id).not.toBe(p.json.id);
+  expect(copy.json).toMatchObject({ name: 'Template farm', description: 'Copy me' });
+  expect(copy.json.code).not.toBe(p.json.code); // a new number
+  const phases = await call(
+    'GET',
+    `/api/v1/models/project.phase?filter=${encodeURIComponent(JSON.stringify({ project: copy.json.id }))}&fields=name`,
+    'maria',
+  );
+  expect((phases.json.items as Json[]).map((x) => x.name).sort()).toEqual(['Build', 'Survey']);
+  // A unique code is not copied as it is: required, it gets "(copy)".
+  const type = await call('POST', '/api/v1/models/project.type', 'maria', {
+    name: 'Shed',
+    code: 'SHED',
+  });
+  const typeCopy = await call(
+    'POST',
+    `/api/v1/models/project.type/${type.json.id}/duplicate`,
+    'maria',
+  );
+  expectStatus(typeCopy, 201);
+  expect(typeCopy.json).toMatchObject({ name: 'Shed', code: 'SHED (copy)' });
+  // Without the right to create, no copy.
+  expectStatus(
+    await call('POST', `/api/v1/models/project.type/${type.json.id}/duplicate`, 'rahim'),
+    403,
+  );
+});

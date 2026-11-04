@@ -54,6 +54,8 @@ export interface ApiModel {
   readonly onchange: readonly string[];
   /** The stored field names are searched by (`name` by default), or `null`. */
   readonly recName: string | null;
+  /** The field sets of the model's unique constraints (a copy leaves them out, RFC 0023 §3.2). */
+  readonly unique: readonly (readonly string[])[];
 }
 
 const IMPLICIT_READONLY = new Set([
@@ -138,9 +140,21 @@ export function apiModels(registry: Registry): ReadonlyMap<string, ApiModel> {
       transitionSpecs,
       onchange: [...description.onchange],
       recName: recNameOf(registry, name, fields),
+      unique: uniqueOf(registry, name),
     });
   }
   return out;
+}
+
+function uniqueOf(registry: Registry, name: string): string[][] {
+  // Shutro resolves a model's constraints to `{ kind, fields }` (the definition's object form also accepted).
+  const raw = (registry.get(name).model as unknown as { sqlConstraints?: unknown }).sqlConstraints;
+  const list = Array.isArray(raw)
+    ? (raw as readonly { readonly kind?: unknown; readonly fields?: unknown }[])
+    : [];
+  return list.flatMap((c) =>
+    c.kind === 'unique' && Array.isArray(c.fields) ? [c.fields.map(String)] : [],
+  );
 }
 
 function recNameOf(registry: Registry, name: string, fields: readonly ApiField[]): string | null {
