@@ -556,6 +556,9 @@ export function documentsModule(options: DocumentsOptions = {}): ReturnType<type
         columns: ['name', 'color'],
         inlineEdit: ['name', 'color'],
       }),
+      'documents.tag.form': form(DocumentsTag, (k) => ({
+        sheet: [k.group('main', ['name', 'color'])],
+      })),
     },
     search: {
       'documents.document': search(DocumentsDocument, {
