@@ -211,3 +211,26 @@ Measured on the demo catalogue (41 modules: 19 apps, 22 extensions).
   it exists on the model or its extensions, is not read-only, computed or a state, is a cell kind, and a
   `line.field` path goes through a one2many to a field of its lines. All templates met it.
 - Sample workbooks come from the importer as before: `GET /api/v1/import-templates/:model?mapping=<module>.<key>`.
+
+## Implementation notes (2026-11-04): step 4 — events and Duplicate
+
+- **E1, enforced**: every document model emits a named event. `emitting(topic, transition)` (`@kosh/server`) wraps a
+  transition so that, after its own `after`, it emits `topic` with `{ id }` for each record — in the transaction,
+  through the outbox. The module declares the topic in its manifest's `events`, for webhooks and automations.
+  - New topics: payments posted; meetings cancelled; maintenance started and done; transfers done, counts applied and
+    scraps done; production orders confirmed and done; counter sessions closed; job openings closed; to-dos done;
+    letters of credit issued and settled; shipments delivered and returned.
+  - Fiscal years and online payments have no transitions, so their code emits `account.fiscal.year.closed` and
+    `payment.transaction.done`. Requests already emitted `approval.ask.approved`; it is now declared.
+  - Payment providers are waived: they are configuration, not documents.
+- **R1 Duplicate** on every record, from the form's menu and the API (`POST /api/v1/models/:model/:id/duplicate`, in
+  the OpenAPI document). The copy is made as the user, from the metadata (Shutro request #32 stays open for a
+  `copy()` of its own):
+  - stored, writable fields are copied — many2one kept, many2many the same set;
+  - states, numbers and computed fields start again;
+  - a field of a unique constraint (beside the company) is left out, or gets "(copy)" when it is a required text;
+  - one2many lines are copied with the record, without their link back.
+  The form opens the copy, saying so.
+- **Tests**: unit tests of `emitting`; on real PostgreSQL a project copied with its phases and a new number, a type's
+  required unique code copied with "(copy)", a user without the right to create refused; end to end, *Duplicate*
+  from a project's form opening its copy.
