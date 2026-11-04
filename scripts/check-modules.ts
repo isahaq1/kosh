@@ -10,6 +10,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { layoutProblems } from '../packages/reporting/src/routes-documents.ts';
 
 type M = Record<string, unknown>;
 interface Waiver {
@@ -36,7 +37,7 @@ const root = join(fileURLToPath(import.meta.url), '..', '..');
 const all = process.argv.includes('--all');
 
 /** The rules `pnpm lint` enforces today; the others are reported (RFC 0023 §5 switches them on step by step). */
-const ENFORCED = new Set(['M1', 'M2', 'M3', 'M4', 'V1']);
+const ENFORCED = new Set(['M1', 'M2', 'M3', 'M4', 'V1', 'P1', 'P2', 'I1', 'I2']);
 const RULES: Readonly<Record<string, string>> = {
   M1: 'every model has a label',
   M2: 'every model with a list view has a search spec',
@@ -45,7 +46,9 @@ const RULES: Readonly<Record<string, string>> = {
   M5: 'state, selection and computed-amount fields have help',
   V1: 'every public model has a list and a form',
   P1: 'every document model has a print template',
+  P2: 'print templates bind fields their models have',
   I1: 'every master and document model has an import template',
+  I2: 'import templates fill fields the importer accepts',
   E1: 'every document model emits named events',
   A1: 'every app has an overview and demo data',
   T1: 'every module ships Bangla for its labels',
@@ -106,6 +109,94 @@ for (const m of modules) {
     });
   }
 }
+/**
+ * Every model's fields across the catalogue — its own, those its extensions add, and the ones every record has —, as
+ * the document renderer sees them (`layoutProblems` of `@kosh/reporting` checks bindings against them).
+ */
+type FieldInfo = { readonly label: string; readonly kind: string; readonly target: string | null };
+const allFields = new Map<string, Map<string, FieldInfo>>();
+const addFields = (model: string, fields: Readonly<Record<string, M>>) => {
+  const map = allFields.get(model) ?? new Map<string, FieldInfo>();
+  for (const [key, d] of Object.entries(fields))
+    map.set(key, {
+      label: key,
+      kind: String(d['kind']),
+      target: typeof d['target'] === 'string' ? d['target'] : null,
+    });
+  allFields.set(model, map);
+};
+for (const m of catalogue) {
+  const shutro = m['shutro'] as M | undefined;
+  for (const model of (shutro?.['models'] as M[] | undefined) ?? []) {
+    const name = model['name'] as string;
+    const implicit: Record<string, M> = {
+      id: { kind: 'integer' },
+      displayName: { kind: 'char' },
+      createdAt: { kind: 'datetime' },
+      updatedAt: { kind: 'datetime' },
+      createdBy: { kind: 'many2one', target: 'res.users' },
+      updatedBy: { kind: 'many2one', target: 'res.users' },
+    };
+    if (model['companyScoped'] !== undefined && model['companyScoped'] !== false)
+      implicit['company'] = { kind: 'many2one', target: 'res.company' };
+    if (model['archivable'] === true) implicit['active'] = { kind: 'boolean' };
+    addFields(name, implicit);
+    addFields(name, (model['fields'] as Readonly<Record<string, M>> | undefined) ?? {});
+  }
+}
+for (const m of catalogue)
+  for (const ext of ((m['shutro'] as M | undefined)?.['extensions'] as M[] | undefined) ?? [])
+    addFields(
+      ext['name'] as string,
+      (ext['fields'] as Readonly<Record<string, M>> | undefined) ?? {},
+    );
+
+/** Every model's field definitions across the catalogue (its own and its extensions'), for import columns. */
+const definitions = new Map<string, Record<string, M>>();
+for (const m of catalogue) {
+  const shutro = m['shutro'] as M | undefined;
+  for (const x of [
+    ...((shutro?.['models'] as M[] | undefined) ?? []),
+    ...((shutro?.['extensions'] as M[] | undefined) ?? []),
+  ])
+    definitions.set(x['name'] as string, {
+      ...(definitions.get(x['name'] as string) ?? {}),
+      ...((x['fields'] as Record<string, M> | undefined) ?? {}),
+    });
+}
+/** Why the importer would not take this field (as `packages/import`'s rules: not read-only or computed, a cell). */
+const notImportable = (key: string, d: M | undefined): string | null => {
+  if (d === undefined) return 'no such field';
+  if (key === 'id' || key === 'company') return 'set by the system';
+  if (d['readonly'] === true || d['kind'] === 'state') return 'read-only';
+  if ((d['computed'] === true || typeof d['compute'] !== 'undefined') && d['inverse'] === undefined)
+    return 'computed';
+  if (['binary', 'json', 'one2many'].includes(String(d['kind']))) return `a ${String(d['kind'])}`;
+  return null;
+};
+const importProblems = (model: string, columns: readonly M[]): string[] => {
+  const out: string[] = [];
+  const own = definitions.get(model) ?? {};
+  for (const c of columns) {
+    const path = String(c['field']);
+    if (path === 'id' || path === 'externalId') continue;
+    const [head, sub, ...rest] = path.split('.');
+    if (sub === undefined) {
+      const why = notImportable(head as string, own[head as string]);
+      if (why !== null) out.push(`'${path}': ${why}`);
+      continue;
+    }
+    const line = own[head as string];
+    if (rest.length > 0 || line?.['kind'] !== 'one2many' || typeof line['target'] !== 'string') {
+      out.push(`'${path}': not a field of a one2many's lines`);
+      continue;
+    }
+    const why = notImportable(sub, (definitions.get(line['target']) ?? {})[sub]);
+    if (why !== null) out.push(`'${path}': ${why}`);
+  }
+  return out;
+};
+
 const referred = new Set<string>();
 for (const m of catalogue)
   for (const model of ((m['shutro'] as M | undefined)?.['models'] as M[] | undefined) ?? [])
@@ -138,6 +229,18 @@ for (const m of modules) {
     (d) => d['model'] as string,
   );
   const events = ((m['events'] as M[] | undefined) ?? []).map((d) => d['model'] as string);
+  // I2: each import template fills fields the importer accepts.
+  for (const t of (m['importTemplates'] as M[] | undefined) ?? []) {
+    const problems = importProblems(t['model'] as string, (t['columns'] as M[] | undefined) ?? []);
+    if (problems.length > 0)
+      fail('I2', name, t['model'] as string, `${String(t['key'])}: ${problems.join('; ')}`);
+  }
+  // P2: each print template binds fields its model (and the models it reaches) have.
+  for (const d of (m['documents'] as M[] | undefined) ?? []) {
+    const problems = layoutProblems(d['layout'] as never, d['model'] as string, allFields as never);
+    if (problems.length > 0)
+      fail('P2', name, d['model'] as string, `${String(d['key'])}: ${problems.join('; ')}`);
+  }
   for (const model of models.filter((x) => x.module === name)) {
     const mine = views.filter((v) => v['model'] === model.name);
     const types = new Set(mine.map((v) => v['type'] as string));
