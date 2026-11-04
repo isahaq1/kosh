@@ -156,3 +156,28 @@ Policies declared in manifests and their conditions, `requestApprovals` / `appro
   two at once with a refused third, my requests, what I decided, the header, an unknown list refused; end to end, a
   purchase order of 140 000 decided from the inbox and seen approved in the requester's requests.
 
+## Implementation notes (2026-11-04): step 3 — deadlines, delegation, decisions from email
+
+- **Deadlines** (`approval.level.deadlineHours`, `escalateRole`): a request's `dueAt` is set when it is asked. Hourly
+  (and by `POST /api/v1/approvals/deadlines/run`) each pending request is **reminded** once at half its deadline and,
+  once late, **escalated**: the level's escalation role may decide it too (`escalatedTo`), audited
+  (`approval.escalated`); both email who may decide. The inbox shows when a request is due (red once late) and
+  whether it was escalated. Business hours (Attendance's calendar) are left for later: deadlines count clock hours.
+- **Delegation** (`approval.delegation`, Approvals › *Away*): "from … to …, X decides for me". Each person keeps
+  their own (record rules); Approvals managers see all; never to oneself. A delegate sees the absent approver's
+  requests in their inbox and decides **in their own name, for them**: the vote keeps `onBehalfOf`, the audit says it;
+  separation of duties still holds, and a request decided by either is decided for both.
+- **Decisions from email**: when a record's approvals are asked, and whenever a level is approved and the next one's
+  turn comes, each person who may decide it now — its approvers or role's holders, the escalation role once late, and
+  their delegates — gets an email with a **link of their own** (`approval.link`, a digest kept, seven days, single
+  use). The link opens a confirmation page (its script allowed by a nonce); opening it decides nothing — mail scanners
+  follow links. The decision runs **as that person** (their groups, the engine's checks), is audited with the address
+  it came from (`approval.vote.ip`), and spends the link. Sent through the mailer (`SMTP_URL`) after the commit.
+- **Fixed on the way**: datetimes read through `read()` arrive as ISO strings — `decidedAt` (and now `dueAt`) were
+  always empty in the API; both are served.
+- **Tests**: on real PostgreSQL (over the permissions package's purchase fixture) a delegation to oneself refused,
+  the delegate emailed and deciding for the approver, the approver then refused a second decision, the delegation
+  removed; reminded at half the deadline once, escalated past it to a role whose holder could not decide before and can
+  after; an email link's page (nothing decided by opening it), a rejection without a reason and an unknown decision
+  refused, the approval as its person, the link spent; when a request was decided; end to end, *Away* filled on screen.
+

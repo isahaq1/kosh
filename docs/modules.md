@@ -449,7 +449,9 @@ Every approval of every app in one place: **To approve** as cards (the record, w
 level as a step), decided one by one or many at once, from the keyboard too; **My requests**, withdrawn while they
 wait; **What I decided**. Levels are decided by a role, named people, the requester's manager or a person on the
 record — any one, all, or a number of them —; a request may be sent back for changes (a new round when resubmitted).
-Approvals managers edit the policies on screen. Install it with `shutro-erp apps install approvals`.
+Levels may have a deadline (a reminder at half, then escalation to a role), approvers may say who decides for them
+while away, and each approver gets the request by email with a one-time link to a confirmation page. Approvals
+managers edit the policies on screen. Install it with `shutro-erp apps install approvals`.
 
 ### Documents (`modules/documents`, RFC 0024)
 

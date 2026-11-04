@@ -693,6 +693,9 @@ importers:
 
   modules/approvals:
     dependencies:
+      '@kosh/mail':
+        specifier: workspace:*
+        version: link:../../packages/mail
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
