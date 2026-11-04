@@ -113,7 +113,7 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
           {
             kind: 'table',
             id: 'days',
-            bind: 'records',
+            bind: '$records',
             columns: [
               { label: 'Date', bind: 'date' },
               { label: 'Employee', bind: 'employee.name' },
