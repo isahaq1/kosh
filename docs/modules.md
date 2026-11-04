@@ -236,6 +236,16 @@ managers alone; *Take the baseline again* on a plan in progress copies the curre
 work packages. App settings › Projects › *Require an approved plan* refuses projects without one, except inside a
 programme and those made by sales orders. A plan is seen by who wrote it, its manager and its sponsor.
 
+A project's **team** lists its members: the person, a **role** (Configuration › Roles, each with a default hourly
+cost), their **allocation** of working time, their own hourly cost and the dates they are in it. A member whose
+projects take more than all their time on some day of those dates is **over-allocated** — flagged on the form as soon
+as the allocation is typed, before saving. Projects › **Workload** shows people by weeks, each cell the person's peak
+allocation that week, over 100 % in red (Projects managers see everyone; others themselves; `GET
+/api/v1/projects/workload?from=&weeks=`). Each timesheet **costs** its hours at the person's hourly cost in that
+project on that day, else their role's default; the project adds them up as its **labour cost**. Hourly costs, a
+timesheet's cost and a project's labour cost are Projects managers' to see and set — the server leaves them out for
+everyone else.
+
 ### Focus (`modules/todo`, RFC 0021)
 
 To-dos for the people who use them: their own, or on lists shared with colleagues, with due dates, priorities and

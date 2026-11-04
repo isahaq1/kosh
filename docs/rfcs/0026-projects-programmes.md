@@ -161,3 +161,27 @@ awaiting a decision, phases overdue, people over-allocated, budget variance).
   the baseline; a slip of ten days, the baseline refused to a user by hand and to a user through the plan, taken again by
   a manager; the setting refusing a project without a plan or with a draft one and accepting one inside a programme. End
   to end, a plan written, approved by its sponsor in the Approvals inbox and started into a project with its baseline.
+
+## Implementation notes (2026-11-04): step 3 — team and workload
+
+- **`project.role`** (name, code, a default hourly cost) and **`project.member`** (project, person, role, allocation
+  1–100 %, hourly cost, from / until, notes). Projects managers manage teams; Projects users read them.
+- **Over-allocation** (`overallocated`, computed when read): the person's highest total allocation on any day of the
+  membership's dates, across their memberships in active projects (open dates count as unbounded), above 100 %. The
+  member being edited counts as it is on the form, so the onchange flags it before saving. It reads the teams as the
+  reader (every Projects user sees every team): a GET cannot open a superuser scope, which writes an audit row.
+- **Workload** (`GET /api/v1/projects/workload?from=YYYY-MM-DD&weeks=1..52`, Projects › *Workload*): people × weeks
+  from the Monday of `from`, each cell the week's peak allocation with the projects behind it; managers see everyone,
+  others themselves. In English and Bangla, as a table with captions and labels for screen readers.
+- **Labour cost**: `project.timesheet.cost` = hours × the member's hourly cost on that day (else the role's default,
+  else nothing); `project.project.labourCost` sums it. Rates and costs have Shutro field groups — read by Projects
+  managers only, left out of everyone else's records and refused when asked for by name.
+- **Shutro request #34**: field groups apply to computes too (loading a restricted field and writing a computed one).
+  Until fixed, the costs' write groups name `project.user`, and the computes read rates and costs inside
+  `env.asSuperuser`, which is safe because they run in the write that changed them. The department waits for
+  Workforce's link (a later step).
+- **Tests**: on real PostgreSQL roles and members by managers only, hourly costs refused to users and left out by
+  default, over-allocation across two projects in overlapping weeks (and flagged in the onchange before saving), an
+  allocation over 100 % refused, labour costs from the role's default and a member's own rate, a user's own timesheet
+  without its cost, the workload's weekly peaks for a manager and only oneself for a user, outsiders and bad ranges
+  refused. End to end, two memberships adding to 120 % shown over-allocated and in red on the Workload.
