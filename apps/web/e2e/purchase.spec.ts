@@ -29,8 +29,8 @@ test('a 750 000 order: two approval levels, then approved', async ({ page }) => 
   await page.getByRole('button', { name: 'Submit' }).click();
   const panel = page.getByRole('region', { name: 'Approvals' });
   await expect(panel.getByRole('listitem')).toHaveText([
-    /Department head.*pending/,
-    /Finance director.*pending/,
+    /Department head.*Waiting/,
+    /Finance director.*Waiting/,
   ]);
   await expect(panel.getByRole('button', { name: /Approve/ })).toHaveCount(0); // requesters do not approve
   await expect(page.getByText('Read-only')).toBeVisible();
@@ -39,15 +39,15 @@ test('a 750 000 order: two approval levels, then approved', async ({ page }) => 
 
   await signIn(page, 'dina');
   await page.goto(url);
-  await panel.getByLabel('Comment').fill('Within budget');
-  await panel.getByRole('button', { name: 'Approve Department head' }).click();
-  await expect(panel.getByRole('listitem').first()).toContainText('approved');
+  await panel.getByRole('textbox', { name: /^Your decision/ }).fill('Within budget');
+  await panel.getByRole('button', { name: 'Approve', exact: true }).click();
+  await expect(panel.getByRole('listitem').first()).toContainText('Approved');
   await expect(panel.getByText('“Within budget”')).toBeVisible();
   await signOut(page, 'Dina Rahman');
 
   await signIn(page, 'maria');
   await page.goto(url);
-  await panel.getByRole('button', { name: 'Approve Finance director' }).click();
+  await panel.getByRole('button', { name: 'Approve', exact: true }).click();
   await expect(page.getByRole('button', { name: 'State: Approved' })).toBeVisible();
 
   // The list shows it approved, with the total.

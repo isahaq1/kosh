@@ -149,7 +149,9 @@ function ResizeHandle({
       role="separator"
       aria-orientation="vertical"
       aria-label={label}
-      aria-valuenow={width ?? undefined}
+      aria-valuenow={width ?? DEFAULT_WIDTH}
+      aria-valuemin={MIN_WIDTH}
+      aria-valuemax={MAX_WIDTH}
       tabIndex={0}
       className="absolute inset-y-0 end-0 w-2 cursor-col-resize touch-none select-none hover:bg-primary/30 focus-visible:bg-primary/40 focus-visible:outline-none"
       onPointerDown={(e) => {
@@ -1522,6 +1524,9 @@ export function ListView(props: ViewProps): ReactElement {
             {columns.map((c) => (
               <MenuCheckboxItem
                 key={`pin-${c.id}`}
+                aria-label={t('views.pinColumn', {
+                  name: c.label ?? fields[c.field]?.label ?? c.field,
+                })}
                 checked={pinned.includes(c.id)}
                 onCheckedChange={() => togglePin(c.id)}
               >

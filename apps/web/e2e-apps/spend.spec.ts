@@ -59,7 +59,7 @@ test('an allowance claimed at the rate, a report submitted, approved by a Spend 
   await page.goto(report);
   await page
     .getByRole('region', { name: 'Approvals' })
-    .getByRole('button', { name: 'Approve Approver' })
+    .getByRole('button', { name: 'Approve', exact: true })
     .click();
   await expect(page.getByRole('button', { name: /^State: Approved/ })).toBeVisible();
 });

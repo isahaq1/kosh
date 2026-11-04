@@ -54,7 +54,7 @@ test('export downloads a CSV of the current search; columns and density are reme
   expect(download.suggestedFilename()).toBe('res.partner.csv');
 
   await page.getByRole('button', { name: 'Columns' }).click();
-  await page.getByRole('menuitemcheckbox', { name: 'Email' }).click();
+  await page.getByRole('menuitemcheckbox', { name: 'Email', exact: true }).click();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('columnheader', { name: 'Email' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Density' }).click();
@@ -66,7 +66,7 @@ test('export downloads a CSV of the current search; columns and density are reme
   );
   // Restore for the other tests.
   await page.getByRole('button', { name: 'Columns' }).click();
-  await page.getByRole('menuitemcheckbox', { name: 'Email' }).click();
+  await page.getByRole('menuitemcheckbox', { name: 'Email', exact: true }).click();
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Density' }).click();
   await expect(page.getByRole('columnheader', { name: 'Email' })).toBeVisible();

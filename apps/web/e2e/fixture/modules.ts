@@ -320,7 +320,6 @@ export const purchase = defineKoshModule({
         buttons: [k.button('submit', { primary: true, label: 'Submit' })],
       },
       sheet: [
-        k.component('documents', 'reporting.Documents'),
         k.group('main', [
           'name',
           'vendor',
