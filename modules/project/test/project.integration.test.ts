@@ -130,6 +130,7 @@ test('installing Projects brings its dependencies and the stages', async () => {
     'base',
     'contacts',
     'messaging',
+    'permissions',
     'project',
     'reporting',
     'storage',
@@ -489,4 +490,131 @@ test('sub-tasks, several assignees, tags and dependencies (RFC 0026 step 1): blo
   expect(await blocked(b.json.id)).toBe(false);
   // Outsiders still cannot see any of it.
   expectStatus(await call('GET', '/api/v1/models/project.phase', 'bob'), 403);
+});
+
+test('plans (RFC 0026 step 2): submitted with their case, decided by the sponsor and a manager, a project started with the baseline', async () => {
+  const users = await driver.query<{ id: number; login: string }>({
+    text: 'SELECT id, login FROM res_users',
+    params: [],
+  });
+  const idOf = (login: string) => users.find((u) => u.login === login)?.id;
+  const run = (id: number, transition: string, as: string) =>
+    call('POST', `/api/v1/models/project.plan/${id}/transitions/${transition}`, as);
+  const plan = await call('POST', '/api/v1/models/project.plan', 'rahim', {
+    title: 'Hatchery 2',
+    sponsor: idOf('sumi'),
+  });
+  expectStatus(plan, 201);
+  expect(plan.json.name).toMatch(/^PLAN-\d{4}$/);
+  // Without its objectives, dates and estimate it is not submitted.
+  expectStatus(await run(plan.json.id, 'submit', 'rahim'), 409);
+  expectStatus(
+    await call('PATCH', `/api/v1/models/project.plan/${plan.json.id}`, 'rahim', {
+      objectives: 'Double the chicks hatched a week',
+      dateStart: '2027-02-01',
+      dateEnd: '2027-08-31',
+      estimatedBudget: '1500000',
+    }),
+    200,
+  );
+  expectStatus(await run(plan.json.id, 'submit', 'rahim'), 200);
+  // Outsiders never see it; the requester cannot change it once submitted.
+  expectStatus(await call('GET', `/api/v1/models/project.plan/${plan.json.id}`, 'bob'), 403);
+  expect(
+    (
+      await call('PATCH', `/api/v1/models/project.plan/${plan.json.id}`, 'rahim', {
+        estimatedBudget: '10',
+      })
+    ).status,
+  ).toBeGreaterThanOrEqual(403);
+  const decide = async (who: string) => {
+    const inbox = (await call('GET', '/api/v1/approvals/inbox', who)).json.requests as Json[];
+    const mine = inbox.filter(
+      (r) => r.targetModel === 'project.plan' && r.targetId === plan.json.id,
+    );
+    for (const r of mine)
+      expectStatus(await call('POST', `/api/v1/approvals/requests/${r.id}/approve`, who), 200);
+    return mine.length;
+  };
+  // The sponsor first; above 1 000 000 a Projects manager too.
+  expect(await decide('sumi')).toBe(1);
+  const state = async () =>
+    (await call('GET', `/api/v1/models/project.plan/${plan.json.id}`, 'maria')).json;
+  expect((await state()).state).toBe('submitted');
+  expect(await decide('maria')).toBe(1);
+  const approved = await state();
+  expect(approved.state).toBe('approved');
+  expect(Number(approved.approvedBudget)).toBe(1500000);
+  expect(approved.approvedAt).not.toBeNull();
+
+  // The project starts from it with the baseline.
+  expectStatus(await run(plan.json.id, 'start', 'rahim'), 200);
+  const projects = await call(
+    'GET',
+    `/api/v1/models/project.project?filter=${encodeURIComponent(JSON.stringify({ plan: plan.json.id }))}&fields=id,name,baselineStart,baselineEnd,baselineBudget,dateEnd,slipDays`,
+    'rahim',
+  );
+  expect(projects.json.items).toHaveLength(1);
+  const started = projects.json.items[0];
+  expect(started).toMatchObject({
+    name: 'Hatchery 2',
+    baselineStart: '2027-02-01',
+    baselineEnd: '2027-08-31',
+    slipDays: 0,
+  });
+  expect(Number(started.baselineBudget)).toBe(1500000);
+  // The deadline slips ten days: the baseline says so; only a manager takes the baseline again.
+  expectStatus(
+    await call('PATCH', `/api/v1/models/project.project/${started.id}`, 'rahim', {
+      dateEnd: '2027-09-10',
+    }),
+    200,
+  );
+  const slip = async () =>
+    (await call('GET', `/api/v1/models/project.project/${started.id}?fields=slipDays`, 'rahim'))
+      .json.slipDays;
+  expect(await slip()).toBe(10);
+  // A user cannot move the baseline by hand.
+  expect(
+    (
+      await call('PATCH', `/api/v1/models/project.project/${started.id}`, 'rahim', {
+        baselineEnd: '2027-09-10',
+      })
+    ).status,
+  ).toBeGreaterThanOrEqual(403);
+  expectStatus(await run(plan.json.id, 'baseline', 'rahim'), 403);
+  expectStatus(await run(plan.json.id, 'baseline', 'maria'), 200);
+  expect(await slip()).toBe(0);
+});
+
+test('App settings › Plans (RFC 0026 step 2): a project starts from an approved plan', async () => {
+  await driver.query({ text: 'UPDATE res_company SET project_require_plan = true', params: [] });
+  try {
+    expectStatus(
+      await call('POST', '/api/v1/models/project.project', 'rahim', { name: 'No plan' }),
+      422,
+    );
+    const draft = await call('POST', '/api/v1/models/project.plan', 'rahim', { title: 'Draft' });
+    expectStatus(
+      await call('POST', '/api/v1/models/project.project', 'rahim', {
+        name: 'Draft plan',
+        plan: draft.json.id,
+      }),
+      422,
+    );
+    // Inside a programme the programme's plan stands.
+    const [programme] = await driver.query<{ id: number }>({
+      text: "SELECT id FROM project_project WHERE name = 'Hatchery 2'",
+      params: [],
+    });
+    expectStatus(
+      await call('POST', '/api/v1/models/project.project', 'rahim', {
+        name: 'Hatchery 2 — sheds',
+        parentProject: programme?.id,
+      }),
+      201,
+    );
+  } finally {
+    await driver.query({ text: 'UPDATE res_company SET project_require_plan = false', params: [] });
+  }
 });

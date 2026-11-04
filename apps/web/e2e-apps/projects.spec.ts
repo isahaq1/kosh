@@ -126,3 +126,46 @@ test('a phase and a work package of a project; the project shows its structure a
   await expect(tree.getByRole('link', { name: 'Piers' })).toBeVisible();
   await expect(tree.getByRole('progressbar', { name: 'Progress of Piers' })).toBeVisible();
 });
+
+test('a plan written, approved by its sponsor in the Approvals inbox, and started as a project with its baseline (RFC 0026 step 2)', async ({
+  page,
+  browser,
+}) => {
+  await signIn(page, 'rahim');
+  await page.goto('/projects/a/projects.action_plans/new');
+  await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Feed mill upgrade');
+  await page.getByRole('combobox', { name: 'Sponsor', exact: true }).click();
+  await page.getByRole('option', { name: 'Dina Rahman' }).click();
+  await page.getByRole('textbox', { name: 'Planned start', exact: true }).fill('2027-03-01');
+  await page.getByRole('textbox', { name: 'Planned end', exact: true }).fill('2027-06-30');
+  await page.getByRole('textbox', { name: 'Estimated budget', exact: true }).fill('400000');
+  await page.getByRole('textbox', { name: 'Objectives', exact: true }).fill('Twice the feed a day');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/projects\.action_plans\/\d+$/);
+  const url = page.url();
+  await page.getByRole('button', { name: 'Submit for approval' }).click();
+  await expect(page.getByRole('button', { name: 'Submit for approval' })).toHaveCount(0);
+
+  const context = await browser.newContext();
+  const dina = await context.newPage();
+  await signIn(dina, 'dina');
+  await dina.goto('/approvals/a/approvals.action_inbox');
+  const card = dina.getByRole('listitem').filter({ hasText: 'Feed mill upgrade' }).first();
+  await expect(card).toBeVisible();
+  await card.getByRole('button', { name: 'Approve' }).click();
+  await expect(dina.getByText('Approved.')).toBeVisible();
+  await context.close();
+
+  await page.goto(url);
+  await page.getByRole('button', { name: 'Start the project' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Yes' }).click();
+  await expect(page.getByRole('button', { name: 'Start the project' })).toHaveCount(0);
+  await page.goto('/projects/a/projects.action_projects');
+  await page
+    .getByRole('row', { name: /Feed mill upgrade/ })
+    .first()
+    .click();
+  await expect(page.getByRole('heading', { name: 'Feed mill upgrade' })).toBeVisible();
+  const baseline = page.getByRole('group', { name: 'Baseline' });
+  await expect(baseline).toContainText(/30.Jun.2027/); // read-only: managers alone move it
+});

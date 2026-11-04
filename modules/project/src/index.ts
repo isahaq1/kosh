@@ -7,12 +7,14 @@
 import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
+import { permissions } from '@kosh/permissions';
 import { reporting } from '@kosh/reporting';
 import { action, calendar, form, gantt, hierarchy, kanban, list, pivot, search } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import { projectDemo, SUPPORT_PROJECT } from './demo.js';
 import {
   ProjectPhase,
+  ProjectPlan,
   ProjectProject,
   ProjectTag,
   ProjectTask,
@@ -28,6 +30,7 @@ import {
 export { SUPPORT_PROJECT } from './demo.js';
 export {
   ProjectPhase,
+  ProjectPlan,
   ProjectProject,
   ProjectTag,
   ProjectTask,
@@ -66,6 +69,20 @@ export const project: ReturnType<typeof defineModule> = defineModule({
           },
         ],
       },
+      {
+        key: 'plans',
+        label: 'Plans',
+        description: 'Whether a project starts only from an approved plan.',
+        keywords: 'plan approval require proposal budget',
+        scope: 'company',
+        editors: ['project.manager'],
+        fields: [
+          {
+            key: 'projectRequirePlan',
+            help: 'Projects inside a programme and projects made by sales orders need none of their own.',
+          },
+        ],
+      },
     ],
   },
   // support@<inbound domain>: a task in the support project (RFC 0006 §7.1), or the first project there is.
@@ -87,7 +104,35 @@ export const project: ReturnType<typeof defineModule> = defineModule({
       },
     },
   ],
-  depends: [contacts, messaging, reporting],
+  depends: [contacts, messaging, permissions, reporting],
+  // A plan is decided by its sponsor (a Projects manager when there is none), and a large one by a manager too.
+  approvals: [
+    {
+      name: 'Project plans',
+      model: 'project.plan',
+      onApproved: 'approve',
+      onRejected: 'reject',
+      onSentBack: 'redraft',
+      onWithdrawn: 'redraft',
+      levels: [
+        {
+          name: 'Sponsor',
+          condition: {},
+          approver: { field: 'sponsor' },
+          approverRole: 'project.manager',
+        },
+        {
+          name: 'Large budget',
+          condition: { estimatedBudget: { gt: '1000000' } },
+          approverRole: 'project.manager',
+        },
+      ],
+    },
+  ],
+  events: [
+    { topic: 'project.plan.submitted', model: 'project.plan', label: 'Project plan submitted' },
+    { topic: 'project.plan.approved', model: 'project.plan', label: 'Project plan approved' },
+  ],
   app: {
     code: 'projects',
     label: 'Projects',
@@ -184,6 +229,10 @@ export const project: ReturnType<typeof defineModule> = defineModule({
     ],
   },
   actions: {
+    'projects.action_plans': action(ProjectPlan, {
+      label: 'Plans',
+      views: ['list', 'kanban', 'form'],
+    }),
     'projects.action_projects': action(ProjectProject, {
       label: 'Projects',
       views: ['list', 'gantt', 'hierarchy', 'form'],
@@ -220,6 +269,13 @@ export const project: ReturnType<typeof defineModule> = defineModule({
   },
   menus: [
     { id: 'projects.root', label: 'Projects', app: 'projects' },
+    {
+      id: 'projects.plans',
+      parent: 'projects.root',
+      label: 'Plans',
+      action: 'projects.action_plans',
+      sequence: 0.5,
+    },
     {
       id: 'projects.projects',
       parent: 'projects.root',
@@ -352,11 +408,16 @@ export const project: ReturnType<typeof defineModule> = defineModule({
             action: 'projects.action_projects',
           },
         ]),
-        k.group('main', ['name', 'code', 'type', 'parentProject', 'partner', 'location']),
+        k.group('main', ['name', 'code', 'type', 'parentProject', 'plan', 'partner', 'location']),
         k.group('people', ['manager', 'sponsor', 'owner', 'priority', 'riskLevel'], {
           label: 'People and risk',
         }),
         k.group('dates', ['dateStart', 'dateEnd', 'progress', 'taskCount', 'hours']),
+        k.group('baseline', ['baselineStart', 'baselineEnd', 'baselineBudget', 'slipDays'], {
+          label: 'Baseline',
+          description:
+            'The dates and budget approved with the plan; the deadline is compared with them.',
+        }),
         k.group('about', ['description', 'scope', 'assumptions', 'constraints'], {
           columns: 1,
           label: 'Scope',
@@ -488,6 +549,83 @@ export const project: ReturnType<typeof defineModule> = defineModule({
       measures: [{ sum: 'hours' }],
       comparison: { field: 'date', mode: 'previous' },
     }),
+    'project.plan.list': list(ProjectPlan, {
+      columns: [
+        'name',
+        'title',
+        'type',
+        'manager',
+        'sponsor',
+        'dateStart',
+        'dateEnd',
+        { field: 'estimatedBudget', sum: true },
+        { field: 'approvedBudget', sum: true },
+        { field: 'state', widget: 'badge' },
+      ],
+      decorations: {
+        warning: { state: 'submitted' },
+        danger: { state: 'rejected' },
+        neutral: { state: { in: ['completed', 'cancelled'] } },
+      },
+    }),
+    'project.plan.kanban': kanban(ProjectPlan, {
+      groupBy: 'state',
+      card: {
+        title: 'title',
+        subtitle: 'name',
+        avatar: 'manager',
+        footer: ['estimatedBudget', { field: 'dateStart', widget: 'daysLeft' }],
+      },
+    }),
+    'project.plan.form': form(ProjectPlan, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('submit', { primary: true, label: 'Submit for approval' }),
+          k.button('start', {
+            primary: true,
+            label: 'Start the project',
+            confirm: 'Start the project? It is made from the plan, with its dates as the baseline.',
+          }),
+          k.button('baseline', {
+            label: 'Take the baseline again',
+            confirm:
+              'Take the baseline again? The projects’, phases’ and work packages’ current dates become the baseline.',
+          }),
+          k.button('complete', { label: 'Completed' }),
+          k.button('redraft', { label: 'Set to draft' }),
+          k.button('cancel', { label: 'Cancel' }),
+        ],
+      },
+      sheet: [
+        k.stats('related', [
+          {
+            id: 'plan_projects',
+            label: 'Projects',
+            model: ProjectProject,
+            where: { plan: { $record: 'id' } },
+            action: 'projects.action_projects',
+          },
+        ]),
+        k.group('main', ['title', 'name', 'type', 'priority']),
+        k.group('people', ['requester', 'manager', 'sponsor'], { label: 'People' }),
+        k.component('approvals', 'approvals.Panel'),
+        k.group(
+          'when',
+          ['dateStart', 'dateEnd', 'estimatedBudget', 'approvedBudget', 'approvedAt'],
+          {
+            label: 'Dates and budget',
+            description:
+              'The estimate decides who approves: the sponsor, and above 1 000 000 a Projects manager too.',
+          },
+        ),
+        k.group('case', ['objectives', 'expectedOutcome', 'strategicGoal', 'description'], {
+          columns: 1,
+          label: 'The case',
+        }),
+      ],
+      chatter: true,
+    })),
     'project.project.hierarchy': hierarchy(ProjectProject, {
       parent: 'parentProject',
       title: 'name',
@@ -527,6 +665,7 @@ export const project: ReturnType<typeof defineModule> = defineModule({
         ]),
         k.group('main', ['name', 'code', 'project', 'parentPhase', 'sequence', 'priority']),
         k.group('people', ['manager', 'responsible', 'dateStart', 'dateEnd', 'status']),
+        k.group('baseline', ['baselineStart', 'baselineEnd'], { label: 'Baseline' }),
         k.group('progress_group', ['progress', 'progressOverride'], {
           label: 'Progress',
           description:
@@ -661,6 +800,18 @@ export const project: ReturnType<typeof defineModule> = defineModule({
     'project.tag': search(ProjectTag, { fields: ['name'] }),
     'project.task.link': search(ProjectTaskLink, {
       fields: ['successor.name', 'predecessor.name'],
+    }),
+    'project.plan': search(ProjectPlan, {
+      fields: ['title', 'name'],
+      filters: {
+        mine: {
+          label: 'Mine',
+          domain: { or: [{ requester: { $env: 'uid' } }, { manager: { $env: 'uid' } }] },
+        },
+        waiting: { label: 'Waiting for approval', domain: { state: 'submitted' }, group: 'state' },
+        approved: { label: 'Approved', domain: { state: 'approved' }, group: 'state' },
+      },
+      groupBy: ['state', 'type', 'manager', 'sponsor'],
     }),
     'project.project': search(ProjectProject, {
       fields: ['name', 'code', 'partner.name'],

@@ -1694,6 +1694,9 @@ importers:
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
+      '@kosh/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@kosh/reporting':
         specifier: workspace:*
         version: link:../../packages/reporting

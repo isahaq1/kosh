@@ -9,6 +9,7 @@
  */
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
+import { approvalGuard, permissionsShutro, requestApprovals } from '@kosh/permissions';
 import { orm } from '@kosh/server/orm';
 import {
   check,
@@ -18,7 +19,9 @@ import {
   type Env,
   extendModel,
   f,
+  method,
   record,
+  records,
 } from './.kosh/bindings.js';
 
 const READ = ['read'] as const;
@@ -34,8 +37,32 @@ export const CompanyProject = extendModel('res.company', {
       { none: 'Any', quarter: 'Quarter hours', half: 'Half hours', whole: 'Whole hours' },
       { default: 'none', label: 'Timesheets in steps of' },
     ),
+    projectRequirePlan: f.boolean({
+      default: false,
+      label: 'Require an approved plan',
+      help: 'A new project (not inside a programme) starts from an approved plan.',
+    }),
   },
 });
+
+/** Whether the company asks for an approved plan before a project (RFC 0026 step 2). */
+async function planRequired(env: Env, company: number): Promise<boolean> {
+  const read = async (e: Env) =>
+    (
+      await e
+        .model('res.company')
+        .browse([company as never])
+        .load(['projectRequirePlan'])
+    ).read(['projectRequirePlan']);
+  let rows: Awaited<ReturnType<typeof read>>;
+  try {
+    rows = await read(env);
+  } catch (error) {
+    if (!(error instanceof Error && error.name === 'AccessError')) throw error;
+    rows = await env.withGrants({ grants: ['res.company:read'], reason: 'project settings' }, read);
+  }
+  return rows[0]?.['projectRequirePlan'] === true;
+}
 
 /** The timesheet steps as hours. */
 const STEPS: Readonly<Record<string, ReturnType<typeof orm.toDecimal>>> = {
@@ -169,6 +196,249 @@ export const ProjectTaskStage = defineModel('project.task.stage', {
   },
 });
 
+const PLAN_STATES = {
+  draft: 'Draft',
+  submitted: 'Waiting for approval',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  in_progress: 'In progress',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+} as const;
+
+const me = { $env: 'uid' } as const;
+/** Moved by the plan (as the system) or by Projects managers only. */
+const MANAGERS_WRITE = { write: ['project.manager'] } as const;
+
+/**
+ * A project plan (RFC 0026 step 2): the case for a project before it exists — objectives, expected outcome, the
+ * strategic goal, dates and an estimated budget —, submitted and decided through the approval engine (RFC 0025);
+ * once approved, a project starts from it with the plan's dates as its baseline.
+ */
+export const ProjectPlan = defineModel('project.plan', {
+  label: 'Project plan',
+  recName: 'title',
+  order: ['id desc'],
+  companyScoped: { required: true },
+  tracking: [
+    'state',
+    'estimatedBudget',
+    'approvedBudget',
+    'manager',
+    'sponsor',
+    'dateStart',
+    'dateEnd',
+  ],
+  access: { 'project.user': ['read', 'write', 'create', 'unlink'], 'project.manager': ALL },
+  rules: {
+    // Seen by who wrote it, its manager and its sponsor; changed by them while a draft.
+    involved: {
+      groups: ['project.user'],
+      perms: ['read'],
+      domain: { or: [{ requester: me }, { manager: me }, { sponsor: me }] },
+    },
+    draftOwn: {
+      groups: ['project.user'],
+      perms: ['write', 'create', 'unlink'],
+      domain: {
+        or: [{ requester: me }, { manager: me }],
+        state: { in: ['draft', 'rejected'] },
+      },
+    },
+    // Its manager starts the project from it and completes it once approved (audited, tracked).
+    running: {
+      groups: ['project.user'],
+      perms: ['write'],
+      domain: { manager: me, state: { in: ['approved', 'in_progress'] } },
+    },
+    managers: {
+      groups: ['project.manager'],
+      perms: ['read', 'write', 'create', 'unlink'],
+      domain: {},
+    },
+  },
+  fields: {
+    /** Numbered when created: PLAN-0001. */
+    name: f.char({ readonly: true, sequence: 'project.plan', label: 'Number' }),
+    title: f.char({ required: true }),
+    type: f.many2one('project.type', { ondelete: 'set null', label: 'Project type' }),
+    requester: f.many2one('res.users', {
+      default: (env: Env) => env.userId,
+      ondelete: 'restrict',
+      label: 'Written by',
+    }),
+    manager: f.many2one('res.users', {
+      default: (env: Env) => env.userId,
+      ondelete: 'set null',
+      label: 'Project manager',
+    }),
+    sponsor: f.many2one('res.users', {
+      ondelete: 'set null',
+      label: 'Sponsor',
+      help: 'Approves the plan first; a Projects manager when there is none.',
+    }),
+    priority: f.selection(PRIORITIES, { required: true, default: 'normal' }),
+    dateStart: f.date({ label: 'Planned start' }),
+    dateEnd: f.date({ label: 'Planned end' }),
+    description: f.text(),
+    objectives: f.text(),
+    expectedOutcome: f.text({ label: 'Expected outcome' }),
+    strategicGoal: f.text({ label: 'Strategic goal' }),
+    estimatedBudget: f.decimal({
+      scale: 2,
+      label: 'Estimated budget',
+      help: 'Decides the approval levels: above 1 000 000 a Projects manager approves too.',
+    }),
+    approvedBudget: f.decimal({
+      scale: 2,
+      groups: MANAGERS_WRITE,
+      label: 'Approved budget',
+      help: 'The estimate unless changed before approving.',
+    }),
+    approvedAt: f.datetime({ label: 'Approved on', groups: MANAGERS_WRITE }),
+    projects: f.one2many('project.project', 'plan'),
+    projectCount: f.integer({
+      label: 'Projects',
+      ...compute('project.plan', 'projectCount', ['projects'], (plans) => {
+        for (const p of plans) p.projectCount = p.projects.length;
+      }),
+    }),
+    state: f.state({
+      states: PLAN_STATES,
+      initial: 'draft',
+      help: 'Draft, then submitted for approval; once approved, a project starts from it.',
+      transitions: {
+        submit: {
+          from: ['draft', 'rejected'],
+          to: 'submitted',
+          guard: records('project.plan', async (plans) =>
+            [...(await plans.load({}))]
+              .filter(
+                (p) =>
+                  p.estimatedBudget === null ||
+                  p.dateStart === null ||
+                  p.dateEnd === null ||
+                  (p.objectives ?? '').trim() === '',
+              )
+              .map((p) => p.id),
+          ),
+          message:
+            'A plan states its objectives, dates and estimated budget before it is submitted.',
+          after: records('project.plan', async (plans) => {
+            await requestApprovals(plans);
+            for (const p of await plans.load({}))
+              await plans.env.emit('project.plan.submitted', { id: p.id });
+          }),
+        },
+        approve: {
+          from: ['submitted'],
+          to: 'approved',
+          guard: records('project.plan', (plans) => approvalGuard(plans)),
+          message: 'Waiting for approvals.',
+          after: records('project.plan', async (plans) => {
+            for (const p of await plans.load({})) {
+              await plans.env
+                .model('project.plan')
+                .browse([p.id])
+                .write({
+                  approvedAt: new Date(),
+                  ...(p.approvedBudget === null ? { approvedBudget: p.estimatedBudget } : {}),
+                });
+              await plans.env.emit('project.plan.approved', { id: p.id });
+            }
+          }),
+        },
+        reject: { from: ['submitted'], to: 'rejected' },
+        /** Sent back for changes or withdrawn: a draft again. */
+        redraft: { from: ['submitted', 'rejected', 'cancelled'], to: 'draft' },
+        /** A project starts from the approved plan, with the plan's dates as its baseline. */
+        start: {
+          from: ['approved'],
+          to: 'in_progress',
+          after: records('project.plan', async (plans) => {
+            for (const p of await plans.load({ projects: ['id'] })) {
+              if (p.projects.length > 0) continue;
+              const created = await plans.env.model('project.project').create([
+                {
+                  name: p.title,
+                  plan: p.id,
+                  type: p.type?.id ?? null,
+                  manager: p.manager?.id ?? null,
+                  sponsor: p.sponsor?.id ?? null,
+                  priority: p.priority,
+                  dateStart: p.dateStart,
+                  dateEnd: p.dateEnd,
+                  description: p.description,
+                  company: p.company.id,
+                },
+              ]);
+              // The baseline is the plan's, set by the system (managers alone move it by hand).
+              await (plans.env as unknown as Env).asSuperuser(
+                { reason: 'project baseline from its plan' },
+                (su) =>
+                  su.model('project.project').browse(created.ids).write({
+                    baselineStart: p.dateStart,
+                    baselineEnd: p.dateEnd,
+                    baselineBudget: p.approvedBudget,
+                  }),
+              );
+            }
+          }),
+        },
+        /** The baseline taken again from the projects', phases' and work packages' current dates. */
+        baseline: {
+          from: ['in_progress'],
+          to: 'in_progress',
+          requires: 'project.baseline',
+          after: records('project.plan', async (plans) => {
+            const env = plans.env;
+            for (const p of await plans.load({ projects: ['dateStart', 'dateEnd'] })) {
+              for (const project of p.projects) {
+                await env
+                  .model('project.project')
+                  .browse([project.id])
+                  .write({ baselineStart: project.dateStart, baselineEnd: project.dateEnd });
+                for (const model of ['project.phase', 'project.work.package'] as const) {
+                  const rows = await env
+                    .model(model)
+                    .search({ where: { project: project.id } })
+                    .then((r) => r.load(['dateStart', 'dateEnd']));
+                  for (const row of rows)
+                    await env
+                      .model(model)
+                      .browse([row.id as never])
+                      .write({ baselineStart: row.dateStart, baselineEnd: row.dateEnd });
+                }
+              }
+            }
+          }),
+        },
+        complete: { from: ['in_progress'], to: 'completed' },
+        cancel: { from: ['draft', 'submitted', 'approved', 'rejected'], to: 'cancelled' },
+      },
+    }),
+  },
+  sqlConstraints: {
+    budgetPositive: {
+      check: orm.sql`(estimated_budget IS NULL OR estimated_budget >= 0) AND (approved_budget IS NULL OR approved_budget >= 0)`,
+      message: 'Budgets are not negative.',
+    },
+  },
+  constraints: {
+    dates: {
+      ...check('project.plan', ['dateStart', 'dateEnd'], async (plans) =>
+        plans
+          .filter(
+            (p) =>
+              p.dateStart !== null && p.dateEnd !== null && String(p.dateEnd) < String(p.dateStart),
+          )
+          .map((p) => p.id),
+      ),
+      message: 'A plan ends on or after it starts.',
+    },
+  },
+});
+
 export const ProjectProject = defineModel('project.project', {
   label: 'Project',
   recName: 'name',
@@ -194,6 +464,24 @@ export const ProjectProject = defineModel('project.project', {
     parentProject: f.many2one('project.project', { ondelete: 'restrict', label: 'Programme' }),
     parentPath: f.char({ readonly: true, index: true }),
     children: f.one2many('project.project', 'parentProject', { label: 'Projects' }),
+    /** The approved plan it started from (RFC 0026 step 2). */
+    plan: f.many2one('project.plan', { ondelete: 'restrict', checkCompany: true }),
+    baselineStart: f.date({ label: 'Baseline start', groups: MANAGERS_WRITE }),
+    baselineEnd: f.date({ label: 'Baseline end', groups: MANAGERS_WRITE }),
+    baselineBudget: f.decimal({ scale: 2, label: 'Baseline budget', groups: MANAGERS_WRITE }),
+    /** Days the deadline moved past the baseline (negative: earlier). */
+    slipDays: f.integer({
+      label: 'Days late against the baseline',
+      ...compute('project.project', 'slipDays', ['dateEnd', 'baselineEnd'], (projects) => {
+        for (const p of projects)
+          p.slipDays =
+            p.dateEnd === null || p.baselineEnd === null
+              ? 0
+              : Math.round(
+                  (Date.parse(String(p.dateEnd)) - Date.parse(String(p.baselineEnd))) / 86_400_000,
+                );
+      }),
+    }),
     partner: f.many2one('res.partner', { checkCompany: true, label: 'Customer' }),
     manager: f.many2one('res.users', {
       default: (env: Env) => env.userId,
@@ -295,6 +583,41 @@ export const ProjectProject = defineModel('project.project', {
       ),
       message: 'A project ends on or after it starts.',
     },
+    // Only an approved plan starts a project; the company may require one (App settings › Projects).
+    plan: {
+      ...check('project.project', ['plan', 'parentProject', 'company'], async (projects) => {
+        const bad: number[] = [];
+        const loaded = await projects.load({ plan: true, company: true });
+        const exempt = await (projects.env as unknown as Env)
+          .model('project.project')
+          .browse(projects.ids)
+          .planNotNeeded();
+        const required = new Map<number, boolean>();
+        for (const p of loaded) {
+          if (p.plan !== null) {
+            if (!['approved', 'in_progress'].includes(p.plan.state)) bad.push(p.id);
+            continue;
+          }
+          if (p.parentProject !== null || exempt.has(p.id)) continue;
+          let need = required.get(p.company.id);
+          if (need === undefined) {
+            need = await planRequired(projects.env as unknown as Env, p.company.id);
+            required.set(p.company.id, need);
+          }
+          if (need) bad.push(p.id);
+        }
+        return bad;
+      }),
+      message:
+        'A project starts from an approved plan (App settings › Projects asks for one; projects inside a programme follow theirs).',
+    },
+  },
+  methods: {
+    /**
+     * Of these projects, those that need no plan whatever the company's setting. None here; an app that makes
+     * projects itself overrides it (`sale_project`: projects made by a confirmed order).
+     */
+    planNotNeeded: method('project.project', async (): Promise<Set<number>> => new Set<number>()),
   },
 });
 
@@ -310,6 +633,8 @@ const layerFields = {
   description: f.text(),
   /** Set by hand when the tasks do not tell the whole story (empty: computed). */
   progressOverride: f.decimal({ scale: 1, label: 'Progress set by hand %' }),
+  baselineStart: f.date({ label: 'Baseline start', groups: MANAGERS_WRITE }),
+  baselineEnd: f.date({ label: 'Baseline end', groups: MANAGERS_WRITE }),
 } as const;
 
 export const ProjectPhase = defineModel('project.phase', {
@@ -714,7 +1039,7 @@ export const ProjectTimesheet = defineModel('project.timesheet', {
 export const projectShutro = defineModule({
   name: 'project',
   version: '0.4.0',
-  depends: [contactsShutro, messagingShutro],
+  depends: [contactsShutro, messagingShutro, permissionsShutro],
   groups: [
     orm.defineGroup({
       code: 'project.user',
@@ -727,8 +1052,19 @@ export const projectShutro = defineModule({
       implies: ['project.user'],
     }),
   ],
-  sequences: [orm.defineSequence({ code: 'project.project', prefix: 'PRJ-', padding: 4 })],
+  permissions: [
+    orm.definePermission({
+      code: 'project.baseline',
+      label: 'Take a plan’s baseline again',
+      groups: ['project.manager'],
+    }),
+  ],
+  sequences: [
+    orm.defineSequence({ code: 'project.project', prefix: 'PRJ-', padding: 4 }),
+    orm.defineSequence({ code: 'project.plan', prefix: 'PLAN-', padding: 4 }),
+  ],
   models: [
+    ProjectPlan,
     ProjectType,
     ProjectTaskCategory,
     ProjectTag,

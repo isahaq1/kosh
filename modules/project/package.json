@@ -46,13 +46,14 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@kosh/modules-sdk": "workspace:*",
-    "@kosh/server": "workspace:*",
-    "@kosh/views": "workspace:*",
     "@kosh/contacts": "workspace:*",
     "@kosh/messaging": "workspace:*",
+    "@kosh/modules-sdk": "workspace:*",
+    "@kosh/permissions": "workspace:*",
     "@kosh/reporting": "workspace:*",
-    "@kosh/ui": "workspace:*"
+    "@kosh/server": "workspace:*",
+    "@kosh/ui": "workspace:*",
+    "@kosh/views": "workspace:*"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1",

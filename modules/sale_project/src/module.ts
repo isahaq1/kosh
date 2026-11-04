@@ -8,7 +8,7 @@ import { productShutro } from '@kosh/product';
 import { projectShutro } from '@kosh/project';
 import { salesShutro } from '@kosh/sales';
 import { orm } from '@kosh/server/orm';
-import { compute, defineModule, type Env, extendModel, f } from './.kosh/bindings.js';
+import { compute, defineModule, type Env, extendModel, f, type Records } from './.kosh/bindings.js';
 
 export const ProductService = extendModel('product.product', {
   fields: {
@@ -29,6 +29,18 @@ export const TaskSale = extendModel('project.task', {
 
 export const ProjectSale = extendModel('project.project', {
   fields: { saleOrder: f.many2one('sale.order', { label: 'Sales order' }) },
+  overrides: {
+    // A project made by a confirmed order needs no plan: the order is its case (RFC 0026 step 2).
+    planNotNeeded: async function (
+      this: unknown,
+      next: () => Promise<Set<number>>,
+    ): Promise<Set<number>> {
+      const out = await next();
+      const projects = this as Records<'project.project'>;
+      for (const p of await projects.load(['saleOrder'])) if (p.saleOrder !== null) out.add(p.id);
+      return out;
+    },
+  },
 });
 
 export const OrderTasks = extendModel('sale.order', {
