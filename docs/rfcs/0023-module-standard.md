@@ -179,3 +179,35 @@ Measured on the demo catalogue (41 modules: 19 apps, 22 extensions).
 - **V1**: portal announcements are private (sent, never browsed); reconciliation records and valuation layers are
   waived as ledgers seen from the records they belong to.
 
+
+## Implementation notes (2026-11-04): step 2 — printing
+
+- **Every document model has a print template** (P1, now enforced by `pnpm lint`). Twenty were missing:
+  - fiscal years, purchase orders, requests (Approvals), meetings, document requests, events with their attendees;
+  - maintenance orders, transfers, stock count sheets, scrap notes, production orders;
+  - payment providers and receipts, counter session reports, project plans, job openings, signature requests;
+  - to-dos, letters of credit, and shipping labels (with a QR of the tracking reference).
+- Each template binds only its own module's fields, so it prints with that module alone; bridges add theirs. Each is
+  on the record's Print menu, and in the portal where its document is shared.
+- **P2, enforced**: every shipped template binds fields its model and the models it reaches have. The checker builds
+  each model's fields across the catalogue (its own, its extensions', and those every record has) and runs
+  `layoutProblems` of `@kosh/reporting`, the check the template designer already ran on drafts.
+- It found two mistakes:
+  - the Attendance register's table bound `records` instead of `$records`, so it printed an empty table;
+  - one new template bound a bill of materials' `name`, which bills of materials don't have.
+
+## Implementation notes (2026-11-04): step 3 — import
+
+- **Every master and document model has an import template** (I1, now enforced). 53 templates were added across 22
+  modules. Each lists the model's own fields that a person fills in, by their labels, and for documents up to five
+  fields of their lines (`lines.product`…). Left out:
+  - what the system fills (states, numbers, results, hashes);
+  - fields that point at records the system makes (entries, payments, transfers);
+  - baselines and approved budgets, which only managers set.
+- **Waived with their reasons**: records only the system makes, which no sheet should create — reconciliations,
+  payment transactions, counter sessions and sales, signature requests, shipments, stored files and payroll runs.
+  Expense reports were already waived.
+- **I2, enforced**: every column of every import template (the existing ones too) is a field the importer accepts —
+  it exists on the model or its extensions, is not read-only, computed or a state, is a cell kind, and a
+  `line.field` path goes through a one2many to a field of its lines. All templates met it.
+- Sample workbooks come from the importer as before: `GET /api/v1/import-templates/:model?mapping=<module>.<key>`.
