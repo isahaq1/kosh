@@ -1,6 +1,6 @@
 # RFC 0026 — Projects for programmes: plans, phases, work packages, teams and money
 
-- Status: Accepted (2026-11-04)
+- Status: Accepted (2026-11-04); implemented (steps 1–5, 2026-11-04)
 - Builds on: RFC 0008 (Projects), RFC 0022 (app depth), RFC 0024 §2.5 (cost centres, budgets), RFC 0025 (approvals)
 - Benchmark: Odoo's Projects plus the custom addon `poultry_project` (Paragon Group's Poultry Breeding ERP)
 
@@ -216,3 +216,41 @@ awaiting a decision, phases overdue, people over-allocated, budget variance).
   centre made once, a posted bill booked and a draft not, off track beyond the budget; with Purchase an order
   committed, then billed and booked and never counted twice, at risk at 90 %, users refused the money. End to end, a
   manager refreshing the figures and a user seeing the health without the money.
+
+## Implementation notes (2026-11-04): step 5 — schedule and control
+
+- **Control register**:
+  - `project.risk`: category, probability and impact from 1 to 5, the score and level (up to 4 low, 9 medium, 15
+    high, above that critical), owner, mitigation, contingency, review date and status.
+  - `project.issue`: severity, who raised it, owner, due date, status, the risk it came from, and a resolution
+    required once resolved.
+  - `project.change` (`CR-0001`): a new deadline and/or a new baseline budget, the budget for managers only, with the
+    reason and the impact. Decided by the *Project change requests* policy: the project's sponsor (a Projects manager
+    when there is none), then a Projects manager. Approving applies it as the system: the deadline and baseline end
+    move, the baseline budget too, and the previous values are kept along with when it was applied.
+  - `project.status.report`: the project's health and progress and its open risks and issues, filled in when the
+    project is chosen. Sending posts it on the project's chatter and makes the sponsor a follower.
+  - Projects users write the register; managers delete. Changes and reports are frozen once submitted or sent.
+  - Events `project.change.applied` and `project.status.report.sent`. The project page has tiles for open risks, open
+    issues, change requests and reports.
+- **Schedule** (`schedule.ts`, pure functions unit-tested):
+  - Tasks gain `dateStart` (they end on their deadline) and a baseline, taken by the plan's *Take the baseline again*.
+  - `criticalPath()`: earliest and latest dates over finish-to-start links with lags. A task without dates lasts its
+    planned hours at 8 a day. Float, and critical when there is none.
+  - `slipMoves()`: moves dated tasks after what they wait for, keeping their length, in dependency order.
+  - Served by `GET /api/v1/projects/:id/schedule` and `POST …/schedule/apply`, as the caller.
+  - The project form's **Schedule** component draws bars, baselines, arrows, milestones as diamonds and the critical
+    path in red, with labels for screen readers, in English and Bangla. Tasks also have a timeline view.
+- **Repeating tasks**: every n days, weeks or months until a date. The refresh (hourly and on demand) makes the next
+  one of each done task once (`nextTask`), its dates moved, in the first open stage.
+- **Tests**:
+  - Unit: the critical path with float, lags, a task without dates, slipping successors.
+  - On real PostgreSQL:
+    - a risk scored critical, an out-of-range risk refused, outsiders refused;
+    - an issue refused as resolved without its resolution;
+    - a change request refused with nothing asked, then approved by the sponsor and a manager and applied with the
+      deadline before it kept;
+    - a status report filled in, sent onto the chatter with the sponsor following, frozen once sent;
+    - the critical path and float through the API, a backwards task refused, a slip moving two tasks;
+    - a weekly task repeated once a week later.
+  - End to end: a risk scored critical on screen; the project's schedule and its risk tile.

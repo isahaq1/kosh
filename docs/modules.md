@@ -261,6 +261,20 @@ marks phases past their end as **late**. A manager may set the health by hand wi
 underneath and both are in the history. The Projects overview shows projects by health, plans waiting for a decision
 and phases overdue.
 
+**Schedule.** Tasks have a start besides their deadline. The project's page shows its **schedule**: the top-level
+tasks as bars over the weeks, the baseline as a thin bar beneath each, arrows from a task to what waits for it, and
+the **critical path** in red — the tasks with no day to spare, by the critical path method over the dependencies and
+their lags (`GET /api/v1/projects/:id/schedule`). When a task slips, *Move waiting tasks* moves what starts before it
+is finished to the day after (plus the lag), keeping each one's length, and what waits for those in turn. A task may
+**repeat** every n days, weeks or months until a date: once done, the next one is made with its dates moved.
+
+**Control.** Projects › Control holds each project's **risks** (probability and impact from 1 to 5, the score and its
+level, the owner, mitigation and contingency), **issues** (severity, owner, a resolution before they are resolved),
+**change requests** (a new deadline or baseline budget with the reason and impact, decided through Approvals by the
+sponsor and a Projects manager, then applied to the project and its baseline with what they were kept) and weekly
+**status reports** (the health and progress filled in with the open risks and issues; sent, the report is posted on
+the project for its followers, the sponsor among them).
+
 ### Focus (`modules/todo`, RFC 0021)
 
 To-dos for the people who use them: their own, or on lists shared with colleagues, with due dates, priorities and
