@@ -222,6 +222,8 @@ export const maintenance: ReturnType<typeof defineModule> = defineModule({
     },
     { topic: 'maintenance.request.done', model: 'maintenance.request', label: 'Maintenance done' },
   ],
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     user: { label: 'Technician (orders, readings, breakdowns)', groups: ['maintenance.user'] },
     manager: {

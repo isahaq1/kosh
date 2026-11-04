@@ -21,6 +21,8 @@ export const l10nBdPayroll: ReturnType<typeof defineModule> = defineModule({
   depends: [l10nBd, payroll],
   bridge: [l10nBd, payroll],
   hooks: { defaults: async (env) => installBangladeshPayroll(env as Env) },
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     user: { label: 'Bangladesh payroll', groups: ['l10n_bd_payroll.user'] },
   },

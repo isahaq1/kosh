@@ -148,6 +148,8 @@ export const crm: ReturnType<typeof defineModule> = defineModule({
       columns: [{ header: 'Name', field: 'name' }],
     },
   ],
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     user: { label: 'Salesperson (own and unassigned deals)', groups: ['crm.user'] },
     manager: { label: 'Manager (every deal, stages)', groups: ['crm.manager'], implies: ['user'] },

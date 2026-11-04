@@ -59,6 +59,8 @@ export const saleStock: ReturnType<typeof defineModule> = defineModule({
   hooks: { demo: saleStockDemo },
   depends: [sales, stock, product],
   bridge: [sales, stock],
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     user: { label: 'Sales with deliveries', groups: ['sale_stock.user'] },
   },

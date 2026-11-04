@@ -76,6 +76,8 @@ export function posModule(options: CounterOptions = {}): ReturnType<typeof defin
         },
       ],
     },
+    // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+    i18n: { bn: () => import('./i18n/bn.js') },
     accessLevels: {
       cashier: { label: 'Cashier (sell in own sessions)', groups: ['pos.cashier'] },
       manager: {

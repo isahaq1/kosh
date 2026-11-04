@@ -1,0 +1,5 @@
+/** Bangla for the module's labels, keyed by their English text (RFC 0023 §3.1; `pnpm i18n:extract`). */
+export const bn: Readonly<Record<string, string>> = {
+  'Event places invoiced': 'ইভেন্টের আসনের চালান হয়েছে',
+  Invoice: 'চালান',
+};

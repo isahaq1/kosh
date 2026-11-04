@@ -18,6 +18,8 @@ export const mrpAccount: ReturnType<typeof defineModule> = defineModule({
   kosh: '^0.1.0',
   depends: [mrp, stock, stockAccount, accounting],
   bridge: [mrp, accounting],
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     user: { label: 'Production valued', groups: ['mrp_account.user'] },
   },

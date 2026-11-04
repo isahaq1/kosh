@@ -265,6 +265,8 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
     category: 'Finance',
     summary: 'Invoices, bills, journals and entries posted in exact money',
   },
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     invoicing: { label: 'Invoicing (invoices and their payments)', groups: ['account.invoicing'] },
     user: {

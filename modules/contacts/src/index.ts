@@ -50,6 +50,8 @@ export const contacts: ReturnType<typeof defineModule> = defineModule({
     category: 'Sales',
     summary: 'Customers, vendors and the people who work there',
   },
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     user: { label: 'User', groups: ['contacts.user'] },
     manager: { label: 'Manager', groups: ['contacts.manager'], implies: ['user'] },

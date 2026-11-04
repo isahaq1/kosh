@@ -1,0 +1,20 @@
+/** Bangla for the module's labels, keyed by their English text (RFC 0023 §3.1; `pnpm i18n:extract`). */
+export const bn: Readonly<Record<string, string>> = {
+  'A part is used in a positive quantity.': 'যন্ত্রাংশের ব্যবহৃত পরিমাণ ধনাত্মক হতে হবে।',
+  Cost: 'খরচ',
+  'Created At': 'তৈরির সময়',
+  'Created By': 'তৈরি করেছেন',
+  'Display Name': 'প্রদর্শিত নাম',
+  ID: 'আইডি',
+  'Maintenance with spare parts': 'খুচরা যন্ত্রাংশসহ রক্ষণাবেক্ষণ',
+  'Parts cost': 'যন্ত্রাংশের খরচ',
+  'Parts transfer': 'যন্ত্রাংশ স্থানান্তর',
+  Product: 'পণ্য',
+  Quantity: 'পরিমাণ',
+  Request: 'অনুরোধ',
+  'Spare part': 'খুচরা যন্ত্রাংশ',
+  'Spare parts': 'খুচরা যন্ত্রাংশ',
+  Unit: 'একক',
+  'Updated At': 'হালনাগাদের সময়',
+  'Updated By': 'হালনাগাদ করেছেন',
+};

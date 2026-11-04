@@ -201,6 +201,8 @@ export const accountAsset: ReturnType<typeof defineModule> = defineModule({
   kosh: '^0.1.0',
   hooks: { demo: assetDemo },
   depends: [accounting],
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     user: { label: 'Fixed assets', groups: ['account_asset.user'] },
   },

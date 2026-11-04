@@ -96,6 +96,8 @@ export const payroll: ReturnType<typeof defineModule> = defineModule({
     category: 'People',
     summary: 'Salary structures, monthly runs with explained payslips, loans and payment files',
   },
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     user: { label: 'Employee (own payslips once approved)', groups: ['payroll.user'] },
     officer: {

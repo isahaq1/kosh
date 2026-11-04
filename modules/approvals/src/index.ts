@@ -328,6 +328,8 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
       },
     ],
     events: [{ topic: 'approval.ask.approved', model: 'approval.ask', label: 'Request approved' }],
+    // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+    i18n: { bn: () => import('./i18n/bn.js') },
     accessLevels: {
       user: { label: 'Everyone (decide and ask)', groups: ['base.user'] },
       manager: {

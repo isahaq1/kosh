@@ -50,6 +50,8 @@ export function createPortal(
     shutro: portalShutro,
     kosh: '^0.1.0',
     depends: [base, contacts, messaging, reporting],
+    // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+    i18n: { bn: () => import('./i18n/bn.js') },
     accessLevels: { manager: { label: 'Portal access', groups: ['portal.manager'] } },
     externalGroups: ['portal.user'],
     privateModels: ['portal.invitation', 'portal.signature', 'portal.announcement'],

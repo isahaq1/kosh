@@ -39,6 +39,8 @@ export const accountPortal: ReturnType<typeof defineModule> = defineModule({
   depends: [accounting, portal],
   // A posted invoice is announced to its customer by email (the portal reads the entries' changes).
   changeEvents: ['account.move'],
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     manager: { label: 'Portal access (invoices)', groups: ['portal.manager'] },
   },

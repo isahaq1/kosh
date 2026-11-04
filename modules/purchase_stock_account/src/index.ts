@@ -20,6 +20,8 @@ export const purchaseStockAccount: ReturnType<typeof defineModule> = defineModul
   kosh: '^0.1.0',
   depends: [purchase, stock, accounting, purchaseStock, stockAccount, purchaseAccount],
   bridge: [purchase, stock, accounting],
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     user: { label: 'Purchases valued in stock', groups: ['purchase_stock_account.user'] },
   },

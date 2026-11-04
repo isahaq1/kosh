@@ -80,6 +80,8 @@ export const stockAccount: ReturnType<typeof defineModule> = defineModule({
   depends: [stock, accounting, product],
   bridge: [stock, accounting],
   hooks: { defaults: async (env) => stockDefaults(env as Env) },
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     user: { label: 'Stock valuation (read)', groups: ['stock_account.user'] },
   },

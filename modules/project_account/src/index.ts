@@ -17,6 +17,8 @@ export const projectAccount: ReturnType<typeof defineModule> = defineModule({
   kosh: '^0.1.0',
   depends: [project, accounting],
   bridge: [project, accounting],
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     user: { label: 'Projects with their costs', groups: ['project_account.user'] },
   },

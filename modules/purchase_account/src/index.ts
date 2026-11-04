@@ -19,6 +19,8 @@ export const purchaseAccount: ReturnType<typeof defineModule> = defineModule({
   hooks: { demo: purchaseAccountDemo },
   depends: [purchase, accounting],
   bridge: [purchase, accounting],
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     user: { label: 'Bill purchase orders', groups: ['purchase_account.user'] },
   },

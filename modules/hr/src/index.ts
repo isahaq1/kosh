@@ -238,6 +238,8 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
       ],
     },
   ],
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     user: { label: 'Employee (directory, own leave, team’s leave)', groups: ['hr.user'] },
     manager: {

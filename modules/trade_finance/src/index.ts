@@ -188,6 +188,8 @@ export const tradeFinance: ReturnType<typeof defineModule> = defineModule({
     { topic: 'trade.lc.issued', model: 'trade.lc', label: 'Letter of credit issued' },
     { topic: 'trade.lc.settled', model: 'trade.lc', label: 'Letter of credit settled' },
   ],
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     user: { label: 'User (LCs, presentations)', groups: ['trade_finance.user'] },
     manager: {

@@ -110,6 +110,8 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
       ],
     },
   ],
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     user: { label: 'Buyer (own orders)', groups: ['purchase.user'] },
     manager: { label: 'Manager (all orders)', groups: ['purchase.manager'], implies: ['user'] },

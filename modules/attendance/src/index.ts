@@ -62,6 +62,8 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
     category: 'People',
     summary: 'Shifts, check-in by phone, kiosk or device, overtime',
   },
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     user: { label: 'Employee (own check-ins and days)', groups: ['attendance.user'] },
     manager: {

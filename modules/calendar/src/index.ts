@@ -238,6 +238,8 @@ export const calendarApp: ReturnType<typeof defineModule> = defineModule({
   events: [
     { topic: 'calendar.event.cancelled', model: 'calendar.event', label: 'Meeting cancelled' },
   ],
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     user: { label: 'User (own and public events)', groups: ['calendar.user'] },
     manager: {

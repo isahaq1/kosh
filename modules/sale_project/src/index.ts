@@ -44,6 +44,8 @@ export const saleProject: ReturnType<typeof defineModule> = defineModule({
   hooks: { demo: saleProjectDemo },
   depends: [sales, project, product],
   bridge: [sales, project],
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     user: { label: 'Sales to projects', groups: ['sale_project.user'] },
   },

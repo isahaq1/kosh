@@ -17,6 +17,8 @@ export const salePortal: ReturnType<typeof defineModule> = defineModule({
   depends: [sales, portal],
   // A sent quotation is announced to its customer by email (the portal reads the order's changes).
   changeEvents: ['sale.order'],
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     manager: { label: 'Portal access (sales documents)', groups: ['portal.manager'] },
   },

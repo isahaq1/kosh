@@ -74,6 +74,8 @@ export const helpdesk: ReturnType<typeof defineModule> = defineModule({
     category: 'Services',
     summary: 'Tickets from email, SLAs in business hours, assignment, ratings',
   },
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     user: { label: 'Agent (the tickets of their teams)', groups: ['helpdesk.user'] },
     manager: {

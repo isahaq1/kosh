@@ -518,6 +518,8 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
     { topic: 'stock.count.applied', model: 'stock.count', label: 'Stock count applied' },
     { topic: 'stock.scrap.done', model: 'stock.scrap', label: 'Scrap done' },
   ],
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     user: { label: 'User (transfers, stock)', groups: ['stock.user'] },
     manager: {

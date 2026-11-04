@@ -1177,3 +1177,35 @@ test('duplicate (RFC 0023 R1): a copy as the user — lines with it, numbers new
     403,
   );
 });
+
+test('in Bangla (RFC 0023 §3.1): menus and a form’s field labels come translated; English stays the default', async () => {
+  const token = (
+    await host.server.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { login: 'rahim', password: PASSWORD },
+    })
+  ).json().token as string;
+  const get = (url: string, lang?: string) =>
+    host.server.app.inject({
+      method: 'GET',
+      url,
+      headers: {
+        authorization: `Bearer ${token}`,
+        ...(lang === undefined ? {} : { 'accept-language': lang }),
+      },
+    });
+  const labels = (menus: Json[]): string[] =>
+    menus.flatMap((m) => [String(m.label), ...labels((m.children as Json[] | undefined) ?? [])]);
+  const bn = labels(
+    (await get('/api/v1/menus', 'bn-BD,bn;q=0.9')).json().menus ??
+      (await get('/api/v1/menus', 'bn')).json(),
+  );
+  expect(bn).toContain('প্রকল্প');
+  const en = labels(
+    (await get('/api/v1/menus')).json().menus ?? (await get('/api/v1/menus')).json(),
+  );
+  expect(en).toContain('Projects');
+  const form = (await get('/api/v1/views/project.task.form', 'bn')).json();
+  expect(form.fields['project.task'].deadline.label).toBe('শেষ সময়');
+});

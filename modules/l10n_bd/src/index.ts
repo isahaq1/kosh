@@ -136,6 +136,8 @@ export const l10nBd: KoshModule = defineModule({
   shutro: l10nBdShutro,
   kosh: '^0.1.0',
   depends: [accounting, contacts],
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     manager: { label: 'Bangladesh localization', groups: ['account.manager'] },
   },

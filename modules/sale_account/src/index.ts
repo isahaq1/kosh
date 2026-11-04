@@ -19,6 +19,8 @@ export const saleAccount: ReturnType<typeof defineModule> = defineModule({
   hooks: { demo: saleAccountDemo },
   depends: [sales, accounting],
   bridge: [sales, accounting],
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
     user: { label: 'Invoice sales orders', groups: ['sale_account.user'] },
   },
