@@ -26,6 +26,7 @@ import { enforceScopes } from './auth/scopes.js';
 import { type AuthOptions, AuthService } from './auth/service.js';
 import { applyEnvironmentNames } from './env-names.js';
 import { HttpProblem, problemOf, ServerConfigError } from './errors.js';
+import { loadDictionaries, registerTranslation } from './i18n.js';
 import { type Authenticator, denyAll, type RequestIdentity, runOptionsOf } from './identity.js';
 import { registerImageRoutes } from './images.js';
 import { type Driver, type Env, orm, pg, type Shutro } from './orm.js';
@@ -369,6 +370,9 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
       baseUrl: options.oauth?.baseUrl ?? process.env['KOSH_BASE_URL'] ?? 'http://localhost:5173',
     });
   }
+
+  // Metadata and problems in the request's language, from the modules' dictionaries (RFC 0023 §3.1).
+  registerTranslation(app, await loadDictionaries(registry.loaded.modules));
 
   // The generated REST API and its OpenAPI document (RFC 0002 §6.3–6.4).
   for (const statement of idempotencyTableStatements()) await driver.query(statement);

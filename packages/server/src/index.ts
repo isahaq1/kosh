@@ -82,6 +82,13 @@ export { HttpProblem, type Problem, problemOf, ServerConfigError } from './error
 export { emitting } from './events.js';
 export { type AppHost, type AppHostOptions, createAppHost, startAppHost } from './host.js';
 export {
+  type Dictionaries,
+  dictionaryFor,
+  loadDictionaries,
+  translateDetail,
+  translateValue,
+} from './i18n.js';
+export {
   type Authenticator,
   denyAll,
   isSuperuser,
