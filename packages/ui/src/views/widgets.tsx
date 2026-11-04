@@ -510,7 +510,14 @@ function linkWidget(kind: 'email' | 'phone' | 'url') {
 function ProgressWidget(props: WidgetProps): ReactElement {
   const { format } = useKosh();
   if (props.onChange !== undefined && !props.readonly) return <IntegerWidget {...props} />;
-  const n = typeof props.value === 'number' ? Math.max(0, Math.min(100, props.value)) : null;
+  // Decimals arrive as strings ("75.0"), integers as numbers.
+  const raw =
+    typeof props.value === 'number'
+      ? props.value
+      : typeof props.value === 'string' && props.value.trim() !== ''
+        ? Number(props.value)
+        : Number.NaN;
+  const n = Number.isFinite(raw) ? Math.max(0, Math.min(100, raw)) : null;
   if (n === null) return <span />;
   return (
     <span className="inline-flex w-full max-w-40 items-center gap-2">

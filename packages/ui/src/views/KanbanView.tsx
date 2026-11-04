@@ -87,6 +87,15 @@ function Card({
   });
   if (view.type !== 'kanban') throw new Error('kanban');
   const fields = served.fields[view.model] ?? {};
+  // A number, or a decimal's string ("75.0").
+  const rawProgress = view.card.progress === undefined ? undefined : row[view.card.progress];
+  const progressValue =
+    typeof rawProgress === 'number' || (typeof rawProgress === 'string' && rawProgress !== '')
+      ? Number(rawProgress)
+      : Number.NaN;
+  const progress = Number.isFinite(progressValue)
+    ? Math.max(0, Math.min(100, progressValue))
+    : null;
   const show = (node: FieldNode) => {
     const field = fields[node.field];
     if (field === undefined) return null;
@@ -177,18 +186,15 @@ function Card({
           {(view.card.footer ?? []).map(show)}
         </div>
       )}
-      {view.card.progress === undefined || typeof row[view.card.progress] !== 'number' ? null : (
+      {progress === null ? null : (
         <div
           role="progressbar"
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-valuenow={row[view.card.progress] as number}
+          aria-valuenow={progress}
           className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted"
         >
-          <div
-            className="h-full rounded-full bg-primary"
-            style={{ width: `${Math.max(0, Math.min(100, row[view.card.progress] as number))}%` }}
-          />
+          <div className="h-full rounded-full bg-primary" style={{ width: `${progress}%` }} />
         </div>
       )}
     </li>
