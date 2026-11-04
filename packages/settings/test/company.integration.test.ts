@@ -203,6 +203,48 @@ test('companies: listed with their people; administrators add them', async () =>
   // The administrator can switch to it at once.
   const me = await call('GET', '/api/v1/auth/me', 'admin');
   expect(me.json.companies).toContain(made.json.id);
+
+  // A new company with its details at once: the fields offered, checked as when they are changed.
+  const offered = (after.json.fields as Json[]).map((f) => f.key);
+  expect(offered).toEqual(expect.arrayContaining(['street', 'city', 'email', 'phone', 'website']));
+  expect(
+    (
+      await call('POST', '/api/v1/settings/companies', 'admin', {
+        name: 'Bad Co',
+        currency: bdt,
+        details: { notAField: 'x' },
+      })
+    ).status,
+  ).toBe(422);
+  expect(
+    (
+      await call('POST', '/api/v1/settings/companies', 'admin', {
+        name: 'Bad Co',
+        currency: bdt,
+        accentColor: 'pink',
+      })
+    ).status,
+  ).toBe(422);
+  const full = await call('POST', '/api/v1/settings/companies', 'admin', {
+    name: 'Jamuna Agro',
+    currency: bdt,
+    numberGrouping: 'lakh',
+    accentColor: '#0F766E',
+    details: { street: '12 Motijheel', city: 'Dhaka', email: 'info@jamuna.example', website: '' },
+  });
+  expect(full.status, JSON.stringify(full.json)).toBe(201);
+  const [row] = await server.driver.query<Record<string, unknown>>({
+    text: 'SELECT number_grouping, accent_color, street, city, email, website FROM res_company WHERE id = $1',
+    params: [full.json.id],
+  });
+  expect(row).toMatchObject({
+    number_grouping: 'lakh',
+    accent_color: '#0f766e',
+    street: '12 Motijheel',
+    city: 'Dhaka',
+    email: 'info@jamuna.example',
+    website: null,
+  });
 });
 
 // A 1×1 PNG and the same bytes claiming to be SVG; an SVG itself is refused by its bytes.

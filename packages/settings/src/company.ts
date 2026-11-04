@@ -8,7 +8,9 @@
  * - `PATCH /api/v1/settings/company`     `{ name?, numberGrouping?, accentColor?, details? }` (`accentColor`:
  *                                         `#rrggbb` or null; `details`: `{ field: value }`)
  * - `GET   /api/v1/settings/companies`   every company with its currency and people, the currencies
- * - `POST  /api/v1/settings/companies`   `{ name, currency }`: a new company (administrators)
+ * - `GET   /api/v1/settings/companies`   … and the details a new company may be given (`fields`)
+ * - `POST  /api/v1/settings/companies`   `{ name, currency, numberGrouping?, accentColor?, details? }`: a new company
+ *                                         (administrators), with what each app set up for it (`defaults`)
  */
 import {
   type ApiField,
@@ -127,12 +129,11 @@ export function registerCompanyRoutes(context: ModuleContext): void {
       { write: true },
     );
 
-  app.get('/api/v1/settings/company', async (request) =>
-    guarded(request, (su, company) => read(su, company)),
-  );
-
-  app.patch('/api/v1/settings/company', async (request) => {
-    const body = (request.body ?? {}) as Row;
+  /**
+   * The company values of a body (`name`, `numberGrouping`, `accentColor`, `details`), checked: the same rules for a
+   * new company and a change.
+   */
+  const companyValues = (body: Row): Row => {
     const values: Row = {};
     const invalid = (code: string, title: string, detail: string) =>
       new HttpProblem(422, code, title, detail);
@@ -184,6 +185,16 @@ export function registerCompanyRoutes(context: ModuleContext): void {
         values[key] = typeof value === 'string' && value.trim() === '' ? null : value;
       }
     }
+    return values;
+  };
+
+  app.get('/api/v1/settings/company', async (request) =>
+    guarded(request, (su, company) => read(su, company)),
+  );
+
+  app.patch('/api/v1/settings/company', async (request) => {
+    const body = (request.body ?? {}) as Row;
+    const values = companyValues(body);
     return guarded(
       request,
       async (su, company) => {
@@ -207,6 +218,16 @@ export function registerCompanyRoutes(context: ModuleContext): void {
       const currencyName = new Map(currencies.map((c) => [c['id'], String(c['name'])]));
       return {
         canCreate: env.administrator,
+        // What a new company may be given: the details a person changes (not those an app's own flow sets).
+        fields: detailFields()
+          .filter((f) => !f.readonly && !SHOWN_ONLY.has(f.key))
+          .map((f) => ({
+            key: f.key,
+            label: f.label,
+            kind: f.kind,
+            help: f.help,
+            options: f.options?.map((o) => ({ value: String(o[0]), label: String(o[1]) })) ?? null,
+          })),
         companies: (
           await Promise.all(
             all.map(async (c) => ({
@@ -241,6 +262,7 @@ export function registerCompanyRoutes(context: ModuleContext): void {
     const body = (request.body ?? {}) as Row;
     const name = String(body['name'] ?? '').trim();
     const currency = Number(body['currency']);
+    const values = companyValues({ ...body, name });
     if (name === '' || name.length > 200)
       throw new HttpProblem(422, 'invalid-name', 'Invalid name', 'The company needs a name.');
     if (!Number.isSafeInteger(currency) || currency <= 0)
@@ -262,7 +284,7 @@ export function registerCompanyRoutes(context: ModuleContext): void {
               'Invalid currency',
               'Choose its currency.',
             );
-          const company = (await model(su, 'res.company').create([{ name, currency }]))
+          const company = (await model(su, 'res.company').create([{ ...values, name, currency }]))
             .ids[0] as number;
           // The administrators and the person who made it can switch to it at once.
           const admins = [...su.access.administratorGroups()];

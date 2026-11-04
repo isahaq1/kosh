@@ -169,8 +169,15 @@ test('Company details saved; Companies: a new company, switched to and back', as
   await dialog.getByRole('textbox', { name: 'Name' }).fill('Karnaphuli Traders');
   await dialog.getByRole('combobox', { name: 'Currency' }).click();
   await page.getByRole('option', { name: 'BDT' }).click();
+  // Its address and contact at once, in their own sections.
+  await expect(dialog.getByRole('group', { name: 'Address' })).toBeVisible();
+  await dialog.getByRole('textbox', { name: 'City' }).fill('Chattogram');
+  await dialog.getByRole('textbox', { name: 'Email' }).fill('info@karnaphuli.example');
   await dialog.getByRole('button', { name: 'Create' }).click();
-  await expect(dialog).toHaveCount(0);
+  const ready = page.getByRole('dialog', { name: 'Karnaphuli Traders is ready' });
+  await expect(ready.getByText('Karnaphuli Traders was created.')).toBeVisible();
+  await ready.getByRole('button', { name: 'Close' }).first().click();
+  await expect(ready).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Switch to Karnaphuli Traders' }).click();
   await expect(page.getByRole('button', { name: /Karnaphuli Traders/ }).first()).toBeVisible();

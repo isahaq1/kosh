@@ -389,6 +389,32 @@ export const messages: Readonly<Record<string, object>> = {
       people_other: '{{count}} people',
       switch: 'Switch',
       switchTo: 'Switch to {{name}}',
+      identity: 'Identity',
+      identityHint:
+        'How the company is named and counts its money. The currency cannot be changed once it has entries.',
+      namePlaceholder: 'e.g. Padma Traders Ltd.',
+      currencyHint: 'Its books, prices and reports are in this currency.',
+      brandHint:
+        'The accent of the back-office for everyone working in this company. Empty: the default.',
+      address: 'Address',
+      addressHint: 'Printed on its invoices, orders and letters, and shown in the customer portal.',
+      contact: 'Contact',
+      contactHint: 'How customers and vendors reach it; on its documents and emails.',
+      registration: 'Registration and tax',
+      registrationHint:
+        'Its identifiers with the authorities, on tax invoices and returns. Fill them in now or later in Settings › Company.',
+      more: 'More',
+      moreHint:
+        'What the installed apps ask of a company. Everything here can be changed later in Settings › Company.',
+      whatHappens:
+        'Creating it sets up what each installed app needs — journals, taxes, sequences, defaults — and gives administrators access at once. Give others access in People.',
+      readyTitle: '{{name}} is ready',
+      readyHint: 'Its apps are set up. Switch to it to start working in it.',
+      created: '{{name}} was created.',
+      setUp: 'Set up for it',
+      nextSteps: 'Next: invite its people in People, then check its App settings.',
+      switchNow: 'Switch to it now',
+      close: 'Close',
     },
     apiKeys: {
       title: 'API keys',
@@ -844,6 +870,30 @@ export const messages: Readonly<Record<string, object>> = {
       people_other: '{{count}} জন',
       switch: 'যান',
       switchTo: '{{name}}-এ যান',
+      identity: 'পরিচিতি',
+      identityHint: 'প্রতিষ্ঠানের নাম ও তার হিসাবের মুদ্রা। লেনদেন হয়ে গেলে মুদ্রা আর বদলানো যায় না।',
+      namePlaceholder: 'যেমন: পদ্মা ট্রেডার্স লিমিটেড',
+      currencyHint: 'এর হিসাবের খাতা, মূল্য ও প্রতিবেদন এই মুদ্রায় হবে।',
+      brandHint: 'এই প্রতিষ্ঠানে যাঁরা কাজ করেন, তাঁদের সবার জন্য ব্যাক-অফিসের রং। খালি রাখলে ডিফল্ট রং।',
+      address: 'ঠিকানা',
+      addressHint: 'এর চালান, অর্ডার ও চিঠিতে ছাপা হয় এবং গ্রাহক পোর্টালে দেখা যায়।',
+      contact: 'যোগাযোগ',
+      contactHint: 'গ্রাহক ও সরবরাহকারীরা যেভাবে যোগাযোগ করবেন; এর নথি ও ইমেইলে থাকে।',
+      registration: 'নিবন্ধন ও কর',
+      registrationHint:
+        'কর্তৃপক্ষের কাছে এর শনাক্তকরণ নম্বর, কর চালান ও রিটার্নে থাকে। এখন বা পরে সেটিংস › প্রতিষ্ঠান থেকে পূরণ করুন।',
+      more: 'আরও',
+      moreHint:
+        'ইনস্টল করা অ্যাপগুলো প্রতিষ্ঠানের কাছে যা জানতে চায়। এখানকার সবকিছু পরে সেটিংস › প্রতিষ্ঠান থেকে বদলানো যায়।',
+      whatHappens:
+        'তৈরি করলে প্রতিটি ইনস্টল করা অ্যাপের যা দরকার — জার্নাল, কর, ক্রম, ডিফল্ট — সব প্রস্তুত হয় এবং অ্যাডমিনিস্ট্রেটররা সাথে সাথে প্রবেশাধিকার পান। অন্যদের প্রবেশাধিকার দিন জনবল অংশে।',
+      readyTitle: '{{name}} প্রস্তুত',
+      readyHint: 'এর অ্যাপগুলো প্রস্তুত। কাজ শুরু করতে এতে যান।',
+      created: '{{name}} তৈরি হয়েছে।',
+      setUp: 'এর জন্য যা প্রস্তুত হলো',
+      nextSteps: 'এরপর: জনবল অংশে এর লোকজনকে আমন্ত্রণ জানান, তারপর এর অ্যাপ সেটিংস দেখে নিন।',
+      switchNow: 'এখনই এতে যান',
+      close: 'বন্ধ করুন',
     },
     apiKeys: {
       title: 'এপিআই কী',
