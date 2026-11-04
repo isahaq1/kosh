@@ -132,3 +132,32 @@ awaiting a decision, phases overdue, people over-allocated, budget variance).
   its range, a task in another project's phase refused; sub-tasks, several assignees and tags, a dependency blocking
   until done, circles and self-links refused, outsiders refused. End to end, a phase and a work package made on screen
   and shown in the project's structure.
+
+## Implementation notes (2026-11-04): step 2 — plans and the baseline
+
+- **`project.plan`**: number (sequence `project.plan`, `PLAN-0001`), title, type, who wrote it, manager, sponsor,
+  priority, planned dates, objectives, expected outcome, strategic goal, description, estimated and approved budget,
+  when approved, its projects. States draft → waiting for approval → approved / rejected → in progress → completed;
+  cancel; *Set to draft* after a rejection, a sending back or a withdrawal. Submitting needs the objectives, the dates
+  and the estimate (a guard). The department waits for step 3.
+- **Approval** through RFC 0025's engine: the *Project plans* policy, installed with Projects — the sponsor (a Projects
+  manager when the field is empty), and above an estimate of 1 000 000 a Projects manager. The engine runs
+  `approve`, `reject` and `redraft` as the system; approving fills the approved budget from the estimate unless a
+  manager set it. Events `project.plan.submitted` and `project.plan.approved`.
+- **Who sees a plan**: who wrote it, its manager and its sponsor (record rules); changed by its writer or manager while a
+  draft or rejected, run (started, completed) by its manager once approved; Projects managers see and change all.
+- **Baseline**: *Start the project* makes one project from the plan (name, type, people, priority, dates,
+  description) and sets its baseline start, end and budget as the system. Phases and work packages have a baseline too;
+  the plan's *Take the baseline again* (permission `project.baseline`, Projects managers) copies their current dates
+  and the projects'. Baseline fields and the approved budget are writable by Projects managers only (Shutro field
+  groups), so the server refuses anyone else. A project shows *Days late against the baseline*. Change requests that
+  move the baseline through an approval are step 5.
+- **The setting** (App settings › Projects › Plans, `res.company.projectRequirePlan`): a project without a programme
+  needs an approved or running plan. `project.project.planNotNeeded()` lets apps exempt the projects they make;
+  `sale_project` exempts projects made by a confirmed order. A project linked to a plan that is not approved or running
+  is always refused.
+- **Tests**: on real PostgreSQL a plan refused for submission without its case, submitted, unseen by outsiders and
+  frozen for its writer; approved by the sponsor and then a manager for a large estimate; started into a project with
+  the baseline; a slip of ten days, the baseline refused to a user by hand and to a user through the plan, taken again by
+  a manager; the setting refusing a project without a plan or with a draft one and accepting one inside a programme. End
+  to end, a plan written, approved by its sponsor in the Approvals inbox and started into a project with its baseline.

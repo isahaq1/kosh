@@ -226,6 +226,16 @@ a project weigh their top-level tasks by planned hours (a task without any weigh
 may be set by hand (`progressOverride`), and shows as such. The project's page shows the **structure** as a tree —
 phases, work packages and tasks with their progress — read as the user, so record rules decide what appears.
 
+**Plans** come before projects. A plan (`PLAN-0001`) states the objectives, expected outcome, strategic goal, the
+planned dates and an estimated budget; it is submitted for approval through the approval engine (the *Project plans*
+policy: the sponsor, or a Projects manager when there is none, and above 1 000 000 a Projects manager too), so the
+Approvals inbox, deadlines, delegation and decisions from email all apply. Once approved, *Start the project* makes
+the project from it with the plan's dates and approved budget as its **baseline**; the project shows how many days
+its deadline moved against it. The baseline (and the approved budget) are written by the system or by Projects
+managers alone; *Take the baseline again* on a plan in progress copies the current dates of its projects, phases and
+work packages. App settings › Projects › *Require an approved plan* refuses projects without one, except inside a
+programme and those made by sales orders. A plan is seen by who wrote it, its manager and its sponsor.
+
 ### Focus (`modules/todo`, RFC 0021)
 
 To-dos for the people who use them: their own, or on lists shared with colleagues, with due dates, priorities and
