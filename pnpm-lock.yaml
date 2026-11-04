@@ -44,6 +44,9 @@ importers:
       '@kosh/approvals':
         specifier: workspace:*
         version: link:../../modules/approvals
+      '@kosh/approvals_purchase':
+        specifier: workspace:*
+        version: link:../../modules/approvals_purchase
       '@kosh/attendance':
         specifier: workspace:*
         version: link:../../modules/attendance
@@ -407,6 +410,9 @@ importers:
       '@kosh/account_portal':
         specifier: workspace:*
         version: link:../../modules/account_portal
+      '@kosh/approvals_purchase':
+        specifier: workspace:*
+        version: link:../../modules/approvals_purchase
       '@kosh/automation':
         specifier: workspace:*
         version: link:../../packages/automation
@@ -705,6 +711,9 @@ importers:
 
   modules/approvals:
     dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
       '@kosh/mail':
         specifier: workspace:*
         version: link:../../packages/mail
@@ -745,6 +754,40 @@ importers:
       react-i18next:
         specifier: ^17.0.21
         version: 17.0.21(i18next@26.4.7(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
+
+  modules/approvals_purchase:
+    dependencies:
+      '@kosh/approvals':
+        specifier: workspace:*
+        version: link:../approvals
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/purchase':
+        specifier: workspace:*
+        version: link:../purchase
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
 
   modules/attendance:
     dependencies:
@@ -2800,6 +2843,9 @@ importers:
       '@kosh/approvals':
         specifier: workspace:*
         version: link:../../modules/approvals
+      '@kosh/approvals_purchase':
+        specifier: workspace:*
+        version: link:../../modules/approvals_purchase
       '@kosh/attendance':
         specifier: workspace:*
         version: link:../../modules/attendance

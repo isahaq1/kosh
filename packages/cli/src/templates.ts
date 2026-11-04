@@ -40,6 +40,7 @@ export type AppName =
   | 'sale_project'
   | 'project_account'
   | 'project_purchase'
+  | 'approvals_purchase'
   | 'sale_stock'
   | 'purchase_stock'
   | 'stock_account'
@@ -276,6 +277,13 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'projectPurchase',
     bridge: ['project', 'purchase', 'accounting'],
+  },
+  approvals_purchase: {
+    label:
+      'Bridge: approved purchase requests become requests for quotation (Approvals ↔ Purchase)',
+    icon: '🔗',
+    server: 'approvalsPurchase',
+    bridge: ['approvals', 'purchase'],
   },
   sale_stock: {
     label: 'Bridge: deliveries from sales orders (Sales ↔ Stockroom)',

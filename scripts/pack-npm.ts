@@ -77,6 +77,7 @@ const PACKAGES = [
   'sale_project',
   'project_account',
   'project_purchase',
+  'approvals_purchase',
   'sale_stock',
   'purchase_stock',
   'stock_account',

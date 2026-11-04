@@ -3,6 +3,7 @@ import { accountAsset } from '@kosh/account_asset';
 import { accountBudget } from '@kosh/account_budget';
 import { accounting } from '@kosh/accounting';
 import { approvals } from '@kosh/approvals';
+import { approvalsPurchase } from '@kosh/approvals_purchase';
 import { attendance } from '@kosh/attendance';
 import { automation } from '@kosh/automation';
 import { calendarApp } from '@kosh/calendar';
@@ -139,6 +140,7 @@ export function demoCatalogue(): KoshModule[] {
     saleProject,
     projectAccount,
     projectPurchase,
+    approvalsPurchase,
     saleStock,
     purchaseStock,
     stockAccount,

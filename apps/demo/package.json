@@ -51,6 +51,7 @@
     "@kosh/sale_account": "workspace:*",
     "@kosh/project_account": "workspace:*",
     "@kosh/project_purchase": "workspace:*",
+    "@kosh/approvals_purchase": "workspace:*",
     "@kosh/sale_project": "workspace:*",
     "@kosh/sale_stock": "workspace:*",
     "@kosh/sales": "workspace:*",

@@ -18,6 +18,7 @@ import { accountBudget } from '@kosh/account_budget';
 import { accountPortal } from '@kosh/account_portal';
 import { accounting } from '@kosh/accounting';
 import { approvals } from '@kosh/approvals';
+import { approvalsPurchase } from '@kosh/approvals_purchase';
 import { createAssistant, fakeClient } from '@kosh/assistant';
 import { attendance } from '@kosh/attendance';
 import { automation } from '@kosh/automation';
@@ -161,6 +162,7 @@ const CATALOGUE = [
   saleProject,
   projectAccount,
   projectPurchase,
+  approvalsPurchase,
   saleStock,
   purchaseStock,
   stockAccount,
