@@ -163,6 +163,78 @@ export const calendarApp: ReturnType<typeof defineModule> = defineModule({
     category: 'Productivity',
     summary: 'Meetings, rooms and who is free when',
   },
+  documents: [
+    {
+      key: 'meeting',
+      name: 'Meeting',
+      model: 'calendar.event',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: '{{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'when',
+            items: [
+              { label: 'Starts', bind: 'start' },
+              { label: 'Ends', bind: 'stop' },
+              { label: 'Organizer', bind: 'organizer.name' },
+              { label: 'Room', bind: 'room.name' },
+              { label: 'Location', bind: 'location' },
+              { label: 'Video', bind: 'videoUrl' },
+              { label: 'Status', bind: 'state' },
+            ],
+          },
+          { kind: 'text', id: 'about', text: '{{description}}' },
+          {
+            kind: 'table',
+            id: 'attendees',
+            bind: 'attendees',
+            columns: [
+              { label: 'Person', bind: 'user.name' },
+              { label: 'Contact', bind: 'partner.name' },
+              { label: 'Answer', bind: 'response' },
+            ],
+          },
+          { kind: 'signature', id: 'sign', labels: ['Minutes taken by'] },
+        ],
+      },
+    },
+  ],
+  importTemplates: [
+    {
+      key: 'calendar_room',
+      model: 'calendar.room',
+      label: 'Room',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'Seats', field: 'capacity' },
+        { header: 'Location', field: 'location' },
+      ],
+    },
+    {
+      key: 'calendar_event',
+      model: 'calendar.event',
+      label: 'Event',
+      columns: [
+        { header: 'Title', field: 'name' },
+        { header: 'Start', field: 'start' },
+        { header: 'End', field: 'stop' },
+        { header: 'All day', field: 'allDay' },
+        { header: 'Organizer', field: 'organizer' },
+        { header: 'Room', field: 'room' },
+        { header: 'Location', field: 'location' },
+        { header: 'Video call link', field: 'videoUrl' },
+        { header: 'Privacy', field: 'privacy' },
+        { header: 'Description', field: 'description' },
+        { header: 'Attendees › Person', field: 'attendees.user' },
+        { header: 'Attendees › Contact', field: 'attendees.partner' },
+        { header: 'Attendees › Answer', field: 'attendees.response' },
+      ],
+    },
+  ],
   accessLevels: {
     user: { label: 'User (own and public events)', groups: ['calendar.user'] },
     manager: {

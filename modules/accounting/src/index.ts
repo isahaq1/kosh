@@ -235,6 +235,11 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
   standard: {
     waive: [
       {
+        rule: 'I1',
+        model: 'account.full.reconcile',
+        reason: 'Made by reconciling, never imported.',
+      },
+      {
         rule: 'M3',
         model: 'account.full.reconcile',
         reason: 'Made by reconciling; undone by unreconciling, never archived.',
@@ -721,6 +726,105 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
   ],
   importTemplates: [
     {
+      key: 'account_withholding',
+      model: 'account.withholding',
+      label: 'Withholding',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'Direction', field: 'direction' },
+        { header: 'Computed on', field: 'base' },
+        { header: 'Rate', field: 'rate' },
+        { header: 'Applies from (document total)', field: 'threshold' },
+        { header: 'Account', field: 'account' },
+      ],
+    },
+    {
+      key: 'account_account',
+      model: 'account.account',
+      label: 'Account',
+      columns: [
+        { header: 'Code', field: 'code' },
+        { header: 'Name', field: 'name' },
+        { header: 'Type', field: 'type' },
+        { header: 'Allow reconciliation', field: 'reconcile' },
+        { header: 'Account currency', field: 'currency' },
+        { header: 'Note', field: 'note' },
+      ],
+    },
+    {
+      key: 'account_journal',
+      model: 'account.journal',
+      label: 'Journal',
+      columns: [
+        { header: 'Code', field: 'code' },
+        { header: 'Name', field: 'name' },
+        { header: 'Type', field: 'type' },
+        { header: 'Default account', field: 'defaultAccount' },
+      ],
+    },
+    {
+      key: 'account_fiscal_year',
+      model: 'account.fiscal.year',
+      label: 'Fiscal year',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'From', field: 'dateFrom' },
+        { header: 'To', field: 'dateTo' },
+      ],
+    },
+    {
+      key: 'account_payment_term',
+      model: 'account.payment.term',
+      label: 'Payment term',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'Shown on documents', field: 'note' },
+        { header: 'Lines › Days', field: 'lines.days' },
+        { header: 'Lines › Percent', field: 'lines.percent' },
+      ],
+    },
+    {
+      key: 'account_move',
+      model: 'account.move',
+      label: 'Journal entry',
+      columns: [
+        { header: 'Journal', field: 'journal' },
+        { header: 'Date', field: 'date' },
+        { header: 'Type', field: 'kind' },
+        { header: 'Partner', field: 'partner' },
+        { header: 'Reference', field: 'ref' },
+        { header: 'Currency', field: 'currency' },
+        { header: 'Rate', field: 'rate' },
+        { header: 'Notes', field: 'narration' },
+        { header: 'Due date', field: 'dateDue' },
+        { header: 'Payment terms', field: 'paymentTerm' },
+        { header: 'Source document', field: 'invoiceOrigin' },
+        { header: 'Place of supply', field: 'placeOfSupply' },
+        { header: 'Lines › Account', field: 'lines.account' },
+        { header: 'Lines › Partner', field: 'lines.partner' },
+        { header: 'Lines › Label', field: 'lines.name' },
+        { header: 'Lines › Due date', field: 'lines.dateMaturity' },
+        { header: 'Lines › Debit', field: 'lines.debit' },
+      ],
+    },
+    {
+      key: 'account_payment',
+      model: 'account.payment',
+      label: 'Payment',
+      columns: [
+        { header: 'Direction', field: 'kind' },
+        { header: 'Partner', field: 'partner' },
+        { header: 'Journal', field: 'journal' },
+        { header: 'Date', field: 'date' },
+        { header: 'Currency', field: 'currency' },
+        { header: 'Amount', field: 'amount' },
+        { header: 'Memo', field: 'memo' },
+        { header: 'Withholdings › Withholding', field: 'withholdings.withholding' },
+        { header: 'Withholdings › Base', field: 'withholdings.base' },
+        { header: 'Withholdings › Amount', field: 'withholdings.amount' },
+      ],
+    },
+    {
       key: 'cost_centres',
       model: 'account.analytic',
       label: 'Cost centres',
@@ -837,6 +941,32 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
     },
   ],
   documents: [
+    {
+      key: 'fiscal_year',
+      name: 'Fiscal year',
+      model: 'account.fiscal.year',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Fiscal year {{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'year',
+            items: [
+              { label: 'From', bind: 'dateFrom' },
+              { label: 'To', bind: 'dateTo' },
+              { label: 'Status', bind: 'state' },
+              { label: 'Locked until', bind: 'lockDate' },
+              { label: 'Closing entry', bind: 'closingMove.name' },
+              { label: 'Reopened because', bind: 'reopenReason' },
+            ],
+          },
+          { kind: 'signature', id: 'sign', labels: ['Prepared by', 'Approved by'] },
+        ],
+      },
+    },
     {
       key: 'withholding_certificate',
       name: 'Withholding certificate',

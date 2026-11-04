@@ -56,6 +56,40 @@ export function websiteModule(options: SitesOptions = {}): ReturnType<typeof def
       category: 'Website',
       summary: 'Website pages from blocks, forms that create records, a public API',
     },
+    importTemplates: [
+      {
+        key: 'website_site',
+        model: 'website.site',
+        label: 'Site',
+        columns: [
+          { header: 'Name', field: 'name' },
+          { header: 'Key', field: 'key' },
+          { header: 'Domain', field: 'domain' },
+          { header: 'Default language', field: 'lang' },
+          { header: 'Pages › Path', field: 'pages.path' },
+          { header: 'Pages › Language', field: 'pages.lang' },
+          { header: 'Pages › Title', field: 'pages.title' },
+          { header: 'Pages › Summary', field: 'pages.description' },
+          { header: 'Pages › In the menu', field: 'pages.inMenu' },
+        ],
+      },
+      {
+        key: 'website_form',
+        model: 'website.form',
+        label: 'Website form',
+        columns: [
+          { header: 'Name', field: 'name' },
+          { header: 'Key', field: 'key' },
+          { header: 'Creates', field: 'target' },
+          { header: 'Message after sending', field: 'successMessage' },
+          { header: 'Fields › Input name', field: 'fields.name' },
+          { header: 'Fields › Label', field: 'fields.label' },
+          { header: 'Fields › Type', field: 'fields.kind' },
+          { header: 'Fields › Required', field: 'fields.required' },
+          { header: 'Fields › Fills', field: 'fields.targetField' },
+        ],
+      },
+    ],
     accessLevels: {
       editor: { label: 'Editor (pages, submissions)', groups: ['website.editor'] },
       manager: {

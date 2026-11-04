@@ -93,6 +93,48 @@ export function eventModule(options: EventOptions = {}): ReturnType<typeof defin
     // The ticket and badge: the attendee, the event, and the QR the door scans.
     documents: [
       {
+        key: 'event_attendees',
+        name: 'Event and attendees',
+        model: 'event.event',
+        layout: {
+          paper: 'A4',
+          orientation: 'landscape',
+          header: '{{company.name}}',
+          footer: 'Page {{page}} of {{pages}}',
+          blocks: [
+            { kind: 'heading', id: 'title', text: '{{name}}', level: 1 },
+            {
+              kind: 'fields',
+              id: 'event',
+              items: [
+                { label: 'Starts', bind: 'dateBegin' },
+                { label: 'Ends', bind: 'dateEnd' },
+                { label: 'Venue', bind: 'venue' },
+                { label: 'Organizer', bind: 'organizer.name' },
+                { label: 'Seats', bind: 'seatsMax' },
+                { label: 'Taken', bind: 'seatsTaken' },
+                { label: 'Attended', bind: 'attended' },
+                { label: 'Status', bind: 'state' },
+              ],
+            },
+            {
+              kind: 'table',
+              id: 'registrations',
+              bind: 'registrations',
+              columns: [
+                { label: 'Name', bind: 'name' },
+                { label: 'Email', bind: 'email' },
+                { label: 'Phone', bind: 'phone' },
+                { label: 'Ticket', bind: 'ticket.name' },
+                { label: 'Code', bind: 'code' },
+                { label: 'Checked in', bind: 'checkedInAt' },
+                { label: 'Status', bind: 'state' },
+              ],
+            },
+          ],
+        },
+      },
+      {
         key: 'ticket',
         name: 'Ticket and badge',
         model: 'event.registration',
@@ -125,6 +167,28 @@ export function eventModule(options: EventOptions = {}): ReturnType<typeof defin
       category: 'Marketing',
       summary: 'Events, tickets and seats, waiting lists, check-in by QR',
     },
+    importTemplates: [
+      {
+        key: 'event_event',
+        model: 'event.event',
+        label: 'Event',
+        columns: [
+          { header: 'Name', field: 'name' },
+          { header: 'Starts', field: 'dateBegin' },
+          { header: 'Ends', field: 'dateEnd' },
+          { header: 'Venue', field: 'venue' },
+          { header: 'Organiser', field: 'organizer' },
+          { header: 'Seats (0: no limit)', field: 'seatsMax' },
+          { header: 'Waiting list when full', field: 'waitingList' },
+          { header: 'Currency', field: 'currency' },
+          { header: 'Description', field: 'description' },
+          { header: 'Tickets › Name', field: 'tickets.name' },
+          { header: 'Tickets › Price', field: 'tickets.price' },
+          { header: 'Tickets › Seats (0: no limit)', field: 'tickets.seatsMax' },
+          { header: 'Tickets › Sold until', field: 'tickets.saleEnd' },
+        ],
+      },
+    ],
     accessLevels: {
       user: { label: 'User (registrations, check-in)', groups: ['event.user'] },
       manager: {

@@ -189,6 +189,55 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
     category: 'People',
     summary: 'Employees, the org chart, contracts and leave',
   },
+  importTemplates: [
+    {
+      key: 'hr_department',
+      model: 'hr.department',
+      label: 'Department',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'Part of', field: 'parent' },
+        { header: 'Head', field: 'head' },
+      ],
+    },
+    {
+      key: 'hr_job',
+      model: 'hr.job',
+      label: 'Position',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'Department', field: 'department' },
+      ],
+    },
+    {
+      key: 'hr_employee',
+      model: 'hr.employee',
+      label: 'Employee',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'User', field: 'user' },
+        { header: 'Department', field: 'department' },
+        { header: 'Position', field: 'job' },
+        { header: 'Manager', field: 'manager' },
+        { header: 'Work email', field: 'workEmail' },
+        { header: 'Work phone', field: 'workPhone' },
+        { header: 'Joined', field: 'hireDate' },
+        { header: 'Birthday', field: 'birthday' },
+        { header: 'National ID', field: 'nationalId' },
+        { header: 'Home address', field: 'privateAddress' },
+        { header: 'Emergency contact', field: 'emergencyContact' },
+      ],
+    },
+    {
+      key: 'hr_leave_type',
+      model: 'hr.leave.type',
+      label: 'Leave type',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'Days per year', field: 'daysPerYear' },
+      ],
+    },
+  ],
   accessLevels: {
     user: { label: 'Employee (directory, own leave, team’s leave)', groups: ['hr.user'] },
     manager: {

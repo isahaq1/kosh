@@ -392,6 +392,71 @@ export function documentsModule(options: DocumentsOptions = {}): ReturnType<type
       summary:
         'Folders, versions, share links and requests for files — one search with every record’s files',
     },
+    documents: [
+      {
+        key: 'document_request',
+        name: 'Document request',
+        model: 'documents.request',
+        layout: {
+          paper: 'A4',
+          header: '{{company.name}}',
+          footer: 'Page {{page}} of {{pages}}',
+          blocks: [
+            { kind: 'heading', id: 'title', text: 'Document request: {{name}}', level: 1 },
+            {
+              kind: 'fields',
+              id: 'request',
+              items: [
+                { label: 'Asked of', bind: 'partner.name' },
+                { label: 'Email', bind: 'email' },
+                { label: 'Folder', bind: 'folder.name' },
+                { label: 'Due', bind: 'dueDate' },
+                { label: 'Sent', bind: 'sentAt' },
+                { label: 'Status', bind: 'state' },
+              ],
+            },
+            { kind: 'text', id: 'message', text: '{{message}}' },
+          ],
+        },
+      },
+    ],
+    importTemplates: [
+      {
+        key: 'documents_folder',
+        model: 'documents.folder',
+        label: 'Folder',
+        columns: [
+          { header: 'Name', field: 'name' },
+          { header: 'Inside', field: 'parent' },
+          { header: 'Owner', field: 'owner' },
+          { header: 'Members only', field: 'restricted' },
+          { header: 'Members', field: 'members' },
+          { header: 'Description', field: 'description' },
+        ],
+      },
+      {
+        key: 'documents_request',
+        model: 'documents.request',
+        label: 'Document request',
+        columns: [
+          { header: 'What is asked for', field: 'name' },
+          { header: 'Into', field: 'folder' },
+          { header: 'From', field: 'partner' },
+          { header: 'Email', field: 'email' },
+          { header: 'Message', field: 'message' },
+          { header: 'Due', field: 'dueDate' },
+        ],
+      },
+    ],
+    standard: {
+      waive: [
+        {
+          rule: 'I1',
+          model: 'documents.document',
+          reason: 'Files are uploaded, not imported from a sheet.',
+        },
+      ],
+    },
     accessLevels: {
       user: { label: 'User', groups: ['documents.user'] },
       manager: {

@@ -305,6 +305,67 @@ export function signModule(options: SignOptions = {}): ReturnType<typeof defineM
       summary:
         'Signatures in order or all at once, one-time codes, a sealed PDF with its certificate',
     },
+    documents: [
+      {
+        key: 'signature_request',
+        name: 'Signature request',
+        model: 'sign.request',
+        layout: {
+          paper: 'A4',
+          header: '{{company.name}}',
+          footer: 'Page {{page}} of {{pages}}',
+          blocks: [
+            { kind: 'heading', id: 'title', text: '{{name}}', level: 1 },
+            {
+              kind: 'fields',
+              id: 'request',
+              items: [
+                { label: 'Template', bind: 'template.name' },
+                { label: 'In order', bind: 'ordered' },
+                { label: 'Completed', bind: 'completedAt' },
+                { label: 'Status', bind: 'state' },
+                { label: 'Refused because', bind: 'refusal' },
+              ],
+            },
+            { kind: 'text', id: 'message', text: '{{message}}' },
+            {
+              kind: 'table',
+              id: 'signers',
+              bind: 'signers',
+              columns: [
+                { label: 'Role', bind: 'role' },
+                { label: 'Name', bind: 'name' },
+                { label: 'Email', bind: 'email' },
+                { label: 'Sent', bind: 'sentAt' },
+                { label: 'Signed', bind: 'signedAt' },
+                { label: 'Status', bind: 'state' },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+    importTemplates: [
+      {
+        key: 'sign_template',
+        model: 'sign.template',
+        label: 'Signing template',
+        columns: [
+          { header: 'Name', field: 'name' },
+          { header: 'Pages', field: 'pages' },
+          { header: 'Description', field: 'description' },
+        ],
+      },
+    ],
+    standard: {
+      waive: [
+        {
+          rule: 'I1',
+          model: 'sign.request',
+          reason: 'Sent from a template to its signers; a file cannot sign.',
+        },
+      ],
+    },
     accessLevels: {
       user: { label: 'User (send requests)', groups: ['sign.user'] },
       manager: { label: 'Manager (templates)', groups: ['sign.manager'], implies: ['user'] },

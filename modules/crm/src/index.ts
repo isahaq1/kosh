@@ -128,6 +128,26 @@ export const crm: ReturnType<typeof defineModule> = defineModule({
     category: 'Sales',
     summary: 'Deals on a board, stage rules and the weighted forecast',
   },
+  importTemplates: [
+    {
+      key: 'crm_stage',
+      model: 'crm.stage',
+      label: 'Stage',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'Probability (%)', field: 'probability' },
+        { header: 'Wins the deal', field: 'won' },
+        { header: 'Folded on the board', field: 'fold' },
+        { header: 'Required to enter', field: 'requiredFields' },
+      ],
+    },
+    {
+      key: 'crm_lost_reason',
+      model: 'crm.lost.reason',
+      label: 'Lost reason',
+      columns: [{ header: 'Name', field: 'name' }],
+    },
+  ],
   accessLevels: {
     user: { label: 'Salesperson (own and unassigned deals)', groups: ['crm.user'] },
     manager: { label: 'Manager (every deal, stages)', groups: ['crm.manager'], implies: ['user'] },

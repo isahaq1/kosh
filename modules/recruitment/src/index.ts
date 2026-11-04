@@ -172,6 +172,65 @@ export const recruitment: ReturnType<typeof defineModule> = defineModule({
     category: 'People',
     summary: 'Openings, applicants on a board, independent scorecards, hire in one step',
   },
+  documents: [
+    {
+      key: 'job_opening',
+      name: 'Job opening',
+      model: 'hiring.opening',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: '{{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'opening',
+            items: [
+              { label: 'Position', bind: 'job.name' },
+              { label: 'Department', bind: 'department.name' },
+              { label: 'Hiring manager', bind: 'manager.name' },
+              { label: 'Headcount', bind: 'headcount' },
+              { label: 'Hired', bind: 'hiredCount' },
+              { label: 'Status', bind: 'state' },
+            ],
+          },
+          { kind: 'text', id: 'about', text: '{{description}}' },
+          { kind: 'signature', id: 'sign', labels: ['Hiring manager', 'Approved by'] },
+        ],
+      },
+    },
+  ],
+  importTemplates: [
+    {
+      key: 'hiring_stage',
+      model: 'hiring.stage',
+      label: 'Hiring stage',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'Folded on the board', field: 'fold' },
+        { header: 'Hired', field: 'hired' },
+      ],
+    },
+    {
+      key: 'hiring_opening',
+      model: 'hiring.opening',
+      label: 'Opening',
+      columns: [
+        { header: 'Opening', field: 'name' },
+        { header: 'Position', field: 'job' },
+        { header: 'Department', field: 'department' },
+        { header: 'Hiring manager', field: 'manager' },
+        { header: 'To hire', field: 'headcount' },
+        { header: 'Description', field: 'description' },
+        { header: 'Applicants › Candidate', field: 'applicants.name' },
+        { header: 'Applicants › Email', field: 'applicants.email' },
+        { header: 'Applicants › Phone', field: 'applicants.phone' },
+        { header: 'Applicants › Stage', field: 'applicants.stage' },
+        { header: 'Applicants › Source', field: 'applicants.source' },
+      ],
+    },
+  ],
   accessLevels: {
     user: { label: 'Interviewer (applicants, own scorecards)', groups: ['hiring.user'] },
     manager: {

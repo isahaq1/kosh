@@ -125,6 +125,88 @@ export const mrp: ReturnType<typeof defineModule> = defineModule({
     summary: 'Bills of materials with versions, orders that show what is short and what they cost',
   },
   routes: (context: ModuleContext) => registerCapacityRoutes(context),
+  documents: [
+    {
+      key: 'production_order',
+      name: 'Production order',
+      model: 'mrp.production',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Production order {{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'order',
+            items: [
+              { label: 'Product', bind: 'product.name' },
+              { label: 'Quantity', bind: 'quantity' },
+              { label: 'Bill of materials', bind: 'bom.displayName' },
+              { label: 'Date', bind: 'date' },
+              { label: 'Warehouse', bind: 'warehouse.name' },
+              { label: 'Status', bind: 'state' },
+            ],
+          },
+          {
+            kind: 'fields',
+            id: 'cost',
+            items: [
+              { label: 'Materials', bind: 'materialCost' },
+              { label: 'Operations', bind: 'operationCost' },
+              { label: 'Total', bind: 'totalCost' },
+              { label: 'Per unit', bind: 'unitCost' },
+            ],
+          },
+          { kind: 'text', id: 'note', text: '{{note}}' },
+          { kind: 'signature', id: 'sign', labels: ['Produced by', 'Checked by'] },
+        ],
+      },
+    },
+  ],
+  importTemplates: [
+    {
+      key: 'mrp_workcenter',
+      model: 'mrp.workcenter',
+      label: 'Work centre',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'Code', field: 'code' },
+        { header: 'Hours a day', field: 'hoursPerDay' },
+        { header: 'Cost per hour', field: 'costPerHour' },
+        { header: 'Note', field: 'note' },
+      ],
+    },
+    {
+      key: 'mrp_bom',
+      model: 'mrp.bom',
+      label: 'Bill of materials',
+      columns: [
+        { header: 'Product', field: 'product' },
+        { header: 'Makes', field: 'quantity' },
+        { header: 'Version', field: 'version' },
+        { header: 'Valid from', field: 'validFrom' },
+        { header: 'Valid until', field: 'validTo' },
+        { header: 'Note', field: 'note' },
+        { header: 'Components › Product', field: 'lines.product' },
+        { header: 'Components › Quantity', field: 'lines.quantity' },
+        { header: 'Components › Unit', field: 'lines.uom' },
+      ],
+    },
+    {
+      key: 'mrp_production',
+      model: 'mrp.production',
+      label: 'Production order',
+      columns: [
+        { header: 'Product', field: 'product' },
+        { header: 'Quantity', field: 'quantity' },
+        { header: 'Bill of materials', field: 'bom' },
+        { header: 'Planned for', field: 'date' },
+        { header: 'Warehouse', field: 'warehouse' },
+        { header: 'Note', field: 'note' },
+      ],
+    },
+  ],
   accessLevels: {
     user: { label: 'User (production orders)', groups: ['mrp.user'] },
     manager: {

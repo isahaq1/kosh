@@ -27,6 +27,62 @@ export const todo: ReturnType<typeof defineModule> = defineModule({
     category: 'Productivity',
     summary: 'Your to-dos and shared lists, with checklists and due dates',
   },
+  documents: [
+    {
+      key: 'todo',
+      name: 'To-do',
+      model: 'todo.task',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: '{{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'task',
+            items: [
+              { label: 'List', bind: 'list.name' },
+              { label: 'Owner', bind: 'owner.name' },
+              { label: 'Due', bind: 'dueDate' },
+              { label: 'Priority', bind: 'priority' },
+              { label: 'Progress %', bind: 'progress' },
+              { label: 'Status', bind: 'state' },
+            ],
+          },
+          { kind: 'text', id: 'note', text: '{{note}}' },
+        ],
+      },
+    },
+  ],
+  importTemplates: [
+    {
+      key: 'todo_list',
+      model: 'todo.list',
+      label: 'List',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'Owner', field: 'owner' },
+        { header: 'Shared with', field: 'members' },
+        { header: 'Color', field: 'color' },
+      ],
+    },
+    {
+      key: 'todo_task',
+      model: 'todo.task',
+      label: 'To-do',
+      columns: [
+        { header: 'To-do', field: 'name' },
+        { header: 'List', field: 'list' },
+        { header: 'For', field: 'owner' },
+        { header: 'Due', field: 'dueDate' },
+        { header: 'Priority', field: 'priority' },
+        { header: 'Notes', field: 'note' },
+        { header: 'Checklist › Step', field: 'items.name' },
+        { header: 'Checklist › Done', field: 'items.done' },
+      ],
+    },
+  ],
   accessLevels: {
     user: { label: 'User (own to-dos and shared lists)', groups: ['todo.user'] },
   },

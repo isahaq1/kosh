@@ -45,6 +45,37 @@ export function posModule(options: CounterOptions = {}): ReturnType<typeof defin
       category: 'Sales',
       summary: 'Point of sale: sessions, split payments, receipts, the register on a tablet',
     },
+    importTemplates: [
+      {
+        key: 'pos_shop',
+        model: 'pos.shop',
+        label: 'Shop',
+        columns: [
+          { header: 'Name', field: 'name' },
+          { header: 'Prices include taxes', field: 'pricesIncludeTax' },
+          { header: 'Sales journal', field: 'salesJournal' },
+          { header: 'Receipt footer', field: 'receiptFooter' },
+          { header: 'Cash difference account', field: 'differenceAccount' },
+          { header: 'Payment methods › Name', field: 'methods.name' },
+          { header: 'Payment methods › Kind', field: 'methods.kind' },
+          { header: 'Payment methods › Journal', field: 'methods.journal' },
+        ],
+      },
+    ],
+    standard: {
+      waive: [
+        {
+          rule: 'I1',
+          model: 'pos.session',
+          reason: 'Opened and closed at the counter, never imported.',
+        },
+        {
+          rule: 'I1',
+          model: 'pos.order',
+          reason: 'Sales are rung up at the counter (or replayed offline), never imported.',
+        },
+      ],
+    },
     accessLevels: {
       cashier: { label: 'Cashier (sell in own sessions)', groups: ['pos.cashier'] },
       manager: {
@@ -55,6 +86,51 @@ export function posModule(options: CounterOptions = {}): ReturnType<typeof defin
     },
     events: [{ topic: 'pos.order.paid', model: 'pos.order', label: 'Sale paid at the counter' }],
     documents: [
+      {
+        key: 'session_report',
+        name: 'Session report',
+        model: 'pos.session',
+        layout: {
+          paper: 'A4',
+          header: '{{company.name}}',
+          footer: 'Page {{page}} of {{pages}}',
+          blocks: [
+            { kind: 'heading', id: 'title', text: 'Session {{name}}', level: 1 },
+            {
+              kind: 'fields',
+              id: 'session',
+              items: [
+                { label: 'Shop', bind: 'shop.name' },
+                { label: 'Cashier', bind: 'cashier.name' },
+                { label: 'Opened', bind: 'openedAt' },
+                { label: 'Closed', bind: 'closedAt' },
+                { label: 'Opening cash', bind: 'openingCash' },
+                { label: 'Expected cash', bind: 'expectedCash' },
+                { label: 'Counted cash', bind: 'closingCash' },
+                { label: 'Difference', bind: 'closingDifference' },
+                { label: 'Why', bind: 'differenceReason' },
+                { label: 'Sales', bind: 'orderCount' },
+                { label: 'Total', bind: 'total' },
+                { label: 'Status', bind: 'state' },
+              ],
+            },
+            {
+              kind: 'table',
+              id: 'orders',
+              bind: 'orders',
+              columns: [
+                { label: 'Sale', bind: 'name' },
+                { label: 'Time', bind: 'date' },
+                { label: 'Customer', bind: 'partner.name' },
+                { label: 'Total', bind: 'total' },
+                { label: 'Paid', bind: 'amountPaid' },
+                { label: 'Status', bind: 'state' },
+              ],
+            },
+            { kind: 'signature', id: 'sign', labels: ['Cashier', 'Manager'] },
+          ],
+        },
+      },
       {
         key: 'receipt',
         name: 'Receipt',

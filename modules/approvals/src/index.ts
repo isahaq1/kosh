@@ -305,6 +305,28 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
       category: 'Productivity',
       summary: 'Everything waiting for your decision, in one place — and what you asked for',
     },
+    importTemplates: [
+      {
+        key: 'approval_ask',
+        model: 'approval.ask',
+        label: 'Request',
+        columns: [
+          { header: 'Category', field: 'category' },
+          { header: 'What for', field: 'title' },
+          { header: 'Asked by', field: 'requester' },
+          { header: 'Description', field: 'description' },
+          { header: 'Amount', field: 'amount' },
+          { header: 'From', field: 'dateFrom' },
+          { header: 'Until', field: 'dateTo' },
+          { header: 'Contact', field: 'partner' },
+          { header: 'Location', field: 'location' },
+          { header: 'Quantity', field: 'quantity' },
+          { header: 'Lines › Description', field: 'lines.name' },
+          { header: 'Lines › Quantity', field: 'lines.quantity' },
+          { header: 'Lines › Unit price', field: 'lines.priceUnit' },
+        ],
+      },
+    ],
     accessLevels: {
       user: { label: 'Everyone (decide and ask)', groups: ['base.user'] },
       manager: {
@@ -317,6 +339,58 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
       configureMails({ log: (message, error) => context.app.log.warn({ err: error }, message) });
       registerApprovalAppRoutes(context);
     },
+    documents: [
+      {
+        key: 'approval_request',
+        name: 'Request',
+        model: 'approval.ask',
+        layout: {
+          paper: 'A4',
+          header: '{{company.name}}',
+          footer: 'Page {{page}} of {{pages}}',
+          blocks: [
+            { kind: 'heading', id: 'title', text: 'Request {{name}}: {{title}}', level: 1 },
+            {
+              kind: 'fields',
+              id: 'ask',
+              items: [
+                { label: 'Category', bind: 'category.name' },
+                { label: 'Asked by', bind: 'requester.name' },
+                { label: 'Amount', bind: 'amount' },
+                { label: 'From', bind: 'dateFrom' },
+                { label: 'Until', bind: 'dateTo' },
+                { label: 'Contact', bind: 'partner.name' },
+                { label: 'Location', bind: 'location' },
+                { label: 'Quantity', bind: 'quantity' },
+                { label: 'Status', bind: 'state' },
+                { label: 'Approved on', bind: 'approvedAt' },
+              ],
+            },
+            { kind: 'text', id: 'about', text: '{{description}}' },
+            {
+              kind: 'table',
+              id: 'lines',
+              bind: 'lines',
+              columns: [
+                { label: 'Description', bind: 'name' },
+                { label: 'Quantity', bind: 'quantity' },
+                { label: 'Unit price', bind: 'priceUnit' },
+                { label: 'Amount', bind: 'subtotal' },
+              ],
+            },
+            {
+              kind: 'fields',
+              id: 'total',
+              items: [
+                { label: 'Lines total', bind: 'linesTotal' },
+                { label: 'Made', bind: 'resultName' },
+              ],
+            },
+            { kind: 'signature', id: 'sign', labels: ['Asked by', 'Approved by'] },
+          ],
+        },
+      },
+    ],
     actions: {
       'approvals.action_inbox': { type: 'client', page: 'approvals.Inbox', label: 'To approve' },
       'approvals.action_mine': { type: 'client', page: 'approvals.Mine', label: 'My requests' },

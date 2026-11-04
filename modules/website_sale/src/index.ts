@@ -398,6 +398,75 @@ export function websiteSaleModule(options: ShopOptions = {}): ReturnType<typeof 
     kosh: '^0.1.0',
     hooks: { demo: shopDemo },
     depends: [website, sales, saleAccount, payment, product],
+    documents: [
+      {
+        key: 'shipping_label',
+        name: 'Shipping label',
+        model: 'delivery.shipment',
+        layout: {
+          paper: 'A4',
+          header: '{{company.name}}',
+          footer: 'Page {{page}} of {{pages}}',
+          blocks: [
+            { kind: 'heading', id: 'title', text: 'Shipment {{name}}', level: 1 },
+            {
+              kind: 'fields',
+              id: 'to',
+              items: [
+                { label: 'To', bind: 'recipient' },
+                { label: 'Phone', bind: 'phone' },
+                { label: 'Address', bind: 'address' },
+                { label: 'City', bind: 'city' },
+              ],
+            },
+            {
+              kind: 'fields',
+              id: 'shipment',
+              items: [
+                { label: 'Order', bind: 'order.name' },
+                { label: 'Carrier', bind: 'carrier.name' },
+                { label: 'Courier', bind: 'courier' },
+                { label: 'Tracking', bind: 'trackingRef' },
+                { label: 'Weight (kg)', bind: 'weight' },
+                { label: 'Cash to collect', bind: 'cod' },
+                { label: 'Status', bind: 'state' },
+              ],
+            },
+            { kind: 'qr', id: 'tracking', bind: 'trackingRef' },
+          ],
+        },
+      },
+    ],
+    importTemplates: [
+      {
+        key: 'delivery_carrier',
+        model: 'delivery.carrier',
+        label: 'Delivery method',
+        columns: [
+          { header: 'Name', field: 'name' },
+          { header: 'Fee by', field: 'kind' },
+          { header: 'Fee', field: 'price' },
+          { header: 'Each further kg', field: 'pricePerKg' },
+          { header: 'Inside: cities', field: 'zoneCities' },
+          { header: 'Fee inside', field: 'priceInside' },
+          { header: 'Fee outside', field: 'priceOutside' },
+          { header: 'Free from', field: 'freeOver' },
+          { header: 'Cash on delivery', field: 'cod' },
+          { header: 'Courier', field: 'courier' },
+          { header: 'Fee product', field: 'product' },
+          { header: 'Description', field: 'description' },
+        ],
+      },
+    ],
+    standard: {
+      waive: [
+        {
+          rule: 'I1',
+          model: 'delivery.shipment',
+          reason: 'Made from confirmed shop orders and tracked through the courier.',
+        },
+      ],
+    },
     accessLevels: {
       manager: { label: 'Shop manager', groups: ['website_sale.manager'] },
     },

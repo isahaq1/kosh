@@ -613,6 +613,77 @@ export function paymentModule(options: PaymentOptions = {}): KoshModule {
     shutro: paymentShutro,
     kosh: '^0.1.0',
     depends: [accounting, accountPortal, integrations],
+    documents: [
+      {
+        key: 'payment_provider',
+        name: 'Payment provider',
+        model: 'payment.provider',
+        layout: {
+          paper: 'A4',
+          header: '{{company.name}}',
+          footer: 'Page {{page}} of {{pages}}',
+          blocks: [
+            { kind: 'heading', id: 'title', text: '{{name}}', level: 1 },
+            {
+              kind: 'fields',
+              id: 'provider',
+              items: [
+                { label: 'Provider', bind: 'code' },
+                { label: 'Mode', bind: 'state' },
+                { label: 'Journal', bind: 'journal.name' },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        key: 'payment_receipt',
+        name: 'Payment receipt',
+        model: 'payment.transaction',
+        layout: {
+          paper: 'A4',
+          header: '{{company.name}}',
+          footer: 'Page {{page}} of {{pages}}',
+          blocks: [
+            { kind: 'heading', id: 'title', text: 'Payment {{reference}}', level: 1 },
+            {
+              kind: 'fields',
+              id: 'payment',
+              items: [
+                { label: 'Provider', bind: 'provider.name' },
+                { label: 'From', bind: 'partner.name' },
+                { label: 'Amount', bind: 'amount' },
+                { label: 'Currency', bind: 'currency.name' },
+                { label: 'Provider reference', bind: 'providerReference' },
+                { label: 'Paid on', bind: 'doneAt' },
+                { label: 'Status', bind: 'state' },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+    standard: {
+      waive: [
+        {
+          rule: 'I1',
+          model: 'payment.transaction',
+          reason: 'Made by payment providers, never typed in.',
+        },
+      ],
+    },
+    importTemplates: [
+      {
+        key: 'payment_provider',
+        model: 'payment.provider',
+        label: 'Payment provider',
+        columns: [
+          { header: 'Name', field: 'name' },
+          { header: 'Provider', field: 'code' },
+          { header: 'Journal', field: 'journal' },
+        ],
+      },
+    ],
     accessLevels: {
       manager: { label: 'Payment providers', groups: ['account.manager'] },
     },

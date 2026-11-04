@@ -30,6 +30,27 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
     category: 'Sales',
     summary: 'Quotations, sales orders, discounts and taxes',
   },
+  importTemplates: [
+    {
+      key: 'sale_order',
+      model: 'sale.order',
+      label: 'Sales order',
+      columns: [
+        { header: 'Salesperson', field: 'user' },
+        { header: 'Customer', field: 'partner' },
+        { header: 'Currency', field: 'currency' },
+        { header: 'Order date', field: 'dateOrder' },
+        { header: 'Valid until', field: 'validityDate' },
+        { header: 'Customer reference', field: 'clientReference' },
+        { header: 'Terms and conditions', field: 'note' },
+        { header: 'Lines › Product', field: 'lines.product' },
+        { header: 'Lines › Description', field: 'lines.name' },
+        { header: 'Lines › Quantity', field: 'lines.quantity' },
+        { header: 'Lines › Unit', field: 'lines.uom' },
+        { header: 'Lines › Unit price', field: 'lines.priceUnit' },
+      ],
+    },
+  ],
   accessLevels: {
     user: { label: 'Salesperson (own orders)', groups: ['sales.user'] },
     manager: { label: 'Manager (all orders)', groups: ['sales.manager'], implies: ['user'] },
