@@ -234,3 +234,29 @@ Measured on the demo catalogue (41 modules: 19 apps, 22 extensions).
 - **Tests**: unit tests of `emitting`; on real PostgreSQL a project copied with its phases and a new number, a type's
   required unique code copied with "(copy)", a user without the right to create refused; end to end, *Duplicate*
   from a project's form opening its copy.
+
+## Implementation notes (2026-11-04): step 5 — Bangla for every module
+
+- **The platform** (`packages/server/src/i18n.ts`):
+  - Each module's manifest names its dictionary (`i18n: { bn: () => import('./i18n/bn.js') }`, keyed by the English
+    text), and the server merges the installed modules' dictionaries at start.
+  - A `preSerialization` hook translates what it serves to the request's language (`Accept-Language`, which the
+    back-office sends from the person's language; `bn_BD` falls back to `bn`): apps, menus, actions, views, searches,
+    model metadata, overviews, settings and the next step of a record.
+  - Problems' details have their known messages translated too.
+  - A field's label may have a context key, `<model>.<field>`, for where the English word means something else.
+  - English stays the key, and what has no translation is served in English. Changing the language refetches what
+    the screen shows.
+- **`pnpm i18n:extract`** (`scripts/i18n-extract.ts`, with `scripts/i18n-strings.ts`) lists every string a module
+  serves:
+  - its models' and fields' labels (Shutro's derived labels included), help, selection and state labels, and
+    constraint and guard messages;
+  - its manifest's app, roles, actions, menus, views, searches, settings, overview, print and import templates,
+    events and approval policies.
+  It writes `src/i18n/bn.ts`, keeping translations and context keys and adding what is missing as `''`. `--check`
+  lists what is missing.
+- **T1, enforced**: every module ships Bangla for everything it serves — about 3,850 strings across 58 modules (2,669
+  distinct), translated to `docs/i18n-glossary-bn.md`. Common words were made the same everywhere; 42 strings differ
+  by module on purpose (an Indian state is রাজ্য; a till receipt is রসিদ and goods received প্রাপ্তি).
+- **Tests**: unit tests of merging, language fallback, what is and is not translated, and problems; on real PostgreSQL
+  a Bangla request getting Bangla menus and field labels and an English one English.
