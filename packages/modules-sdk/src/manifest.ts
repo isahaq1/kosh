@@ -58,8 +58,15 @@ export interface ApprovalLevelSpec {
   readonly name: string;
   /** A Shutro domain on the record (e.g. `{ amountTotal: { gt: '500000' } }`); empty or omitted: always. */
   readonly condition?: Readonly<Record<string, unknown>>;
-  /** The group or role whose holders (in the record's company) decide. */
+  /**
+   * The group or role whose holders (in the record's company) decide; with `approver`, the role used when there is
+   * nobody (no manager, an empty field).
+   */
   readonly approverRole: string;
+  /** Decided by the requester's manager (Workforce), or the person in a field of the record (RFC 0025). */
+  readonly approver?: 'manager' | { readonly field: string };
+  /** How many decide: any one (default), all of them, or a number. */
+  readonly quorum?: 'any' | 'all' | number;
 }
 
 /** A default approval policy of a model. */
@@ -71,6 +78,12 @@ export interface ApprovalSpec {
   readonly onApproved?: string;
   /** A transition run when a level rejects. */
   readonly onRejected?: string;
+  /** A transition run when an approver sends the record back for changes. */
+  readonly onSentBack?: string;
+  /** A transition run when the requester withdraws the request. */
+  readonly onWithdrawn?: string;
+  /** A rejection or a sending back must say why (default: yes). */
+  readonly reasonRequired?: boolean;
 }
 
 /**

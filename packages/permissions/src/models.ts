@@ -1,7 +1,9 @@
 /**
- * The approval models (RFC 0003 §5.3): policies and their ordered levels are data (administrators edit them through
- * the generated API, without code); requests are private and change only through the approvals API, which checks
- * the approver, the order of levels and separation of duties.
+ * The approval models (RFC 0003 §5.3, RFC 0025): policies and their ordered levels are data (administrators edit them
+ * through the generated API, without code); requests are private and change only through the approvals API, which
+ * checks the approver, the order of levels and separation of duties. A level is decided by a role's holders, named
+ * people, the requester's manager or a person on the record — by any one of them, all, or a number —; each
+ * decision is a vote; a request may be sent back for changes, which starts a new round when resubmitted.
  */
 import { baseShutro } from '@kosh/server';
 import { type Env, orm } from '@kosh/server/orm';
@@ -12,7 +14,9 @@ type Row = Record<string, unknown>;
 interface Rows {
   readonly ids: readonly number[];
   readonly length: number;
-  load(keys: readonly string[]): Promise<{ read(keys: readonly string[]): Row[] }>;
+  load(
+    keys: readonly string[] | Readonly<Record<string, true>>,
+  ): Promise<{ read(keys: readonly string[]): Row[] }>;
 }
 const modelOf = (env: Env, name: string) =>
   env.model(name as never) as unknown as {
@@ -22,7 +26,9 @@ const modelOf = (env: Env, name: string) =>
 
 async function readAll(records: unknown, keys: string[]): Promise<Row[]> {
   const set = records as Rows;
-  return set.length === 0 ? [] : (await set.load(keys)).read(keys);
+  // A many-to-many is loaded by the object spec (defaults plus the relation) and read as ids.
+  const spec = keys.includes('approverUsers') ? { approverUsers: true as const } : keys;
+  return set.length === 0 ? [] : (await set.load(spec)).read(keys);
 }
 
 /** The installed model a policy names, or `undefined`. */
@@ -50,6 +56,12 @@ const ApprovalPolicy = defineModel('approval.policy', {
     onApproved: f.char(),
     /** A transition run when a level rejects. */
     onRejected: f.char(),
+    /** A transition run when an approver sends the record back for changes (usually back to draft). */
+    onSentBack: f.char({ label: 'On sent back' }),
+    /** A transition run when the requester withdraws the request. */
+    onWithdrawn: f.char({ label: 'On withdrawn' }),
+    /** A rejection or a sending back must say why. */
+    reasonRequired: f.boolean({ default: true, label: 'Reason required' }),
     levels: f.one2many('approval.level', 'policy'),
   },
   constraints: {
@@ -77,10 +89,76 @@ const ApprovalLevel = defineModel('approval.level', {
     name: f.char({ required: true }),
     /** A Shutro domain on the record; empty: the level always applies. Compiled when saved. */
     condition: f.json(),
-    /** The group or role whose holders decide (in the record's company). */
-    approverRole: f.char({ required: true }),
+    /**
+     * Who decides: a role's holders (in the record's company), named people, the requester's manager (Workforce),
+     * or the person in a field of the record.
+     */
+    approverKind: f.selection(
+      {
+        role: 'A role',
+        users: 'Named people',
+        manager: 'The requester’s manager',
+        field: 'A person on the record',
+      },
+      { required: true, default: 'role', label: 'Approved by' },
+    ),
+    /** The role (or, for a manager or a field, the role used when there is nobody). */
+    approverRole: f.char({ label: 'Role' }),
+    approverUsers: f.many2many('res.users', {
+      relation: 'approval_level_user_rel',
+      label: 'People',
+    }),
+    /** A many-to-one field of the record to a user (`user`, `project.user`). */
+    approverField: f.char({ label: 'Field' }),
+    /** How many decide: any one, all of them, or a number. */
+    quorum: f.selection(
+      { any: 'Any one', all: 'All of them', count: 'A number of them' },
+      { required: true, default: 'any', label: 'Decided by' },
+    ),
+    quorumCount: f.integer({ label: 'How many' }),
   },
   constraints: {
+    // Who decides is complete: a role for roles (and as the fallback of a manager or a field), people for people, a
+    // field for a field, a number for a quorum by number.
+    approvers: {
+      depends: [
+        'approverKind',
+        'approverRole',
+        'approverUsers',
+        'approverField',
+        'quorum',
+        'quorumCount',
+      ],
+      check: async (records: never) => {
+        const { env, ids } = records as { env: Env; ids: readonly number[] };
+        return env.asSuperuser({ reason: 'validate approval level' }, async (su) => {
+          const rows = await readAll(modelOf(su, 'approval.level').browse(ids), [
+            'approverKind',
+            'approverRole',
+            'approverUsers',
+            'approverField',
+            'quorum',
+            'quorumCount',
+          ]);
+          return rows
+            .filter((r) => {
+              const role = typeof r['approverRole'] === 'string' && r['approverRole'] !== '';
+              const users = Array.isArray(r['approverUsers']) ? r['approverUsers'].length : 0;
+              const kind = r['approverKind'];
+              return (
+                (kind !== 'users' && !role) ||
+                (kind === 'users' && users === 0) ||
+                (kind === 'field' &&
+                  !(typeof r['approverField'] === 'string' && r['approverField'] !== '')) ||
+                (r['quorum'] === 'count' && !(Number(r['quorumCount']) >= 1))
+              );
+            })
+            .map((r) => r['id'] as number);
+        });
+      },
+      message:
+        'A level names its approvers: a role (also the fallback of a manager or a field), people, or a field; a quorum by number needs the number.',
+    },
     // A broken condition is refused when saved, not when a user submits a record.
     validCondition: {
       depends: ['condition', 'policy'],
@@ -128,9 +206,26 @@ const ApprovalRequest = defineModel('approval.request', {
     targetModel: f.char({ required: true, index: true }),
     targetId: f.integer({ required: true, index: true }),
     company: f.many2one('res.company', { ondelete: 'cascade' }),
-    approverRole: f.char({ required: true }),
+    /** The role whose holders decide (empty when named people do). */
+    approverRole: f.char(),
+    /** The people who decide, when the level names them (empty: the role's holders). */
+    approvers: f.many2many('res.users', {
+      relation: 'approval_request_user_rel',
+      label: 'Approvers',
+    }),
+    /** How many approvals it needs. */
+    required: f.integer({ required: true, default: 1, label: 'Approvals needed' }),
+    /** The submission it belongs to (a resubmission after sending back is the next round). */
+    round: f.integer({ required: true, default: 1 }),
+    votes: f.one2many('approval.vote', 'request'),
     state: f.selection(
-      { pending: 'Pending', approved: 'Approved', rejected: 'Rejected', cancelled: 'Cancelled' },
+      {
+        pending: 'Pending',
+        approved: 'Approved',
+        rejected: 'Rejected',
+        sent_back: 'Sent back',
+        cancelled: 'Cancelled',
+      },
       { required: true, default: 'pending' },
     ),
     requestedBy: f.many2one('res.users', { ondelete: 'set null' }),
@@ -140,10 +235,28 @@ const ApprovalRequest = defineModel('approval.request', {
   },
 });
 
+/** One approver's decision on a request (a level decided by several keeps each). */
+const ApprovalVote = defineModel('approval.vote', {
+  order: ['request asc', 'at asc', 'id asc'],
+  fields: {
+    request: f.many2one('approval.request', { required: true, ondelete: 'cascade' }),
+    user: f.many2one('res.users', { required: true, ondelete: 'restrict' }),
+    decision: f.selection(
+      { approve: 'Approved', reject: 'Rejected', send_back: 'Sent back' },
+      { required: true },
+    ),
+    comment: f.text(),
+    at: f.datetime({ required: true }),
+  },
+  sqlConstraints: {
+    once: { unique: ['request', 'user'], message: 'Each approver decides a request once.' },
+  },
+});
+
 /** The Shutro module of `@kosh/permissions`. */
 export const permissionsShutro: ReturnType<typeof orm.defineModule> = defineModule({
   name: 'permissions',
-  version: '0.1.0',
+  version: '0.2.0',
   depends: [baseShutro],
   groups: [
     defineGroup({
@@ -159,5 +272,5 @@ export const permissionsShutro: ReturnType<typeof orm.defineModule> = defineModu
       groups: ['permissions.auditor'],
     }),
   ],
-  models: [ApprovalPolicy, ApprovalLevel, ApprovalRequest],
+  models: [ApprovalPolicy, ApprovalLevel, ApprovalRequest, ApprovalVote],
 });

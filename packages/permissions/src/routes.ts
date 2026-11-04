@@ -4,11 +4,13 @@
  * - `GET  /api/v1/approvals/inbox`                       requests the user may decide now
  * - `GET  /api/v1/approvals/:model/:id`                  the requests of a record the user can read
  * - `POST /api/v1/approvals/requests/:id/approve`        `{ comment? }`
- * - `POST /api/v1/approvals/requests/:id/reject`         `{ comment? }`
+ * - `POST /api/v1/approvals/requests/:id/reject`         `{ comment }` (why; unless the policy says otherwise)
+ * - `POST /api/v1/approvals/requests/:id/send-back`      `{ comment }`: back for changes (RFC 0025)
+ * - `POST /api/v1/approvals/:model/:id/withdraw`         the requester withdraws the pending approvals
  */
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import type { FastifyRequest } from 'fastify';
-import { decide, inbox, requestsOf } from './approvals.js';
+import { decide, inbox, requestsOf, withdraw } from './approvals.js';
 
 function positive(value: unknown, what: string): number {
   const id = Number(value);
@@ -42,10 +44,20 @@ export function registerApprovalRoutes({ app }: ModuleContext): void {
       write: true, // reads through audited system scopes
     });
   });
-  for (const decision of ['approve', 'reject'] as const)
-    app.post(`/api/v1/approvals/requests/:id/${decision}`, async (request) => {
+  for (const [path, decision] of [
+    ['approve', 'approve'],
+    ['reject', 'reject'],
+    ['send-back', 'send_back'],
+  ] as const)
+    app.post(`/api/v1/approvals/requests/:id/${path}`, async (request) => {
       const id = positive((request.params as { id?: unknown }).id, 'id');
       const text = comment(request);
       return request.env(async (env) => decide(env, id, decision, text));
     });
+  // The requester withdraws their record's pending approvals (RFC 0025).
+  app.post('/api/v1/approvals/:model/:id/withdraw', async (request) => {
+    const { model, id } = request.params as { model: string; id: string };
+    const recordId = positive(id, 'id');
+    return request.env(async (env) => ({ withdrawn: await withdraw(env, model, recordId) }));
+  });
 }
