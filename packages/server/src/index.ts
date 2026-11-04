@@ -79,6 +79,7 @@ export {
 export { DEMO_PASSWORD, type DemoResult, installDemo } from './demo.js';
 export { applyEnvironmentNames } from './env-names.js';
 export { HttpProblem, type Problem, problemOf, ServerConfigError } from './errors.js';
+export { emitting } from './events.js';
 export { type AppHost, type AppHostOptions, createAppHost, startAppHost } from './host.js';
 export {
   type Authenticator,
