@@ -52,3 +52,28 @@ test('away: Dina says who decides for her while she is on leave', async ({ page 
   await page.goto('/approvals/a/approvals.action_away');
   await expect(page.getByRole('row').filter({ hasText: 'Rahim Uddin' })).toBeVisible();
 });
+
+test('a request of a category (RFC 0025 step 4): the fields it asks for, submitted for approval', async ({
+  page,
+}) => {
+  await signIn(page, 'rahim');
+  await page.goto('/approvals/a/approvals.action_asks/new');
+  await page.getByRole('combobox', { name: 'Category', exact: true }).click();
+  await page.getByRole('option', { name: 'Business trip' }).click();
+  await page.getByRole('textbox', { name: 'What for', exact: true }).fill('Visit the Sylhet farm');
+  // A business trip asks where and when, and how much.
+  await expect(page.getByRole('textbox', { name: 'Location', exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Contact', exact: true })).toHaveCount(0);
+  await page.getByRole('textbox', { name: 'Amount', exact: true }).fill('15000');
+  await page.getByRole('textbox', { name: 'From', exact: true }).fill('2026-12-01');
+  await page.getByRole('textbox', { name: 'Until', exact: true }).fill('2026-12-03');
+  await page.getByRole('textbox', { name: 'Location', exact: true }).fill('Sylhet');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/approvals\.action_asks\/\d+$/);
+  await page.getByRole('button', { name: 'Submit for approval' }).click();
+  await expect(page.getByRole('button', { name: 'Submit for approval' })).toHaveCount(0);
+  await page.goto('/approvals/a/approvals.action_asks');
+  await expect(page.getByRole('row', { name: /Visit the Sylhet farm/ })).toContainText(
+    'Waiting for approval',
+  );
+});

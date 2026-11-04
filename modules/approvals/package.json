@@ -51,7 +51,8 @@
     "@kosh/permissions": "workspace:*",
     "@kosh/server": "workspace:*",
     "@kosh/ui": "workspace:*",
-    "@kosh/views": "workspace:*"
+    "@kosh/views": "workspace:*",
+    "@kosh/contacts": "workspace:*"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1",

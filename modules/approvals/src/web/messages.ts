@@ -1,6 +1,17 @@
 /** Messages of the Approvals screens (namespace `approvals`), in English and Bangla. */
 export const messages: Readonly<Record<string, object>> = {
   en: {
+    preview: {
+      title: 'What the levels would have asked about',
+      explain_one: 'Of the last record of this model (within the policy’s condition):',
+      explain_other: 'Of the last {{count}} records of this model (within the policy’s condition):',
+      matched_one: '{{matched}} of {{count}}',
+      matched_other: '{{matched}} of {{count}}',
+    },
+    category: {
+      setUp: 'Set up its approvals',
+      editLevels: 'Edit who approves (the policy’s levels)',
+    },
     loading: 'Loading…',
     steps: 'Approval levels',
     approve: 'Approve',
@@ -59,6 +70,17 @@ export const messages: Readonly<Record<string, object>> = {
     },
   },
   bn: {
+    preview: {
+      title: 'স্তরগুলো কোন কোন রেকর্ডে অনুমোদন চাইত',
+      explain_one: 'এই মডেলের শেষ রেকর্ডটির মধ্যে (নীতির শর্তের ভেতরে):',
+      explain_other: 'এই মডেলের শেষ {{count}}টি রেকর্ডের মধ্যে (নীতির শর্তের ভেতরে):',
+      matched_one: '{{count}}টির মধ্যে {{matched}}টি',
+      matched_other: '{{count}}টির মধ্যে {{matched}}টি',
+    },
+    category: {
+      setUp: 'অনুমোদন ঠিক করুন',
+      editLevels: 'কে অনুমোদন দেবেন তা বদলান (নীতির স্তর)',
+    },
     loading: 'লোড হচ্ছে…',
     steps: 'অনুমোদনের ধাপ',
     approve: 'অনুমোদন',

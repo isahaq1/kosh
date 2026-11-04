@@ -10,8 +10,14 @@
  * - `GET  /api/v1/public/approvals/:token`   the confirmation page of an email link
  * - `POST /api/v1/public/approvals/:token`   `{ decision: approve | reject | send_back, comment? }`, once
  * - `POST /api/v1/approvals/deadlines/run`   reminders and escalations now (Approvals managers; hourly too)
+ * - `POST /api/v1/approvals/categories/:id/policy`  a request category's policy, made when missing (Approvals managers)
+ * - `GET  /api/v1/approvals/policies/:id/preview`    which of the last 50 records each level would have asked about
+ *
+ * **Generic requests** (step 4): categories say what a request asks for and what it leads to; a request is decided
+ * through its category's policy, and its outcome runs when approved.
  */
 import { randomBytes } from 'node:crypto';
+import { contacts } from '@kosh/contacts';
 import { type Mailer, mailerFromEnv } from '@kosh/mail';
 import { defineModule } from '@kosh/modules-sdk';
 import {
@@ -20,17 +26,26 @@ import {
   groupsOf,
   linkOf,
   permissions,
+  previewPolicy,
   sweepDeadlines,
   useLink,
 } from '@kosh/permissions';
 import { digest, HttpProblem, type ModuleContext } from '@kosh/server';
 import type { Env, Worker } from '@kosh/server/orm';
-import { form, list, search } from '@kosh/views';
+import { action, form, kanban, list, search } from '@kosh/views';
 import { configureMails, mailDeciders, mailTurn } from './mails.js';
-import { approvalsShutro } from './module.js';
+import { ApprovalAsk, ApprovalCategory, approvalsShutro, ensureCategoryPolicy } from './module.js';
 
 export { mailDeciders, mailTurn } from './mails.js';
-export { approvalsShutro } from './module.js';
+export {
+  ApprovalAsk,
+  ApprovalAskLine,
+  ApprovalCategory,
+  approvalsShutro,
+  ensureCategoryPolicy,
+  missingFields,
+  outcomesOffered,
+} from './module.js';
 
 type Row = Record<string, unknown>;
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -73,6 +88,47 @@ async function runDeadlines(su: Env): Promise<{ reminded: number; escalated: num
 
 function registerApprovalAppRoutes(context: ModuleContext): void {
   const { app, shutro } = context;
+  const managersOnly = (env: Env) => {
+    if (!env.administrator && !env.groups.has('approvals.manager'))
+      throw new HttpProblem(
+        403,
+        'access',
+        'Approvals managers',
+        'This needs the Approvals manager role.',
+      );
+  };
+  const idParam = (params: unknown) => {
+    const id = Number((params as Row)['id']);
+    if (!Number.isSafeInteger(id) || id <= 0)
+      throw new HttpProblem(404, 'missing-record', 'Not found', 'No such record.');
+    return id;
+  };
+  app.post('/api/v1/approvals/categories/:id/policy', async (request) => {
+    const id = idParam(request.params);
+    return request.env(
+      async (raw) => {
+        const env = raw as Env;
+        managersOnly(env);
+        return env.asSuperuser({ reason: 'request category policy' }, async (su) => ({
+          policy: await ensureCategoryPolicy(su as never, id),
+        }));
+      },
+      { write: true },
+    );
+  });
+  app.get('/api/v1/approvals/policies/:id/preview', async (request) => {
+    const id = idParam(request.params);
+    return request.env(
+      async (raw) => {
+        const env = raw as Env;
+        managersOnly(env);
+        return env.asSuperuser({ reason: 'approval policy preview' }, (su) =>
+          previewPolicy(su, id),
+        );
+      },
+      { write: true },
+    );
+  });
   const tokenOf = (params: unknown) => String((params as Row)['token'] ?? '');
   const linkFor = (token: string) =>
     shutro.bootstrap({ reason: 'approval link' }, (raw) =>
@@ -240,7 +296,7 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
   return defineModule({
     shutro: approvalsShutro,
     kosh: '^0.1.0',
-    depends: [permissions],
+    depends: [permissions, contacts],
     app: {
       code: 'approvals',
       label: 'Approvals',
@@ -274,6 +330,14 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
         label: 'Away',
         views: ['list', 'form'],
       },
+      'approvals.action_asks': action(ApprovalAsk, {
+        label: 'Requests',
+        views: ['list', 'kanban', 'form'],
+      }),
+      'approvals.action_categories': action(ApprovalCategory, {
+        label: 'Request categories',
+        views: ['kanban', 'list', 'form'],
+      }),
       'approvals.action_policies': {
         model: 'approval.policy',
         label: 'Policies',
@@ -305,6 +369,13 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
         sequence: 3,
       },
       {
+        id: 'approvals.asks',
+        parent: 'approvals.root',
+        label: 'Requests',
+        action: 'approvals.action_asks',
+        sequence: 2.5,
+      },
+      {
         id: 'approvals.away',
         parent: 'approvals.root',
         label: 'Away',
@@ -316,6 +387,14 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
         parent: 'approvals.root',
         label: 'Configuration',
         sequence: 9,
+        visibleTo: ['approvals.manager'],
+      },
+      {
+        id: 'approvals.categories',
+        parent: 'approvals.configuration',
+        label: 'Request categories',
+        action: 'approvals.action_categories',
+        sequence: 0.5,
         visibleTo: ['approvals.manager'],
       },
       {
@@ -339,6 +418,141 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
           }),
         ],
       })),
+      'approval.ask.list': list(ApprovalAsk, {
+        columns: [
+          'name',
+          'category',
+          'title',
+          'requester',
+          { field: 'amount', sum: true },
+          'dateFrom',
+          { field: 'state', widget: 'badge' },
+        ],
+        decorations: {
+          warning: { state: 'submitted' },
+          success: { state: 'approved' },
+          danger: { state: 'refused' },
+        },
+      }),
+      'approval.ask.kanban': kanban(ApprovalAsk, {
+        groupBy: 'state',
+        card: {
+          title: 'title',
+          subtitle: 'category',
+          avatar: 'requester',
+          footer: ['amount', 'name'],
+        },
+      }),
+      'approval.ask.form': form(ApprovalAsk, (k) => ({
+        header: {
+          statusbar: 'state',
+          buttons: [
+            k.button('submit', { primary: true, label: 'Submit for approval' }),
+            k.button('redraft', { label: 'Set to draft' }),
+            k.button('cancel', { label: 'Cancel' }),
+          ],
+        },
+        sheet: [
+          k.group('main', ['category', 'title', 'name', 'requester']),
+          k.component('approvals', 'approvals.Panel'),
+          k.group(
+            'details',
+            [
+              {
+                field: 'amount',
+                id: 'ask_amount',
+                visibleWhen: { askAmount: { ne: 'none' } },
+                requiredWhen: { askAmount: 'required' },
+              },
+              {
+                field: 'dateFrom',
+                id: 'ask_dateFrom',
+                visibleWhen: { askPeriod: { ne: 'none' } },
+                requiredWhen: { askPeriod: 'required' },
+              },
+              {
+                field: 'dateTo',
+                id: 'ask_dateTo',
+                visibleWhen: { askPeriod: { ne: 'none' } },
+                requiredWhen: { askPeriod: 'required' },
+              },
+              {
+                field: 'partner',
+                id: 'ask_partner',
+                visibleWhen: { askPartner: { ne: 'none' } },
+                requiredWhen: { askPartner: 'required' },
+              },
+              {
+                field: 'location',
+                id: 'ask_location',
+                visibleWhen: { askLocation: { ne: 'none' } },
+                requiredWhen: { askLocation: 'required' },
+              },
+              {
+                field: 'quantity',
+                id: 'ask_quantity',
+                visibleWhen: { askQuantity: { ne: 'none' } },
+                requiredWhen: { askQuantity: 'required' },
+              },
+            ],
+            {
+              label: 'Details',
+              description:
+                'What the category asks for; required ones are marked. A file, when asked for, goes in the chatter.',
+            },
+          ),
+          k.group('about', ['description'], { columns: 1 }),
+          {
+            ...k.lines('lines', [
+              { field: 'name', id: 'line_name' },
+              { field: 'quantity', id: 'line_quantity' },
+              { field: 'priceUnit', id: 'line_price' },
+              { field: 'subtotal', id: 'line_subtotal', sum: true },
+            ]),
+            visibleWhen: { askLines: { ne: 'none' } },
+          },
+          k.group('result', ['approvedAt', 'resultName'], {
+            label: 'Outcome',
+            visibleWhen: { state: 'approved' },
+          }),
+        ],
+        chatter: true,
+      })),
+      'approval.category.kanban': kanban(ApprovalCategory, {
+        groupBy: 'outcome',
+        card: { title: 'name', subtitle: 'description', footer: ['requestCount', 'code'] },
+      }),
+      'approval.category.list': list(ApprovalCategory, {
+        columns: ['sequence', 'code', 'name', 'outcome', 'policy', 'requestCount'],
+      }),
+      'approval.category.form': form(ApprovalCategory, (k) => ({
+        sheet: [
+          k.group('main', ['name', 'code', 'sequence', 'company']),
+          k.group('about', ['description'], { columns: 1 }),
+          k.group(
+            'fields',
+            [
+              'askAmount',
+              'askPeriod',
+              'askPartner',
+              'askLocation',
+              'askQuantity',
+              'askLines',
+              'askAttachment',
+            ],
+            {
+              label: 'What a request asks for',
+              description: 'Not asked, optional or required; submitting checks the required ones.',
+            },
+          ),
+          k.group('decision', ['policy', 'outcome'], {
+            label: 'Who decides and what follows',
+            description:
+              'The policy’s levels decide (made with the first request: the requester’s manager, else an Approvals manager); edit them on the policy. The outcome runs once approved.',
+          }),
+          k.component('category_policy', 'approvals.CategoryPolicy'),
+        ],
+      })),
       'approval.policy.list': list('approval.policy' as never, {
         columns: [
           'name',
@@ -351,7 +565,8 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
       }),
       'approval.policy.form': form('approval.policy' as never, (k) => ({
         sheet: [
-          k.group('main', ['name', 'targetModel', 'company', 'sequence'] as never, {
+          k.component('preview', 'approvals.PolicyPreview'),
+          k.group('main', ['name', 'targetModel', 'company', 'sequence', 'condition'] as never, {
             description:
               'A record of the model gets one approval per level whose condition it meets; levels with a lower sequence are decided first, those with the same side by side.',
           }),
@@ -386,6 +601,23 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
       'approval.delegation': search('approval.delegation' as never, {
         fields: ['user.name', 'delegate.name'] as never,
         groupBy: ['user', 'delegate'] as never,
+      }),
+      'approval.ask': search(ApprovalAsk, {
+        fields: ['title', 'name', 'requester.name'],
+        filters: {
+          mine: { label: 'Mine', domain: { requester: { $env: 'uid' } } },
+          waiting: {
+            label: 'Waiting for approval',
+            domain: { state: 'submitted' },
+            group: 'state',
+          },
+          approved: { label: 'Approved', domain: { state: 'approved' }, group: 'state' },
+        },
+        groupBy: ['category', 'state', 'requester'],
+      }),
+      'approval.category': search(ApprovalCategory, {
+        fields: ['name', 'code'],
+        groupBy: ['outcome'],
       }),
       'approval.policy': search('approval.policy' as never, {
         fields: ['name', 'targetModel'] as never,
