@@ -246,6 +246,21 @@ project on that day, else their role's default; the project adds them up as its 
 timesheet's cost and a project's labour cost are Projects managers' to see and set — the server leaves them out for
 everyone else.
 
+**Money and health.** A project's **budget** is its lines (what for, a category, a phase or work package, planned).
+Its **actual cost** is labour plus the costs **booked** on its cost centre; **committed** costs are purchase orders on
+it not billed yet; what is **left in the budget** is the budget less both. With Accounting, the bridge
+`project_account` gives each project its **cost centre** (coded like the project) the first time its figures are
+refreshed, and posted expense lines on it are booked; with Purchase too, `project_purchase` adds the orders not yet
+billed — once billed and posted they count as booked, never twice. The money is Projects managers' to see.
+
+A project's **health** — on track, at risk, off track — is what its figures say: progress against the share of time
+gone (at risk from 10 points behind, off track from 25), past its deadline and not done, milestones late, the budget
+used (at risk from 90 %, off track beyond it); thresholds in App settings › Projects › Health. The figures and the
+health refresh hourly and on *Refresh the figures* (`POST /api/v1/projects/refresh`, Projects managers), which also
+marks phases past their end as **late**. A manager may set the health by hand with the reason; the figures stay
+underneath and both are in the history. The Projects overview shows projects by health, plans waiting for a decision
+and phases overdue.
+
 ### Focus (`modules/todo`, RFC 0021)
 
 To-dos for the people who use them: their own, or on lists shared with colleagues, with due dates, priorities and

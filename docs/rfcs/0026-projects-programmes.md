@@ -185,3 +185,34 @@ awaiting a decision, phases overdue, people over-allocated, budget variance).
   allocation over 100 % refused, labour costs from the role's default and a member's own rate, a user's own timesheet
   without its cost, the workload's weekly peaks for a manager and only oneself for a user, outsiders and bad ranges
   refused. End to end, two memberships adding to 120 % shown over-allocated and in red on the Workload.
+
+## Implementation notes (2026-11-04): step 4 — money and health
+
+- **`project.budget.line`** (project, what for, category, phase, work package, planned; Projects managers only;
+  phase and work package kept in the project). `project.project` gains `budget` (the lines), `bookedCost` and
+  `committedCost` (written by the refresh), `actualCost` (labour plus booked) and `variance` (budget less actual and
+  committed), all seen by Projects managers alone; computes for anyone else leave them at zero without reading them
+  (a user's new-project form computes them too).
+- **Bridges** through `project.project.moneyOf()` (a method the bridges extend, like `planNotNeeded()`):
+  `project_account` (Projects ↔ Accounting) makes each project's cost centre once, coded and named like the project,
+  and books its posted expense lines (debit less credit); `project_purchase` (with Purchase Accounting) commits the
+  untaxed lines of confirmed orders on that cost centre not billed yet. Purchase Accounting carries the order line's
+  cost centre onto the bill, so a billed order moves from committed to booked. Registered in the installer (proposed
+  with the apps they connect), the demo, the npm package and the apps' E2E server.
+- **Health** (`judgeHealth`, pure and unit-tested): the worst of schedule (progress against the share of time gone;
+  past the deadline and not done is off track), late milestones (at risk) and cost (the budget used, actual and
+  committed). Thresholds in App settings › Projects › Health (`projectHealthBehindRisk` 10, `projectHealthBehindOff`
+  25, `projectHealthCostRisk` 90). `refreshProjects()` writes `healthComputed` with the reasons in `healthNotes` and
+  `healthCheckedAt`, hourly (off with `KOSH_SCHEDULES=off`) and on `POST /api/v1/projects/refresh` (Projects managers;
+  the projects they see; *Refresh the figures* on the form). `health` is the manager's override, which needs its
+  reason, or else the figures; all three are tracked.
+- **Late phases**: domains have no "today", so the refresh marks phases past their end and not finished `late`. The
+  step 1 *Late* filter, which compared with an unsupported placeholder, now reads it, and so does the overview's
+  *Phases overdue*. The overview also shows projects by health and plans waiting for a decision. People
+  over-allocated are on the Workload (a computed flag cannot be counted on a dashboard).
+- **Tests**: unit tests of the health rules; on real PostgreSQL budget lines and money for managers only, a refresh
+  refused to users, off track when behind, on track when caught up, at risk with a late milestone, a late phase, the
+  override refused without a reason and kept over the figures, a user's new-project onchange; with Accounting a cost
+  centre made once, a posted bill booked and a draft not, off track beyond the budget; with Purchase an order
+  committed, then billed and booked and never counted twice, at risk at 90 %, users refused the money. End to end, a
+  manager refreshing the figures and a user seeing the health without the money.
