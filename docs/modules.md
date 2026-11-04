@@ -209,6 +209,23 @@ export const SaleOrder = defineModel('sale.order', {
 The views come from Shutro's own type generator, run through Shutro ERP's single Shutro gateway (`loadCodegen` in
 `@kosh/server/orm`). Their imports point at `@kosh/server/orm`, and other modules are referenced by package name.
 
+### Projects for programmes (`modules/project`, RFC 0026)
+
+Projects carries a programme's structure, not only a to-do list. Configuration holds **project types**, **task
+categories** (optionally of a type) and **tags**. A project has a code (`PRJ-0001`, numbered per company), a type, a
+sponsor, an owner, a priority, a risk level, a location, its scope, assumptions and constraints, and may sit inside a
+**programme** (`parentProject`; no cycles, shown as a hierarchy). Inside it are **phases** (nested, with a manager,
+the person responsible, dates and a status) and **work packages** (in a phase or directly in the project, with their
+deliverables). Tasks sit in them (the work package sets the phase; all are kept in the task's own project), have
+**sub-tasks**, several **assignees**, tags and a **milestone** flag, and wait for other tasks through
+**dependencies** (`project.task.link`, with a lag in days; never a circle). A task waiting for one that is not done is
+*blocked*.
+
+Progress is computed, never typed: a task is 100 when done, else its sub-tasks' share done; a work package, a phase and
+a project weigh their top-level tasks by planned hours (a task without any weighs one hour). A phase or work package
+may be set by hand (`progressOverride`), and shows as such. The project's page shows the **structure** as a tree —
+phases, work packages and tasks with their progress — read as the user, so record rules decide what appears.
+
 ### Focus (`modules/todo`, RFC 0021)
 
 To-dos for the people who use them: their own, or on lists shared with colleagues, with due dates, priorities and

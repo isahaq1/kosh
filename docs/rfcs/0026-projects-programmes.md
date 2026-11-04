@@ -105,3 +105,30 @@ awaiting a decision, phases overdue, people over-allocated, budget variance).
 2. **Money through Accounting**: each project's cost centre, actuals from the books plus labour, committed purchase
    orders, budget lines that warn or block; without Accounting, Projects' own budget lines with labour still work.
 3. **Control in**: risks, issues, change requests and weekly status reports are step 5.
+
+## Implementation notes (2026-11-04): step 1 — structure
+
+- **Models** (`modules/project`, version 0.4.0): `project.type`, `project.task.category`, `project.tag`,
+  `project.phase`, `project.work.package` and `project.task.link`. `project.project` gains its code (sequence
+  `project.project`), type, `parentProject` / `children` (a hierarchy with `parentPath`), sponsor, owner, priority,
+  risk level, location, scope, assumptions, constraints and `progress`. `project.task` gains `phase`, `workPackage`,
+  `category`, `parentTask` / `subtasks`, `assignees`, `tags`, `milestone`, `predecessors` / `successors`, `progress`
+  and `blocked`. The department waits for step 3, with the team.
+- **Checks**: no programme inside its own projects, a sub-phase in its phase's project, a work package in its phase's
+  project, a task's phase, work package and parent task in its own project, no dependency on itself, none twice and
+  none in a circle, dates in order, a progress override from 0 to 100.
+- **Progress** (§2) as stored computes, weighted by planned hours. The structure tree (`projects.Structure`, in
+  English and Bangla) is a node component of the project form. The progress widget and kanban bars now read decimals
+  (served as strings) as well as integers; before, decimal progress showed nothing.
+- **Shutro request #33**: a one2many's batch load aliases the inverse column `parent_id`, which a target's own `parent`
+  field overwrote, so lists of tasks, phases and projects read empty. Until Shutro is fixed, the self-relations are
+  named `parentProject`, `parentPhase` and `parentTask` (and `sale_project` names its fields when loading tasks).
+- **Screens**: Projects › Phases (list, timeline, form with tiles) and Work packages (list, board, form);
+  Configuration › Project types, Task categories, Tags; projects as a hierarchy; the project form's people and risk,
+  scope, tiles for phases, work packages and sub-projects, lines of phases and work packages; the task form's place,
+  people, sub-task lines and dependency lines; searches for blocked tasks, milestones and top-level tasks.
+- **Tests**: on real PostgreSQL a programme with a project, the cycle and dates refused, a phase and a work package, the
+  onchange setting the phase, progress 75 from planned hours on the work package, phase and project, the override and
+  its range, a task in another project's phase refused; sub-tasks, several assignees and tags, a dependency blocking
+  until done, circles and self-links refused, outsiders refused. End to end, a phase and a work package made on screen
+  and shown in the project's structure.
