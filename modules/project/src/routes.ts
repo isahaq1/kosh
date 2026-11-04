@@ -5,11 +5,24 @@
  *   projects they are members of (active projects only): the highest total on any day of the week, with the projects
  *   behind it. Projects managers see everyone; others see themselves.
  * - `POST /api/v1/projects/refresh` `{ projects? }`             Projects managers: the booked and committed costs (from
- *   the bridges) and the health of active projects (these, or all), now; hourly too.
+ *   the bridges) and the health of active projects (these, or all), now; hourly too. The next of each repeating task
+ *   done is made then too.
+ * - `GET  /api/v1/projects/:id/schedule`        the project's tasks with their dates, baseline, float and the
+ *   critical path (as the caller sees them)
+ * - `POST /api/v1/projects/:id/schedule/apply`  tasks that start before what they wait for is finished move later,
+ *   their length kept (who may change the tasks)
  */
+
+import { chatterContext } from '@kosh/messaging';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import type { Env } from './.kosh/bindings.js';
-import { type HealthRules, judgeHealth, peakAllocation } from './module.js';
+import {
+  configureProjectChatter,
+  type HealthRules,
+  judgeHealth,
+  peakAllocation,
+} from './module.js';
+import { applySlips, scheduleOf } from './schedule.js';
 
 const DAY = 86_400_000;
 const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
@@ -167,6 +180,7 @@ export async function refreshProjects(su: Env, ids?: readonly number[]): Promise
         healthCheckedAt: new Date(),
       } as never);
   }
+  await repeatTasks(su, found.ids as unknown as number[], today);
   // Phases past their end and not finished: late (what the overview and the Late filter read).
   const phases = await su
     .model('project.phase')
@@ -185,8 +199,78 @@ export async function refreshProjects(su: Env, ids?: readonly number[]): Promise
   return projects.length;
 }
 
+/** `date` moved by `n` days, weeks or months. */
+export function shiftDate(date: string, n: number, unit: string): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  if (unit === 'month') d.setUTCMonth(d.getUTCMonth() + n);
+  else d.setUTCDate(d.getUTCDate() + n * (unit === 'week' ? 7 : 1));
+  return d.toISOString().slice(0, 10);
+}
+
+/** For each repeating task done in `projects` with no next one yet: the next one, its dates moved, until its end. */
+async function repeatTasks(su: Env, projects: readonly number[], today: string): Promise<number> {
+  const done = await su
+    .model('project.task')
+    .search({
+      where: {
+        project: { in: projects as never },
+        done: true,
+        repeatEvery: { gt: 0 },
+        nextTask: { isNull: true },
+      } as never,
+    })
+    .then((r) => r.load({ assignees: ['id'], tags: ['id'] }));
+  if (done.length === 0) return 0;
+  const [open] = await su
+    .model('project.task.stage')
+    .search({ where: { done: false } as never, order: ['sequence asc'], limit: 1 })
+    .then((r) => r.load(['id']));
+  let made = 0;
+  for (const t of done) {
+    const every = Number(t.repeatEvery ?? 0);
+    const unit = String(t.repeatUnit ?? 'week');
+    const start = isoDate(t.dateStart);
+    const end = isoDate(t.deadline);
+    const nextEnd = end === null ? null : shiftDate(end, every, unit);
+    const nextStart = start === null ? null : shiftDate(start, every, unit);
+    const until = isoDate(t.repeatUntil);
+    const first = nextStart ?? nextEnd ?? shiftDate(today, every, unit);
+    if (until !== null && first > until) continue;
+    const created = await su.model('project.task').create([
+      {
+        name: t.name,
+        project: t.project.id,
+        phase: t.phase?.id ?? null,
+        workPackage: t.workPackage?.id ?? null,
+        category: t.category?.id ?? null,
+        partner: t.partner?.id ?? null,
+        assignee: t.assignee?.id ?? null,
+        assignees: { set: [...t.assignees].map((a) => a.id) },
+        tags: { set: [...t.tags].map((x) => x.id) },
+        priority: t.priority,
+        milestone: t.milestone,
+        plannedHours: t.plannedHours,
+        description: t.description,
+        dateStart: nextStart,
+        deadline: nextEnd,
+        repeatEvery: t.repeatEvery,
+        repeatUnit: t.repeatUnit,
+        repeatUntil: t.repeatUntil,
+        ...(open === undefined ? {} : { stage: open.id }),
+      } as never,
+    ]);
+    await su
+      .model('project.task')
+      .browse([t.id])
+      .write({ nextTask: created.ids[0] } as never);
+    made += 1;
+  }
+  return made;
+}
+
 export function registerProjectRoutes(context: ModuleContext): void {
   const { app, shutro } = context;
+  configureProjectChatter(chatterContext(context));
   app.post('/api/v1/projects/refresh', async (request) => {
     const body = (request.body ?? {}) as { projects?: unknown };
     const ids = Array.isArray(body.projects)
@@ -231,6 +315,37 @@ export function registerProjectRoutes(context: ModuleContext): void {
         if (!env.administrator && !env.groups.has('project.user'))
           throw new HttpProblem(403, 'access', 'Projects users', 'This needs a Projects role.');
         return workload(env, from, weeks);
+      },
+      { write: true },
+    );
+  });
+
+  const projectId = (request: { params: unknown }) => {
+    const id = Number((request.params as { id?: string }).id);
+    if (!Number.isSafeInteger(id) || id <= 0)
+      throw new HttpProblem(404, 'missing-record', 'Not found', 'No such project.');
+    return id;
+  };
+  const seenProject = async (env: Env, id: number) => {
+    const seen = await env.model('project.project').search({ where: { id: id as never } });
+    if (seen.ids.length === 0)
+      throw new HttpProblem(404, 'missing-record', 'Not found', 'No such project of yours.');
+  };
+  app.get('/api/v1/projects/:id/schedule', async (request) => {
+    const id = projectId(request);
+    return request.env(async (raw) => {
+      const env = raw as unknown as Env;
+      await seenProject(env, id);
+      return scheduleOf(env, id);
+    });
+  });
+  app.post('/api/v1/projects/:id/schedule/apply', async (request) => {
+    const id = projectId(request);
+    return request.env(
+      async (raw) => {
+        const env = raw as unknown as Env;
+        await seenProject(env, id);
+        return { moved: await applySlips(env, id) };
       },
       { write: true },
     );

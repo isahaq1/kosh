@@ -230,3 +230,28 @@ test('money and health on a project (RFC 0026 step 4): a manager refreshes the f
   await expect(rahim.getByText('Left in the budget')).toHaveCount(0);
   await context.close();
 });
+
+test('control and schedule (RFC 0026 step 5): a risk scored critical; the project shows its schedule with the critical path', async ({
+  page,
+}) => {
+  await signIn(page, 'rahim');
+  await page.goto('/projects/a/projects.action_risks/new');
+  await page.getByRole('textbox', { name: 'Risk', exact: true }).fill('Monsoon floods the site');
+  await page.getByRole('combobox', { name: 'Project', exact: true }).click();
+  await page.getByRole('option', { name: 'Bridge works' }).click();
+  await page.getByRole('textbox', { name: 'Probability', exact: true }).fill('4');
+  await page.getByRole('textbox', { name: 'Impact', exact: true }).fill('5');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/projects\.action_risks\/\d+$/);
+  await expect(page.getByRole('group', { name: 'Assessment' })).toContainText('Critical');
+
+  await page.goto('/projects/a/projects.action_projects');
+  await page
+    .getByRole('row', { name: /Bridge works/ })
+    .first()
+    .click();
+  const schedule = page.getByRole('region', { name: 'Schedule' });
+  await expect(schedule).toBeVisible();
+  await expect(schedule.getByRole('img', { name: /Survey the site/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open risks 1' })).toBeVisible();
+});

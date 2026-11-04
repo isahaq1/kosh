@@ -1,6 +1,21 @@
 /** Messages of the Projects screens (namespace `project`), in English and Bangla. */
 export const messages: Readonly<Record<string, object>> = {
   en: {
+    schedule: {
+      title: 'Schedule',
+      loading: 'Loading the schedule…',
+      summary_one:
+        '{{critical}} task(s) on the critical path; one starts before what it waits for is finished.',
+      summary_other:
+        '{{critical}} task(s) on the critical path; {{late}} start before what they wait for is finished.',
+      apply: 'Move waiting tasks',
+      moved_one: 'One task moved later.',
+      moved_other: '{{count}} tasks moved later.',
+      bar: '{{name}}: {{start}} to {{end}}, {{float}} day(s) to spare',
+      barCritical: '{{name}}: {{start}} to {{end}}, on the critical path',
+      legend:
+        'Red: the critical path (no day to spare). The thin grey bar under a task is its baseline; the dark part of a bar is what is done.',
+    },
     refresh: { button: 'Refresh the figures' },
     workload: {
       title: 'Workload',
@@ -30,6 +45,21 @@ export const messages: Readonly<Record<string, object>> = {
     },
   },
   bn: {
+    schedule: {
+      title: 'সময়সূচি',
+      loading: 'সময়সূচি লোড হচ্ছে…',
+      summary_one:
+        'ক্রিটিক্যাল পথে {{critical}}টি কাজ; একটি কাজ যার জন্য অপেক্ষা করে তা শেষ হওয়ার আগেই শুরু হয়।',
+      summary_other:
+        'ক্রিটিক্যাল পথে {{critical}}টি কাজ; {{late}}টি কাজ যার জন্য অপেক্ষা করে তা শেষ হওয়ার আগেই শুরু হয়।',
+      apply: 'অপেক্ষমাণ কাজ সরান',
+      moved_one: 'একটি কাজ পিছিয়ে দেওয়া হয়েছে।',
+      moved_other: '{{count}}টি কাজ পিছিয়ে দেওয়া হয়েছে।',
+      bar: '{{name}}: {{start}} থেকে {{end}}, হাতে {{float}} দিন',
+      barCritical: '{{name}}: {{start}} থেকে {{end}}, ক্রিটিক্যাল পথে',
+      legend:
+        'লাল: ক্রিটিক্যাল পথ (হাতে কোনো দিন নেই)। কাজের নিচের সরু ধূসর দাগ তার বেসলাইন; বারের গাঢ় অংশ যা শেষ হয়েছে।',
+    },
     refresh: { button: 'হিসাব হালনাগাদ করুন' },
     workload: {
       title: 'কাজের চাপ',

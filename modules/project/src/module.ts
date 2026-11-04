@@ -8,7 +8,7 @@
  * timesheets; managers see everything.
  */
 import { contactsShutro } from '@kosh/contacts';
-import { messagingShutro } from '@kosh/messaging';
+import { type ChatterContext, messagingShutro, postMessage, setFollower } from '@kosh/messaging';
 import { approvalGuard, permissionsShutro, requestApprovals } from '@kosh/permissions';
 import { orm } from '@kosh/server/orm';
 import {
@@ -20,6 +20,7 @@ import {
   extendModel,
   f,
   method,
+  onchange,
   record,
   records,
 } from './.kosh/bindings.js';
@@ -603,6 +604,15 @@ export const ProjectPlan = defineModel('project.plan', {
                       .browse([row.id as never])
                       .write({ baselineStart: row.dateStart, baselineEnd: row.dateEnd });
                 }
+                const tasks = await env
+                  .model('project.task')
+                  .search({ where: { project: project.id } })
+                  .then((r) => r.load(['dateStart', 'deadline']));
+                for (const t of tasks)
+                  await env
+                    .model('project.task')
+                    .browse([t.id])
+                    .write({ baselineStart: t.dateStart, baselineEnd: t.deadline });
               }
             }
           }),
@@ -1311,6 +1321,31 @@ export const ProjectTask = defineModel('project.task', {
     sequence: f.integer({ required: true, default: 10 }),
     description: f.text(),
     timesheets: f.one2many('project.timesheet', 'task'),
+    /** When it starts (RFC 0026 step 5); it ends on its deadline. */
+    dateStart: f.date({ label: 'Start' }),
+    baselineStart: f.date({ label: 'Baseline start', groups: MANAGERS_WRITE }),
+    baselineEnd: f.date({ label: 'Baseline end', groups: MANAGERS_WRITE }),
+    /** Repeats: once done, the next one is made (the hourly refresh), until the date given. */
+    repeatEvery: f.integer({
+      label: 'Repeat every',
+      help: 'Once done, the next one is made with its dates moved by this many days, weeks or months.',
+    }),
+    repeatUnit: f.selection(
+      { day: 'Days', week: 'Weeks', month: 'Months' },
+      { default: 'week', label: 'Repeat unit' },
+    ),
+    repeatUntil: f.date({ label: 'Repeat until' }),
+    nextTask: f.many2one('project.task', { ondelete: 'set null', label: 'Next one' }),
+  },
+  sqlConstraints: {
+    datesOrdered: {
+      check: orm.sql`date_start IS NULL OR deadline IS NULL OR deadline >= date_start`,
+      message: 'A task ends on or after it starts.',
+    },
+    repeatPositive: {
+      check: orm.sql`repeat_every IS NULL OR repeat_every > 0`,
+      message: 'A task repeats every one or more days, weeks or months.',
+    },
   },
   constraints: {
     // Its phase, work package and parent task are in its own project; a task is not its own parent.
@@ -1414,6 +1449,410 @@ export const ProjectTaskLink = defineModel('project.task.link', {
       }),
       message: 'These dependencies would go round in a circle.',
     },
+  },
+});
+
+/** The chatter's served models, set when the app's routes register (status reports post on their project). */
+let chatter: ChatterContext | undefined;
+export function configureProjectChatter(context: ChatterContext): void {
+  chatter = context;
+}
+
+/** Who reads and writes the control register: Projects users write, managers also delete. */
+const CONTROL_ACCESS = {
+  'project.user': ['read', 'write', 'create'],
+  'project.manager': ALL,
+} as const;
+
+const RISK_LEVELS = { low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical' } as const;
+
+/** Probability × impact (each 1–5) as a level: up to 4 low, 9 medium, 15 high, above critical. */
+export function riskLevel(score: number): keyof typeof RISK_LEVELS {
+  if (score <= 4) return 'low';
+  if (score <= 9) return 'medium';
+  if (score <= 15) return 'high';
+  return 'critical';
+}
+
+/** A risk of a project (RFC 0026 step 5): how likely, how bad, who owns it and what is done about it. */
+export const ProjectRisk = defineModel('project.risk', {
+  label: 'Project risk',
+  recName: 'name',
+  order: ['score desc', 'id desc'],
+  companyScoped: { required: true },
+  tracking: ['status', 'probability', 'impact', 'owner'],
+  access: CONTROL_ACCESS,
+  fields: {
+    project: f.many2one('project.project', {
+      required: true,
+      checkCompany: true,
+      ondelete: 'cascade',
+    }),
+    name: f.char({ required: true, label: 'Risk' }),
+    description: f.text(),
+    category: f.selection(
+      {
+        schedule: 'Schedule',
+        cost: 'Cost',
+        scope: 'Scope',
+        quality: 'Quality',
+        safety: 'Safety',
+        supply: 'Supply',
+        other: 'Other',
+      },
+      { required: true, default: 'other' },
+    ),
+    probability: f.integer({
+      required: true,
+      default: 3,
+      help: 'How likely, from 1 (rare) to 5 (almost certain).',
+    }),
+    impact: f.integer({
+      required: true,
+      default: 3,
+      help: 'How bad if it happens, from 1 (slight) to 5 (severe).',
+    }),
+    score: f.integer({
+      store: true,
+      label: 'Score',
+      ...compute('project.risk', 'score', ['probability', 'impact'], (risks) => {
+        for (const r of risks) r.score = (r.probability ?? 0) * (r.impact ?? 0);
+      }),
+    }),
+    level: f.selection(RISK_LEVELS, {
+      store: true,
+      label: 'Level',
+      ...compute('project.risk', 'level', ['probability', 'impact'], (risks) => {
+        for (const r of risks) r.level = riskLevel((r.probability ?? 0) * (r.impact ?? 0));
+      }),
+    }),
+    owner: f.many2one('res.users', {
+      ondelete: 'set null',
+      default: (env: Env) => env.userId,
+    }),
+    mitigation: f.text({ help: 'What is done to make it less likely or less bad.' }),
+    contingency: f.text({ help: 'What is done if it happens.' }),
+    dueDate: f.date({ label: 'Review by' }),
+    status: f.selection(
+      { open: 'Open', mitigating: 'Being mitigated', occurred: 'Occurred', closed: 'Closed' },
+      { required: true, default: 'open' },
+    ),
+  },
+  sqlConstraints: {
+    scale: {
+      check: orm.sql`probability BETWEEN 1 AND 5 AND impact BETWEEN 1 AND 5`,
+      message: 'Probability and impact are from 1 to 5.',
+    },
+  },
+});
+
+/** An issue of a project: something wrong now, how serious, who resolves it and how it was resolved. */
+export const ProjectIssue = defineModel('project.issue', {
+  label: 'Project issue',
+  recName: 'name',
+  order: ['id desc'],
+  companyScoped: { required: true },
+  tracking: ['status', 'severity', 'owner'],
+  access: CONTROL_ACCESS,
+  fields: {
+    project: f.many2one('project.project', {
+      required: true,
+      checkCompany: true,
+      ondelete: 'cascade',
+    }),
+    name: f.char({ required: true, label: 'Issue' }),
+    description: f.text(),
+    severity: f.selection(RISK_LEVELS, { required: true, default: 'medium' }),
+    raisedBy: f.many2one('res.users', {
+      default: (env: Env) => env.userId,
+      ondelete: 'set null',
+      label: 'Raised by',
+    }),
+    owner: f.many2one('res.users', { ondelete: 'set null' }),
+    dueDate: f.date({ label: 'Resolve by' }),
+    status: f.selection(
+      { open: 'Open', in_progress: 'In progress', resolved: 'Resolved', closed: 'Closed' },
+      { required: true, default: 'open' },
+    ),
+    resolution: f.text(),
+    risk: f.many2one('project.risk', { ondelete: 'set null', label: 'From the risk' }),
+  },
+  constraints: {
+    resolution: {
+      ...check('project.issue', ['status', 'resolution'], async (issues) =>
+        issues
+          .filter(
+            (i) => ['resolved', 'closed'].includes(i.status) && (i.resolution ?? '').trim() === '',
+          )
+          .map((i) => i.id),
+      ),
+      message: 'A resolved issue says how it was resolved.',
+    },
+  },
+});
+
+const CHANGE_STATES = {
+  draft: 'Draft',
+  submitted: 'Waiting for approval',
+  applied: 'Approved and applied',
+  rejected: 'Rejected',
+  cancelled: 'Cancelled',
+} as const;
+
+/**
+ * A change request (RFC 0026 step 5): a new deadline or budget for a project, with the reason and the impact, decided
+ * through the approval engine; once approved it moves the project's dates and baseline (and its baseline budget) and
+ * keeps what they were.
+ */
+export const ProjectChange = defineModel('project.change', {
+  label: 'Change request',
+  recName: 'title',
+  order: ['id desc'],
+  companyScoped: { required: true },
+  tracking: ['state', 'newDateEnd', 'newBudget'],
+  access: CONTROL_ACCESS,
+  rules: {
+    // Changed while a draft (or rejected); managers anywhere.
+    read: { groups: ['project.user'], perms: ['read'], domain: {} },
+    draft: {
+      groups: ['project.user'],
+      perms: ['write', 'create'],
+      domain: { state: { in: ['draft', 'rejected'] } },
+    },
+    managers: {
+      groups: ['project.manager'],
+      perms: ['read', 'write', 'create', 'unlink'],
+      domain: {},
+    },
+  },
+  fields: {
+    name: f.char({ readonly: true, sequence: 'project.change', label: 'Number' }),
+    project: f.many2one('project.project', {
+      required: true,
+      checkCompany: true,
+      ondelete: 'cascade',
+    }),
+    title: f.char({ required: true }),
+    requester: f.many2one('res.users', {
+      default: (env: Env) => env.userId,
+      ondelete: 'restrict',
+      label: 'Asked by',
+    }),
+    /** The project's sponsor, who decides it first (a Projects manager when there is none). */
+    sponsor: f.many2one('res.users', {
+      store: true,
+      label: 'Sponsor',
+      ...compute('project.change', 'sponsor', ['project.sponsor'], (changes) => {
+        for (const c of changes) c.sponsor = c.project?.sponsor?.id ?? null;
+      }),
+    }),
+    reason: f.text({ required: true }),
+    impact: f.text({ help: 'What else it changes: scope, people, other projects.' }),
+    newDateEnd: f.date({ label: 'New deadline' }),
+    newBudget: f.decimal({ scale: 2, label: 'New baseline budget', groups: MANAGERS_ONLY }),
+    previousDateEnd: f.date({ label: 'Deadline before' }),
+    previousBaselineEnd: f.date({ label: 'Baseline end before' }),
+    previousBudget: f.decimal({ scale: 2, label: 'Baseline budget before', groups: MANAGERS_ONLY }),
+    appliedAt: f.datetime({ label: 'Applied on' }),
+    state: f.state({
+      states: CHANGE_STATES,
+      initial: 'draft',
+      help: 'Submitted for approval; once approved, applied to the project and its baseline.',
+      transitions: {
+        submit: {
+          from: ['draft', 'rejected'],
+          to: 'submitted',
+          // The new budget is the managers' to see: read as the system (a transition is a write).
+          guard: records(
+            'project.change',
+            async (changes): Promise<number[]> =>
+              (changes.env as unknown as Env).asSuperuser(
+                { reason: 'change request check' },
+                async (su) =>
+                  [
+                    ...(await su
+                      .model('project.change')
+                      .browse(changes.ids)
+                      .load(['newDateEnd', 'newBudget'])),
+                  ]
+                    .filter((c) => c.newDateEnd === null && c.newBudget === null)
+                    .map((c) => c.id),
+              ),
+          ),
+          message: 'A change request asks for a new deadline, a new budget or both.',
+          after: records('project.change', async (changes) => {
+            await requestApprovals(changes);
+          }),
+        },
+        approve: {
+          from: ['submitted'],
+          to: 'applied',
+          guard: records('project.change', (changes) => approvalGuard(changes)),
+          message: 'Waiting for approvals.',
+          // Run as the system by the engine: the deadline, the baseline and its budget move, what they were kept.
+          after: records('project.change', async (changes) => {
+            const env = changes.env as unknown as Env;
+            await env.asSuperuser({ reason: 'change request applied' }, async (su) => {
+              for (const c of await su
+                .model('project.change')
+                .browse(changes.ids)
+                .load({ project: ['dateEnd', 'baselineEnd', 'baselineBudget'] })) {
+                const project = c.project;
+                const moves: Record<string, unknown> = {};
+                if (c.newDateEnd !== null) {
+                  moves['dateEnd'] = c.newDateEnd;
+                  moves['baselineEnd'] = c.newDateEnd;
+                }
+                if (c.newBudget !== null) moves['baselineBudget'] = c.newBudget;
+                await su
+                  .model('project.change')
+                  .browse([c.id])
+                  .write({
+                    previousDateEnd: project.dateEnd,
+                    previousBaselineEnd: project.baselineEnd,
+                    previousBudget: project.baselineBudget,
+                    appliedAt: new Date(),
+                  } as never);
+                await su
+                  .model('project.project')
+                  .browse([project.id])
+                  .write(moves as never);
+                await su.emit('project.change.applied', { id: c.id });
+              }
+            });
+          }),
+        },
+        reject: { from: ['submitted'], to: 'rejected' },
+        redraft: { from: ['submitted', 'rejected'], to: 'draft' },
+        cancel: { from: ['draft', 'submitted', 'rejected'], to: 'cancelled' },
+      },
+    }),
+  },
+});
+
+/**
+ * A weekly status report (RFC 0026 step 5): the project's health and progress when written, what was done, what is
+ * next and the risks; sent, it is posted on the project for its followers, the sponsor among them.
+ */
+export const ProjectStatusReport = defineModel('project.status.report', {
+  label: 'Status report',
+  recName: 'name',
+  order: ['date desc', 'id desc'],
+  companyScoped: { required: true },
+  access: CONTROL_ACCESS,
+  rules: {
+    read: { groups: ['project.user'], perms: ['read'], domain: {} },
+    draftOwn: {
+      groups: ['project.user'],
+      perms: ['write', 'create'],
+      domain: { author: { $env: 'uid' }, state: 'draft' },
+    },
+    managers: {
+      groups: ['project.manager'],
+      perms: ['read', 'write', 'create', 'unlink'],
+      domain: {},
+    },
+  },
+  fields: {
+    project: f.many2one('project.project', {
+      required: true,
+      checkCompany: true,
+      ondelete: 'cascade',
+    }),
+    date: f.date({ required: true, default: (env: Env) => env.today(), label: 'Week of' }),
+    name: f.char({
+      store: true,
+      label: 'Report',
+      ...compute('project.status.report', 'name', ['project.name', 'date'], (reports) => {
+        for (const r of reports)
+          r.name = `${r.project?.name ?? ''} — ${String(r.date ?? '').slice(0, 10)}`;
+      }),
+    }),
+    author: f.many2one('res.users', {
+      default: (env: Env) => env.userId,
+      ondelete: 'restrict',
+    }),
+    health: f.selection(HEALTH, { label: 'Health then' }),
+    progress: f.decimal({ scale: 1, label: 'Progress then %' }),
+    done: f.text({ label: 'Done this week' }),
+    next: f.text({ label: 'Next week' }),
+    risks: f.text({ label: 'Risks and issues' }),
+    sentAt: f.datetime({ label: 'Sent' }),
+    state: f.state({
+      states: { draft: 'Draft', sent: 'Sent' },
+      initial: 'draft',
+      transitions: {
+        send: {
+          from: ['draft'],
+          to: 'sent',
+          guard: records('project.status.report', async (reports) =>
+            [...(await reports.load({}))]
+              .filter((r) => (r.done ?? '').trim() === '' && (r.next ?? '').trim() === '')
+              .map((r) => r.id),
+          ),
+          message: 'A report says what was done or what is next.',
+          after: records('project.status.report', async (reports) => {
+            const env = reports.env as unknown as Env;
+            for (const r of await reports.load({ project: ['sponsor'] })) {
+              await env
+                .model('project.status.report')
+                .browse([r.id])
+                .write({ sentAt: new Date() } as never);
+              // Posted on the project for its followers; its sponsor follows it.
+              if (chatter !== undefined) {
+                const projectId = r.project.id as number;
+                const sponsor = r.project.sponsor?.id ?? null;
+                if (sponsor !== null)
+                  await setFollower(env as never, chatter, 'project.project', projectId, {
+                    user: sponsor,
+                    follow: true,
+                  });
+                const parts = [
+                  `Status report, week of ${String(r.date ?? '').slice(0, 10)}`,
+                  `Health: ${r.health === null ? '—' : HEALTH[r.health]} · Progress: ${String(r.progress ?? 0)}%`,
+                  (r.done ?? '').trim() === '' ? '' : `Done: ${r.done}`,
+                  (r.next ?? '').trim() === '' ? '' : `Next: ${r.next}`,
+                  (r.risks ?? '').trim() === '' ? '' : `Risks and issues: ${r.risks}`,
+                ].filter((x) => x !== '');
+                await postMessage(env as never, chatter, 'project.project', projectId, {
+                  kind: 'comment',
+                  text: parts.join('\n\n'),
+                });
+              }
+              await reports.env.emit('project.status.report.sent', { id: r.id });
+            }
+          }),
+        },
+      },
+    }),
+  },
+  onchange: {
+    // The project's figures and its open risks and issues, filled in for the author to edit.
+    project: onchange('project.status.report', async (d, env) => {
+      const id = Number(d.get('project') ?? 0);
+      if (!Number.isSafeInteger(id) || id <= 0) return;
+      const [p] = await env
+        .model('project.project')
+        .browse([id as never])
+        .load(['health', 'progress']);
+      const risks = await env
+        .model('project.risk')
+        .search({ where: { project: id, status: { in: ['open', 'mitigating'] } } as never })
+        .then((r) => r.load(['name', 'level']));
+      const issues = await env
+        .model('project.issue')
+        .search({ where: { project: id, status: { in: ['open', 'in_progress'] } } as never })
+        .then((r) => r.load(['name', 'severity']));
+      d.set('health', p?.health ?? null);
+      d.set('progress', p?.progress ?? null);
+      d.set(
+        'risks',
+        [
+          ...[...risks].map((x) => `Risk (${x.level}): ${x.name}`),
+          ...[...issues].map((x) => `Issue (${x.severity}): ${x.name}`),
+        ].join('\n'),
+      );
+    }),
   },
 });
 
@@ -1545,8 +1984,13 @@ export const projectShutro = defineModule({
   sequences: [
     orm.defineSequence({ code: 'project.project', prefix: 'PRJ-', padding: 4 }),
     orm.defineSequence({ code: 'project.plan', prefix: 'PLAN-', padding: 4 }),
+    orm.defineSequence({ code: 'project.change', prefix: 'CR-', padding: 4 }),
   ],
   models: [
+    ProjectRisk,
+    ProjectIssue,
+    ProjectChange,
+    ProjectStatusReport,
     ProjectBudgetLine,
     ProjectRole,
     ProjectMember,

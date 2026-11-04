@@ -15,11 +15,15 @@ import type { Env } from './.kosh/bindings.js';
 import { projectDemo, SUPPORT_PROJECT } from './demo.js';
 import {
   ProjectBudgetLine,
+  ProjectChange,
+  ProjectIssue,
   ProjectMember,
   ProjectPhase,
   ProjectPlan,
   ProjectProject,
+  ProjectRisk,
   ProjectRole,
+  ProjectStatusReport,
   ProjectTag,
   ProjectTask,
   ProjectTaskCategory,
@@ -34,14 +38,19 @@ import { registerProjectRoutes } from './routes.js';
 
 export { SUPPORT_PROJECT } from './demo.js';
 export {
+  configureProjectChatter,
   HEALTH,
   judgeHealth,
   ProjectBudgetLine,
+  ProjectChange,
+  ProjectIssue,
   ProjectMember,
   ProjectPhase,
   ProjectPlan,
   ProjectProject,
+  ProjectRisk,
   ProjectRole,
+  ProjectStatusReport,
   ProjectTag,
   ProjectTask,
   ProjectTaskCategory,
@@ -52,8 +61,10 @@ export {
   ProjectWorkPackage,
   peakAllocation,
   projectShutro,
+  riskLevel,
 } from './module.js';
-export { mondayOf, refreshProjects, workload } from './routes.js';
+export { mondayOf, refreshProjects, shiftDate, workload } from './routes.js';
+export { criticalPath, type PlanTask, type Scheduled, scheduleOf, slipMoves } from './schedule.js';
 
 export const project: ReturnType<typeof defineModule> = defineModule({
   shutro: projectShutro,
@@ -155,8 +166,32 @@ export const project: ReturnType<typeof defineModule> = defineModule({
         },
       ],
     },
+    // A change to a project's deadline or budget: its sponsor, then a Projects manager.
+    {
+      name: 'Project change requests',
+      model: 'project.change',
+      onApproved: 'approve',
+      onRejected: 'reject',
+      onSentBack: 'redraft',
+      onWithdrawn: 'redraft',
+      levels: [
+        {
+          name: 'Sponsor',
+          condition: {},
+          approver: { field: 'sponsor' },
+          approverRole: 'project.manager',
+        },
+        { name: 'Projects manager', condition: {}, approverRole: 'project.manager' },
+      ],
+    },
   ],
   events: [
+    { topic: 'project.change.applied', model: 'project.change', label: 'Change request applied' },
+    {
+      topic: 'project.status.report.sent',
+      model: 'project.status.report',
+      label: 'Status report sent',
+    },
     { topic: 'project.plan.submitted', model: 'project.plan', label: 'Project plan submitted' },
     { topic: 'project.plan.approved', model: 'project.plan', label: 'Project plan approved' },
   ],
@@ -310,6 +345,22 @@ export const project: ReturnType<typeof defineModule> = defineModule({
       views: ['list', 'form'],
     }),
     'projects.action_workload': { type: 'client', page: 'projects.Workload', label: 'Workload' },
+    'projects.action_risks': action(ProjectRisk, {
+      label: 'Risks',
+      views: ['list', 'kanban', 'form'],
+    }),
+    'projects.action_issues': action(ProjectIssue, {
+      label: 'Issues',
+      views: ['list', 'kanban', 'form'],
+    }),
+    'projects.action_changes': action(ProjectChange, {
+      label: 'Change requests',
+      views: ['list', 'form'],
+    }),
+    'projects.action_reports': action(ProjectStatusReport, {
+      label: 'Status reports',
+      views: ['list', 'form'],
+    }),
     'projects.action_categories': action(ProjectTaskCategory, {
       label: 'Task categories',
       views: ['list', 'form'],
@@ -317,7 +368,7 @@ export const project: ReturnType<typeof defineModule> = defineModule({
     'projects.action_tags': action(ProjectTag, { label: 'Tags', views: ['list', 'form'] }),
     'projects.action_tasks': action(ProjectTask, {
       label: 'Tasks',
-      views: ['kanban', 'list', 'form', 'calendar'],
+      views: ['kanban', 'list', 'form', 'calendar', 'gantt'],
     }),
     'projects.action_timesheets': action(ProjectTimesheet, {
       label: 'Timesheets',
@@ -371,6 +422,35 @@ export const project: ReturnType<typeof defineModule> = defineModule({
       label: 'Timesheets',
       action: 'projects.action_timesheets',
       sequence: 3,
+    },
+    { id: 'projects.control', parent: 'projects.root', label: 'Control', sequence: 5 },
+    {
+      id: 'projects.risks',
+      parent: 'projects.control',
+      label: 'Risks',
+      action: 'projects.action_risks',
+      sequence: 1,
+    },
+    {
+      id: 'projects.issues',
+      parent: 'projects.control',
+      label: 'Issues',
+      action: 'projects.action_issues',
+      sequence: 2,
+    },
+    {
+      id: 'projects.changes',
+      parent: 'projects.control',
+      label: 'Change requests',
+      action: 'projects.action_changes',
+      sequence: 3,
+    },
+    {
+      id: 'projects.reports',
+      parent: 'projects.control',
+      label: 'Status reports',
+      action: 'projects.action_reports',
+      sequence: 4,
     },
     { id: 'projects.configuration', parent: 'projects.root', label: 'Configuration', sequence: 9 },
     {
@@ -480,6 +560,34 @@ export const project: ReturnType<typeof defineModule> = defineModule({
             action: 'projects.action_work_packages',
           },
           {
+            id: 'project_risks',
+            label: 'Open risks',
+            model: ProjectRisk,
+            where: { project: { $record: 'id' }, status: { in: ['open', 'mitigating'] } },
+            action: 'projects.action_risks',
+          },
+          {
+            id: 'project_issues',
+            label: 'Open issues',
+            model: ProjectIssue,
+            where: { project: { $record: 'id' }, status: { in: ['open', 'in_progress'] } },
+            action: 'projects.action_issues',
+          },
+          {
+            id: 'project_changes',
+            label: 'Change requests',
+            model: ProjectChange,
+            where: { project: { $record: 'id' } },
+            action: 'projects.action_changes',
+          },
+          {
+            id: 'project_reports',
+            label: 'Status reports',
+            model: ProjectStatusReport,
+            where: { project: { $record: 'id' } },
+            action: 'projects.action_reports',
+          },
+          {
             id: 'project_children',
             label: 'Projects in it',
             model: ProjectProject,
@@ -529,6 +637,7 @@ export const project: ReturnType<typeof defineModule> = defineModule({
           label: 'Scope',
         }),
         k.component('structure', 'projects.Structure'),
+        k.component('schedule', 'projects.Schedule'),
         k.lines('members', [
           { field: 'user', id: 'member_user' },
           { field: 'role', id: 'member_role' },
@@ -614,11 +723,18 @@ export const project: ReturnType<typeof defineModule> = defineModule({
         k.group('when', [
           'partner',
           'priority',
+          'dateStart',
           'deadline',
           'plannedHours',
           'effectiveHours',
           'progress',
         ]),
+        k.group('repeat', ['repeatEvery', 'repeatUnit', 'repeatUntil', 'nextTask'], {
+          label: 'Repeats',
+          description:
+            'Once done, the next one is made with its dates moved, until the date given.',
+        }),
+        k.group('task_baseline', ['baselineStart', 'baselineEnd'], { label: 'Baseline' }),
         k.group('about', ['description'], { columns: 1 }),
         k.lines('subtasks', [
           { field: 'name', id: 'sub_name' },
@@ -640,6 +756,14 @@ export const project: ReturnType<typeof defineModule> = defineModule({
       ],
       chatter: true,
     })),
+    'project.task.gantt': gantt(ProjectTask, {
+      dateStart: 'dateStart',
+      dateStop: 'deadline',
+      title: 'name',
+      groupBy: 'project',
+      progress: 'progress',
+      scale: 'week',
+    }),
     'project.task.calendar': calendar(ProjectTask, {
       dateStart: 'deadline',
       title: 'name',
@@ -664,6 +788,151 @@ export const project: ReturnType<typeof defineModule> = defineModule({
       measures: [{ sum: 'hours' }],
       comparison: { field: 'date', mode: 'previous' },
     }),
+    'project.risk.list': list(ProjectRisk, {
+      columns: [
+        'project',
+        'name',
+        'category',
+        'probability',
+        'impact',
+        'score',
+        { field: 'level', widget: 'badge' },
+        'owner',
+        { field: 'dueDate', widget: 'daysLeft' },
+        { field: 'status', widget: 'badge' },
+      ],
+      decorations: {
+        danger: { level: 'critical' },
+        warning: { level: 'high' },
+        neutral: { status: 'closed' },
+      },
+    }),
+    'project.risk.kanban': kanban(ProjectRisk, {
+      groupBy: 'level',
+      card: {
+        title: 'name',
+        subtitle: 'project',
+        avatar: 'owner',
+        footer: ['score', { field: 'status', widget: 'badge' }],
+      },
+    }),
+    'project.risk.form': form(ProjectRisk, (k) => ({
+      sheet: [
+        k.group('main', ['name', 'project', 'category', 'owner', 'status', 'dueDate']),
+        k.group('assessment', ['probability', 'impact', 'score', 'level'], {
+          label: 'Assessment',
+          description: 'Probability and impact from 1 to 5; their product is the score.',
+        }),
+        k.group('response', ['description', 'mitigation', 'contingency'], {
+          columns: 1,
+          label: 'Response',
+        }),
+      ],
+      chatter: true,
+    })),
+    'project.issue.list': list(ProjectIssue, {
+      columns: [
+        'project',
+        'name',
+        { field: 'severity', widget: 'badge' },
+        'owner',
+        { field: 'dueDate', widget: 'daysLeft' },
+        { field: 'status', widget: 'badge' },
+      ],
+      decorations: { danger: { severity: 'critical' }, neutral: { status: 'closed' } },
+    }),
+    'project.issue.kanban': kanban(ProjectIssue, {
+      groupBy: 'status',
+      card: {
+        title: 'name',
+        subtitle: 'project',
+        avatar: 'owner',
+        footer: [
+          { field: 'severity', widget: 'badge' },
+          { field: 'dueDate', widget: 'daysLeft' },
+        ],
+      },
+    }),
+    'project.issue.form': form(ProjectIssue, (k) => ({
+      sheet: [
+        k.group('main', ['name', 'project', 'severity', 'status', 'risk']),
+        k.group('people', ['raisedBy', 'owner', 'dueDate']),
+        k.group('about', ['description', 'resolution'], { columns: 1 }),
+      ],
+      chatter: true,
+    })),
+    'project.change.list': list(ProjectChange, {
+      columns: [
+        'name',
+        'project',
+        'title',
+        'requester',
+        'newDateEnd',
+        'newBudget',
+        { field: 'state', widget: 'badge' },
+      ],
+      decorations: { warning: { state: 'submitted' }, danger: { state: 'rejected' } },
+    }),
+    'project.change.form': form(ProjectChange, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('submit', { primary: true, label: 'Submit for approval' }),
+          k.button('redraft', { label: 'Set to draft' }),
+          k.button('cancel', { label: 'Cancel' }),
+        ],
+      },
+      sheet: [
+        k.group('main', ['title', 'name', 'project', 'requester', 'sponsor']),
+        k.component('approvals', 'approvals.Panel'),
+        k.group('asked', ['newDateEnd', 'newBudget'], {
+          label: 'What it asks for',
+          description:
+            'Once approved, the project’s deadline and baseline end move to the new deadline, and its baseline budget to the new budget.',
+        }),
+        k.group('why', ['reason', 'impact'], { columns: 1, label: 'Why' }),
+        k.group(
+          'before',
+          ['previousDateEnd', 'previousBaselineEnd', 'previousBudget', 'appliedAt'],
+          {
+            label: 'What it changed',
+          },
+        ),
+      ],
+      chatter: true,
+    })),
+    'project.status.report.list': list(ProjectStatusReport, {
+      columns: [
+        'project',
+        'date',
+        'author',
+        { field: 'health', widget: 'badge' },
+        { field: 'progress', widget: 'progress' },
+        { field: 'state', widget: 'badge' },
+      ],
+      decorations: { danger: { health: 'off_track' }, warning: { health: 'at_risk' } },
+    }),
+    'project.status.report.form': form(ProjectStatusReport, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('send', {
+            primary: true,
+            label: 'Send',
+            confirm:
+              'Send the report? It is posted on the project for its followers and its sponsor.',
+          }),
+        ],
+      },
+      sheet: [
+        k.group('main', ['project', 'date', 'author', 'sentAt']),
+        k.group('figures', ['health', 'progress'], {
+          label: 'Figures',
+          description: 'Filled in from the project when it is chosen.',
+        }),
+        k.group('report', ['done', 'next', 'risks'], { columns: 1, label: 'Report' }),
+      ],
+    })),
     'project.budget.line.list': list(ProjectBudgetLine, {
       columns: [
         'project',
@@ -958,6 +1227,41 @@ export const project: ReturnType<typeof defineModule> = defineModule({
     'project.tag': search(ProjectTag, { fields: ['name'] }),
     'project.task.link': search(ProjectTaskLink, {
       fields: ['successor.name', 'predecessor.name'],
+    }),
+    'project.risk': search(ProjectRisk, {
+      fields: ['name', 'project.name'],
+      filters: {
+        open: {
+          label: 'Open',
+          domain: { status: { in: ['open', 'mitigating'] } },
+          group: 'status',
+        },
+        severe: { label: 'High and critical', domain: { level: { in: ['high', 'critical'] } } },
+        mine: { label: 'Mine', domain: { owner: { $env: 'uid' } } },
+      },
+      groupBy: ['project', 'level', 'category', 'status', 'owner'],
+    }),
+    'project.issue': search(ProjectIssue, {
+      fields: ['name', 'project.name'],
+      filters: {
+        open: {
+          label: 'Open',
+          domain: { status: { in: ['open', 'in_progress'] } },
+          group: 'status',
+        },
+        mine: { label: 'Mine', domain: { owner: { $env: 'uid' } } },
+      },
+      groupBy: ['project', 'severity', 'status', 'owner'],
+    }),
+    'project.change': search(ProjectChange, {
+      fields: ['title', 'name', 'project.name'],
+      filters: { waiting: { label: 'Waiting for approval', domain: { state: 'submitted' } } },
+      groupBy: ['project', 'state'],
+    }),
+    'project.status.report': search(ProjectStatusReport, {
+      fields: ['name', 'project.name'],
+      filters: { drafts: { label: 'Drafts', domain: { state: 'draft' } } },
+      groupBy: ['project', 'health', 'author', 'date:month'],
     }),
     'project.role': search(ProjectRole, { fields: ['name', 'code'] }),
     'project.budget.line': search(ProjectBudgetLine, {

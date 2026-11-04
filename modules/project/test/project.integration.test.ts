@@ -255,6 +255,10 @@ test('the Projects overview (RFC 0022 step 2) to a user; the project form has it
     'project_hours',
     'project_phases',
     'project_work_packages',
+    'project_risks',
+    'project_issues',
+    'project_changes',
+    'project_reports',
     'project_children',
   ]);
   const gantt = await call('GET', '/api/v1/views?model=project.project&type=gantt', 'rahim');
@@ -885,4 +889,254 @@ test('money and health (RFC 0026 step 4): budget lines and figures for managers 
     (await call('GET', `/api/v1/models/project.project/${p.json.id}?fields=health`, 'rahim')).json
       .health,
   ).toBe('on_track');
+});
+
+test('control (RFC 0026 step 5): risks scored, issues resolved with a resolution, a change request approved and applied to the baseline, a status report sent to the project', async () => {
+  const users = await driver.query<{ id: number; login: string }>({
+    text: 'SELECT id, login FROM res_users',
+    params: [],
+  });
+  const idOf = (login: string) => users.find((u) => u.login === login)?.id;
+  const p = await call('POST', '/api/v1/models/project.project', 'maria', {
+    name: 'Feed store',
+    sponsor: idOf('sumi'),
+    dateStart: '2027-01-01',
+    dateEnd: '2027-06-30',
+  });
+  expectStatus(p, 201);
+
+  // A risk: 4 × 4 = 16, critical; 1–5 only.
+  const risk = await call('POST', '/api/v1/models/project.risk', 'rahim', {
+    project: p.json.id,
+    name: 'Monsoon floods the site',
+    category: 'schedule',
+    probability: 4,
+    impact: 4,
+    mitigation: 'Raise the plinth first',
+  });
+  expectStatus(risk, 201);
+  const r = (
+    await call('GET', `/api/v1/models/project.risk/${risk.json.id}?fields=score,level`, 'rahim')
+  ).json;
+  expect(r).toMatchObject({ score: 16, level: 'critical' });
+  expectStatus(
+    await call('POST', '/api/v1/models/project.risk', 'rahim', {
+      project: p.json.id,
+      name: 'Bad',
+      probability: 6,
+      impact: 1,
+    }),
+    422,
+  );
+  expectStatus(await call('GET', '/api/v1/models/project.risk', 'bob'), 403);
+
+  // An issue is resolved only with its resolution.
+  const issue = await call('POST', '/api/v1/models/project.issue', 'rahim', {
+    project: p.json.id,
+    name: 'Cement delivery late',
+    severity: 'high',
+    risk: risk.json.id,
+  });
+  expectStatus(issue, 201);
+  expectStatus(
+    await call('PATCH', `/api/v1/models/project.issue/${issue.json.id}`, 'rahim', {
+      status: 'resolved',
+    }),
+    422,
+  );
+  expectStatus(
+    await call('PATCH', `/api/v1/models/project.issue/${issue.json.id}`, 'rahim', {
+      status: 'resolved',
+      resolution: 'Second supplier delivered.',
+    }),
+    200,
+  );
+
+  // A change request: refused without anything asked; then the sponsor and a manager approve, and it is applied.
+  const change = await call('POST', '/api/v1/models/project.change', 'rahim', {
+    project: p.json.id,
+    title: 'Two more weeks for the floods',
+    reason: 'The monsoon came early.',
+  });
+  expectStatus(change, 201);
+  expect(change.json.name).toMatch(/^CR-\d{4}$/);
+  const run = (t: string, as: string) =>
+    call('POST', `/api/v1/models/project.change/${change.json.id}/transitions/${t}`, as);
+  expectStatus(await run('submit', 'rahim'), 409);
+  expectStatus(
+    await call('PATCH', `/api/v1/models/project.change/${change.json.id}`, 'rahim', {
+      newDateEnd: '2027-07-14',
+    }),
+    200,
+  );
+  expectStatus(await run('submit', 'rahim'), 200);
+  const decide = async (who: string) => {
+    const inbox = (await call('GET', '/api/v1/approvals/inbox', who)).json.requests as Json[];
+    const mine = inbox.filter(
+      (x) => x.targetModel === 'project.change' && x.targetId === change.json.id,
+    );
+    for (const x of mine)
+      expectStatus(await call('POST', `/api/v1/approvals/requests/${x.id}/approve`, who), 200);
+    return mine.length;
+  };
+  expect(await decide('sumi')).toBe(1);
+  expect(await decide('maria')).toBe(1);
+  const applied = (
+    await call(
+      'GET',
+      `/api/v1/models/project.change/${change.json.id}?fields=state,previousDateEnd,appliedAt`,
+      'maria',
+    )
+  ).json;
+  expect(applied).toMatchObject({ state: 'applied', previousDateEnd: '2027-06-30' });
+  expect(
+    (
+      await call(
+        'GET',
+        `/api/v1/models/project.project/${p.json.id}?fields=dateEnd,baselineEnd`,
+        'maria',
+      )
+    ).json,
+  ).toMatchObject({ dateEnd: '2027-07-14', baselineEnd: '2027-07-14' });
+
+  // A status report: the figures and open risks filled in; sent, it is posted on the project; the sponsor follows.
+  const draft = await call('POST', '/api/v1/models/project.status.report/onchange', 'rahim', {
+    values: { project: p.json.id },
+    changed: ['project'],
+  });
+  expectStatus(draft, 200);
+  expect(draft.json.values.health).toBe('on_track');
+  expect(draft.json.values.risks).toContain('Monsoon floods the site');
+  const report = await call('POST', '/api/v1/models/project.status.report', 'rahim', {
+    project: p.json.id,
+    health: draft.json.values.health,
+    progress: draft.json.values.progress,
+    risks: draft.json.values.risks,
+    done: 'Plinth raised.',
+    next: 'Walls.',
+  });
+  expectStatus(report, 201);
+  expectStatus(
+    await call(
+      'POST',
+      `/api/v1/models/project.status.report/${report.json.id}/transitions/send`,
+      'rahim',
+    ),
+    200,
+  );
+  const chatter = await call('GET', `/api/v1/chatter/project.project/${p.json.id}`, 'maria');
+  expectStatus(chatter, 200);
+  expect(JSON.stringify(chatter.json)).toContain('Plinth raised.');
+  expect(JSON.stringify(chatter.json.followers ?? chatter.json)).toContain(String(idOf('sumi')));
+  // Sent reports are no longer the author's to change.
+  expectStatus(
+    await call('PATCH', `/api/v1/models/project.status.report/${report.json.id}`, 'rahim', {
+      done: 'Changed afterwards',
+    }),
+    403,
+  );
+});
+
+test('the schedule (RFC 0026 step 5): the critical path, waiting tasks moved after a slip, repeating tasks', async () => {
+  const p = await call('POST', '/api/v1/models/project.project', 'maria', {
+    name: 'Layer house',
+    dateStart: '2027-03-01',
+  });
+  expectStatus(p, 201);
+  const task = async (name: string, dateStart: string, deadline: string, extra = {}) => {
+    const r = await call('POST', '/api/v1/models/project.task', 'rahim', {
+      name,
+      project: p.json.id,
+      stage: stages['New'],
+      dateStart,
+      deadline,
+      ...extra,
+    });
+    expectStatus(r, 201);
+    return r.json.id as number;
+  };
+  const a = await task('Dig', '2027-03-01', '2027-03-03');
+  const b = await task('Pour', '2027-03-04', '2027-03-08');
+  const c = await task('Order roof', '2027-03-04', '2027-03-05');
+  for (const [pred, succ] of [
+    [a, b],
+    [a, c],
+  ])
+    expectStatus(
+      await call('POST', '/api/v1/models/project.task.link', 'rahim', {
+        predecessor: pred,
+        successor: succ,
+      }),
+      201,
+    );
+  expectStatus(
+    await call('POST', '/api/v1/models/project.task', 'rahim', {
+      name: 'Backwards',
+      project: p.json.id,
+      dateStart: '2027-03-05',
+      deadline: '2027-03-01',
+    }),
+    422,
+  );
+  const schedule = await call('GET', `/api/v1/projects/${p.json.id}/schedule`, 'rahim');
+  expectStatus(schedule, 200);
+  const byId = new Map((schedule.json.tasks as Json[]).map((t) => [t.id, t]));
+  expect(byId.get(a).critical).toBe(true);
+  expect(byId.get(b).critical).toBe(true);
+  expect(byId.get(c)).toMatchObject({ critical: false, float: 3 });
+  expectStatus(await call('GET', `/api/v1/projects/${p.json.id}/schedule`, 'bob'), 403);
+
+  // Dig slips two days: Pour and Order roof move two days later, keeping their length.
+  expectStatus(
+    await call('PATCH', `/api/v1/models/project.task/${a}`, 'rahim', { deadline: '2027-03-05' }),
+    200,
+  );
+  const applied = await call('POST', `/api/v1/projects/${p.json.id}/schedule/apply`, 'rahim', {});
+  expectStatus(applied, 200);
+  expect(applied.json.moved).toHaveLength(2);
+  expect(
+    (await call('GET', `/api/v1/models/project.task/${b}?fields=dateStart,deadline`, 'rahim')).json,
+  ).toMatchObject({ dateStart: '2027-03-06', deadline: '2027-03-10' });
+
+  // A weekly inspection, done: the next one is made a week later by the refresh, once.
+  const weekly = await task('Inspection', '2027-03-01', '2027-03-01', {
+    repeatEvery: 1,
+    repeatUnit: 'week',
+    repeatUntil: '2027-03-31',
+  });
+  expectStatus(
+    await call('PATCH', `/api/v1/models/project.task/${weekly}`, 'rahim', {
+      stage: stages['Done'],
+    }),
+    200,
+  );
+  for (let i = 0; i < 2; i += 1)
+    expectStatus(
+      await call('POST', '/api/v1/projects/refresh', 'maria', { projects: [p.json.id] }),
+      200,
+    );
+  const next = (await call('GET', `/api/v1/models/project.task/${weekly}?fields=nextTask`, 'rahim'))
+    .json.nextTask;
+  expect(next).toEqual(expect.any(Number));
+  expect(
+    (
+      await call(
+        'GET',
+        `/api/v1/models/project.task/${next}?fields=name,dateStart,deadline,done,repeatEvery`,
+        'rahim',
+      )
+    ).json,
+  ).toMatchObject({
+    name: 'Inspection',
+    dateStart: '2027-03-08',
+    deadline: '2027-03-08',
+    done: false,
+    repeatEvery: 1,
+  });
+  const copies = await call(
+    'GET',
+    `/api/v1/models/project.task?filter=${encodeURIComponent(JSON.stringify({ project: p.json.id, name: 'Inspection' }))}&fields=id`,
+    'rahim',
+  );
+  expect(copies.json.items).toHaveLength(2);
 });
