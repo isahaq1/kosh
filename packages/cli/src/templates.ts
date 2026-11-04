@@ -38,6 +38,8 @@ export type AppName =
   | 'sign'
   | 'approvals'
   | 'sale_project'
+  | 'project_account'
+  | 'project_purchase'
   | 'sale_stock'
   | 'purchase_stock'
   | 'stock_account'
@@ -260,6 +262,20 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'saleProject',
     bridge: ['sales', 'project'],
+  },
+  project_account: {
+    label:
+      'Bridge: each project its cost centre, costs booked on it against its budget (Projects ↔ Accounting)',
+    icon: '🔗',
+    server: 'projectAccount',
+    bridge: ['project', 'accounting'],
+  },
+  project_purchase: {
+    label:
+      'Bridge: purchase orders on a project not billed yet, committed against its budget (Projects ↔ Purchase)',
+    icon: '🔗',
+    server: 'projectPurchase',
+    bridge: ['project', 'purchase', 'accounting'],
   },
   sale_stock: {
     label: 'Bridge: deliveries from sales orders (Sales ↔ Stockroom)',

@@ -196,3 +196,37 @@ test('a team member added at 120 % in total across projects shows over-allocated
   const rahim = page.getByRole('row', { name: /Rahim Uddin/ });
   await expect(rahim.getByRole('cell').first()).toHaveText('120%');
 });
+
+test('money and health on a project (RFC 0026 step 4): a manager refreshes the figures and sets the health with a reason; a user sees no money', async ({
+  page,
+  browser,
+}) => {
+  await signIn(page, 'dina');
+  await page.goto('/projects/a/projects.action_projects');
+  await page
+    .getByRole('row', { name: /Bridge works/ })
+    .first()
+    .click();
+  await expect(page.getByRole('group', { name: 'Money' })).toBeVisible();
+  const refreshed = page.waitForResponse(
+    (r) => r.url().includes('/api/v1/projects/refresh') && r.request().method() === 'POST',
+  );
+  await page.getByRole('button', { name: 'Refresh the figures' }).click();
+  expect((await refreshed).status()).toBe(200);
+  const health = page.getByRole('group', { name: 'Health', exact: true });
+  await expect(health).toContainText(/On track|At risk|Off track/);
+
+  const context = await browser.newContext();
+  const rahim = await context.newPage();
+  await signIn(rahim, 'rahim');
+  await rahim.goto('/projects/a/projects.action_projects');
+  await rahim
+    .getByRole('row', { name: /Bridge works/ })
+    .first()
+    .click();
+  await expect(rahim.getByRole('heading', { name: 'Bridge works' })).toBeVisible();
+  await expect(rahim.getByRole('group', { name: 'Health', exact: true })).toBeVisible();
+  await expect(rahim.getByRole('button', { name: 'Refresh the figures' })).toHaveCount(0);
+  await expect(rahim.getByText('Left in the budget')).toHaveCount(0);
+  await context.close();
+});

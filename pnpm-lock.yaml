@@ -131,6 +131,12 @@ importers:
       '@kosh/project':
         specifier: workspace:*
         version: link:../../modules/project
+      '@kosh/project_account':
+        specifier: workspace:*
+        version: link:../../modules/project_account
+      '@kosh/project_purchase':
+        specifier: workspace:*
+        version: link:../../modules/project_purchase
       '@kosh/purchase':
         specifier: workspace:*
         version: link:../../modules/purchase
@@ -458,6 +464,12 @@ importers:
       '@kosh/project':
         specifier: workspace:*
         version: link:../../modules/project
+      '@kosh/project_account':
+        specifier: workspace:*
+        version: link:../../modules/project_account
+      '@kosh/project_purchase':
+        specifier: workspace:*
+        version: link:../../modules/project_purchase
       '@kosh/purchase':
         specifier: workspace:*
         version: link:../../modules/purchase
@@ -1729,6 +1741,31 @@ importers:
         specifier: ^17.0.21
         version: 17.0.21(i18next@26.4.7(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
 
+  modules/project_account:
+    dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../accounting
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/project':
+        specifier: workspace:*
+        version: link:../project
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   modules/project_portal:
     dependencies:
       '@kosh/contacts':
@@ -1753,6 +1790,40 @@ importers:
       '@kosh/product':
         specifier: workspace:*
         version: link:../product
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/project_purchase:
+    dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../accounting
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/project':
+        specifier: workspace:*
+        version: link:../project
+      '@kosh/project_account':
+        specifier: workspace:*
+        version: link:../project_account
+      '@kosh/purchase':
+        specifier: workspace:*
+        version: link:../purchase
+      '@kosh/purchase_account':
+        specifier: workspace:*
+        version: link:../purchase_account
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
       '@testcontainers/postgresql':
         specifier: ^12.2.1
         version: 12.2.1
@@ -2825,6 +2896,12 @@ importers:
       '@kosh/project':
         specifier: workspace:*
         version: link:../../modules/project
+      '@kosh/project_account':
+        specifier: workspace:*
+        version: link:../../modules/project_account
+      '@kosh/project_purchase':
+        specifier: workspace:*
+        version: link:../../modules/project_purchase
       '@kosh/purchase':
         specifier: workspace:*
         version: link:../../modules/purchase

@@ -50,6 +50,8 @@ import { pos } from '@kosh/pos';
 import { posStock } from '@kosh/pos_stock';
 import { product } from '@kosh/product';
 import { project } from '@kosh/project';
+import { projectAccount } from '@kosh/project_account';
+import { projectPurchase } from '@kosh/project_purchase';
 import { purchase } from '@kosh/purchase';
 import { purchaseAccount } from '@kosh/purchase_account';
 import { purchaseStock } from '@kosh/purchase_stock';
@@ -157,6 +159,8 @@ const CATALOGUE = [
   saleAccount,
   purchaseAccount,
   saleProject,
+  projectAccount,
+  projectPurchase,
   saleStock,
   purchaseStock,
   stockAccount,
