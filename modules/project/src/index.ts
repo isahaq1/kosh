@@ -14,6 +14,7 @@ import { action, calendar, form, gantt, hierarchy, kanban, list, pivot, search }
 import type { Env } from './.kosh/bindings.js';
 import { projectDemo, SUPPORT_PROJECT } from './demo.js';
 import {
+  ProjectBudgetLine,
   ProjectMember,
   ProjectPhase,
   ProjectPlan,
@@ -33,6 +34,9 @@ import { registerProjectRoutes } from './routes.js';
 
 export { SUPPORT_PROJECT } from './demo.js';
 export {
+  HEALTH,
+  judgeHealth,
+  ProjectBudgetLine,
   ProjectMember,
   ProjectPhase,
   ProjectPlan,
@@ -49,7 +53,7 @@ export {
   peakAllocation,
   projectShutro,
 } from './module.js';
-export { mondayOf, workload } from './routes.js';
+export { mondayOf, refreshProjects, workload } from './routes.js';
 
 export const project: ReturnType<typeof defineModule> = defineModule({
   shutro: projectShutro,
@@ -75,6 +79,20 @@ export const project: ReturnType<typeof defineModule> = defineModule({
             key: 'projectTimesheetStep',
             help: 'Hours that are not a multiple of the step are refused.',
           },
+        ],
+      },
+      {
+        key: 'health',
+        label: 'Health',
+        description:
+          'When a project shows at risk or off track: how far behind its schedule, how much of its budget used.',
+        keywords: 'health schedule behind budget risk off track',
+        scope: 'company',
+        editors: ['project.manager'],
+        fields: [
+          { key: 'projectHealthBehindRisk', min: 0 },
+          { key: 'projectHealthBehindOff', min: 0 },
+          { key: 'projectHealthCostRisk', min: 0 },
         ],
       },
       {
@@ -194,6 +212,34 @@ export const project: ReturnType<typeof defineModule> = defineModule({
         model: 'project.task',
         measure: 'sum:plannedHours',
         filter: { 'stage.done': false },
+        w: 3,
+      },
+      {
+        id: 'projects_by_health',
+        title: 'Projects by health',
+        kind: 'chart',
+        model: 'project.project',
+        measure: 'count',
+        groupBy: 'health',
+        chart: 'pie',
+        w: 6,
+      },
+      {
+        id: 'plans_waiting',
+        title: 'Plans waiting for a decision',
+        kind: 'kpi',
+        model: 'project.plan',
+        measure: 'count',
+        filter: { state: 'submitted' },
+        w: 3,
+      },
+      {
+        id: 'phases_overdue',
+        title: 'Phases overdue',
+        kind: 'kpi',
+        model: 'project.phase',
+        measure: 'count',
+        filter: { late: true },
         w: 3,
       },
       {
@@ -380,13 +426,17 @@ export const project: ReturnType<typeof defineModule> = defineModule({
         'manager',
         { field: 'priority', widget: 'badge' },
         { field: 'riskLevel', widget: 'badge' },
+        { field: 'health', widget: 'badge' },
         { field: 'progress', widget: 'progress' },
         { field: 'dateEnd', widget: 'daysLeft' },
         { field: 'taskCount', sum: true },
         { field: 'hours', sum: true },
       ],
       defaultOrder: ['sequence asc', 'name asc'],
-      decorations: { danger: { riskLevel: { in: ['high', 'critical'] } } },
+      decorations: {
+        danger: { health: 'off_track' },
+        warning: { health: 'at_risk' },
+      },
     }),
     'project.project.form': form(ProjectProject, (k) => ({
       header: { buttons: [] },
@@ -441,7 +491,34 @@ export const project: ReturnType<typeof defineModule> = defineModule({
         k.group('people', ['manager', 'sponsor', 'owner', 'priority', 'riskLevel'], {
           label: 'People and risk',
         }),
-        k.group('dates', ['dateStart', 'dateEnd', 'progress', 'taskCount', 'hours', 'labourCost']),
+        k.group('dates', ['dateStart', 'dateEnd', 'progress', 'taskCount', 'hours']),
+        k.group('health_group', ['health', 'healthNotes', 'healthCheckedAt'], {
+          label: 'Health',
+          description:
+            'From the figures — schedule against time elapsed, late milestones, the budget used —, refreshed hourly.',
+        }),
+        k.group('health_override', ['healthComputed', 'healthOverride', 'healthReason'], {
+          label: 'Health set by hand',
+          description:
+            'The manager may override what the figures say, with the reason; it stays in the history.',
+        }),
+        k.group(
+          'money',
+          ['budget', 'labourCost', 'bookedCost', 'committedCost', 'actualCost', 'variance'],
+          {
+            label: 'Money',
+            description:
+              'Labour from timesheets at each member’s cost; booked and committed costs from Accounting and Purchase on the project’s cost centre.',
+          },
+        ),
+        k.component('refresh', 'projects.Refresh'),
+        k.lines('budgetLines', [
+          { field: 'name', id: 'budget_name' },
+          { field: 'category', id: 'budget_category' },
+          { field: 'phase', id: 'budget_phase' },
+          { field: 'workPackage', id: 'budget_wp' },
+          { field: 'planned', id: 'budget_planned', sum: true },
+        ]),
         k.group('baseline', ['baselineStart', 'baselineEnd', 'baselineBudget', 'slipDays'], {
           label: 'Baseline',
           description:
@@ -587,6 +664,19 @@ export const project: ReturnType<typeof defineModule> = defineModule({
       measures: [{ sum: 'hours' }],
       comparison: { field: 'date', mode: 'previous' },
     }),
+    'project.budget.line.list': list(ProjectBudgetLine, {
+      columns: [
+        'project',
+        'name',
+        'category',
+        'phase',
+        'workPackage',
+        { field: 'planned', sum: true },
+      ],
+    }),
+    'project.budget.line.form': form(ProjectBudgetLine, (k) => ({
+      sheet: [k.group('main', ['project', 'name', 'category', 'phase', 'workPackage', 'planned'])],
+    })),
     'project.role.list': list(ProjectRole, {
       columns: ['sequence', 'code', 'name', 'defaultHourlyCost'],
       inlineEdit: ['sequence', 'code', 'name', 'defaultHourlyCost'],
@@ -708,7 +798,10 @@ export const project: ReturnType<typeof defineModule> = defineModule({
         { field: 'status', widget: 'badge' },
         { field: 'progress', widget: 'progress' },
       ],
-      decorations: { neutral: { status: { in: ['done', 'cancelled'] } } },
+      decorations: {
+        danger: { late: true },
+        neutral: { status: { in: ['done', 'cancelled'] } },
+      },
     }),
     'project.phase.form': form(ProjectPhase, (k) => ({
       sheet: [
@@ -841,7 +934,7 @@ export const project: ReturnType<typeof defineModule> = defineModule({
         },
         late: {
           label: 'Late',
-          domain: { dateEnd: { lt: { $today: 0 } }, status: { notIn: ['done', 'cancelled'] } },
+          domain: { late: true },
         },
       },
       groupBy: ['project', 'status', 'manager'],
@@ -867,6 +960,10 @@ export const project: ReturnType<typeof defineModule> = defineModule({
       fields: ['successor.name', 'predecessor.name'],
     }),
     'project.role': search(ProjectRole, { fields: ['name', 'code'] }),
+    'project.budget.line': search(ProjectBudgetLine, {
+      fields: ['name', 'project.name'],
+      groupBy: ['project', 'category', 'phase'],
+    }),
     'project.member': search(ProjectMember, {
       fields: ['user.name', 'project.name'],
       groupBy: ['project', 'user', 'role'],
@@ -886,10 +983,12 @@ export const project: ReturnType<typeof defineModule> = defineModule({
     'project.project': search(ProjectProject, {
       fields: ['name', 'code', 'partner.name'],
       filters: {
+        atRisk: { label: 'At risk', domain: { health: 'at_risk' }, group: 'health' },
+        offTrack: { label: 'Off track', domain: { health: 'off_track' }, group: 'health' },
         risky: { label: 'High risk', domain: { riskLevel: { in: ['high', 'critical'] } } },
         programmes: { label: 'Programmes', domain: { children: { any: {} } } },
       },
-      groupBy: ['manager', 'partner', 'type', 'parentProject', 'riskLevel'],
+      groupBy: ['health', 'manager', 'partner', 'type', 'parentProject', 'riskLevel'],
     }),
     'project.task': search(ProjectTask, {
       fields: ['name', 'project.name', 'partner.name'],

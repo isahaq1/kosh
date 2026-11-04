@@ -758,3 +758,131 @@ test('teams (RFC 0026 step 3): roles and hourly costs for managers only, over-al
   expectStatus(await call('GET', '/api/v1/projects/workload?from=2027-03-01', 'bob'), 403);
   expectStatus(await call('GET', '/api/v1/projects/workload?weeks=99', 'maria'), 422);
 });
+
+test('money and health (RFC 0026 step 4): budget lines and figures for managers only, health from the schedule, milestones and costs, overridden with a reason', async () => {
+  const day = (offset: number) =>
+    new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+  const p = await call('POST', '/api/v1/models/project.project', 'maria', {
+    name: 'Brooder house',
+    dateStart: day(-50),
+    dateEnd: day(50),
+  });
+  expectStatus(p, 201);
+  // Budget lines are the managers'.
+  expectStatus(
+    await call('POST', '/api/v1/models/project.budget.line', 'rahim', {
+      project: p.json.id,
+      name: 'Bricks',
+      planned: '1000',
+    }),
+    403,
+  );
+  expectStatus(
+    await call('POST', '/api/v1/models/project.budget.line', 'maria', {
+      project: p.json.id,
+      name: 'Bricks',
+      category: 'materials',
+      planned: '1000',
+    }),
+    201,
+  );
+  const figures = async () =>
+    (
+      await call(
+        'GET',
+        `/api/v1/models/project.project/${p.json.id}?fields=budget,variance,actualCost,health,healthComputed,healthNotes`,
+        'maria',
+      )
+    ).json;
+  expect(Number((await figures()).budget)).toBe(1000);
+  expectStatus(
+    await call('GET', `/api/v1/models/project.project/${p.json.id}?fields=budget`, 'rahim'),
+    403,
+  );
+
+  // Half the time gone, nothing done: off track once refreshed (only managers refresh).
+  expectStatus(
+    await call('POST', '/api/v1/projects/refresh', 'rahim', { projects: [p.json.id] }),
+    403,
+  );
+  const refreshed = await call('POST', '/api/v1/projects/refresh', 'maria', {
+    projects: [p.json.id],
+  });
+  expectStatus(refreshed, 200);
+  expect(refreshed.json.refreshed).toBe(1);
+  let now = await figures();
+  expect(now.health).toBe('off_track');
+  expect(now.healthNotes).toContain('points behind');
+  expect(Number(now.variance)).toBe(1000);
+
+  // A phase past its end and not finished is marked late by the refresh.
+  const phase = await call('POST', '/api/v1/models/project.phase', 'maria', {
+    name: 'Foundations',
+    project: p.json.id,
+    dateStart: day(-40),
+    dateEnd: day(-1),
+  });
+  expectStatus(phase, 201);
+  await call('POST', '/api/v1/projects/refresh', 'maria', { projects: [p.json.id] });
+  expect(
+    (await call('GET', `/api/v1/models/project.phase/${phase.json.id}?fields=late`, 'rahim')).json
+      .late,
+  ).toBe(true);
+  // Half done: on track; a milestone late: at risk.
+  const task = await call('POST', '/api/v1/models/project.task', 'maria', {
+    name: 'Walls',
+    project: p.json.id,
+    stage: stages['Done'],
+    plannedHours: '5',
+  });
+  await call('POST', '/api/v1/models/project.task', 'maria', {
+    name: 'Roof',
+    project: p.json.id,
+    stage: stages['New'],
+    plannedHours: '5',
+  });
+  expectStatus(task, 201);
+  await call('POST', '/api/v1/projects/refresh', 'maria', { projects: [p.json.id] });
+  expect((await figures()).health).toBe('on_track');
+  await call('POST', '/api/v1/models/project.task', 'maria', {
+    name: 'Inspection',
+    project: p.json.id,
+    stage: stages['New'],
+    milestone: true,
+    deadline: day(-2),
+  });
+  await call('POST', '/api/v1/projects/refresh', 'maria', { projects: [p.json.id] });
+  now = await figures();
+  expect(now.health).toBe('at_risk');
+  expect(now.healthNotes).toContain('milestone');
+
+  // Overridden by the manager: only with the reason; the figures stay underneath.
+  expectStatus(
+    await call('PATCH', `/api/v1/models/project.project/${p.json.id}`, 'maria', {
+      healthOverride: 'on_track',
+    }),
+    422,
+  );
+  expectStatus(
+    await call('PATCH', `/api/v1/models/project.project/${p.json.id}`, 'maria', {
+      healthOverride: 'on_track',
+      healthReason: 'The inspector moved the visit; nothing is late on our side.',
+    }),
+    200,
+  );
+  now = await figures();
+  expect(now.health).toBe('on_track');
+  expect(now.healthComputed).toBe('at_risk');
+  // A user's new project form computes without the money (the managers' to see).
+  const blank = await call('POST', '/api/v1/models/project.project/onchange', 'rahim', {
+    values: { name: 'x' },
+    changed: ['name'],
+  });
+  expectStatus(blank, 200);
+  expect(blank.json.values).not.toHaveProperty('variance');
+  // Everyone sees the health.
+  expect(
+    (await call('GET', `/api/v1/models/project.project/${p.json.id}?fields=health`, 'rahim')).json
+      .health,
+  ).toBe('on_track');
+});

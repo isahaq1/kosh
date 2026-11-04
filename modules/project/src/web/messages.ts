@@ -1,6 +1,7 @@
 /** Messages of the Projects screens (namespace `project`), in English and Bangla. */
 export const messages: Readonly<Record<string, object>> = {
   en: {
+    refresh: { button: 'Refresh the figures' },
     workload: {
       title: 'Workload',
       caption: 'Each person’s allocation week by week across their projects',
@@ -29,6 +30,7 @@ export const messages: Readonly<Record<string, object>> = {
     },
   },
   bn: {
+    refresh: { button: 'হিসাব হালনাগাদ করুন' },
     workload: {
       title: 'কাজের চাপ',
       caption: 'প্রত্যেকের প্রকল্পগুলোতে সপ্তাহভিত্তিক বরাদ্দ',

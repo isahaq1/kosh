@@ -42,6 +42,20 @@ export const CompanyProject = extendModel('res.company', {
       label: 'Require an approved plan',
       help: 'A new project (not inside a programme) starts from an approved plan.',
     }),
+    projectHealthBehindRisk: f.integer({
+      default: 10,
+      label: 'At risk when behind by (points)',
+      help: 'Progress this many points behind the share of time elapsed puts a project at risk.',
+    }),
+    projectHealthBehindOff: f.integer({
+      default: 25,
+      label: 'Off track when behind by (points)',
+    }),
+    projectHealthCostRisk: f.integer({
+      default: 90,
+      label: 'At risk when the budget is used to (%)',
+      help: 'Actual and committed costs at this share of the budget put a project at risk; beyond the budget, off track.',
+    }),
   },
 });
 
@@ -188,6 +202,15 @@ const MANAGERS_ONLY = { read: ['project.manager'], write: ['project.manager'] } 
  * #34), so the compute running for a user's timesheet needs `project.user` here; nobody writes a computed field by hand.
  */
 const MANAGERS_SEE = { read: ['project.manager'], write: ['project.user'] } as const;
+
+/** Whether the scope may read the managers' money fields (computes for others leave them at zero, unread). */
+function seesMoney(env: {
+  readonly su: boolean;
+  readonly administrator: boolean;
+  readonly groups: ReadonlySet<string>;
+}): boolean {
+  return env.su || env.administrator || env.groups.has('project.manager');
+}
 
 /** A role people play in projects, with the hourly cost a member in it has unless given their own. */
 export const ProjectRole = defineModel('project.role', {
@@ -610,6 +633,106 @@ export const ProjectPlan = defineModel('project.plan', {
   },
 });
 
+export const HEALTH = { on_track: 'On track', at_risk: 'At risk', off_track: 'Off track' } as const;
+export type Health = keyof typeof HEALTH;
+
+/** The health thresholds of a company (App settings › Projects › Health). */
+export interface HealthRules {
+  readonly behindRisk: number;
+  readonly behindOff: number;
+  readonly costRisk: number;
+}
+
+/** What a project's figures say, and why (RFC 0026 §2): the worst of schedule, milestones and cost. */
+export function judgeHealth(
+  p: {
+    readonly today: string;
+    readonly dateStart: string | null;
+    readonly dateEnd: string | null;
+    readonly progress: number;
+    readonly milestonesLate: number;
+    readonly budget: number;
+    readonly spent: number;
+  },
+  rules: HealthRules,
+): { health: Health; reasons: string[] } {
+  const reasons: string[] = [];
+  let level = 0;
+  const raise = (to: number, why: string) => {
+    level = Math.max(level, to);
+    reasons.push(why);
+  };
+  if (p.dateEnd !== null && p.today > p.dateEnd && p.progress < 100)
+    raise(2, `Past its deadline at ${p.progress}%.`);
+  else if (p.dateStart !== null && p.dateEnd !== null && p.dateEnd > p.dateStart) {
+    const span = Date.parse(p.dateEnd) - Date.parse(p.dateStart);
+    const gone = Math.min(Math.max(Date.parse(p.today) - Date.parse(p.dateStart), 0), span);
+    const elapsed = Math.round((gone / span) * 100);
+    const behind = elapsed - p.progress;
+    if (behind >= rules.behindOff)
+      raise(2, `${behind} points behind: ${elapsed}% of the time gone, ${p.progress}% done.`);
+    else if (behind >= rules.behindRisk)
+      raise(1, `${behind} points behind: ${elapsed}% of the time gone, ${p.progress}% done.`);
+  }
+  if (p.milestonesLate > 0) raise(1, `${p.milestonesLate} milestone(s) late.`);
+  if (p.budget > 0) {
+    const used = Math.round((p.spent / p.budget) * 100);
+    if (used > 100) raise(2, `${used}% of the budget used.`);
+    else if (used >= rules.costRisk) raise(1, `${used}% of the budget used.`);
+  }
+  const health: Health = level === 2 ? 'off_track' : level === 1 ? 'at_risk' : 'on_track';
+  return { health, reasons };
+}
+
+const BUDGET_CATEGORIES = {
+  labour: 'Labour',
+  materials: 'Materials',
+  services: 'Services',
+  equipment: 'Equipment',
+  other: 'Other',
+} as const;
+
+/** A line of a project's budget (RFC 0026 step 4): what for, in which phase or work package, planned. */
+export const ProjectBudgetLine = defineModel('project.budget.line', {
+  label: 'Project budget line',
+  order: ['project asc', 'sequence asc', 'id asc'],
+  companyScoped: { required: true },
+  access: { 'project.manager': ALL },
+  fields: {
+    project: f.many2one('project.project', {
+      required: true,
+      checkCompany: true,
+      ondelete: 'cascade',
+    }),
+    sequence: f.integer({ required: true, default: 10 }),
+    name: f.char({ required: true, label: 'What for' }),
+    category: f.selection(BUDGET_CATEGORIES, { required: true, default: 'other' }),
+    phase: f.many2one('project.phase', { ondelete: 'set null' }),
+    workPackage: f.many2one('project.work.package', {
+      ondelete: 'set null',
+      label: 'Work package',
+    }),
+    planned: f.decimal({ scale: 2, required: true, default: '0' }),
+  },
+  sqlConstraints: {
+    planned: { check: orm.sql`planned >= 0`, message: 'A planned amount is not negative.' },
+  },
+  constraints: {
+    sameProject: {
+      ...check('project.budget.line', ['phase', 'workPackage', 'project'], async (lines) =>
+        (await lines.load({ phase: ['project'], workPackage: ['project'] }))
+          .filter(
+            (l) =>
+              (l.phase !== null && l.phase.project.id !== l.project.id) ||
+              (l.workPackage !== null && l.workPackage.project.id !== l.project.id),
+          )
+          .map((l) => l.id),
+      ),
+      message: 'A budget line’s phase and work package are in its project.',
+    },
+  },
+});
+
 export const ProjectProject = defineModel('project.project', {
   label: 'Project',
   recName: 'name',
@@ -617,7 +740,18 @@ export const ProjectProject = defineModel('project.project', {
   archivable: true,
   companyScoped: { required: true },
   hierarchy: { parent: 'parentProject', path: 'parentPath' },
-  tracking: ['manager', 'partner', 'dateEnd', 'sponsor', 'owner', 'riskLevel', 'priority'],
+  tracking: [
+    'manager',
+    'partner',
+    'dateEnd',
+    'sponsor',
+    'owner',
+    'riskLevel',
+    'priority',
+    'health',
+    'healthOverride',
+    'healthReason',
+  ],
   access: { 'project.user': ['read', 'write', 'create'], 'project.manager': ALL },
   rules: {
     all: {
@@ -701,6 +835,79 @@ export const ProjectProject = defineModel('project.project', {
     members: f.one2many('project.member', 'project', { label: 'Team' }),
     timesheets: f.one2many('project.timesheet', 'project'),
     /** Timesheet hours at each member's cost (RFC 0026 step 3); Projects managers only. */
+    budgetLines: f.one2many('project.budget.line', 'project', { label: 'Budget' }),
+    /** The budget lines' planned amounts together (managers only). */
+    budget: f.decimal({
+      scale: 2,
+      store: true,
+      label: 'Budget',
+      groups: MANAGERS_SEE,
+      ...compute('project.project', 'budget', ['budgetLines.planned'], (projects) => {
+        if (!seesMoney(projects.env)) {
+          for (const p of projects) p.budget = orm.toDecimal(0);
+          return;
+        }
+        for (const p of projects)
+          p.budget = [...p.budgetLines].reduce((t, l) => t.plus(l.planned), orm.toDecimal(0));
+      }),
+    }),
+    /** Posted costs from the books on the project's cost centre (written by the refresh; Accounting's bridge). */
+    bookedCost: f.decimal({ scale: 2, label: 'Booked costs', groups: MANAGERS_SEE }),
+    /** Confirmed purchase orders on its cost centre not billed yet (written by the refresh; Purchase's bridge). */
+    committedCost: f.decimal({ scale: 2, label: 'Committed', groups: MANAGERS_SEE }),
+    actualCost: f.decimal({
+      scale: 2,
+      label: 'Actual cost',
+      groups: MANAGERS_SEE,
+      help: 'Labour from timesheets plus costs booked on its cost centre.',
+      ...compute('project.project', 'actualCost', ['labourCost', 'bookedCost'], (projects) => {
+        if (!seesMoney(projects.env)) {
+          for (const p of projects) p.actualCost = orm.toDecimal(0);
+          return;
+        }
+        for (const p of projects)
+          p.actualCost = orm.toDecimal(p.labourCost ?? 0).plus(p.bookedCost ?? 0);
+      }),
+    }),
+    variance: f.decimal({
+      scale: 2,
+      label: 'Left in the budget',
+      groups: MANAGERS_SEE,
+      help: 'The budget less the actual and committed costs; negative when beyond it.',
+      ...compute(
+        'project.project',
+        'variance',
+        ['budget', 'labourCost', 'bookedCost', 'committedCost'],
+        (projects) => {
+          if (!seesMoney(projects.env)) {
+            for (const p of projects) p.variance = orm.toDecimal(0);
+            return;
+          }
+          for (const p of projects)
+            p.variance = orm
+              .toDecimal(p.budget ?? 0)
+              .minus(p.labourCost ?? 0)
+              .minus(p.bookedCost ?? 0)
+              .minus(p.committedCost ?? 0);
+        },
+      ),
+    }),
+    /** What the figures say (written by the refresh, hourly and on demand). */
+    healthComputed: f.selection(HEALTH, { label: 'Health by the figures' }),
+    healthNotes: f.text({ label: 'Why', help: 'What the figures said at the last refresh.' }),
+    healthCheckedAt: f.datetime({ label: 'Checked' }),
+    healthOverride: f.selection(HEALTH, {
+      label: 'Health set by the manager',
+      help: 'Overrides the figures until cleared; give the reason.',
+    }),
+    healthReason: f.text({ label: 'Reason for the override' }),
+    health: f.selection(HEALTH, {
+      store: true,
+      label: 'Health',
+      ...compute('project.project', 'health', ['healthOverride', 'healthComputed'], (projects) => {
+        for (const p of projects) p.health = p.healthOverride ?? p.healthComputed ?? 'on_track';
+      }),
+    }),
     labourCost: f.decimal({
       scale: 2,
       store: true,
@@ -770,6 +977,14 @@ export const ProjectProject = defineModel('project.project', {
       }),
       message: 'A programme cannot be inside one of its own projects.',
     },
+    overrideReason: {
+      ...check('project.project', ['healthOverride', 'healthReason'], async (projects) =>
+        projects
+          .filter((p) => p.healthOverride !== null && (p.healthReason ?? '').trim() === '')
+          .map((p) => p.id),
+      ),
+      message: 'Setting the health by hand needs the reason.',
+    },
     dates: {
       ...check('project.project', ['dateStart', 'dateEnd'], async (projects) =>
         projects
@@ -816,6 +1031,16 @@ export const ProjectProject = defineModel('project.project', {
      * projects itself overrides it (`sale_project`: projects made by a confirmed order).
      */
     planNotNeeded: method('project.project', async (): Promise<Set<number>> => new Set<number>()),
+    /**
+     * The booked and committed costs of these projects, by project. Nothing here; the bridges add theirs
+     * (`project_account`: posted costs on each project's cost centre, made when missing; `project_purchase`:
+     * confirmed purchase orders not billed yet). Called as the system by the refresh.
+     */
+    moneyOf: method(
+      'project.project',
+      async (): Promise<Map<number, { booked: string; committed: string }>> =>
+        new Map<number, { booked: string; committed: string }>(),
+    ),
   },
 });
 
@@ -855,6 +1080,8 @@ export const ProjectPhase = defineModel('project.phase', {
     parentPath: f.char({ readonly: true, index: true }),
     children: f.one2many('project.phase', 'parentPhase', { label: 'Sub-phases' }),
     responsible: f.many2one('res.users', { ondelete: 'set null' }),
+    /** Its end has passed and it is not done or cancelled (set by the refresh, hourly). */
+    late: f.boolean({ default: false, label: 'Late' }),
     priority: f.selection(PRIORITIES, { required: true, default: 'normal' }),
     workPackages: f.one2many('project.work.package', 'phase', { label: 'Work packages' }),
     tasks: f.one2many('project.task', 'phase'),
@@ -1320,6 +1547,7 @@ export const projectShutro = defineModule({
     orm.defineSequence({ code: 'project.plan', prefix: 'PLAN-', padding: 4 }),
   ],
   models: [
+    ProjectBudgetLine,
     ProjectRole,
     ProjectMember,
     ProjectPlan,
