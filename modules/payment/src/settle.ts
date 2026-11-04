@@ -78,5 +78,6 @@ export async function settle(env: Env, result: PaymentResult): Promise<Settled |
     doneAt: new Date(),
   });
   await env.flush(); // checks run in this system scope, not at commit (Shutro request #11)
+  await env.emit('payment.transaction.done', { id: tx.id });
   return { ...same, state: 'done', changed: true, payment: payment.id };
 }

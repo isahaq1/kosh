@@ -13,11 +13,13 @@
  * counterpart lines: partial matches are records, residuals are computed from them, and a document is paid when
  * its counterpart lines are settled (`payments.ts` holds the matching).
  */
+
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
 import { approvalGuard, permissionsShutro, requestApprovals } from '@kosh/permissions';
 import { computeTaxes, productShutro, taxRule } from '@kosh/product';
 import { reportingShutro } from '@kosh/reporting';
+import { emitting } from '@kosh/server';
 import { type Decimal, type Money, orm } from '@kosh/server/orm';
 import {
   check,
@@ -1565,11 +1567,11 @@ export const AccountPayment = defineModel('account.payment', {
       states: { draft: 'Draft', posted: 'Posted', cancel: 'Cancelled' },
       initial: 'draft',
       transitions: {
-        post: {
+        post: emitting('account.payment.posted', {
           from: ['draft'],
           to: 'posted',
           before: records('account.payment', (payments) => postPayments(payments)),
-        },
+        }),
         cancel: { from: ['draft'], to: 'cancel' },
         redraft: { from: ['cancel'], to: 'draft' },
       },

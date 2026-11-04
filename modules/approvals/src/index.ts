@@ -327,6 +327,7 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
         ],
       },
     ],
+    events: [{ topic: 'approval.ask.approved', model: 'approval.ask', label: 'Request approved' }],
     accessLevels: {
       user: { label: 'Everyone (decide and ask)', groups: ['base.user'] },
       manager: {

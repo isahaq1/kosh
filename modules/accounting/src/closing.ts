@@ -157,6 +157,7 @@ export async function closeFiscalYear(env: Env, id: number): Promise<Closed> {
     if (c !== undefined && (c.lockDate === null || c.lockDate < year.dateTo))
       await su.model('res.company').browse([company.id]).write({ lockDate: year.dateTo });
   });
+  await env.emit('account.fiscal.year.closed', { id });
   return { id, state: 'closed', lockDate: year.dateTo, closingMove, result: net.neg().toString() };
 }
 

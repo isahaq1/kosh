@@ -4,7 +4,9 @@
  * the applicant's average rating shows to everyone. One email applies once per opening. Expected salaries are for
  * hiring managers only.
  */
+
 import { hrShutro } from '@kosh/hr';
+import { emitting } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
 import {
   check,
@@ -65,7 +67,7 @@ export const HiringOpening = defineModel('hiring.opening', {
       states: { open: 'Open', closed: 'Closed' },
       initial: 'open',
       transitions: {
-        close: { from: ['open'], to: 'closed' },
+        close: emitting('hiring.opening.closed', { from: ['open'], to: 'closed' }),
         reopen: { from: ['closed'], to: 'open' },
       },
     }),

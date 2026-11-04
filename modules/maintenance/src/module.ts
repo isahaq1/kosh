@@ -3,9 +3,10 @@
  * meter with their checklists, and maintenance orders — preventive or breakdown — whose checklist is ticked before
  * they are done, with labour hours and the downtime from report to finish.
  */
+
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
-import { installationSetting } from '@kosh/server';
+import { emitting, installationSetting } from '@kosh/server';
 import { type Decimal, type Id, orm } from '@kosh/server/orm';
 import {
   check,
@@ -353,7 +354,7 @@ export const MaintenanceRequest = defineModel('maintenance.request', {
       states: { new: 'New', progress: 'In progress', done: 'Done', cancel: 'Cancelled' },
       initial: 'new',
       transitions: {
-        start: {
+        start: emitting('maintenance.request.started', {
           from: ['new'],
           to: 'progress',
           after: records('maintenance.request', async (requests): Promise<void> => {
@@ -363,8 +364,8 @@ export const MaintenanceRequest = defineModel('maintenance.request', {
               .browse(requests.ids)
               .started();
           }),
-        },
-        finish: {
+        }),
+        finish: emitting('maintenance.request.done', {
           from: ['progress'],
           to: 'done',
           guard: records('maintenance.request', async (requests) =>
@@ -400,7 +401,7 @@ export const MaintenanceRequest = defineModel('maintenance.request', {
               }
             });
           }),
-        },
+        }),
         cancel: {
           from: ['new', 'progress'],
           to: 'cancel',

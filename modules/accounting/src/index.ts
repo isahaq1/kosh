@@ -722,6 +722,12 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
   ],
   // What webhooks may subscribe to besides record changes (RFC 0017 §5.3).
   events: [
+    {
+      topic: 'account.fiscal.year.closed',
+      model: 'account.fiscal.year',
+      label: 'Fiscal year closed',
+    },
+    { topic: 'account.payment.posted', model: 'account.payment', label: 'Payment posted' },
     { topic: 'account.move.posted', model: 'account.move', label: 'Entry, invoice or bill posted' },
   ],
   importTemplates: [

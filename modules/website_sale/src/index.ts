@@ -467,6 +467,18 @@ export function websiteSaleModule(options: ShopOptions = {}): ReturnType<typeof 
         },
       ],
     },
+    events: [
+      {
+        topic: 'delivery.shipment.delivered',
+        model: 'delivery.shipment',
+        label: 'Shipment delivered',
+      },
+      {
+        topic: 'delivery.shipment.returned',
+        model: 'delivery.shipment',
+        label: 'Shipment returned',
+      },
+    ],
     accessLevels: {
       manager: { label: 'Shop manager', groups: ['website_sale.manager'] },
     },

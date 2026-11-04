@@ -235,6 +235,9 @@ export const calendarApp: ReturnType<typeof defineModule> = defineModule({
       ],
     },
   ],
+  events: [
+    { topic: 'calendar.event.cancelled', model: 'calendar.event', label: 'Meeting cancelled' },
+  ],
   accessLevels: {
     user: { label: 'User (own and public events)', groups: ['calendar.user'] },
     manager: {

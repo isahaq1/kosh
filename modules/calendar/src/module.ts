@@ -4,9 +4,10 @@
  * user, private ones by their organizer and attendees only. Only the organizer (and Agenda managers) change an event;
  * an attendee changes their own answer.
  */
+
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
-import { installationSetting } from '@kosh/server';
+import { emitting, installationSetting } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
 import { check, defineModel, defineModule, type Env, f, onchange } from './.kosh/bindings.js';
 
@@ -67,7 +68,7 @@ export const CalendarEvent = defineModel('calendar.event', {
       states: { confirmed: 'Confirmed', cancelled: 'Cancelled' },
       initial: 'confirmed',
       transitions: {
-        cancel: { from: ['confirmed'], to: 'cancelled' },
+        cancel: emitting('calendar.event.cancelled', { from: ['confirmed'], to: 'cancelled' }),
         restore: { from: ['cancelled'], to: 'confirmed' },
       },
     }),

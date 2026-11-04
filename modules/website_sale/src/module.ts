@@ -5,11 +5,13 @@
  * quotations of the site's company with a secret token and the method chosen; and online payments of a shop's order,
  * which confirm it, invoice it and register the payment once the provider confirms.
  */
+
 import { createHash, randomBytes } from 'node:crypto';
 import { paymentShutro } from '@kosh/payment';
 import { productShutro } from '@kosh/product';
 import { saleAccountShutro } from '@kosh/sale_account';
 import { salesShutro } from '@kosh/sales';
+import { emitting } from '@kosh/server';
 import { type Decimal, orm } from '@kosh/server/orm';
 import { websiteShutro } from '@kosh/website';
 import {
@@ -383,7 +385,7 @@ export const DeliveryShipment = defineModel('delivery.shipment', {
         },
         pick: { from: ['booked'], to: 'picked' },
         transit: { from: ['booked', 'picked'], to: 'in_transit' },
-        deliver: {
+        deliver: emitting('delivery.shipment.delivered', {
           from: ['booked', 'picked', 'in_transit'],
           to: 'delivered',
           after: records('delivery.shipment', async (shipments): Promise<void> => {
@@ -391,8 +393,11 @@ export const DeliveryShipment = defineModel('delivery.shipment', {
               if (s.cod.gt(0) && !s.codCollected)
                 await s.write({ codCollected: true, codCollectedAt: new Date() });
           }),
-        },
-        bounce: { from: ['booked', 'picked', 'in_transit'], to: 'returned' },
+        }),
+        bounce: emitting('delivery.shipment.returned', {
+          from: ['booked', 'picked', 'in_transit'],
+          to: 'returned',
+        }),
         cancel: {
           from: ['draft', 'booked'],
           to: 'cancel',

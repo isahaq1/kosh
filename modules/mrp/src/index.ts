@@ -207,6 +207,14 @@ export const mrp: ReturnType<typeof defineModule> = defineModule({
       ],
     },
   ],
+  events: [
+    {
+      topic: 'mrp.production.confirmed',
+      model: 'mrp.production',
+      label: 'Production order confirmed',
+    },
+    { topic: 'mrp.production.done', model: 'mrp.production', label: 'Production order done' },
+  ],
   accessLevels: {
     user: { label: 'User (production orders)', groups: ['mrp.user'] },
     manager: {

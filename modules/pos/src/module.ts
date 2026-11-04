@@ -4,10 +4,12 @@
  * each accepted once by the device's client id (sales queued offline arrive later, in order). What a closed session
  * means to Stockroom and Accounting is the bridges' (`pos_stock`, `pos_account`).
  */
+
 import { accountingShutro } from '@kosh/accounting';
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
 import { productShutro } from '@kosh/product';
+import { emitting } from '@kosh/server';
 import { type Decimal, type Id, orm } from '@kosh/server/orm';
 import {
   check,
@@ -166,7 +168,7 @@ export const PosSession = defineModel('pos.session', {
       states: { open: 'Open', closed: 'Closed' },
       initial: 'open',
       transitions: {
-        close: {
+        close: emitting('pos.session.closed', {
           from: ['open'],
           to: 'closed',
           guard: records('pos.session', async (sessions) =>
@@ -195,7 +197,7 @@ export const PosSession = defineModel('pos.session', {
             );
             await env.model('pos.session').browse(sessions.ids).closed();
           }),
-        },
+        }),
       },
     }),
   },

@@ -84,7 +84,10 @@ export function posModule(options: CounterOptions = {}): ReturnType<typeof defin
         implies: ['cashier'],
       },
     },
-    events: [{ topic: 'pos.order.paid', model: 'pos.order', label: 'Sale paid at the counter' }],
+    events: [
+      { topic: 'pos.order.paid', model: 'pos.order', label: 'Sale paid at the counter' },
+      { topic: 'pos.session.closed', model: 'pos.session', label: 'Counter session closed' },
+    ],
     documents: [
       {
         key: 'session_report',

@@ -6,10 +6,11 @@
  * internal location is validated only when all of it is reserved, and reservations take only what is available.
  * Quants and reservations are written only here, in audited superuser scopes, never by users.
  */
+
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
 import { productShutro } from '@kosh/product';
-import { installationSetting } from '@kosh/server';
+import { emitting, installationSetting } from '@kosh/server';
 import { type Decimal, type Id, orm } from '@kosh/server/orm';
 import {
   check,
@@ -1359,7 +1360,7 @@ export const StockPicking = defineModel('stock.picking', {
             await unreserve(pickings.ids, pickings.env);
           }),
         },
-        validate: {
+        validate: emitting('stock.picking.done', {
           from: ['confirmed'],
           to: 'done',
           // What is done must be reserved (out of stock), and something must be done.
@@ -1381,7 +1382,7 @@ export const StockPicking = defineModel('stock.picking', {
           after: records('stock.picking', async (pickings): Promise<void> => {
             await chainOnValidate(pickings.ids, pickings.env);
           }),
-        },
+        }),
         cancel: {
           from: ['draft', 'confirmed'],
           to: 'cancel',
@@ -1731,14 +1732,14 @@ export const StockCount = defineModel('stock.count', {
             });
           }),
         },
-        apply: {
+        apply: emitting('stock.count.applied', {
           from: ['counting'],
           to: 'done',
           requires: 'stock.count_apply',
           before: records('stock.count', async (counts): Promise<void> => {
             await applyCounts(counts.ids, counts.env);
           }),
-        },
+        }),
         cancel: { from: ['draft', 'counting'], to: 'cancel' },
         redraft: { from: ['cancel'], to: 'draft' },
       },
@@ -1799,13 +1800,13 @@ export const StockScrap = defineModel('stock.scrap', {
       states: { draft: 'Draft', done: 'Scrapped', cancel: 'Cancelled' },
       initial: 'draft',
       transitions: {
-        validate: {
+        validate: emitting('stock.scrap.done', {
           from: ['draft'],
           to: 'done',
           before: records('stock.scrap', async (scraps): Promise<void> => {
             await scrapStock(scraps.ids, scraps.env as unknown as Env);
           }),
-        },
+        }),
         cancel: { from: ['draft'], to: 'cancel' },
       },
     }),

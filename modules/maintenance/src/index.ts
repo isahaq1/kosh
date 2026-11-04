@@ -214,6 +214,14 @@ export const maintenance: ReturnType<typeof defineModule> = defineModule({
       ],
     },
   ],
+  events: [
+    {
+      topic: 'maintenance.request.started',
+      model: 'maintenance.request',
+      label: 'Maintenance started',
+    },
+    { topic: 'maintenance.request.done', model: 'maintenance.request', label: 'Maintenance done' },
+  ],
   accessLevels: {
     user: { label: 'Technician (orders, readings, breakdowns)', groups: ['maintenance.user'] },
     manager: {

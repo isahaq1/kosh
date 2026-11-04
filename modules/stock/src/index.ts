@@ -513,6 +513,11 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       ],
     },
   ],
+  events: [
+    { topic: 'stock.picking.done', model: 'stock.picking', label: 'Transfer done' },
+    { topic: 'stock.count.applied', model: 'stock.count', label: 'Stock count applied' },
+    { topic: 'stock.scrap.done', model: 'stock.scrap', label: 'Scrap done' },
+  ],
   accessLevels: {
     user: { label: 'User (transfers, stock)', groups: ['stock.user'] },
     manager: {

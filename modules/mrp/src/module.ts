@@ -4,9 +4,11 @@
  * what they will cost. Orders move stock only through Stockroom: Confirm reserves the components in a consumption
  * transfer (stock → Production), Produce validates it and the output transfer (Production → stock).
  */
+
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
 import { productShutro } from '@kosh/product';
+import { emitting } from '@kosh/server';
 import { type Decimal, type Id, orm } from '@kosh/server/orm';
 import { defaultLocations, inProductUnit, stockShutro } from '@kosh/stock';
 import {
@@ -581,7 +583,7 @@ export const MrpProduction = defineModel('mrp.production', {
             await explode(orders.ids, orders.env);
           }),
         },
-        confirm: {
+        confirm: emitting('mrp.production.confirmed', {
           from: ['draft'],
           to: 'confirmed',
           guard: records('mrp.production', async (orders) =>
@@ -628,7 +630,7 @@ export const MrpProduction = defineModel('mrp.production', {
                 .write({ consumption: made.ids[0] ?? null });
             }
           }),
-        },
+        }),
         /** "Check availability": reserve the components that came in since. */
         reserve: {
           from: ['confirmed'],
@@ -640,7 +642,7 @@ export const MrpProduction = defineModel('mrp.production', {
                 await env.model('stock.picking').browse([o.consumption.id]).reserve();
           }),
         },
-        produce: {
+        produce: emitting('mrp.production.done', {
           from: ['confirmed'],
           to: 'done',
           guard: records('mrp.production', async (orders) =>
@@ -698,7 +700,7 @@ export const MrpProduction = defineModel('mrp.production', {
               await made.validate();
             }
           }),
-        },
+        }),
         cancel: {
           from: ['draft', 'confirmed'],
           to: 'cancel',

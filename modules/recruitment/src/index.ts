@@ -231,6 +231,9 @@ export const recruitment: ReturnType<typeof defineModule> = defineModule({
       ],
     },
   ],
+  events: [
+    { topic: 'hiring.opening.closed', model: 'hiring.opening', label: 'Job opening closed' },
+  ],
   accessLevels: {
     user: { label: 'Interviewer (applicants, own scorecards)', groups: ['hiring.user'] },
     manager: {

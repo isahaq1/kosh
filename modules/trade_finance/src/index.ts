@@ -184,6 +184,10 @@ export const tradeFinance: ReturnType<typeof defineModule> = defineModule({
       ],
     },
   ],
+  events: [
+    { topic: 'trade.lc.issued', model: 'trade.lc', label: 'Letter of credit issued' },
+    { topic: 'trade.lc.settled', model: 'trade.lc', label: 'Letter of credit settled' },
+  ],
   accessLevels: {
     user: { label: 'User (LCs, presentations)', groups: ['trade_finance.user'] },
     manager: {

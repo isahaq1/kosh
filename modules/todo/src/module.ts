@@ -3,7 +3,9 @@
  * colleagues — with a due date, a priority, a checklist whose progress shows on the task, and an optional link to any
  * record of another app. People see their own tasks and those of the lists they belong to; nobody else's.
  */
+
 import { messagingShutro } from '@kosh/messaging';
+import { emitting } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
 import { compute, defineModel, defineModule, type Env, f } from './.kosh/bindings.js';
 
@@ -77,7 +79,7 @@ export const TodoTask = defineModel('todo.task', {
       states: { open: 'To do', done: 'Done' },
       initial: 'open',
       transitions: {
-        complete: { from: ['open'], to: 'done' },
+        complete: emitting('todo.task.done', { from: ['open'], to: 'done' }),
         reopen: { from: ['done'], to: 'open' },
       },
     }),

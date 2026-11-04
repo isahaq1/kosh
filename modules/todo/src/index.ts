@@ -83,6 +83,7 @@ export const todo: ReturnType<typeof defineModule> = defineModule({
       ],
     },
   ],
+  events: [{ topic: 'todo.task.done', model: 'todo.task', label: 'To-do done' }],
   accessLevels: {
     user: { label: 'User (own to-dos and shared lists)', groups: ['todo.user'] },
   },

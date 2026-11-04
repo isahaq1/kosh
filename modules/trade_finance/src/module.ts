@@ -4,9 +4,10 @@
  * presentations of documents with their discrepancies, accepted (with their maturity) and paid, and the limits each
  * bank gives, which issuing an LC never passes.
  */
+
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
-import { installationSetting } from '@kosh/server';
+import { emitting, installationSetting } from '@kosh/server';
 import { type Decimal, orm } from '@kosh/server/orm';
 import {
   check,
@@ -211,7 +212,7 @@ export const TradeLc = defineModel('trade.lc', {
       initial: 'draft',
       transitions: {
         apply: { from: ['draft'], to: 'applied' },
-        issue: {
+        issue: emitting('trade.lc.issued', {
           from: ['applied'],
           to: 'issued',
           requires: 'trade_finance.issue',
@@ -249,14 +250,14 @@ export const TradeLc = defineModel('trade.lc', {
               if (lc.issueDate === null) await lc.write({ issueDate: lcs.env.today() } as never);
             await (lcs.env as unknown as Env).model('trade.lc').browse(lcs.ids).issued();
           }),
-        },
-        settle: {
+        }),
+        settle: emitting('trade.lc.settled', {
           from: ['issued'],
           to: 'settled',
           after: records('trade.lc', async (lcs): Promise<void> => {
             await (lcs.env as unknown as Env).model('trade.lc').browse(lcs.ids).closed();
           }),
-        },
+        }),
         cancel: {
           from: ['draft', 'applied', 'issued'],
           to: 'cancel',

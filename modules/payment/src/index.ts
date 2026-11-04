@@ -666,6 +666,12 @@ export function paymentModule(options: PaymentOptions = {}): KoshModule {
     standard: {
       waive: [
         {
+          rule: 'E1',
+          model: 'payment.provider',
+          reason:
+            'A provider is configuration (test or live, on or off), not a document with a life of its own.',
+        },
+        {
           rule: 'I1',
           model: 'payment.transaction',
           reason: 'Made by payment providers, never typed in.',
@@ -682,6 +688,13 @@ export function paymentModule(options: PaymentOptions = {}): KoshModule {
           { header: 'Provider', field: 'code' },
           { header: 'Journal', field: 'journal' },
         ],
+      },
+    ],
+    events: [
+      {
+        topic: 'payment.transaction.done',
+        model: 'payment.transaction',
+        label: 'Online payment done',
       },
     ],
     accessLevels: {
