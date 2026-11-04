@@ -95,3 +95,34 @@ test('the Projects overview and the projects timeline (RFC 0022 step 2)', async 
   await page.goto('/projects/a/projects.action_projects?view=gantt');
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
+
+test('a phase and a work package of a project; the project shows its structure as a tree (RFC 0026 step 1)', async ({
+  page,
+}) => {
+  await signIn(page, 'rahim');
+  await page.goto('/projects/a/projects.action_phases/new');
+  await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Civil works');
+  await page.getByRole('combobox', { name: 'Project', exact: true }).click();
+  await page.getByRole('option', { name: 'Bridge works' }).click();
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/projects\.action_phases\/\d+$/);
+
+  await page.goto('/projects/a/projects.action_work_packages/new');
+  await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Piers');
+  await page.getByRole('combobox', { name: 'Project', exact: true }).click();
+  await page.getByRole('option', { name: 'Bridge works' }).click();
+  await page.getByRole('combobox', { name: 'Phase', exact: true }).click();
+  await page.getByRole('option', { name: 'Civil works' }).click();
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/projects\.action_work_packages\/\d+$/);
+
+  await page.goto('/projects/a/projects.action_projects');
+  await page
+    .getByRole('row', { name: /Bridge works/ })
+    .first()
+    .click();
+  const tree = page.getByRole('region', { name: 'Structure' });
+  await expect(tree.getByRole('link', { name: 'Civil works' })).toBeVisible();
+  await expect(tree.getByRole('link', { name: 'Piers' })).toBeVisible();
+  await expect(tree.getByRole('progressbar', { name: 'Progress of Piers' })).toBeVisible();
+});

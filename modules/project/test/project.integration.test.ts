@@ -252,6 +252,9 @@ test('the Projects overview (RFC 0022 step 2) to a user; the project form has it
     'project_tasks',
     'project_open_tasks',
     'project_hours',
+    'project_phases',
+    'project_work_packages',
+    'project_children',
   ]);
   const gantt = await call('GET', '/api/v1/views?model=project.project&type=gantt', 'rahim');
   expect(gantt.status, JSON.stringify(gantt.json)).toBe(200);
@@ -290,4 +293,200 @@ test('App settings › Projects (RFC 0020 step 2): timesheets on the step; plann
     text: "UPDATE res_company SET project_timesheet_step = 'none', project_planned_hours_default = NULL",
     params: [],
   });
+});
+
+test('programmes, phases, work packages and tasks (RFC 0026 step 1): codes, progress from planned hours, same-project checks', async () => {
+  const type = await call('POST', '/api/v1/models/project.type', 'maria', {
+    name: 'Farm build',
+    code: 'FARM',
+  });
+  expectStatus(type, 201);
+  const programme = await call('POST', '/api/v1/models/project.project', 'rahim', {
+    name: 'Northern farms',
+    type: type.json.id,
+    riskLevel: 'high',
+  });
+  expectStatus(programme, 201);
+  expect(programme.json.code).toMatch(/^PRJ-\d{4}$/);
+  const farm = await call('POST', '/api/v1/models/project.project', 'rahim', {
+    name: 'Farm 1',
+    parentProject: programme.json.id,
+    dateStart: '2027-01-01',
+    dateEnd: '2027-06-30',
+  });
+  expectStatus(farm, 201);
+  // No cycles: the programme cannot go inside its own project; dates in order.
+  expectStatus(
+    await call('PATCH', `/api/v1/models/project.project/${programme.json.id}`, 'rahim', {
+      parentProject: farm.json.id,
+    }),
+    422,
+  );
+  expectStatus(
+    await call('PATCH', `/api/v1/models/project.project/${farm.json.id}`, 'rahim', {
+      dateEnd: '2026-12-01',
+    }),
+    422,
+  );
+  const phase = await call('POST', '/api/v1/models/project.phase', 'rahim', {
+    name: 'Civil works',
+    project: farm.json.id,
+  });
+  expectStatus(phase, 201);
+  const wp = await call('POST', '/api/v1/models/project.work.package', 'rahim', {
+    name: 'Sheds',
+    project: farm.json.id,
+    phase: phase.json.id,
+    deliverables: 'Four sheds, roofed',
+  });
+  expectStatus(wp, 201);
+  // The work package sets the task's phase (the form's onchange).
+  const draft = await call('POST', '/api/v1/models/project.task/onchange', 'rahim', {
+    values: { name: 'x', project: farm.json.id, workPackage: wp.json.id },
+    changed: ['workPackage'],
+  });
+  expectStatus(draft, 200);
+  expect(draft.json.values).toMatchObject({ phase: phase.json.id });
+  const t1 = await call('POST', '/api/v1/models/project.task', 'rahim', {
+    name: 'Foundations',
+    project: farm.json.id,
+    phase: phase.json.id,
+    workPackage: wp.json.id,
+    stage: stages['New'],
+    plannedHours: '30',
+  });
+  const t2 = await call('POST', '/api/v1/models/project.task', 'rahim', {
+    name: 'Roofing',
+    project: farm.json.id,
+    phase: phase.json.id,
+    workPackage: wp.json.id,
+    stage: stages['New'],
+    plannedHours: '10',
+    milestone: true,
+  });
+  expectStatus(t1, 201);
+  expectStatus(t2, 201);
+  expectStatus(
+    await call('PATCH', `/api/v1/models/project.task/${t1.json.id}`, 'rahim', {
+      stage: stages['Done'],
+    }),
+    200,
+  );
+  const progressOf = async (model: string, id: number) =>
+    Number(
+      (await call('GET', `/api/v1/models/${model}/${id}?fields=progress`, 'rahim')).json.progress,
+    );
+  expect(await progressOf('project.work.package', wp.json.id)).toBe(75);
+  expect(await progressOf('project.phase', phase.json.id)).toBe(75);
+  expect(await progressOf('project.project', farm.json.id)).toBe(75);
+  // A manual override shows instead, within 0–100.
+  expectStatus(
+    await call('PATCH', `/api/v1/models/project.phase/${phase.json.id}`, 'rahim', {
+      progressOverride: '40',
+    }),
+    200,
+  );
+  expect(await progressOf('project.phase', phase.json.id)).toBe(40);
+  expectStatus(
+    await call('PATCH', `/api/v1/models/project.phase/${phase.json.id}`, 'rahim', {
+      progressOverride: '140',
+    }),
+    422,
+  );
+  // A task cannot sit in another project's phase.
+  const other = await call('POST', '/api/v1/models/project.project', 'rahim', { name: 'Farm 2' });
+  expectStatus(
+    await call('POST', '/api/v1/models/project.task', 'rahim', {
+      name: 'Wrong place',
+      project: other.json.id,
+      phase: phase.json.id,
+    }),
+    422,
+  );
+  // The programme's hierarchy view.
+  expectStatus(
+    await call('GET', '/api/v1/views?model=project.project&type=hierarchy', 'rahim'),
+    200,
+  );
+});
+
+test('sub-tasks, several assignees, tags and dependencies (RFC 0026 step 1): blocked until done, no circles', async () => {
+  const p = await call('POST', '/api/v1/models/project.project', 'rahim', { name: 'Hatchery' });
+  const users = await driver.query<{ id: number; login: string }>({
+    text: 'SELECT id, login FROM res_users',
+    params: [],
+  });
+  const idOf = (login: string) => users.find((u) => u.login === login)?.id;
+  const tag = await call('POST', '/api/v1/models/project.tag', 'maria', { name: 'Civil' });
+  expectStatus(tag, 201);
+  const a = await call('POST', '/api/v1/models/project.task', 'rahim', {
+    name: 'Order incubators',
+    project: p.json.id,
+    stage: stages['New'],
+    assignees: { set: [idOf('rahim'), idOf('sumi')] },
+    tags: { set: [tag.json.id] },
+  });
+  expectStatus(a, 201);
+  const b = await call('POST', '/api/v1/models/project.task', 'rahim', {
+    name: 'Install incubators',
+    project: p.json.id,
+    stage: stages['New'],
+  });
+  const link = await call('POST', '/api/v1/models/project.task.link', 'rahim', {
+    predecessor: a.json.id,
+    successor: b.json.id,
+    lag: 2,
+  });
+  expectStatus(link, 201);
+  const blocked = async (id: number) =>
+    (await call('GET', `/api/v1/models/project.task/${id}?fields=blocked`, 'rahim')).json.blocked;
+  expect(await blocked(b.json.id)).toBe(true);
+  // B waiting for A, A waiting for B: refused; nor on itself.
+  expectStatus(
+    await call('POST', '/api/v1/models/project.task.link', 'rahim', {
+      predecessor: b.json.id,
+      successor: a.json.id,
+    }),
+    422,
+  );
+  expectStatus(
+    await call('POST', '/api/v1/models/project.task.link', 'rahim', {
+      predecessor: a.json.id,
+      successor: a.json.id,
+    }),
+    422,
+  );
+  // Sub-tasks: the parent's progress is theirs, weighted by planned hours.
+  const s1 = await call('POST', '/api/v1/models/project.task', 'rahim', {
+    name: 'Get quotes',
+    project: p.json.id,
+    parentTask: a.json.id,
+    stage: stages['Done'],
+    plannedHours: '1',
+  });
+  const s2 = await call('POST', '/api/v1/models/project.task', 'rahim', {
+    name: 'Place the order',
+    project: p.json.id,
+    parentTask: a.json.id,
+    stage: stages['New'],
+    plannedHours: '3',
+  });
+  expectStatus(s1, 201);
+  expectStatus(s2, 201);
+  const read = await call(
+    'GET',
+    `/api/v1/models/project.task/${a.json.id}?fields=progress,assignees,tags`,
+    'rahim',
+  );
+  expect(Number(read.json.progress)).toBe(25);
+  expect(read.json.assignees).toHaveLength(2);
+  expectStatus(
+    await call('PATCH', `/api/v1/models/project.task/${a.json.id}`, 'rahim', {
+      stage: stages['Done'],
+    }),
+    200,
+  );
+  expect(await blocked(b.json.id)).toBe(false);
+  // Outsiders still cannot see any of it.
+  expectStatus(await call('GET', '/api/v1/models/project.phase', 'bob'), 403);
 });

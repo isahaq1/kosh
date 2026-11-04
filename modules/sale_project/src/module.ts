@@ -52,7 +52,12 @@ export async function createTasksFor(
   const [order] = await env
     .model('sale.order')
     .browse([orm.asId(orderId, 'sale.order')])
-    .load({ lines: { product: { project: true } }, partner: true, company: true, tasks: true });
+    .load({
+      lines: { product: { project: true } },
+      partner: true,
+      company: true,
+      tasks: ['saleLine'],
+    });
   if (order === undefined) return { tasks: 0, projects: 0 };
   const served = new Set(order.tasks.map((t) => t.saleLine?.id ?? 0));
   let tasks = 0;

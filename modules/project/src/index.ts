@@ -8,23 +8,35 @@ import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
 import { reporting } from '@kosh/reporting';
-import { action, calendar, form, gantt, kanban, list, pivot, search } from '@kosh/views';
+import { action, calendar, form, gantt, hierarchy, kanban, list, pivot, search } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import { projectDemo, SUPPORT_PROJECT } from './demo.js';
 import {
+  ProjectPhase,
   ProjectProject,
+  ProjectTag,
   ProjectTask,
+  ProjectTaskCategory,
+  ProjectTaskLink,
   ProjectTaskStage,
   ProjectTimesheet,
+  ProjectType,
+  ProjectWorkPackage,
   projectShutro,
 } from './module.js';
 
 export { SUPPORT_PROJECT } from './demo.js';
 export {
+  ProjectPhase,
   ProjectProject,
+  ProjectTag,
   ProjectTask,
+  ProjectTaskCategory,
+  ProjectTaskLink,
   ProjectTaskStage,
   ProjectTimesheet,
+  ProjectType,
+  ProjectWorkPackage,
   projectShutro,
 } from './module.js';
 
@@ -174,8 +186,25 @@ export const project: ReturnType<typeof defineModule> = defineModule({
   actions: {
     'projects.action_projects': action(ProjectProject, {
       label: 'Projects',
+      views: ['list', 'gantt', 'hierarchy', 'form'],
+    }),
+    'projects.action_phases': action(ProjectPhase, {
+      label: 'Phases',
       views: ['list', 'gantt', 'form'],
     }),
+    'projects.action_work_packages': action(ProjectWorkPackage, {
+      label: 'Work packages',
+      views: ['list', 'kanban', 'form'],
+    }),
+    'projects.action_types': action(ProjectType, {
+      label: 'Project types',
+      views: ['list', 'form'],
+    }),
+    'projects.action_categories': action(ProjectTaskCategory, {
+      label: 'Task categories',
+      views: ['list', 'form'],
+    }),
+    'projects.action_tags': action(ProjectTag, { label: 'Tags', views: ['list', 'form'] }),
     'projects.action_tasks': action(ProjectTask, {
       label: 'Tasks',
       views: ['kanban', 'list', 'form', 'calendar'],
@@ -199,6 +228,20 @@ export const project: ReturnType<typeof defineModule> = defineModule({
       sequence: 1,
     },
     {
+      id: 'projects.phases',
+      parent: 'projects.root',
+      label: 'Phases',
+      action: 'projects.action_phases',
+      sequence: 1.3,
+    },
+    {
+      id: 'projects.work_packages',
+      parent: 'projects.root',
+      label: 'Work packages',
+      action: 'projects.action_work_packages',
+      sequence: 1.6,
+    },
+    {
       id: 'projects.tasks',
       parent: 'projects.root',
       label: 'Tasks',
@@ -220,18 +263,45 @@ export const project: ReturnType<typeof defineModule> = defineModule({
       action: 'projects.action_stages',
       sequence: 1,
     },
+    {
+      id: 'projects.types',
+      parent: 'projects.configuration',
+      label: 'Project types',
+      action: 'projects.action_types',
+      sequence: 2,
+    },
+    {
+      id: 'projects.categories',
+      parent: 'projects.configuration',
+      label: 'Task categories',
+      action: 'projects.action_categories',
+      sequence: 3,
+    },
+    {
+      id: 'projects.tags',
+      parent: 'projects.configuration',
+      label: 'Tags',
+      action: 'projects.action_tags',
+      sequence: 4,
+    },
   ],
   views: {
     'project.project.list': list(ProjectProject, {
       columns: [
+        'code',
         'name',
+        'type',
         'partner',
         'manager',
-        'dateEnd',
+        { field: 'priority', widget: 'badge' },
+        { field: 'riskLevel', widget: 'badge' },
+        { field: 'progress', widget: 'progress' },
+        { field: 'dateEnd', widget: 'daysLeft' },
         { field: 'taskCount', sum: true },
         { field: 'hours', sum: true },
       ],
       defaultOrder: ['sequence asc', 'name asc'],
+      decorations: { danger: { riskLevel: { in: ['high', 'critical'] } } },
     }),
     'project.project.form': form(ProjectProject, (k) => ({
       header: { buttons: [] },
@@ -260,17 +330,64 @@ export const project: ReturnType<typeof defineModule> = defineModule({
             measure: { sum: 'hours' },
             action: 'projects.action_timesheets',
           },
+          {
+            id: 'project_phases',
+            label: 'Phases',
+            model: ProjectPhase,
+            where: { project: { $record: 'id' } },
+            action: 'projects.action_phases',
+          },
+          {
+            id: 'project_work_packages',
+            label: 'Work packages',
+            model: ProjectWorkPackage,
+            where: { project: { $record: 'id' } },
+            action: 'projects.action_work_packages',
+          },
+          {
+            id: 'project_children',
+            label: 'Projects in it',
+            model: ProjectProject,
+            where: { parentProject: { $record: 'id' } },
+            action: 'projects.action_projects',
+          },
         ]),
-        k.group('main', ['name', 'partner', 'manager', 'sequence']),
-        k.group('dates', ['dateStart', 'dateEnd', 'taskCount', 'hours']),
-        k.group('about', ['description'], { columns: 1 }),
+        k.group('main', ['name', 'code', 'type', 'parentProject', 'partner', 'location']),
+        k.group('people', ['manager', 'sponsor', 'owner', 'priority', 'riskLevel'], {
+          label: 'People and risk',
+        }),
+        k.group('dates', ['dateStart', 'dateEnd', 'progress', 'taskCount', 'hours']),
+        k.group('about', ['description', 'scope', 'assumptions', 'constraints'], {
+          columns: 1,
+          label: 'Scope',
+        }),
+        k.component('structure', 'projects.Structure'),
+        k.lines('phases', [
+          { field: 'sequence', id: 'phase_sequence' },
+          { field: 'name', id: 'phase_name' },
+          { field: 'manager', id: 'phase_manager' },
+          { field: 'dateStart', id: 'phase_start' },
+          { field: 'dateEnd', id: 'phase_end' },
+          { field: 'status', id: 'phase_status' },
+          { field: 'progress', id: 'phase_progress', widget: 'progress' },
+        ]),
+        k.lines('workPackages', [
+          { field: 'name', id: 'wp_name' },
+          { field: 'phase', id: 'wp_phase' },
+          { field: 'manager', id: 'wp_manager' },
+          { field: 'dateEnd', id: 'wp_end' },
+          { field: 'status', id: 'wp_status' },
+          { field: 'progress', id: 'wp_progress', widget: 'progress' },
+        ]),
         k.lines('tasks', [
           { field: 'name', id: 'task_name' },
+          { field: 'phase', id: 'task_phase' },
           'stage',
           'assignee',
           'deadline',
           'plannedHours',
           'effectiveHours',
+          { field: 'progress', id: 'task_progress', widget: 'progress' },
         ]),
       ],
       chatter: true,
@@ -285,7 +402,9 @@ export const project: ReturnType<typeof defineModule> = defineModule({
         footer: [
           { field: 'deadline', widget: 'daysLeft' },
           { field: 'priority', widget: 'priority' },
+          { field: 'tags', widget: 'tags' },
         ],
+        progress: 'progress',
       },
     }),
     // Projects on a timeline, from their start to their deadline.
@@ -299,8 +418,11 @@ export const project: ReturnType<typeof defineModule> = defineModule({
       columns: [
         'name',
         'project',
+        'phase',
+        'workPackage',
         'stage',
         'assignee',
+        { field: 'progress', widget: 'progress' },
         { field: 'deadline', widget: 'daysLeft' },
         { field: 'priority', widget: 'priority' },
         { field: 'plannedHours', sum: true },
@@ -311,9 +433,28 @@ export const project: ReturnType<typeof defineModule> = defineModule({
     'project.task.form': form(ProjectTask, (k) => ({
       header: { buttons: [] },
       sheet: [
-        k.group('main', ['name', 'project', 'stage', 'assignee']),
-        k.group('when', ['partner', 'priority', 'deadline', 'plannedHours', 'effectiveHours']),
+        k.group('main', ['name', 'project', 'phase', 'workPackage', 'parentTask', 'stage']),
+        k.group('people', ['assignee', 'assignees', 'category', 'tags', 'milestone', 'blocked']),
+        k.group('when', [
+          'partner',
+          'priority',
+          'deadline',
+          'plannedHours',
+          'effectiveHours',
+          'progress',
+        ]),
         k.group('about', ['description'], { columns: 1 }),
+        k.lines('subtasks', [
+          { field: 'name', id: 'sub_name' },
+          { field: 'assignee', id: 'sub_assignee' },
+          { field: 'deadline', id: 'sub_deadline' },
+          { field: 'plannedHours', id: 'sub_planned' },
+          { field: 'stage', id: 'sub_stage' },
+        ]),
+        k.lines('predecessors', [
+          { field: 'predecessor', id: 'dep_predecessor' },
+          { field: 'lag', id: 'dep_lag' },
+        ]),
         k.lines('timesheets', [
           'date',
           'user',
@@ -347,6 +488,128 @@ export const project: ReturnType<typeof defineModule> = defineModule({
       measures: [{ sum: 'hours' }],
       comparison: { field: 'date', mode: 'previous' },
     }),
+    'project.project.hierarchy': hierarchy(ProjectProject, {
+      parent: 'parentProject',
+      title: 'name',
+      subtitle: 'manager',
+    }),
+    'project.phase.list': list(ProjectPhase, {
+      columns: [
+        'project',
+        'sequence',
+        'name',
+        'parentPhase',
+        'manager',
+        'dateStart',
+        { field: 'dateEnd', widget: 'daysLeft' },
+        { field: 'status', widget: 'badge' },
+        { field: 'progress', widget: 'progress' },
+      ],
+      decorations: { neutral: { status: { in: ['done', 'cancelled'] } } },
+    }),
+    'project.phase.form': form(ProjectPhase, (k) => ({
+      sheet: [
+        k.stats('related', [
+          {
+            id: 'phase_tasks',
+            label: 'Tasks',
+            model: ProjectTask,
+            where: { phase: { $record: 'id' } },
+            action: 'projects.action_tasks',
+          },
+          {
+            id: 'phase_work_packages',
+            label: 'Work packages',
+            model: ProjectWorkPackage,
+            where: { phase: { $record: 'id' } },
+            action: 'projects.action_work_packages',
+          },
+        ]),
+        k.group('main', ['name', 'code', 'project', 'parentPhase', 'sequence', 'priority']),
+        k.group('people', ['manager', 'responsible', 'dateStart', 'dateEnd', 'status']),
+        k.group('progress_group', ['progress', 'progressOverride'], {
+          label: 'Progress',
+          description:
+            'Computed from its tasks, weighted by their planned hours; set it by hand only when the tasks do not tell the whole story.',
+        }),
+        k.group('about', ['description'], { columns: 1 }),
+      ],
+      chatter: true,
+    })),
+    'project.phase.gantt': gantt(ProjectPhase, {
+      dateStart: 'dateStart',
+      dateStop: 'dateEnd',
+      title: 'name',
+      scale: 'week',
+    }),
+    'project.work.package.list': list(ProjectWorkPackage, {
+      columns: [
+        'project',
+        'phase',
+        'name',
+        'manager',
+        { field: 'dateEnd', widget: 'daysLeft' },
+        { field: 'status', widget: 'badge' },
+        { field: 'progress', widget: 'progress' },
+      ],
+      decorations: { neutral: { status: { in: ['done', 'cancelled'] } } },
+    }),
+    'project.work.package.kanban': kanban(ProjectWorkPackage, {
+      groupBy: 'status',
+      card: {
+        title: 'name',
+        subtitle: 'project',
+        avatar: 'manager',
+        footer: [{ field: 'dateEnd', widget: 'daysLeft' }],
+        progress: 'progress',
+      },
+    }),
+    'project.work.package.form': form(ProjectWorkPackage, (k) => ({
+      sheet: [
+        k.stats('related', [
+          {
+            id: 'wp_tasks',
+            label: 'Tasks',
+            model: ProjectTask,
+            where: { workPackage: { $record: 'id' } },
+            action: 'projects.action_tasks',
+          },
+        ]),
+        k.group('main', ['name', 'code', 'project', 'phase', 'sequence']),
+        k.group('people', ['manager', 'dateStart', 'dateEnd', 'status']),
+        k.group('progress_group', ['progress', 'progressOverride'], { label: 'Progress' }),
+        k.group('about', ['deliverables', 'description'], { columns: 1 }),
+      ],
+      chatter: true,
+    })),
+    'project.type.list': list(ProjectType, {
+      columns: ['sequence', 'code', 'name'],
+      inlineEdit: ['sequence', 'code', 'name'],
+    }),
+    'project.type.form': form(ProjectType, (k) => ({
+      sheet: [
+        k.group('main', ['name', 'code', 'sequence']),
+        k.group('about', ['description'], { columns: 1 }),
+      ],
+    })),
+    'project.task.category.list': list(ProjectTaskCategory, {
+      columns: ['sequence', 'code', 'name', 'type'],
+      inlineEdit: ['sequence', 'code', 'name', 'type'],
+    }),
+    'project.task.category.form': form(ProjectTaskCategory, (k) => ({
+      sheet: [k.group('main', ['name', 'code', 'type', 'sequence'])],
+    })),
+    'project.tag.list': list(ProjectTag, {
+      columns: ['name', 'color'],
+      inlineEdit: ['name', 'color'],
+    }),
+    'project.tag.form': form(ProjectTag, (k) => ({ sheet: [k.group('main', ['name', 'color'])] })),
+    'project.task.link.list': list(ProjectTaskLink, {
+      columns: ['successor', 'predecessor', 'lag'],
+    }),
+    'project.task.link.form': form(ProjectTaskLink, (k) => ({
+      sheet: [k.group('main', ['successor', 'predecessor', 'lag'])],
+    })),
     'project.task.stage.list': list(ProjectTaskStage, {
       columns: ['sequence', 'name', 'fold', 'done'],
       inlineEdit: ['name', 'sequence', 'fold', 'done'],
@@ -364,9 +627,48 @@ export const project: ReturnType<typeof defineModule> = defineModule({
         folded: { label: 'Folded on the board', domain: { fold: true }, group: 'fold' },
       },
     }),
+    'project.phase': search(ProjectPhase, {
+      fields: ['name', 'code', 'project.name'],
+      filters: {
+        open: {
+          label: 'Open',
+          domain: { status: { in: ['draft', 'in_progress', 'on_hold'] } },
+          group: 'status',
+        },
+        late: {
+          label: 'Late',
+          domain: { dateEnd: { lt: { $today: 0 } }, status: { notIn: ['done', 'cancelled'] } },
+        },
+      },
+      groupBy: ['project', 'status', 'manager'],
+    }),
+    'project.work.package': search(ProjectWorkPackage, {
+      fields: ['name', 'code', 'project.name', 'phase.name'],
+      filters: {
+        open: {
+          label: 'Open',
+          domain: { status: { in: ['draft', 'in_progress', 'on_hold'] } },
+          group: 'status',
+        },
+      },
+      groupBy: ['project', 'phase', 'status', 'manager'],
+    }),
+    'project.type': search(ProjectType, { fields: ['name', 'code'] }),
+    'project.task.category': search(ProjectTaskCategory, {
+      fields: ['name', 'code'],
+      groupBy: ['type'],
+    }),
+    'project.tag': search(ProjectTag, { fields: ['name'] }),
+    'project.task.link': search(ProjectTaskLink, {
+      fields: ['successor.name', 'predecessor.name'],
+    }),
     'project.project': search(ProjectProject, {
-      fields: ['name', 'partner.name'],
-      groupBy: ['manager', 'partner'],
+      fields: ['name', 'code', 'partner.name'],
+      filters: {
+        risky: { label: 'High risk', domain: { riskLevel: { in: ['high', 'critical'] } } },
+        programmes: { label: 'Programmes', domain: { children: { any: {} } } },
+      },
+      groupBy: ['manager', 'partner', 'type', 'parentProject', 'riskLevel'],
     }),
     'project.task': search(ProjectTask, {
       fields: ['name', 'project.name', 'partner.name'],
@@ -374,8 +676,19 @@ export const project: ReturnType<typeof defineModule> = defineModule({
         open: { label: 'Open', domain: { done: false }, group: 'state' },
         done: { label: 'Done', domain: { done: true }, group: 'state' },
         high: { label: 'High priority', domain: { priority: 'high' } },
+        blocked: { label: 'Waiting for another task', domain: { blocked: true } },
+        milestones: { label: 'Milestones', domain: { milestone: true } },
+        top: { label: 'Not sub-tasks', domain: { parentTask: { isNull: true } } },
       },
-      groupBy: ['project', 'stage', 'assignee', 'deadline:week'],
+      groupBy: [
+        'project',
+        'phase',
+        'workPackage',
+        'stage',
+        'assignee',
+        'category',
+        'deadline:week',
+      ],
     }),
     'project.timesheet': search(ProjectTimesheet, {
       fields: ['description', 'task.name', 'project.name'],
