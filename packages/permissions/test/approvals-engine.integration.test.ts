@@ -254,3 +254,14 @@ describe('the Approvals app’s lists', () => {
     );
   });
 });
+
+describe('when it was decided', () => {
+  test('a decided request says when', async () => {
+    const id = await order('7003');
+    await submit(id);
+    const [level] = await requests(id);
+    await decide(level?.id ?? 0, 'approve', 'dina');
+    const [after] = (await requests(id)) as unknown as { decidedAt: string | null }[];
+    expect(after?.decidedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+});

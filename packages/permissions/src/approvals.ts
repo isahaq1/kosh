@@ -52,6 +52,8 @@ async function find(env: Env, model: string, where: unknown, keys: string[], ord
 }
 
 const REQUEST_KEYS = [
+  'dueAt',
+  'escalatedTo',
   'approvers',
   'required',
   'round',
@@ -85,6 +87,9 @@ export interface ApprovalRequestInfo {
   readonly required: number;
   readonly approvals: number;
   readonly round: number;
+  /** When it should be decided by, and the role it was escalated to once late. */
+  readonly dueAt: string | null;
+  readonly escalatedTo: string | null;
   readonly state: 'pending' | 'approved' | 'rejected' | 'sent_back' | 'cancelled';
   readonly requestedBy: number | null;
   readonly decidedBy: number | null;
@@ -107,10 +112,20 @@ function info(row: Row): ApprovalRequestInfo {
     required: Number(row['required'] ?? 1),
     approvals: Number(row['approvals'] ?? 0),
     round: Number(row['round'] ?? 1),
+    dueAt:
+      row['dueAt'] instanceof Date
+        ? row['dueAt'].toISOString()
+        : typeof row['dueAt'] === 'string'
+          ? row['dueAt']
+          : null,
+    escalatedTo:
+      typeof row['escalatedTo'] === 'string' && row['escalatedTo'] !== ''
+        ? row['escalatedTo']
+        : null,
     state: row['state'] as ApprovalRequestInfo['state'],
     requestedBy: (row['requestedBy'] as number | null) ?? null,
     decidedBy: (row['decidedBy'] as number | null) ?? null,
-    decidedAt: at instanceof Date ? at.toISOString() : null,
+    decidedAt: at instanceof Date ? at.toISOString() : typeof at === 'string' ? at : null,
     comment: (row['comment'] as string | null) ?? null,
   };
 }
@@ -279,6 +294,7 @@ export async function requestApprovals(records: unknown): Promise<number> {
             'approverField',
             'quorum',
             'quorumCount',
+            'deadlineHours',
           ],
           ['sequence asc', 'id asc'],
         );
@@ -303,6 +319,9 @@ export async function requestApprovals(records: unknown): Promise<number> {
             approvers: { set: who.approvers },
             required: who.required,
             round,
+            ...(typeof level['deadlineHours'] === 'number' && level['deadlineHours'] > 0
+              ? { dueAt: new Date(Date.now() + (level['deadlineHours'] as number) * 3_600_000) }
+              : {}),
             requestedBy: requester,
           });
         }
@@ -364,33 +383,114 @@ function refuse(status: number, type: string, title: string, detail: string, hin
   throw new HttpProblem(status, type, title, detail, hint);
 }
 
+/** A user deciding: their groups, and who delegated their approvals to them today (with those people's roles). */
+export interface Who {
+  readonly uid: number;
+  readonly administrator: boolean;
+  readonly groups: ReadonlySet<string>;
+  readonly companyId: number | null;
+  readonly delegators: readonly {
+    readonly user: number;
+    readonly roles: readonly { readonly group: string; readonly company: number | null }[];
+  }[];
+}
+
+/** `env`'s user as a decider (RFC 0025 §3.3: delegations active today count). */
+export async function whoIs(su: Env, env: Env): Promise<Who> {
+  const today = env.today();
+  const delegations = await find(
+    su,
+    'approval.delegation',
+    { delegate: env.uid, dateFrom: { lte: today }, dateTo: { gte: today } },
+    ['user'],
+  );
+  const users = [...new Set(delegations.map((d) => d['user'] as number))];
+  const groups =
+    users.length === 0
+      ? []
+      : await find(su, 'auth.user_group', { user: { in: users } }, ['user', 'group', 'company']);
+  return {
+    uid: env.uid as number,
+    administrator: env.administrator,
+    groups: env.groups,
+    companyId: (env.companyId as number | undefined) ?? null,
+    delegators: users.map((user) => ({
+      user,
+      roles: groups
+        .filter((g) => g['user'] === user)
+        .map((g) => ({
+          group: String(g['group']),
+          company: (g['company'] as number | null) ?? null,
+        })),
+    })),
+  };
+}
+
+const holds = (roles: Who['delegators'][number]['roles'], role: string, company: number | null) =>
+  role !== '' &&
+  roles.some(
+    (r) => r.group === role && (r.company === null || company === null || r.company === company),
+  );
+
+/**
+ * Whether `who` may decide `request` as an approver: as themselves (`{ for: null }`) — named, holding the role, or
+ * the escalation role once it is late —, or for someone away who delegated to them (`{ for: <user> }`); null when not.
+ */
+function approverFor(who: Who, request: ApprovalRequestInfo): { for: number | null } | null {
+  if (request.approvers.includes(who.uid)) return { for: null };
+  if (request.approvers.length === 0 && (who.administrator || who.groups.has(request.approverRole)))
+    return { for: null };
+  if (request.escalatedTo !== null && (who.administrator || who.groups.has(request.escalatedTo)))
+    return { for: null };
+  for (const d of who.delegators) {
+    if (d.user === request.requestedBy) continue;
+    if (request.approvers.includes(d.user)) return { for: d.user };
+    if (request.approvers.length === 0 && holds(d.roles, request.approverRole, request.company))
+      return { for: d.user };
+    if (request.escalatedTo !== null && holds(d.roles, request.escalatedTo, request.company))
+      return { for: d.user };
+  }
+  return null;
+}
+
 /**
  * Why `env`'s user may not decide `request` now — its turn, its approvers (or role), its company, not the requester,
  * not decided by them already —, or null when they may.
  */
 function mayDecide(
-  env: Env,
+  who: Who,
   request: ApprovalRequestInfo,
   round: readonly ApprovalRequestInfo[],
-  voted: ReadonlySet<number> = new Set(),
-): string | null {
-  if (request.state !== 'pending') return 'decided';
-  if (voted.has(request.id)) return 'voted';
+  decided: ReadonlyMap<number, ReadonlySet<number>> = new Map(),
+): { reason: string | null; onBehalfOf: number | null } {
+  const no = (reason: string) => ({ reason, onBehalfOf: null });
+  if (request.state !== 'pending') return no('decided');
   if (round.some((r) => r.sequence < request.sequence && r.state !== 'approved'))
-    return 'not-your-turn';
-  if (request.requestedBy === env.uid) return 'separation-of-duties';
-  if (request.company !== null && request.company !== env.companyId) return 'other-company';
-  if (request.approvers.length > 0) {
-    if (!request.approvers.includes(env.uid as number)) return 'not-approver';
-  } else if (!env.administrator && !env.groups.has(request.approverRole)) return 'not-approver';
-  return null;
+    return no('not-your-turn');
+  if (request.requestedBy === who.uid) return no('separation-of-duties');
+  if (request.company !== null && request.company !== who.companyId) return no('other-company');
+  const as = approverFor(who, request);
+  if (as === null) return no('not-approver');
+  const done = decided.get(request.id) ?? new Set();
+  if (done.has(who.uid) || (as.for !== null && done.has(as.for))) return no('voted');
+  return { reason: null, onBehalfOf: as.for };
 }
 
-/** The requests (of `ids`) `user` has already decided. */
-async function votedBy(su: Env, user: number, ids: readonly number[]): Promise<Set<number>> {
-  if (ids.length === 0) return new Set();
-  const rows = await find(su, 'approval.vote', { user, request: { in: [...ids] } }, ['request']);
-  return new Set(rows.map((r) => r['request'] as number));
+/** Who has decided each request of `ids` already (the voters, and those they decided for). */
+async function decidedOn(su: Env, ids: readonly number[]): Promise<Map<number, Set<number>>> {
+  const out = new Map<number, Set<number>>();
+  if (ids.length === 0) return out;
+  for (const v of await find(su, 'approval.vote', { request: { in: [...ids] } }, [
+    'request',
+    'user',
+    'onBehalfOf',
+  ])) {
+    const set = out.get(v['request'] as number) ?? new Set<number>();
+    set.add(v['user'] as number);
+    if (typeof v['onBehalfOf'] === 'number') set.add(v['onBehalfOf'] as number);
+    out.set(v['request'] as number, set);
+  }
+  return out;
 }
 
 export type Decision = 'approve' | 'reject' | 'send_back';
@@ -406,6 +506,7 @@ export async function decide(
   requestId: number,
   decision: Decision,
   comment?: string,
+  from?: { readonly ip?: string },
 ): Promise<ApprovalRequestInfo> {
   const actor = env.uid;
   return env.asSuperuser({ reason: `${decision} approval ${requestId}` }, async (su) => {
@@ -413,7 +514,13 @@ export async function decide(
     if (request === undefined)
       refuse(404, 'missing-record', 'Not found', `No approval request ${requestId}.`);
     const round = await currentRequests(su, request.targetModel, request.targetId);
-    const reason = mayDecide(env, request, round, await votedBy(su, actor as number, [request.id]));
+    const who = await whoIs(su, env);
+    const { reason, onBehalfOf } = mayDecide(
+      who,
+      request,
+      round,
+      await decidedOn(su, [request.id]),
+    );
     if (reason === 'decided' || request.state === 'cancelled')
       refuse(409, 'approval-decided', 'Already decided', `This request is ${request.state}.`);
     if (reason === 'voted')
@@ -475,6 +582,8 @@ export async function decide(
         decision,
         comment: text === '' ? null : text,
         at: new Date(),
+        onBehalfOf,
+        ip: from?.ip ?? null,
       },
     ]);
     const approvals = request.approvals + (decision === 'approve' ? 1 : 0);
@@ -518,6 +627,8 @@ export async function decide(
         comment: text === '' ? null : text,
         approvals,
         required: request.required,
+        onBehalfOf,
+        ip: from?.ip ?? null,
       },
     });
     await su.emit('approval.decided', { ...target, request: request.id, state, final: done });
@@ -600,6 +711,9 @@ export interface ApprovalCard {
   readonly required: number;
   readonly waitingSince: string;
   readonly decidedAt: string | null;
+  /** When it should be decided by, and the role it was escalated to once late. */
+  readonly dueAt: string | null;
+  readonly escalatedTo: string | null;
   readonly comment: string | null;
   readonly record: {
     readonly model: string;
@@ -688,6 +802,8 @@ async function cardsOf(
       required: r.required,
       waitingSince: created.get(r.id) ?? new Date().toISOString(),
       decidedAt: o.decidedAt ?? r.decidedAt,
+      dueAt: r.dueAt,
+      escalatedTo: r.escalatedTo,
       comment: o.comment === undefined ? r.comment : o.comment,
       record: {
         model: r.targetModel,
@@ -868,25 +984,167 @@ export async function approvalStats(env: Env): Promise<{
   });
 }
 
+/** The people who may decide `request` now: its approvers (or its role's holders), the escalation role's once late,
+ * and whoever they delegated to today; never the requester. */
+export async function decidersOf(
+  su: Env,
+  request: ApprovalRequestInfo,
+  today: string,
+): Promise<number[]> {
+  const people = new Set<number>(request.approvers);
+  if (request.approvers.length === 0 && request.approverRole !== '')
+    for (const u of await holders(su, request.approverRole, request.company)) people.add(u);
+  if (request.escalatedTo !== null)
+    for (const u of await holders(su, request.escalatedTo, request.company)) people.add(u);
+  if (people.size > 0)
+    for (const d of await find(
+      su,
+      'approval.delegation',
+      { user: { in: [...people] }, dateFrom: { lte: today }, dateTo: { gte: today } },
+      ['delegate'],
+    ))
+      people.add(d['delegate'] as number);
+  if (request.requestedBy !== null) people.delete(request.requestedBy);
+  return [...people];
+}
+
+/** The pending requests of a record whose turn it is (every lower level approved). */
+export async function turnOf(su: Env, model: string, id: number): Promise<ApprovalRequestInfo[]> {
+  const round = await currentRequests(su, model, id);
+  return round.filter(
+    (r) =>
+      r.state === 'pending' &&
+      !round.some((x) => x.sequence < r.sequence && x.state !== 'approved'),
+  );
+}
+
+/**
+ * Deadlines (RFC 0025 §3.3), as the system: each pending request with a deadline is reminded once at half of it and,
+ * once late, escalated to its level's role (who may then decide too), audited; returns what was done, with who to
+ * tell.
+ */
+export async function sweepDeadlines(
+  su: Env,
+  now: Date = new Date(),
+): Promise<{ kind: 'reminded' | 'escalated'; request: ApprovalRequestInfo }[]> {
+  const out: { kind: 'reminded' | 'escalated'; request: ApprovalRequestInfo }[] = [];
+  const rows = await find(su, 'approval.request', { state: 'pending', dueAt: { isNull: false } }, [
+    'dueAt',
+    'remindedAt',
+    'escalatedTo',
+    'createdAt',
+    'level',
+  ]);
+  for (const row of rows) {
+    const due = new Date(row['dueAt'] as Date).getTime();
+    const start = new Date(row['createdAt'] as Date).getTime();
+    const [request] = await loadRequests(su, { id: row['id'] }, ['id asc']);
+    if (request === undefined) continue;
+    if (now.getTime() >= due && (row['escalatedTo'] ?? null) === null) {
+      const [level] =
+        typeof row['level'] === 'number'
+          ? await find(su, 'approval.level', { id: row['level'] }, ['escalateRole'])
+          : [];
+      const role =
+        typeof level?.['escalateRole'] === 'string' ? (level['escalateRole'] as string) : '';
+      if (role !== '') {
+        await ref(su, 'approval.request')
+          .browse([request.id])
+          .write({
+            escalatedTo: role,
+            escalatedAt: now,
+            remindedAt: row['remindedAt'] == null ? now : new Date(row['remindedAt'] as string),
+          });
+        await audit(su, {
+          kind: 'approval.escalated',
+          summary: `${request.levelName} escalated to ${role} for ${request.targetModel} ${request.targetId}.`,
+          actor: null,
+          company: request.company,
+          targetModel: request.targetModel,
+          targetId: request.targetId,
+          details: { request: request.id, role },
+        });
+        await su.emit('approval.escalated', { request: request.id, role });
+        out.push({ kind: 'escalated', request: { ...request, escalatedTo: role } });
+        continue;
+      }
+    }
+    if ((row['remindedAt'] ?? null) === null && now.getTime() >= start + (due - start) / 2) {
+      await ref(su, 'approval.request').browse([request.id]).write({ remindedAt: now });
+      out.push({ kind: 'reminded', request });
+    }
+  }
+  return out;
+}
+
+/** One-time links deciding `request` from an email, one per person who may decide it now (7 days). */
+export async function issueLinks(
+  su: Env,
+  request: ApprovalRequestInfo,
+  today: string,
+  newToken: () => string,
+  digestOf: (token: string) => string,
+): Promise<{ user: number; token: string }[]> {
+  const out: { user: number; token: string }[] = [];
+  const expiresAt = new Date(Date.now() + 7 * 86_400_000);
+  for (const user of await decidersOf(su, request, today)) {
+    const token = newToken();
+    await ref(su, 'approval.link').create([
+      { request: request.id, user, tokenHash: digestOf(token), expiresAt },
+    ]);
+    out.push({ user, token });
+  }
+  return out;
+}
+
+/** The link of a token, while it is unused and not expired: who decides, which request. */
+export async function linkOf(
+  su: Env,
+  tokenHash: string,
+): Promise<{ id: number; user: number; request: ApprovalRequestInfo } | null> {
+  const [link] = await find(su, 'approval.link', { tokenHash, usedAt: { isNull: true } }, [
+    'request',
+    'user',
+    'expiresAt',
+  ]);
+  if (link === undefined || new Date(link['expiresAt'] as Date).getTime() < Date.now()) return null;
+  const [request] = await loadRequests(su, { id: link['request'] }, ['id asc']);
+  return request === undefined
+    ? null
+    : { id: link['id'] as number, user: link['user'] as number, request };
+}
+
+/** Marks a link used (as the system). */
+export async function useLink(su: Env, id: number): Promise<void> {
+  await ref(su, 'approval.link').browse([id]).write({ usedAt: new Date() });
+}
+
+/** A user's groups in a company (direct grants), to act as them from a link. */
+export async function groupsOf(su: Env, user: number, company: number | null): Promise<string[]> {
+  return (
+    await find(
+      su,
+      'auth.user_group',
+      { user, ...(company === null ? {} : { or: [{ company }, { company: null }] }) },
+      ['group'],
+    )
+  ).map((r) => String(r['group']));
+}
+
 /** The pending requests `env`'s user may decide now, in the current company. */
 export async function inbox(env: Env): Promise<ApprovalRequestInfo[]> {
   return env.asSuperuser({ reason: 'approval inbox' }, async (su) => {
     const pending = await loadRequests(su, { state: 'pending' }, ['id asc']);
-    const voted = await votedBy(
+    const who = await whoIs(su, env);
+    const decided = await decidedOn(
       su,
-      env.uid as number,
       pending.map((r) => r.id),
     );
     const out: ApprovalRequestInfo[] = [];
     for (const request of pending) {
-      if (
-        request.approvers.length > 0
-          ? !request.approvers.includes(env.uid as number)
-          : !env.administrator && !env.groups.has(request.approverRole)
-      )
-        continue;
+      if (approverFor(who, request) === null) continue;
       const round = await currentRequests(su, request.targetModel, request.targetId);
-      if (mayDecide(env, request, round, voted) === null) out.push(request);
+      if (mayDecide(who, request, round, decided).reason === null) out.push(request);
     }
     return out;
   });

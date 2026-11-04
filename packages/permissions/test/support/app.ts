@@ -2,6 +2,7 @@
  * A purchase installation for permission tests: two companies, an administrator with 2FA, and users whose roles
  * differ per company. Requests go through the real HTTP layer (`app.inject`) with real sessions.
  */
+import type { KoshModule } from '@kosh/modules-sdk';
 import { createServer, installBase, type KoshServer, totp } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
 import { installApprovalPolicies } from '../../src/index.js';
@@ -35,11 +36,14 @@ export interface TestApp {
   stop(): Promise<void>;
 }
 
-export async function startApp(): Promise<TestApp> {
+/** `modules`: more modules over the purchase fixture (the Approvals app's tests add it). */
+export async function startApp(
+  options: { readonly modules?: readonly KoshModule[] } = {},
+): Promise<TestApp> {
   const db = await startPostgres();
   const server = await createServer({
     databaseUrl: db.url,
-    modules: [purchase],
+    modules: [purchase, ...(options.modules ?? [])],
     auth: { secureCookies: false, cacheMs: 0, loginLimit: 0 },
     rateLimit: { max: 0, timeWindow: '1 minute' },
     logger: false,

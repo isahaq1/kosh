@@ -24,10 +24,19 @@ export {
   approveMany,
   type Decision,
   decide,
+  decidersOf,
+  groupsOf,
   inbox,
   installApprovalPolicies,
+  issueLinks,
+  linkOf,
   requestApprovals,
   requestsOf,
+  sweepDeadlines,
+  turnOf,
+  useLink,
+  type Who,
+  whoIs,
   withdraw,
 } from './approvals.js';
 export { permissionsShutro } from './models.js';
@@ -48,7 +57,7 @@ export const permissions: ReturnType<typeof defineModule> = defineModule({
   accessLevels: {
     auditor: { label: 'Security auditor', groups: ['permissions.auditor'] },
   },
-  privateModels: ['approval.request'],
+  privateModels: ['approval.request', 'approval.vote', 'approval.link'],
   hooks: {
     defaults: async (env, modules) => {
       const n = await installApprovalPolicies(env as Env, modules);

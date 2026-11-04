@@ -116,6 +116,10 @@ const ApprovalLevel = defineModel('approval.level', {
       { required: true, default: 'any', label: 'Decided by' },
     ),
     quorumCount: f.integer({ label: 'How many' }),
+    /** Hours to decide (empty: no deadline); a reminder at half, then escalation (RFC 0025 §3.3). */
+    deadlineHours: f.integer({ label: 'Hours to decide' }),
+    /** Who may decide once the deadline passed (besides the approvers). */
+    escalateRole: f.char({ label: 'Escalate to (role)' }),
   },
   constraints: {
     // Who decides is complete: a role for roles (and as the fallback of a manager or a field), people for people, a
@@ -218,6 +222,12 @@ const ApprovalRequest = defineModel('approval.request', {
     /** The submission it belongs to (a resubmission after sending back is the next round). */
     round: f.integer({ required: true, default: 1 }),
     votes: f.one2many('approval.vote', 'request'),
+    /** When it should be decided by (the level's deadline). */
+    dueAt: f.datetime({ label: 'Due' }),
+    remindedAt: f.datetime({ label: 'Reminded at' }),
+    /** The role that may also decide since the deadline passed. */
+    escalatedTo: f.char({ label: 'Escalated to' }),
+    escalatedAt: f.datetime({ label: 'Escalated at' }),
     state: f.selection(
       {
         pending: 'Pending',
@@ -247,16 +257,81 @@ const ApprovalVote = defineModel('approval.vote', {
     ),
     comment: f.text(),
     at: f.datetime({ required: true }),
+    /** Decided for this approver, who delegated to `user` while away. */
+    onBehalfOf: f.many2one('res.users', { ondelete: 'set null', label: 'For' }),
+    /** Decided from an email link: the address it came from. */
+    ip: f.char({ label: 'From address' }),
   },
   sqlConstraints: {
     once: { unique: ['request', 'user'], message: 'Each approver decides a request once.' },
   },
 });
 
+const me = { $env: 'uid' } as const;
+
+/**
+ * "While I am away, my approvals go to …" (RFC 0025 §3.3): from one date to another, `delegate` decides what `user`
+ * may, in their own name and for them. Each person keeps their own; Approvals managers see all.
+ */
+const ApprovalDelegation = defineModel('approval.delegation', {
+  order: ['dateFrom desc', 'id desc'],
+  access: {
+    'base.user': ['read', 'write', 'create', 'unlink'],
+    'approvals.manager': ['read', 'write', 'create', 'unlink'],
+  },
+  rules: {
+    mine: {
+      groups: ['base.user'],
+      perms: ['read', 'write', 'create', 'unlink'],
+      domain: { or: [{ user: me }, { delegate: me }] },
+    },
+    all: {
+      groups: ['approvals.manager'],
+      perms: ['read', 'write', 'create', 'unlink'],
+      domain: {},
+    },
+  },
+  fields: {
+    user: f.many2one('res.users', {
+      required: true,
+      ondelete: 'cascade',
+      default: (env: Env) => env.uid as never,
+      label: 'Away',
+    }),
+    delegate: f.many2one('res.users', {
+      required: true,
+      ondelete: 'cascade',
+      label: 'Decides instead',
+    }),
+    dateFrom: f.date({ required: true, label: 'From' }),
+    dateTo: f.date({ required: true, label: 'Until' }),
+    note: f.char(),
+  },
+  sqlConstraints: {
+    period: {
+      check: orm.sql`date_to >= date_from`,
+      message: 'A delegation ends on or after it starts.',
+    },
+    other: { check: orm.sql`delegate_id <> user_id`, message: 'Delegate to someone else.' },
+  },
+});
+
+/** A one-time link that decides a request from an email (only its digest kept). */
+const ApprovalLink = defineModel('approval.link', {
+  order: ['id desc'],
+  fields: {
+    request: f.many2one('approval.request', { required: true, ondelete: 'cascade' }),
+    user: f.many2one('res.users', { required: true, ondelete: 'cascade' }),
+    tokenHash: f.char({ required: true, index: 'unique' }),
+    expiresAt: f.datetime({ required: true }),
+    usedAt: f.datetime(),
+  },
+});
+
 /** The Shutro module of `@kosh/permissions`. */
 export const permissionsShutro: ReturnType<typeof orm.defineModule> = defineModule({
   name: 'permissions',
-  version: '0.2.0',
+  version: '0.3.0',
   depends: [baseShutro],
   groups: [
     // Who edits approval policies on screen (RFC 0025; administrators always may).
@@ -274,5 +349,12 @@ export const permissionsShutro: ReturnType<typeof orm.defineModule> = defineModu
       groups: ['permissions.auditor'],
     }),
   ],
-  models: [ApprovalPolicy, ApprovalLevel, ApprovalRequest, ApprovalVote],
+  models: [
+    ApprovalPolicy,
+    ApprovalLevel,
+    ApprovalRequest,
+    ApprovalVote,
+    ApprovalDelegation,
+    ApprovalLink,
+  ],
 });
