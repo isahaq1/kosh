@@ -226,7 +226,7 @@ export interface CalendarView extends ViewBase {
   readonly title: string;
   /** A field whose value colours the events. */
   readonly color?: string;
-  readonly mode?: 'month' | 'week';
+  readonly mode?: 'month' | 'week' | 'day';
 }
 
 /** Records as bars on a timeline. */

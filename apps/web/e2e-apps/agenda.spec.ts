@@ -64,3 +64,32 @@ test('the Agenda overview (RFC 0022 step 2)', async ({ page }) => {
   for (const title of ['Meetings this month', 'Rooms', 'Meetings by room'])
     await expect(page.getByRole('region', { name: title, exact: true })).toBeVisible();
 });
+
+test('the calendar in full: month, week and day, the meeting at its hour; a new one from an empty hour', async ({
+  page,
+}) => {
+  await signIn(page, 'dina');
+  await page.goto('/agenda/a/agenda.action_events?view=calendar');
+  await page.getByRole('button', { name: 'Month', exact: true }).click();
+  const month = new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric' }).format(
+    new Date(),
+  );
+  await expect(page.getByRole('table', { name: month })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Weekly review' }).first()).toBeVisible();
+
+  await page.getByRole('button', { name: 'Week', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Week', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.getByRole('button', { name: /Weekly review/ }).first()).toBeVisible();
+
+  await page.getByRole('button', { name: 'Day', exact: true }).click();
+  await expect(page.getByRole('button', { name: /Weekly review/ }).first()).toBeVisible();
+  // An empty hour starts a new meeting there.
+  await page
+    .getByRole('button', { name: /^New on .* at 10/ })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/agenda\.action_events\/new/);
+});
