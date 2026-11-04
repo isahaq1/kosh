@@ -248,6 +248,63 @@ async function companyOf(su: Env, model: string, id: number): Promise<number | n
  * and levels; earlier pending requests of the records are cancelled (a resubmission starts a new round). Returns
  * the number of requests created.
  */
+/** Whether record `id` of `model` meets `condition` (a Shutro domain; empty: always). */
+async function matches(
+  su: Env,
+  model: string,
+  id: number,
+  condition: Row | null,
+): Promise<boolean> {
+  if (condition === null || Object.keys(condition).length === 0) return true;
+  return (
+    (await ref(su, model).search({ where: { and: [{ id }, condition] }, limit: 1 })).length > 0
+  );
+}
+
+/**
+ * Which of the last `limit` records of the policy's model each of its levels would have asked about (RFC 0025 step
+ * 4: the editor's preview), as the system; the policy's own condition first.
+ */
+export async function previewPolicy(
+  su: Env,
+  policyId: number,
+  limit = 50,
+): Promise<{ records: number; levels: { id: number; name: string; matched: number[] }[] }> {
+  const [policy] = await find(su, 'approval.policy', { id: policyId }, [
+    'targetModel',
+    'condition',
+  ]);
+  if (policy === undefined)
+    throw new HttpProblem(404, 'missing-record', 'Not found', 'No such policy.');
+  const model = String(policy['targetModel']);
+  const recent = await ref(su, model).search({
+    where: (policy['condition'] as Row | null) ?? {},
+    order: ['id desc'],
+    limit,
+  });
+  const ids = recent.ids as unknown as number[];
+  const levels = await find(
+    su,
+    'approval.level',
+    { policy: policyId },
+    ['name', 'condition'],
+    ['sequence asc', 'id asc'],
+  );
+  const out: { id: number; name: string; matched: number[] }[] = [];
+  for (const level of levels) {
+    const condition = level['condition'] as Row | null;
+    const matched =
+      ids.length === 0
+        ? []
+        : condition === null || Object.keys(condition).length === 0
+          ? ids
+          : ((await ref(su, model).search({ where: { and: [{ id: { in: ids } }, condition] } }))
+              .ids as unknown as number[]);
+    out.push({ id: level['id'] as number, name: String(level['name']), matched });
+  }
+  return { records: ids.length, levels: out };
+}
+
 export async function requestApprovals(records: unknown): Promise<number> {
   const { env, modelName, ids } = records as {
     env: Env;
@@ -275,11 +332,13 @@ export async function requestApprovals(records: unknown): Promise<number> {
         su,
         'approval.policy',
         { targetModel: modelName, or: [{ company: null }, { company }] },
-        ['name'],
+        ['name', 'condition'],
         ['sequence asc', 'id asc'],
       );
       const rows: Row[] = [];
       for (const policy of policies) {
+        // A policy for some records only (a request category's): the record must match its condition.
+        if (!(await matches(su, modelName, id, policy['condition'] as Row | null))) continue;
         const levels = await find(
           su,
           'approval.level',
@@ -299,13 +358,7 @@ export async function requestApprovals(records: unknown): Promise<number> {
           ['sequence asc', 'id asc'],
         );
         for (const level of levels) {
-          const condition = level['condition'] as Row | null;
-          const applies =
-            condition === null ||
-            Object.keys(condition).length === 0 ||
-            (await ref(su, modelName).search({ where: { and: [{ id }, condition] }, limit: 1 }))
-              .length > 0;
-          if (!applies) continue;
+          if (!(await matches(su, modelName, id, level['condition'] as Row | null))) continue;
           const who = await approversOf(su, level, { model: modelName, id, company }, requester);
           rows.push({
             policy: policy['id'],

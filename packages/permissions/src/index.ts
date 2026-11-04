@@ -30,6 +30,7 @@ export {
   installApprovalPolicies,
   issueLinks,
   linkOf,
+  previewPolicy,
   requestApprovals,
   requestsOf,
   sweepDeadlines,

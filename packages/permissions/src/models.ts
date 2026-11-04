@@ -62,9 +62,42 @@ const ApprovalPolicy = defineModel('approval.policy', {
     onWithdrawn: f.char({ label: 'On withdrawn' }),
     /** A rejection or a sending back must say why. */
     reasonRequired: f.boolean({ default: true, label: 'Reason required' }),
+    /**
+     * The records the policy is for, as a Shutro domain on the model (RFC 0025 step 4: a request category's policy
+     * covers that category's requests); empty: every record.
+     */
+    condition: f.json({ label: 'For records where' }),
     levels: f.one2many('approval.level', 'policy'),
   },
   constraints: {
+    validCondition: {
+      depends: ['condition', 'targetModel'],
+      check: async (records: never) => {
+        const { env, ids } = records as { env: Env; ids: readonly number[] };
+        return env.asSuperuser({ reason: 'validate approval policy condition' }, async (su) => {
+          const failing: number[] = [];
+          for (const row of await readAll(modelOf(su, 'approval.policy').browse(ids), [
+            'condition',
+            'targetModel',
+          ])) {
+            const condition = row['condition'];
+            if (condition === null || condition === undefined) continue;
+            const target = row['targetModel'];
+            const ok =
+              typeof condition === 'object' &&
+              !Array.isArray(condition) &&
+              installed(su, target) &&
+              (await modelOf(su, String(target))
+                .search({ where: condition, limit: 1 })
+                .then(() => true)
+                .catch(() => false));
+            if (!ok) failing.push(row['id'] as number);
+          }
+          return failing;
+        });
+      },
+      message: 'The policy’s condition is not a valid domain on its model.',
+    },
     installedModel: {
       depends: ['targetModel'],
       check: async (records: never) => {
