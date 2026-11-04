@@ -11,6 +11,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { layoutProblems } from '../packages/reporting/src/routes-documents.ts';
+import { manifestStrings, modelStrings, readDictionary } from './i18n-strings.ts';
 
 type M = Record<string, unknown>;
 interface Waiver {
@@ -37,7 +38,7 @@ const root = join(fileURLToPath(import.meta.url), '..', '..');
 const all = process.argv.includes('--all');
 
 /** The rules `pnpm lint` enforces today; the others are reported (RFC 0023 §5 switches them on step by step). */
-const ENFORCED = new Set(['M1', 'M2', 'M3', 'M4', 'V1', 'P1', 'P2', 'I1', 'I2', 'E1']);
+const ENFORCED = new Set(['M1', 'M2', 'M3', 'M4', 'V1', 'P1', 'P2', 'I1', 'I2', 'E1', 'T1']);
 const RULES: Readonly<Record<string, string>> = {
   M1: 'every model has a label',
   M2: 'every model with a list view has a search spec',
@@ -277,7 +278,15 @@ for (const m of modules) {
     if (m['overview'] === undefined) fail('A1', name, null, 'no overview');
     if (hooks['demo'] === undefined) fail('A1', name, null, 'no demo data');
   }
+  // T1: every string the module serves has its Bangla (`pnpm i18n:extract` writes the dictionary).
   if (m['i18n'] === undefined || !('bn' in (m['i18n'] as M))) fail('T1', name, null, 'no Bangla');
+  else {
+    const strings = new Set([...modelStrings(m['shutro'] as M), ...manifestStrings(m)]);
+    const dict = readDictionary(join(root, 'modules', name, 'src', 'i18n', 'bn.ts'));
+    const missing = [...strings].filter((x) => (dict.get(x) ?? '') === '');
+    if (missing.length > 0)
+      fail('T1', name, null, `${missing.length} of ${strings.size} labels without Bangla`);
+  }
 }
 
 // ---- waivers: a finding the module explains is not a failure.
