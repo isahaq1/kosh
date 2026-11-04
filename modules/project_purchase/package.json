@@ -1,0 +1,57 @@
+{
+  "name": "@kosh/project_purchase",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bridge: confirmed purchase orders on a project's cost centre, not billed yet, are its committed costs (Projects ↔ Purchase, RFC 0026)",
+  "keywords": [
+    "kosh",
+    "erp",
+    "typescript",
+    "postgresql",
+    "shutro"
+  ],
+  "author": "Isahaq <hmisahaq01@gmail.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/isahaq1/kosh/tree/main/modules/project_purchase#readme",
+  "bugs": {
+    "url": "https://github.com/isahaq1/kosh/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isahaq1/kosh.git",
+    "directory": "modules/project_purchase"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "@kosh/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node ../../scripts/copy-views.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@kosh/modules-sdk": "workspace:*",
+    "@kosh/server": "workspace:*",
+    "@kosh/views": "workspace:*",
+    "@kosh/project": "workspace:*",
+    "@kosh/project_account": "workspace:*",
+    "@kosh/purchase": "workspace:*",
+    "@kosh/purchase_account": "workspace:*",
+    "@kosh/accounting": "workspace:*"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^12.2.1",
+    "@kosh/settings": "workspace:*"
+  }
+}
