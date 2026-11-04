@@ -195,3 +195,62 @@ describe('levels name their approvers', () => {
     }
   });
 });
+
+describe('the Approvals app’s lists', () => {
+  type Card = {
+    id: number;
+    state: string;
+    levelName: string;
+    record: { model: string; id: number; name: string; label: string };
+    requester: { name: string } | null;
+    steps: { levelName: string; state: string }[];
+    comment: string | null;
+  };
+  const cards = async (list: string, as: string): Promise<Card[]> =>
+    (
+      (await t.call({ url: `/api/v1/approvals/cards?list=${list}`, as })).json() as {
+        cards: Card[];
+      }
+    ).cards;
+
+  test('the inbox as cards; approving many at once; my requests; what I decided; the header', async () => {
+    const a = await order('7002');
+    const b = await order('7002');
+    await submit(a);
+    await submit(b);
+    const inbox = await cards('inbox', 'dina');
+    const mine = inbox.filter((c) => [a, b].includes(c.record.id));
+    expect(mine).toHaveLength(2);
+    expect(mine[0]).toMatchObject({
+      levelName: 'Review',
+      state: 'pending',
+      record: { model: 'purchase.order', name: 'PO 7002', label: 'Purchase order' },
+      requester: { name: 'rahim' },
+    });
+    expect(mine[0]?.steps.map((s) => s.levelName)).toEqual(['Review']);
+
+    const bulk = await t.call({
+      method: 'POST',
+      url: '/api/v1/approvals/bulk',
+      as: 'dina',
+      body: { requests: [...mine.map((c) => c.id), 999999] },
+    });
+    expect(bulk.json()).toMatchObject({ approved: 2, failed: [{ id: 999999 }] });
+    expect(await stateOf(a)).toBe('approved');
+    expect(await stateOf(b)).toBe('approved');
+
+    const asked = await cards('mine', 'rahim');
+    expect(asked.find((c) => c.record.id === a)?.state).toBe('approved');
+    const decided = await cards('history', 'dina');
+    expect(decided.filter((c) => [a, b].includes(c.record.id)).map((c) => c.state)).toEqual([
+      'approved',
+      'approved',
+    ]);
+    const stats = (await t.call({ url: '/api/v1/approvals/stats', as: 'dina' })).json();
+    expect(stats.decidedThisMonth).toBeGreaterThanOrEqual(2);
+    expect(typeof stats.waiting).toBe('number');
+    expect((await t.call({ url: '/api/v1/approvals/cards?list=nope', as: 'dina' })).status).toBe(
+      400,
+    );
+  });
+});

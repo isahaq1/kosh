@@ -590,6 +590,284 @@ export async function withdraw(env: Env, model: string, id: number): Promise<num
   });
 }
 
+/** A request as the Approvals app shows it (RFC 0025 §3.1): the record, who asked, since when, every level. */
+export interface ApprovalCard {
+  readonly id: number;
+  readonly levelName: string;
+  readonly state: ApprovalRequestInfo['state'];
+  readonly round: number;
+  readonly approvals: number;
+  readonly required: number;
+  readonly waitingSince: string;
+  readonly decidedAt: string | null;
+  readonly comment: string | null;
+  readonly record: {
+    readonly model: string;
+    readonly id: number;
+    readonly name: string;
+    readonly label: string;
+  };
+  readonly requester: { readonly id: number; readonly name: string } | null;
+  readonly steps: readonly {
+    id: number;
+    levelName: string;
+    sequence: number;
+    state: ApprovalRequestInfo['state'];
+    approvals: number;
+    required: number;
+  }[];
+}
+
+/** `purchase.order` as people say it: "Purchase order". */
+const labelOf = (model: string): string => {
+  const words = model.replace(/[._]/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
+/** Cards of `requests` (the records' names, the requesters, each round's steps), as the system. */
+async function cardsOf(
+  su: Env,
+  requests: readonly ApprovalRequestInfo[],
+  overrides: ReadonlyMap<
+    number,
+    { state?: ApprovalCard['state']; decidedAt?: string; comment?: string | null }
+  > = new Map(),
+): Promise<ApprovalCard[]> {
+  if (requests.length === 0) return [];
+  const names = new Map<string, string>();
+  for (const model of new Set(requests.map((r) => r.targetModel))) {
+    const ids = [
+      ...new Set(requests.filter((r) => r.targetModel === model).map((r) => r.targetId)),
+    ];
+    try {
+      for (const row of (await ref(su, model).browse(ids).load(['displayName'])).read([
+        'displayName',
+      ]))
+        names.set(`${model}:${row['id']}`, String(row['displayName'] ?? ''));
+    } catch {
+      // a model no longer installed: its records are named by id
+    }
+  }
+  const users = new Map<number, string>();
+  const askers = [
+    ...new Set(requests.map((r) => r.requestedBy).filter((u): u is number => u !== null)),
+  ];
+  if (askers.length > 0)
+    for (const row of (await ref(su, 'res.users').browse(askers).load(['name'])).read(['name']))
+      users.set(row['id'] as number, String(row['name'] ?? ''));
+  const created = new Map<number, string>();
+  for (const row of await find(su, 'approval.request', { id: { in: requests.map((r) => r.id) } }, [
+    'createdAt',
+  ]))
+    created.set(
+      row['id'] as number,
+      row['createdAt'] instanceof Date ? row['createdAt'].toISOString() : String(row['createdAt']),
+    );
+  const rounds = new Map<string, ApprovalRequestInfo[]>();
+  const out: ApprovalCard[] = [];
+  for (const r of requests) {
+    const key = `${r.targetModel}:${r.targetId}:${r.round}`;
+    let steps = rounds.get(key);
+    if (steps === undefined) {
+      steps = (
+        await loadRequests(
+          su,
+          { targetModel: r.targetModel, targetId: r.targetId, round: r.round },
+          ['sequence asc', 'id asc'],
+        )
+      ).filter((x) => x.state !== 'cancelled' || x.id === r.id);
+      rounds.set(key, steps);
+    }
+    const o = overrides.get(r.id) ?? {};
+    out.push({
+      id: r.id,
+      levelName: r.levelName,
+      state: o.state ?? r.state,
+      round: r.round,
+      approvals: r.approvals,
+      required: r.required,
+      waitingSince: created.get(r.id) ?? new Date().toISOString(),
+      decidedAt: o.decidedAt ?? r.decidedAt,
+      comment: o.comment === undefined ? r.comment : o.comment,
+      record: {
+        model: r.targetModel,
+        id: r.targetId,
+        name: names.get(`${r.targetModel}:${r.targetId}`) || `#${r.targetId}`,
+        label: labelOf(r.targetModel),
+      },
+      requester:
+        r.requestedBy === null ? null : { id: r.requestedBy, name: users.get(r.requestedBy) ?? '' },
+      steps: steps.map((x) => ({
+        id: x.id,
+        levelName: x.levelName,
+        sequence: x.sequence,
+        state: x.state,
+        approvals: x.approvals,
+        required: x.required,
+      })),
+    });
+  }
+  return out;
+}
+
+/**
+ * The Approvals app's lists (RFC 0025 §3.1): `inbox` — what waits for the user's decision, oldest first —, `mine`
+ * — the records they asked approvals for, the latest round of each, where it stands —, `history` — what they decided,
+ * newest first.
+ */
+export async function approvalCards(
+  env: Env,
+  list: 'inbox' | 'mine' | 'history',
+): Promise<ApprovalCard[]> {
+  if (list === 'inbox') {
+    const waiting = await inbox(env);
+    return env.asSuperuser({ reason: 'approval cards' }, (su) => cardsOf(su, waiting));
+  }
+  const me = env.uid as number;
+  return env.asSuperuser({ reason: 'approval cards' }, async (su) => {
+    if (list === 'mine') {
+      const asked = await loadRequests(su, { requestedBy: me }, [
+        'round desc',
+        'sequence asc',
+        'id asc',
+      ]);
+      // One card per record: the latest round, its first open (or deciding) level, the round's state.
+      const byRecord = new Map<string, ApprovalRequestInfo[]>();
+      for (const r of asked) {
+        const key = `${r.targetModel}:${r.targetId}`;
+        const kept = byRecord.get(key);
+        if (kept === undefined || kept[0]?.round === r.round)
+          byRecord.set(key, [...(kept ?? []), r]);
+      }
+      const chosen: ApprovalRequestInfo[] = [];
+      const overrides = new Map<number, { state: ApprovalCard['state'] }>();
+      for (const round of byRecord.values()) {
+        const live = round.filter((r) => r.state !== 'cancelled');
+        const decisive =
+          live.find((r) => r.state === 'rejected' || r.state === 'sent_back') ??
+          live.find((r) => r.state === 'pending') ??
+          live.at(-1) ??
+          round[0];
+        if (decisive === undefined) continue;
+        const state: ApprovalCard['state'] =
+          live.length === 0
+            ? 'cancelled'
+            : live.some((r) => r.state === 'rejected')
+              ? 'rejected'
+              : live.some((r) => r.state === 'sent_back')
+                ? 'sent_back'
+                : live.every((r) => r.state === 'approved')
+                  ? 'approved'
+                  : 'pending';
+        chosen.push(decisive);
+        overrides.set(decisive.id, { state });
+      }
+      return (await cardsOf(su, chosen, overrides)).sort((a, b) =>
+        b.waitingSince.localeCompare(a.waitingSince),
+      );
+    }
+    const votes = await find(
+      su,
+      'approval.vote',
+      { user: me },
+      ['request', 'decision', 'comment', 'at'],
+      ['at desc', 'id desc'],
+    );
+    const requests = await loadRequests(
+      su,
+      { id: { in: votes.map((v) => v['request'] as number) } },
+      ['id asc'],
+    );
+    const byId = new Map(requests.map((r) => [r.id, r]));
+    const STATE = { approve: 'approved', reject: 'rejected', send_back: 'sent_back' } as const;
+    const ordered: ApprovalRequestInfo[] = [];
+    const overrides = new Map<
+      number,
+      { state: ApprovalCard['state']; decidedAt: string; comment: string | null }
+    >();
+    for (const v of votes.slice(0, 200)) {
+      const r = byId.get(v['request'] as number);
+      if (r === undefined) continue;
+      ordered.push(r);
+      overrides.set(r.id, {
+        state: STATE[v['decision'] as keyof typeof STATE],
+        decidedAt: v['at'] instanceof Date ? v['at'].toISOString() : String(v['at']),
+        comment: (v['comment'] as string | null) ?? null,
+      });
+    }
+    return cardsOf(su, ordered, overrides);
+  });
+}
+
+/** Approves many requests (each checked as one decision); the ones refused say why. */
+export async function approveMany(
+  env: Env,
+  ids: readonly number[],
+  comment?: string,
+): Promise<{ approved: number; failed: { id: number; reason: string }[] }> {
+  let approved = 0;
+  const failed: { id: number; reason: string }[] = [];
+  for (const id of ids.slice(0, 100))
+    try {
+      await decide(env, id, 'approve', comment);
+      approved += 1;
+    } catch (error) {
+      failed.push({ id, reason: error instanceof Error ? error.message : String(error) });
+    }
+  return { approved, failed };
+}
+
+/** The inbox's header: waiting, waiting over three days, decided this month, the median hours to decide them. */
+export async function approvalStats(env: Env): Promise<{
+  waiting: number;
+  overdue: number;
+  decidedThisMonth: number;
+  medianHours: number | null;
+}> {
+  const waiting = await approvalCards(env, 'inbox');
+  const now = Date.now();
+  const overdue = waiting.filter((c) => now - Date.parse(c.waitingSince) >= 72 * 3_600_000).length;
+  const me = env.uid as number;
+  return env.asSuperuser({ reason: 'approval stats' }, async (su) => {
+    const start = new Date();
+    start.setDate(1);
+    start.setHours(0, 0, 0, 0);
+    const votes = await find(su, 'approval.vote', { user: me, at: { gte: start } }, [
+      'request',
+      'at',
+    ]);
+    const asked = new Map<number, number>();
+    if (votes.length > 0)
+      for (const row of await find(
+        su,
+        'approval.request',
+        { id: { in: votes.map((v) => v['request'] as number) } },
+        ['createdAt'],
+      ))
+        asked.set(row['id'] as number, new Date(row['createdAt'] as Date).getTime());
+    const hours = votes
+      .map(
+        (v) =>
+          (new Date(v['at'] as Date).getTime() - (asked.get(v['request'] as number) ?? 0)) /
+          3_600_000,
+      )
+      .sort((a, b) => a - b);
+    const mid = Math.floor(hours.length / 2);
+    const median =
+      hours.length === 0
+        ? null
+        : hours.length % 2 === 1
+          ? (hours[mid] ?? 0)
+          : ((hours[mid - 1] ?? 0) + (hours[mid] ?? 0)) / 2;
+    return {
+      waiting: waiting.length,
+      overdue,
+      decidedThisMonth: votes.length,
+      medianHours: median === null ? null : Math.round(median * 10) / 10,
+    };
+  });
+}
+
 /** The pending requests `env`'s user may decide now, in the current company. */
 export async function inbox(env: Env): Promise<ApprovalRequestInfo[]> {
   return env.asSuperuser({ reason: 'approval inbox' }, async (su) => {

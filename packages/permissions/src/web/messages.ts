@@ -1,0 +1,43 @@
+/** Messages of the approval panel on records (namespace `approvalPanel`), in English and Bangla. */
+export const messages: Readonly<Record<string, object>> = {
+  en: {
+    title: 'Approvals',
+    round: 'Round {{n}}',
+    earlier: 'Earlier rounds ({{count}})',
+    withdrawn: 'The approvals were withdrawn.',
+    votes: '{{n}} of {{of}} approvals',
+    yourDecision: 'Your decision: {{level}}',
+    commentHint: 'A comment (needed to reject or send back)',
+    approve: 'Approve',
+    sendBack: 'Send back for changes',
+    reject: 'Reject',
+    withdraw: 'Withdraw my request',
+    state: {
+      pending: 'Waiting',
+      approved: 'Approved',
+      rejected: 'Rejected',
+      sent_back: 'Sent back',
+      cancelled: 'Cancelled',
+    },
+  },
+  bn: {
+    title: 'অনুমোদন',
+    round: 'পর্ব {{n}}',
+    earlier: 'আগের পর্ব ({{count}})',
+    withdrawn: 'অনুমোদনের অনুরোধ প্রত্যাহার করা হয়েছে।',
+    votes: '{{of}}টির মধ্যে {{n}}টি অনুমোদন',
+    yourDecision: 'আপনার সিদ্ধান্ত: {{level}}',
+    commentHint: 'একটি মন্তব্য (প্রত্যাখ্যান বা ফেরত পাঠাতে প্রয়োজন)',
+    approve: 'অনুমোদন',
+    sendBack: 'সংশোধনের জন্য ফেরত',
+    reject: 'প্রত্যাখ্যান',
+    withdraw: 'আমার অনুরোধ প্রত্যাহার',
+    state: {
+      pending: 'অপেক্ষায়',
+      approved: 'অনুমোদিত',
+      rejected: 'প্রত্যাখ্যাত',
+      sent_back: 'ফেরত পাঠানো',
+      cancelled: 'বাতিল',
+    },
+  },
+};

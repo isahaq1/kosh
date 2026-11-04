@@ -44,7 +44,7 @@ function installed(env: Env, name: unknown): boolean {
 
 const ApprovalPolicy = defineModel('approval.policy', {
   archivable: true,
-  access: { 'base.user': ['read'] },
+  access: { 'base.user': ['read'], 'approvals.manager': ['read', 'write', 'create', 'unlink'] },
   order: ['targetModel asc', 'sequence asc'],
   fields: {
     name: f.char({ required: true }),
@@ -81,7 +81,7 @@ const ApprovalPolicy = defineModel('approval.policy', {
 });
 
 const ApprovalLevel = defineModel('approval.level', {
-  access: { 'base.user': ['read'] },
+  access: { 'base.user': ['read'], 'approvals.manager': ['read', 'write', 'create', 'unlink'] },
   order: ['policy asc', 'sequence asc'],
   fields: {
     policy: f.many2one('approval.policy', { required: true, ondelete: 'cascade' }),
@@ -259,6 +259,8 @@ export const permissionsShutro: ReturnType<typeof orm.defineModule> = defineModu
   version: '0.2.0',
   depends: [baseShutro],
   groups: [
+    // Who edits approval policies on screen (RFC 0025; administrators always may).
+    defineGroup({ code: 'approvals.manager', label: 'Approvals manager', implies: ['base.user'] }),
     defineGroup({
       code: 'permissions.auditor',
       label: 'Security auditor',

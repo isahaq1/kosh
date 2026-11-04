@@ -15,14 +15,20 @@ import { registerApprovalRoutes } from './routes.js';
 
 export { registerAdminApi } from './admin.js';
 export {
+  type ApprovalCard,
   type ApprovalRequestInfo,
+  approvalCards,
   approvalGuard,
   approvalState,
+  approvalStats,
+  approveMany,
+  type Decision,
   decide,
   inbox,
   installApprovalPolicies,
   requestApprovals,
   requestsOf,
+  withdraw,
 } from './approvals.js';
 export { permissionsShutro } from './models.js';
 export { registerRoleRoutes } from './roles.js';

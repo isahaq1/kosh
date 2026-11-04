@@ -7,10 +7,21 @@
  * - `POST /api/v1/approvals/requests/:id/reject`         `{ comment }` (why; unless the policy says otherwise)
  * - `POST /api/v1/approvals/requests/:id/send-back`      `{ comment }`: back for changes (RFC 0025)
  * - `POST /api/v1/approvals/:model/:id/withdraw`         the requester withdraws the pending approvals
+ * - `GET  /api/v1/approvals/cards?list=inbox|mine|history` the Approvals app's cards (RFC 0025)
+ * - `GET  /api/v1/approvals/stats`                       waiting, overdue, decided this month, the median time
+ * - `POST /api/v1/approvals/bulk`                        `{ requests, comment? }`: approves each it may
  */
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import type { FastifyRequest } from 'fastify';
-import { decide, inbox, requestsOf, withdraw } from './approvals.js';
+import {
+  approvalCards,
+  approvalStats,
+  approveMany,
+  decide,
+  inbox,
+  requestsOf,
+  withdraw,
+} from './approvals.js';
 
 function positive(value: unknown, what: string): number {
   const id = Number(value);
@@ -54,6 +65,26 @@ export function registerApprovalRoutes({ app }: ModuleContext): void {
       const text = comment(request);
       return request.env(async (env) => decide(env, id, decision, text));
     });
+  // The Approvals app (RFC 0025): its lists, its header, approving many at once.
+  app.get('/api/v1/approvals/cards', async (request) => {
+    const list = String((request.query as { list?: unknown } | null)?.list ?? 'inbox');
+    if (list !== 'inbox' && list !== 'mine' && list !== 'history')
+      throw new HttpProblem(400, 'invalid-list', 'Invalid list', 'inbox, mine or history.');
+    return request.env(async (env) => ({ cards: await approvalCards(env, list) }), { write: true });
+  });
+  app.get('/api/v1/approvals/stats', async (request) =>
+    request.env(async (env) => approvalStats(env), { write: true }),
+  );
+  app.post('/api/v1/approvals/bulk', async (request) => {
+    const body = (request.body ?? {}) as { requests?: unknown };
+    const ids = Array.isArray(body.requests)
+      ? body.requests.filter((v): v is number => Number.isSafeInteger(v) && Number(v) > 0)
+      : [];
+    if (ids.length === 0)
+      throw new HttpProblem(400, 'invalid-body', 'Nothing chosen', 'requests: the request ids.');
+    const text = comment(request);
+    return request.env(async (env) => approveMany(env, ids, text));
+  });
   // The requester withdraws their record's pending approvals (RFC 0025).
   app.post('/api/v1/approvals/:model/:id/withdraw', async (request) => {
     const { model, id } = request.params as { model: string; id: string };
