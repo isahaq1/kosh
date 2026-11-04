@@ -254,3 +254,9 @@ awaiting a decision, phases overdue, people over-allocated, budget variance).
     - the critical path and float through the API, a backwards task refused, a slip moving two tasks;
     - a weekly task repeated once a week later.
   - End to end: a risk scored critical on screen; the project's schedule and its risk tile.
+
+## Follow-up (2026-11-04): Shutro 0.3.4
+
+Shutro 0.3.4 fixes requests #33 and #34. Kosh requires `shutro@^0.3.4`. The cost computes again read members' hourly
+costs and timesheets' costs directly, and the costs are restricted for reading only. The parent fields keep their
+names (`parentProject`, `parentPhase`, `parentTask`).

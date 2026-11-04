@@ -198,20 +198,8 @@ export const ProjectTag = defineModel('project.tag', {
 
 /** Hourly costs: seen and set by Projects managers only (RFC 0026 step 3). */
 const MANAGERS_ONLY = { read: ['project.manager'], write: ['project.manager'] } as const;
-/**
- * Computed costs: seen by Projects managers only. Shutro checks a field's write groups on compute writes too (request
- * #34), so the compute running for a user's timesheet needs `project.user` here; nobody writes a computed field by hand.
- */
-const MANAGERS_SEE = { read: ['project.manager'], write: ['project.user'] } as const;
-
-/** Whether the scope may read the managers' money fields (computes for others leave them at zero, unread). */
-function seesMoney(env: {
-  readonly su: boolean;
-  readonly administrator: boolean;
-  readonly groups: ReadonlySet<string>;
-}): boolean {
-  return env.su || env.administrator || env.groups.has('project.manager');
-}
+/** Computed costs: seen by Projects managers only (computes read and write them for anyone). */
+const MANAGERS_SEE = { read: ['project.manager'] } as const;
 
 /** A role people play in projects, with the hourly cost a member in it has unless given their own. */
 export const ProjectRole = defineModel('project.role', {
@@ -853,10 +841,6 @@ export const ProjectProject = defineModel('project.project', {
       label: 'Budget',
       groups: MANAGERS_SEE,
       ...compute('project.project', 'budget', ['budgetLines.planned'], (projects) => {
-        if (!seesMoney(projects.env)) {
-          for (const p of projects) p.budget = orm.toDecimal(0);
-          return;
-        }
         for (const p of projects)
           p.budget = [...p.budgetLines].reduce((t, l) => t.plus(l.planned), orm.toDecimal(0));
       }),
@@ -871,10 +855,6 @@ export const ProjectProject = defineModel('project.project', {
       groups: MANAGERS_SEE,
       help: 'Labour from timesheets plus costs booked on its cost centre.',
       ...compute('project.project', 'actualCost', ['labourCost', 'bookedCost'], (projects) => {
-        if (!seesMoney(projects.env)) {
-          for (const p of projects) p.actualCost = orm.toDecimal(0);
-          return;
-        }
         for (const p of projects)
           p.actualCost = orm.toDecimal(p.labourCost ?? 0).plus(p.bookedCost ?? 0);
       }),
@@ -889,10 +869,6 @@ export const ProjectProject = defineModel('project.project', {
         'variance',
         ['budget', 'labourCost', 'bookedCost', 'committedCost'],
         (projects) => {
-          if (!seesMoney(projects.env)) {
-            for (const p of projects) p.variance = orm.toDecimal(0);
-            return;
-          }
           for (const p of projects)
             p.variance = orm
               .toDecimal(p.budget ?? 0)
@@ -923,23 +899,12 @@ export const ProjectProject = defineModel('project.project', {
       store: true,
       label: 'Labour cost',
       groups: MANAGERS_SEE,
-      ...compute('project.project', 'labourCost', ['timesheets.cost'], async (projects) => {
-        // Costs are the managers' to see: summed as the system, in the write that changed them.
-        const env = projects.env as unknown as Env;
-        const ids = [...projects].map((p) => p.id as number);
-        const totals = await env.asSuperuser({ reason: 'labour cost' }, async (su) => {
-          const out = new Map<number, ReturnType<typeof orm.toDecimal>>();
-          const lines = await su
-            .model('project.timesheet')
-            .search({ where: { project: { in: ids } } as never })
-            .then((r) => r.load(['project', 'cost']));
-          for (const l of lines) {
-            const key = l.project?.id as number;
-            out.set(key, (out.get(key) ?? orm.toDecimal(0)).plus(l.cost ?? 0));
-          }
-          return out;
-        });
-        for (const p of projects) p.labourCost = totals.get(p.id as number) ?? orm.toDecimal(0);
+      ...compute('project.project', 'labourCost', ['timesheets.cost'], (projects) => {
+        for (const p of projects) {
+          let total = orm.toDecimal(0);
+          for (const t of p.timesheets) total = total.plus(t.cost ?? 0);
+          p.labourCost = total;
+        }
       }),
     }),
     taskCount: f.integer({
@@ -1902,39 +1867,16 @@ export const ProjectTimesheet = defineModel('project.timesheet', {
           'project.members.dateTo',
           'project.members.role.defaultHourlyCost',
         ],
-        async (lines) => {
-          // The rates are the managers' to see: read as the system, in the write that changed them.
-          const env = lines.env as unknown as Env;
-          const projectIds = [...new Set([...lines].map((l) => l.project?.id as number))].filter(
-            (id) => id !== undefined,
-          );
-          const members =
-            projectIds.length === 0
-              ? []
-              : await env.asSuperuser({ reason: 'labour cost' }, async (su) =>
-                  (
-                    await su
-                      .model('project.member')
-                      .search({ where: { project: { in: projectIds } } as never })
-                      .then((r) => r.load({ role: ['defaultHourlyCost'] }))
-                  ).map((m) => ({
-                    project: m.project.id as number,
-                    user: m.user.id as number,
-                    from: m.dateFrom === null ? null : String(m.dateFrom),
-                    to: m.dateTo === null ? null : String(m.dateTo),
-                    rate: m.hourlyCost ?? m.role?.defaultHourlyCost ?? null,
-                  })),
-                );
+        (lines) => {
           for (const l of lines) {
             const day = String(l.date);
-            const member = members.find(
+            const member = [...(l.project?.members ?? [])].find(
               (m) =>
-                m.project === l.project?.id &&
-                m.user === l.user.id &&
-                (m.from === null || m.from <= day) &&
-                (m.to === null || m.to >= day),
+                m.user.id === l.user.id &&
+                (m.dateFrom === null || String(m.dateFrom) <= day) &&
+                (m.dateTo === null || String(m.dateTo) >= day),
             );
-            const rate = member?.rate ?? null;
+            const rate = member?.hourlyCost ?? member?.role?.defaultHourlyCost ?? null;
             l.cost = rate === null ? orm.toDecimal(0) : l.hours.times(rate).toDecimalPlaces(2);
           }
         },
