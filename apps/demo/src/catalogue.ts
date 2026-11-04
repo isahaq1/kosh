@@ -2,6 +2,7 @@
 import { accountAsset } from '@kosh/account_asset';
 import { accountBudget } from '@kosh/account_budget';
 import { accounting } from '@kosh/accounting';
+import { approvals } from '@kosh/approvals';
 import { attendance } from '@kosh/attendance';
 import { automation } from '@kosh/automation';
 import { calendarApp } from '@kosh/calendar';
@@ -86,6 +87,7 @@ export const DEMO_APPS: readonly string[] = [
   'helpdesk',
   'documents',
   'sign',
+  'approvals',
   'account_asset',
   'account_budget',
   'website_sale',
@@ -127,6 +129,7 @@ export function demoCatalogue(): KoshModule[] {
     helpdesk,
     documents,
     sign,
+    approvals,
     accountAsset,
     saleAccount,
     purchaseAccount,

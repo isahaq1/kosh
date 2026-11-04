@@ -90,6 +90,7 @@ const PACKAGES = [
   'website_sale_stock',
   'documents',
   'sign',
+  'approvals',
   'pos_stock',
   'expense_account',
   'payroll_account',

@@ -4,6 +4,7 @@
  */
 import './index.css';
 import { accountingMessages, registerAccountingWeb } from '@kosh/accounting/web';
+import { approvalsMessages, registerApprovalsWeb } from '@kosh/approvals/web';
 import { assistantMessages, registerAssistantWeb } from '@kosh/assistant/web';
 import { attendanceMessages, registerAttendanceWeb } from '@kosh/attendance/web';
 import { automationMessages, registerAutomationWeb } from '@kosh/automation/web';
@@ -16,7 +17,7 @@ import { l10n_inMessages, registerL10nInWeb } from '@kosh/l10n_in/web';
 import { mailMessages, registerMailWeb } from '@kosh/mail/web';
 import { messagingMessages, registerMessagingWeb } from '@kosh/messaging/web';
 import { notifyMessages, registerNotifyWeb } from '@kosh/notify/web';
-import { registerPermissionsWeb } from '@kosh/permissions/web';
+import { approvalPanelMessages, registerPermissionsWeb } from '@kosh/permissions/web';
 import { portalMessages, registerPortalWeb } from '@kosh/portal/web';
 import { posMessages, registerPosWeb } from '@kosh/pos/web';
 import { recruitmentMessages, registerRecruitmentWeb } from '@kosh/recruitment/web';
@@ -31,6 +32,7 @@ import { createRoot } from 'react-dom/client';
 
 const registry = createDefaultRegistry();
 registerPermissionsWeb(registry);
+registerApprovalsWeb(registry);
 registerReportingWeb(registry);
 registerMessagingWeb(registry);
 registerSettingsWeb(registry);
@@ -70,6 +72,8 @@ const messages = {
   pos: posMessages,
   attendance: attendanceMessages,
   documents: documentsMessages,
+  approvalPanel: approvalPanelMessages,
+  approvals: approvalsMessages,
   reporting: reportingMessages,
   messaging: messagingMessages,
   settings: settingsMessages,

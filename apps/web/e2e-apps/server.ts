@@ -17,6 +17,7 @@ import { accountAsset } from '@kosh/account_asset';
 import { accountBudget } from '@kosh/account_budget';
 import { accountPortal } from '@kosh/account_portal';
 import { accounting } from '@kosh/accounting';
+import { approvals } from '@kosh/approvals';
 import { createAssistant, fakeClient } from '@kosh/assistant';
 import { attendance } from '@kosh/attendance';
 import { automation } from '@kosh/automation';
@@ -178,6 +179,7 @@ const CATALOGUE = [
   helpdesk,
   documents,
   sign,
+  approvals,
   accountAsset,
   accountBudget,
   l10nBdPayroll,
@@ -225,6 +227,7 @@ await applyApps(
         'helpdesk',
         'documents',
         'sign',
+        'approvals',
         'account_asset',
         'account_budget',
         'website_sale',
@@ -330,6 +333,7 @@ for (const [login, name, groups] of [
       'maintenance.user',
       'trade_finance.user',
       'event.user',
+      'purchase.user',
     ],
   ],
 ] as const)
@@ -442,6 +446,16 @@ const beam = (await as('dina', 'POST', '/api/v1/models/product.product', {
   standardPrice: '700',
   taxes: { set: vat[0] === undefined ? [] : [vat[0].id] },
 })) as { id: number };
+// Approvals (RFC 0025): Rahim's order of 140 000 waits for a Purchase manager (Dina) in the Approvals app.
+const toApprove = (await as('rahim', 'POST', '/api/v1/models/purchase.order', {
+  partner: partners.id,
+  currency: bdt?.id,
+  lines: {
+    create: [{ product: beam.id, name: 'Steel beam', quantity: '200', priceUnit: '700' }],
+  },
+})) as { id: number };
+await as('rahim', 'POST', `/api/v1/models/purchase.order/${toApprove.id}/transitions/submit`, {});
+
 // Replenishment (RFC 0024 §2.6): anchor bolts kept between 100 and 200 in the main warehouse, bought from Bengal Steel.
 const bolt = (await as('dina', 'POST', '/api/v1/models/product.product', {
   name: 'Anchor bolt',

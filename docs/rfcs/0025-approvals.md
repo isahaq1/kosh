@@ -133,3 +133,26 @@ Policies declared in manifests and their conditions, `requestApprovals` / `appro
   reason refused, withdrawing by the requester only and its transition, a manager level falling back to its role, and
   levels that do not name their approvers refused; the earlier approval tests unchanged.
 
+## Implementation notes (2026-11-04): step 2 — the app
+
+- **`@kosh/approvals`** (`modules/approvals`), the **Approvals** app every user has (its access level is `base.user`;
+  *Policies* for the new **Approvals manager** group, which may edit `approval.policy` and `approval.level`).
+- **To approve** (the app's home): a header — waiting for me, waiting over three days, decided this month, the median
+  hours to decide (`GET /api/v1/approvals/stats`) — and the requests as **cards** (`GET /api/v1/approvals/cards?list=inbox`):
+  the record's name and kind with its link, who asked, how long it has waited (amber after a day, red after three),
+  the round, the votes, every level of the round as a **step**; a comment and *Approve*, *Send back for changes*,
+  *Reject* (the last two only with a comment). Select many and **approve them at once** (`POST /api/v1/approvals/bulk`,
+  each checked as a decision of its own, the refused ones saying why). Keyboard: J / K, A, R, X.
+- **My requests** (`list=mine`): one card per record — its latest round, where it stands, what was said — withdrawn
+  while it waits. **What I decided** (`list=history`): each of my votes with the record, the answer, the comment, when.
+- **The record's panel**, redesigned: the current round as steps with their votes and comments, earlier rounds behind
+  a disclosure, the user's decision with the three answers, *Withdraw my request* for the requester; in English and
+  Bangla (`approvalPanel` messages), as every Approvals screen.
+- **Policies on screen**: the policy with what happens (approved, rejected, sent back, withdrawn) and its levels as
+  lines — who decides, the role, the people, the field, how many.
+- An overview of declared cards is not possible yet: requests are private models (never served by the generated API
+  the overviews read); the header gives the figures instead.
+- **Tests**: on real PostgreSQL the inbox as cards (the record's name and kind, the requester, the steps), approving
+  two at once with a refused third, my requests, what I decided, the header, an unknown list refused; end to end, a
+  purchase order of 140 000 decided from the inbox and seen approved in the requester's requests.
+

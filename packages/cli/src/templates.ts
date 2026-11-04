@@ -36,6 +36,7 @@ export type AppName =
   | 'website_sale'
   | 'documents'
   | 'sign'
+  | 'approvals'
   | 'sale_project'
   | 'sale_stock'
   | 'purchase_stock'
@@ -247,6 +248,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
       'Sign: signatures in order or at once, one-time codes, a sealed PDF with its certificate',
     icon: '✍️',
     server: 'sign',
+  },
+  approvals: {
+    label: 'Approvals: everything waiting for your decision, my requests, policies on screen',
+    icon: '✅',
+    server: 'approvals',
+    web: 'registerApprovalsWeb',
   },
   sale_project: {
     label: 'Bridge: tasks and projects from sales orders (Sales ↔ Projects)',

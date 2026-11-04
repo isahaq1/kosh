@@ -443,6 +443,14 @@ within what is available. Coupons (a percentage, an amount or free delivery, wit
 one reminder for a cart left with an email (with a code that restores it), a sitemap of the site's pages and
 products, search titles, and product pictures served publicly complete the Shop.
 
+### Approvals (`modules/approvals`, RFC 0025)
+
+Every approval of every app in one place: **To approve** as cards (the record, who asked, how long it waits, each
+level as a step), decided one by one or many at once, from the keyboard too; **My requests**, withdrawn while they
+wait; **What I decided**. Levels are decided by a role, named people, the requester's manager or a person on the
+record — any one, all, or a number of them —; a request may be sent back for changes (a new round when resubmitted).
+Approvals managers edit the policies on screen. Install it with `shutro-erp apps install approvals`.
+
 ### Documents (`modules/documents`, RFC 0024)
 
 Folders (open, or kept to their members), documents with tags and versions — each upload a version, the latest the

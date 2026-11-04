@@ -41,6 +41,9 @@ importers:
       '@kosh/accounting':
         specifier: workspace:*
         version: link:../../modules/accounting
+      '@kosh/approvals':
+        specifier: workspace:*
+        version: link:../../modules/approvals
       '@kosh/attendance':
         specifier: workspace:*
         version: link:../../modules/attendance
@@ -307,6 +310,9 @@ importers:
       '@kosh/accounting':
         specifier: workspace:*
         version: link:../../modules/accounting
+      '@kosh/approvals':
+        specifier: workspace:*
+        version: link:../../modules/approvals
       '@kosh/assistant':
         specifier: workspace:*
         version: link:../../packages/assistant
@@ -668,6 +674,46 @@ importers:
     devDependencies:
       '@tanstack/react-query':
         specifier: ^5.104.3
+        version: 5.104.3(react@19.3.1)
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+      '@types/react':
+        specifier: ^19.3.0
+        version: 19.3.0
+      i18next:
+        specifier: ^26.4.7
+        version: 26.4.7(typescript@7.0.2)
+      react:
+        specifier: ^19.3.1
+        version: 19.3.1
+      react-i18next:
+        specifier: ^17.0.21
+        version: 17.0.21(i18next@26.4.7(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
+
+  modules/approvals:
+    dependencies:
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@tanstack/react-query':
+        specifier: ^5.90.2
         version: 5.104.3(react@19.3.1)
       '@testcontainers/postgresql':
         specifier: ^12.2.1
@@ -2656,6 +2702,9 @@ importers:
       '@kosh/accounting':
         specifier: workspace:*
         version: link:../../modules/accounting
+      '@kosh/approvals':
+        specifier: workspace:*
+        version: link:../../modules/approvals
       '@kosh/attendance':
         specifier: workspace:*
         version: link:../../modules/attendance
@@ -3121,9 +3170,15 @@ importers:
       '@types/react':
         specifier: ^19.3.0
         version: 19.3.0
+      i18next:
+        specifier: ^26.4.7
+        version: 26.4.7(typescript@7.0.2)
       react:
         specifier: ^19.3.1
         version: 19.3.1
+      react-i18next:
+        specifier: ^17.0.21
+        version: 17.0.21(i18next@26.4.7(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
 
   packages/realtime:
     dependencies:

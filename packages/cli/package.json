@@ -48,6 +48,7 @@
     "@kosh/account_asset": "workspace:*",
     "@kosh/account_budget": "workspace:*",
     "@kosh/accounting": "workspace:*",
+    "@kosh/approvals": "workspace:*",
     "@kosh/attendance": "workspace:*",
     "@kosh/automation": "workspace:*",
     "@kosh/calendar": "workspace:*",
