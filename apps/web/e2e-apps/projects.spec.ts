@@ -169,3 +169,30 @@ test('a plan written, approved by its sponsor in the Approvals inbox, and starte
   const baseline = page.getByRole('group', { name: 'Baseline' });
   await expect(baseline).toContainText(/30.Jun.2027/); // read-only: managers alone move it
 });
+
+test('a team member added at 120 % in total across projects shows over-allocated, in red on the Workload (RFC 0026 step 3)', async ({
+  page,
+}) => {
+  await signIn(page, 'dina');
+  for (const [project, allocation] of [
+    ['Bridge works', '70'],
+    ['Feed mill upgrade', '50'],
+  ] as const) {
+    await page.goto('/projects/a/projects.action_members/new');
+    await page.getByRole('combobox', { name: 'Project', exact: true }).click();
+    await page.getByRole('option', { name: project }).click();
+    await page.getByRole('combobox', { name: 'Person', exact: true }).click();
+    await page.getByRole('option', { name: 'Rahim Uddin' }).click();
+    await page.getByRole('textbox', { name: 'Allocation %', exact: true }).fill(allocation);
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page).toHaveURL(/projects\.action_members\/\d+$/);
+  }
+  await page.goto('/projects/a/projects.action_members');
+  await expect(page.getByRole('row', { name: /Feed mill upgrade/ })).toContainText('Yes');
+
+  await page.goto('/projects/a/projects.action_workload');
+  await expect(page.getByRole('heading', { name: 'Workload' })).toBeVisible();
+  await expect(page.getByText('One person is over-allocated in these weeks.')).toBeVisible();
+  const rahim = page.getByRole('row', { name: /Rahim Uddin/ });
+  await expect(rahim.getByRole('cell').first()).toHaveText('120%');
+});

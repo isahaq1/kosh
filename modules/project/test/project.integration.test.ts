@@ -618,3 +618,143 @@ test('App settings › Plans (RFC 0026 step 2): a project starts from an approve
     await driver.query({ text: 'UPDATE res_company SET project_require_plan = false', params: [] });
   }
 });
+
+test('teams (RFC 0026 step 3): roles and hourly costs for managers only, over-allocation across projects, labour cost from timesheets, the workload', async () => {
+  const users = await driver.query<{ id: number; login: string }>({
+    text: 'SELECT id, login FROM res_users',
+    params: [],
+  });
+  const idOf = (login: string) => users.find((u) => u.login === login)?.id;
+  const role = await call('POST', '/api/v1/models/project.role', 'maria', {
+    name: 'Site engineer',
+    code: 'SE',
+    defaultHourlyCost: '500',
+  });
+  expectStatus(role, 201);
+  const a = await call('POST', '/api/v1/models/project.project', 'maria', { name: 'Shed A' });
+  const b = await call('POST', '/api/v1/models/project.project', 'maria', { name: 'Shed B' });
+  const sumi = idOf('sumi');
+  const m1 = await call('POST', '/api/v1/models/project.member', 'maria', {
+    project: a.json.id,
+    user: sumi,
+    role: role.json.id,
+    allocation: 60,
+    dateFrom: '2027-03-01',
+    dateTo: '2027-03-31',
+  });
+  expectStatus(m1, 201);
+  // Users are not team managers; and they never see hourly costs.
+  expectStatus(
+    await call('POST', '/api/v1/models/project.member', 'rahim', {
+      project: a.json.id,
+      user: sumi,
+    }),
+    403,
+  );
+  expectStatus(
+    await call(
+      'GET',
+      `/api/v1/models/project.member/${m1.json.id}?fields=allocation,hourlyCost`,
+      'rahim',
+    ),
+    403,
+  );
+  const asUser = await call('GET', `/api/v1/models/project.member/${m1.json.id}`, 'rahim');
+  expectStatus(asUser, 200);
+  expect(asUser.json.allocation).toBe(60);
+  expect(asUser.json).not.toHaveProperty('hourlyCost');
+  const over = async (id: number) => {
+    const r = await call(
+      'GET',
+      `/api/v1/models/project.member/${id}?fields=overallocated`,
+      'maria',
+    );
+    expectStatus(r, 200);
+    return r.json.overallocated;
+  };
+  expect(await over(m1.json.id)).toBe(false);
+  // Flagged on the form, before it is saved: 60 % in A plus 50 % more.
+  const draft = await call('POST', '/api/v1/models/project.member/onchange', 'maria', {
+    values: {
+      project: b.json.id,
+      user: sumi,
+      allocation: 50,
+      dateFrom: '2027-03-15',
+      dateTo: '2027-04-30',
+    },
+    changed: ['allocation'],
+  });
+  expectStatus(draft, 200);
+  expect(draft.json.values).toMatchObject({ overallocated: true });
+  // 60 % plus 50 % in the same weeks of March: over-allocated, both of them; not in April.
+  const m2 = await call('POST', '/api/v1/models/project.member', 'maria', {
+    project: b.json.id,
+    user: sumi,
+    allocation: 50,
+    dateFrom: '2027-03-15',
+    dateTo: '2027-04-30',
+    hourlyCost: '700',
+  });
+  expectStatus(m2, 201);
+  expect(await over(m1.json.id)).toBe(true);
+  expect(await over(m2.json.id)).toBe(true);
+  expectStatus(
+    await call('POST', '/api/v1/models/project.member', 'maria', {
+      project: b.json.id,
+      user: sumi,
+      allocation: 120,
+    }),
+    422,
+  );
+
+  // Labour: Sumi's hours at her cost in each project (the role's default in A, her own in B).
+  const taskOf = async (project: number) =>
+    (
+      await call('POST', '/api/v1/models/project.task', 'maria', {
+        name: 'Work',
+        project,
+        stage: stages['In progress'],
+      })
+    ).json.id as number;
+  const ta = await taskOf(a.json.id);
+  const tb = await taskOf(b.json.id);
+  for (const [task, date] of [
+    [ta, '2027-03-10'],
+    [tb, '2027-04-02'],
+  ] as const)
+    expectStatus(
+      await call('POST', '/api/v1/models/project.timesheet', 'sumi', {
+        task,
+        date,
+        hours: '2',
+      }),
+      201,
+    );
+  const labour = async (id: number) =>
+    Number(
+      (await call('GET', `/api/v1/models/project.project/${id}?fields=labourCost`, 'maria')).json
+        .labourCost,
+    );
+  expect(await labour(a.json.id)).toBe(1000);
+  expect(await labour(b.json.id)).toBe(1400);
+  // Her own cost is not hers to see: asked for, refused; by default, left out.
+  expectStatus(
+    await call('GET', '/api/v1/models/project.timesheet?fields=hours,cost', 'sumi'),
+    403,
+  );
+  const own = await call('GET', '/api/v1/models/project.timesheet', 'sumi');
+  expectStatus(own, 200);
+  expect(own.json.items[0]).not.toHaveProperty('cost');
+
+  // The workload: the peak of each week; Sumi sees herself, managers everyone.
+  const load = await call('GET', '/api/v1/projects/workload?from=2027-03-01&weeks=9', 'maria');
+  expectStatus(load, 200);
+  expect(load.json.weeks[0]).toBe('2027-03-01');
+  const row = load.json.people.find((p: Json) => p.user === sumi);
+  expect(row.weeks).toEqual([60, 60, 110, 110, 110, 50, 50, 50, 50]);
+  const mine = await call('GET', '/api/v1/projects/workload?from=2027-03-01&weeks=2', 'rahim');
+  expectStatus(mine, 200);
+  expect(mine.json.people).toEqual([]);
+  expectStatus(await call('GET', '/api/v1/projects/workload?from=2027-03-01', 'bob'), 403);
+  expectStatus(await call('GET', '/api/v1/projects/workload?weeks=99', 'maria'), 422);
+});

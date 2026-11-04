@@ -9,13 +9,16 @@ import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
 import { permissions } from '@kosh/permissions';
 import { reporting } from '@kosh/reporting';
+import type { ModuleContext } from '@kosh/server';
 import { action, calendar, form, gantt, hierarchy, kanban, list, pivot, search } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import { projectDemo, SUPPORT_PROJECT } from './demo.js';
 import {
+  ProjectMember,
   ProjectPhase,
   ProjectPlan,
   ProjectProject,
+  ProjectRole,
   ProjectTag,
   ProjectTask,
   ProjectTaskCategory,
@@ -26,12 +29,15 @@ import {
   ProjectWorkPackage,
   projectShutro,
 } from './module.js';
+import { registerProjectRoutes } from './routes.js';
 
 export { SUPPORT_PROJECT } from './demo.js';
 export {
+  ProjectMember,
   ProjectPhase,
   ProjectPlan,
   ProjectProject,
+  ProjectRole,
   ProjectTag,
   ProjectTask,
   ProjectTaskCategory,
@@ -40,8 +46,10 @@ export {
   ProjectTimesheet,
   ProjectType,
   ProjectWorkPackage,
+  peakAllocation,
   projectShutro,
 } from './module.js';
+export { mondayOf, workload } from './routes.js';
 
 export const project: ReturnType<typeof defineModule> = defineModule({
   shutro: projectShutro,
@@ -105,6 +113,7 @@ export const project: ReturnType<typeof defineModule> = defineModule({
     },
   ],
   depends: [contacts, messaging, permissions, reporting],
+  routes: (context: ModuleContext) => registerProjectRoutes(context),
   // A plan is decided by its sponsor (a Projects manager when there is none), and a large one by a manager too.
   approvals: [
     {
@@ -249,6 +258,12 @@ export const project: ReturnType<typeof defineModule> = defineModule({
       label: 'Project types',
       views: ['list', 'form'],
     }),
+    'projects.action_roles': action(ProjectRole, { label: 'Roles', views: ['list', 'form'] }),
+    'projects.action_members': action(ProjectMember, {
+      label: 'Team members',
+      views: ['list', 'form'],
+    }),
+    'projects.action_workload': { type: 'client', page: 'projects.Workload', label: 'Workload' },
     'projects.action_categories': action(ProjectTaskCategory, {
       label: 'Task categories',
       views: ['list', 'form'],
@@ -318,6 +333,20 @@ export const project: ReturnType<typeof defineModule> = defineModule({
       label: 'Stages',
       action: 'projects.action_stages',
       sequence: 1,
+    },
+    {
+      id: 'projects.workload',
+      parent: 'projects.root',
+      label: 'Workload',
+      action: 'projects.action_workload',
+      sequence: 2.5,
+    },
+    {
+      id: 'projects.roles',
+      parent: 'projects.configuration',
+      label: 'Roles',
+      action: 'projects.action_roles',
+      sequence: 1.5,
     },
     {
       id: 'projects.types',
@@ -412,7 +441,7 @@ export const project: ReturnType<typeof defineModule> = defineModule({
         k.group('people', ['manager', 'sponsor', 'owner', 'priority', 'riskLevel'], {
           label: 'People and risk',
         }),
-        k.group('dates', ['dateStart', 'dateEnd', 'progress', 'taskCount', 'hours']),
+        k.group('dates', ['dateStart', 'dateEnd', 'progress', 'taskCount', 'hours', 'labourCost']),
         k.group('baseline', ['baselineStart', 'baselineEnd', 'baselineBudget', 'slipDays'], {
           label: 'Baseline',
           description:
@@ -423,6 +452,15 @@ export const project: ReturnType<typeof defineModule> = defineModule({
           label: 'Scope',
         }),
         k.component('structure', 'projects.Structure'),
+        k.lines('members', [
+          { field: 'user', id: 'member_user' },
+          { field: 'role', id: 'member_role' },
+          { field: 'allocation', id: 'member_allocation' },
+          { field: 'hourlyCost', id: 'member_cost' },
+          { field: 'dateFrom', id: 'member_from' },
+          { field: 'dateTo', id: 'member_to' },
+          { field: 'overallocated', id: 'member_over' },
+        ]),
         k.lines('phases', [
           { field: 'sequence', id: 'phase_sequence' },
           { field: 'name', id: 'phase_name' },
@@ -549,6 +587,33 @@ export const project: ReturnType<typeof defineModule> = defineModule({
       measures: [{ sum: 'hours' }],
       comparison: { field: 'date', mode: 'previous' },
     }),
+    'project.role.list': list(ProjectRole, {
+      columns: ['sequence', 'code', 'name', 'defaultHourlyCost'],
+      inlineEdit: ['sequence', 'code', 'name', 'defaultHourlyCost'],
+    }),
+    'project.role.form': form(ProjectRole, (k) => ({
+      sheet: [k.group('main', ['name', 'code', 'sequence', 'defaultHourlyCost'])],
+    })),
+    'project.member.list': list(ProjectMember, {
+      columns: [
+        'project',
+        'user',
+        'role',
+        'allocation',
+        'hourlyCost',
+        'dateFrom',
+        'dateTo',
+        'overallocated',
+      ],
+      decorations: { danger: { overallocated: true } },
+    }),
+    'project.member.form': form(ProjectMember, (k) => ({
+      sheet: [
+        k.group('main', ['project', 'user', 'role', 'allocation', 'overallocated']),
+        k.group('when', ['dateFrom', 'dateTo', 'hourlyCost']),
+        k.group('about', ['notes'], { columns: 1 }),
+      ],
+    })),
     'project.plan.list': list(ProjectPlan, {
       columns: [
         'name',
@@ -800,6 +865,11 @@ export const project: ReturnType<typeof defineModule> = defineModule({
     'project.tag': search(ProjectTag, { fields: ['name'] }),
     'project.task.link': search(ProjectTaskLink, {
       fields: ['successor.name', 'predecessor.name'],
+    }),
+    'project.role': search(ProjectRole, { fields: ['name', 'code'] }),
+    'project.member': search(ProjectMember, {
+      fields: ['user.name', 'project.name'],
+      groupBy: ['project', 'user', 'role'],
     }),
     'project.plan': search(ProjectPlan, {
       fields: ['title', 'name'],

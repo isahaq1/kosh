@@ -1,6 +1,20 @@
 /** Messages of the Projects screens (namespace `project`), in English and Bangla. */
 export const messages: Readonly<Record<string, object>> = {
   en: {
+    workload: {
+      title: 'Workload',
+      caption: 'Each person’s allocation week by week across their projects',
+      person: 'Person',
+      loading: 'Loading the workload…',
+      empty: 'Nobody is in a project team in these weeks. Add members on a project’s Team.',
+      noneOver: 'Nobody is over-allocated in these weeks.',
+      over_one: 'One person is over-allocated in these weeks.',
+      over_other: '{{count}} people are over-allocated in these weeks.',
+      earlier: 'Earlier',
+      today: 'This week',
+      later: 'Later',
+      cell: '{{name}}, week of {{week}}: {{percent}}%',
+    },
     structure: {
       title: 'Structure',
       loading: 'Loading the structure…',
@@ -15,6 +29,20 @@ export const messages: Readonly<Record<string, object>> = {
     },
   },
   bn: {
+    workload: {
+      title: 'কাজের চাপ',
+      caption: 'প্রত্যেকের প্রকল্পগুলোতে সপ্তাহভিত্তিক বরাদ্দ',
+      person: 'ব্যক্তি',
+      loading: 'কাজের চাপ লোড হচ্ছে…',
+      empty: 'এই সপ্তাহগুলোতে কেউ কোনো প্রকল্প দলে নেই। প্রকল্পের দলে সদস্য যোগ করুন।',
+      noneOver: 'এই সপ্তাহগুলোতে কারও বরাদ্দ সীমা ছাড়ায়নি।',
+      over_one: 'এই সপ্তাহগুলোতে একজনের বরাদ্দ সীমা ছাড়িয়েছে।',
+      over_other: 'এই সপ্তাহগুলোতে {{count}} জনের বরাদ্দ সীমা ছাড়িয়েছে।',
+      earlier: 'আগে',
+      today: 'এই সপ্তাহ',
+      later: 'পরে',
+      cell: '{{name}}, {{week}}-এর সপ্তাহ: {{percent}}%',
+    },
     structure: {
       title: 'কাঠামো',
       loading: 'কাঠামো লোড হচ্ছে…',

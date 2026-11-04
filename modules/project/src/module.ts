@@ -181,6 +181,177 @@ export const ProjectTag = defineModel('project.tag', {
   sqlConstraints: { oneName: { unique: ['name'], message: 'Another tag has this name.' } },
 });
 
+/** Hourly costs: seen and set by Projects managers only (RFC 0026 step 3). */
+const MANAGERS_ONLY = { read: ['project.manager'], write: ['project.manager'] } as const;
+/**
+ * Computed costs: seen by Projects managers only. Shutro checks a field's write groups on compute writes too (request
+ * #34), so the compute running for a user's timesheet needs `project.user` here; nobody writes a computed field by hand.
+ */
+const MANAGERS_SEE = { read: ['project.manager'], write: ['project.user'] } as const;
+
+/** A role people play in projects, with the hourly cost a member in it has unless given their own. */
+export const ProjectRole = defineModel('project.role', {
+  label: 'Project role',
+  recName: 'name',
+  order: ['sequence asc', 'name asc'],
+  archivable: true,
+  companyScoped: { required: true },
+  access: { 'project.user': READ, 'project.manager': ALL },
+  fields: {
+    name: f.char({ required: true, translate: true }),
+    code: f.char({ size: 16 }),
+    sequence: f.integer({ required: true, default: 10 }),
+    defaultHourlyCost: f.decimal({
+      scale: 2,
+      label: 'Default hourly cost',
+      groups: MANAGERS_ONLY,
+      help: 'The cost of an hour of a member in this role who has no cost of their own.',
+    }),
+  },
+  sqlConstraints: {
+    oneCode: { unique: ['company', 'code'], message: 'Another role has this code.' },
+    costPositive: {
+      check: orm.sql`default_hourly_cost IS NULL OR default_hourly_cost >= 0`,
+      message: 'A cost is not negative.',
+    },
+  },
+});
+
+type Span = {
+  readonly from: string | null;
+  readonly to: string | null;
+  readonly allocation: number;
+};
+
+/** The highest total allocation of `spans` on any day of `[from, to]` (open ends: unbounded). */
+export function peakAllocation(
+  spans: readonly Span[],
+  from: string | null,
+  to: string | null,
+): number {
+  const overlaps = (x: Span) =>
+    (x.to === null || from === null || x.to >= from) &&
+    (x.from === null || to === null || x.from <= to);
+  const inside = spans.filter(overlaps);
+  // The total changes only where a span starts: try the range's start and every start inside it.
+  const points = new Set<string | null>([from]);
+  for (const x of inside)
+    if (x.from !== null && (from === null || x.from > from)) points.add(x.from);
+  let peak = 0;
+  for (const day of points) {
+    let total = 0;
+    for (const x of inside)
+      if (
+        (x.from === null || day === null || x.from <= day) &&
+        (x.to === null || day === null || x.to >= day)
+      )
+        total += x.allocation;
+    peak = Math.max(peak, total);
+  }
+  return peak;
+}
+
+/** Someone in a project's team: their role, how much of their time it takes, their hourly cost and when. */
+export const ProjectMember = defineModel('project.member', {
+  label: 'Project member',
+  order: ['project asc', 'id asc'],
+  companyScoped: { required: true },
+  tracking: ['allocation', 'role', 'dateFrom', 'dateTo'],
+  access: { 'project.user': READ, 'project.manager': ALL },
+  rules: {
+    all: {
+      groups: ['project.user', 'project.manager'],
+      perms: ['read', 'write', 'create', 'unlink'],
+      domain: {},
+    },
+  },
+  fields: {
+    project: f.many2one('project.project', {
+      required: true,
+      checkCompany: true,
+      ondelete: 'cascade',
+    }),
+    user: f.many2one('res.users', { required: true, ondelete: 'restrict', label: 'Person' }),
+    role: f.many2one('project.role', { ondelete: 'set null', checkCompany: true }),
+    allocation: f.integer({
+      required: true,
+      default: 100,
+      label: 'Allocation %',
+      help: 'The share of their working time this project takes while they are in it.',
+    }),
+    hourlyCost: f.decimal({
+      scale: 2,
+      label: 'Hourly cost',
+      groups: MANAGERS_ONLY,
+      help: 'Their timesheets on this project cost this an hour; empty: their role’s default cost.',
+    }),
+    dateFrom: f.date({ label: 'From' }),
+    dateTo: f.date({ label: 'Until' }),
+    notes: f.text(),
+    /** Their projects take more than all their time on some day of this membership. */
+    overallocated: f.boolean({
+      label: 'Over-allocated',
+      ...compute(
+        'project.member',
+        'overallocated',
+        ['user', 'allocation', 'dateFrom', 'dateTo'],
+        async (members) => {
+          const env = members.env as unknown as Env;
+          const users = [
+            ...new Set([...members].flatMap((m) => (m.user === null ? [] : [m.user.id]))),
+          ];
+          const all =
+            users.length === 0
+              ? []
+              : // As the reader: every Projects user sees every team (a GET cannot audit a superuser scope).
+                (
+                  await env
+                    .model('project.member')
+                    .search({
+                      where: { user: { in: users }, 'project.active': true } as never,
+                    })
+                    .then((r) => r.load(['user', 'allocation', 'dateFrom', 'dateTo']))
+                ).map((m) => ({
+                  id: m.id as number,
+                  user: m.user.id as number,
+                  from: m.dateFrom === null ? null : String(m.dateFrom),
+                  to: m.dateTo === null ? null : String(m.dateTo),
+                  allocation: m.allocation,
+                }));
+          for (const m of members) {
+            if (m.user === null) {
+              m.overallocated = false;
+              continue;
+            }
+            const from = m.dateFrom === null ? null : String(m.dateFrom);
+            const to = m.dateTo === null ? null : String(m.dateTo);
+            // The others as saved, this one as it is now (on the form, before it is saved).
+            const spans = [
+              ...all.filter((x) => x.user === m.user?.id && x.id !== m.id),
+              { from, to, allocation: m.allocation ?? 0 },
+            ];
+            m.overallocated = peakAllocation(spans, from, to) > 100;
+          }
+        },
+      ),
+    }),
+  },
+  sqlConstraints: {
+    allocationRange: {
+      check: orm.sql`allocation > 0 AND allocation <= 100`,
+      message: 'An allocation is from 1 to 100 %.',
+    },
+    costPositive: {
+      check: orm.sql`hourly_cost IS NULL OR hourly_cost >= 0`,
+      message: 'A cost is not negative.',
+    },
+    dates: {
+      check: orm.sql`date_from IS NULL OR date_to IS NULL OR date_to >= date_from`,
+      message: 'A membership ends on or after it starts.',
+    },
+  },
+});
+
 export const ProjectTaskStage = defineModel('project.task.stage', {
   label: 'Task stage',
   archivable: true,
@@ -527,6 +698,33 @@ export const ProjectProject = defineModel('project.project', {
       ),
     }),
     tasks: f.one2many('project.task', 'project'),
+    members: f.one2many('project.member', 'project', { label: 'Team' }),
+    timesheets: f.one2many('project.timesheet', 'project'),
+    /** Timesheet hours at each member's cost (RFC 0026 step 3); Projects managers only. */
+    labourCost: f.decimal({
+      scale: 2,
+      store: true,
+      label: 'Labour cost',
+      groups: MANAGERS_SEE,
+      ...compute('project.project', 'labourCost', ['timesheets.cost'], async (projects) => {
+        // Costs are the managers' to see: summed as the system, in the write that changed them.
+        const env = projects.env as unknown as Env;
+        const ids = [...projects].map((p) => p.id as number);
+        const totals = await env.asSuperuser({ reason: 'labour cost' }, async (su) => {
+          const out = new Map<number, ReturnType<typeof orm.toDecimal>>();
+          const lines = await su
+            .model('project.timesheet')
+            .search({ where: { project: { in: ids } } as never })
+            .then((r) => r.load(['project', 'cost']));
+          for (const l of lines) {
+            const key = l.project?.id as number;
+            out.set(key, (out.get(key) ?? orm.toDecimal(0)).plus(l.cost ?? 0));
+          }
+          return out;
+        });
+        for (const p of projects) p.labourCost = totals.get(p.id as number) ?? orm.toDecimal(0);
+      }),
+    }),
     taskCount: f.integer({
       store: true,
       label: 'Tasks',
@@ -1018,6 +1216,64 @@ export const ProjectTimesheet = defineModel('project.timesheet', {
     date: f.date({ required: true, default: (env: Env) => env.today() }),
     hours: f.decimal({ scale: 2, required: true, default: '1' }),
     description: f.char(),
+    /** The hours at the person's cost in the project on that day, else their role's default (managers only). */
+    cost: f.decimal({
+      scale: 2,
+      store: true,
+      label: 'Cost',
+      groups: MANAGERS_SEE,
+      ...compute(
+        'project.timesheet',
+        'cost',
+        [
+          'hours',
+          'user',
+          'date',
+          'project',
+          'project.members.hourlyCost',
+          'project.members.user',
+          'project.members.dateFrom',
+          'project.members.dateTo',
+          'project.members.role.defaultHourlyCost',
+        ],
+        async (lines) => {
+          // The rates are the managers' to see: read as the system, in the write that changed them.
+          const env = lines.env as unknown as Env;
+          const projectIds = [...new Set([...lines].map((l) => l.project?.id as number))].filter(
+            (id) => id !== undefined,
+          );
+          const members =
+            projectIds.length === 0
+              ? []
+              : await env.asSuperuser({ reason: 'labour cost' }, async (su) =>
+                  (
+                    await su
+                      .model('project.member')
+                      .search({ where: { project: { in: projectIds } } as never })
+                      .then((r) => r.load({ role: ['defaultHourlyCost'] }))
+                  ).map((m) => ({
+                    project: m.project.id as number,
+                    user: m.user.id as number,
+                    from: m.dateFrom === null ? null : String(m.dateFrom),
+                    to: m.dateTo === null ? null : String(m.dateTo),
+                    rate: m.hourlyCost ?? m.role?.defaultHourlyCost ?? null,
+                  })),
+                );
+          for (const l of lines) {
+            const day = String(l.date);
+            const member = members.find(
+              (m) =>
+                m.project === l.project?.id &&
+                m.user === l.user.id &&
+                (m.from === null || m.from <= day) &&
+                (m.to === null || m.to >= day),
+            );
+            const rate = member?.rate ?? null;
+            l.cost = rate === null ? orm.toDecimal(0) : l.hours.times(rate).toDecimalPlaces(2);
+          }
+        },
+      ),
+    }),
   },
   sqlConstraints: {
     hoursPositive: { check: orm.sql`hours > 0`, message: 'Hours are positive.' },
@@ -1064,6 +1320,8 @@ export const projectShutro = defineModule({
     orm.defineSequence({ code: 'project.plan', prefix: 'PLAN-', padding: 4 }),
   ],
   models: [
+    ProjectRole,
+    ProjectMember,
     ProjectPlan,
     ProjectType,
     ProjectTaskCategory,
