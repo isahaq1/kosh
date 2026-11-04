@@ -46,6 +46,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@kosh/mail": "workspace:*",
     "@kosh/modules-sdk": "workspace:*",
     "@kosh/permissions": "workspace:*",
     "@kosh/server": "workspace:*",

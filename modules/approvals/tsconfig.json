@@ -1,7 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": ".",
+    "rootDir": "../..",
     "isolatedDeclarations": false,
     "jsx": "react-jsx",
     "lib": ["es2024", "dom", "dom.iterable"]

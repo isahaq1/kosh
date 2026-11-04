@@ -200,6 +200,14 @@ export function Inbox({ api }: PageProps): ReactElement {
                       <Badge tone={waitedTone(c)}>
                         {t('waiting', { since: ago(format.locale, c.waitingSince) })}
                       </Badge>
+                      {c.dueAt === null ? null : (
+                        <Badge tone={Date.parse(c.dueAt) < Date.now() ? 'danger' : 'info'}>
+                          {t('due', { when: ago(format.locale, c.dueAt) })}
+                        </Badge>
+                      )}
+                      {c.escalatedTo === null ? null : (
+                        <Badge tone="danger">{t('escalated')}</Badge>
+                      )}
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {t('askedBy', { name: c.requester?.name ?? '—' })} · {c.levelName}

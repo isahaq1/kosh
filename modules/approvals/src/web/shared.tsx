@@ -24,6 +24,8 @@ export interface Card {
   readonly required: number;
   readonly waitingSince: string;
   readonly decidedAt: string | null;
+  readonly dueAt: string | null;
+  readonly escalatedTo: string | null;
   readonly comment: string | null;
   readonly record: {
     readonly model: string;

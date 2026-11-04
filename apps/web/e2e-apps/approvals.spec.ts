@@ -39,3 +39,16 @@ test('a purchase order decided from the Approvals inbox; the requester sees it a
   await expect(rahim.getByRole('listitem').filter({ hasText: 'Approved' }).first()).toBeVisible();
   await context.close();
 });
+
+test('away: Dina says who decides for her while she is on leave', async ({ page }) => {
+  await signIn(page, 'dina');
+  await page.goto('/approvals/a/approvals.action_away/new');
+  await page.getByRole('combobox', { name: 'Decides instead' }).click();
+  await page.getByRole('option', { name: 'Rahim Uddin' }).click();
+  await page.getByRole('textbox', { name: 'From', exact: true }).fill('2026-12-20');
+  await page.getByRole('textbox', { name: 'Until', exact: true }).fill('2026-12-31');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/approvals\.action_away\/\d+$/);
+  await page.goto('/approvals/a/approvals.action_away');
+  await expect(page.getByRole('row').filter({ hasText: 'Rahim Uddin' })).toBeVisible();
+});
