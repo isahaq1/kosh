@@ -613,3 +613,34 @@ data, an overview, docs and an E2E.
   link (the first stopping), the file received once into the folder; the demo; end to end, a document made on screen
   with two versions uploaded.
 
+## Implementation notes (2026-11-03): step 8 part 2 — Sign
+
+- **Templates** (`sign.template`): the PDF uploaded by a Sign manager (`POST /api/v1/sign/templates/:id/pdf`, read by
+  pdf-lib to count its pages, refused when it is not a readable PDF) and its fields — per role (*Customer*,
+  *Company*), of a kind (signature, initials, the date signed, text, a checkbox), on a page, where they start and how
+  big they are as fractions of the page. Fields are placed by typing those fractions for now: placing them by drag
+  needs the pages drawn in the browser (pdf.js), a dependency of its own for a later step.
+- **Requests** (`sign.request`) from a template, from any record the user may read (`POST /api/v1/sign/requests`
+  `{ template, model, id, signers }`), signers **in order or all at once**. *Send for signature* refuses a template
+  without its PDF or a role without a signer, keeps the PDF's SHA-256, and asks the first signer (or all): each gets a
+  link of their own by email (only its digest kept).
+- **Signing**: the link opens a page served by the server (its script allowed by a nonce): the PDF, the signer's
+  fields, a pad to draw the signature with a finger or a mouse. A **one-time code** by email (6 digits, 10 minutes;
+  five wrong tries at most — each counted even though the answer is an error — then a new code) confirms each
+  signature or refusal. Codes by SMS go through `notify` with its providers in a later step. The date is the
+  server's; text and drawings are checked (a PNG of up to 300 KB).
+- **Sealing**, when the last signer signs: pdf-lib stamps every value where its field is and adds a **certificate
+  page** — the document, the company, the SHA-256 of what was sent, and for each signer their name, email, role, when
+  they signed, from which address, confirmed by a code sent to their email —; the sealed PDF's own SHA-256 is kept.
+  It is stored on the request, in Documents (*Signed documents*) and on the record it was signed from; every signer
+  is told. A refusal ends the request (with who and why) and the other links.
+- **Not in this part**: placing fields by drag, codes by SMS, reminders to signers, a cryptographic (PAdES)
+  signature of the sealed PDF with a certificate of the company's (the hashes and the certificate page now).
+- **Tests**: on real PostgreSQL a two-page PDF made with pdf-lib as the template; a request refused without a signer
+  for every role; in order, only the first asked, the page and the PDF served, a wrong code, a missing signature,
+  signed, the link used, the second asked and signing; the request signed with both hashes, the sealed PDF of three
+  pages (the two and the certificate), in Documents and on the contact, everyone told; five wrong codes then refused
+  until a new code; in parallel, both asked and a refusal ending the request and the other link.
+
+RFC 0024 is complete: every step is implemented; what each part left for later is listed in its notes.
+

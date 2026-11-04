@@ -457,6 +457,14 @@ GET  /api/v1/documents/search?q=contract      documents and record attachments
 POST /api/v1/documents/shares                 { "document": 12, "days": 7, "password": "…" } → { url }
 ```
 
+### Sign (`modules/sign`, RFC 0024)
+
+Templates — a PDF with fields per signer's role (signature, initials, date, text, checkbox) — and requests from a
+template, from any record, to signers in order or all at once. Each signer gets a link by email, confirms with a
+one-time code, draws their signature on the page (a phone too) or refuses with why; the last signature seals the PDF
+(the values stamped in, a certificate page, its hashes kept) and stores it in Documents and on the record. Install it
+with `shutro-erp apps install sign`.
+
 ### Counter (`modules/pos`, RFC 0021)
 
 Point of sale: shops with their payment methods, cashiers' sessions with opening and closing counts (a difference

@@ -35,6 +35,7 @@
     "@kosh/pos_stock": "workspace:*",
     "@kosh/reporting": "workspace:*",
     "@kosh/settings": "workspace:*",
+    "@kosh/sign": "workspace:*",
     "@kosh/studio": "workspace:*",
     "@kosh/ui": "workspace:*",
     "@kosh/website": "workspace:*",

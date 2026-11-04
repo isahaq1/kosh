@@ -44,6 +44,7 @@ import { saleStock } from '@kosh/sale_stock';
 import { sales } from '@kosh/sales';
 import { base } from '@kosh/server';
 import { settings } from '@kosh/settings';
+import { sign } from '@kosh/sign';
 import { stock } from '@kosh/stock';
 import { stockAccount } from '@kosh/stock_account';
 import { todo } from '@kosh/todo';
@@ -84,6 +85,7 @@ export const DEMO_APPS: readonly string[] = [
   'payroll',
   'helpdesk',
   'documents',
+  'sign',
   'account_asset',
   'account_budget',
   'website_sale',
@@ -124,6 +126,7 @@ export function demoCatalogue(): KoshModule[] {
     payroll,
     helpdesk,
     documents,
+    sign,
     accountAsset,
     saleAccount,
     purchaseAccount,

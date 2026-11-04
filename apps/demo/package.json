@@ -53,6 +53,7 @@
     "@kosh/sales": "workspace:*",
     "@kosh/server": "workspace:*",
     "@kosh/settings": "workspace:*",
+    "@kosh/sign": "workspace:*",
     "@kosh/stock": "workspace:*",
     "@kosh/stock_account": "workspace:*",
     "@kosh/todo": "workspace:*",

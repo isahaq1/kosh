@@ -73,6 +73,7 @@ import {
 } from '@kosh/server';
 import { orm, pg } from '@kosh/server/orm';
 import { settings } from '@kosh/settings';
+import { sign } from '@kosh/sign';
 import { stock } from '@kosh/stock';
 import { stockAccount } from '@kosh/stock_account';
 import { todo } from '@kosh/todo';
@@ -176,6 +177,7 @@ const CATALOGUE = [
   payrollAccount,
   helpdesk,
   documents,
+  sign,
   accountAsset,
   accountBudget,
   l10nBdPayroll,
@@ -222,6 +224,7 @@ await applyApps(
         'payroll',
         'helpdesk',
         'documents',
+        'sign',
         'account_asset',
         'account_budget',
         'website_sale',
@@ -297,6 +300,7 @@ for (const [login, name, groups] of [
       'payroll.manager',
       'helpdesk.manager',
       'documents.manager',
+      'sign.manager',
       'messaging.user',
       'reporting.user',
       'assistant.user',
