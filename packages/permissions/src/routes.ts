@@ -12,16 +12,20 @@
  * - `POST /api/v1/approvals/bulk`                        `{ requests, comment? }`: approves each it may
  * - `POST /api/v1/approvals/requests/:id/reassign`       `{ users, mode: 'replace' | 'add', reason }` (RFC 0027)
  * - `POST /api/v1/approvals/requests/:id/notify-backups` tells the level's backups it waits (RFC 0027)
+ * - `GET  /api/v1/approvals/matrix?period=&mode=`        the matrix dashboard: cards per policy, direct or delegated
  */
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import type { FastifyRequest } from 'fastify';
 import {
   approvalCards,
+  approvalMatrix,
   approvalStats,
   approveMany,
   decide,
   eventsOf,
   inbox,
+  MATRIX_PERIODS,
+  type MatrixPeriod,
   notifyBackups,
   reassign,
   requestsOf,
@@ -78,6 +82,20 @@ export function registerApprovalRoutes({ app }: ModuleContext): void {
       const text = comment(request);
       return request.env(async (env) => decide(env, id, decision, text));
     });
+  // RFC 0027 §2.7: the matrix dashboard.
+  app.get('/api/v1/approvals/matrix', async (request) => {
+    const q = (request.query ?? {}) as { period?: unknown; mode?: unknown };
+    const period = (q.period ?? '3m') as MatrixPeriod;
+    if (!MATRIX_PERIODS.includes(period))
+      throw new HttpProblem(
+        400,
+        'invalid-query',
+        'Invalid query',
+        `period is one of ${MATRIX_PERIODS.join(', ')}.`,
+      );
+    const mode = q.mode === 'delegated' ? 'delegated' : 'direct';
+    return request.env(async (env) => approvalMatrix(env, period, mode), { write: true });
+  });
   // RFC 0027: reassigning a waiting request; telling its backups.
   app.post('/api/v1/approvals/requests/:id/reassign', async (request) => {
     const id = positive((request.params as { id?: unknown }).id, 'id');

@@ -1809,7 +1809,8 @@ export async function approvalMatrix(
     const names = new Map(
       (
         await find(
-          su,
+          // Archived policies keep their requests' history.
+          su.withFlags({ activeTest: false }) as Env,
           'approval.policy',
           {
             id: {
