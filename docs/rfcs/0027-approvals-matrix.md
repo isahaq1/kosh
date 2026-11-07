@@ -83,9 +83,11 @@ list). Resolution returns, beside the ids, **an explanation** (§2.5).
 
 ### 2.4 When nobody is found (8)
 
-`policy.whenNobody: 'refuse' | 'role' | 'skip'` — default **refuse**: the submission fails with a 422 naming the level
-and the explanation ("Rahim has no manager in Workforce; the fallback role Purchase manager has nobody in Paragon Feed").
-`role` keeps today's fallback; `skip` records the level as skipped in the log.
+`policy.whenNobody: 'refuse' | 'admins' | 'skip'` — when a level finds no person and has no role to stand in. Default
+**refuse**: the submission fails with a 422 naming the level and the explanation ("Rahim has no manager with a user in
+Workforce"). `admins` lets administrators decide; `skip` records the level as skipped in the log (every level skipped:
+approved at once). A level with a role always has someone — administrators decide a role nobody holds yet, as before —
+and its explanation says so.
 
 ### 2.5 The log, explanations and timings (11–12)
 
@@ -129,3 +131,14 @@ bottleneck** (approvers with the most overdue) — which `dynamic_approval` cann
 
 Each step: tests on real PostgreSQL (permission tests for reassign and backups), English and Bangla, the E2E of the
 inbox and the policy form, docs/approvals.md (new; today the engine is in docs/permissions.md).
+
+## 5. Notes
+
+- **Step 1 (2026-11-07).** Approver kinds `department_head`, `department_approvers` (`hr.department.approvalUsers`) and
+  `record` (`approvalUsers(key)`; Purchase: `product.category.approvalUsers`, the nearest up the tree), `extraUsers`
+  beside any kind (a role's holders named when a role level has extra people). `whenNobody` is
+  `refuse | admins | skip`: a role always has someone — administrators decide a role nobody holds, as before — so it
+  applies to levels with no person and no role. `approval.request.explanation` and `startedAt`; the deadline is set
+  when the level's turn starts, and the sweep counts the reminder from it. `approval.event` is the log, returned with
+  the record's approvals (`events`) and shown in the panel under "How the approvers were found". The cost-centre
+  approvers of §2.1 wait for a record field naming the cost centre; they come with step 2.
