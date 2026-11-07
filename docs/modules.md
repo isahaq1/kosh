@@ -261,6 +261,17 @@ says:
 Orders also carry **Invoice to** and **Deliver to** (contacts) and **Payment terms**; the invoice goes to the invoice
 address with the order's payment terms, else the customer's (**Customer payment terms** on the contact).
 
+### Invoicing by what was delivered, down payments (`modules/sale_account`, RFC 0028)
+
+A product is invoiced on **Ordered quantities** (the default) or **Delivered quantities** (Products › a product ›
+Invoice). Each order line knows what is **Invoiced** (its invoice lines, less credit notes); **Create invoice**
+invoices what is due now — ordered, or delivered by Stockroom when it is installed (services count as delivered) — so
+an order can have several invoices, and is refused when nothing is due ("Nothing to invoice now"). The order is
+*Invoiced* when every ordered quantity is. **Invoice a down payment** invoices the **Down payment %** or **amount**
+typed on a confirmed order (on the company's *Down payment* service, made on first use), never beyond the order's
+total; the next invoice deducts every down payment not deducted yet. Several orders are invoiced at once with the
+list's bulk actions. Orders invoiced before this keep their invoice links (a migration matches the lines).
+
 ### Projects for programmes (`modules/project`, RFC 0026)
 
 Projects carries a programme's structure, not only a to-do list. Configuration holds **project types**, **task

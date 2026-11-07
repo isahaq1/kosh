@@ -129,3 +129,12 @@ RFC: bank statements and reconciliation rules).
   shipped *Credit approvals* policy (Accounting managers, on `creditHeld`). `partnerInvoice` and `partnerShipping` on
   orders; the invoice takes the invoice address and the payment terms. Not yet: the delivery address on Stockroom's
   delivery (sale_stock), amounts in other currencies than the company's in the exposure.
+- **Step 3 part 1 (2026-11-07), Sales.** `product.invoicePolicy`; `account.move.line.saleLine` and
+  `sale.order.line.qtyInvoiced` (stored, credit notes less, cancelled not counted); `toInvoice()` reads Stockroom's
+  `qtyDelivered` when installed (an untyped read: `sale_account` does not depend on `sale_stock`). `invoice` invoices
+  what is due and is refused with nothing due; `invoiceState` follows the quantities. Down payments are invoice lines
+  marked `downPaymentOf` the order (not order lines: they must not change the order's total), invoiced by the
+  `invoiceDownPayment` transition from two fields on the order — a transition, since form buttons run transitions —
+  and deducted by the next invoice. Batch invoicing is the lists' bulk transitions. A migration links existing invoice
+  lines to their order lines. Not yet: taxes on down payments, credit notes from orders; Purchase (bills by received
+  quantity, the three-way check) is part 2.
