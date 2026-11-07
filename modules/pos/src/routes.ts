@@ -57,6 +57,46 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
   const models = publicApiModels(context.registry);
   const fields = documentFields(models);
 
+  /** The receipt template of a sale: its shop's (`pos.shop.receiptTemplate()`), as the cashier may read it. */
+  const receiptTemplateOf = async (env: Env, id: number) => {
+    const [order] = await env
+      .model('pos.order')
+      .browse([id as never])
+      .load({ session: ['shop'] });
+    const shop = order?.session?.shop?.id as number | undefined;
+    const keys =
+      shop === undefined
+        ? new Map<number, string>()
+        : await (
+            env.model('pos.shop').browse([shop as never]) as unknown as {
+              receiptTemplate(): Promise<Map<number, string>>;
+            }
+          ).receiptTemplate();
+    const key = (shop === undefined ? undefined : keys.get(shop)) ?? 'pos.receipt';
+    const find = async (k: string) =>
+      (
+        await (await env.model('report.template').search({ where: { key: k }, limit: 1 })).load([])
+      ).read(['id', 'name', 'layout', 'scope'])[0];
+    const template = (await find(key)) ?? (await find('pos.receipt'));
+    if (template === undefined)
+      throw new HttpProblem(
+        409,
+        'no-template',
+        'No receipt template',
+        'Run the apps\u2019 defaults.',
+      );
+    return template;
+  };
+
+  // `GET /api/v1/counter/orders/:id/receipt-template`: the template its receipt prints with (the shop decides).
+  app.get('/api/v1/counter/orders/:id/receipt-template', async (request) => {
+    const id = idOf((request.params as { id?: unknown }).id, 'id');
+    return request.env(async (raw) => {
+      const template = await receiptTemplateOf(raw as unknown as Env, id);
+      return { id: template['id'], name: template['name'] };
+    });
+  });
+
   // `POST /api/v1/counter/orders/:id/receipt` `{ email?, phone? }`: the receipt sent — the document by email,
   // a summary by text; what was sent is said back.
   app.post('/api/v1/counter/orders/:id/receipt', async (request) => {
@@ -86,18 +126,7 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
             'No email set up',
             'Set SMTP_URL to send receipts by email.',
           );
-        const [template] = (
-          await (
-            await env.model('report.template').search({ where: { key: 'pos.receipt' }, limit: 1 })
-          ).load([])
-        ).read(['id', 'name', 'layout', 'scope']);
-        if (template === undefined)
-          throw new HttpProblem(
-            409,
-            'no-template',
-            'No receipt template',
-            'Run the apps\u2019 defaults.',
-          );
+        const template = await receiptTemplateOf(env, id);
         const rendered = await renderDocument(
           env as never,
           model,

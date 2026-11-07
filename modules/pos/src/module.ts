@@ -56,6 +56,18 @@ export const PosShop = defineModel('pos.shop', {
       label: 'Cash difference account',
     }),
   },
+  methods: {
+    /**
+     * The key of the receipt template each of these shops prints (`<module>.<key>`). The Counter's own here; a
+     * localization overrides it (`l10n_bd_pos`: the Mushak 6.3 receipt for shops that issue it).
+     */
+    receiptTemplate: method('pos.shop', async function (this: unknown): Promise<
+      Map<number, string>
+    > {
+      const shops = this as { readonly ids: readonly number[] };
+      return new Map(shops.ids.map((id) => [id, 'pos.receipt']));
+    }),
+  },
 });
 
 /** How a shop takes money: cash, a card terminal, mobile money, a transfer; each to its journal. */

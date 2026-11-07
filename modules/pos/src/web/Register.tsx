@@ -275,13 +275,11 @@ export function Register({ api }: PageProps): ReactElement {
   });
   const printReceipt = async (sale: Sale): Promise<void> => {
     try {
-      const { templates } = await api.call<{
-        templates: { id: number; name: string; scope: string }[];
-      }>('GET', '/api/v1/models/pos.order/documents');
-      const template =
-        templates.find((tpl) => tpl.name === 'Receipt') ??
-        templates.find((tpl) => tpl.scope === 'record');
-      if (template === undefined) throw new Error(t('noReceiptTemplate'));
+      // The shop's receipt (a Mushak 6.3 receipt where the shop issues them).
+      const template = await api.call<{ id: number; name: string }>(
+        'GET',
+        `/api/v1/counter/orders/${sale.id}/receipt-template`,
+      );
       const file = await api.download(`/api/v1/models/pos.order/documents/${template.id}`, {
         ids: [sale.id],
       });
