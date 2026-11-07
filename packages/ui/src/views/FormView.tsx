@@ -12,9 +12,10 @@ import {
   type FormNode,
   holds,
   type LinesNode,
+  resolveRecord,
 } from '@kosh/views';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useBlocker, useParams } from '@tanstack/react-router';
+import { useBlocker, useNavigate, useParams } from '@tanstack/react-router';
 import {
   ArrowLeft,
   Check,
@@ -56,6 +57,7 @@ import { useKosh } from '../context.js';
 import { useDesign } from '../design.js';
 import { cn } from '../lib/cn.js';
 import { useLiveRecord } from '../live.js';
+import { setPrefill } from '../prefill.js';
 import type { FormProps } from '../registry.js';
 import { useToast } from '../shell/toast.js';
 import { StatsRow } from './StatsRow.js';
@@ -360,6 +362,7 @@ export function FormView({
   const design = useDesign();
   const toast = useToast();
   const queryClient = useQueryClient();
+  const navigateTo = useNavigate();
   const formId = useId();
   const [railOpen, setRailOpen] = useRail();
   const route = useParams({ strict: false }) as { app?: string; action?: string };
@@ -860,9 +863,24 @@ export function FormView({
           );
         })
         .map((n) => n.field);
+  // A button that opens a new record of another model, filled from this one (RFC 0028 §3.4).
+  const openNew = (open: NonNullable<ButtonNode['open']>): void => {
+    void api.routes().then((routes) => {
+      const route = routes[open.model];
+      const action = open.action ?? route?.action;
+      if (action === undefined || route?.app === undefined) return;
+      const filled = resolveRecord(open.values as Condition, values) as Record<string, unknown>;
+      setPrefill(action, { values: filled, proposed: [] });
+      void navigateTo({
+        to: '/$app/a/$action/$id',
+        params: { app: route.app, action, id: 'new' },
+      });
+    });
+  };
   // RFC 0022 §3.5: the record's document templates as a Print menu, when reporting's web is registered.
   const Print = registry.component('reporting.Documents');
   const buttons = view.header.buttons.filter((b) => {
+    if (b.open !== undefined) return !isNew && visible(b.visibleWhen);
     const spec = served.transitions.find((tr) => tr.name === b.transition);
     return (
       !isNew &&
@@ -1292,10 +1310,14 @@ export function FormView({
                       }
                       busy={transition.isPending && transition.variables === b.transition}
                       onClick={() =>
-                        b.confirm === undefined ? transition.mutate(b.transition) : setConfirming(b)
+                        b.open !== undefined
+                          ? openNew(b.open)
+                          : b.confirm === undefined
+                            ? transition.mutate(b.transition ?? '')
+                            : setConfirming(b)
                       }
                     >
-                      {b.label ?? b.transition}
+                      {b.label ?? b.transition ?? b.id}
                     </Button>
                   ))}
                 </div>
@@ -1342,7 +1364,7 @@ export function FormView({
             <Button
               variant="primary"
               onClick={() => {
-                if (confirming !== null) transition.mutate(confirming.transition);
+                if (confirming?.transition !== undefined) transition.mutate(confirming.transition);
                 setConfirming(null);
               }}
             >

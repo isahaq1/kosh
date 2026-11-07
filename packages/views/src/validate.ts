@@ -78,7 +78,13 @@ export function validateView(view: ViewDefinition, models: ModelLookup): string[
             problems.push(`stat '${node.id}': '$record' names no field '${key}' of ${view.model}`);
       }
     }
-    if (node.kind === 'button' && !info.transitions.includes(node.transition))
+    if (node.kind === 'button' && node.open !== undefined) {
+      if (models(node.open.model) === undefined)
+        problems.push(`button '${node.id}': opens unknown model ${node.open.model}`);
+      for (const key of recordKeys(node.open.values as never))
+        if (!info.fields.has(key))
+          problems.push(`button '${node.id}': '$record' names no field '${key}' of ${view.model}`);
+    } else if (node.kind === 'button' && !info.transitions.includes(node.transition ?? ''))
       problems.push(
         `unknown transition '${node.transition}' (has ${info.transitions.join(', ') || 'none'})`,
       );

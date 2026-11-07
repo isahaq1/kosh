@@ -106,7 +106,18 @@ export type FormNode = FieldNode | GroupNode | NotebookNode | LinesNode | Compon
 export interface ButtonNode {
   readonly kind: 'button';
   readonly id: string;
-  readonly transition: string;
+  /** The transition it runs (a button runs a transition, or opens a new record: `open`). */
+  readonly transition?: string;
+  /**
+   * Opens a new record of another model, filled from this one (RFC 0028 §3.4: "New quotation" on a deal): `values`
+   * may refer to the record (`{ $record: 'partner' }`); `action` defaults to the model's own. Saved like any new
+   * record: the server checks the rights then.
+   */
+  readonly open?: {
+    readonly model: string;
+    readonly action?: string;
+    readonly values: Readonly<Record<string, unknown>>;
+  };
   readonly label?: string;
   readonly primary?: boolean;
   readonly visibleWhen?: Condition;

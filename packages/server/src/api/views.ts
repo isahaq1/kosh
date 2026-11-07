@@ -251,7 +251,9 @@ export class ViewRegistry {
         break;
       case 'form': {
         if (view.header.statusbar !== undefined) meta(model, view.header.statusbar);
-        const buttons: ButtonNode[] = view.header.buttons.filter((b) => allowed.has(b.transition));
+        const buttons: ButtonNode[] = view.header.buttons.filter(
+          (b) => b.open !== undefined || (b.transition !== undefined && allowed.has(b.transition)),
+        );
         served = {
           ...view,
           header: { ...view.header, buttons },

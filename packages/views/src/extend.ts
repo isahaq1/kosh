@@ -167,6 +167,18 @@ function apply(view: ViewDefinition, op: ViewOperation): ViewDefinition {
       break;
     }
     case 'form': {
+      // `append: 'header'` adds buttons to the header, which may have none yet (RFC 0028 §3.4).
+      if ('append' in op && op.append === 'header') {
+        next = {
+          ...view,
+          header: {
+            ...view.header,
+            buttons: [...view.header.buttons, ...(op.nodes as unknown as ButtonNode[])],
+          },
+        };
+        done = true;
+        break;
+      }
       const [buttons, inHeader] = applyIn(view.header.buttons, op);
       if (inHeader)
         [next, done] = [
