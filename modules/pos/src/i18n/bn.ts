@@ -75,6 +75,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Point of sale: sessions, split payments, receipts, the register on a tablet':
     'বিক্রয় কাউন্টার: সেশন, ভাগ করা পেমেন্ট, রসিদ, ট্যাবলেটে রেজিস্টার',
   Price: 'মূল্য',
+  'Price list': 'মূল্যতালিকা',
   'Prices include taxes': 'মূল্যে কর অন্তর্ভুক্ত',
   Product: 'পণ্য',
   Qty: 'পরিমাণ',
@@ -123,6 +124,8 @@ export const bn: Readonly<Record<string, string>> = {
   'The sum of the payments received for the sale.': 'বিক্রয়ের জন্য পাওয়া পেমেন্টগুলোর যোগফল।',
   'The sum of the taxes on the lines.': 'লাইনগুলোর করের যোগফল।',
   'The taxes on this line, after the discount.': 'ছাড়ের পরে এই লাইনের কর।',
+  'The till prices products by this list; a sale for a customer with a list of their own uses theirs.':
+    'ক্যাশ কাউন্টার এই তালিকায় পণ্যের মূল্য ধরে; নিজস্ব তালিকা থাকা গ্রাহকের বিক্রয়ে তাঁর তালিকা ব্যবহৃত হয়।',
   'The total of the session’s paid sales.': 'সেশনের পরিশোধিত বিক্রয়গুলোর মোট।',
   'This cashier already has an open session; close it first.':
     'এই ক্যাশিয়ারের একটি সেশন ইতিমধ্যে খোলা আছে; আগে সেটি বন্ধ করুন।',

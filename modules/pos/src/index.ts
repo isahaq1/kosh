@@ -409,6 +409,7 @@ export function posModule(options: CounterOptions = {}): ReturnType<typeof defin
         sheet: [
           k.group('main', [
             'name',
+            'pricelist',
             'pricesIncludeTax',
             'salesJournal',
             'differenceAccount',

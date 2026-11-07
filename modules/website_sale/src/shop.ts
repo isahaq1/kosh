@@ -236,9 +236,12 @@ export async function newCart(env: Env, site: Site): Promise<{ token: string; id
     .model('res.company')
     .browse([site.company as never])
     .load({ currency: true });
+  const visitor = await visitorOf(env, site);
   const made = await env.model('sale.order').create([
     {
-      partner: (await visitorOf(env, site)) as never,
+      partner: visitor as never,
+      // The customer's price list, when they have one (RFC 0028 §3.1).
+      pricelist: (await pricelistOf(env, visitor)) as never,
       currency: company?.currency.id as never,
       company: site.company as never,
       website: site.id as never,
@@ -283,7 +286,7 @@ export async function cartView(env: Env, id: Id<'sale.order'>): Promise<Record<s
   const goods = [...o.lines].filter((l) => !l.isDelivery && !l.isDiscount);
   const fee = [...o.lines]
     .filter((l) => l.isDelivery)
-    .reduce((s, l) => s.plus(l.priceUnit.times(l.quantity)), zero);
+    .reduce((s, l) => s.plus((l.priceUnit ?? zero).times(l.quantity)), zero);
   const payments = await (
     await env.model('payment.transaction').search({
       where: { saleOrder: id },
@@ -300,8 +303,8 @@ export async function cartView(env: Env, id: Id<'sale.order'>): Promise<Record<s
       product: l.product.id,
       name: l.name,
       quantity: l.quantity.toString(),
-      price: money(l.priceUnit),
-      subtotal: money(l.priceUnit.times(l.quantity)),
+      price: money(l.priceUnit ?? zero),
+      subtotal: money((l.priceUnit ?? zero).times(l.quantity)),
     })),
     carrier: o.carrier === null ? null : { id: o.carrier.id, name: o.carrier.name },
     delivery: money(fee),
@@ -313,14 +316,24 @@ export async function cartView(env: Env, id: Id<'sale.order'>): Promise<Record<s
       [...o.lines].reduce(
         (s, l) =>
           l.isDiscount
-            ? s.minus(l.priceUnit.times(l.quantity))
-            : s.plus(l.priceUnit.times(l.quantity).times(l.discount).div(100)),
+            ? s.minus((l.priceUnit ?? zero).times(l.quantity))
+            : s.plus((l.priceUnit ?? zero).times(l.quantity).times(l.discount).div(100)),
         zero,
       ),
     ),
     payment: o.shopPayment,
     paymentState: [...payments][0]?.state ?? null,
   };
+}
+
+/** A customer's price list (RFC 0028 §3.1), or null. */
+async function pricelistOf(env: Env, partner: unknown): Promise<number | null> {
+  if (typeof partner !== 'number') return null;
+  const [p] = await env
+    .model('res.partner')
+    .browse([partner as never])
+    .load({ pricelist: true });
+  return (p?.pricelist?.id as number | undefined) ?? null;
 }
 
 const goodsOf = async (env: Env, id: Id<'sale.order'>) => {
@@ -331,7 +344,7 @@ const goodsOf = async (env: Env, id: Id<'sale.order'>) => {
   const goods = [...(o?.lines ?? [])].filter((l) => !l.isDelivery && !l.isDiscount);
   return {
     order: o,
-    amount: goods.reduce((s, l) => s.plus(l.priceUnit.times(l.quantity)), zero),
+    amount: goods.reduce((s, l) => s.plus((l.priceUnit ?? zero).times(l.quantity)), zero),
     weight: goods.reduce((s, l) => s.plus((l.product.weight ?? zero).times(l.quantity)), zero),
   };
 };
@@ -382,7 +395,7 @@ export async function setLine(
         name: p.name,
         quantity,
         uom: p.uom?.id ?? null,
-        priceUnit: p.listPrice,
+        // Priced by the cart's price list (the customer's), else at the list price (RFC 0028 §3.1).
         taxes: { set: [...p.taxes.ids] },
       },
     ] as never);
@@ -443,7 +456,7 @@ async function refreshCoupon(env: Env, id: Id<'sale.order'>): Promise<void> {
   const [o] = await env.model('sale.order').browse([id]).load({ coupon: true, lines: true });
   if (o === undefined) return;
   const goods = [...o.lines].filter((l) => !l.isDelivery && !l.isDiscount);
-  const amount = goods.reduce((s, l) => s.plus(l.priceUnit.times(l.quantity)), zero);
+  const amount = goods.reduce((s, l) => s.plus((l.priceUnit ?? zero).times(l.quantity)), zero);
   let coupon = o.coupon as CouponRow | null;
   if (coupon !== null && couponProblem(env, coupon, amount) !== null) {
     await env.model('sale.order').browse([id]).write({ coupon: null });

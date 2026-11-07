@@ -12,6 +12,7 @@
  */
 import { type Mailer, mailerFromEnv } from '@kosh/mail';
 import { type Messenger, messengerFromEnv } from '@kosh/notify';
+import { priceFor } from '@kosh/product';
 import { documentFields, renderDocument } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext, publicApiModels } from '@kosh/server';
 import { type Id, orm } from '@kosh/server/orm';
@@ -161,34 +162,59 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
   app.get('/api/v1/counter/shops', async (request) =>
     request.env(async (raw) => {
       const env = raw as unknown as Env;
-      const shops = await (await env.model('pos.shop').search({})).load({ methods: true });
+      const shops = await (await env.model('pos.shop').search({})).load({
+        methods: true,
+        pricelist: true,
+      });
       return {
         shops: shops.map((s) => ({
           id: s.id,
           name: s.name,
           pricesIncludeTax: s.pricesIncludeTax,
           receiptFooter: s.receiptFooter,
+          pricelist: (s.pricelist?.id as number | undefined) ?? null,
           methods: [...s.methods].map((m) => ({ id: m.id, name: m.name, kind: m.kind })),
         })),
       };
     }),
   );
 
+  // `GET /api/v1/counter/catalogue?shop=`: the products on sale, at the shop's prices (its price list).
   app.get('/api/v1/counter/catalogue', async (request) =>
     request.env(async (raw) => {
       const env = raw as unknown as Env;
+      const shopId = Number((request.query as { shop?: unknown } | null)?.shop);
+      const [shop] =
+        Number.isSafeInteger(shopId) && shopId > 0
+          ? await env
+              .model('pos.shop')
+              .browse([shopId as Id<'pos.shop'>])
+              .load({ pricelist: true })
+          : [];
+      const list = (shop?.pricelist?.id as number | undefined) ?? null;
+      const today = env.today();
       const products = await (
         await env
           .model('product.product')
           .search({ where: { saleOk: true }, order: ['name asc'], limit: 2000 })
       ).load({ taxes: true, category: true, uom: true, image: true });
+      const prices = new Map<number, ReturnType<typeof orm.toDecimal>>();
+      if (list !== null)
+        for (const p of products)
+          prices.set(
+            p.id as number,
+            (await priceFor(env as never, list, p.id as number, '1', today)).price,
+          );
       return {
         products: products.map((p) => ({
           id: p.id,
           name: p.name,
           code: p.code,
           barcode: p.barcode,
-          price: p.listPrice.toString(),
+          price: (list === null
+            ? p.listPrice
+            : (prices.get(p.id as number) ?? p.listPrice)
+          ).toString(),
           category: p.category?.name ?? null,
           uom: p.uom?.name ?? null,
           image: p.image?.id ?? null,
@@ -269,9 +295,42 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
         const [current] = await env
           .model('pos.session')
           .browse([session as Id<'pos.session'>])
-          .load({ shop: true });
+          .load({ shop: { pricelist: true } });
         if (current === undefined)
           throw new HttpProblem(404, 'missing-record', 'Not found', 'No such session.');
+        // The customer's own price list, else the shop's (RFC 0028 §3.1).
+        const customer =
+          input.partner === undefined || input.partner === null
+            ? null
+            : idOf(input.partner, 'partner');
+        // A customer's price list is Sales' field: read when Sales is installed.
+        let own: number | null = null;
+        if (customer !== null)
+          try {
+            const partners = env.model('res.partner' as never) as unknown as {
+              browse(ids: number[]): {
+                load(keys: string[]): Promise<{ read(keys: string[]): Record<string, unknown>[] }>;
+              };
+            };
+            const [row] = (await partners.browse([customer]).load(['pricelist'])).read([
+              'pricelist',
+            ]);
+            own = typeof row?.['pricelist'] === 'number' ? (row['pricelist'] as number) : null;
+          } catch {
+            own = null; // Sales is not installed: no customer lists
+          }
+        const list = own ?? (current.shop.pricelist?.id as number | undefined) ?? null;
+        const today = env.today();
+        const listed = new Map<string, ReturnType<typeof orm.toDecimal>>();
+        for (const l of input.lines)
+          if (text(l.priceUnit) === '' && list !== null) {
+            const quantity = text(l.quantity) || '1';
+            listed.set(
+              `${String(l.product)}:${quantity}`,
+              (await priceFor(env as never, list, idOf(l.product, 'product'), quantity, today))
+                .price,
+            );
+          }
         const products = await env
           .model('product.product')
           .browse(input.lines.map((l) => idOf(l.product, 'product') as Id<'product.product'>))
@@ -300,7 +359,11 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
                   product: product.id,
                   name: product.name,
                   quantity: orm.toDecimal(text(l.quantity) || '1'),
-                  priceUnit: orm.toDecimal(text(l.priceUnit) || product.listPrice.toString()),
+                  priceUnit:
+                    text(l.priceUnit) !== ''
+                      ? orm.toDecimal(text(l.priceUnit))
+                      : (listed.get(`${String(l.product)}:${text(l.quantity) || '1'}`) ??
+                        product.listPrice),
                   discount: orm.toDecimal(text(l.discount) || '0'),
                   taxes: { set: [...product.taxes].map((t) => t.id) },
                 };

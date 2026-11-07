@@ -42,6 +42,12 @@ export const PosShop = defineModel('pos.shop', {
   archivable: true,
   access: { 'pos.cashier': ['read'], 'pos.manager': [...ALL, 'export'] },
   fields: {
+    /** Its prices (RFC 0028 §3.1): the shop's price list, else list prices; a customer's own list wins. */
+    pricelist: f.many2one('product.pricelist', {
+      ondelete: 'restrict',
+      label: 'Price list',
+      help: 'The till prices products by this list; a sale for a customer with a list of their own uses theirs.',
+    }),
     name: f.char({ required: true }),
     /** Prices on the register include the taxes (a shop) or not (a wholesale counter). */
     pricesIncludeTax: f.boolean({ default: true, label: 'Prices include taxes' }),

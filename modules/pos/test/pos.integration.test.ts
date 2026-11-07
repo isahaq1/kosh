@@ -454,3 +454,43 @@ test('step 3: a refund with its reason is a negative sale paid back, linked; onl
   expect(lines.reduce((sum, l) => sum + amount(l.debit), 0)).toBeCloseTo(250, 2);
   expect(lines.reduce((sum, l) => sum + amount(l.credit), 0)).toBeCloseTo(250, 2);
 });
+
+test('the shop’s price list prices the catalogue and a line sold without a price (RFC 0028)', async () => {
+  const list = await call('maria', 'POST', '/api/v1/models/product.pricelist', {
+    name: 'Counter offer',
+    rules: { create: [{ appliesTo: 'all', compute: 'discount', discount: '20' }] },
+  });
+  expect(list.status, JSON.stringify(list.json)).toBe(201);
+  expect(
+    (
+      await call('maria', 'PATCH', `/api/v1/models/pos.shop/${ids['shop']}`, {
+        pricelist: list.json.id,
+      })
+    ).status,
+  ).toBe(200);
+  const catalogue = await call('rahim', 'GET', `/api/v1/counter/catalogue?shop=${ids['shop']}`);
+  expect(catalogue.status, JSON.stringify(catalogue.json)).toBe(200);
+  const tea = (catalogue.json.products as { id: number; price: string }[]).find(
+    (p) => p.id === ids['tea'],
+  );
+  expect(Number(tea?.price)).toBe(200);
+  const opened = await call('rahim', 'POST', '/api/v1/counter/sessions', {
+    shop: ids['shop'],
+    openingCash: '100',
+  });
+  expect(opened.status, JSON.stringify(opened.json)).toBe(201);
+  const sale = await call('rahim', 'POST', '/api/v1/counter/orders', {
+    session: opened.json.session.id,
+    lines: [{ product: ids['tea'], quantity: '1' }],
+    payments: [{ method: ids['cash'], amount: '200' }],
+  });
+  expect(sale.status, JSON.stringify(sale.json)).toBe(201);
+  const lines = (
+    await call(
+      'maria',
+      'GET',
+      `/api/v1/models/pos.order.line?fields=priceUnit&filter=${encodeURIComponent(JSON.stringify({ order: sale.json.order.id }))}`,
+    )
+  ).json.items as { priceUnit: string }[];
+  expect(lines.map((l) => Number(l.priceUnit))).toEqual([200]);
+});
