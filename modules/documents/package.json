@@ -54,7 +54,8 @@
     "@kosh/storage": "workspace:*",
     "@kosh/ui": "workspace:*",
     "@kosh/views": "workspace:*",
-    "fastify": "^5.12.7"
+    "fastify": "^5.12.7",
+    "@kosh/reporting": "workspace:*"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1",

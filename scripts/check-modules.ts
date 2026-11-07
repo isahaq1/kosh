@@ -38,7 +38,21 @@ const root = join(fileURLToPath(import.meta.url), '..', '..');
 const all = process.argv.includes('--all');
 
 /** The rules `pnpm lint` enforces today; the others are reported (RFC 0023 §5 switches them on step by step). */
-const ENFORCED = new Set(['M1', 'M2', 'M3', 'M4', 'V1', 'P1', 'P2', 'I1', 'I2', 'E1', 'T1']);
+const ENFORCED = new Set([
+  'M1',
+  'M2',
+  'M3',
+  'M4',
+  'V1',
+  'P1',
+  'P2',
+  'I1',
+  'I2',
+  'E1',
+  'T1',
+  'M5',
+  'A1',
+]);
 const RULES: Readonly<Record<string, string>> = {
   M1: 'every model has a label',
   M2: 'every model with a list view has a search spec',

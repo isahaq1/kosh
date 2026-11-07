@@ -20,6 +20,7 @@ import { contacts } from '@kosh/contacts';
 import { type Mailer, mailerFromEnv } from '@kosh/mail';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
+import { reporting } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
 import { cleanName, storageOf } from '@kosh/storage';
@@ -382,7 +383,7 @@ export function documentsModule(options: DocumentsOptions = {}): ReturnType<type
     shutro: documentsShutro,
     kosh: '^0.1.0',
     hooks: { demo: documentsDemo },
-    depends: [contacts, messaging],
+    depends: [contacts, messaging, reporting],
     app: {
       code: 'documents',
       label: 'Documents',
@@ -459,6 +460,65 @@ export function documentsModule(options: DocumentsOptions = {}): ReturnType<type
     },
     // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
     i18n: { bn: () => import('./i18n/bn.js') },
+    overview: {
+      cards: [
+        {
+          id: 'documents',
+          title: 'Documents',
+          kind: 'kpi',
+          model: 'documents.document',
+          measure: 'count',
+          comparison: { field: 'createdAt', mode: 'previous' },
+          w: 3,
+        },
+        {
+          id: 'requests_waiting',
+          title: 'Requests waiting for a file',
+          kind: 'kpi',
+          model: 'documents.request',
+          measure: 'count',
+          filter: { state: 'sent' },
+          w: 3,
+        },
+        {
+          id: 'requests_received',
+          title: 'Files received',
+          kind: 'kpi',
+          model: 'documents.request',
+          measure: 'count',
+          filter: { state: 'received' },
+          w: 3,
+        },
+        {
+          id: 'folders',
+          title: 'Folders',
+          kind: 'kpi',
+          model: 'documents.folder',
+          measure: 'count',
+          w: 3,
+        },
+        {
+          id: 'by_folder',
+          title: 'Documents by folder',
+          kind: 'chart',
+          model: 'documents.document',
+          measure: 'count',
+          groupBy: 'folder',
+          chart: 'bar',
+          w: 6,
+        },
+        {
+          id: 'requests_by_state',
+          title: 'Requests by state',
+          kind: 'chart',
+          model: 'documents.request',
+          measure: 'count',
+          groupBy: 'state',
+          chart: 'pie',
+          w: 6,
+        },
+      ],
+    },
     accessLevels: {
       user: { label: 'User', groups: ['documents.user'] },
       manager: {

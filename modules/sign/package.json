@@ -50,7 +50,8 @@
     "@kosh/storage": "workspace:*",
     "@kosh/views": "workspace:*",
     "fastify": "^5.12.7",
-    "pdf-lib": "1.17.1"
+    "pdf-lib": "1.17.1",
+    "@kosh/reporting": "workspace:*"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1",

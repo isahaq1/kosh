@@ -13,12 +13,14 @@
  * - `POST /api/v1/public/sign/:token/sign`        `{ code, values: { <field id>: text | true | PNG data URL } }`
  * - `POST /api/v1/public/sign/:token/refuse`      `{ code, reason }`
  */
+
 import { randomBytes } from 'node:crypto';
 import { contacts } from '@kosh/contacts';
 import { documents } from '@kosh/documents';
 import { type Mailer, mailerFromEnv } from '@kosh/mail';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
+import { reporting } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import { storageOf } from '@kosh/storage';
 import { action, form, list, search } from '@kosh/views';
@@ -295,7 +297,7 @@ export function signModule(options: SignOptions = {}): ReturnType<typeof defineM
   return defineModule({
     shutro: signShutro,
     kosh: '^0.1.0',
-    depends: [contacts, messaging, documents],
+    depends: [contacts, messaging, documents, reporting],
     app: {
       code: 'sign',
       label: 'Sign',
@@ -360,6 +362,11 @@ export function signModule(options: SignOptions = {}): ReturnType<typeof defineM
     standard: {
       waive: [
         {
+          rule: 'A1',
+          reason:
+            'Demo signature requests need a template made from an uploaded PDF, which the demo cannot ship; the app is tried with a document of your own.',
+        },
+        {
           rule: 'I1',
           model: 'sign.request',
           reason: 'Sent from a template to its signers; a file cannot sign.',
@@ -368,6 +375,66 @@ export function signModule(options: SignOptions = {}): ReturnType<typeof defineM
     },
     // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
     i18n: { bn: () => import('./i18n/bn.js') },
+    overview: {
+      cards: [
+        {
+          id: 'out',
+          title: 'Out for signature',
+          kind: 'kpi',
+          model: 'sign.request',
+          measure: 'count',
+          filter: { state: 'sent' },
+          w: 3,
+        },
+        {
+          id: 'signed',
+          title: 'Signed',
+          kind: 'kpi',
+          model: 'sign.request',
+          measure: 'count',
+          filter: { state: 'signed' },
+          comparison: { field: 'completedAt', mode: 'previous' },
+          w: 3,
+        },
+        {
+          id: 'refused',
+          title: 'Refused',
+          kind: 'kpi',
+          model: 'sign.request',
+          measure: 'count',
+          filter: { state: 'refused' },
+          w: 3,
+        },
+        {
+          id: 'templates',
+          title: 'Templates',
+          kind: 'kpi',
+          model: 'sign.template',
+          measure: 'count',
+          w: 3,
+        },
+        {
+          id: 'by_state',
+          title: 'Requests by state',
+          kind: 'chart',
+          model: 'sign.request',
+          measure: 'count',
+          groupBy: 'state',
+          chart: 'pie',
+          w: 6,
+        },
+        {
+          id: 'by_template',
+          title: 'Requests by template',
+          kind: 'chart',
+          model: 'sign.request',
+          measure: 'count',
+          groupBy: 'template',
+          chart: 'bar',
+          w: 6,
+        },
+      ],
+    },
     accessLevels: {
       user: { label: 'User (send requests)', groups: ['sign.user'] },
       manager: { label: 'Manager (templates)', groups: ['sign.manager'], implies: ['user'] },

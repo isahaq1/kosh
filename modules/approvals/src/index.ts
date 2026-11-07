@@ -16,6 +16,7 @@
  * **Generic requests** (step 4): categories say what a request asks for and what it leads to; a request is decided
  * through its category's policy, and its outcome runs when approved.
  */
+
 import { randomBytes } from 'node:crypto';
 import { contacts } from '@kosh/contacts';
 import { type Mailer, mailerFromEnv } from '@kosh/mail';
@@ -30,9 +31,11 @@ import {
   sweepDeadlines,
   useLink,
 } from '@kosh/permissions';
+import { reporting } from '@kosh/reporting';
 import { digest, HttpProblem, type ModuleContext } from '@kosh/server';
 import type { Env, Worker } from '@kosh/server/orm';
 import { action, form, kanban, list, search } from '@kosh/views';
+import { approvalsDemo } from './demo.js';
 import { configureMails, mailDeciders, mailTurn } from './mails.js';
 import { ApprovalAsk, ApprovalCategory, approvalsShutro, ensureCategoryPolicy } from './module.js';
 
@@ -296,7 +299,8 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
   return defineModule({
     shutro: approvalsShutro,
     kosh: '^0.1.0',
-    depends: [permissions, contacts],
+    hooks: { demo: approvalsDemo },
+    depends: [permissions, contacts, reporting],
     app: {
       code: 'approvals',
       label: 'Approvals',
@@ -330,6 +334,67 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
     events: [{ topic: 'approval.ask.approved', model: 'approval.ask', label: 'Request approved' }],
     // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
     i18n: { bn: () => import('./i18n/bn.js') },
+    overview: {
+      cards: [
+        {
+          id: 'waiting',
+          title: 'Requests waiting',
+          kind: 'kpi',
+          model: 'approval.ask',
+          measure: 'count',
+          filter: { state: 'submitted' },
+          w: 3,
+        },
+        {
+          id: 'approved',
+          title: 'Approved this month',
+          kind: 'kpi',
+          model: 'approval.ask',
+          measure: 'count',
+          filter: { state: 'approved' },
+          comparison: { field: 'approvedAt', mode: 'previous' },
+          w: 3,
+        },
+        {
+          id: 'refused',
+          title: 'Refused',
+          kind: 'kpi',
+          model: 'approval.ask',
+          measure: 'count',
+          filter: { state: 'refused' },
+          w: 3,
+        },
+        {
+          id: 'amount',
+          title: 'Amount waiting',
+          kind: 'kpi',
+          model: 'approval.ask',
+          measure: 'sum:amount',
+          filter: { state: 'submitted' },
+          w: 3,
+        },
+        {
+          id: 'by_category',
+          title: 'Requests by category',
+          kind: 'chart',
+          model: 'approval.ask',
+          measure: 'count',
+          groupBy: 'category',
+          chart: 'bar',
+          w: 6,
+        },
+        {
+          id: 'by_state',
+          title: 'Requests by state',
+          kind: 'chart',
+          model: 'approval.ask',
+          measure: 'count',
+          groupBy: 'state',
+          chart: 'pie',
+          w: 6,
+        },
+      ],
+    },
     accessLevels: {
       user: { label: 'Everyone (decide and ask)', groups: ['base.user'] },
       manager: {
