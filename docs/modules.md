@@ -280,6 +280,32 @@ due. Each order line knows what is **Billed** (its bill lines, less refunds); th
 ordered quantity is. On the bill, each line shows **Ordered / received / billed** for its order line, flagged
 *more than received* or *more than ordered* before anyone posts it. Orders billed before this keep their bill links.
 
+### Deals to quotations (`modules/sale_crm`, RFC 0028)
+
+With Pipeline and Sales installed, an open deal has **New quotation**: a new quotation for the deal's customer, by its
+salesperson, linked to the deal (**Deal** on the order). The deal shows its **Quotations** and what was **Ordered**.
+Confirming a quotation wins its deal (the first winning stage); when every quotation of a deal is cancelled, the
+deal is lost, with the reason *Every quotation was cancelled*. Both follow the orders through the outbox, once each
+(`sale.order.confirmed`, `sale.order.cancelled`).
+
+A form button may **open** a new record of another model filled from the record instead of running a transition
+(`{ kind: 'button', id, label, open: { model, action?, values: { deal: { $record: 'id' } } } }`), and a view
+extension may append buttons to a form's header (`{ append: 'header', nodes }`).
+
+### Quotation templates and optional products (`modules/sales`, RFC 0028)
+
+**Sales › Configuration › Quotation templates** (Sales managers): lines, optional lines, how many days quotations
+stay valid, terms. A draft quotation with a **Quotation template** gets **Fill from template**: its lines, its
+optional products (**Optional products** on the order, offered to the customer), its validity and its terms. An
+optional product's **Add** (`POST /api/v1/models/sale.order.option/:id/transitions/add`) makes it a line of the open
+quotation, once — priced by the order's list unless the option has a price of its own.
+
+In the portal, a sent quotation shows its **Optional products**; the customer adds what they want before accepting.
+The portal checks the quotation is theirs and still waiting, adds the option as the system, posts it on the
+quotation's thread and audits it. Any portal document may offer options the same way (`options` in its declaration:
+the one2many, its fields, `offered`, `when` and the item's `add` transition;
+`POST /api/portal/v1/documents/:key/:id/options/:option/add`).
+
 ### Projects for programmes (`modules/project`, RFC 0026)
 
 Projects carries a programme's structure, not only a to-do list. Configuration holds **project types**, **task

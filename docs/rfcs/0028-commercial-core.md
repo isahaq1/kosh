@@ -1,6 +1,6 @@
 # RFC 0028 — The commercial core: price lists, credit control, invoicing by what was delivered, deals to quotations, quotation templates
 
-- Status: Accepted (2026-11-07)
+- Status: Accepted (2026-11-07); implemented (2026-11-07)
 - Builds on: RFC 0008 (Sales, Purchase, Products), RFC 0009 (Accounting), RFC 0021 (Pipeline, Stockroom, Shop,
   Counter), RFC 0025 / 0027 (Approvals)
 - Source: [docs/odoo-gaps/README.md](../odoo-gaps/README.md) — the gaps several apps wait on (#1, #4) and the most
@@ -146,3 +146,21 @@ RFC: bank statements and reconciliation rules).
 - **Open (2026-11-07).** The Trade Finance overview E2E sometimes renders "Something went wrong!" (the error
   boundary) under parallel load since step 3: it failed in three full runs and passed alone, serially and paired in
   later runs; the cards read `trade.lc` only and no console error was caught in the passing runs. To investigate.
+- **Step 4 (2026-11-07).** `@kosh/sale_crm` (a bridge of Sales and Pipeline): `sale.order.deal`,
+  `crm.deal.quotations`, tiles on the deal. A deal has no state, so "New quotation" needed a new kind of form button:
+  `open` (a new record of another model, filled from `$record` values, through the existing prefill) — the API still
+  exposes transitions only; and `append: 'header'` in view extensions (the deal form has no buttons to insert beside).
+  Sales emits `sale.order.cancelled`; the bridge's subscribers win the deal on confirmation (the first winning stage)
+  and lose it when every quotation is cancelled, with its own lost reason (Pipeline requires one).
+- **Step 5 part 1 (2026-11-07).** `sale.order.template` and its lines (optional ones), `sale.order.template` on the
+  order with the `fill` transition (lines, options, validity, terms), `sale.order.option` with `offered | added` and
+  `add` (a line, once, while the quotation is open). Options are their own model, not lines kept out of the totals:
+  nothing that reads lines (taxes, invoicing, deliveries) needs to know about them. Transition names: Shutro wants
+  snake_case names and camelCase methods, so only one-word names pass on a model's own state field (`fill`) —
+  to raise with Shutro. Part 2: the customer adds options in the portal before signing.
+- **Step 5 part 2 (2026-11-07).** Portal documents declare `options` (the one2many, its fields, `offered` on the
+  items, `when` on the document, the item's `add` transition), checked at start; the document's page returns the items
+  on offer and whether it takes them; `POST …/options/:option/add` checks the document is the user's (as the user)
+  and both domains, runs the transition as the system, posts on the thread and audits (`portal.option`), with an
+  idempotency key like the actions. `sale_portal` offers a sent quotation's options; the portal app shows them with
+  **Add**. RFC 0028 complete.
