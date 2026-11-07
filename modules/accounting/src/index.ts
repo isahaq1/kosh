@@ -1511,6 +1511,16 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       return undefined;
     },
     demo: accountingDemo,
+    // The books are kept (RFC 0008 §5.4): with posted entries, Accounting is disabled, never removed with its data.
+    preUninstall: async (env) => {
+      const posted = await (env as Env)
+        .model('account.move')
+        .search({ where: { state: 'posted' }, limit: 1 });
+      if (posted.ids.length > 0)
+        throw new Error(
+          'posted journal entries exist, and the books are kept for the legal retention period',
+        );
+    },
   },
   routes: (context: ModuleContext) => {
     // The charts: the generic one and the installed localizations' (RFC 0016).
