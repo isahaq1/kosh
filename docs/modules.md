@@ -96,7 +96,7 @@ anything is written, each change audited like one made by hand (`POST /api/v1/se
 `GET …/export`, `POST …/import`). A setting that a model must obey (a required tax ID, timesheet steps) is enforced
 by a constraint reading the company's field, so the API and imports obey it too (see Contacts and Projects).
 
-## Installing, disabling and enabling apps (RFC 0008)
+## Installing, disabling, upgrading and uninstalling apps (RFC 0008)
 
 `src/modules.ts` lists the **catalogue**: the modules this installation can install. The database records which of
 them are **installed**, **disabled** or still **available** (`kosh_module`). The app host serves the installed
@@ -123,6 +123,7 @@ npx shutro-erp apps disable projects      # menus, API and access go; tables and
 npx shutro-erp apps enable projects       # back in seconds, with its data
 npx shutro-erp apps upgrade               # every app whose code is newer than its installed version
 npx shutro-erp apps upgrade acme --remove-data   # an upgrade that drops columns its code no longer has
+npx shutro-erp apps uninstall projects --remove-data   # the app and its data, for good (dependents too)
 npx shutro-erp apps install sales --plan  # only show the plan
 ```
 
@@ -158,7 +159,24 @@ The engine refuses a change in these cases:
 - another app change happened after this one was planned.
 
 A disabled module's tables stay part of the schema, so `shutro-erp migrate` plans with the installed and disabled modules
-and never proposes dropping them. Removing an app together with its data comes in a later step.
+and never proposes dropping them.
+
+**Uninstalling** removes an app with its data, for good; disabling stays the reversible choice. The plan lists the
+apps that go with it (every installed or disabled app that depends on it) and every table and column deleted, with
+its rows. Each module may refuse in `hooks.preUninstall` by throwing (Accounting refuses while posted journal
+entries exist: the books are kept). On the Apps page, Uninstall asks for the app's name typed back and a code from
+the authenticator app (two-factor sign-in is needed; recovery codes do not count); the CLI asks for the name unless
+`--yes`, and needs `--remove-data`. One transaction then:
+
+- keeps a **snapshot** of every table and column it deletes in `kosh_app_snapshot` (30 days; older ones are pruned
+  by the next uninstall);
+- drops the tables and columns;
+- deletes the apps' records in the models that stay, by external id (one still used elsewhere is kept), and their
+  external ids;
+- removes their groups from people and from runtime roles, and the roles' rights on models that went;
+- removes them from the installed set and from Shutro's module list, and writes the `apps.change` audit event.
+
+Installing the app again starts afresh, with its seed data. `base` and Settings cannot be uninstalled.
 
 Projects from before the App manager have no `kosh_module` yet. Until their first `shutro-erp apps` change, servers and
 `shutro-erp migrate` keep treating `src/modules.ts` as the installed set. That first change records the modules that have

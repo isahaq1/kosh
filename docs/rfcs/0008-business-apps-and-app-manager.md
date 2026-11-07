@@ -421,3 +421,19 @@ show the reason; a pre-checked line to uncheck in the UI is still to come.
 - **Not yet:** end-to-end browser tests for Sales and Purchase. The e2e fixture defines its own `res.partner` and
   `purchase.order`, so these apps need their own e2e catalogue first. Accounting (RFC 0009 first) and Projects
   come next.
+
+## Implementation notes (2026-11-07): uninstall with its data (§5.4)
+
+- **Plan:** `AppChange.uninstall`; every installed or disabled module that depends on one goes too (bridges
+  included), dependents first; alone in its change; protected modules refused. `prepareApps` allows the drops for an
+  uninstall and lists them with the rows holding data (`drops`).
+- **Apply (one transaction):** each module's `hooks.preUninstall` on the modules as they are (a throw refuses, with
+  "disable instead"); the snapshot; the destructive migration; the modules' records in the models that stay by
+  external id (each in a savepoint: one still used is kept) and their external ids; their groups from
+  `auth_user_group` and runtime roles (`implies`, access, rules, permissions), field rights on models that went; the
+  `kosh_module` and `shutro_module` rows; the log and the audit event.
+- **Deviations:** the snapshot is a row of `kosh_app_snapshot` (each dropped table's rows and column's values as
+  JSON), not a file in storage, kept 30 days; restoring it when reinstalling is not offered yet. The step-up is the
+  authenticator's current code (`AuthService.confirmSecondFactor`), required of Administrators and App managers
+  alike. The work runs in the request (or the CLI), as installs do, not in a job. Records other apps derived for the
+  removed models (approval policies, document templates, automation rules on them) stay, unused.
