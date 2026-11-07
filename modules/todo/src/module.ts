@@ -39,7 +39,7 @@ export const TodoList = defineModel('todo.list', {
         rose: 'Rose',
         violet: 'Violet',
       },
-      { required: true, default: 'blue' },
+      { required: true, default: 'blue', help: 'The colour that marks this list and its to-dos.' },
     ),
     sequence: f.integer({ required: true, default: 10 }),
     tasks: f.one2many('todo.task', 'list'),
@@ -73,11 +73,12 @@ export const TodoTask = defineModel('todo.task', {
     dueDate: f.date({ label: 'Due' }),
     priority: f.selection(
       { normal: 'Normal', high: 'High', urgent: 'Urgent' },
-      { required: true, default: 'normal' },
+      { required: true, default: 'normal', help: 'How pressing it is: normal, high or urgent.' },
     ),
     state: f.state({
       states: { open: 'To do', done: 'Done' },
       initial: 'open',
+      help: 'Open until you mark it done; a done to-do can be reopened.',
       transitions: {
         complete: emitting('todo.task.done', { from: ['open'], to: 'done' }),
         reopen: { from: ['done'], to: 'open' },

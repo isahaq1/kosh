@@ -1,5 +1,7 @@
 /** Bangla for the module's labels, keyed by their English text (RFC 0023 §3.1; `pnpm i18n:extract`). */
 export const bn: Readonly<Record<string, string>> = {
+  'A confirmed event takes place and holds its room; a cancelled one frees the room and can be restored.':
+    'নিশ্চিত ইভেন্ট অনুষ্ঠিত হয় ও এর কক্ষ ধরে রাখে; বাতিল ইভেন্ট কক্ষ ছেড়ে দেয় এবং আবার ফিরিয়ে আনা যায়।',
   'A new event ends this long after it starts; each can still be changed.':
     'নতুন ইভেন্ট শুরুর এতক্ষণ পরে শেষ হয়; প্রতিটি পরে বদলানো যায়।',
   'About (id)': 'সম্পর্কিত (আইডি)',
@@ -60,6 +62,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Private (busy for others)': 'ব্যক্তিগত (অন্যদের কাছে ব্যস্ত)',
   Productivity: 'উৎপাদনশীলতা',
   Public: 'সর্বজনীন',
+  'Public events are seen by everyone in Agenda; private ones show only as busy to people not invited.':
+    'সর্বজনীন ইভেন্ট এজেন্ডায় সবাই দেখতে পান; ব্যক্তিগত ইভেন্ট আমন্ত্রিত নন এমন লোকদের কাছে শুধু ব্যস্ত হিসেবে দেখায়।',
   Restore: 'পুনরুদ্ধার করুন',
   Room: 'কক্ষ',
   Rooms: 'কক্ষ',
@@ -75,4 +79,6 @@ export const bn: Readonly<Record<string, string>> = {
   'User (own and public events)': 'ব্যবহারকারী (নিজের ও সর্বজনীন ইভেন্ট)',
   Video: 'ভিডিও',
   'Video call link': 'ভিডিও কলের লিংক',
+  'Whether this person will come: not answered yet, accepted, maybe or declined.':
+    'এই ব্যক্তি আসবেন কি না: এখনও উত্তর দেননি, গ্রহণ করেছেন, হয়তো বা প্রত্যাখ্যান করেছেন।',
 };

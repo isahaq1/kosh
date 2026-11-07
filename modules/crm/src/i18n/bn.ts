@@ -27,6 +27,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Forecast by close month': 'সমাপ্তির মাস অনুযায়ী পূর্বাভাস',
   Good: 'ভালো',
   'How deals are closed.': 'ডিল কীভাবে বন্ধ করা হয়।',
+  'How promising the deal is, shown as stars.': 'ডিলটি কতটা সম্ভাবনাময়, তারকা চিহ্নে দেখানো হয়।',
   ID: 'আইডি',
   Lost: 'হারানো',
   'Lost because': 'হারানোর কারণ',
@@ -62,6 +63,8 @@ export const bn: Readonly<Record<string, string>> = {
   Stage: 'ধাপ',
   Stages: 'ধাপসমূহ',
   Status: 'অবস্থা',
+  'The expected revenue multiplied by the probability of winning the deal.':
+    'প্রত্যাশিত আয়কে ডিলটি জেতার সম্ভাবনা দিয়ে গুণ করা অঙ্ক।',
   'The reasons tell what to improve; switch off to lose deals without one.':
     'কারণগুলো বলে দেয় কোথায় উন্নতি দরকার; কারণ ছাড়া ডিল হারাতে চাইলে এটি বন্ধ করুন।',
   'This stage needs more details: see the stage’s required fields.':
@@ -73,7 +76,10 @@ export const bn: Readonly<Record<string, string>> = {
   Website: 'ওয়েবসাইট',
   'Weighted forecast': 'ভারযুক্ত পূর্বাভাস',
   'Weighted revenue': 'ভারযুক্ত আয়',
+  'Where the deal came from.': 'ডিলটি কোথা থেকে এসেছে।',
   'Wins the deal': 'ডিল জেতা হয়',
   Won: 'জেতা',
   'Won this month': 'এ মাসে জেতা',
+  'Won when the deal is in a winning stage, lost when marked lost, open otherwise.':
+    'ডিলটি জেতার ধাপে থাকলে জেতা, হারানো চিহ্নিত হলে হারানো, অন্যথায় খোলা।',
 };

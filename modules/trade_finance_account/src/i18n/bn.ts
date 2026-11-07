@@ -1,5 +1,7 @@
 /** Bangla for the module's labels, keyed by their English text (RFC 0023 §3.1; `pnpm i18n:extract`). */
 export const bn: Readonly<Record<string, string>> = {
+  'A draft charge can be changed; posting expenses it against the bank in the accounts.':
+    'খসড়া চার্জ বদলানো যায়; পোস্ট করলে এটি ব্যাংকের বিপরীতে হিসাবে খরচ হিসেবে লিপিবদ্ধ হয়।',
   Amount: 'অঙ্ক',
   'Bank charges': 'ব্যাংক চার্জ',
   'Bank journal': 'ব্যাংক জার্নাল',

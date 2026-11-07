@@ -64,6 +64,7 @@ export const HiringOpening = defineModel('hiring.opening', {
     applicants: f.one2many('hiring.applicant', 'opening'),
     description: f.text(),
     state: f.state({
+      help: 'An open opening takes applicants; it closes by hand or once its headcount is hired.',
       states: { open: 'Open', closed: 'Closed' },
       initial: 'open',
       transitions: {
@@ -105,7 +106,7 @@ export const HiringApplicant = defineModel('hiring.applicant', {
         agency: 'Agency',
         other: 'Other',
       },
-      {},
+      { help: 'Where the candidate heard of the opening.' },
     ),
     expectedSalary: f.decimal({ scale: 2, label: 'Expected salary', groups: ['hiring.manager'] }),
     refused: f.boolean({ default: false }),
@@ -116,6 +117,7 @@ export const HiringApplicant = defineModel('hiring.applicant', {
       scale: 1,
       store: true,
       label: 'Rating',
+      help: 'The average score of the interviewers’ scorecards, out of 5.',
       ...compute('hiring.applicant', 'rating', ['scorecards.score'], (applicants) => {
         for (const a of applicants) {
           const scores = [...a.scorecards].map((s) => s.score);
@@ -135,6 +137,7 @@ export const HiringApplicant = defineModel('hiring.applicant', {
       { active: 'In progress', hired: 'Hired', refused: 'Refused' },
       {
         store: true,
+        help: 'Hired once the candidate became an employee, refused when turned down, in progress otherwise.',
         ...compute('hiring.applicant', 'status', ['employee', 'refused'], (applicants) => {
           for (const a of applicants)
             a.status = a.employee !== null ? 'hired' : a.refused ? 'refused' : 'active';
@@ -196,7 +199,11 @@ export const HiringScorecard = defineModel('hiring.scorecard', {
     score: f.integer({ required: true, default: 3, label: 'Score (1–5)' }),
     recommendation: f.selection(
       { strong_yes: 'Strong yes', yes: 'Yes', no: 'No', strong_no: 'Strong no' },
-      { required: true, default: 'yes' },
+      {
+        required: true,
+        default: 'yes',
+        help: 'Whether the interviewer recommends hiring the candidate.',
+      },
     ),
     notes: f.text(),
   },

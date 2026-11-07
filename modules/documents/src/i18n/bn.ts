@@ -3,6 +3,8 @@ export const bn: Readonly<Record<string, string>> = {
   'A folder kept to its members is seen by them and its owner (and Documents managers).':
     'সদস্যদের জন্য রাখা ফোল্ডার শুধু সদস্যরা, এর মালিক (এবং নথি ব্যবস্থাপকরা) দেখতে পান।',
   'A link shares a document or a folder.': 'একটি লিংক একটি নথি বা ফোল্ডার শেয়ার করে।',
+  'A sent request emails the person an upload link; it is received once they upload the file.':
+    'পাঠানো অনুরোধ ব্যক্তিকে একটি আপলোড লিংক ইমেইল করে; তিনি ফাইল আপলোড করলে এটি প্রাপ্ত হয়।',
   'About (model)': 'বিষয় (মডেল)',
   'About (record)': 'বিষয় (রেকর্ড)',
   Active: 'সক্রিয়',
@@ -24,6 +26,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Document request: {{name}}': 'নথির অনুরোধ: {{name}}',
   'Document tag': 'নথির ট্যাগ',
   Documents: 'নথি',
+  'Documents by folder': 'ফোল্ডার অনুযায়ী নথি',
   'Documents manager': 'নথি ব্যবস্থাপক',
   'Documents user': 'নথি ব্যবহারকারী',
   Downloads: 'ডাউনলোড',
@@ -34,6 +37,7 @@ export const bn: Readonly<Record<string, string>> = {
   Email: 'ইমেইল',
   'Expires at': 'মেয়াদ শেষ হওয়ার সময়',
   File: 'ফাইল',
+  'Files received': 'প্রাপ্ত ফাইল',
   Folder: 'ফোল্ডার',
   Folders: 'ফোল্ডার',
   'Folders, versions, share links and requests for files — one search with every record’s files':
@@ -48,6 +52,7 @@ export const bn: Readonly<Record<string, string>> = {
   Message: 'বার্তা',
   Mine: 'আমার',
   Name: 'নাম',
+  Overview: 'সারসংক্ষেপ',
   Owner: 'মালিক',
   'Page {{page}} of {{pages}}': 'পৃষ্ঠা {{page}} / {{pages}}',
   'Parent Path': 'মূল পথ',
@@ -58,6 +63,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Requested by': 'অনুরোধকারী',
   'Requested file received': 'অনুরোধ করা ফাইল পাওয়া গেছে',
   Requests: 'অনুরোধ',
+  'Requests by state': 'অবস্থা অনুযায়ী অনুরোধ',
+  'Requests waiting for a file': 'ফাইলের অপেক্ষায় অনুরোধ',
   Revoked: 'প্রত্যাহারকৃত',
   'Send the request': 'অনুরোধ পাঠান',
   Sent: 'পাঠানো',

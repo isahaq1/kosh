@@ -252,6 +252,7 @@ export const TradeCharge = defineModel('trade.lc.charge', {
     state: f.state({
       states: { draft: 'Draft', posted: 'Posted' },
       initial: 'draft',
+      help: 'A draft charge can be changed; posting expenses it against the bank in the accounts.',
       transitions: {
         post: {
           from: ['draft'],

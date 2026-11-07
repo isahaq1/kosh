@@ -3,6 +3,8 @@ export const bn: Readonly<Record<string, string>> = {
   'A discount is between 0 and 100 %.': 'ছাড় ০ থেকে ১০০ %-এর মধ্যে হতে হবে।',
   'A new quotation is valid until its date plus these days; 0 leaves it open.':
     'নতুন উদ্ধৃতি তার তারিখ থেকে এত দিন পর্যন্ত বৈধ থাকে; ০ দিলে কোনো সীমা থাকে না।',
+  'A quotation until it is confirmed as a sales order, which can then be locked or cancelled.':
+    'বিক্রয় আদেশ হিসেবে নিশ্চিত না হওয়া পর্যন্ত এটি উদ্ধৃতি; এরপর তা লক বা বাতিল করা যায়।',
   'Add at least one line before confirming the order.':
     'অর্ডার নিশ্চিত করার আগে অন্তত একটি লাইন যোগ করুন।',
   'Average order': 'গড় অর্ডার',
@@ -77,6 +79,13 @@ export const bn: Readonly<Record<string, string>> = {
   'Tax (before 0.2.0)': 'কর (0.2.0-এর আগে)',
   Taxes: 'কর',
   'Terms and conditions': 'শর্তাবলি',
+  'The line’s amount before taxes: the quantity times the unit price, less the discount and any tax included in the price.':
+    'লাইনের করবিহীন অঙ্ক: পরিমাণ গুণ একক মূল্য, ছাড় ও মূল্যে অন্তর্ভুক্ত কর বাদ দিয়ে।',
+  'The margin as a percentage of the untaxed amount.': 'করবিহীন অঙ্কের শতাংশ হিসেবে মার্জিন।',
+  'The sum of the lines’ amounts before taxes.': 'লাইনগুলোর করবিহীন অঙ্কের যোগফল।',
+  'The sum of the taxes on the lines.': 'লাইনগুলোর করের যোগফল।',
+  'The taxes on this line, computed from its amount and its taxes.':
+    'এই লাইনের কর, লাইনের অঙ্ক ও তার কর থেকে হিসাব করা।',
   'Top customers': 'শীর্ষ গ্রাহক',
   Total: 'মোট',
   Totals: 'মোট',
@@ -87,4 +96,10 @@ export const bn: Readonly<Record<string, string>> = {
   'Updated At': 'হালনাগাদের সময়',
   'Updated By': 'হালনাগাদ করেছেন',
   'Valid until': 'বৈধ থাকবে',
+  'What the customer pays: the untaxed amount plus the taxes.':
+    'গ্রাহক যা পরিশোধ করেন: করবিহীন অঙ্কের সাথে কর যোগ করে।',
+  'What the line earns: its untaxed amount less its product’s cost for the quantity.':
+    'লাইনটি যা আয় করে: করবিহীন অঙ্ক থেকে পরিমাণ অনুযায়ী পণ্যের খরচ বাদ দিয়ে।',
+  'What the order earns: its lines’ untaxed amounts less their products’ cost.':
+    'অর্ডারটি যা আয় করে: লাইনগুলোর করবিহীন অঙ্ক থেকে তাদের পণ্যের খরচ বাদ দিয়ে।',
 };

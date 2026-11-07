@@ -70,7 +70,11 @@ export const PosPaymentMethod = defineModel('pos.payment.method', {
     name: f.char({ required: true }),
     kind: f.selection(
       { cash: 'Cash', card: 'Card', mobile: 'Mobile money', transfer: 'Bank transfer' },
-      { required: true, default: 'cash' },
+      {
+        required: true,
+        default: 'cash',
+        help: 'The kind of payment; only cash payments count toward the cash expected in the drawer.',
+      },
     ),
     journal: f.many2one('account.journal', { ondelete: 'restrict' }),
     sequence: f.integer({ required: true, default: 10 }),
@@ -103,6 +107,7 @@ export const PosSession = defineModel('pos.session', {
       scale: 2,
       store: true,
       label: 'Cash expected',
+      help: 'The opening cash plus the cash taken on paid sales, less the change given back.',
       ...compute(
         'pos.session',
         'expectedCash',
@@ -130,6 +135,7 @@ export const PosSession = defineModel('pos.session', {
       scale: 2,
       store: true,
       label: 'Difference',
+      help: 'The cash counted at closing less the cash expected; negative when cash is missing.',
       ...compute(
         'pos.session',
         'closingDifference',
@@ -157,6 +163,7 @@ export const PosSession = defineModel('pos.session', {
       scale: 2,
       store: true,
       label: 'Sold',
+      help: 'The total of the session’s paid sales.',
       ...compute('pos.session', 'total', ['orders.state', 'orders.total'], (sessions) => {
         for (const s of sessions)
           s.total = [...s.orders]
@@ -165,6 +172,7 @@ export const PosSession = defineModel('pos.session', {
       }),
     }),
     state: f.state({
+      help: 'Open while the cashier sells; closed once the cash in the drawer is counted.',
       states: { open: 'Open', closed: 'Closed' },
       initial: 'open',
       transitions: {
@@ -307,6 +315,7 @@ export const PosOrder = defineModel('pos.order', {
       scale: 2,
       store: true,
       label: 'Untaxed',
+      help: 'The sum of the lines’ amounts before taxes.',
       ...compute('pos.order', 'amountUntaxed', ['lines.subtotal'], (orders) => {
         for (const o of orders)
           o.amountUntaxed = [...o.lines].reduce((sum, l) => sum.plus(l.subtotal ?? ZERO), ZERO);
@@ -316,6 +325,7 @@ export const PosOrder = defineModel('pos.order', {
       scale: 2,
       store: true,
       label: 'Taxes',
+      help: 'The sum of the taxes on the lines.',
       ...compute('pos.order', 'amountTax', ['lines.taxAmount'], (orders) => {
         for (const o of orders)
           o.amountTax = [...o.lines].reduce((sum, l) => sum.plus(l.taxAmount ?? ZERO), ZERO);
@@ -325,6 +335,7 @@ export const PosOrder = defineModel('pos.order', {
       scale: 2,
       store: true,
       label: 'Total',
+      help: 'What the customer pays: the untaxed amount plus the taxes.',
       ...compute('pos.order', 'total', ['amountUntaxed', 'amountTax'], (orders) => {
         for (const o of orders) o.total = (o.amountUntaxed ?? ZERO).plus(o.amountTax ?? ZERO);
       }),
@@ -333,6 +344,7 @@ export const PosOrder = defineModel('pos.order', {
       scale: 2,
       store: true,
       label: 'Paid',
+      help: 'The sum of the payments received for the sale.',
       ...compute('pos.order', 'amountPaid', ['payments.amount'], (orders) => {
         for (const o of orders)
           o.amountPaid = [...o.payments].reduce((sum, p) => sum.plus(p.amount), ZERO);
@@ -343,6 +355,7 @@ export const PosOrder = defineModel('pos.order', {
       scale: 2,
       store: true,
       label: 'Change',
+      help: 'What the cashier gives back when the payments exceed the total.',
       ...compute('pos.order', 'change', ['amountPaid', 'total'], (orders) => {
         for (const o of orders) {
           const over = (o.amountPaid ?? ZERO).minus(o.total ?? ZERO);
@@ -351,6 +364,7 @@ export const PosOrder = defineModel('pos.order', {
       }),
     }),
     state: f.state({
+      help: 'Being paid while the sale is at the register; paid once the payments cover the total, or voided when it is abandoned.',
       states: { draft: 'Being paid', paid: 'Paid', void: 'Voided' },
       initial: 'draft',
       transitions: {
@@ -430,8 +444,20 @@ export const PosOrderLine = defineModel('pos.order.line', {
     priceUnit: f.decimal({ scale: 2, required: true, default: '0', label: 'Unit price' }),
     discount: f.decimal({ scale: 2, required: true, default: '0', label: 'Discount %' }),
     taxes: f.many2many('account.tax', { relation: 'pos_line_tax_rel' }),
-    subtotal: f.decimal({ scale: 2, store: true, label: 'Untaxed', ...lineAmounts }),
-    taxAmount: f.decimal({ scale: 2, store: true, label: 'Tax', ...lineAmounts }),
+    subtotal: f.decimal({
+      scale: 2,
+      store: true,
+      label: 'Untaxed',
+      help: 'The line’s amount before taxes, after the discount.',
+      ...lineAmounts,
+    }),
+    taxAmount: f.decimal({
+      scale: 2,
+      store: true,
+      label: 'Tax',
+      help: 'The taxes on this line, after the discount.',
+      ...lineAmounts,
+    }),
   },
 });
 
@@ -450,6 +476,7 @@ export const PosOrderPayment = defineModel('pos.order.payment', {
       { cash: 'Cash', card: 'Card', mobile: 'Mobile money', transfer: 'Bank transfer' },
       {
         store: true,
+        help: 'The kind of the payment’s method, copied from the method.',
         ...compute('pos.order.payment', 'kind', ['method.kind'], (payments) => {
           for (const p of payments) p.kind = p.method.kind;
         }),

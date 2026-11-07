@@ -66,6 +66,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Message after sending': 'পাঠানোর পরের বার্তা',
   Name: 'নাম',
   Number: 'সংখ্যা',
+  'Only published pages are shown on the public site.': 'পাবলিক ওয়েবসাইটে শুধু প্রকাশিত পাতাগুলো দেখানো হয়।',
   Overview: 'সারসংক্ষেপ',
   Page: 'পাতা',
   Pages: 'পাতা',
@@ -89,6 +90,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Sites manager': 'সাইট ব্যবস্থাপক',
   Spam: 'স্প্যাম',
   'Spam caught this month': 'এ মাসে ধরা পড়া স্প্যাম',
+  'Spam when a bot filled in the hidden field; received submissions create their record.':
+    'কোনো বট লুকানো ঘরটি পূরণ করলে এটি স্প্যাম; গৃহীত জমাগুলো থেকে তাদের রেকর্ড তৈরি হয়।',
   State: 'অবস্থা',
   Submission: 'জমা',
   Submissions: 'জমা',
@@ -98,6 +101,10 @@ export const bn: Readonly<Record<string, string>> = {
   Summary: 'সারাংশ',
   Text: 'লেখা',
   'The form already has an input with this name.': 'ফর্মে এই নামের একটি ইনপুট আগে থেকেই আছে।',
+  'The kind of value the visitor types in this input.': 'দর্শনার্থী এই ঘরে কোন ধরনের মান লিখবেন।',
+  'The language the page is written in.': 'পাতাটি যে ভাষায় লেখা।',
+  'The language the site shows when a visitor has not chosen one.':
+    'দর্শনার্থী কোনো ভাষা বেছে না নিলে ওয়েবসাইট যে ভাষায় দেখায়।',
   'The site already has a page at this path in this language.':
     'সাইটে এই ভাষায় এই পাথে একটি পাতা আগে থেকেই আছে।',
   Title: 'শিরোনাম',
@@ -111,6 +118,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Website form submitted': 'ওয়েবসাইট ফর্ম জমা হয়েছে',
   'Website pages from blocks, forms that create records, a public API':
     'ব্লক দিয়ে তৈরি ওয়েবসাইট পাতা, রেকর্ড তৈরি করা ফর্ম, একটি পাবলিক API',
+  'What the block shows: a hero banner, text, an image, a call to action or a form.':
+    'ব্লকটি কী দেখায়: একটি হিরো ব্যানার, লেখা, ছবি, কাজের আহ্বান বা ফর্ম।',
   'Where the public site is served, e.g. www.example.com':
     'যেখানে পাবলিক সাইটটি চলে, যেমন www.example.com',
 };

@@ -91,14 +91,33 @@ export const SaleOrder = defineModel('sale.order', {
     clientReference: f.char({ label: 'Customer reference' }),
     note: f.text({ label: 'Terms and conditions' }),
     lines: f.one2many('sale.order.line', 'order'),
-    amountUntaxed: f.monetary({ currency: 'currency', store: true, label: 'Untaxed', ...amounts }),
-    amountTax: f.monetary({ currency: 'currency', store: true, label: 'Taxes', ...amounts }),
-    amountTotal: f.monetary({ currency: 'currency', store: true, label: 'Total', ...amounts }),
+    amountUntaxed: f.monetary({
+      currency: 'currency',
+      store: true,
+      label: 'Untaxed',
+      help: 'The sum of the lines’ amounts before taxes.',
+      ...amounts,
+    }),
+    amountTax: f.monetary({
+      currency: 'currency',
+      store: true,
+      label: 'Taxes',
+      help: 'The sum of the taxes on the lines.',
+      ...amounts,
+    }),
+    amountTotal: f.monetary({
+      currency: 'currency',
+      store: true,
+      label: 'Total',
+      help: 'What the customer pays: the untaxed amount plus the taxes.',
+      ...amounts,
+    }),
     /** RFC 0022 step 2: what the order earns — the lines' untaxed amounts less their products' cost. */
     margin: f.monetary({
       currency: 'currency',
       store: true,
       label: 'Margin',
+      help: 'What the order earns: its lines’ untaxed amounts less their products’ cost.',
       ...compute('sale.order', 'margin', ['lines.margin', 'currency'], (orders) => {
         for (const o of orders)
           o.margin = o.currency === null ? null : o.lines.sum('margin', o.currency);
@@ -108,6 +127,7 @@ export const SaleOrder = defineModel('sale.order', {
       scale: 1,
       store: true,
       label: 'Margin (%)',
+      help: 'The margin as a percentage of the untaxed amount.',
       ...compute('sale.order', 'marginPercent', ['margin', 'amountUntaxed'], (orders) => {
         for (const o of orders) {
           const untaxed = amountOf(o.amountUntaxed);
@@ -120,6 +140,7 @@ export const SaleOrder = defineModel('sale.order', {
       }),
     }),
     state: f.state({
+      help: 'A quotation until it is confirmed as a sales order, which can then be locked or cancelled.',
       states: {
         draft: 'Quotation',
         sent: 'Quotation sent',
@@ -231,6 +252,7 @@ export const SaleOrderLine = defineModel('sale.order.line', {
     subtotal: f.monetary({
       currency: 'currency',
       store: true,
+      help: 'The line’s amount before taxes: the quantity times the unit price, less the discount and any tax included in the price.',
       ...compute(
         'sale.order.line',
         'subtotal',
@@ -256,6 +278,7 @@ export const SaleOrderLine = defineModel('sale.order.line', {
       currency: 'currency',
       store: true,
       label: 'Margin',
+      help: 'What the line earns: its untaxed amount less its product’s cost for the quantity.',
       ...compute(
         'sale.order.line',
         'margin',
@@ -275,6 +298,7 @@ export const SaleOrderLine = defineModel('sale.order.line', {
       currency: 'currency',
       store: true,
       label: 'Tax',
+      help: 'The taxes on this line, computed from its amount and its taxes.',
       ...compute(
         'sale.order.line',
         'taxAmount',

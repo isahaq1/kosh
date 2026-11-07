@@ -7,6 +7,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Average sale': 'গড় বিক্রয়',
   'Bank transfer': 'ব্যাংক ট্রান্সফার',
   'Being paid': 'পরিশোধ চলছে',
+  'Being paid while the sale is at the register; paid once the payments cover the total, or voided when it is abandoned.':
+    'বিক্রয়টি রেজিস্টারে থাকাকালীন পরিশোধ চলছে; পেমেন্টে মোট অঙ্ক পূরণ হলে পরিশোধিত, আর বাদ দেওয়া হলে বাতিলকৃত।',
   'Best sellers': 'সর্বাধিক বিক্রিত',
   'By payment method': 'পেমেন্ট পদ্ধতি অনুযায়ী',
   Card: 'কার্ড',
@@ -54,6 +56,8 @@ export const bn: Readonly<Record<string, string>> = {
   Note: 'নোট',
   Open: 'খোলা',
   'Open sessions': 'খোলা সেশন',
+  'Open while the cashier sells; closed once the cash in the drawer is counted.':
+    'ক্যাশিয়ার বিক্রি করার সময় খোলা থাকে; ড্রয়ারের নগদ গোনা হলে বন্ধ হয়।',
   Opened: 'খোলার সময়',
   'Opening cash': 'শুরুর নগদ',
   Order: 'অর্ডার',
@@ -105,7 +109,21 @@ export const bn: Readonly<Record<string, string>> = {
   Status: 'অবস্থা',
   Tax: 'কর',
   Taxes: 'কর',
+  'The cash counted at closing less the cash expected; negative when cash is missing.':
+    'বন্ধের সময় গণনাকৃত নগদ থেকে প্রত্যাশিত নগদ বাদ দিয়ে; নগদ কম থাকলে ঋণাত্মক।',
+  'The kind of payment; only cash payments count toward the cash expected in the drawer.':
+    'পেমেন্টের ধরন; কেবল নগদ পেমেন্টই ড্রয়ারের প্রত্যাশিত নগদে গণ্য হয়।',
+  'The kind of the payment’s method, copied from the method.':
+    'পেমেন্ট পদ্ধতির ধরন, পদ্ধতি থেকে নেওয়া।',
+  'The line’s amount before taxes, after the discount.': 'ছাড়ের পরে লাইনের করবিহীন অঙ্ক।',
+  'The opening cash plus the cash taken on paid sales, less the change given back.':
+    'শুরুর নগদের সাথে পরিশোধিত বিক্রয়ে নেওয়া নগদ যোগ করে, ফেরত দেওয়া খুচরা বাদ দিয়ে।',
   'The payment method belongs to another shop.': 'পেমেন্ট পদ্ধতিটি অন্য দোকানের।',
+  'The sum of the lines’ amounts before taxes.': 'লাইনগুলোর করবিহীন অঙ্কের যোগফল।',
+  'The sum of the payments received for the sale.': 'বিক্রয়ের জন্য পাওয়া পেমেন্টগুলোর যোগফল।',
+  'The sum of the taxes on the lines.': 'লাইনগুলোর করের যোগফল।',
+  'The taxes on this line, after the discount.': 'ছাড়ের পরে এই লাইনের কর।',
+  'The total of the session’s paid sales.': 'সেশনের পরিশোধিত বিক্রয়গুলোর মোট।',
   'This cashier already has an open session; close it first.':
     'এই ক্যাশিয়ারের একটি সেশন ইতিমধ্যে খোলা আছে; আগে সেটি বন্ধ করুন।',
   'This sale was already received from the device.': 'এই বিক্রয়টি ডিভাইস থেকে আগেই গ্রহণ করা হয়েছে।',
@@ -118,5 +136,9 @@ export const bn: Readonly<Record<string, string>> = {
   'Updated By': 'হালনাগাদ করেছেন',
   Void: 'বাতিল করুন',
   Voided: 'বাতিলকৃত',
+  'What the cashier gives back when the payments exceed the total.':
+    'পেমেন্ট মোট অঙ্কের বেশি হলে ক্যাশিয়ার যা ফেরত দেন।',
+  'What the customer pays: the untaxed amount plus the taxes.':
+    'গ্রাহক যা পরিশোধ করেন: করবিহীন অঙ্কের সাথে কর যোগ করে।',
   Why: 'কারণ',
 };

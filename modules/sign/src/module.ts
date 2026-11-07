@@ -48,7 +48,11 @@ export const SignTemplateField = defineModel('sign.template.field', {
     template: f.many2one('sign.template', { required: true, ondelete: 'cascade' }),
     /** Whose it is: "Customer", "Company". */
     role: f.char({ required: true }),
-    kind: f.selection(FIELD_KINDS, { required: true, default: 'signature' }),
+    kind: f.selection(FIELD_KINDS, {
+      required: true,
+      default: 'signature',
+      help: 'What the signer fills in here: a signature, initials, the date signed, a text or a checkbox.',
+    }),
     label: f.char(),
     page: f.integer({ required: true, default: 1 }),
     /** From the page's top-left corner, as fractions of its width and height (0 to 1). */
@@ -90,6 +94,7 @@ export const SignRequest = defineModel('sign.request', {
     completedAt: f.datetime({ label: 'Completed at' }),
     refusal: f.text({ label: 'Why it was refused' }),
     state: f.state({
+      help: 'A request is out for signature once sent, and signed when the last signer is done, which seals the PDF.',
       states: {
         draft: 'Draft',
         sent: 'Out for signature',
@@ -134,7 +139,11 @@ export const SignSigner = defineModel('sign.signer', {
     sequence: f.integer({ required: true, default: 10 }),
     state: f.selection(
       { waiting: 'Waiting', sent: 'Asked', signed: 'Signed', refused: 'Refused' },
-      { required: true, default: 'waiting' },
+      {
+        required: true,
+        default: 'waiting',
+        help: 'Waiting for the signers before them, asked once their link is sent, then signed or refused.',
+      },
     ),
     tokenHash: f.char({ index: true, label: 'Link (hash)' }),
     codeHash: f.char({ label: 'Code (hash)' }),

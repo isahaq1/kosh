@@ -1,7 +1,11 @@
 /** Bangla for the module's labels, keyed by their English text (RFC 0023 §3.1; `pnpm i18n:extract`). */
 export const bn: Readonly<Record<string, string>> = {
   'A contract ends after it starts.': 'চুক্তি শুরুর পরে শেষ হয়।',
+  'A contract runs once started, until it is ended or cancelled.':
+    'শুরু করার পর চুক্তিটি চলমান থাকে, যতক্ষণ না তা শেষ বা বাতিল করা হয়।',
   'A leave ends on or after it starts.': 'ছুটি শুরুর দিন বা তার পরে শেষ হয়।',
+  'A request waits once submitted, and someone other than the requester approves or refuses it.':
+    'জমা দেওয়ার পর অনুরোধটি অপেক্ষায় থাকে, এবং অনুরোধকারী ছাড়া অন্য কেউ তা অনুমোদন বা নামঞ্জুর করেন।',
   Active: 'সক্রিয়',
   Approve: 'অনুমোদন করুন',
   Approved: 'অনুমোদিত',
@@ -75,6 +79,8 @@ export const bn: Readonly<Record<string, string>> = {
   State: 'অবস্থা',
   Submit: 'জমা দিন',
   Team: 'দল',
+  'The kind of employment the contract is for: permanent, a fixed term, probation or an internship.':
+    'চুক্তিটি কোন ধরনের চাকরির জন্য: স্থায়ী, নির্দিষ্ট মেয়াদি, শিক্ষানবিশ বা ইন্টার্নশিপ।',
   'The working days do not match the dates (or none falls on a working day).':
     'কর্মদিবস তারিখের সাথে মেলে না (অথবা কোনো দিনই কর্মদিবস নয়)।',
   'This person already has leave on some of these days.':

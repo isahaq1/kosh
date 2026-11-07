@@ -62,11 +62,16 @@ export const CalendarEvent = defineModel('calendar.event', {
     videoUrl: f.char({ label: 'Video call link' }),
     privacy: f.selection(
       { public: 'Public', private: 'Private (busy for others)' },
-      { required: true, default: 'public' },
+      {
+        required: true,
+        default: 'public',
+        help: 'Public events are seen by everyone in Agenda; private ones show only as busy to people not invited.',
+      },
     ),
     state: f.state({
       states: { confirmed: 'Confirmed', cancelled: 'Cancelled' },
       initial: 'confirmed',
+      help: 'A confirmed event takes place and holds its room; a cancelled one frees the room and can be restored.',
       transitions: {
         cancel: emitting('calendar.event.cancelled', { from: ['confirmed'], to: 'cancelled' }),
         restore: { from: ['cancelled'], to: 'confirmed' },
@@ -160,7 +165,12 @@ export const CalendarAttendee = defineModel('calendar.attendee', {
         tentative: 'Maybe',
         declined: 'Declined',
       },
-      { required: true, default: 'needs_action', label: 'Answer' },
+      {
+        required: true,
+        default: 'needs_action',
+        label: 'Answer',
+        help: 'Whether this person will come: not answered yet, accepted, maybe or declined.',
+      },
     ),
   },
   sqlConstraints: {

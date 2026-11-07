@@ -1,5 +1,9 @@
 /** Bangla for the module's labels, keyed by their English text (RFC 0023 §3.1; `pnpm i18n:extract`). */
 export const bn: Readonly<Record<string, string>> = {
+  'A confirmed transfer is ready once everything is reserved, otherwise it is waiting.':
+    'নিশ্চিত স্থানান্তরের সবকিছু সংরক্ষিত হলে এটি প্রস্তুত, নইলে অপেক্ষমাণ।',
+  'A confirmed transfer reserves its stock; validated, the goods have moved.':
+    'নিশ্চিত স্থানান্তর তার মজুদ সংরক্ষণ করে; যাচাই করা হলে মাল সরানো হয়ে গেছে।',
   'A counted quantity cannot be negative.': 'গণনাকৃত পরিমাণ ঋণাত্মক হতে পারে না।',
   'A done quantity cannot be negative.': 'সম্পন্ন পরিমাণ ঋণাত্মক হতে পারে না।',
   'A line moves a positive quantity.': 'প্রতিটি লাইনে ধনাত্মক পরিমাণ সরানো হয়।',
@@ -86,6 +90,14 @@ export const bn: Readonly<Record<string, string>> = {
     'লট বা সিরিয়াল নম্বর দিন: বিদ্যমান একটি, অথবা নতুন একটির নাম।',
   History: 'ইতিহাস',
   'How it is ordered': 'যেভাবে অর্ডার করা হয়',
+  'How many steps incoming goods go through before they reach stock.':
+    'আসা মাল মজুদে পৌঁছানোর আগে কয়টি ধাপ পার হয়।',
+  'How many steps outgoing goods go through: picked, packed and delivered.':
+    'যাওয়া মাল কয়টি ধাপ পার হয়: বাছাই, প্যাকিং ও সরবরাহ।',
+  'How much of this line is already set aside from stock.':
+    'এই লাইনের কতটা ইতিমধ্যে মজুদ থেকে আলাদা করে রাখা হয়েছে।',
+  'How much of what leaves stock is already reserved; receipts are always ready.':
+    'মজুদ থেকে যা বের হবে তার কতটা ইতিমধ্যে সংরক্ষিত; প্রাপ্তি সবসময় প্রস্তুত।',
   ID: 'আইডি',
   'In one step': 'এক ধাপে',
   'In stock': 'মজুদে আছে',
@@ -146,9 +158,13 @@ export const bn: Readonly<Record<string, string>> = {
     'বন্ধ থাকলে: মজুদ শুধু "প্রাপ্যতা যাচাই করুন" দিয়ে সংরক্ষিত হয়।',
   'On hand': 'হাতে আছে',
   'On hand by location': 'অবস্থান অনুযায়ী হাতে আছে',
+  'Only internal locations hold stock; the others are where goods come from or go to.':
+    'শুধু অভ্যন্তরীণ অবস্থানে মজুদ থাকে; অন্যগুলো হলো মাল যেখান থেকে আসে বা যেখানে যায়।',
   Operations: 'কার্যক্রম',
   'Order automatically': 'স্বয়ংক্রিয়ভাবে অর্ডার করুন',
   'Order in steps of': 'অর্ডারের গুণিতক',
+  'Order when the forecast falls below the minimum, or for each delivery what it needs.':
+    'পূর্বাভাস সর্বনিম্নের নিচে নামলে অর্ডার দেয়, অথবা প্রতিটি সরবরাহের জন্য যা দরকার তা।',
   'Ordered automatically': 'স্বয়ংক্রিয়ভাবে অর্ডারকৃত',
   'Ordered on': 'অর্ডারের তারিখ',
   Orders: 'অর্ডার',
@@ -210,6 +226,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Source document': 'উৎস নথি',
   'Spilt or broken in handling': 'নাড়াচাড়ায় পড়ে গেছে বা ভেঙেছে',
   'Start counting': 'গণনা শুরু করুন',
+  'Started, the count lists what is expected; applied, the differences are adjusted in stock.':
+    'শুরু হলে গণনায় প্রত্যাশিত পরিমাণ তালিকাভুক্ত হয়; প্রয়োগ করা হলে পার্থক্যগুলো মজুদে সমন্বয় করা হয়।',
   State: 'অবস্থা',
   Status: 'অবস্থা',
   Step: 'ধাপ',
@@ -224,10 +242,21 @@ export const bn: Readonly<Record<string, string>> = {
   Stockroom: 'স্টকরুম',
   'Stockroom manager': 'স্টকরুম ব্যবস্থাপক',
   'Stockroom user': 'স্টকরুম ব্যবহারকারী',
+  'The line’s quantity converted to the product’s unit, as stock is counted.':
+    'লাইনের পরিমাণ পণ্যের এককে রূপান্তরিত, যে এককে মজুদ গোনা হয়।',
   'The line’s unit must measure the same thing as the product’s unit (a dozen of units, grams of kg).':
     'লাইনের একক অবশ্যই পণ্যের এককের মতো একই জিনিস মাপবে (যেমন পিসের জন্য ডজন, কেজির জন্য গ্রাম)।',
   'The minimum is zero or more, the maximum at least the minimum, the step and the lead time positive.':
     'সর্বনিম্ন শূন্য বা তার বেশি, সর্বোচ্চ অন্তত সর্বনিম্নের সমান, আর গুণিতক ও সরবরাহ সময় ধনাত্মক হতে হবে।',
+  'The part of the quantity on hand held for transfers waiting to go out.':
+    'হাতে থাকা পরিমাণের যে অংশ বের হওয়ার অপেক্ষায় থাকা স্থানান্তরের জন্য রাখা আছে।',
+  'The quantity actually moved, or the whole line when none is entered, in the product’s unit.':
+    'প্রকৃতপক্ষে সরানো পরিমাণ, কিছু না দিলে পুরো লাইন, পণ্যের এককে।',
+  'The quantity of this lot or serial number held in every location.':
+    'সব অবস্থানে এই লট বা সিরিয়াল নম্বরের মোট পরিমাণ।',
+  'The quantity on hand less what is reserved.': 'হাতে থাকা পরিমাণ থেকে সংরক্ষিত পরিমাণ বাদে।',
+  'The step of the warehouse’s receipts or deliveries this location is used for.':
+    'গুদামের প্রাপ্তি বা সরবরাহের যে ধাপে এই অবস্থান ব্যবহৃত হয়।',
   'This lot or serial number belongs to another product.': 'এই লট বা সিরিয়াল নম্বর অন্য একটি পণ্যের।',
   'This product already has a lot or serial number with this name.':
     'এই পণ্যের এই নামে ইতিমধ্যে একটি লট বা সিরিয়াল নম্বর আছে।',
@@ -251,6 +280,8 @@ export const bn: Readonly<Record<string, string>> = {
   Usage: 'ব্যবহার',
   'User (transfers, stock)': 'ব্যবহারকারী (স্থানান্তর, মজুদ)',
   Validate: 'চূড়ান্ত করুন',
+  'Validated, the goods leave their location as a loss.':
+    'যাচাই করা হলে মাল ক্ষতি হিসেবে তার অবস্থান থেকে বের হয়ে যায়।',
   Vendor: 'সরবরাহকারী',
   Vendors: 'সরবরাহকারী',
   Waiting: 'অপেক্ষমাণ',
@@ -260,7 +291,14 @@ export const bn: Readonly<Record<string, string>> = {
     'গুদাম, একটি স্পষ্ট অবস্থাসহ স্থানান্তর, কীসের জন্য তা জানানো সংরক্ষণ',
   'What arrives in the location — this product, or any product of this category — is put away in the location inside it.':
     'এই অবস্থানে যা আসে — এই পণ্য, অথবা এই শ্রেণির যেকোনো পণ্য — তা এর ভেতরের অবস্থানে রাখা হয়।',
+  'What the transfer does: brings goods in, sends them out, moves them inside or adjusts stock.':
+    'স্থানান্তরটি কী করে: মাল আনে, পাঠায়, ভেতরে সরায় বা মজুদ সমন্বয় করে।',
+  'What was counted less what was expected; empty until the line is counted.':
+    'গোনা পরিমাণ থেকে প্রত্যাশিত পরিমাণ বাদে; লাইনটি গোনা না হওয়া পর্যন্ত খালি।',
   'When it arrives in': 'যখন এখানে পৌঁছায়',
   'When transfers hold the stock they take.': 'স্থানান্তর কখন তার নেওয়া মজুদ সংরক্ষণ করে।',
+  'Whether more is bought, made, transferred from another warehouse or shipped by the vendor straight to the customer.':
+    'আরও কেনা হবে, তৈরি হবে, অন্য গুদাম থেকে আনা হবে, নাকি সরবরাহকারী সরাসরি গ্রাহককে পাঠাবে।',
   Why: 'কেন',
+  'Why the goods are thrown away.': 'মাল কেন ফেলে দেওয়া হচ্ছে।',
 };

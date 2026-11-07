@@ -4,6 +4,8 @@ export const bn: Readonly<Record<string, string>> = {
   'A score is from 1 to 5.': 'স্কোর ১ থেকে ৫ পর্যন্ত।',
   Active: 'সক্রিয়',
   Agency: 'এজেন্সি',
+  'An open opening takes applicants; it closes by hand or once its headcount is hired.':
+    'খোলা শূন্যপদে আবেদন নেওয়া হয়; হাতে বন্ধ করলে বা নির্ধারিত সংখ্যক লোক নিয়োগ হলে এটি বন্ধ হয়।',
   'An opening hires at least one person.': 'একটি শূন্যপদে অন্তত একজন নিয়োগ হয়।',
   Applicant: 'আবেদনকারী',
   Applicants: 'আবেদনকারীরা',
@@ -34,6 +36,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Folded on the board': 'বোর্ডে গুটানো',
   Headcount: 'জনসংখ্যা',
   Hired: 'নিয়োগপ্রাপ্ত',
+  'Hired once the candidate became an employee, refused when turned down, in progress otherwise.':
+    'প্রার্থী কর্মী হলে নিয়োগপ্রাপ্ত, বাদ দিলে নামঞ্জুর, অন্যথায় চলমান।',
   Hiring: 'নিয়োগ',
   'Hiring manager': 'নিয়োগ ব্যবস্থাপক',
   'Hiring manager (everything, salaries, hiring)': 'নিয়োগ ব্যবস্থাপক (সবকিছু, বেতন, নিয়োগ)',
@@ -80,11 +84,16 @@ export const bn: Readonly<Record<string, string>> = {
   Status: 'অবস্থা',
   'Strong no': 'একেবারেই না',
   'Strong yes': 'অবশ্যই হ্যাঁ',
+  'The average score of the interviewers’ scorecards, out of 5.':
+    'সাক্ষাৎকারগ্রহীতাদের স্কোরকার্ডের গড় স্কোর, ৫-এর মধ্যে।',
   'This person already applied to this opening.': 'এই ব্যক্তি ইতিমধ্যে এই শূন্যপদে আবেদন করেছেন।',
   'To hire': 'নিয়োগ বাকি',
   'Updated At': 'হালনাগাদের সময়',
   'Updated By': 'হালনাগাদ করেছেন',
   Website: 'ওয়েবসাইট',
   'Where applicants come from': 'আবেদনকারীরা কোথা থেকে আসেন',
+  'Where the candidate heard of the opening.': 'প্রার্থী শূন্যপদটির কথা কোথা থেকে জেনেছেন।',
+  'Whether the interviewer recommends hiring the candidate.':
+    'সাক্ষাৎকারগ্রহীতা প্রার্থীকে নিয়োগের সুপারিশ করেন কি না।',
   Yes: 'হ্যাঁ',
 };

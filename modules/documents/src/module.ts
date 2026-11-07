@@ -199,6 +199,7 @@ export const DocumentsRequest = defineModel('documents.request', {
     state: f.state({
       states: { draft: 'Draft', sent: 'Sent', received: 'Received', cancel: 'Cancelled' },
       initial: 'draft',
+      help: 'A sent request emails the person an upload link; it is received once they upload the file.',
       transitions: {
         /** Emails the person a link that uploads the file into the folder. */
         send: {

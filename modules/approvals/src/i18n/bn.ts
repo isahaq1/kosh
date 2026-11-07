@@ -7,12 +7,14 @@ export const bn: Readonly<Record<string, string>> = {
     'মডেলের একটি রেকর্ড যে যে স্তরের শর্ত পূরণ করে, প্রতিটির জন্য একটি করে অনুমোদন পায়; কম ক্রমের স্তর আগে সিদ্ধান্ত হয়, একই ক্রমের স্তরগুলো একসাথে।',
   Active: 'সক্রিয়',
   Amount: 'অঙ্ক',
+  'Amount waiting': 'অপেক্ষমাণ অঙ্ক',
   'An amount is not negative.': 'অঙ্ক ঋণাত্মক হতে পারে না।',
   'Another category has this code.': 'অন্য একটি শ্রেণির এই কোড আছে।',
   'Approval policy': 'অনুমোদন নীতি',
   Approvals: 'অনুমোদন',
   Approved: 'অনুমোদিত',
   'Approved on': 'অনুমোদনের তারিখ',
+  'Approved this month': 'এই মাসে অনুমোদিত',
   Ask: 'চাওয়া',
   'Ask Amount': 'অঙ্ক চাওয়া',
   'Ask Attachment': 'সংযুক্তি চাওয়া',
@@ -68,6 +70,7 @@ export const bn: Readonly<Record<string, string>> = {
   'On approval': 'অনুমোদনের পর',
   Optional: 'ঐচ্ছিক',
   Outcome: 'ফলাফল',
+  Overview: 'সারসংক্ষেপ',
   'Page {{page}} of {{pages}}': 'পৃষ্ঠা {{page}} / {{pages}}',
   Period: 'সময়কাল',
   Policies: 'নীতি',
@@ -81,6 +84,9 @@ export const bn: Readonly<Record<string, string>> = {
   'Request category': 'অনুরোধের শ্রেণি',
   'Request line': 'অনুরোধের লাইন',
   Requests: 'অনুরোধ',
+  'Requests by category': 'শ্রেণি অনুযায়ী অনুরোধ',
+  'Requests by state': 'অবস্থা অনুযায়ী অনুরোধ',
+  'Requests waiting': 'অপেক্ষমাণ অনুরোধ',
   Required: 'আবশ্যক',
   'Required: the request is submitted only with a file attached.':
     'আবশ্যক: ফাইল সংযুক্ত থাকলেই কেবল অনুরোধ জমা দেওয়া যায়।',
@@ -96,6 +102,8 @@ export const bn: Readonly<Record<string, string>> = {
   Subtotal: 'উপমোট',
   'The policy’s levels decide (made with the first request: the requester’s manager, else an Approvals manager); edit them on the policy. The outcome runs once approved.':
     'নীতির স্তরগুলো সিদ্ধান্ত নেয় (প্রথম অনুরোধের সাথে তৈরি হয়: অনুরোধকারীর ব্যবস্থাপক, না থাকলে একজন অনুমোদন ব্যবস্থাপক); নীতিতে এগুলো সম্পাদনা করুন। অনুমোদিত হলে ফলাফল কার্যকর হয়।',
+  'The quantity times the unit price.': 'পরিমাণ গুণ একক মূল্য।',
+  'The sum of the lines’ subtotals.': 'লাইনগুলোর উপমোটের যোগফল।',
   'The transitions of the record run when it is approved, rejected, sent back or withdrawn.':
     'অনুমোদিত, প্রত্যাখ্যাত, ফেরত পাঠানো বা প্রত্যাহার হলে রেকর্ডের ধাপ পরিবর্তনগুলো কার্যকর হয়।',
   'To approve': 'অনুমোদনের জন্য',
@@ -111,6 +119,32 @@ export const bn: Readonly<Record<string, string>> = {
   'What I decided': 'আমার সিদ্ধান্তগুলো',
   'What the category asks for; required ones are marked. A file, when asked for, goes in the chatter.':
     'শ্রেণিটি যা চায়; আবশ্যকগুলো চিহ্নিত। ফাইল চাওয়া হলে তা চ্যাটারে যুক্ত করুন।',
+  'Whether a request of this category asks for a contact: not asked, optional or required.':
+    'এই শ্রেণির অনুরোধে একটি যোগাযোগ চাওয়া হয় কি না: চাওয়া হয়নি, ঐচ্ছিক বা আবশ্যক।',
+  'Whether a request of this category asks for a location: not asked, optional or required.':
+    'এই শ্রেণির অনুরোধে একটি অবস্থান চাওয়া হয় কি না: চাওয়া হয়নি, ঐচ্ছিক বা আবশ্যক।',
+  'Whether a request of this category asks for a period, from and until: not asked, optional or required.':
+    'এই শ্রেণির অনুরোধে একটি সময়কাল (শুরু ও শেষ) চাওয়া হয় কি না: চাওয়া হয়নি, ঐচ্ছিক বা আবশ্যক।',
+  'Whether a request of this category asks for a quantity: not asked, optional or required.':
+    'এই শ্রেণির অনুরোধে একটি পরিমাণ চাওয়া হয় কি না: চাওয়া হয়নি, ঐচ্ছিক বা আবশ্যক।',
+  'Whether a request of this category asks for an amount: not asked, optional or required.':
+    'এই শ্রেণির অনুরোধে একটি অঙ্ক চাওয়া হয় কি না: চাওয়া হয়নি, ঐচ্ছিক বা আবশ্যক।',
+  'Whether a request of this category asks for lines with quantities and prices: not asked, optional or required.':
+    'এই শ্রেণির অনুরোধে পরিমাণ ও মূল্যসহ লাইন চাওয়া হয় কি না: চাওয়া হয়নি, ঐচ্ছিক বা আবশ্যক।',
+  'Whether this request asks for a contact, as its category says.':
+    'এই অনুরোধে একটি যোগাযোগ চাওয়া হয় কি না, এর শ্রেণি অনুযায়ী।',
+  'Whether this request asks for a location, as its category says.':
+    'এই অনুরোধে একটি অবস্থান চাওয়া হয় কি না, এর শ্রেণি অনুযায়ী।',
+  'Whether this request asks for a period, as its category says.':
+    'এই অনুরোধে একটি সময়কাল চাওয়া হয় কি না, এর শ্রেণি অনুযায়ী।',
+  'Whether this request asks for a quantity, as its category says.':
+    'এই অনুরোধে একটি পরিমাণ চাওয়া হয় কি না, এর শ্রেণি অনুযায়ী।',
+  'Whether this request asks for an amount, as its category says.':
+    'এই অনুরোধে একটি অঙ্ক চাওয়া হয় কি না, এর শ্রেণি অনুযায়ী।',
+  'Whether this request asks for an attached file, as its category says.':
+    'এই অনুরোধে একটি সংযুক্ত ফাইল চাওয়া হয় কি না, এর শ্রেণি অনুযায়ী।',
+  'Whether this request asks for lines, as its category says.':
+    'এই অনুরোধে লাইন চাওয়া হয় কি না, এর শ্রেণি অনুযায়ী।',
   'While you are away, the person you choose decides your approvals — in their own name, for you. They never approve their own requests.':
     'আপনার অনুপস্থিতিতে আপনার বেছে নেওয়া ব্যক্তি আপনার হয়ে, নিজের নামে আপনার অনুমোদনের সিদ্ধান্ত দেবেন। তিনি কখনো নিজের অনুরোধ অনুমোদন করেন না।',
   'Who decides and what follows': 'কে সিদ্ধান্ত নেয় এবং এরপর কী হয়',

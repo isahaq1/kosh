@@ -330,7 +330,10 @@ export const GstEinvoice = defineModel('l10n_in.einvoice', {
   fields: {
     move: f.many2one('account.move', { required: true, ondelete: 'cascade' }),
     /** E-invoicing (RFC 0016 step 5, part 4): the IRP's answer, written only by the registration. */
-    einvoiceStatus: f.selection(EINVOICE_STATES, { label: 'E-invoice' }),
+    einvoiceStatus: f.selection(EINVOICE_STATES, {
+      label: 'E-invoice',
+      help: 'Whether the invoice was registered at the Invoice Registration Portal and got its IRN, failed, or was cancelled there.',
+    }),
     irn: f.char({ size: 64, label: 'IRN' }),
     irnAckNo: f.char({ size: 20, label: 'Acknowledgement number' }),
     irnAckDate: f.datetime({ label: 'Acknowledged at' }),
@@ -344,12 +347,18 @@ export const GstEinvoice = defineModel('l10n_in.einvoice', {
     ewbValidUntil: f.datetime({ label: 'E-way bill valid until' }),
     ewbStatus: f.selection(
       { generated: 'Generated', failed: 'Not generated: see the error', cancelled: 'Cancelled' },
-      { label: 'E-way bill status' },
+      {
+        label: 'E-way bill status',
+        help: 'Whether the e-way bill for moving the goods was generated, failed or was cancelled.',
+      },
     ),
     ewbError: f.text({ label: 'E-way bill error' }),
     ewbMode: f.selection(
       { road: 'Road', rail: 'Rail', air: 'Air', ship: 'Ship' },
-      { label: 'Transport mode' },
+      {
+        label: 'Transport mode',
+        help: 'How the goods travel under the e-way bill: by road, rail, air or ship.',
+      },
     ),
     ewbVehicleNo: f.char({ size: 15, label: 'Vehicle number' }),
     ewbTransporterId: f.char({ size: 15, label: 'Transporter ID' }),
@@ -413,6 +422,7 @@ export const MoveGst = extendModel('account.move', {
     /** E-invoicing (RFC 0016 step 5, part 4): the IRP's answer (its record's). */
     einvoiceStatus: f.selection(EINVOICE_STATES, {
       label: 'E-invoice',
+      help: 'Whether the invoice was registered at the Invoice Registration Portal and got its IRN, failed, or was cancelled there.',
       store: true,
       ...fromEinvoice,
     }),
@@ -429,12 +439,22 @@ export const MoveGst = extendModel('account.move', {
     ewbValidUntil: f.datetime({ label: 'E-way bill valid until', store: true, ...fromEinvoice }),
     ewbStatus: f.selection(
       { generated: 'Generated', failed: 'Not generated: see the error', cancelled: 'Cancelled' },
-      { label: 'E-way bill status', store: true, ...fromEinvoice },
+      {
+        label: 'E-way bill status',
+        help: 'Whether the e-way bill for moving the goods was generated, failed or was cancelled.',
+        store: true,
+        ...fromEinvoice,
+      },
     ),
     ewbError: f.text({ label: 'E-way bill error', store: true, ...fromEinvoice }),
     ewbMode: f.selection(
       { road: 'Road', rail: 'Rail', air: 'Air', ship: 'Ship' },
-      { label: 'Transport mode', store: true, ...fromEinvoice },
+      {
+        label: 'Transport mode',
+        help: 'How the goods travel under the e-way bill: by road, rail, air or ship.',
+        store: true,
+        ...fromEinvoice,
+      },
     ),
     ewbVehicleNo: f.char({ size: 15, label: 'Vehicle number', store: true, ...fromEinvoice }),
     ewbTransporterId: f.char({ size: 15, label: 'Transporter ID', store: true, ...fromEinvoice }),

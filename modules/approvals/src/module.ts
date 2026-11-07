@@ -74,12 +74,42 @@ export const ApprovalCategory = defineModel('approval.category', {
     company: f.many2one('res.company', { ondelete: 'cascade' }),
     sequence: f.integer({ required: true, default: 10 }),
     description: f.text({ translate: true, help: 'Shown to whoever asks: what to give and why.' }),
-    askAmount: f.selection(PRESENCE, { required: true, default: 'optional', label: 'Amount' }),
-    askPeriod: f.selection(PRESENCE, { required: true, default: 'none', label: 'Period' }),
-    askPartner: f.selection(PRESENCE, { required: true, default: 'none', label: 'Contact' }),
-    askLocation: f.selection(PRESENCE, { required: true, default: 'none', label: 'Location' }),
-    askQuantity: f.selection(PRESENCE, { required: true, default: 'none', label: 'Quantity' }),
-    askLines: f.selection(PRESENCE, { required: true, default: 'none', label: 'Lines' }),
+    askAmount: f.selection(PRESENCE, {
+      required: true,
+      default: 'optional',
+      label: 'Amount',
+      help: 'Whether a request of this category asks for an amount: not asked, optional or required.',
+    }),
+    askPeriod: f.selection(PRESENCE, {
+      required: true,
+      default: 'none',
+      label: 'Period',
+      help: 'Whether a request of this category asks for a period, from and until: not asked, optional or required.',
+    }),
+    askPartner: f.selection(PRESENCE, {
+      required: true,
+      default: 'none',
+      label: 'Contact',
+      help: 'Whether a request of this category asks for a contact: not asked, optional or required.',
+    }),
+    askLocation: f.selection(PRESENCE, {
+      required: true,
+      default: 'none',
+      label: 'Location',
+      help: 'Whether a request of this category asks for a location: not asked, optional or required.',
+    }),
+    askQuantity: f.selection(PRESENCE, {
+      required: true,
+      default: 'none',
+      label: 'Quantity',
+      help: 'Whether a request of this category asks for a quantity: not asked, optional or required.',
+    }),
+    askLines: f.selection(PRESENCE, {
+      required: true,
+      default: 'none',
+      label: 'Lines',
+      help: 'Whether a request of this category asks for lines with quantities and prices: not asked, optional or required.',
+    }),
     askAttachment: f.selection(PRESENCE, {
       required: true,
       default: 'none',
@@ -173,6 +203,7 @@ export const ApprovalAsk = defineModel('approval.ask', {
       scale: 2,
       store: true,
       label: 'Lines total',
+      help: 'The sum of the lines’ subtotals.',
       ...compute('approval.ask', 'linesTotal', ['lines.subtotal'], (asks) => {
         for (const a of asks)
           a.linesTotal = [...a.lines].reduce((s, l) => s.plus(l.subtotal ?? 0), ZERO);
@@ -186,42 +217,49 @@ export const ApprovalAsk = defineModel('approval.ask', {
     /** What the category asks for (the form shows and marks the fields by them). */
     askAmount: f.selection(PRESENCE, {
       store: true,
+      help: 'Whether this request asks for an amount, as its category says.',
       ...compute('approval.ask', 'askAmount', ['category.askAmount'], (asks) => {
         for (const a of asks) a.askAmount = a.category?.askAmount ?? 'none';
       }),
     }),
     askPeriod: f.selection(PRESENCE, {
       store: true,
+      help: 'Whether this request asks for a period, as its category says.',
       ...compute('approval.ask', 'askPeriod', ['category.askPeriod'], (asks) => {
         for (const a of asks) a.askPeriod = a.category?.askPeriod ?? 'none';
       }),
     }),
     askPartner: f.selection(PRESENCE, {
       store: true,
+      help: 'Whether this request asks for a contact, as its category says.',
       ...compute('approval.ask', 'askPartner', ['category.askPartner'], (asks) => {
         for (const a of asks) a.askPartner = a.category?.askPartner ?? 'none';
       }),
     }),
     askLocation: f.selection(PRESENCE, {
       store: true,
+      help: 'Whether this request asks for a location, as its category says.',
       ...compute('approval.ask', 'askLocation', ['category.askLocation'], (asks) => {
         for (const a of asks) a.askLocation = a.category?.askLocation ?? 'none';
       }),
     }),
     askQuantity: f.selection(PRESENCE, {
       store: true,
+      help: 'Whether this request asks for a quantity, as its category says.',
       ...compute('approval.ask', 'askQuantity', ['category.askQuantity'], (asks) => {
         for (const a of asks) a.askQuantity = a.category?.askQuantity ?? 'none';
       }),
     }),
     askLines: f.selection(PRESENCE, {
       store: true,
+      help: 'Whether this request asks for lines, as its category says.',
       ...compute('approval.ask', 'askLines', ['category.askLines'], (asks) => {
         for (const a of asks) a.askLines = a.category?.askLines ?? 'none';
       }),
     }),
     askAttachment: f.selection(PRESENCE, {
       store: true,
+      help: 'Whether this request asks for an attached file, as its category says.',
       ...compute('approval.ask', 'askAttachment', ['category.askAttachment'], (asks) => {
         for (const a of asks) a.askAttachment = a.category?.askAttachment ?? 'none';
       }),
@@ -330,6 +368,7 @@ export const ApprovalAskLine = defineModel('approval.ask.line', {
     subtotal: f.decimal({
       scale: 2,
       store: true,
+      help: 'The quantity times the unit price.',
       ...compute('approval.ask.line', 'subtotal', ['quantity', 'priceUnit'], (lines) => {
         for (const l of lines) l.subtotal = l.quantity.times(l.priceUnit).toDecimalPlaces(2);
       }),

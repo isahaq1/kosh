@@ -111,7 +111,12 @@ export const DeliveryCarrier = defineModel('delivery.carrier', {
     name: f.char({ required: true, translate: true }),
     kind: f.selection(
       { fixed: 'Fixed fee', weight: 'By weight', zone: 'By zone' },
-      { required: true, default: 'fixed', label: 'Fee by' },
+      {
+        required: true,
+        default: 'fixed',
+        label: 'Fee by',
+        help: 'How the delivery fee is worked out: one fixed fee, by the parcel’s weight or by whether the city is inside the zone.',
+      },
     ),
     /** The fixed fee; by weight, the fee of the first kg. */
     price: f.decimal({ scale: 2, required: true, default: '0', label: 'Fee' }),
@@ -125,7 +130,12 @@ export const DeliveryCarrier = defineModel('delivery.carrier', {
     freeOver: f.decimal({ scale: 2, label: 'Free from' }),
     /** Customers may pay the courier on delivery. */
     cod: f.boolean({ default: true, label: 'Cash on delivery' }),
-    courier: f.selection(COURIERS, { required: true, default: 'none', label: 'Courier' }),
+    courier: f.selection(COURIERS, {
+      required: true,
+      default: 'none',
+      label: 'Courier',
+      help: 'The courier service that books and delivers the parcels of this method.',
+    }),
     /** The service product the fee is charged as on orders (made with the method). */
     product: f.many2one('product.product', { ondelete: 'restrict', label: 'Fee product' }),
     sequence: f.integer({ required: true, default: 10 }),
@@ -188,7 +198,12 @@ export const ShopCoupon = defineModel('shop.coupon', {
     name: f.char({ translate: true, label: 'What it gives' }),
     kind: f.selection(
       { percent: 'Percentage off the goods', amount: 'Amount off', free_delivery: 'Free delivery' },
-      { required: true, default: 'percent', label: 'Gives' },
+      {
+        required: true,
+        default: 'percent',
+        label: 'Gives',
+        help: 'What the coupon gives: a percentage off the goods, an amount off or free delivery.',
+      },
     ),
     value: f.decimal({ scale: 2, required: true, default: '0', label: 'Value' }),
     /** The goods must come to this much. */
@@ -314,7 +329,11 @@ export const DeliveryShipment = defineModel('delivery.shipment', {
     }),
     order: f.many2one('sale.order', { required: true, ondelete: 'restrict', label: 'Order' }),
     carrier: f.many2one('delivery.carrier', { required: true, ondelete: 'restrict' }),
-    courier: f.selection(COURIERS, { required: true, default: 'fake' }),
+    courier: f.selection(COURIERS, {
+      required: true,
+      default: 'fake',
+      help: 'The courier service the parcel is booked with.',
+    }),
     recipient: f.char({ required: true }),
     phone: f.char({ required: true }),
     address: f.char({ required: true }),
@@ -329,6 +348,7 @@ export const DeliveryShipment = defineModel('delivery.shipment', {
     events: f.one2many('delivery.shipment.event', 'shipment', { label: 'Tracking' }),
     note: f.text(),
     state: f.state({
+      help: 'Follows the parcel from booking with the courier through pick-up and transit to delivery or return.',
       states: {
         draft: 'To book',
         booked: 'Booked',

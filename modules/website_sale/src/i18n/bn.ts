@@ -59,10 +59,14 @@ export const bn: Readonly<Record<string, string>> = {
   'Fees are zero or more.': 'ফি শূন্য বা তার বেশি হতে হবে।',
   'Few left from': 'অল্প বাকি যখন',
   'Fixed fee': 'নির্দিষ্ট ফি',
+  'Follows the parcel from booking with the courier through pick-up and transit to delivery or return.':
+    'কুরিয়ারে বুকিং থেকে শুরু করে সংগ্রহ ও পরিবহন হয়ে সরবরাহ বা ফেরত পর্যন্ত পার্সেলটির অবস্থা।',
   'Free delivery': 'ফ্রি ডেলিভারি',
   'Free from': 'ফ্রি যখন থেকে',
   From: 'থেকে',
   Gives: 'দেয়',
+  'How the delivery fee is worked out: one fixed fee, by the parcel’s weight or by whether the city is inside the zone.':
+    'সরবরাহ ফি কীভাবে হিসাব হয়: একটি নির্দিষ্ট ফি, পার্সেলের ওজন অনুযায়ী, অথবা শহরটি এলাকার ভেতরে কি না তা অনুযায়ী।',
   ID: 'আইডি',
   'In transit': 'পথে',
   'Inside: cities': 'ভেতরে: শহর',
@@ -115,6 +119,9 @@ export const bn: Readonly<Record<string, string>> = {
   Status: 'অবস্থা',
   Steadfast: 'Steadfast',
   'Test courier': 'পরীক্ষামূলক কুরিয়ার',
+  'The courier service that books and delivers the parcels of this method.':
+    'যে কুরিয়ার সেবা এই পদ্ধতির পার্সেল বুক করে ও পৌঁছে দেয়।',
+  'The courier service the parcel is booked with.': 'যে কুরিয়ার সেবায় পার্সেলটি বুক করা হয়েছে।',
   To: 'পর্যন্ত',
   'To book': 'বুক করতে হবে',
   Tracking: 'ট্র্যাকিং',
@@ -128,5 +135,7 @@ export const bn: Readonly<Record<string, string>> = {
   Value: 'মান',
   'Weight (kg)': 'ওজন (কেজি)',
   'What it gives': 'যা দেয়',
+  'What the coupon gives: a percentage off the goods, an amount off or free delivery.':
+    'কুপনটি কী দেয়: পণ্যের ওপর শতাংশ ছাড়, নির্দিষ্ট অঙ্কের ছাড় বা বিনা খরচে সরবরাহ।',
   When: 'কখন',
 };

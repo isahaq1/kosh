@@ -86,10 +86,29 @@ export const PurchaseOrder = defineModel('purchase.order', {
     origin: f.char({ label: 'Source document' }),
     note: f.text({ label: 'Terms and conditions' }),
     lines: f.one2many('purchase.order.line', 'order'),
-    amountUntaxed: f.monetary({ currency: 'currency', store: true, label: 'Untaxed', ...amounts }),
-    amountTax: f.monetary({ currency: 'currency', store: true, label: 'Taxes', ...amounts }),
-    amountTotal: f.monetary({ currency: 'currency', store: true, label: 'Total', ...amounts }),
+    amountUntaxed: f.monetary({
+      currency: 'currency',
+      store: true,
+      label: 'Untaxed',
+      help: 'The sum of the lines’ amounts before taxes.',
+      ...amounts,
+    }),
+    amountTax: f.monetary({
+      currency: 'currency',
+      store: true,
+      label: 'Taxes',
+      help: 'The sum of the taxes on the lines.',
+      ...amounts,
+    }),
+    amountTotal: f.monetary({
+      currency: 'currency',
+      store: true,
+      label: 'Total',
+      help: 'What the order costs with its taxes: the untaxed amount plus the taxes.',
+      ...amounts,
+    }),
     state: f.state({
+      help: 'A request for quotation until it is submitted; once approved it becomes a purchase order, which can then be locked or cancelled.',
       states: {
         draft: 'RFQ',
         sent: 'RFQ sent',
@@ -198,6 +217,7 @@ export const PurchaseOrderLine = defineModel('purchase.order.line', {
     subtotal: f.monetary({
       currency: 'currency',
       store: true,
+      help: 'The line’s amount before taxes: the quantity times the unit price, less any tax included in the price.',
       ...compute(
         'purchase.order.line',
         'subtotal',
@@ -221,6 +241,7 @@ export const PurchaseOrderLine = defineModel('purchase.order.line', {
       currency: 'currency',
       store: true,
       label: 'Tax',
+      help: 'The taxes on this line, computed from its amount and its taxes.',
       ...compute(
         'purchase.order.line',
         'taxAmount',

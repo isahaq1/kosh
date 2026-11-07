@@ -39,6 +39,7 @@ export const MaintenancePart = defineModel('maintenance.request.part', {
       scale: 2,
       store: true,
       label: 'Cost',
+      help: 'The quantity used, in the product’s unit, at the product’s cost.',
       ...compute(
         'maintenance.request.part',
         'cost',

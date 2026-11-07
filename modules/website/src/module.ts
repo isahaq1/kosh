@@ -44,7 +44,12 @@ export const WebsiteSite = defineModel('website.site', {
       label: 'Domain',
       help: 'Where the public site is served, e.g. www.example.com',
     }),
-    lang: f.selection(LANGS, { required: true, default: 'en', label: 'Default language' }),
+    lang: f.selection(LANGS, {
+      required: true,
+      default: 'en',
+      label: 'Default language',
+      help: 'The language the site shows when a visitor has not chosen one.',
+    }),
     pages: f.one2many('website.page', 'site'),
   },
   sqlConstraints: {
@@ -73,7 +78,12 @@ export const WebsitePage = defineModel('website.page', {
   fields: {
     site: f.many2one('website.site', { required: true, ondelete: 'cascade' }),
     path: f.char({ required: true, default: '/', help: '/ for the home page, /about, /contact' }),
-    lang: f.selection(LANGS, { required: true, default: 'en', label: 'Language' }),
+    lang: f.selection(LANGS, {
+      required: true,
+      default: 'en',
+      label: 'Language',
+      help: 'The language the page is written in.',
+    }),
     title: f.char({ required: true }),
     /** For search engines and link previews. */
     description: f.text({ label: 'Summary' }),
@@ -83,6 +93,7 @@ export const WebsitePage = defineModel('website.page', {
     translationOf: f.many2one('website.page', { ondelete: 'set null', label: 'Translation of' }),
     blocks: f.one2many('website.block', 'page', { label: 'Content' }),
     state: f.state({
+      help: 'Only published pages are shown on the public site.',
       states: { draft: 'Draft', published: 'Published' },
       initial: 'draft',
       transitions: {
@@ -140,7 +151,11 @@ export const WebsiteBlock = defineModel('website.block', {
     sequence: f.integer({ required: true, default: 10 }),
     kind: f.selection(
       { hero: 'Hero', text: 'Text', image: 'Image', cta: 'Call to action', form: 'Form' },
-      { required: true, default: 'text' },
+      {
+        required: true,
+        default: 'text',
+        help: 'What the block shows: a hero banner, text, an image, a call to action or a form.',
+      },
     ),
     title: f.char(),
     body: f.text({ label: 'Text' }),
@@ -262,7 +277,12 @@ export const WebsiteFormField = defineModel('website.form.field', {
         number: 'Number',
         date: 'Date',
       },
-      { required: true, default: 'text', label: 'Type' },
+      {
+        required: true,
+        default: 'text',
+        label: 'Type',
+        help: 'The kind of value the visitor types in this input.',
+      },
     ),
     required: f.boolean({ default: false }),
     /** The field of the created record it fills (`email`); plain fields only, checked on submission. */
@@ -302,7 +322,11 @@ export const WebsiteSubmission = defineModel('website.submission', {
     data: f.json({ required: true, default: {} }),
     state: f.selection(
       { received: 'Received', spam: 'Spam' },
-      { required: true, default: 'received' },
+      {
+        required: true,
+        default: 'received',
+        help: 'Spam when a bot filled in the hidden field; received submissions create their record.',
+      },
     ),
     resModel: f.char({ label: 'Created (model)' }),
     resId: f.integer({ label: 'Created (id)' }),

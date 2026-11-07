@@ -49,7 +49,7 @@ test('a bill of materials, an order checked for what is short and what it costs,
   await page.getByRole('button', { name: 'Check components' }).click();
   const components = page.getByRole('table', { name: 'components' });
   await expect(components.getByRole('row').filter({ hasText: 'Steel beam' })).toBeVisible();
-  await expect(page.getByText('Total cost')).toBeVisible();
+  await expect(page.getByText('Total cost', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Confirm' }).click();
   await expect(page.getByRole('button', { name: /^State: Confirmed/ })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Components transfer' })).toContainText('TR/');

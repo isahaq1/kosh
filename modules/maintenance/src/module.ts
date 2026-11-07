@@ -81,7 +81,11 @@ export const MaintenanceEquipment = defineModel('maintenance.equipment', {
         tool: 'Tool',
         other: 'Other',
       },
-      { required: true, default: 'machine' },
+      {
+        required: true,
+        default: 'machine',
+        help: 'The kind of equipment, used to group and filter it.',
+      },
     ),
     location: f.char({ label: 'Where it is' }),
     vendor: f.many2one('res.partner', { ondelete: 'set null' }),
@@ -97,6 +101,7 @@ export const MaintenanceEquipment = defineModel('maintenance.equipment', {
       {
         store: true,
         label: 'Status',
+        help: 'Down while a breakdown order is open, retired once archived, otherwise operational.',
         ...compute(
           'maintenance.equipment',
           'status',
@@ -140,6 +145,7 @@ export const MaintenanceMeter = defineModel('maintenance.meter', {
       scale: 2,
       store: true,
       label: 'Reading',
+      help: 'The latest reading recorded on this meter.',
       ...compute('maintenance.meter', 'value', ['readings.value', 'readings.date'], (meters) => {
         for (const m of meters) {
           const latest = [...m.readings].sort(
@@ -212,7 +218,12 @@ export const MaintenancePlan = defineModel('maintenance.plan', {
     equipment: f.many2one('maintenance.equipment', { required: true, ondelete: 'cascade' }),
     trigger: f.selection(
       { time: 'Every so many days', meter: 'Every so much on a meter' },
-      { required: true, default: 'time', label: 'When' },
+      {
+        required: true,
+        default: 'time',
+        label: 'When',
+        help: 'Whether the plan falls due after a number of days or after a set amount on a meter.',
+      },
     ),
     intervalDays: f.integer({ label: 'Every (days)' }),
     startDate: f.date({ required: true, default: (env: Env) => env.today(), label: 'From' }),
@@ -309,13 +320,18 @@ export const MaintenanceRequest = defineModel('maintenance.request', {
     equipment: f.many2one('maintenance.equipment', { required: true, ondelete: 'restrict' }),
     kind: f.selection(
       { preventive: 'Preventive', breakdown: 'Breakdown' },
-      { required: true, default: 'breakdown', label: 'Type' },
+      {
+        required: true,
+        default: 'breakdown',
+        label: 'Type',
+        help: 'Preventive work comes from a maintenance plan; a breakdown is a repair after a failure.',
+      },
     ),
     plan: f.many2one('maintenance.plan', { ondelete: 'set null' }),
     description: f.text({ label: 'What is wrong / what to do' }),
     priority: f.selection(
       { low: 'Low', normal: 'Normal', high: 'High', urgent: 'Urgent' },
-      { required: true, default: 'normal' },
+      { required: true, default: 'normal', help: 'How soon the work should be done.' },
     ),
     scheduledDate: f.date({
       required: true,
@@ -332,6 +348,7 @@ export const MaintenanceRequest = defineModel('maintenance.request', {
       scale: 2,
       store: true,
       label: 'Downtime (hours)',
+      help: 'Hours from the report to the finish when the equipment was stopped, counted once the order is finished.',
       ...compute(
         'maintenance.request',
         'downtimeHours',
@@ -353,6 +370,7 @@ export const MaintenanceRequest = defineModel('maintenance.request', {
     state: f.state({
       states: { new: 'New', progress: 'In progress', done: 'Done', cancel: 'Cancelled' },
       initial: 'new',
+      help: 'A new order is started when work begins and finished once every checklist item is ticked.',
       transitions: {
         start: emitting('maintenance.request.started', {
           from: ['new'],

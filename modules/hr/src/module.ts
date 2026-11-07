@@ -148,12 +148,18 @@ export const HrContract = defineModel('hr.contract', {
     employee: f.many2one('hr.employee', { required: true, ondelete: 'cascade' }),
     kind: f.selection(
       { permanent: 'Permanent', fixed: 'Fixed term', probation: 'Probation', intern: 'Internship' },
-      { required: true, default: 'permanent', label: 'Type' },
+      {
+        required: true,
+        default: 'permanent',
+        label: 'Type',
+        help: 'The kind of employment the contract is for: permanent, a fixed term, probation or an internship.',
+      },
     ),
     dateStart: f.date({ required: true, label: 'Starts' }),
     dateEnd: f.date({ label: 'Ends' }),
     wage: f.decimal({ scale: 2, label: 'Monthly wage', groups: HR }),
     state: f.state({
+      help: 'A contract runs once started, until it is ended or cancelled.',
       states: { draft: 'Draft', running: 'Running', ended: 'Ended', cancelled: 'Cancelled' },
       initial: 'draft',
       transitions: {
@@ -211,6 +217,7 @@ export const HrLeave = defineModel('hr.leave', {
     days: f.integer({ required: true, default: 0, label: 'Working days' }),
     reason: f.text(),
     state: f.state({
+      help: 'A request waits once submitted, and someone other than the requester approves or refuses it.',
       states: { draft: 'Draft', submitted: 'Waiting', approved: 'Approved', refused: 'Refused' },
       initial: 'draft',
       transitions: {

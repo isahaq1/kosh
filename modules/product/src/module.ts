@@ -26,7 +26,11 @@ export const UomUom = defineModel('uom.uom', {
         length: 'Length',
         volume: 'Volume',
       },
-      { required: true, default: 'unit' },
+      {
+        required: true,
+        default: 'unit',
+        help: 'The kind of quantity this unit measures; quantities convert only between units of the same kind.',
+      },
     ),
     /** How many of the category's reference unit one of this unit is (dozen: 12; gram: 0.001 of a kg). */
     ratio: f.decimal({ scale: 6, required: true, default: '1' }),
@@ -61,12 +65,24 @@ export const AccountTax = defineModel('account.tax', {
   access: { 'product.user': READ, 'product.manager': ALL },
   fields: {
     name: f.char({ required: true, translate: true }),
-    use: f.selection({ sale: 'Sales', purchase: 'Purchases' }, { required: true, default: 'sale' }),
+    use: f.selection(
+      { sale: 'Sales', purchase: 'Purchases' },
+      {
+        required: true,
+        default: 'sale',
+        help: 'Whether the tax applies to sales documents or to purchase documents.',
+      },
+    ),
     /** The order a line's taxes apply in (lower first): supplementary duty before VAT. */
     sequence: f.integer({ required: true, default: 10 }),
     amountType: f.selection(
       { percent: 'Percentage of the base', fixed: 'Fixed amount per unit' },
-      { required: true, default: 'percent', label: 'Computed as' },
+      {
+        required: true,
+        default: 'percent',
+        label: 'Computed as',
+        help: 'How the tax is computed: a percentage of the line’s base or a fixed amount per unit.',
+      },
     ),
     /** 0.15 for 15 % (percentage taxes). */
     rate: f.decimal({ scale: 4, required: true, default: '0' }),
@@ -103,7 +119,14 @@ export const ProductProduct = defineModel('product.product', {
     name: f.char({ required: true, translate: true }),
     /** Numbered when created: P00001, P00002, ... */
     code: f.char({ readonly: true, sequence: 'product.product', index: 'unique' }),
-    kind: f.selection({ goods: 'Goods', service: 'Service' }, { required: true, default: 'goods' }),
+    kind: f.selection(
+      { goods: 'Goods', service: 'Service' },
+      {
+        required: true,
+        default: 'goods',
+        help: 'Goods are physical items that are stocked and delivered; services are work or time sold or bought.',
+      },
+    ),
     category: f.many2one('product.category'),
     uom: f.many2one('uom.uom', { label: 'Unit of measure' }),
     barcode: f.char({ index: 'unique' }),

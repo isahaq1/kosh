@@ -4,6 +4,8 @@ export const bn: Readonly<Record<string, string>> = {
     'শেষ হওয়া আদেশের শ্রমঘণ্টার খরচ এই হারে ধরা হয়।',
   'A meter counts up: a reading cannot be below an earlier one.':
     'মিটার শুধু বাড়ে: কোনো রিডিং আগের রিডিংয়ের চেয়ে কম হতে পারে না।',
+  'A new order is started when work begins and finished once every checklist item is ticked.':
+    'কাজ শুরু হলে নতুন আদেশ চালু করা হয় এবং চেকলিস্টের প্রতিটি বিষয়ে টিক দিলে শেষ করা হয়।',
   'A plan by time gets its order this many days before it is due.':
     'সময়ভিত্তিক পরিকল্পনার আদেশ নির্ধারিত তারিখের এত দিন আগে তৈরি হয়।',
   'A plan by time repeats every so many days; by meter, every so much on one of the equipment’s meters.':
@@ -34,6 +36,8 @@ export const bn: Readonly<Record<string, string>> = {
   Done: 'সম্পন্ন',
   'Done this month': 'এ মাসে সম্পন্ন',
   Down: 'বন্ধ',
+  'Down while a breakdown order is open, retired once archived, otherwise operational.':
+    'বিকলের আদেশ খোলা থাকলে বন্ধ, আর্কাইভ করা হলে অবসরপ্রাপ্ত, নইলে চালু।',
   'Downtime (hours)': 'বন্ধ থাকার সময় (ঘণ্টা)',
   'Downtime hours this month': 'এ মাসে বন্ধ থাকার ঘণ্টা',
   Equipment: 'যন্ত্রপাতি',
@@ -48,8 +52,11 @@ export const bn: Readonly<Record<string, string>> = {
   Finished: 'শেষ হয়েছে',
   From: 'থেকে',
   High: 'উচ্চ',
+  'Hours from the report to the finish when the equipment was stopped, counted once the order is finished.':
+    'যন্ত্রপাতি বন্ধ থাকলে জানানো থেকে শেষ হওয়া পর্যন্ত ঘণ্টা, আদেশ শেষ হলে গোনা হয়।',
   'How early the orders of preventive plans are made, and what an hour of work costs.':
     'প্রতিরোধমূলক পরিকল্পনার আদেশ কত আগে তৈরি হয়, এবং এক ঘণ্টা কাজের খরচ কত।',
+  'How soon the work should be done.': 'কাজটি কত তাড়াতাড়ি করা উচিত।',
   ID: 'আইডি',
   'In progress': 'চলমান',
   'IT equipment': 'আইটি যন্ত্রপাতি',
@@ -95,6 +102,8 @@ export const bn: Readonly<Record<string, string>> = {
   Preventive: 'প্রতিরোধমূলক',
   'Preventive plan': 'প্রতিরোধমূলক পরিকল্পনা',
   'Preventive plans': 'প্রতিরোধমূলক পরিকল্পনা',
+  'Preventive work comes from a maintenance plan; a breakdown is a repair after a failure.':
+    'প্রতিরোধমূলক কাজ আসে রক্ষণাবেক্ষণ পরিকল্পনা থেকে; বিকল হলো নষ্ট হওয়ার পর মেরামত।',
   Priority: 'অগ্রাধিকার',
   'Read at': 'রিডিংয়ের সময়',
   Reading: 'রিডিং',
@@ -112,6 +121,9 @@ export const bn: Readonly<Record<string, string>> = {
   Status: 'অবস্থা',
   Technician: 'টেকনিশিয়ান',
   'Technician (orders, readings, breakdowns)': 'টেকনিশিয়ান (আদেশ, রিডিং, বিকল)',
+  'The kind of equipment, used to group and filter it.':
+    'যন্ত্রপাতির ধরন, যা দিয়ে দলবদ্ধ ও ফিল্টার করা হয়।',
+  'The latest reading recorded on this meter.': 'এই মিটারে লিপিবদ্ধ সর্বশেষ রিডিং।',
   'Tick every item of the checklist first.': 'আগে চেকলিস্টের প্রতিটি আইটেমে টিক দিন।',
   'To do': 'করণীয়',
   Tool: 'সরঞ্জাম',
@@ -127,4 +139,6 @@ export const bn: Readonly<Record<string, string>> = {
   'What is wrong / what to do': 'কী সমস্যা / কী করতে হবে',
   When: 'কখন',
   'Where it is': 'কোথায় আছে',
+  'Whether the plan falls due after a number of days or after a set amount on a meter.':
+    'পরিকল্পনাটি নির্দিষ্ট দিন পরপর, নাকি মিটারে নির্দিষ্ট পরিমাণ পরপর প্রাপ্য হয়।',
 };

@@ -204,7 +204,10 @@ export const AccountAccount = defineModel('account.account', {
         for (const a of accounts) a.displayName = `${a.code} ${a.name}`;
       }),
     }),
-    type: f.selection(ACCOUNT_TYPES, { required: true }),
+    type: f.selection(ACCOUNT_TYPES, {
+      required: true,
+      help: 'Where the account appears in the balance sheet or the profit and loss, and whether it holds receivables, payables or money.',
+    }),
     /** Lines on this account are matched against each other (receivables, payables, suspense). */
     reconcile: f.boolean({ default: false, label: 'Allow reconciliation' }),
     currency: f.many2one('res.currency', { label: 'Account currency' }),
@@ -227,7 +230,11 @@ export const AccountJournal = defineModel('account.journal', {
   fields: {
     code: f.char({ required: true, size: 8 }),
     name: f.char({ required: true, translate: true }),
-    type: f.selection(JOURNAL_TYPES, { required: true, default: 'general' }),
+    type: f.selection(JOURNAL_TYPES, {
+      required: true,
+      default: 'general',
+      help: 'What the journal records: sales, purchases, cash, bank or miscellaneous entries.',
+    }),
     /** Cash and bank journals: the account of the money; sales and purchases: the default income / expense. */
     defaultAccount: f.many2one('account.account', { checkCompany: true, label: 'Default account' }),
   },
@@ -272,7 +279,14 @@ export const AccountFiscalYear = defineModel('account.fiscal.year', {
     name: f.char({ required: true }),
     dateFrom: f.date({ required: true, label: 'From' }),
     dateTo: f.date({ required: true, label: 'To' }),
-    state: f.selection({ open: 'Open', closed: 'Closed' }, { required: true, default: 'open' }),
+    state: f.selection(
+      { open: 'Open', closed: 'Closed' },
+      {
+        required: true,
+        default: 'open',
+        help: 'A closed year has its result moved to retained earnings and accepts no more entries on or before its lock date.',
+      },
+    ),
     /** Set when the year closes: nothing is posted on or before it. */
     lockDate: f.date({ label: 'Lock date' }),
     /** The entry that moved the year's result to retained earnings (closing.ts). */
@@ -428,7 +442,11 @@ export const AccountTaxComponent = defineModel('account.tax.component', {
     share: f.decimal({ scale: 4, required: true, default: '1' }),
     scope: f.selection(
       { always: 'Always', intra: 'Within the state', inter: 'Between states or abroad' },
-      { required: true, default: 'always' },
+      {
+        required: true,
+        default: 'always',
+        help: 'When this part of the tax applies: always, only for supplies within the state, or only between states and abroad.',
+      },
     ),
     /** What the returns call it: CGST, SGST, IGST, CESS. */
     code: f.char({ size: 16 }),
@@ -579,7 +597,12 @@ export const AccountMove = defineModel('account.move', {
     }),
     journal: f.many2one('account.journal', { required: true, checkCompany: true }),
     date: f.date({ required: true, default: (env: Env) => env.today() }),
-    kind: f.selection(MOVE_KINDS, { required: true, default: 'entry', label: 'Type' }),
+    kind: f.selection(MOVE_KINDS, {
+      required: true,
+      default: 'entry',
+      label: 'Type',
+      help: 'A journal entry, or the kind of document: customer or vendor invoice, credit note or debit note.',
+    }),
     partner: f.many2one('res.partner', { checkCompany: true }),
     ref: f.char({ label: 'Reference' }),
     currency: f.many2one('res.currency', { required: true }),
@@ -600,12 +623,14 @@ export const AccountMove = defineModel('account.move', {
       currency: 'companyCurrency',
       store: true,
       label: 'Debit',
+      help: 'The sum of the debits of the entry’s lines, in the company currency.',
       ...moveTotals,
     }),
     amountCredit: f.monetary({
       currency: 'companyCurrency',
       store: true,
       label: 'Credit',
+      help: 'The sum of the credits of the entry’s lines, in the company currency.',
       ...moveTotals,
     }),
     // Documents
@@ -654,13 +679,21 @@ export const AccountMove = defineModel('account.move', {
       currency: 'currency',
       store: true,
       label: 'Untaxed',
+      help: 'The sum of the product lines before taxes, in the document’s currency.',
       ...documentTotals,
     }),
-    amountTax: f.monetary({ currency: 'currency', store: true, label: 'Taxes', ...documentTotals }),
+    amountTax: f.monetary({
+      currency: 'currency',
+      store: true,
+      label: 'Taxes',
+      help: 'The taxes of the product lines, in the document’s currency.',
+      ...documentTotals,
+    }),
     amountTotal: f.monetary({
       currency: 'currency',
       store: true,
       label: 'Total',
+      help: 'The untaxed amount plus the taxes: what the document is for.',
       ...documentTotals,
     }),
     /** What is still due on a posted document, in its currency. */
@@ -668,6 +701,7 @@ export const AccountMove = defineModel('account.move', {
       currency: 'currency',
       store: true,
       label: 'Amount due',
+      help: 'What is still to be paid on the posted document after the payments and credit notes matched with it.',
       ...moveResidual,
     }),
     paymentState: f.selection(
@@ -677,7 +711,12 @@ export const AccountMove = defineModel('account.move', {
         partial: 'Partially paid',
         paid: 'Paid',
       },
-      { store: true, label: 'Payment', ...moveResidual },
+      {
+        store: true,
+        label: 'Payment',
+        help: 'Whether the posted document is not paid, partially paid or paid, from what is still due on it.',
+        ...moveResidual,
+      },
     ),
     payments: f.many2many('account.payment', { label: 'Paid by' }),
     state: f.state({
@@ -688,6 +727,7 @@ export const AccountMove = defineModel('account.move', {
         cancel: 'Cancelled',
       },
       initial: 'draft',
+      help: 'A draft can be changed; a bill may wait for approval; a posted entry is in the books and is corrected only by a reversal.',
       transitions: {
         /** Bills: ask the approvers the amount needs (none needed: post right after). */
         submit: {
@@ -892,7 +932,12 @@ export const AccountMoveLine = defineModel('account.move.line', {
         tax: 'Tax',
         counterpart: 'Receivable / payable',
       },
-      { required: true, default: 'entry', label: 'Kind' },
+      {
+        required: true,
+        default: 'entry',
+        label: 'Kind',
+        help: 'A line of a journal entry, a product line of a document, or a tax or receivable / payable line made at posting.',
+      },
     ),
     /** The document this is a product line of (null on entry lines and generated lines). */
     invoice: f.many2one('account.move', {
@@ -921,6 +966,7 @@ export const AccountMoveLine = defineModel('account.move.line', {
       currency: 'currency',
       store: true,
       label: 'Subtotal',
+      help: 'Quantity times unit price less the discount, before taxes, in the document’s currency.',
       ...compute(
         'account.move.line',
         'subtotal',
@@ -948,6 +994,7 @@ export const AccountMoveLine = defineModel('account.move.line', {
       currency: 'currency',
       store: true,
       label: 'Tax',
+      help: 'The taxes of this product line, in the document’s currency.',
       ...compute(
         'account.move.line',
         'taxAmount',
@@ -982,6 +1029,7 @@ export const AccountMoveLine = defineModel('account.move.line', {
     balance: f.monetary({
       currency: 'companyCurrency',
       store: true,
+      help: 'Debit minus credit, in the company currency.',
       // companyCurrency too: money reads are null until it is stored, and the sides may never change again.
       ...compute(
         'account.move.line',
@@ -1005,6 +1053,7 @@ export const AccountMoveLine = defineModel('account.move.line', {
     accountType: f.selection(ACCOUNT_TYPES, {
       store: true,
       label: 'Account type',
+      help: 'The type of the line’s account, for grouping in the reports.',
       ...compute('account.move.line', 'accountType', ['account.type'], (lines) => {
         for (const l of lines) l.accountType = l.account?.type ?? null;
       }),
@@ -1027,12 +1076,14 @@ export const AccountMoveLine = defineModel('account.move.line', {
       currency: 'companyCurrency',
       store: true,
       label: 'Residual',
+      help: 'What is still unmatched on this receivable or payable line, in the company currency.',
       ...lineResiduals,
     }),
     amountResidualCurrency: f.monetary({
       currency: 'currency',
       store: true,
       label: 'Residual in currency',
+      help: 'What is still unmatched on this receivable or payable line, in the entry’s currency.',
       ...lineResiduals,
     }),
     reconciled: f.boolean({ store: true, ...lineResiduals }),
@@ -1462,11 +1513,20 @@ export const AccountWithholding = defineModel('account.withholding', {
     sequence: f.integer({ required: true, default: 10 }),
     direction: f.selection(
       { vendor: 'We withhold when paying vendors', customer: 'Customers withhold from us' },
-      { required: true, default: 'vendor' },
+      {
+        required: true,
+        default: 'vendor',
+        help: 'Whether we keep the amount back when paying vendors, or customers keep it back when paying us.',
+      },
     ),
     base: f.selection(
       { untaxed: 'Untaxed amount', tax: 'Tax amount', total: 'Total' },
-      { required: true, default: 'untaxed', label: 'Computed on' },
+      {
+        required: true,
+        default: 'untaxed',
+        label: 'Computed on',
+        help: 'The part of the document the rate is applied to: the untaxed amount, the tax or the total.',
+      },
     ),
     /** 0.05 for 5 %. */
     rate: f.decimal({ scale: 4, required: true, default: '0' }),
@@ -1542,7 +1602,12 @@ export const AccountPayment = defineModel('account.payment', {
     }),
     kind: f.selection(
       { inbound: 'Receive', outbound: 'Send' },
-      { required: true, default: 'inbound', label: 'Direction' },
+      {
+        required: true,
+        default: 'inbound',
+        label: 'Direction',
+        help: 'Whether the money is received from the partner or sent to them.',
+      },
     ),
     partner: f.many2one('res.partner', { required: true, checkCompany: true }),
     journal: f.many2one('account.journal', { required: true, checkCompany: true }),
@@ -1558,6 +1623,7 @@ export const AccountPayment = defineModel('account.payment', {
       currency: 'currency',
       store: true,
       label: 'Withheld',
+      help: 'The sum of the amounts withheld (VDS, TDS); with the amount paid, it settles the documents.',
       ...compute('account.payment', 'amountWithheld', ['withholdings.amount'], (payments) => {
         for (const p of payments) p.amountWithheld = p.withholdings.sum('amount', p.currency);
       }),
@@ -1566,6 +1632,7 @@ export const AccountPayment = defineModel('account.payment', {
     state: f.state({
       states: { draft: 'Draft', posted: 'Posted', cancel: 'Cancelled' },
       initial: 'draft',
+      help: 'A draft payment can be changed; posting records it in the journal and matches it with the documents it pays.',
       transitions: {
         post: emitting('account.payment.posted', {
           from: ['draft'],

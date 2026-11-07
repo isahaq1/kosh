@@ -219,6 +219,7 @@ export const MrpProductionComponent = defineModel('mrp.production.component', {
       scale: 4,
       store: true,
       label: 'Short',
+      help: 'How much more is needed than the warehouse had available when the order was last checked.',
       ...compute('mrp.production.component', 'short', ['required', 'available'], (lines) => {
         for (const l of lines) {
           const missing = l.required.minus(l.available);
@@ -230,6 +231,7 @@ export const MrpProductionComponent = defineModel('mrp.production.component', {
       scale: 2,
       store: true,
       label: 'Cost',
+      help: 'The quantity needed at the component’s cost.',
       ...compute(
         'mrp.production.component',
         'cost',
@@ -354,6 +356,7 @@ export const MrpWorkorder = defineModel('mrp.workorder', {
     state: f.state({
       states: { ready: 'Ready', progress: 'In progress', done: 'Done', cancel: 'Cancelled' },
       initial: 'ready',
+      help: 'Started and finished at the work centre; the minutes between them are recorded.',
       transitions: {
         start: {
           from: ['ready'],
@@ -490,6 +493,7 @@ export const MrpProduction = defineModel('mrp.production', {
       scale: 2,
       store: true,
       label: 'Materials',
+      help: 'The components needed at their cost.',
       ...compute('mrp.production', 'materialCost', ['components.cost'], (orders) => {
         for (const o of orders)
           o.materialCost = [...o.components].reduce((s, c) => s.plus(c.cost ?? zero), zero);
@@ -500,6 +504,7 @@ export const MrpProduction = defineModel('mrp.production', {
       scale: 2,
       store: true,
       label: 'Operations',
+      help: 'The operations’ minutes for the quantity ordered at their work centres’ cost per hour.',
       ...compute(
         'mrp.production',
         'operationCost',
@@ -531,6 +536,7 @@ export const MrpProduction = defineModel('mrp.production', {
       scale: 2,
       store: true,
       label: 'Total cost',
+      help: 'The materials and the operations together.',
       ...compute('mrp.production', 'totalCost', ['materialCost', 'operationCost'], (orders) => {
         for (const o of orders)
           o.totalCost = (o.materialCost ?? zero).plus(o.operationCost ?? zero);
@@ -540,6 +546,7 @@ export const MrpProduction = defineModel('mrp.production', {
       scale: 4,
       store: true,
       label: 'Unit cost',
+      help: 'The total cost divided by the quantity made.',
       ...compute('mrp.production', 'unitCost', ['totalCost', 'quantity'], (orders) => {
         for (const o of orders)
           o.unitCost = o.quantity.gt(0)
@@ -553,6 +560,7 @@ export const MrpProduction = defineModel('mrp.production', {
       {
         store: true,
         label: 'Status',
+        help: 'A confirmed order is ready once all its components are reserved, otherwise it is waiting.',
         ...compute('mrp.production', 'status', ['state', 'consumption.availability'], (orders) => {
           for (const o of orders)
             o.status =
@@ -570,6 +578,7 @@ export const MrpProduction = defineModel('mrp.production', {
     state: f.state({
       states: { draft: 'Draft', confirmed: 'Confirmed', done: 'Done', cancel: 'Cancelled' },
       initial: 'draft',
+      help: 'Confirmed, the components are reserved and the work orders scheduled; done, the product is made.',
       transitions: {
         /** Lists the components with what is available and short, and the cost, before anything starts. */
         check: {

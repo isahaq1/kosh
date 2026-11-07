@@ -1,5 +1,7 @@
 /** Bangla for the module's labels, keyed by their English text (RFC 0023 §3.1; `pnpm i18n:extract`). */
 export const bn: Readonly<Record<string, string>> = {
+  'A requested amendment changes the LC only once accepted; a refused one changes nothing.':
+    'অনুরোধ করা সংশোধনী কেবল গৃহীত হলেই এলসি বদলায়; নামঞ্জুর সংশোধনী কিছুই বদলায় না।',
   'A shipment is under an issued LC, on or before its latest shipment date, within what it allows — and the only one unless partial shipments are allowed.':
     'শিপমেন্ট একটি ইস্যুকৃত এলসির অধীনে, তার সর্বশেষ শিপমেন্ট তারিখে বা তার আগে, অনুমোদিত সীমার মধ্যে হয় — আর আংশিক শিপমেন্ট অনুমোদিত না হলে একটিই।',
   'A usance LC says after how many days it is paid.':
@@ -24,6 +26,8 @@ export const bn: Readonly<Record<string, string>> = {
   Apply: 'আবেদন করুন',
   'Arrives on': 'পৌঁছানোর তারিখ',
   'At sight': 'অ্যাট সাইট',
+  'At sight: paid when compliant documents are accepted; usance: paid the set number of days after acceptance.':
+    'অ্যাট সাইট: যথাযথ নথি গৃহীত হলে পরিশোধ; ইউজেন্স: গ্রহণের নির্ধারিত দিন পরে পরিশোধ।',
   'Back to draft': 'খসড়ায় ফেরত নিন',
   Bank: 'ব্যাংক',
   'Bank limits': 'ব্যাংক সীমা',
@@ -57,6 +61,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Documents required': 'প্রয়োজনীয় দলিল',
   'Documents required: {{documents}}': 'প্রয়োজনীয় দলিল: {{documents}}',
   Draft: 'খসড়া',
+  'Drafted, applied for at the bank, issued within the bank’s limit, then settled once paid, or cancelled.':
+    'খসড়া, ব্যাংকে আবেদন করা, ব্যাংকের সীমার মধ্যে ইস্যু করা, তারপর পরিশোধ হলে নিষ্পন্ন, অথবা বাতিল।',
   Drawn: 'উত্তোলিত',
   'Due on': 'নির্ধারিত তারিখ',
   Expires: 'মেয়াদ শেষ',
@@ -78,6 +84,8 @@ export const bn: Readonly<Record<string, string>> = {
   Import: 'আমদানি',
   'Import (we apply)': 'আমদানি (আমরা আবেদন করি)',
   'Import and export': 'আমদানি ও রপ্তানি',
+  'Import: our bank opens the LC for our vendor; export: a customer’s bank opens it for us.':
+    'আমদানি: আমাদের ব্যাংক সরবরাহকারীর জন্য এলসি খোলে; রপ্তানি: গ্রাহকের ব্যাংক আমাদের জন্য তা খোলে।',
   Incoterm: 'ইনকোটার্ম',
   Issued: 'ইস্যুকৃত',
   'Issued by the bank': 'ব্যাংক কর্তৃক ইস্যুকৃত',
@@ -122,6 +130,8 @@ export const bn: Readonly<Record<string, string>> = {
   Presentation: 'উপস্থাপন',
   Presentations: 'উপস্থাপন',
   Presented: 'উপস্থাপিত',
+  'Presented documents are accepted when they comply or their discrepancies are waived, then paid at maturity, or refused.':
+    'উপস্থাপিত নথি যথাযথ হলে বা অসঙ্গতি মওকুফ হলে গৃহীত হয়, তারপর মেয়াদপূর্তিতে পরিশোধ হয়, অথবা নামঞ্জুর হয়।',
   'Presented on': 'উপস্থাপনের তারিখ',
   Reference: 'রেফারেন্স',
   Refuse: 'নামঞ্জুর করুন',
@@ -140,6 +150,15 @@ export const bn: Readonly<Record<string, string>> = {
     'ব্যাংকের সীমা অতিক্রম করবে: অন্য এলসি নিষ্পত্তি করুন, অথবা সীমা বাড়িয়ে নিন।',
   'The documents are discrepant: waive the discrepancies, or refuse them.':
     'দলিলে অসঙ্গতি আছে: অসঙ্গতি মওকুফ করুন, অথবা নামঞ্জুর করুন।',
+  'The LC amount plus its tolerance: the most that can be drawn.':
+    'এলসির অঙ্ক যোগ সহনশীলতা: সর্বোচ্চ যা উত্তোলন করা যায়।',
+  'The total of the documents presented under the LC, except refused presentations.':
+    'নামঞ্জুর উপস্থাপন বাদে এলসির অধীনে উপস্থাপিত নথির মোট অঙ্ক।',
+  'The total of the presentations the bank has paid.': 'ব্যাংক যে উপস্থাপনগুলো পরিশোধ করেছে তার মোট অঙ্ক।',
+  'The total value of the shipments made against the LC.':
+    'এলসির বিপরীতে পাঠানো চালানের (শিপমেন্ট) মোট মূল্য।',
+  'The trade term that says where the seller’s costs and risks end and the buyer’s begin.':
+    'যে বাণিজ্য শর্ত বলে দেয় বিক্রেতার খরচ ও ঝুঁকি কোথায় শেষ এবং ক্রেতার কোথায় শুরু।',
   'This bank already has a limit in this currency.': 'এই ব্যাংকের এই মুদ্রায় ইতিমধ্যে একটি সীমা আছে।',
   'Tolerance (± %)': 'সহনশীলতা (± %)',
   'Tolerance %': 'সহনশীলতা %',
@@ -158,4 +177,6 @@ export const bn: Readonly<Record<string, string>> = {
   'Value shipped': 'পাঠানো পণ্যের মূল্য',
   'Vessel / flight': 'জাহাজ / ফ্লাইট',
   'What changes': 'যা বদলাচ্ছে',
+  'What the issued LC still commits the bank to: its amount less what has been paid.':
+    'ইস্যু করা এলসিতে ব্যাংক এখনো যতটুকুর জন্য দায়বদ্ধ: এর অঙ্ক থেকে পরিশোধিত অংশ বাদে।',
 };

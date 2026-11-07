@@ -1,8 +1,12 @@
 /** Bangla for the module's labels, keyed by their English text (RFC 0023 §3.1; `pnpm i18n:extract`). */
 export const bn: Readonly<Record<string, string>> = {
+  'A registration is confirmed while seats are left, waits on the waiting list when the event is full, and is checked in at the door.':
+    'আসন খালি থাকলে নিবন্ধন নিশ্চিত হয়, ইভেন্ট পূর্ণ হলে অপেক্ষমাণ তালিকায় থাকে, আর প্রবেশপথে চেক-ইন হয়।',
   'A session happens during its event.': 'সেশন তার ইভেন্ট চলাকালীন হয়।',
   'A ticket has a price and seats that are not negative.': 'টিকিটের মূল্য ও আসন ঋণাত্মক হতে পারে না।',
   'An event ends after it starts.': 'ইভেন্ট শুরুর পরে শেষ হয়।',
+  'An event takes registrations once published and ends when closed, which thanks those who came.':
+    'প্রকাশের পর ইভেন্টে নিবন্ধন নেওয়া হয় এবং বন্ধ করলে শেষ হয়, তখন যাঁরা এসেছিলেন তাঁদের ধন্যবাদ জানানো হয়।',
   Attended: 'উপস্থিত ছিলেন',
   Attendee: 'অংশগ্রহণকারী',
   'Back to draft': 'খসড়ায় ফেরত নিন',
@@ -80,6 +84,7 @@ export const bn: Readonly<Record<string, string>> = {
   Status: 'অবস্থা',
   Taken: 'নেওয়া',
   'Thanks sent': 'ধন্যবাদ পাঠানো হয়েছে',
+  'The language of the emails sent to the attendee.': 'অংশগ্রহণকারীকে পাঠানো ইমেইলের ভাষা।',
   'The ticket is for another event.': 'টিকিটটি অন্য ইভেন্টের।',
   'This event has no waiting list, or does not take registrations.':
     'এই ইভেন্টে অপেক্ষমাণ তালিকা নেই, অথবা নিবন্ধন নেওয়া হয় না।',

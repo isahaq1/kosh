@@ -23,7 +23,11 @@ export const bn: Readonly<Record<string, string>> = {
   'Display Name': 'প্রদর্শিত নাম',
   'Fixed amount per unit': 'প্রতি এককে নির্দিষ্ট অঙ্ক',
   Goods: 'মালামাল',
+  'Goods are physical items that are stocked and delivered; services are work or time sold or bought.':
+    'পণ্য হলো বাস্তব জিনিস যা মজুদ ও সরবরাহ করা হয়; সেবা হলো বিক্রি বা কেনা কাজ বা সময়।',
   'Highest sales prices': 'সর্বোচ্চ বিক্রয় মূল্য',
+  'How the tax is computed: a percentage of the line’s base or a fixed amount per unit.':
+    'কর কীভাবে হিসাব হয়: লাইনের ভিত্তির শতাংশ হিসেবে, নাকি প্রতি এককে নির্দিষ্ট অঙ্ক হিসেবে।',
   ID: 'আইডি',
   'Included in price': 'মূল্যের মধ্যে অন্তর্ভুক্ত',
   Inventory: 'মজুদ',
@@ -62,6 +66,8 @@ export const bn: Readonly<Record<string, string>> = {
   Services: 'সেবা',
   Tax: 'কর',
   Taxes: 'কর',
+  'The kind of quantity this unit measures; quantities convert only between units of the same kind.':
+    'এই একক কোন ধরনের পরিমাণ মাপে; কেবল একই ধরনের এককের মধ্যে পরিমাণ রূপান্তর হয়।',
   Unit: 'একক',
   'Unit of measure': 'পরিমাপের একক',
   'Units of measure': 'পরিমাপের একক',
@@ -71,5 +77,7 @@ export const bn: Readonly<Record<string, string>> = {
   User: 'ব্যবহারকারী',
   Volume: 'আয়তন',
   Weight: 'ওজন',
+  'Whether the tax applies to sales documents or to purchase documents.':
+    'করটি বিক্রয়ের নথিতে প্রযোজ্য, নাকি ক্রয়ের নথিতে।',
   'Working time': 'কর্মসময়',
 };

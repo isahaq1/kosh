@@ -134,12 +134,22 @@ export const StockWarehouse = defineModel('stock.warehouse', {
     /** Receipts in one step (into stock), two (Input, then stock) or three (Input, Quality control, then stock). */
     receptionSteps: f.selection(
       { one: 'In one step', two: 'Input, then stock', three: 'Input, quality control, then stock' },
-      { required: true, default: 'one', label: 'Receipts' },
+      {
+        required: true,
+        default: 'one',
+        label: 'Receipts',
+        help: 'How many steps incoming goods go through before they reach stock.',
+      },
     ),
     /** Deliveries in one step, two (a pick into Output, then the delivery) or three (pick, pack, deliver). */
     deliverySteps: f.selection(
       { one: 'In one step', two: 'Pick, then deliver', three: 'Pick, pack, then deliver' },
-      { required: true, default: 'one', label: 'Deliveries' },
+      {
+        required: true,
+        default: 'one',
+        label: 'Deliveries',
+        help: 'How many steps outgoing goods go through: picked, packed and delivered.',
+      },
     ),
   },
   sqlConstraints: {
@@ -171,12 +181,19 @@ export const StockLocation = defineModel('stock.location', {
         production: 'Production',
         transit: 'In transit',
       },
-      { required: true, default: 'internal' },
+      {
+        required: true,
+        default: 'internal',
+        help: 'Only internal locations hold stock; the others are where goods come from or go to.',
+      },
     ),
     /** The step of the warehouse's routes this location is for (its Input, Quality control, Packing or Output). */
     step: f.selection(
       { input: 'Input', quality: 'Quality control', packing: 'Packing', output: 'Output' },
-      { label: 'Step' },
+      {
+        label: 'Step',
+        help: 'The step of the warehouse’s receipts or deliveries this location is used for.',
+      },
     ),
     /**
      * `WH/Stock/Shelf 1`: the warehouse code and the names from the top (four levels by name; deeper ones start
@@ -249,6 +266,7 @@ export const StockLot = defineModel('stock.lot', {
       scale: 4,
       store: true,
       label: 'On hand',
+      help: 'The quantity of this lot or serial number held in every location.',
       ...compute('stock.lot', 'qtyOnHand', ['quants.quantity'], (lots) => {
         for (const l of lots)
           l.qtyOnHand = [...l.quants].reduce((s, q) => s.plus(q.quantity), zero);
@@ -284,6 +302,7 @@ export const StockQuant = defineModel('stock.quant', {
       scale: 4,
       store: true,
       label: 'Reserved',
+      help: 'The part of the quantity on hand held for transfers waiting to go out.',
       ...compute('stock.quant', 'reserved', ['reservations.quantity'], (quants) => {
         for (const q of quants)
           q.reserved = [...q.reservations].reduce((s, r) => s.plus(r.quantity), zero);
@@ -293,6 +312,7 @@ export const StockQuant = defineModel('stock.quant', {
       scale: 4,
       store: true,
       label: 'Available',
+      help: 'The quantity on hand less what is reserved.',
       ...compute('stock.quant', 'available', ['quantity', 'reserved'], (quants) => {
         for (const q of quants) q.available = q.quantity.minus(q.reserved ?? zero);
       }),
@@ -379,6 +399,7 @@ export const StockMove = defineModel('stock.move', {
       scale: 4,
       store: true,
       label: 'In the product’s unit',
+      help: 'The line’s quantity converted to the product’s unit, as stock is counted.',
       ...compute(
         'stock.move',
         'productQty',
@@ -415,6 +436,7 @@ export const StockMove = defineModel('stock.move', {
       scale: 4,
       store: true,
       label: 'Done in the product’s unit',
+      help: 'The quantity actually moved, or the whole line when none is entered, in the product’s unit.',
       ...compute(
         'stock.move',
         'doneQty',
@@ -454,6 +476,7 @@ export const StockMove = defineModel('stock.move', {
       scale: 4,
       store: true,
       label: 'Reserved',
+      help: 'How much of this line is already set aside from stock.',
       ...compute('stock.move', 'reserved', ['reservations.quantity'], (moves) => {
         for (const m of moves)
           m.reserved = [...m.reservations].reduce((s, r) => s.plus(r.quantity), zero);
@@ -1245,7 +1268,12 @@ export const StockPicking = defineModel('stock.picking', {
         production: 'Production',
         dropship: 'Dropship',
       },
-      { required: true, default: 'receipt', label: 'Type' },
+      {
+        required: true,
+        default: 'receipt',
+        label: 'Type',
+        help: 'What the transfer does: brings goods in, sends them out, moves them inside or adjusts stock.',
+      },
     ),
     partner: f.many2one('res.partner', { ondelete: 'set null', label: 'Contact' }),
     warehouse: f.many2one('stock.warehouse', { ondelete: 'restrict' }),
@@ -1280,6 +1308,7 @@ export const StockPicking = defineModel('stock.picking', {
       {
         store: true,
         label: 'Availability',
+        help: 'How much of what leaves stock is already reserved; receipts are always ready.',
         ...compute(
           'stock.picking',
           'availability',
@@ -1305,6 +1334,7 @@ export const StockPicking = defineModel('stock.picking', {
       {
         store: true,
         label: 'Status',
+        help: 'A confirmed transfer is ready once everything is reserved, otherwise it is waiting.',
         ...compute('stock.picking', 'status', ['state', 'availability'], (pickings) => {
           for (const p of pickings)
             p.status =
@@ -1321,6 +1351,7 @@ export const StockPicking = defineModel('stock.picking', {
     state: f.state({
       states: { draft: 'Draft', confirmed: 'Confirmed', done: 'Done', cancel: 'Cancelled' },
       initial: 'draft',
+      help: 'A confirmed transfer reserves its stock; validated, the goods have moved.',
       transitions: {
         confirm: {
           from: ['draft'],
@@ -1523,6 +1554,7 @@ export const StockCountLine = defineModel('stock.count.line', {
       scale: 4,
       store: true,
       label: 'Difference',
+      help: 'What was counted less what was expected; empty until the line is counted.',
       ...compute('stock.count.line', 'difference', ['expected', 'counted'], (lines) => {
         for (const l of lines)
           l.difference = l.counted === null ? null : l.counted.minus(l.expected ?? zero);
@@ -1686,6 +1718,7 @@ export const StockCount = defineModel('stock.count', {
     state: f.state({
       states: { draft: 'Draft', counting: 'Counting', done: 'Applied', cancel: 'Cancelled' },
       initial: 'draft',
+      help: 'Started, the count lists what is expected; applied, the differences are adjusted in stock.',
       transitions: {
         /** Lists what the location holds (and inside it), with what is expected, for counting. */
         start: {
@@ -1792,13 +1825,18 @@ export const StockScrap = defineModel('stock.scrap', {
     /** Where it is thrown away from (empty: the main warehouse's stock). */
     location: f.many2one('stock.location', { ondelete: 'restrict', label: 'From' }),
     lot: f.many2one('stock.lot', { ondelete: 'restrict', label: 'Lot / serial number' }),
-    reason: f.selection(SCRAP_REASONS, { required: true, default: 'damaged' }),
+    reason: f.selection(SCRAP_REASONS, {
+      required: true,
+      default: 'damaged',
+      help: 'Why the goods are thrown away.',
+    }),
     note: f.text(),
     date: f.date({ required: true, default: (env: Env) => env.today() }),
     picking: f.many2one('stock.picking', { ondelete: 'set null', label: 'Transfer' }),
     state: f.state({
       states: { draft: 'Draft', done: 'Scrapped', cancel: 'Cancelled' },
       initial: 'draft',
+      help: 'Validated, the goods leave their location as a loss.',
       transitions: {
         validate: emitting('stock.scrap.done', {
           from: ['draft'],
@@ -1969,7 +2007,12 @@ export const StockReorder = defineModel('stock.reorder', {
         transfer: 'Transfer',
         dropship: 'Dropship (the vendor delivers to the customer)',
       },
-      { required: true, default: 'buy', label: 'Replenish by' },
+      {
+        required: true,
+        default: 'buy',
+        label: 'Replenish by',
+        help: 'Whether more is bought, made, transferred from another warehouse or shipped by the vendor straight to the customer.',
+      },
     ),
     /**
      * When it orders: when the forecast falls below the minimum, or for each delivery, what it needs (make to
@@ -1977,7 +2020,12 @@ export const StockReorder = defineModel('stock.reorder', {
      */
     trigger: f.selection(
       { minmax: 'Below the minimum', order: 'For each delivery (make to order)' },
-      { required: true, default: 'minmax', label: 'Orders' },
+      {
+        required: true,
+        default: 'minmax',
+        label: 'Orders',
+        help: 'Order when the forecast falls below the minimum, or for each delivery what it needs.',
+      },
     ),
     vendor: f.many2one('res.partner', { ondelete: 'set null', label: 'Vendor' }),
     sourceWarehouse: f.many2one('stock.warehouse', {

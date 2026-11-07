@@ -103,7 +103,11 @@ export const TradeLc = defineModel('trade.lc', {
     bankReference: f.char({ label: 'LC number' }),
     direction: f.selection(
       { import: 'Import (we apply)', export: 'Export (opened for us)' },
-      { required: true, default: 'import' },
+      {
+        required: true,
+        default: 'import',
+        help: 'Import: our bank opens the LC for our vendor; export: a customer’s bank opens it for us.',
+      },
     ),
     bank: f.many2one('res.partner', {
       required: true,
@@ -122,10 +126,17 @@ export const TradeLc = defineModel('trade.lc', {
     tolerance: f.decimal({ scale: 2, required: true, default: '0', label: 'Tolerance (± %)' }),
     payment: f.selection(
       { sight: 'At sight', usance: 'Usance (days after acceptance)' },
-      { required: true, default: 'sight' },
+      {
+        required: true,
+        default: 'sight',
+        help: 'At sight: paid when compliant documents are accepted; usance: paid the set number of days after acceptance.',
+      },
     ),
     usanceDays: f.integer({ label: 'Usance (days)' }),
-    incoterm: f.selection(INCOTERMS, { label: 'Incoterm' }),
+    incoterm: f.selection(INCOTERMS, {
+      label: 'Incoterm',
+      help: 'The trade term that says where the seller’s costs and risks end and the buyer’s begin.',
+    }),
     applicationDate: f.date({
       required: true,
       default: (env: Env) => env.today(),
@@ -148,6 +159,7 @@ export const TradeLc = defineModel('trade.lc', {
       scale: 2,
       store: true,
       label: 'Shipped',
+      help: 'The total value of the shipments made against the LC.',
       ...compute('trade.lc', 'shipped', ['shipments.value'], (lcs) => {
         for (const lc of lcs)
           lc.shipped = [...lc.shipments].reduce((s, x) => s.plus(amountOf(x.value)), zero);
@@ -158,6 +170,7 @@ export const TradeLc = defineModel('trade.lc', {
       scale: 2,
       store: true,
       label: 'Can be drawn',
+      help: 'The LC amount plus its tolerance: the most that can be drawn.',
       ...compute('trade.lc', 'maxDrawable', ['amount', 'tolerance'], (lcs) => {
         for (const lc of lcs)
           lc.maxDrawable = amountOf(lc.amount)
@@ -170,6 +183,7 @@ export const TradeLc = defineModel('trade.lc', {
       scale: 2,
       store: true,
       label: 'Drawn',
+      help: 'The total of the documents presented under the LC, except refused presentations.',
       ...compute('trade.lc', 'drawn', ['presentations.amount', 'presentations.state'], (lcs) => {
         for (const lc of lcs)
           lc.drawn = [...lc.presentations]
@@ -181,6 +195,7 @@ export const TradeLc = defineModel('trade.lc', {
       scale: 2,
       store: true,
       label: 'Paid',
+      help: 'The total of the presentations the bank has paid.',
       ...compute('trade.lc', 'paid', ['presentations.amount', 'presentations.state'], (lcs) => {
         for (const lc of lcs)
           lc.paid = [...lc.presentations]
@@ -193,6 +208,7 @@ export const TradeLc = defineModel('trade.lc', {
       scale: 2,
       store: true,
       label: 'Outstanding',
+      help: 'What the issued LC still commits the bank to: its amount less what has been paid.',
       ...compute('trade.lc', 'outstanding', ['amount', 'paid', 'state'], (lcs) => {
         for (const lc of lcs) {
           const left = amountOf(lc.amount).minus(amountOf(lc.paid));
@@ -210,6 +226,7 @@ export const TradeLc = defineModel('trade.lc', {
         cancel: 'Cancelled',
       },
       initial: 'draft',
+      help: 'Drafted, applied for at the bank, issued within the bank’s limit, then settled once paid, or cancelled.',
       transitions: {
         apply: { from: ['draft'], to: 'applied' },
         issue: emitting('trade.lc.issued', {
@@ -329,6 +346,7 @@ export const TradeAmendment = defineModel('trade.lc.amendment', {
     state: f.state({
       states: { draft: 'Requested', accepted: 'Accepted', refused: 'Refused' },
       initial: 'draft',
+      help: 'A requested amendment changes the LC only once accepted; a refused one changes nothing.',
       transitions: {
         // Binding once accepted (UCP 600 art. 10): only then does the LC change.
         accept: {
@@ -397,6 +415,7 @@ export const TradePresentation = defineModel('trade.lc.presentation', {
     state: f.state({
       states: { presented: 'Presented', accepted: 'Accepted', paid: 'Paid', refused: 'Refused' },
       initial: 'presented',
+      help: 'Presented documents are accepted when they comply or their discrepancies are waived, then paid at maturity, or refused.',
       transitions: {
         accept: {
           from: ['presented'],

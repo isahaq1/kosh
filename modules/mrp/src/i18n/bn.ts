@@ -7,6 +7,8 @@ export const bn: Readonly<Record<string, string>> = {
   'A component is needed in a positive quantity.': 'উপাদানের প্রয়োজনীয় পরিমাণ ধনাত্মক হতে হবে।',
   'A confirmed order is checked with Check availability.':
     'নিশ্চিত আদেশ "প্রাপ্যতা যাচাই করুন" দিয়ে যাচাই করা হয়।',
+  'A confirmed order is ready once all its components are reserved, otherwise it is waiting.':
+    'নিশ্চিত আদেশের সব উপকরণ সংরক্ষিত হলে এটি প্রস্তুত, নইলে অপেক্ষমাণ।',
   'A product is not a component of itself.': 'কোনো পণ্য নিজের উপাদান হতে পারে না।',
   'A work centre works some hours a day, at a cost that is not negative.':
     'কর্মকেন্দ্র দিনে নির্দিষ্ট কিছু ঘণ্টা কাজ করে, এবং এর খরচ ঋণাত্মক হতে পারে না।',
@@ -43,6 +45,8 @@ export const bn: Readonly<Record<string, string>> = {
   Configuration: 'কনফিগারেশন',
   Confirm: 'নিশ্চিত করুন',
   Confirmed: 'নিশ্চিত',
+  'Confirmed, the components are reserved and the work orders scheduled; done, the product is made.':
+    'নিশ্চিত হলে উপকরণ সংরক্ষিত হয় ও কার্যাদেশের সময়সূচি হয়; সম্পন্ন হলে পণ্যটি তৈরি হয়ে গেছে।',
   Cost: 'খরচ',
   'Cost per hour': 'ঘণ্টাপ্রতি খরচ',
   'Created At': 'তৈরির সময়',
@@ -54,6 +58,8 @@ export const bn: Readonly<Record<string, string>> = {
   Finish: 'শেষ করুন',
   Finished: 'শেষ হয়েছে',
   'Hours a day': 'দিনে ঘণ্টা',
+  'How much more is needed than the warehouse had available when the order was last checked.':
+    'আদেশটি শেষবার যাচাইয়ের সময় গুদামে যা ছিল তার চেয়ে কতটা বেশি দরকার।',
   ID: 'আইডি',
   'In progress': 'চলমান',
   'Made this month': 'এ মাসে উৎপাদিত',
@@ -98,9 +104,17 @@ export const bn: Readonly<Record<string, string>> = {
   Short: 'ঘাটতি',
   Start: 'শুরু করুন',
   Started: 'শুরু হয়েছে',
+  'Started and finished at the work centre; the minutes between them are recorded.':
+    'কর্মকেন্দ্রে শুরু ও শেষ করা হয়; মাঝের মিনিটগুলো লিপিবদ্ধ হয়।',
   State: 'অবস্থা',
   Status: 'অবস্থা',
   'The bill of materials is for another product.': 'এই উপকরণ তালিকা অন্য একটি পণ্যের জন্য।',
+  'The components needed at their cost.': 'প্রয়োজনীয় উপকরণ তাদের খরচে।',
+  'The materials and the operations together.': 'উপকরণ ও কার্যক্রমের খরচ একসাথে।',
+  'The operations’ minutes for the quantity ordered at their work centres’ cost per hour.':
+    'আদেশকৃত পরিমাণের জন্য কার্যক্রমের মিনিট, কর্মকেন্দ্রের ঘণ্টাপ্রতি খরচে।',
+  'The quantity needed at the component’s cost.': 'প্রয়োজনীয় পরিমাণ উপকরণের খরচে।',
+  'The total cost divided by the quantity made.': 'মোট খরচকে তৈরি পরিমাণ দিয়ে ভাগ করে।',
   'To do': 'করণীয়',
   Total: 'মোট',
   'Total cost': 'মোট খরচ',

@@ -1,6 +1,8 @@
 /** Bangla for the module's labels, keyed by their English text (RFC 0023 §3.1; `pnpm i18n:extract`). */
 export const bn: Readonly<Record<string, string>> = {
   'A field is on a page, inside it.': 'ফিল্ড একটি পাতার উপর, তার ভিতরে থাকে।',
+  'A request is out for signature once sent, and signed when the last signer is done, which seals the PDF.':
+    'পাঠানোর পর অনুরোধটি স্বাক্ষরের জন্য পাঠানো অবস্থায় থাকে, আর শেষ স্বাক্ষরকারী স্বাক্ষর করলে এটি স্বাক্ষরিত হয় এবং PDF সিল করা হয়।',
   'A signer has an email address.': 'স্বাক্ষরকারীর একটি ইমেইল ঠিকানা থাকতে হবে।',
   Active: 'সক্রিয়',
   Asked: 'অনুরোধ করা হয়েছে',
@@ -43,6 +45,7 @@ export const bn: Readonly<Record<string, string>> = {
   Message: 'বার্তা',
   Name: 'নাম',
   'Out for signature': 'স্বাক্ষরের জন্য পাঠানো',
+  Overview: 'সারসংক্ষেপ',
   Page: 'পাতা',
   'Page {{page}} of {{pages}}': 'পৃষ্ঠা {{page}} / {{pages}}',
   Pages: 'পাতা',
@@ -53,6 +56,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Refused because': 'নামঞ্জুরের কারণ',
   Request: 'অনুরোধ',
   Requests: 'অনুরোধ',
+  'Requests by state': 'অবস্থা অনুযায়ী অনুরোধ',
+  'Requests by template': 'টেমপ্লেট অনুযায়ী অনুরোধ',
   Required: 'আবশ্যক',
   Role: 'ভূমিকা',
   'Send for signature': 'স্বাক্ষরের জন্য পাঠান',
@@ -87,6 +92,10 @@ export const bn: Readonly<Record<string, string>> = {
   'User (send requests)': 'ব্যবহারকারী (অনুরোধ পাঠান)',
   Values: 'মান',
   Waiting: 'অপেক্ষমাণ',
+  'Waiting for the signers before them, asked once their link is sent, then signed or refused.':
+    'আগের স্বাক্ষরকারীদের জন্য অপেক্ষমাণ, লিংক পাঠানো হলে অনুরোধ করা হয়েছে, তারপর স্বাক্ষরিত বা নামঞ্জুর।',
+  'What the signer fills in here: a signature, initials, the date signed, a text or a checkbox.':
+    'স্বাক্ষরকারী এখানে কী পূরণ করবেন: স্বাক্ষর, আদ্যক্ষর, স্বাক্ষরের তারিখ, লেখা বা চেকবক্স।',
   'Why it was refused': 'কেন নামঞ্জুর করা হয়েছে',
   Width: 'প্রস্থ',
   X: 'X',

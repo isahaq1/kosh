@@ -460,7 +460,11 @@ export const ProjectPlan = defineModel('project.plan', {
       label: 'Sponsor',
       help: 'Approves the plan first; a Projects manager when there is none.',
     }),
-    priority: f.selection(PRIORITIES, { required: true, default: 'normal' }),
+    priority: f.selection(PRIORITIES, {
+      required: true,
+      default: 'normal',
+      help: 'How important the plan is against the others.',
+    }),
     dateStart: f.date({ label: 'Planned start' }),
     dateEnd: f.date({ label: 'Planned end' }),
     description: f.text(),
@@ -704,7 +708,11 @@ export const ProjectBudgetLine = defineModel('project.budget.line', {
     }),
     sequence: f.integer({ required: true, default: 10 }),
     name: f.char({ required: true, label: 'What for' }),
-    category: f.selection(BUDGET_CATEGORIES, { required: true, default: 'other' }),
+    category: f.selection(BUDGET_CATEGORIES, {
+      required: true,
+      default: 'other',
+      help: 'What kind of cost the line plans for.',
+    }),
     phase: f.many2one('project.phase', { ondelete: 'set null' }),
     workPackage: f.many2one('project.work.package', {
       ondelete: 'set null',
@@ -792,10 +800,19 @@ export const ProjectProject = defineModel('project.project', {
     }),
     sponsor: f.many2one('res.users', { ondelete: 'set null', label: 'Sponsor' }),
     owner: f.many2one('res.users', { ondelete: 'set null', label: 'Owner' }),
-    priority: f.selection(PRIORITIES, { required: true, default: 'normal' }),
+    priority: f.selection(PRIORITIES, {
+      required: true,
+      default: 'normal',
+      help: 'How important the project is against the others.',
+    }),
     riskLevel: f.selection(
       { low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical' },
-      { required: true, default: 'low', label: 'Risk' },
+      {
+        required: true,
+        default: 'low',
+        label: 'Risk',
+        help: 'How risky the project is judged to be overall.',
+      },
     ),
     location: f.char(),
     sequence: f.integer({ required: true, default: 10 }),
@@ -812,6 +829,7 @@ export const ProjectProject = defineModel('project.project', {
       scale: 1,
       store: true,
       label: 'Progress %',
+      help: 'How much is done, from its tasks weighted by their planned hours.',
       ...compute(
         'project.project',
         'progress',
@@ -840,6 +858,7 @@ export const ProjectProject = defineModel('project.project', {
       store: true,
       label: 'Budget',
       groups: MANAGERS_SEE,
+      help: 'The planned amounts of the budget lines added together.',
       ...compute('project.project', 'budget', ['budgetLines.planned'], (projects) => {
         for (const p of projects)
           p.budget = [...p.budgetLines].reduce((t, l) => t.plus(l.planned), orm.toDecimal(0));
@@ -879,7 +898,10 @@ export const ProjectProject = defineModel('project.project', {
       ),
     }),
     /** What the figures say (written by the refresh, hourly and on demand). */
-    healthComputed: f.selection(HEALTH, { label: 'Health by the figures' }),
+    healthComputed: f.selection(HEALTH, {
+      label: 'Health by the figures',
+      help: 'What the schedule, late milestones and costs say, checked every hour.',
+    }),
     healthNotes: f.text({ label: 'Why', help: 'What the figures said at the last refresh.' }),
     healthCheckedAt: f.datetime({ label: 'Checked' }),
     healthOverride: f.selection(HEALTH, {
@@ -890,6 +912,7 @@ export const ProjectProject = defineModel('project.project', {
     health: f.selection(HEALTH, {
       store: true,
       label: 'Health',
+      help: 'The manager’s health if set, else the health by the figures.',
       ...compute('project.project', 'health', ['healthOverride', 'healthComputed'], (projects) => {
         for (const p of projects) p.health = p.healthOverride ?? p.healthComputed ?? 'on_track';
       }),
@@ -899,6 +922,7 @@ export const ProjectProject = defineModel('project.project', {
       store: true,
       label: 'Labour cost',
       groups: MANAGERS_SEE,
+      help: 'The cost of all the hours logged on the project’s timesheets.',
       ...compute('project.project', 'labourCost', ['timesheets.cost'], (projects) => {
         for (const p of projects) {
           let total = orm.toDecimal(0);
@@ -918,6 +942,7 @@ export const ProjectProject = defineModel('project.project', {
       scale: 2,
       store: true,
       label: 'Hours spent',
+      help: 'The hours logged on all the project’s tasks.',
       ...compute('project.project', 'hours', ['tasks.effectiveHours'], (projects) => {
         for (const p of projects) {
           let total = orm.toDecimal(0);
@@ -1027,7 +1052,11 @@ const layerFields = {
   manager: f.many2one('res.users', { ondelete: 'set null', label: 'Manager' }),
   dateStart: f.date({ label: 'Start' }),
   dateEnd: f.date({ label: 'End' }),
-  status: f.selection(STATUSES, { required: true, default: 'draft' }),
+  status: f.selection(STATUSES, {
+    required: true,
+    default: 'draft',
+    help: 'Where the work stands, from draft to done.',
+  }),
   description: f.text(),
   /** Set by hand when the tasks do not tell the whole story (empty: computed). */
   progressOverride: f.decimal({ scale: 1, label: 'Progress set by hand %' }),
@@ -1057,13 +1086,18 @@ export const ProjectPhase = defineModel('project.phase', {
     responsible: f.many2one('res.users', { ondelete: 'set null' }),
     /** Its end has passed and it is not done or cancelled (set by the refresh, hourly). */
     late: f.boolean({ default: false, label: 'Late' }),
-    priority: f.selection(PRIORITIES, { required: true, default: 'normal' }),
+    priority: f.selection(PRIORITIES, {
+      required: true,
+      default: 'normal',
+      help: 'How important the phase is within its project.',
+    }),
     workPackages: f.one2many('project.work.package', 'phase', { label: 'Work packages' }),
     tasks: f.one2many('project.task', 'phase'),
     progress: f.decimal({
       scale: 1,
       store: true,
       label: 'Progress %',
+      help: 'How much is done: set by hand, else from its tasks weighted by their planned hours.',
       ...compute(
         'project.phase',
         'progress',
@@ -1141,6 +1175,7 @@ export const ProjectWorkPackage = defineModel('project.work.package', {
       scale: 1,
       store: true,
       label: 'Progress %',
+      help: 'How much is done: set by hand, else from its tasks weighted by their planned hours.',
       ...compute(
         'project.work.package',
         'progress',
@@ -1226,7 +1261,7 @@ export const ProjectTask = defineModel('project.task', {
     partner: f.many2one('res.partner', { checkCompany: true, label: 'Customer' }),
     priority: f.selection(
       { normal: 'Normal', high: 'High' },
-      { required: true, default: 'normal' },
+      { required: true, default: 'normal', help: 'How urgent the task is.' },
     ),
     deadline: f.date(),
     plannedHours: f.decimal({ scale: 2, label: 'Planned hours' }),
@@ -1234,6 +1269,7 @@ export const ProjectTask = defineModel('project.task', {
       scale: 2,
       store: true,
       label: 'Hours spent',
+      help: 'The hours logged on the task’s timesheets.',
       ...compute('project.task', 'effectiveHours', ['timesheets.hours'], (tasks) => {
         for (const t of tasks) {
           let total = orm.toDecimal(0);
@@ -1253,6 +1289,7 @@ export const ProjectTask = defineModel('project.task', {
       scale: 1,
       store: true,
       label: 'Progress %',
+      help: 'Full once done; until then, the share of its sub-tasks done, weighted by their planned hours.',
       ...compute(
         'project.task',
         'progress',
@@ -1297,7 +1334,11 @@ export const ProjectTask = defineModel('project.task', {
     }),
     repeatUnit: f.selection(
       { day: 'Days', week: 'Weeks', month: 'Months' },
-      { default: 'week', label: 'Repeat unit' },
+      {
+        default: 'week',
+        label: 'Repeat unit',
+        help: 'Whether the repeat is counted in days, weeks or months.',
+      },
     ),
     repeatUntil: f.date({ label: 'Repeat until' }),
     nextTask: f.many2one('project.task', { ondelete: 'set null', label: 'Next one' }),
@@ -1465,7 +1506,7 @@ export const ProjectRisk = defineModel('project.risk', {
         supply: 'Supply',
         other: 'Other',
       },
-      { required: true, default: 'other' },
+      { required: true, default: 'other', help: 'What part of the project the risk threatens.' },
     ),
     probability: f.integer({
       required: true,
@@ -1487,6 +1528,7 @@ export const ProjectRisk = defineModel('project.risk', {
     level: f.selection(RISK_LEVELS, {
       store: true,
       label: 'Level',
+      help: 'From the probability times the impact: up to 4 low, 9 medium, 15 high, above that critical.',
       ...compute('project.risk', 'level', ['probability', 'impact'], (risks) => {
         for (const r of risks) r.level = riskLevel((r.probability ?? 0) * (r.impact ?? 0));
       }),
@@ -1500,7 +1542,11 @@ export const ProjectRisk = defineModel('project.risk', {
     dueDate: f.date({ label: 'Review by' }),
     status: f.selection(
       { open: 'Open', mitigating: 'Being mitigated', occurred: 'Occurred', closed: 'Closed' },
-      { required: true, default: 'open' },
+      {
+        required: true,
+        default: 'open',
+        help: 'Where the risk stands: open, being dealt with, happened or closed.',
+      },
     ),
   },
   sqlConstraints: {
@@ -1527,7 +1573,11 @@ export const ProjectIssue = defineModel('project.issue', {
     }),
     name: f.char({ required: true, label: 'Issue' }),
     description: f.text(),
-    severity: f.selection(RISK_LEVELS, { required: true, default: 'medium' }),
+    severity: f.selection(RISK_LEVELS, {
+      required: true,
+      default: 'medium',
+      help: 'How serious the issue is for the project.',
+    }),
     raisedBy: f.many2one('res.users', {
       default: (env: Env) => env.userId,
       ondelete: 'set null',
@@ -1537,7 +1587,11 @@ export const ProjectIssue = defineModel('project.issue', {
     dueDate: f.date({ label: 'Resolve by' }),
     status: f.selection(
       { open: 'Open', in_progress: 'In progress', resolved: 'Resolved', closed: 'Closed' },
-      { required: true, default: 'open' },
+      {
+        required: true,
+        default: 'open',
+        help: 'Where the issue stands, from open to resolved and closed.',
+      },
     ),
     resolution: f.text(),
     risk: f.many2one('project.risk', { ondelete: 'set null', label: 'From the risk' }),
@@ -1737,7 +1791,10 @@ export const ProjectStatusReport = defineModel('project.status.report', {
       default: (env: Env) => env.userId,
       ondelete: 'restrict',
     }),
-    health: f.selection(HEALTH, { label: 'Health then' }),
+    health: f.selection(HEALTH, {
+      label: 'Health then',
+      help: 'The project’s health when the report was written.',
+    }),
     progress: f.decimal({ scale: 1, label: 'Progress then %' }),
     done: f.text({ label: 'Done this week' }),
     next: f.text({ label: 'Next week' }),
@@ -1746,6 +1803,7 @@ export const ProjectStatusReport = defineModel('project.status.report', {
     state: f.state({
       states: { draft: 'Draft', sent: 'Sent' },
       initial: 'draft',
+      help: 'A draft can still be edited; once sent, it is posted on the project for its followers.',
       transitions: {
         send: {
           from: ['draft'],
@@ -1853,6 +1911,7 @@ export const ProjectTimesheet = defineModel('project.timesheet', {
       store: true,
       label: 'Cost',
       groups: MANAGERS_SEE,
+      help: 'The hours at the person’s hourly cost in the project that day, else their role’s.',
       ...compute(
         'project.timesheet',
         'cost',

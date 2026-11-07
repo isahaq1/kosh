@@ -1,15 +1,25 @@
 /** Bangla for the module's labels, keyed by their English text (RFC 0023 §3.1; `pnpm i18n:extract`). */
 export const bn: Readonly<Record<string, string>> = {
+  'A closed year has its result moved to retained earnings and accepts no more entries on or before its lock date.':
+    'বন্ধ অর্থবছরের ফলাফল সংরক্ষিত আয়ে স্থানান্তরিত হয় এবং লক তারিখে বা তার আগে আর কোনো এন্ট্রি নেওয়া হয় না।',
   "A component's share is above 0 and at most 1 (0.5 for half).":
     'উপাদানের অংশ 0-এর বেশি এবং সর্বোচ্চ 1 (অর্ধেকের জন্য 0.5)।',
   'A cost centre code is used once per company.':
     'প্রতিটি প্রতিষ্ঠানে একটি খরচ কেন্দ্রের কোড একবারই ব্যবহার হয়।',
+  'A draft can be changed; a bill may wait for approval; a posted entry is in the books and is corrected only by a reversal.':
+    'খসড়া বদলানো যায়; বিল অনুমোদনের অপেক্ষায় থাকতে পারে; পোস্টকৃত এন্ট্রি হিসাবের খাতায় ওঠে এবং কেবল বিপরীত এন্ট্রি দিয়ে সংশোধন করা যায়।',
+  'A draft payment can be changed; posting records it in the journal and matches it with the documents it pays.':
+    'খসড়া পেমেন্ট বদলানো যায়; পোস্ট করলে এটি জার্নালে লিপিবদ্ধ হয় এবং যে নথিগুলো পরিশোধ করে সেগুলোর সঙ্গে মিলকরণ হয়।',
   'A fiscal year ends after it starts.': 'অর্থবছর শুরুর পরে শেষ হয়।',
   'A fiscal year starts in a month from 1 (January) to 12 (December).':
     'অর্থবছর 1 (জানুয়ারি) থেকে 12 (ডিসেম্বর) এর মধ্যে কোনো মাসে শুরু হয়।',
   'A journal code is used once per company.': 'প্রতিটি প্রতিষ্ঠানে একটি জার্নাল কোড একবারই ব্যবহার হয়।',
+  'A journal entry, or the kind of document: customer or vendor invoice, credit note or debit note.':
+    'জার্নাল এন্ট্রি, অথবা নথির ধরন: গ্রাহক চালান বা সরবরাহকারীর বিল, ক্রেডিট নোট বা ডেবিট নোট।',
   'A line is a debit or a credit, never both, and never negative.':
     'একটি লাইন হয় ডেবিট নয়তো ক্রেডিট, কখনো দুটোই নয় এবং কখনো ঋণাত্মক নয়।',
+  'A line of a journal entry, a product line of a document, or a tax or receivable / payable line made at posting.':
+    'জার্নাল এন্ট্রির লাইন, নথির পণ্য লাইন, অথবা পোস্ট করার সময় তৈরি কর বা প্রাপ্য / প্রদেয় লাইন।',
   'A match is zero or more.': 'মিলের অঙ্ক শূন্য বা তার বেশি।',
   'A part is between 0 and 100 %.': 'অংশ 0 থেকে 100 %-এর মধ্যে।',
   'A payment amount is positive.': 'পেমেন্টের অঙ্ক ধনাত্মক হতে হবে।',
@@ -95,6 +105,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Days are zero or more.': 'দিন শূন্য বা তার বেশি।',
   Debit: 'ডেবিট',
   'Debit Line': 'ডেবিট লাইন',
+  'Debit minus credit, in the company currency.': 'ডেবিট বিয়োগ ক্রেডিট, প্রতিষ্ঠানের মুদ্রায়।',
   'Default account': 'ডিফল্ট হিসাব',
   Depreciation: 'অবচয়',
   Description: 'বিবরণ',
@@ -214,6 +225,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Profit and loss': 'লাভ-ক্ষতি',
   Purchases: 'ক্রয়',
   Quantity: 'পরিমাণ',
+  'Quantity times unit price less the discount, before taxes, in the document’s currency.':
+    'পরিমাণ গুণ একক মূল্য থেকে ছাড় বাদে, করের আগে, নথির মুদ্রায়।',
   Rate: 'হার',
   Receivable: 'প্রাপ্য',
   'Receivable / payable': 'প্রাপ্য / প্রদেয়',
@@ -271,6 +284,22 @@ export const bn: Readonly<Record<string, string>> = {
   'The lines of a posted entry cannot be changed. Reverse the entry instead.':
     'পোস্টকৃত এন্ট্রির লাইন বদলানো যায় না। এর পরিবর্তে এন্ট্রিটি উল্টে দিন।',
   'The month it starts: 7 for July–June.': 'শুরুর মাস: জুলাই–জুন হলে 7।',
+  'The part of the document the rate is applied to: the untaxed amount, the tax or the total.':
+    'নথির যে অংশে হার প্রয়োগ হয়: করবিহীন অঙ্ক, কর বা মোট।',
+  'The sum of the amounts withheld (VDS, TDS); with the amount paid, it settles the documents.':
+    'উৎসে কর্তন (VDS, TDS) করা অঙ্কের যোগফল; পরিশোধিত অঙ্কের সঙ্গে মিলে এটি নথিগুলো নিষ্পত্তি করে।',
+  'The sum of the credits of the entry’s lines, in the company currency.':
+    'এন্ট্রির লাইনগুলোর ক্রেডিটের যোগফল, প্রতিষ্ঠানের মুদ্রায়।',
+  'The sum of the debits of the entry’s lines, in the company currency.':
+    'এন্ট্রির লাইনগুলোর ডেবিটের যোগফল, প্রতিষ্ঠানের মুদ্রায়।',
+  'The sum of the product lines before taxes, in the document’s currency.':
+    'করের আগে পণ্য লাইনগুলোর যোগফল, নথির মুদ্রায়।',
+  'The taxes of the product lines, in the document’s currency.': 'পণ্য লাইনগুলোর কর, নথির মুদ্রায়।',
+  'The taxes of this product line, in the document’s currency.': 'এই পণ্য লাইনের কর, নথির মুদ্রায়।',
+  'The type of the line’s account, for grouping in the reports.':
+    'লাইনের হিসাবের ধরন, প্রতিবেদনে গোষ্ঠীভুক্ত করার জন্য।',
+  'The untaxed amount plus the taxes: what the document is for.':
+    'করবিহীন অঙ্ক যোগ কর: নথিটির মোট অঙ্ক।',
   To: 'পর্যন্ত',
   Total: 'মোট',
   Totals: 'মোট',
@@ -290,9 +319,27 @@ export const bn: Readonly<Record<string, string>> = {
   'Waiting approval': 'অনুমোদনের অপেক্ষায়',
   'Waiting for approvals.': 'অনুমোদনের অপেক্ষায়।',
   'We withhold when paying vendors': 'সরবরাহকারীকে পরিশোধের সময় আমরা উৎসে কর্তন করি',
+  'What is still to be paid on the posted document after the payments and credit notes matched with it.':
+    'মিলকরণ করা পেমেন্ট ও ক্রেডিট নোটের পরে পোস্টকৃত নথিতে যা এখনো পরিশোধ বাকি।',
+  'What is still unmatched on this receivable or payable line, in the company currency.':
+    'এই প্রাপ্য বা প্রদেয় লাইনে যা এখনো মিলকরণ হয়নি, প্রতিষ্ঠানের মুদ্রায়।',
+  'What is still unmatched on this receivable or payable line, in the entry’s currency.':
+    'এই প্রাপ্য বা প্রদেয় লাইনে যা এখনো মিলকরণ হয়নি, এন্ট্রির মুদ্রায়।',
+  'What the journal records: sales, purchases, cash, bank or miscellaneous entries.':
+    'জার্নালে যা লিপিবদ্ধ হয়: বিক্রয়, ক্রয়, নগদ, ব্যাংক বা বিবিধ এন্ট্রি।',
   'When paying vendors': 'সরবরাহকারীকে পরিশোধের সময়',
   'When the fiscal year starts, and the dates before which nothing may change.':
     'অর্থবছর কখন শুরু হয় এবং কোন তারিখের আগে কিছুই বদলানো যাবে না।',
+  'When this part of the tax applies: always, only for supplies within the state, or only between states and abroad.':
+    'করের এই অংশ কখন প্রযোজ্য: সবসময়, কেবল রাজ্যের ভেতরের সরবরাহে, অথবা কেবল রাজ্যের বাইরে ও বিদেশে।',
+  'Where the account appears in the balance sheet or the profit and loss, and whether it holds receivables, payables or money.':
+    'হিসাবটি স্থিতিপত্রে না লাভ-ক্ষতিতে দেখা যায়, এবং এতে প্রাপ্য, প্রদেয় না অর্থ থাকে।',
+  'Whether the money is received from the partner or sent to them.':
+    'টাকা অংশীদারের কাছ থেকে গ্রহণ করা হয় নাকি তাকে পাঠানো হয়।',
+  'Whether the posted document is not paid, partially paid or paid, from what is still due on it.':
+    'পোস্টকৃত নথিটি অপরিশোধিত, আংশিক পরিশোধিত নাকি পরিশোধিত, তাতে যা বকেয়া আছে তা থেকে নির্ধারিত।',
+  'Whether we keep the amount back when paying vendors, or customers keep it back when paying us.':
+    'সরবরাহকারীকে পরিশোধের সময় আমরা অঙ্কটি কেটে রাখি, নাকি গ্রাহক আমাদের পরিশোধের সময় তা কেটে রাখেন।',
   'Who owes most': 'সবচেয়ে বেশি বকেয়া কার',
   Withheld: 'কর্তিত',
   'Withheld by customers': 'গ্রাহকদের দ্বারা কর্তিত',

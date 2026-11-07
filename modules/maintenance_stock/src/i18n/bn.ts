@@ -14,6 +14,8 @@ export const bn: Readonly<Record<string, string>> = {
   Request: 'অনুরোধ',
   'Spare part': 'খুচরা যন্ত্রাংশ',
   'Spare parts': 'খুচরা যন্ত্রাংশ',
+  'The quantity used, in the product’s unit, at the product’s cost.':
+    'ব্যবহৃত পরিমাণ, পণ্যের এককে, পণ্যের খরচে।',
   Unit: 'একক',
   'Updated At': 'হালনাগাদের সময়',
   'Updated By': 'হালনাগাদ করেছেন',

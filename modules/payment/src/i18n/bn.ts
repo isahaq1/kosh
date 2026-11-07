@@ -10,6 +10,8 @@ export const bn: Readonly<Record<string, string>> = {
   Currency: 'মুদ্রা',
   Customer: 'গ্রাহক',
   Disabled: 'নিষ্ক্রিয়',
+  'Disabled: not offered; test: the provider’s sandbox, no real money; live: real payments.':
+    'নিষ্ক্রিয়: দেখানো হয় না; পরীক্ষা: প্রদানকারীর স্যান্ডবক্স, আসল টাকা নয়; লাইভ: আসল পেমেন্ট।',
   'Display Name': 'প্রদর্শিত নাম',
   Done: 'সম্পন্ন',
   Error: 'ত্রুটি',
@@ -39,6 +41,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Payment receipt': 'পেমেন্টের রসিদ',
   'Payment transaction': 'পেমেন্ট লেনদেন',
   Pending: 'অপেক্ষমাণ',
+  'Pending until the provider confirms; paid once confirmed and the payment registered; or failed or cancelled.':
+    'প্রদানকারী নিশ্চিত না করা পর্যন্ত অপেক্ষমাণ; নিশ্চিত হয়ে পেমেন্ট নিবন্ধিত হলে পরিশোধিত; অথবা ব্যর্থ বা বাতিল।',
   Provider: 'প্রদানকারী',
   'Provider reference': 'প্রদানকারীর রেফারেন্স',
   Razorpay: 'Razorpay',
@@ -52,6 +56,8 @@ export const bn: Readonly<Record<string, string>> = {
   Stripe: 'Stripe',
   Test: 'পরীক্ষা',
   'Test provider (no money moves)': 'পরীক্ষামূলক প্রদানকারী (কোনো টাকা লেনদেন হয় না)',
+  'The payment service customers pay through; the test provider moves no money.':
+    'যে পেমেন্ট সেবার মাধ্যমে গ্রাহক পরিশোধ করেন; পরীক্ষামূলক প্রদানকারীতে কোনো টাকা লেনদেন হয় না।',
   'Updated At': 'হালনাগাদের সময়',
   'Updated By': 'হালনাগাদ করেছেন',
 };

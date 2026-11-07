@@ -1,5 +1,7 @@
 /** Bangla for the module's labels, keyed by their English text (RFC 0023 §3.1; `pnpm i18n:extract`). */
 export const bn: Readonly<Record<string, string>> = {
+  'A request for quotation until it is submitted; once approved it becomes a purchase order, which can then be locked or cancelled.':
+    'জমা দেওয়া পর্যন্ত এটি উদ্ধৃতির অনুরোধ; অনুমোদিত হলে ক্রয় আদেশে পরিণত হয়, যা পরে লক বা বাতিল করা যায়।',
   'Add at least one line before submitting the order.': 'অর্ডার জমা দেওয়ার আগে অন্তত একটি লাইন যোগ করুন।',
   Amount: 'অঙ্ক',
   'Biggest open requests': 'সবচেয়ে বড় খোলা অনুরোধ',
@@ -76,6 +78,12 @@ export const bn: Readonly<Record<string, string>> = {
   'Tax (before 0.2.0)': 'কর (0.2.0-এর আগে)',
   Taxes: 'কর',
   'Terms and conditions': 'শর্তাবলি',
+  'The line’s amount before taxes: the quantity times the unit price, less any tax included in the price.':
+    'লাইনের করবিহীন অঙ্ক: পরিমাণ গুণ একক মূল্য, মূল্যে অন্তর্ভুক্ত কর বাদ দিয়ে।',
+  'The sum of the lines’ amounts before taxes.': 'লাইনগুলোর করবিহীন অঙ্কের যোগফল।',
+  'The sum of the taxes on the lines.': 'লাইনগুলোর করের যোগফল।',
+  'The taxes on this line, computed from its amount and its taxes.':
+    'এই লাইনের কর, লাইনের অঙ্ক ও তার কর থেকে হিসাব করা।',
   'The terms new requests for quotation and purchase orders start with.':
     'নতুন উদ্ধৃতির অনুরোধ ও ক্রয় আদেশ যে শর্তাবলি নিয়ে শুরু হয়।',
   'To approve': 'অনুমোদন বাকি',
@@ -93,4 +101,6 @@ export const bn: Readonly<Record<string, string>> = {
   Vendors: 'সরবরাহকারী',
   'Waiting approval': 'অনুমোদনের অপেক্ষায়',
   'Waiting for approvals.': 'অনুমোদনের অপেক্ষায়।',
+  'What the order costs with its taxes: the untaxed amount plus the taxes.':
+    'করসহ অর্ডারের খরচ: করবিহীন অঙ্কের সাথে কর যোগ করে।',
 };

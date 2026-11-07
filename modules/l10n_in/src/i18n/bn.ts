@@ -47,6 +47,8 @@ export const bn: Readonly<Record<string, string>> = {
   'GST returns': 'GST রিটার্ন',
   'GST treatment': 'GST প্রয়োগ',
   GSTIN: 'GSTIN',
+  'How the goods travel under the e-way bill: by road, rail, air or ship.':
+    'ই-ওয়ে বিলের অধীনে পণ্য কীভাবে যায়: সড়ক, রেল, আকাশ বা জলপথে।',
   'HSN / SAC': 'HSN / SAC',
   ID: 'আইডি',
   IGST: 'IGST',
@@ -92,5 +94,9 @@ export const bn: Readonly<Record<string, string>> = {
   'Updated At': 'হালনাগাদের সময়',
   'Updated By': 'হালনাগাদ করেছেন',
   'Vehicle number': 'যানবাহনের নম্বর',
+  'Whether the e-way bill for moving the goods was generated, failed or was cancelled.':
+    'পণ্য পরিবহনের ই-ওয়ে বিল তৈরি হয়েছে, ব্যর্থ হয়েছে নাকি বাতিল হয়েছে।',
+  'Whether the invoice was registered at the Invoice Registration Portal and got its IRN, failed, or was cancelled there.':
+    'চালানটি ইনভয়েস রেজিস্ট্রেশন পোর্টালে নিবন্ধিত হয়ে IRN পেয়েছে, ব্যর্থ হয়েছে, নাকি সেখানে বাতিল হয়েছে।',
   'Zero-rated (export under LUT)': 'শূন্য হার (LUT-এর অধীনে রপ্তানি)',
 };

@@ -79,6 +79,7 @@ export const EventEvent = defineModel('event.event', {
     }),
     description: f.text(),
     state: f.state({
+      help: 'An event takes registrations once published and ends when closed, which thanks those who came.',
       states: {
         draft: 'Draft',
         published: 'Open for registration',
@@ -248,7 +249,12 @@ export const EventRegistration = defineModel('event.registration', {
     /** The attendee's language, for their emails. */
     lang: f.selection(
       { en: 'English', bn: 'Bangla' },
-      { required: true, default: 'en', label: 'Language' },
+      {
+        required: true,
+        default: 'en',
+        label: 'Language',
+        help: 'The language of the emails sent to the attendee.',
+      },
     ),
     /** What the attendee's QR carries; checked in once with it. */
     code: f.char({
@@ -264,6 +270,7 @@ export const EventRegistration = defineModel('event.registration', {
     /** When the thanks went, after the event (once). */
     thanksSentAt: f.datetime({ label: 'Thanks sent' }),
     state: f.state({
+      help: 'A registration is confirmed while seats are left, waits on the waiting list when the event is full, and is checked in at the door.',
       states: {
         draft: 'Draft',
         confirmed: 'Confirmed',

@@ -98,6 +98,7 @@ export const CrmDeal = defineModel('crm.deal', {
       scale: 2,
       store: true,
       label: 'Weighted revenue',
+      help: 'The expected revenue multiplied by the probability of winning the deal.',
       ...compute('crm.deal', 'weightedRevenue', ['expectedRevenue', 'probability'], (deals) => {
         for (const d of deals)
           d.weightedRevenue =
@@ -120,11 +121,11 @@ export const CrmDeal = defineModel('crm.deal', {
         partner: 'Partner',
         other: 'Other',
       },
-      {},
+      { help: 'Where the deal came from.' },
     ),
     priority: f.selection(
       { normal: 'Normal', good: 'Good', very_good: 'Very good', excellent: 'Excellent' },
-      { required: true, default: 'normal' },
+      { required: true, default: 'normal', help: 'How promising the deal is, shown as stars.' },
     ),
     lost: f.boolean({ default: false }),
     lostReason: f.many2one('crm.lost.reason', { ondelete: 'restrict', label: 'Lost because' }),
@@ -132,6 +133,7 @@ export const CrmDeal = defineModel('crm.deal', {
       { open: 'Open', won: 'Won', lost: 'Lost' },
       {
         store: true,
+        help: 'Won when the deal is in a winning stage, lost when marked lost, open otherwise.',
         ...compute('crm.deal', 'status', ['stage.won', 'lost'], (deals) => {
           for (const d of deals)
             d.status = d.lost ? 'lost' : d.stage?.won === true ? 'won' : 'open';

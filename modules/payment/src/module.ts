@@ -33,10 +33,20 @@ export const PaymentProvider = defineModel('payment.provider', {
   access: { 'account.user': ['read'], 'account.manager': ALL },
   fields: {
     name: f.char({ required: true }),
-    code: f.selection(PROVIDERS, { required: true, default: 'fake', label: 'Provider' }),
+    code: f.selection(PROVIDERS, {
+      required: true,
+      default: 'fake',
+      label: 'Provider',
+      help: 'The payment service customers pay through; the test provider moves no money.',
+    }),
     state: f.selection(
       { disabled: 'Disabled', test: 'Test', live: 'Live' },
-      { required: true, default: 'test', label: 'Mode' },
+      {
+        required: true,
+        default: 'test',
+        label: 'Mode',
+        help: 'Disabled: not offered; test: the provider’s sandbox, no real money; live: real payments.',
+      },
     ),
     /** Where the money arrives: the payments are registered in this bank (or cash) journal. */
     journal: f.many2one('account.journal', { required: true, checkCompany: true }),
@@ -72,7 +82,11 @@ export const PaymentTransaction = defineModel('payment.transaction', {
         failed: 'Failed',
         cancelled: 'Cancelled',
       },
-      { required: true, default: 'pending' },
+      {
+        required: true,
+        default: 'pending',
+        help: 'Pending until the provider confirms; paid once confirmed and the payment registered; or failed or cancelled.',
+      },
     ),
     providerReference: f.char({ label: 'Provider reference' }),
     /** The payment registered when the provider confirmed. */

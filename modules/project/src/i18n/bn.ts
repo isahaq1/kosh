@@ -5,6 +5,8 @@ export const bn: Readonly<Record<string, string>> = {
   'A change request asks for a new deadline, a new budget or both.':
     'পরিবর্তনের অনুরোধে নতুন শেষ সময়, নতুন বাজেট বা দুটোই চাওয়া হয়।',
   'A cost is not negative.': 'খরচ ঋণাত্মক হতে পারে না।',
+  'A draft can still be edited; once sent, it is posted on the project for its followers.':
+    'খসড়া এখনও সম্পাদনা করা যায়; পাঠানো হলে এটি প্রকল্পে এর অনুসারীদের জন্য পোস্ট করা হয়।',
   'A membership ends on or after it starts.': 'সদস্যপদ শুরুর দিনে বা তার পরে শেষ হয়।',
   'A new project (not inside a programme) starts from an approved plan.':
     'নতুন প্রকল্প (কোনো প্রোগ্রামের অধীনে নয়) একটি অনুমোদিত পরিকল্পনা থেকে শুরু হয়।',
@@ -124,7 +126,11 @@ export const bn: Readonly<Record<string, string>> = {
   From: 'থেকে',
   'From the figures — schedule against time elapsed, late milestones, the budget used —, refreshed hourly.':
     'পরিসংখ্যান থেকে — অতিবাহিত সময়ের তুলনায় সময়সূচি, দেরি হওয়া মাইলফলক, ব্যবহৃত বাজেট — প্রতি ঘণ্টায় হালনাগাদ হয়।',
+  'From the probability times the impact: up to 4 low, 9 medium, 15 high, above that critical.':
+    'সম্ভাবনা গুণ প্রভাব থেকে: ৪ পর্যন্ত নিম্ন, ৯ পর্যন্ত মাঝারি, ১৫ পর্যন্ত উচ্চ, এর বেশি হলে গুরুতর।',
   'From the risk': 'ঝুঁকি থেকে',
+  'Full once done; until then, the share of its sub-tasks done, weighted by their planned hours.':
+    'সম্পন্ন হলে পূর্ণ; ততদিন পর্যন্ত এর উপ-কাজগুলোর সম্পন্ন অংশ, তাদের পরিকল্পিত ঘণ্টা অনুযায়ী ভারযুক্ত।',
   'Half hours': 'আধা ঘণ্টা',
   Health: 'অবস্থা',
   'Health by the figures': 'পরিসংখ্যান অনুযায়ী অবস্থা',
@@ -144,7 +150,17 @@ export const bn: Readonly<Record<string, string>> = {
   'Hours this month': 'এ মাসের ঘণ্টা',
   'How bad if it happens, from 1 (slight) to 5 (severe).':
     'ঘটলে কতটা ক্ষতি, ১ (সামান্য) থেকে ৫ (মারাত্মক)।',
+  'How important the phase is within its project.': 'প্রকল্পের মধ্যে এই ধাপটি কতটা গুরুত্বপূর্ণ।',
+  'How important the plan is against the others.': 'অন্যগুলোর তুলনায় এই পরিকল্পনাটি কতটা গুরুত্বপূর্ণ।',
+  'How important the project is against the others.': 'অন্যগুলোর তুলনায় এই প্রকল্পটি কতটা গুরুত্বপূর্ণ।',
   'How likely, from 1 (rare) to 5 (almost certain).': 'কতটা সম্ভাব্য, ১ (বিরল) থেকে ৫ (প্রায় নিশ্চিত)।',
+  'How much is done, from its tasks weighted by their planned hours.':
+    'কতটা সম্পন্ন হয়েছে, এর কাজগুলো থেকে তাদের পরিকল্পিত ঘণ্টা অনুযায়ী ভারযুক্ত।',
+  'How much is done: set by hand, else from its tasks weighted by their planned hours.':
+    'কতটা সম্পন্ন হয়েছে: হাতে দেওয়া হলে সেটি, নইলে এর কাজগুলো থেকে তাদের পরিকল্পিত ঘণ্টা অনুযায়ী ভারযুক্ত।',
+  'How risky the project is judged to be overall.': 'সামগ্রিকভাবে প্রকল্পটি কতটা ঝুঁকিপূর্ণ বলে বিবেচিত।',
+  'How serious the issue is for the project.': 'প্রকল্পের জন্য সমস্যাটি কতটা গুরুতর।',
+  'How urgent the task is.': 'কাজটি কতটা জরুরি।',
   ID: 'আইডি',
   Impact: 'প্রভাব',
   'In progress': 'চলমান',
@@ -345,6 +361,8 @@ export const bn: Readonly<Record<string, string>> = {
   'The budget less the actual and committed costs; negative when beyond it.':
     'বাজেট থেকে প্রকৃত ও প্রতিশ্রুত খরচ বাদে; বাজেট ছাড়ালে ঋণাত্মক।',
   'The case': 'যৌক্তিকতা',
+  'The cost of all the hours logged on the project’s timesheets.':
+    'প্রকল্পের টাইমশিটে লেখা সব ঘণ্টার খরচ।',
   'The cost of an hour of a member in this role who has no cost of their own.':
     'এই ভূমিকার যে সদস্যের নিজস্ব খরচ নেই, তার এক ঘণ্টার খরচ।',
   'The dates and budget approved with the plan; the deadline is compared with them.':
@@ -352,8 +370,16 @@ export const bn: Readonly<Record<string, string>> = {
   'The estimate decides who approves: the sponsor, and above 1 000 000 a Projects manager too.':
     'আনুমানিক অঙ্ক নির্ধারণ করে কে অনুমোদন করবেন: পৃষ্ঠপোষক, এবং ১০ লাখের বেশি হলে একজন প্রকল্প ব্যবস্থাপকও।',
   'The estimate unless changed before approving.': 'অনুমোদনের আগে না বদলালে আনুমানিক অঙ্কই থাকে।',
+  'The hours at the person’s hourly cost in the project that day, else their role’s.':
+    'সেদিন প্রকল্পে ব্যক্তির ঘণ্টাপ্রতি খরচে ঘণ্টাগুলোর মূল্য, নইলে তার ভূমিকার খরচে।',
+  'The hours logged on all the project’s tasks.': 'প্রকল্পের সব কাজে লেখা ঘণ্টা।',
+  'The hours logged on the task’s timesheets.': 'কাজটির টাইমশিটে লেখা ঘণ্টা।',
   'The manager may override what the figures say, with the reason; it stays in the history.':
     'ব্যবস্থাপক কারণসহ পরিসংখ্যানের ফলাফল বদলাতে পারেন; তা ইতিহাসে থেকে যায়।',
+  'The manager’s health if set, else the health by the figures.':
+    'ব্যবস্থাপক অবস্থা দিলে সেটি, নইলে পরিসংখ্যান অনুযায়ী অবস্থা।',
+  'The planned amounts of the budget lines added together.': 'বাজেট লাইনগুলোর পরিকল্পিত অঙ্কের যোগফল।',
+  'The project’s health when the report was written.': 'প্রতিবেদন লেখার সময় প্রকল্পের অবস্থা।',
   'The share of their working time this project takes while they are in it.':
     'প্রকল্পে থাকাকালীন তাদের কাজের সময়ের যে অংশ এই প্রকল্পে যায়।',
   'Their timesheets on this project cost this an hour; empty: their role’s default cost.':
@@ -384,13 +410,23 @@ export const bn: Readonly<Record<string, string>> = {
   'What is done to make it less likely or less bad.': 'এর সম্ভাবনা বা ক্ষতি কমাতে কী করা হয়।',
   'What it asks for': 'যা চাওয়া হয়েছে',
   'What it changed': 'যা বদলেছে',
+  'What kind of cost the line plans for.': 'লাইনটি কোন ধরনের খরচের পরিকল্পনা করে।',
   'What new tasks start with, and the steps timesheets are entered in.':
     'নতুন কাজ কী নিয়ে শুরু হয়, এবং টাইমশিট কোন ধাপে দেওয়া হয়।',
+  'What part of the project the risk threatens.': 'ঝুঁকিটি প্রকল্পের কোন দিককে হুমকিতে ফেলে।',
   'What the figures said at the last refresh.': 'সর্বশেষ হালনাগাদে পরিসংখ্যান যা দেখিয়েছিল।',
+  'What the schedule, late milestones and costs say, checked every hour.':
+    'সময়সূচি, বিলম্বিত মাইলফলক ও খরচ যা বলে, প্রতি ঘণ্টায় যাচাই করা হয়।',
   'When a project shows at risk or off track: how far behind its schedule, how much of its budget used.':
     'প্রকল্প কখন ঝুঁকিতে বা পথচ্যুত দেখাবে: সময়সূচি থেকে কতটা পিছিয়ে, বাজেটের কতটা ব্যবহৃত।',
+  'Where the issue stands, from open to resolved and closed.':
+    'সমস্যাটি কোন অবস্থায় আছে, খোলা থেকে সমাধান ও বন্ধ পর্যন্ত।',
+  'Where the risk stands: open, being dealt with, happened or closed.':
+    'ঝুঁকিটি কোন অবস্থায় আছে: খোলা, মোকাবিলা চলছে, ঘটে গেছে বা বন্ধ।',
+  'Where the work stands, from draft to done.': 'কাজটি কোন অবস্থায় আছে, খসড়া থেকে সম্পন্ন পর্যন্ত।',
   'Whether a project starts only from an approved plan.':
     'প্রকল্প কেবল অনুমোদিত পরিকল্পনা থেকে শুরু হবে কি না।',
+  'Whether the repeat is counted in days, weeks or months.': 'পুনরাবৃত্তি দিন, সপ্তাহ না মাসে গোনা হবে।',
   'Whole hours': 'পূর্ণ ঘণ্টা',
   Why: 'কেন',
   'Work package': 'কাজের প্যাকেজ',
