@@ -70,6 +70,12 @@ export const HrDepartment = defineModel('hr.department', {
     name: f.char({ required: true }),
     parent: f.many2one('hr.department', { ondelete: 'restrict', label: 'Part of' }),
     head: f.many2one('hr.employee', { ondelete: 'set null', label: 'Head' }),
+    /** Who approves for the department (approval levels by "the approvers of the requester's department"). */
+    approvalUsers: f.many2many('res.users', {
+      relation: 'hr_department_approval_user_rel',
+      label: 'Approvers',
+      help: 'People who approve for this department when an approval level asks for the department’s approvers.',
+    }),
   },
 });
 

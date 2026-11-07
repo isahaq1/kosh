@@ -9,6 +9,7 @@ export const bn: Readonly<Record<string, string>> = {
   Active: 'সক্রিয়',
   Approve: 'অনুমোদন করুন',
   Approved: 'অনুমোদিত',
+  Approvers: 'অনুমোদনকারী',
   'Back to draft': 'খসড়ায় ফেরত নিন',
   Birthday: 'জন্মদিন',
   'By department': 'বিভাগ অনুযায়ী',
@@ -63,6 +64,8 @@ export const bn: Readonly<Record<string, string>> = {
   Overview: 'সারসংক্ষেপ',
   'Part of': 'অন্তর্ভুক্ত',
   People: 'জনবল',
+  'People who approve for this department when an approval level asks for the department’s approvers.':
+    'অনুমোদনের কোনো ধাপ বিভাগের অনুমোদনকারী চাইলে যাঁরা এই বিভাগের পক্ষে অনুমোদন দেন।',
   Permanent: 'স্থায়ী',
   Position: 'পদ',
   Positions: 'পদসমূহ',

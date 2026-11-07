@@ -55,6 +55,12 @@ export const ProductCategory = defineModel('product.category', {
   fields: {
     name: f.char({ required: true, translate: true }),
     parent: f.many2one('product.category', { ondelete: 'restrict' }),
+    /** Who approves documents with these products (approval levels where "the record decides", RFC 0027). */
+    approvalUsers: f.many2many('res.users', {
+      relation: 'product_category_approval_user_rel',
+      label: 'Approvers',
+      help: 'People who approve purchases of this category’s products when an approval level lets the record decide.',
+    }),
   },
 });
 

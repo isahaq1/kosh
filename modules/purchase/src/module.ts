@@ -158,6 +158,39 @@ export const PurchaseOrder = defineModel('purchase.order', {
   methods: {
     /** Before the approvals of a submission: nothing here; account_budget checks the budgets. */
     submitting: method('purchase.order', async () => undefined),
+    /**
+     * The approvers each order names for an approval level where "the record decides" (RFC 0027 §2.1): the approvers
+     * of its lines' product categories (the nearest category up the tree that names some).
+     */
+    approvalUsers: method('purchase.order', async function (this: unknown, _key: string): Promise<
+      Map<number, number[]>
+    > {
+      const orders = this as { env: Env; ids: readonly number[] };
+      const out = new Map<number, number[]>();
+      for (const order of await orders.env
+        .model('purchase.order')
+        .browse([...orders.ids] as never)
+        .load({ lines: { product: { category: true } } })) {
+        const people = new Set<number>();
+        for (const line of order.lines) {
+          let category = line.product?.category?.id as number | undefined;
+          for (let depth = 0; category !== undefined && depth < 10; depth += 1) {
+            const [c] = await orders.env
+              .model('product.category')
+              .browse([category as never])
+              .load({ approvalUsers: true, parent: true });
+            const users = (c?.approvalUsers ?? []) as readonly { id: unknown }[];
+            if (users.length > 0) {
+              for (const u of users) people.add(u.id as number);
+              break;
+            }
+            category = c?.parent?.id as number | undefined;
+          }
+        }
+        out.set(order.id as number, [...people]);
+      }
+      return out;
+    }),
   },
   onchange: {
     // The vendor's currency, else the company's; empty terms from the company's settings.

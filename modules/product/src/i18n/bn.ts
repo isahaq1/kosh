@@ -6,6 +6,7 @@ export const bn: Readonly<Record<string, string>> = {
   Active: 'সক্রিয়',
   'Affects the base of later taxes': 'পরবর্তী করের ভিত্তিতে প্রভাব ফেলে',
   'Amount per unit': 'প্রতি এককে অঙ্ক',
+  Approvers: 'অনুমোদনকারী',
   'Average sales price': 'গড় বিক্রয় মূল্য',
   Barcode: 'বারকোড',
   'By category': 'শ্রেণি অনুযায়ী',
@@ -39,6 +40,8 @@ export const bn: Readonly<Record<string, string>> = {
   'On sales': 'বিক্রয়ে',
   Overview: 'সারসংক্ষেপ',
   Parent: 'মূল শ্রেণি',
+  'People who approve purchases of this category’s products when an approval level lets the record decide.':
+    'অনুমোদনের কোনো ধাপ নথিকে সিদ্ধান্ত নিতে দিলে যাঁরা এই শ্রেণির পণ্যের ক্রয় অনুমোদন করেন।',
   'Percentage of the base': 'ভিত্তির শতাংশ',
   Picture: 'ছবি',
   Prices: 'মূল্য',
