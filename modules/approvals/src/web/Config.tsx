@@ -1,7 +1,7 @@
 /**
  * The policy and category editor's helpers (RFC 0025 step 4), node components of their forms:
  * - `approvals.PolicyPreview`: which of the last 50 records each level of the policy would have asked about, so a
- *   condition is checked before anyone submits;
+ *   condition is checked before anyone submits; and "Sync waiting requests" (RFC 0027 §2.6);
  * - `approvals.CategoryPolicy`: a request category's approval policy — made on demand when it has none, opened when
  *   it has one (its levels are edited there).
  * Shown to Approvals managers (the server decides).
@@ -23,6 +23,12 @@ export function PolicyPreview({ api, record, version }: NodeComponentProps): Rea
         `/api/v1/approvals/policies/${String(id)}/preview`,
       ),
   });
+  const [synced, setSynced] = useState<number | null>(null);
+  const sync = useMutation({
+    mutationFn: () =>
+      api.call<{ synced: number }>('POST', `/api/v1/approvals/policies/${String(id)}/sync`, {}),
+    onSuccess: (r) => setSynced(r.synced),
+  });
   if (id === null || preview.isError) return null;
   if (preview.isPending) return <p className="text-sm text-muted-foreground">{t('loading')}</p>;
   const { records, levels } = preview.data;
@@ -43,6 +49,21 @@ export function PolicyPreview({ api, record, version }: NodeComponentProps): Rea
           </li>
         ))}
       </ul>
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={sync.isPending}
+          onClick={() => sync.mutate()}
+        >
+          {t('preview.sync')}
+        </Button>
+        {synced === null ? null : (
+          <span role="status" className="text-xs text-muted-foreground">
+            {t('preview.synced', { count: synced })}
+          </span>
+        )}
+      </div>
     </section>
   );
 }

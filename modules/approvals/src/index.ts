@@ -22,6 +22,8 @@ import { contacts } from '@kosh/contacts';
 import { type Mailer, mailerFromEnv } from '@kosh/mail';
 import { defineModule } from '@kosh/modules-sdk';
 import {
+  APPROVER_KEYS,
+  type ApprovalRequestInfo,
   type Decision,
   decide,
   groupsOf,
@@ -29,6 +31,8 @@ import {
   permissions,
   previewPolicy,
   sweepDeadlines,
+  syncLevels,
+  turnOf,
   useLink,
 } from '@kosh/permissions';
 import { reporting } from '@kosh/reporting';
@@ -73,10 +77,68 @@ export function approvalMailWorkers(context: Pick<ModuleContext, 'shutro'>): Wor
       },
       { pollMs: 5000 },
     );
+  // The people added to a waiting request (reassigned) and a request's backups (told): their own links.
+  const only = (name: string, topic: string, why: 'added' | 'backup') =>
+    context.shutro.subscribe(
+      name,
+      topic,
+      async (event, env) => {
+        const p = (event.payload ?? {}) as Row;
+        const id = Number(p['request']);
+        const users = Array.isArray(p['users']) ? (p['users'] as number[]) : [];
+        if (!Number.isSafeInteger(id) || users.length === 0) return;
+        await (env as Env).asSuperuser({ reason: 'approval emails' }, async (su) => {
+          const [request] = (await turnOfRequest(su, id)) ?? [];
+          if (request !== undefined) await mailDeciders(su, [request], why, users);
+        });
+      },
+      { pollMs: 5000 },
+    );
+  // Waiting requests follow their level's approvers (RFC 0027 §2.6): Shutro's change events of approval levels.
+  const sync = context.shutro.subscribe(
+    'approvals.sync',
+    'record.changed',
+    async (event, env) => {
+      const p = (event.payload ?? {}) as Row;
+      if (p['model'] !== 'approval.level' || p['action'] !== 'write') return;
+      const keys = Array.isArray(p['keys']) ? (p['keys'] as string[]) : [];
+      if (!keys.some((k) => APPROVER_KEYS.includes(k))) return;
+      const ids = (Array.isArray(p['ids']) ? (p['ids'] as number[]) : []).filter((i) =>
+        Number.isSafeInteger(i),
+      );
+      await (env as Env).asSuperuser({ reason: 'approval sync' }, async (su) => {
+        for (const done of await syncLevels(su, ids))
+          if (done.notify && done.added.length > 0)
+            await mailDeciders(su, [done.request], 'added', done.added);
+      });
+    },
+    { pollMs: 5000 },
+  );
   return [
     turn('approvals.asked', 'approval.requested'),
     turn('approvals.next', 'approval.decided'),
+    only('approvals.reassigned', 'approval.reassigned', 'added'),
+    only('approvals.backups', 'approval.backups', 'backup'),
+    sync,
   ];
+}
+
+/** One request by id, while it waits (for the emails). */
+async function turnOfRequest(su: Env, id: number): Promise<ApprovalRequestInfo[] | undefined> {
+  const found = await (
+    su.model('approval.request' as never) as unknown as {
+      search(q: unknown): Promise<{
+        length: number;
+        load(k: string[]): Promise<{ read(k: string[]): Row[] }>;
+      }>;
+    }
+  ).search({ where: { id, state: 'pending' }, limit: 1 });
+  if (found.length === 0) return undefined;
+  const [row] = (await found.load(['targetModel', 'targetId'])).read(['targetModel', 'targetId']);
+  if (row === undefined) return undefined;
+  return (await turnOf(su, String(row['targetModel']), Number(row['targetId']))).filter(
+    (r) => r.id === id,
+  );
 }
 
 /** Reminders and escalations, then their emails (as the system). */
@@ -131,6 +193,47 @@ function registerApprovalAppRoutes(context: ModuleContext): void {
       },
       { write: true },
     );
+  });
+  // `POST /api/v1/approvals/policies/:id/sync` `{ mode? }`: "Sync now" — the policy's waiting requests get their
+  // approvers found again (RFC 0027 §2.6), adding unless the body or the policy says replace.
+  app.post('/api/v1/approvals/policies/:id/sync', async (request) => {
+    const id = idParam(request.params);
+    const mode = (request.body as { mode?: unknown } | null)?.mode;
+    if (mode !== undefined && mode !== 'add' && mode !== 'replace')
+      throw new HttpProblem(400, 'invalid-body', 'Invalid body', "mode is 'add' or 'replace'.");
+    return request.env(async (raw) => {
+      const env = raw as Env;
+      managersOnly(env);
+      return env.asSuperuser({ reason: 'approval sync' }, async (su) => {
+        const levels = await (
+          await (
+            su.model('approval.level' as never) as unknown as {
+              search(q: unknown): Promise<{ ids: readonly number[] }>;
+            }
+          ).search({ where: { policy: id } })
+        ).ids;
+        const [policy] = await (
+          await (
+            su.model('approval.policy' as never) as unknown as {
+              search(
+                q: unknown,
+              ): Promise<{ load(k: string[]): Promise<{ read(k: string[]): Row[] }> }>;
+            }
+          ).search({ where: { id }, limit: 1 })
+        )
+          .load(['syncPending'])
+          .then((r) => r.read(['syncPending']));
+        if (policy === undefined)
+          throw new HttpProblem(404, 'missing-record', 'Not found', 'No such policy.');
+        const how =
+          (mode as 'add' | 'replace' | undefined) ??
+          (policy['syncPending'] === 'replace' ? 'replace' : 'add');
+        const done = await syncLevels(su, levels, how);
+        for (const d of done)
+          if (d.notify && d.added.length > 0) await mailDeciders(su, [d.request], 'added', d.added);
+        return { synced: done.length };
+      });
+    });
   });
   const tokenOf = (params: unknown) => String((params as Row)['token'] ?? '');
   const linkFor = (token: string) =>
@@ -721,6 +824,9 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
               'onWithdrawn',
               'reasonRequired',
               'whenNobody',
+              'skipDuplicates',
+              'syncPending',
+              'notifyOnSync',
             ] as never,
             {
               label: 'What happens',
@@ -738,6 +844,7 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
               { field: 'approverUsers', id: 'level_users', widget: 'tags' },
               { field: 'approverField', id: 'level_field' },
               { field: 'extraUsers', id: 'level_extra', widget: 'tags' },
+              { field: 'backupUsers', id: 'level_backups', widget: 'tags' },
               { field: 'quorum', id: 'level_quorum' },
               { field: 'quorumCount', id: 'level_count' },
               { field: 'deadlineHours', id: 'level_deadline' },

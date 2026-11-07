@@ -35,13 +35,19 @@ const WHY = {
   asked: (who: string, record: string) => `${who} asks you to approve ${record}`,
   reminded: (_who: string, record: string) => `Reminder: ${record} waits for your approval`,
   escalated: (_who: string, record: string) => `${record} is late: you may decide it now`,
+  added: (who: string, record: string) => `${who} waits for your approval of ${record}`,
+  backup: (_who: string, record: string) => `As a backup approver: ${record} waits for a decision`,
 } as const;
 
-/** Emails each person who may decide `requests` now a link of their own; skips those already sent one. */
+/**
+ * Emails each person who may decide `requests` now a link of their own (only `only`, when given: the people added
+ * to a request, its backups); for a new turn, skips requests already sent links.
+ */
 export async function mailDeciders(
   su: Env,
   requests: readonly ApprovalRequestInfo[],
   why: keyof typeof WHY,
+  only?: readonly number[],
 ): Promise<number> {
   const mailer = config.mailer;
   let sent = 0;
@@ -53,7 +59,7 @@ export async function mailDeciders(
       });
       if (existing.length > 0) continue;
     }
-    const links = await issueLinks(su, request, su.today(), () => randomToken(24), digest);
+    const links = await issueLinks(su, request, su.today(), () => randomToken(24), digest, only);
     if (links.length === 0) continue;
     const [record] = await read(
       await ref(su, request.targetModel)

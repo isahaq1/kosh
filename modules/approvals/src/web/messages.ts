@@ -7,6 +7,9 @@ export const messages: Readonly<Record<string, object>> = {
       explain_other: 'Of the last {{count}} records of this model (within the policy’s condition):',
       matched_one: '{{matched}} of {{count}}',
       matched_other: '{{matched}} of {{count}}',
+      sync: 'Sync waiting requests',
+      synced_one: '{{count}} waiting request updated.',
+      synced_other: '{{count}} waiting requests updated.',
     },
     category: {
       setUp: 'Set up its approvals',
@@ -76,6 +79,9 @@ export const messages: Readonly<Record<string, object>> = {
       explain_other: 'এই মডেলের শেষ {{count}}টি রেকর্ডের মধ্যে (নীতির শর্তের ভেতরে):',
       matched_one: '{{count}}টির মধ্যে {{matched}}টি',
       matched_other: '{{count}}টির মধ্যে {{matched}}টি',
+      sync: 'অপেক্ষমাণ অনুরোধ মিলিয়ে নিন',
+      synced_one: '{{count}}টি অপেক্ষমাণ অনুরোধ হালনাগাদ হয়েছে।',
+      synced_other: '{{count}}টি অপেক্ষমাণ অনুরোধ হালনাগাদ হয়েছে।',
     },
     category: {
       setUp: 'অনুমোদন ঠিক করুন',

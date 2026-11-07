@@ -3,11 +3,14 @@
  * of the requester's department, one by the department's approvers plus an extra person, one by the record (the
  * approvers of the lines' product categories); each request says how its approvers were found; a level's turn —
  * and its deadline — starts when the levels before it are approved; every step is in the log. Nobody to decide:
- * the submission refused with the reason, or the level skipped when the policy says so.
+ * the submission refused with the reason, or the level skipped when the policy says so. Step 2: an approver who
+ * already approved is not asked again; backups decide beside the approvers and are told; Approvals managers reassign
+ * with a reason (never to the requester); waiting requests follow their level's changes, and "Sync now".
  */
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { approvalMailWorkers } from '@kosh/approvals';
 import { hr } from '@kosh/hr';
 import {
   type AppHost,
@@ -281,4 +284,131 @@ test('nobody to decide: refused with the reason; skipped when the policy says so
   // The skipped level does not hold the next one: the department's extra person decides now.
   expect(department).toMatchObject({ approvers: [users['extra']], state: 'pending' });
   expect(department?.startedAt).not.toBeNull();
+});
+
+test('approved already, backups, reassignment, waiting requests in step with their level', async () => {
+  expectStatus(
+    await call('PATCH', `/api/v1/models/approval.policy/${ids['policy']}`, 'pia', {
+      active: false,
+    }),
+    200,
+  );
+  const made = await call('POST', '/api/v1/models/approval.policy', 'pia', {
+    name: 'Matrix 2',
+    targetModel: 'purchase.order',
+    onApproved: 'confirm',
+    onRejected: 'reject',
+    skipDuplicates: true,
+    levels: {
+      create: [
+        {
+          sequence: 10,
+          name: 'First',
+          approverKind: 'users',
+          approverUsers: { set: [users['dina']] },
+        },
+        {
+          sequence: 20,
+          name: 'Second',
+          approverKind: 'users',
+          approverUsers: { set: [users['dina'], users['extra']] },
+        },
+        {
+          sequence: 30,
+          name: 'Third',
+          approverKind: 'users',
+          approverUsers: { set: [users['cat']] },
+          backupUsers: { set: [users['karim']] },
+        },
+      ],
+    },
+  });
+  expectStatus(made, 201);
+  const policy = made.json.id as number;
+  const id = await order('bob');
+  expectStatus(await call('POST', `${PO}/${id}/transitions/submit`, 'bob'), 200);
+  let { requests } = await approvalsOf(id);
+  const [first, second, third] = requests;
+  expectStatus(await call('POST', `/api/v1/approvals/requests/${first?.id}/approve`, 'dina'), 200);
+  // Dina approved First: Second, which she may decide too, is approved for her; Third's turn.
+  let events: { request: number; kind: string; note: string | null }[];
+  ({ requests, events } = await approvalsOf(id));
+  expect(requests[1]?.state).toBe('approved');
+  expect(events.filter((e) => e.request === second?.id).map((e) => e.kind)).toEqual([
+    'created',
+    'started',
+    'auto',
+  ]);
+  expect(requests[2]?.startedAt).not.toBeNull();
+
+  // Telling the backups: the approver may, the requester may not.
+  expect(
+    (await call('POST', `/api/v1/approvals/requests/${third?.id}/notify-backups`, 'bob')).status,
+  ).toBe(403);
+  const told = await call('POST', `/api/v1/approvals/requests/${third?.id}/notify-backups`, 'cat');
+  expectStatus(told, 200);
+  expect(told.json.notified).toBe(1);
+
+  // Reassigning: Approvals managers only, a reason, never the requester.
+  const R = `/api/v1/approvals/requests/${third?.id}/reassign`;
+  expect((await call('POST', R, 'cat', { users: [users['extra']], reason: 'Away' })).status).toBe(
+    403,
+  );
+  expect((await call('POST', R, 'pia', { users: [users['bob']], reason: 'Away' })).status).toBe(
+    422,
+  );
+  expect((await call('POST', R, 'pia', { users: [users['extra']], reason: ' ' })).status).toBe(422);
+  const moved = await call('POST', R, 'pia', {
+    users: [users['extra']],
+    mode: 'replace',
+    reason: 'Cat is on leave',
+  });
+  expectStatus(moved, 200);
+  expect(moved.json.approvers).toEqual([users['extra']]);
+  expect(
+    (await call('POST', `/api/v1/approvals/requests/${third?.id}/approve`, 'cat')).status,
+  ).toBe(403);
+
+  // The level changes (the record decides now): once the change is served, the waiting request follows, adding
+  // the category's approver. (A change of many-to-many fields alone emits no change event yet: Shutro request #35.)
+  const levels = (
+    await call(
+      'GET',
+      `/api/v1/models/approval.level?fields=id,name&filter[policy]=${policy}`,
+      'pia',
+    )
+  ).json.items as Json[];
+  const thirdLevel = levels.find((l) => l.name === 'Third');
+  expectStatus(
+    await call('PATCH', `/api/v1/models/approval.level/${thirdLevel.id}`, 'pia', {
+      approverKind: 'record',
+      backupUsers: { set: [users['dina']] },
+    }),
+    200,
+  );
+  for (const w of approvalMailWorkers({ shutro: host.server.shutro })) await w.drain();
+  ({ requests } = await approvalsOf(id));
+  expect([...(requests[2] as Json).approvers].sort()).toEqual(
+    [users['extra'], users['cat']].sort(),
+  );
+  expect([...(requests[2] as Json).backups].sort()).toEqual([users['karim'], users['dina']].sort());
+  // "Sync now", replacing: the level's people again, its backups as they are now.
+  const synced = await call('POST', `/api/v1/approvals/policies/${policy}/sync`, 'pia', {
+    mode: 'replace',
+  });
+  expectStatus(synced, 200);
+  expect(synced.json.synced).toBe(1);
+  ({ requests, events } = await approvalsOf(id));
+  expect(requests[2]).toMatchObject({ approvers: [users['cat']], backups: [users['dina']] });
+  expect(events.filter((e) => e.request === third?.id).map((e) => e.kind)).toEqual([
+    'created',
+    'started',
+    'notified',
+    'reassigned',
+    'synced',
+    'synced',
+  ]);
+  // A backup decides: the order is approved.
+  expectStatus(await call('POST', `/api/v1/approvals/requests/${third?.id}/approve`, 'dina'), 200);
+  expect((await call('GET', `${PO}/${id}?fields=state`, 'pia')).json.state).toBe('purchase');
 });
