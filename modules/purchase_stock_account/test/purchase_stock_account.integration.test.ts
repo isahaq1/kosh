@@ -309,3 +309,43 @@ test('a dropshipped order: never valued in stock, its bill keeps the purchases a
   expect(line.account?.id ?? line.account).not.toBe(interim.id);
   expect(await balanceOf('2150')).toBe('0.00');
 });
+
+test('billed as received: the bill takes what came in; the three-way check flags billing beyond it (RFC 0028)', async () => {
+  const bolt = await call('POST', '/api/v1/models/product.product', 'maria', {
+    name: 'Bolt',
+    kind: 'goods',
+    uom: ids['Units'],
+    invoicePolicy: 'delivered',
+  });
+  expect(bolt.status, JSON.stringify(bolt.json)).toBe(201);
+  const made = await call('POST', O, 'maria', {
+    partner: ids['vendor'],
+    currency: ids['bdt'],
+    lines: { create: [{ product: bolt.json.id, name: 'Bolt', quantity: '10', priceUnit: '5' }] },
+  });
+  const order = made.json.id as number;
+  await run(`${O}/${order}/transitions/submit`);
+  await run(`${O}/${order}/transitions/confirm`);
+  await purchaseStockWorker({ shutro: host.server.shutro }).drain();
+  // Nothing received: nothing to bill.
+  expect((await call('POST', `${O}/${order}/transitions/bill`, 'maria')).status).toBe(409);
+  const [receipt] = await find('stock.picking', { purchaseOrder: order }, 'id');
+  const [move] = await find('stock.move', { picking: receipt.id }, 'id');
+  await call('PATCH', `/api/v1/models/stock.move/${move.id}`, 'maria', { quantityDone: '4' });
+  await run(`/api/v1/models/stock.picking/${receipt.id}/transitions/validate`);
+  await run(`${O}/${order}/transitions/bill`);
+  const [bill] = await find('account.move', { purchaseOrder: order }, 'id');
+  const [line] = await find(
+    'account.move.line',
+    { move: bill.id, lineKind: 'product' },
+    'id,quantity,matchNote',
+  );
+  expect(line).toMatchObject({ quantity: '4', matchNote: 'ordered 10, received 4, billed 4' });
+  const again = await call('POST', `${O}/${order}/transitions/bill`, 'maria');
+  expect(again.status).toBe(409);
+  expect(again.json.detail).toContain('Nothing to bill now');
+  // The vendor bills six: the check says it is more than was received.
+  await call('PATCH', `/api/v1/models/account.move.line/${line.id}`, 'maria', { quantity: '6' });
+  const [checked] = await find('account.move.line', { id: line.id }, 'matchNote');
+  expect(checked.matchNote).toBe('ordered 10, received 4, billed 6 — more than received');
+});
