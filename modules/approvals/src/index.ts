@@ -714,7 +714,14 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
           }),
           k.group(
             'outcomes',
-            ['onApproved', 'onRejected', 'onSentBack', 'onWithdrawn', 'reasonRequired'] as never,
+            [
+              'onApproved',
+              'onRejected',
+              'onSentBack',
+              'onWithdrawn',
+              'reasonRequired',
+              'whenNobody',
+            ] as never,
             {
               label: 'What happens',
               description:
@@ -730,6 +737,7 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
               { field: 'approverRole', id: 'level_role' },
               { field: 'approverUsers', id: 'level_users', widget: 'tags' },
               { field: 'approverField', id: 'level_field' },
+              { field: 'extraUsers', id: 'level_extra', widget: 'tags' },
               { field: 'quorum', id: 'level_quorum' },
               { field: 'quorumCount', id: 'level_count' },
               { field: 'deadlineHours', id: 'level_deadline' },

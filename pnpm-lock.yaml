@@ -791,6 +791,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/views
     devDependencies:
+      '@kosh/hr':
+        specifier: workspace:*
+        version: link:../hr
       '@kosh/settings':
         specifier: workspace:*
         version: link:../../packages/settings

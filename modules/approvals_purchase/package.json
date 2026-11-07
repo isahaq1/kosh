@@ -52,6 +52,7 @@
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1",
-    "@kosh/settings": "workspace:*"
+    "@kosh/settings": "workspace:*",
+    "@kosh/hr": "workspace:*"
   }
 }
