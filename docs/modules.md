@@ -306,6 +306,18 @@ quotation's thread and audits it. Any portal document may offer options the same
 the one2many, its fields, `offered`, `when` and the item's `add` transition;
 `POST /api/portal/v1/documents/:key/:id/options/:option/add`).
 
+### Bank statements (`modules/accounting`, RFC 0029)
+
+**Accounting › Reconcile bank** (accountants with the reconcile permission): import a statement of a bank or cash
+journal — CSV (name the date, label and amount columns; `debit` / `credit` columns work too), OFX or CAMT.053 —;
+a line imported twice (the same journal, date, amount and reference) is skipped. Then each open line in turn
+(J / K to move): the open invoices, bills and credit notes it may pay, proposed with why ("the same amount,
+INV/2026/00042 in the label, the same partner"); **Match** registers the payment from the statement's journal, posted
+and reconciled. A line that pays nothing is **written off** to an account (bank charges, interest). **Bank
+statements** lists them; a statement closes when every line is matched and its opening balance plus its lines is its
+closing balance. A journal with a **bank feed** (`registerBankFeed(feed)`, then the journal's *Bank feed*) pulls new
+lines into a statement (`POST /api/v1/accounting/journals/:id/pull`); real banks are adapters like the test feed.
+
 ### Projects for programmes (`modules/project`, RFC 0026)
 
 Projects carries a programme's structure, not only a to-do list. Configuration holds **project types**, **task
