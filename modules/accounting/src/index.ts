@@ -60,6 +60,18 @@ import {
   registerPayment,
   unreconcile,
 } from './payments.js';
+import {
+  AccountBankStatement,
+  type CsvMapping,
+  importStatement,
+  matchLine,
+  parseCamt,
+  parseCsv,
+  parseOfx,
+  proposalsFor,
+  pullFeed,
+  writeOffLine,
+} from './statements.js';
 
 export {
   type AccountSpec,
@@ -135,6 +147,23 @@ export {
   unreconcile,
   type WithholdingProposal,
 } from './payments.js';
+export {
+  type BankFeed,
+  bankFeed,
+  type CsvMapping,
+  importStatement,
+  matchLine,
+  type Proposal,
+  parseCamt,
+  parseCsv,
+  parseOfx,
+  proposalsFor,
+  pullFeed,
+  registerBankFeed,
+  type StatementRow,
+  testBankFeed,
+  writeOffLine,
+} from './statements.js';
 
 export interface Reversed {
   readonly id: number;
@@ -234,6 +263,12 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
   // Exceptions to the module standard (RFC 0023), each with its reason.
   standard: {
     waive: [
+      {
+        rule: 'I1',
+        model: 'account.bank.statement',
+        reason:
+          'Imported by its own CSV / OFX / CAMT import (Accounting › Reconcile bank), or pulled from a feed.',
+      },
       {
         rule: 'I1',
         model: 'account.full.reconcile',
@@ -513,6 +548,17 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       page: 'accounting.Reconcile',
       label: 'Reconciliation',
     },
+    'accounting.action_bank_reconcile': {
+      type: 'client',
+      page: 'accounting.BankReconcile',
+      label: 'Reconcile bank',
+      visibleTo: ['account.reconcile'],
+    },
+    'accounting.action_statements': {
+      model: 'account.bank.statement',
+      label: 'Bank statements',
+      views: ['list', 'form'],
+    },
     'accounting.action_settings': {
       type: 'client',
       page: 'accounting.Settings',
@@ -594,6 +640,21 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       label: 'Reconciliation',
       action: 'accounting.action_reconcile',
       sequence: 5,
+    },
+    {
+      id: 'accounting.bank_reconcile',
+      parent: 'accounting.root',
+      label: 'Reconcile bank',
+      action: 'accounting.action_bank_reconcile',
+      sequence: 4.5,
+      visibleTo: ['account.reconcile'],
+    },
+    {
+      id: 'accounting.statements',
+      parent: 'accounting.root',
+      label: 'Bank statements',
+      action: 'accounting.action_statements',
+      sequence: 4.6,
     },
     { id: 'accounting.reporting', parent: 'accounting.root', label: 'Reporting', sequence: 8 },
     {
@@ -724,6 +785,11 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
   ],
   // What webhooks may subscribe to besides record changes (RFC 0017 §5.3).
   events: [
+    {
+      topic: 'account.bank.statement.closed',
+      model: 'account.bank.statement',
+      label: 'Bank statement closed',
+    },
     {
       topic: 'account.fiscal.year.closed',
       model: 'account.fiscal.year',
@@ -950,6 +1016,43 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
   ],
   documents: [
     {
+      key: 'bank_statement',
+      name: 'Bank statement',
+      model: 'account.bank.statement',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Bank statement {{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'statement',
+            items: [
+              { label: 'Journal', bind: 'journal.name' },
+              { label: 'Date', bind: 'date' },
+              { label: 'Opening balance', bind: 'balanceStart' },
+              { label: 'Closing balance', bind: 'balanceEnd' },
+              { label: 'Status', bind: 'state' },
+            ],
+          },
+          {
+            kind: 'table',
+            id: 'lines',
+            bind: 'lines',
+            columns: [
+              { label: 'Date', bind: 'date' },
+              { label: 'Label', bind: 'label' },
+              { label: 'Reference', bind: 'reference' },
+              { label: 'Partner', bind: 'partner.name' },
+              { label: 'Amount', bind: 'amount', align: 'end', sum: true },
+              { label: 'Status', bind: 'state' },
+            ],
+          },
+        ],
+      },
+    },
+    {
       key: 'fiscal_year',
       name: 'Fiscal year',
       model: 'account.fiscal.year',
@@ -1078,6 +1181,36 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
     },
   ],
   views: {
+    'account.bank.statement.list': list(AccountBankStatement, {
+      columns: ['date', 'name', 'journal', 'balanceStart', 'balanceEnd', 'state'],
+    }),
+    'account.bank.statement.form': form(AccountBankStatement, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('close', { primary: true, label: 'Close' }),
+          k.button('reopen', { label: 'Reopen' }),
+        ],
+      },
+      sheet: [
+        k.group('main', ['name', 'journal', 'date', 'balanceStart', 'balanceEnd'], {
+          description:
+            'Match its lines in Accounting › Reconcile bank; it closes once every line is matched and the balances agree.',
+        }),
+        k.lines(
+          'lines' as never,
+          [
+            { field: 'date', id: 'statement_line_date' },
+            { field: 'label', id: 'statement_line_label' },
+            { field: 'reference', id: 'statement_line_reference' },
+            { field: 'partner', id: 'statement_line_partner' },
+            { field: 'amount', id: 'statement_line_amount' },
+            { field: 'state', id: 'statement_line_state' },
+          ] as never,
+        ),
+      ],
+      chatter: true,
+    })),
     'account.move.invoice.list': list(AccountMove, {
       columns: [
         'name',
@@ -1403,6 +1536,10 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
     })),
   },
   search: {
+    'account.bank.statement': search(AccountBankStatement, {
+      fields: ['name', 'journal.name'],
+      groupBy: ['journal', 'state'],
+    }),
     'account.payment.term': search(AccountPaymentTerm, { fields: ['name'] }),
     'account.journal': search(AccountJournal, { fields: ['name', 'code'], groupBy: ['type'] }),
     'account.fiscal.year': search(AccountFiscalYear, {
@@ -1656,6 +1793,121 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
         );
       return ids;
     };
+    // Bank statements (RFC 0029 §3.1): import, the proposals of a line, matching, writing off, pulling a feed.
+    const reconciler = (env: Env) => {
+      if (!env.su && !env.administrator && !env.access.has('account.reconcile'))
+        throw new HttpProblem(
+          403,
+          'access',
+          'Reconciliation',
+          'Bank statements need the reconcile permission.',
+        );
+    };
+    const positiveId = (value: unknown, what: string): number => {
+      const id = Number(value);
+      if (!Number.isSafeInteger(id) || id <= 0)
+        throw new HttpProblem(400, 'invalid-body', 'Invalid request', `${what} is an id.`);
+      return id;
+    };
+    context.app.post('/api/v1/accounting/statements/import', async (request) => {
+      const body = (request.body ?? {}) as {
+        journal?: unknown;
+        format?: unknown;
+        content?: unknown;
+        mapping?: unknown;
+        balanceStart?: unknown;
+        balanceEnd?: unknown;
+        name?: unknown;
+      };
+      const journal = positiveId(body.journal, 'journal');
+      const content = typeof body.content === 'string' ? body.content : '';
+      if (content === '' || content.length > 5_000_000)
+        throw new HttpProblem(
+          400,
+          'invalid-body',
+          'Invalid request',
+          'content is the file’s text.',
+        );
+      const format = String(body.format ?? 'csv');
+      const rows =
+        format === 'ofx'
+          ? parseOfx(content)
+          : format === 'camt'
+            ? parseCamt(content)
+            : format === 'csv'
+              ? parseCsv(content, (body.mapping ?? {}) as CsvMapping)
+              : null;
+      if (rows === null)
+        throw new HttpProblem(
+          400,
+          'invalid-body',
+          'Invalid request',
+          "format is 'csv', 'ofx' or 'camt'.",
+        );
+      const money = (v: unknown) =>
+        v === undefined || v === null || v === '' ? undefined : String(v);
+      return request.env(
+        async (raw) => {
+          const env = raw as Env;
+          reconciler(env);
+          const start = money(body.balanceStart);
+          const end = money(body.balanceEnd);
+          return importStatement(env, {
+            journal,
+            rows,
+            ...(typeof body.name === 'string' && body.name !== '' ? { name: body.name } : {}),
+            ...(start === undefined ? {} : { balanceStart: start }),
+            ...(end === undefined ? {} : { balanceEnd: end }),
+          });
+        },
+        { write: true },
+      );
+    });
+    context.app.get('/api/v1/accounting/statement-lines/:id/proposals', async (request) => {
+      const id = positiveId((request.params as { id?: unknown }).id, 'id');
+      return request.env(async (raw) => {
+        const env = raw as Env;
+        reconciler(env);
+        return { proposals: await proposalsFor(env, id) };
+      });
+    });
+    context.app.post('/api/v1/accounting/statement-lines/:id/match', async (request) => {
+      const id = positiveId((request.params as { id?: unknown }).id, 'id');
+      const moves = (request.body as { moves?: unknown } | null)?.moves;
+      if (!Array.isArray(moves) || moves.length === 0)
+        throw new HttpProblem(
+          400,
+          'invalid-body',
+          'Invalid request',
+          'moves is a list of document ids.',
+        );
+      const ids = moves.map((m) => positiveId(m, 'moves'));
+      return request.env((raw) => matchLine(raw as Env, id, ids), { write: true });
+    });
+    context.app.post('/api/v1/accounting/statement-lines/:id/write-off', async (request) => {
+      const id = positiveId((request.params as { id?: unknown }).id, 'id');
+      const body = (request.body ?? {}) as { account?: unknown; label?: unknown };
+      const account = positiveId(body.account, 'account');
+      return request.env(
+        (raw) =>
+          writeOffLine(raw as Env, id, {
+            account,
+            ...(typeof body.label === 'string' && body.label !== '' ? { label: body.label } : {}),
+          }),
+        { write: true },
+      );
+    });
+    context.app.post('/api/v1/accounting/journals/:id/pull', async (request) => {
+      const id = positiveId((request.params as { id?: unknown }).id, 'id');
+      return request.env(
+        async (raw) => {
+          const env = raw as Env;
+          reconciler(env);
+          return pullFeed(env, id);
+        },
+        { write: true },
+      );
+    });
     context.app.post('/api/v1/accounting/reconcile', async (request) => {
       const ids = lineIds(request.body);
       const writeOff = (request.body as { writeOff?: { account?: unknown; label?: unknown } })

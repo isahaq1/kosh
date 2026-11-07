@@ -36,6 +36,7 @@ import {
   ref,
 } from './.kosh/bindings.js';
 import { postPayments } from './payments.js';
+import { AccountBankStatement, AccountBankStatementLine } from './statements.js';
 
 const READ = ['read'] as const;
 const WRITE = ['read', 'write', 'create'] as const;
@@ -237,6 +238,10 @@ export const AccountJournal = defineModel('account.journal', {
     }),
     /** Cash and bank journals: the account of the money; sales and purchases: the default income / expense. */
     defaultAccount: f.many2one('account.account', { checkCompany: true, label: 'Default account' }),
+    /** A bank feed adapter's name (RFC 0029 §3.1): its lines are pulled into statements. */
+    bankFeed: f.char({ label: 'Bank feed' }),
+    /** Where the feed's last pull ended. */
+    bankFeedCursor: f.char({ label: 'Feed cursor' }),
   },
   sqlConstraints: {
     codeUnique: {
@@ -1661,7 +1666,7 @@ const sequence = (type: JournalType, prefix: string) =>
 
 export const accountingShutro = defineModule({
   name: 'accounting',
-  version: '0.4.0',
+  version: '0.5.0',
   migrations: [
     {
       version: '0.2.0',
@@ -1694,6 +1699,8 @@ export const accountingShutro = defineModule({
     sequence('general', 'MISC'),
   ],
   models: [
+    AccountBankStatement,
+    AccountBankStatementLine,
     ResCurrencyRate,
     ResBankAccount,
     AccountWithholding,
