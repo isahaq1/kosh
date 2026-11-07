@@ -52,8 +52,17 @@ export const APPS_LOG_TABLE = 'kosh_app_log';
  * installed set (`createAppHost`).
  */
 export const APPS_CHANNEL = 'kosh_apps';
+/** What an uninstall dropped, kept for {@link SNAPSHOT_DAYS} days (RFC 0008 §5.4). */
+export const APPS_SNAPSHOT_TABLE = 'kosh_app_snapshot';
+/** How long an uninstall's snapshot is kept. */
+export const SNAPSHOT_DAYS = 30;
 /** Tables the framework owns (not a model's): migrations never alter or drop them. */
-export const FRAMEWORK_TABLES: readonly string[] = [IDEMPOTENCY_TABLE, APPS_TABLE, APPS_LOG_TABLE];
+export const FRAMEWORK_TABLES: readonly string[] = [
+  IDEMPOTENCY_TABLE,
+  APPS_TABLE,
+  APPS_LOG_TABLE,
+  APPS_SNAPSHOT_TABLE,
+];
 
 /** Creates the App manager's tables (idempotent). */
 export function appTableStatements(): DriverQuery[] {
@@ -82,6 +91,16 @@ export function appTableStatements(): DriverQuery[] {
   digest text NOT NULL,
   migration_file text,
   migration_content text
+)`,
+      params: [],
+    },
+    {
+      text: `CREATE TABLE IF NOT EXISTS ${APPS_SNAPSHOT_TABLE} (
+  id bigserial PRIMARY KEY,
+  at timestamptz NOT NULL DEFAULT now(),
+  actor text NOT NULL,
+  modules text[] NOT NULL,
+  tables jsonb NOT NULL
 )`,
       params: [],
     },
@@ -232,8 +251,16 @@ export interface PreparedApps {
   readonly migration: MigrationPlan;
   /** True when the plan changes nothing. */
   readonly empty: boolean;
-  /** An upgrade may drop columns or tables its new code no longer has (`removeData`). */
+  /** An upgrade may drop columns or tables its new code no longer has (`removeData`); an uninstall drops its own. */
   readonly allowDestructive: boolean;
+  /** The installed and disabled modules before the change (an uninstall's hooks run on it). */
+  readonly before: KoshRegistry;
+  /** What an uninstall drops: each table, or column, with the rows that hold data. */
+  readonly drops: readonly {
+    readonly table: string;
+    readonly column: string | null;
+    readonly rows: number;
+  }[];
 }
 
 /** Options of {@link prepareApps}. */
@@ -289,7 +316,8 @@ export async function prepareApps(options: PrepareAppsOptions): Promise<Prepared
     registry: schema.registry,
     ignore: FRAMEWORK_TABLES,
   });
-  const removeData = options.removeData === true && plan.upgrade.length > 0;
+  const removeData =
+    (options.removeData === true && plan.upgrade.length > 0) || plan.uninstall.length > 0;
   if (migration.destructive.length > 0 && !removeData)
     throw new AppPlanError(
       `The change would drop or alter data: ${migration.destructive.map((op) => migrate.renderOperation(op)).join('; ')}.`,
@@ -319,6 +347,21 @@ WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2`,
       `Disabling would leave required fields that no enabled module fills: ${orphaned.join(', ')}.`,
       'Disable the modules that extend these models too, or make the fields optional.',
     );
+  // What an uninstall drops, with the rows that hold data: the plan shows it before anyone confirms.
+  const drops: { table: string; column: string | null; rows: number }[] = [];
+  if (plan.uninstall.length > 0)
+    for (const op of migration.destructive) {
+      if (op.kind !== 'dropTable' && op.kind !== 'dropColumn') continue;
+      const column = op.kind === 'dropColumn' ? op.column : null;
+      const [row] = await driver.query<{ n: string }>({
+        text:
+          column === null
+            ? `SELECT count(*)::text AS n FROM "${op.table}"`
+            : `SELECT count(*)::text AS n FROM "${op.table}" WHERE "${column}" IS NOT NULL`,
+        params: [],
+      });
+      drops.push({ table: op.table, column, rows: Number(row?.n ?? 0) });
+    }
   return {
     plan,
     current,
@@ -330,8 +373,11 @@ WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2`,
       plan.enable.length === 0 &&
       plan.disable.length === 0 &&
       plan.upgrade.length === 0 &&
+      plan.uninstall.length === 0 &&
       migration.statements.length === 0,
     allowDestructive: removeData,
+    before,
+    drops,
   };
 }
 
@@ -374,6 +420,9 @@ export interface AppsResult {
   readonly enabled: readonly string[];
   readonly disabled: readonly string[];
   readonly upgraded: readonly string[];
+  readonly uninstalled: readonly string[];
+  /** The snapshot of what the uninstall dropped (`kosh_app_snapshot.id`), or null. */
+  readonly snapshot: number | null;
 }
 
 /**
@@ -451,6 +500,7 @@ export async function applyApps(
 ): Promise<AppsResult> {
   const { plan } = prepared;
   const step = options.onStep ?? (() => {});
+  let snapshotId: number | null = null;
   const file =
     prepared.migration.statements.length > 0
       ? await migrate.writeMigrationFile({
@@ -471,6 +521,48 @@ export async function applyApps(
           'The installed apps changed since this change was planned.',
           'Plan it again.',
         );
+
+      const removed = plan.uninstall.map((u) => u.name);
+      let snapshot: number | null = null;
+      if (removed.length > 0) {
+        // Each module may refuse (Accounting while posted entries exist), on the modules as they are now.
+        const before = orm.createShutro({ driver: tx, registry: prepared.before.registry });
+        for (const name of removed) {
+          const hook = prepared.before.loaded.byName.get(name)?.hooks?.preUninstall;
+          if (hook === undefined) continue;
+          step('hooks', name);
+          try {
+            await before.bootstrap({ reason: `uninstall ${name}` }, (env) => hook(env));
+          } catch (error) {
+            throw new AppPlanError(
+              `${name} cannot be uninstalled: ${error instanceof Error ? error.message : String(error)}`,
+              'Disable it instead: the app goes away and its data stays.',
+            );
+          }
+        }
+        // The snapshot: every dropped table's rows and every dropped column's values, kept for 30 days.
+        step('state', 'snapshot');
+        const tables: { table: string; column: string | null; rows: unknown }[] = [];
+        for (const d of prepared.drops) {
+          const [row] = await tx.query<{ rows: unknown }>({
+            text:
+              d.column === null
+                ? `SELECT coalesce(json_agg(t), '[]'::json) AS rows FROM "${d.table}" t`
+                : `SELECT coalesce(json_agg(json_build_object('id', id, 'value', "${d.column}")), '[]'::json) AS rows FROM "${d.table}" WHERE "${d.column}" IS NOT NULL`,
+            params: [],
+          });
+          tables.push({ table: d.table, column: d.column, rows: row?.rows ?? [] });
+        }
+        await tx.query({
+          text: `DELETE FROM ${APPS_SNAPSHOT_TABLE} WHERE at < now() - make_interval(days => $1)`,
+          params: [SNAPSHOT_DAYS],
+        });
+        const [made] = await tx.query<{ id: string }>({
+          text: `INSERT INTO ${APPS_SNAPSHOT_TABLE} (actor, modules, tables) VALUES ($1, $2, $3::jsonb) RETURNING id::text AS id`,
+          params: [options.actor, removed, tables],
+        });
+        snapshot = made === undefined ? null : Number(made.id);
+      }
 
       // Upgrades run the modules' data migrations even without schema statements (Shutro tracks the versions).
       if (file !== null || plan.upgrade.length > 0) {
@@ -527,6 +619,15 @@ export async function applyApps(
         );
       }
 
+      if (removed.length > 0) {
+        step('data', `remove ${removed.join(', ')}`);
+        await removeModuleData(tx, shutro, prepared, removed);
+        await tx.query({
+          text: `DELETE FROM ${APPS_TABLE} WHERE name = ANY($1)`,
+          params: [removed],
+        });
+      }
+
       step('state', `${plan.after.length} module(s)`);
       for (const row of plan.after)
         await tx.query({
@@ -550,6 +651,8 @@ VALUES ($1, $2::jsonb, $3, $4, $5, $6)`,
             enable: plan.enable,
             disable: plan.disable,
             upgrade: plan.upgrade,
+            uninstall: plan.uninstall,
+            snapshot,
             migration: file === null ? null : `${file.version}_${file.name}.sql`,
           },
           sql,
@@ -564,6 +667,7 @@ VALUES ($1, $2::jsonb, $3, $4, $5, $6)`,
           ...plan.enable.map((n) => `enabled ${n}`),
           ...plan.disable.map((m) => `disabled ${m.name}`),
           ...plan.upgrade.map((u) => `upgraded ${u.name} ${u.from} → ${u.to}`),
+          ...plan.uninstall.map((u) => `uninstalled ${u.name} (data removed)`),
         ];
         await shutro.bootstrap({ reason: 'apps change audit' }, (env) =>
           audit(env, {
@@ -574,6 +678,7 @@ VALUES ($1, $2::jsonb, $3, $4, $5, $6)`,
             details: {
               by: options.actor,
               migration: file === null ? null : `${file.version}_${file.name}.sql`,
+              ...(removed.length === 0 ? {} : { snapshot, drops: prepared.drops }),
             },
             ...(options.audit?.ip === undefined ? {} : { ip: options.audit.ip }),
           }),
@@ -584,6 +689,7 @@ VALUES ($1, $2::jsonb, $3, $4, $5, $6)`,
         text: 'SELECT pg_notify($1, $2)',
         params: [APPS_CHANNEL, digestOf(plan.after)],
       });
+      snapshotId = snapshot;
     });
   } catch (error) {
     if (file !== null) await rm(file.path, { force: true });
@@ -595,5 +701,86 @@ VALUES ($1, $2::jsonb, $3, $4, $5, $6)`,
     enabled: plan.enable,
     disabled: plan.disable.map((m) => m.name),
     upgraded: plan.upgrade.map((u) => u.name),
+    uninstalled: plan.uninstall.map((u) => u.name),
+    snapshot: snapshotId,
   };
+}
+
+/** Whether a table exists (a failed query would abort the transaction). */
+async function hasTable(tx: Driver, table: string): Promise<boolean> {
+  const [row] = await tx.query<{ found: string | null }>({
+    text: 'SELECT to_regclass($1)::text AS found',
+    params: [`public.${table}`],
+  });
+  return row?.found !== null && row?.found !== undefined;
+}
+
+/**
+ * After an uninstall's schema change (RFC 0008 §5.4): the modules' records in the models that stay (by external
+ * id; one that others still use is kept and logged), their external ids, their groups and role grants, the runtime
+ * roles' rights on models that went, and Shutro's record of the modules.
+ */
+async function removeModuleData(
+  tx: Driver,
+  shutro: Shutro,
+  prepared: PreparedApps,
+  removed: readonly string[],
+): Promise<void> {
+  const models = new Set<string>([...prepared.runtime.registry.models.keys()].map(String));
+  const ids = await tx.query<{ model: string; res_id: string; name: string }>({
+    text: 'SELECT model, res_id::text AS res_id, name FROM shutro_external_id WHERE module = ANY($1)',
+    params: [removed],
+  });
+  for (const row of ids) {
+    if (!models.has(row.model)) continue;
+    try {
+      await shutro.bootstrap({ reason: `uninstall: ${row.name}` }, async (env) => {
+        const records = env.model(row.model as never) as unknown as {
+          browse(ids: number[]): { unlink(): Promise<void> };
+        };
+        await records.browse([Number(row.res_id)]).unlink();
+      });
+    } catch {
+      // Still used by records that stay (a sequence, a category): kept, without its module.
+    }
+  }
+  await tx.query({
+    text: 'DELETE FROM shutro_external_id WHERE module = ANY($1)',
+    params: [removed],
+  });
+  const byName = prepared.before.loaded.byName;
+  const groups = removed.flatMap((n) => (byName.get(n)?.shutro.groups ?? []).map((g) => g.code));
+  const permissions = removed.flatMap((n) =>
+    (byName.get(n)?.shutro.permissions ?? []).map((p) => p.code),
+  );
+  if (groups.length > 0 && (await hasTable(tx, 'auth_user_group')))
+    await tx.query({
+      text: 'DELETE FROM auth_user_group WHERE "group" = ANY($1)',
+      params: [groups],
+    });
+  const kept = [...models];
+  if (await hasTable(tx, 'shutro_role')) {
+    await tx.query({
+      text: 'UPDATE shutro_role SET implies = array(SELECT g FROM unnest(implies) AS g WHERE NOT (g = ANY($1))) WHERE implies && $1',
+      params: [groups],
+    });
+    await tx.query({
+      text: 'DELETE FROM shutro_role_access WHERE role = ANY($1) OR NOT (model = ANY($2))',
+      params: [groups, kept],
+    });
+    await tx.query({
+      text: 'DELETE FROM shutro_role_rule WHERE role = ANY($1) OR NOT (model = ANY($2))',
+      params: [groups, kept],
+    });
+    await tx.query({
+      text: 'DELETE FROM shutro_role_permission WHERE role = ANY($1) OR permission = ANY($2)',
+      params: [groups, permissions],
+    });
+    await tx.query({
+      text: 'DELETE FROM shutro_role_field WHERE NOT (model = ANY($1))',
+      params: [kept],
+    });
+  }
+  if (await hasTable(tx, 'shutro_module'))
+    await tx.query({ text: 'DELETE FROM shutro_module WHERE name = ANY($1)', params: [removed] });
 }

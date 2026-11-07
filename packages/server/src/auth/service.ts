@@ -1026,6 +1026,34 @@ export class AuthService {
   }
 
   /** Turns 2FA off (password and a current code required). */
+  /**
+   * A step-up check (RFC 0008 §5.4): the user's current authenticator code, asked again for a dangerous action
+   * (removing an app with its data). Recovery codes do not count. @throws {HttpProblem} 409 when two-factor is off,
+   * 422 when the code does not match
+   */
+  async confirmSecondFactor(user: number, code: string): Promise<void> {
+    await this.#system('2fa step-up', async (env) => {
+      const credentials = await model(env, 'auth.credential').search({ where: { user } });
+      const [row] = await fetch(credentials, ['totpSecret', 'totpEnabled']);
+      if (row?.['totpEnabled'] !== true || typeof row['totpSecret'] !== 'string')
+        throw new HttpProblem(
+          409,
+          'two-factor-off',
+          'Two-factor authentication is off',
+          'This needs a code from your authenticator app.',
+          'Turn on two-factor sign-in in Settings › Your profile first.',
+        );
+      if (!verifyTotp(row['totpSecret'], code.trim()))
+        throw new HttpProblem(
+          422,
+          'invalid-code',
+          'Invalid code',
+          'The code does not match.',
+          'Use the current code of the authenticator app.',
+        );
+    });
+  }
+
   async disableTwoFactor(session: SessionInfo, password: string, code: string): Promise<void> {
     if ((await this.policy()).twoFactor === 'everyone')
       throw new HttpProblem(

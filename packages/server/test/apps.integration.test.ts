@@ -390,3 +390,107 @@ test('log rows written as a JSON string (before 2026-10-27) are repaired when th
   });
   expect(strings[0]?.n).toBe('0');
 });
+
+test('uninstall: dependents go too, a snapshot first, tables and records removed, role grants and the installed rows gone', async () => {
+  // Library is installed with Shelf (installed) and Tags (disabled earlier); notes stays from the upgrade.
+  const full = notesAt('2.0.0');
+  const apply = async (c: Parameters<typeof prepareApps>[0]['change']) => {
+    const prepared = await prepareApps({ driver, catalogue: full, change: c, dir });
+    return { prepared, result: await applyApps(prepared, { driver, dir, actor: 'test' }) };
+  };
+  // A runtime role with rights on Library's model and its group implied.
+  for (const q of [
+    `CREATE TABLE IF NOT EXISTS "shutro_role" ("code" text PRIMARY KEY, "label" text NOT NULL, "implies" text[] NOT NULL DEFAULT '{}', "administrator" boolean NOT NULL DEFAULT false)`,
+    `CREATE TABLE IF NOT EXISTS "shutro_role_access" ("role" text NOT NULL, "model" text NOT NULL, "perms" text[] NOT NULL, PRIMARY KEY ("role", "model"))`,
+    `CREATE TABLE IF NOT EXISTS "shutro_role_rule" ("name" text PRIMARY KEY, "role" text NOT NULL, "model" text NOT NULL, "perms" text[] NOT NULL, "domain" jsonb NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS "shutro_role_permission" ("role" text NOT NULL, "permission" text NOT NULL, PRIMARY KEY ("role", "permission"))`,
+    `CREATE TABLE IF NOT EXISTS "shutro_role_field" ("model" text NOT NULL, "field" text NOT NULL, "read" text[] NOT NULL DEFAULT '{}', "write" text[] NOT NULL DEFAULT '{}', PRIMARY KEY ("model", "field"))`,
+    `INSERT INTO shutro_role (code, label, implies) VALUES ('librarian', 'Librarian', '{library.user,base.user}')`,
+    `INSERT INTO shutro_role_access (role, model, perms) VALUES ('librarian', 'library.book', '{read,write}')`,
+  ])
+    await driver.query({ text: q, params: [] });
+  await expect(
+    prepareApps({ driver, catalogue: full, change: { uninstall: ['base'] }, dir }),
+  ).rejects.toThrow('base cannot be uninstalled');
+  const prepared = await prepareApps({
+    driver,
+    catalogue: full,
+    change: { uninstall: ['library'] },
+    dir,
+  });
+  expect(prepared.plan.uninstall.map((u) => [u.name, u.cascade])).toEqual([
+    ['tags', true],
+    ['shelf', true],
+    ['library', false],
+  ]);
+  expect(prepared.drops).toEqual(
+    expect.arrayContaining([
+      { table: 'library_book', column: null, rows: 1 },
+      { table: 'library_shelf', column: null, rows: 1 },
+    ]),
+  );
+  const result = await applyApps(prepared, { driver, dir, actor: 'test' });
+  expect(result.uninstalled).toEqual(['tags', 'shelf', 'library']);
+  expect(await exists('library_book')).toBe(false);
+  expect(await exists('library_shelf')).toBe(false);
+  expect((await readInstalledApps(driver))?.map((r) => r.name)).not.toContain('library');
+  expect(
+    await count(
+      "SELECT count(*)::text AS n FROM shutro_external_id WHERE module IN ('library', 'shelf', 'tags')",
+    ),
+  ).toBe(0);
+  expect(await count('SELECT count(*)::text AS n FROM shutro_role_access')).toBe(0);
+  const [role] = await driver.query<{ implies: string[] }>({
+    text: "SELECT implies FROM shutro_role WHERE code = 'librarian'",
+    params: [],
+  });
+  expect(role?.implies).toEqual(['base.user']);
+  const [snapshot] = await driver.query<{
+    modules: string[];
+    tables: { table: string; rows: { title?: string }[] }[];
+  }>({
+    text: 'SELECT modules, tables FROM kosh_app_snapshot WHERE id = $1',
+    params: [result.snapshot],
+  });
+  expect(snapshot?.modules).toEqual(['tags', 'shelf', 'library']);
+  expect(snapshot?.tables.find((t) => t.table === 'library_book')?.rows[0]?.title).toBe('Welcome');
+  // Installed again: a fresh start, its seed data loaded once more.
+  await apply({ install: ['library'] });
+  expect(await count('SELECT count(*)::text AS n FROM library_book')).toBe(1);
+});
+
+test('a module may refuse to be uninstalled: nothing changes', async () => {
+  const sKeeper = defineModule({
+    name: 'keeper',
+    version: '1.0.0',
+    depends: [baseShutro],
+    groups: [group('keeper')],
+    models: [
+      defineModel('keeper.book', {
+        access: { 'keeper.user': ['read'] },
+        fields: { name: f.char() },
+      }),
+    ],
+  });
+  const keeper = app(sKeeper, [base], {
+    async preUninstall() {
+      throw new Error('the books are kept');
+    },
+  });
+  const withKeeper = [...notesAt('2.0.0'), keeper];
+  await applyApps(
+    await prepareApps({ driver, catalogue: withKeeper, change: { install: ['keeper'] }, dir }),
+    { driver, dir, actor: 'test' },
+  );
+  const prepared = await prepareApps({
+    driver,
+    catalogue: withKeeper,
+    change: { uninstall: ['keeper'] },
+    dir,
+  });
+  await expect(applyApps(prepared, { driver, dir, actor: 'test' })).rejects.toThrow(
+    'keeper cannot be uninstalled: the books are kept',
+  );
+  expect(await exists('keeper_book')).toBe(true);
+  expect((await readInstalledApps(driver))?.map((r) => r.name)).toContain('keeper');
+});
