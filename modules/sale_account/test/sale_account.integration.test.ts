@@ -22,7 +22,7 @@ import {
 } from '@kosh/server';
 import { type Driver, orm, pg } from '@kosh/server/orm';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { afterAll, beforeAll, expect, test } from 'vitest';
+import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { saleAccount } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
@@ -42,7 +42,7 @@ const tokens = new Map<string, string>();
 // biome-ignore lint/suspicious/noExplicitAny: test assertions read untyped JSON responses
 type Json = any;
 async function call(
-  method: 'GET' | 'POST',
+  method: 'GET' | 'POST' | 'PATCH',
   url: string,
   as: string,
   payload?: unknown,
@@ -242,4 +242,121 @@ test('the bridge is installed with the apps; a confirmed order is invoiced once,
   );
   expectStatus(posted, 200);
   expect(posted.json.name).toMatch(/^INV\//);
+});
+
+describe('credit control (RFC 0028 §3.2)', () => {
+  type Model = {
+    create(rows: unknown[]): Promise<{ ids: number[] }>;
+    browse(ids: number[]): { write(v: unknown): Promise<void> };
+  };
+  const setup = async (fn: (model: (name: string) => Model) => Promise<number | undefined>) =>
+    host.server.shutro.bootstrap({ reason: 'test: credit', company }, (env) =>
+      fn((name) => env.model(name as never) as unknown as Model),
+    );
+  const mode = (creditControl: string) =>
+    setup(async (model) => {
+      await model('res.company').browse([company]).write({ creditControl });
+      return undefined;
+    });
+  let tight = 0;
+  const quote = async () => {
+    const made = await call('POST', '/api/v1/models/sale.order', 'sumi', {
+      partner: tight,
+      currency: bdt,
+      lines: { create: [{ product, name: 'Steel beam', quantity: '3', taxes: { set: [tax] } }] },
+    });
+    expectStatus(made, 201);
+    return made.json.id as number;
+  };
+  const confirm = (id: number) =>
+    call('POST', `/api/v1/models/sale.order/${id}/transitions/confirm`, 'sumi');
+
+  test('block refuses over the limit; warn confirms and says so; off ignores it', async () => {
+    tight = (await setup(
+      async (model) =>
+        (
+          await model('res.partner').create([{ name: 'Tight Credit', creditLimit: '1000' }])
+        ).ids[0],
+    )) as number;
+    await mode('block');
+    const refused = await quote();
+    const r = await confirm(refused);
+    expect(r.status).toBe(422);
+    expect(r.json.detail).toContain('over their credit limit');
+    expect(r.json.detail).toContain('limit 1000.00');
+    await mode('warn');
+    const warned = await quote();
+    expectStatus(await confirm(warned), 200);
+    expect(
+      (await call('GET', `/api/v1/models/sale.order/${warned}?fields=creditNote`, 'sumi')).json
+        .creditNote,
+    ).toContain('Over the credit limit');
+    await mode('off');
+    expectStatus(await confirm(refused), 200);
+  });
+
+  test('approval: the order waits for Accounting managers, who confirm it by approving', async () => {
+    await mode('approval');
+    const id = await quote();
+    const r = await confirm(id);
+    expect(r.status).toBe(422);
+    expect(r.json.hint).toContain('credit approval');
+    const asked = await call(
+      'POST',
+      `/api/v1/models/sale.order/${id}/transitions/askCredit`,
+      'sumi',
+    );
+    expectStatus(asked, 200);
+    expect(asked.json.state).toBe('credit');
+    const [request] = (await call('GET', `/api/v1/approvals/sale.order/${id}`, 'maria')).json
+      .requests as { id: number }[];
+    // The salesperson does not decide; an Accounting manager does.
+    expect(
+      (await call('POST', `/api/v1/approvals/requests/${request?.id}/approve`, 'sumi')).status,
+    ).toBeGreaterThanOrEqual(403);
+    expectStatus(
+      await call('POST', `/api/v1/approvals/requests/${request?.id}/approve`, 'maria'),
+      200,
+    );
+    const after = await call(
+      'GET',
+      `/api/v1/models/sale.order/${id}?fields=state,creditHeld`,
+      'sumi',
+    );
+    expect(after.json).toMatchObject({ state: 'sale', creditHeld: false });
+    await mode('off');
+  });
+
+  test('the invoice takes the order’s invoice address and payment terms, else the customer’s', async () => {
+    const ids = await setup(async (model) => {
+      const [term] = (
+        await model('account.payment.term').create([
+          { name: '30 days', lines: { create: [{ days: 30, percent: '100' }] } },
+        ])
+      ).ids;
+      await model('res.partner').browse([tight]).write({ customerPaymentTerm: term });
+      return term;
+    });
+    const office = (
+      await call('POST', '/api/v1/models/res.partner', 'maria', { name: 'Tight Credit, accounts' })
+    ).json.id as number;
+    const id = await quote();
+    expectStatus(
+      await call('PATCH', `/api/v1/models/sale.order/${id}`, 'sumi', { partnerInvoice: office }),
+      200,
+    );
+    expectStatus(await confirm(id), 200);
+    expectStatus(
+      await call('POST', `/api/v1/models/sale.order/${id}/transitions/invoice`, 'sumi'),
+      200,
+    );
+    const [invoice] = (
+      await call(
+        'GET',
+        `/api/v1/models/account.move?filter=${encodeURIComponent(JSON.stringify({ saleOrder: id }))}&fields=partner,paymentTerm`,
+        'sumi',
+      )
+    ).json.items;
+    expect(invoice).toMatchObject({ partner: office, paymentTerm: ids });
+  });
 });

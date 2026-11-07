@@ -2,7 +2,7 @@
   "name": "@kosh/sale_account",
   "version": "0.1.0",
   "private": true,
-  "description": "Bridge: invoices from sales orders (RFC 0008 \u00a75.1, RFC 0009)",
+  "description": "Bridge: invoices from sales orders (RFC 0008 §5.1, RFC 0009)",
   "keywords": [
     "kosh",
     "erp",
@@ -47,7 +47,8 @@
     "@kosh/accounting": "workspace:*",
     "@kosh/sales": "workspace:*",
     "@kosh/contacts": "workspace:*",
-    "@kosh/product": "workspace:*"
+    "@kosh/product": "workspace:*",
+    "@kosh/permissions": "workspace:*"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1"
