@@ -54,7 +54,27 @@ its turn, votes, approved, rejected, sent back, cancelled (withdrawn, submitted 
 skipped, reminded and escalated, with who and when. `GET /api/v1/approvals/:model/:id` returns `requests` and
 `events`.
 
+## Backups, approvals already given, reassignment
+
+- **Backups** (`backupUsers` on a level) may always decide it beside its approvers; they get the turn's email too,
+  and their vote is marked as a backup's. On a request whose turn it is, its approvers and Approvals managers can
+  **Tell the backups** (`POST /api/v1/approvals/requests/:id/notify-backups`). For absences between two dates, use
+  *Away* instead.
+- **Skip approvers who already approved** (`skipDuplicates` on the policy): when a level's turn comes, the approval
+  of someone who approved an earlier level of this round and may decide this one counts here too (logged as
+  "Approved already"); a level needing more approvals still waits for the others.
+- **Reassign** (Approvals managers, from the record's panel or
+  `POST /api/v1/approvals/requests/:id/reassign` `{ users, mode: 'replace' | 'add', reason }`): a reason is required,
+  the requester is refused, the people added are emailed, and it is logged and audited.
+
+## Keeping waiting requests in step
+
+When a level's approvers change, its waiting requests follow, as the policy's **Waiting requests follow changes**
+says: add the new approvers (the default), replace them, or not. **Tell the people added** emails those whose turn
+it is. This runs after the change is saved, from the level's change events. A change to a level's people or backups
+alone is not seen yet (Shutro request #35); **Sync waiting requests** on the policy brings them in step at any time
+(`POST /api/v1/approvals/policies/:id/sync` `{ mode? }`).
+
 ## Next (RFC 0027)
 
-Backup approvers per level, skipping approvers who already approved, reassignment by Approvals managers, keeping
-waiting requests in step with their level; policies by several companies or a segment; the matrix dashboard.
+Policies by several companies or a segment; the matrix dashboard.

@@ -142,3 +142,11 @@ inbox and the policy form, docs/approvals.md (new; today the engine is in docs/p
   when the level's turn starts, and the sweep counts the reminder from it. `approval.event` is the log, returned with
   the record's approvals (`events`) and shown in the panel under "How the approvers were found". The cost-centre
   approvers of §2.1 wait for a record field naming the cost centre; they come with step 2.
+- **Step 2 (2026-11-07).** `backupUsers` on levels and `backups` on requests (deciding beside the approvers, in the
+  turn's emails, votes marked `asBackup`); `skipDuplicates` copies an earlier approval of this round as an `auto`
+  vote when the level starts, and a level approved this way starts the next turn or approves the record; `reassign`
+  (Approvals managers, a reason, never the requester; the people added emailed) and `notifyBackups` (approvers and
+  managers); `syncPending` (`off | add | replace`, default `add`) and `notifyOnSync`, run by the Approvals module's
+  subscriber on the level's change events, and "Sync waiting requests" on the policy. A write of many-to-many fields
+  alone emits no change event: Shutro request #35, asked before a work-around. The cost-centre approvers wait for a
+  cost centre on the records approved (purchase orders carry it on their lines only).
