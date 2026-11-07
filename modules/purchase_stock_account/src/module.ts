@@ -158,7 +158,7 @@ async function postPriceDifferences(bills: Records<'account.move'>): Promise<voi
   }
 }
 
-export const purchaseStockAccountShutro = defineModule({
+export const purchaseStockAccountShutro: ReturnType<typeof defineModule> = defineModule({
   name: 'purchase_stock_account',
   version: '0.1.0',
   depends: [
