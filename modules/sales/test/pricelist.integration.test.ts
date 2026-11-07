@@ -270,3 +270,48 @@ test('the customer brings their list to a new order; a list based on itself is r
   });
   expect(cycle.status).toBe(422);
 });
+
+test('a quotation template fills lines, options, validity and terms; an option added becomes a line, once (RFC 0028 step 5)', async () => {
+  const template = await call('POST', '/api/v1/models/sale.order.template', 'maria', {
+    name: 'Fair kit',
+    validityDays: 15,
+    note: 'Prices for the fair only.',
+    lines: {
+      create: [
+        { sequence: 1, product, name: 'Jute bag', quantity: '3' },
+        { sequence: 2, product, name: 'Spare bag', quantity: '1', optional: true },
+      ],
+    },
+  });
+  expect(template.status, JSON.stringify(template.json)).toBe(201);
+  expect(
+    (await call('POST', '/api/v1/models/sale.order.template', 'rahim', { name: 'Nope' })).status,
+  ).toBe(403);
+  const made = await call('POST', '/api/v1/models/sale.order', 'rahim', {
+    partner: extra.customer,
+    currency,
+    dateOrder: '2026-11-01',
+    template: template.json.id,
+  });
+  expect(made.status, JSON.stringify(made.json)).toBe(201);
+  const id = made.json.id as number;
+  const filled = await call('POST', `/api/v1/models/sale.order/${id}/transitions/fill`, 'rahim');
+  expect(filled.status, JSON.stringify(filled.json)).toBe(200);
+  const order = (
+    await call(
+      'GET',
+      `/api/v1/models/sale.order/${id}?fields=lines,options,validityDate,note`,
+      'rahim',
+    )
+  ).json;
+  expect(order).toMatchObject({ validityDate: '2026-11-16', note: 'Prices for the fair only.' });
+  expect(order.lines).toHaveLength(1);
+  expect(order.options).toHaveLength(1);
+  const option = order.options[0] as number;
+  const O = '/api/v1/models/sale.order.option';
+  expect((await call('POST', `${O}/${option}/transitions/add`, 'rahim')).status).toBe(200);
+  expect((await call('GET', `${O}/${option}?fields=state,line`, 'rahim')).json.state).toBe('added');
+  expect((await call('POST', `${O}/${option}/transitions/add`, 'rahim')).status).toBe(409);
+  const after = (await call('GET', `/api/v1/models/sale.order/${id}?fields=lines`, 'rahim')).json;
+  expect(after.lines).toHaveLength(2);
+});

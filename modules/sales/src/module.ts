@@ -113,6 +113,14 @@ export const SaleOrder = defineModel('sale.order', {
     clientReference: f.char({ label: 'Customer reference' }),
     note: f.text({ label: 'Terms and conditions' }),
     lines: f.one2many('sale.order.line', 'order'),
+    /** The quotation template it started from (RFC 0028 §3.5). */
+    template: f.many2one('sale.order.template', {
+      ondelete: 'set null',
+      label: 'Quotation template',
+      help: '“Fill from template” fills the quotation’s lines, options, validity and terms from it.',
+    }),
+    /** Optional products offered with the quotation; added as lines when the customer wants them. */
+    options: f.one2many('sale.order.option', 'order', { label: 'Optional products' }),
     amountUntaxed: f.monetary({
       currency: 'currency',
       store: true,
@@ -173,6 +181,59 @@ export const SaleOrder = defineModel('sale.order', {
       initial: 'draft',
       transitions: {
         send: { from: ['draft'], to: 'sent' },
+        // A quotation filled from its template (RFC 0028 §3.5): lines, options, validity, terms.
+        fill: {
+          from: ['draft'],
+          to: 'draft',
+          guard: records('sale.order', async (orders) =>
+            (await orders.load({ template: true })).filter((o) => o.template === null),
+          ),
+          message: 'Choose a quotation template first.',
+          after: records('sale.order', async (orders) => {
+            const env = orders.env as unknown as Env;
+            for (const o of await orders.load({ template: { lines: { product: true } } })) {
+              const t = o.template;
+              if (t === null) continue;
+              const rows = [...t.lines].sort((a, b) => (a.sequence ?? 10) - (b.sequence ?? 10));
+              const lines = rows.filter((r) => r.optional !== true);
+              const options = rows.filter((r) => r.optional === true);
+              if (lines.length > 0)
+                await env.model('sale.order.line').create(
+                  lines.map((r) => ({
+                    order: o.id,
+                    product: r.product.id,
+                    name: r.name,
+                    quantity: r.quantity,
+                  })) as never,
+                );
+              if (options.length > 0)
+                await env.model('sale.order.option').create(
+                  options.map((r) => ({
+                    order: o.id,
+                    product: r.product.id,
+                    name: r.name,
+                    quantity: r.quantity,
+                  })) as never,
+                );
+              const days = t.validityDays ?? 0;
+              const date = String(o.dateOrder).slice(0, 10);
+              const [y, m, day] = date.split('-').map(Number) as [number, number, number];
+              await env
+                .model('sale.order')
+                .browse([o.id])
+                .write({
+                  ...(days > 0
+                    ? {
+                        validityDate: new Date(Date.UTC(y, m - 1, day + days))
+                          .toISOString()
+                          .slice(0, 10),
+                      }
+                    : {}),
+                  ...(t.note !== null && t.note !== '' ? { note: t.note } : {}),
+                });
+            }
+          }),
+        },
         confirm: {
           from: ['draft', 'sent'],
           to: 'sale',
@@ -194,7 +255,15 @@ export const SaleOrder = defineModel('sale.order', {
         },
         lock: { from: ['sale'], to: 'done' },
         unlock: { from: ['done'], to: 'sale' },
-        cancel: { from: ['draft', 'sent', 'sale'], to: 'cancel' },
+        cancel: {
+          from: ['draft', 'sent', 'sale'],
+          to: 'cancel',
+          // Other apps follow a cancellation through the outbox (sale_crm: a deal with every quotation cancelled).
+          after: records('sale.order', async (orders) => {
+            for (const o of await orders.load({}))
+              await orders.env.emit('sale.order.cancelled', { id: o.id });
+          }),
+        },
         redraft: { from: ['cancel'], to: 'draft' },
       },
       extensible: true, // Accounting adds invoicing states through its bridge
@@ -471,6 +540,105 @@ export const SaleOrderLine = defineModel('sale.order.line', {
   },
 });
 
+/** A quotation template (RFC 0028 §3.5): lines and optional products, validity and terms. */
+export const SaleOrderTemplate = defineModel('sale.order.template', {
+  label: 'Quotation template',
+  archivable: true,
+  order: ['name asc'],
+  access: {
+    'sales.user': ['read'],
+    'sales.manager': ['read', 'write', 'create', 'unlink', 'export', 'import'],
+  },
+  fields: {
+    name: f.char({ required: true, translate: true }),
+    validityDays: f.integer({
+      default: 0,
+      label: 'Valid for (days)',
+      help: 'The quotation is valid until its date plus these days; 0 keeps the quotation’s own.',
+    }),
+    note: f.text({ label: 'Terms and conditions' }),
+    lines: f.one2many('sale.order.template.line', 'template', { label: 'Lines' }),
+  },
+});
+
+export const SaleOrderTemplateLine = defineModel('sale.order.template.line', {
+  label: 'Template line',
+  order: ['template asc', 'sequence asc', 'id asc'],
+  access: {
+    'sales.user': ['read'],
+    'sales.manager': ['read', 'write', 'create', 'unlink'],
+  },
+  fields: {
+    template: f.many2one('sale.order.template', { required: true, ondelete: 'cascade' }),
+    sequence: f.integer({ default: 10 }),
+    product: f.many2one('product.product', { required: true }),
+    name: f.char({ required: true, label: 'Description' }),
+    quantity: f.decimal({ scale: 3, required: true, default: '1' }),
+    optional: f.boolean({
+      default: false,
+      label: 'Optional',
+      help: 'Offered with the quotation; the customer adds it, or not.',
+    }),
+  },
+});
+
+/** An optional product offered with a quotation (RFC 0028 §3.5); added, it becomes a line, once. */
+export const SaleOrderOption = defineModel('sale.order.option', {
+  label: 'Optional product',
+  order: ['order asc', 'id asc'],
+  access: {
+    'sales.user': ['read', 'write', 'create', 'unlink'],
+    'sales.manager': ['read', 'write', 'create', 'unlink'],
+  },
+  fields: {
+    order: f.many2one('sale.order', { required: true, ondelete: 'cascade' }),
+    product: f.many2one('product.product', { required: true }),
+    name: f.char({ required: true, label: 'Description' }),
+    quantity: f.decimal({ scale: 3, required: true, default: '1' }),
+    /** Empty: the order's price list prices the line. */
+    priceUnit: f.decimal({ scale: 2, label: 'Unit price' }),
+    line: f.many2one('sale.order.line', { ondelete: 'set null', label: 'Added as' }),
+    state: f.state({
+      help: 'Offered until it is added to the quotation as a line.',
+      states: { offered: 'Offered', added: 'Added' },
+      initial: 'offered',
+      transitions: {
+        // Added while the quotation is open: a line, priced by the list unless the option has a price.
+        add: {
+          from: ['offered'],
+          to: 'added',
+          guard: records('sale.order.option', async (options) =>
+            (await options.load({ order: true })).filter(
+              (o) => o.order.state !== 'draft' && o.order.state !== 'sent',
+            ),
+          ),
+          message: 'Options are added while the quotation is open.',
+          after: records('sale.order.option', async (options) => {
+            const env = options.env as unknown as Env;
+            for (const o of await options.load({})) {
+              const made = await env.asSuperuser({ reason: 'option added' }, (su) =>
+                su.model('sale.order.line').create([
+                  {
+                    order: o.order.id,
+                    product: o.product.id,
+                    name: o.name,
+                    quantity: o.quantity,
+                    ...(o.priceUnit === null ? {} : { priceUnit: o.priceUnit }),
+                  } as never,
+                ]),
+              );
+              await env
+                .model('sale.order.option')
+                .browse([o.id])
+                .write({ line: made.ids[0] as never });
+            }
+          }),
+        },
+      },
+    }),
+  },
+});
+
 /** The customer's price list (RFC 0028 §3.1): their orders start on it. */
 export const PartnerPricelist = extendModel('res.partner', {
   fields: {
@@ -484,7 +652,7 @@ export const PartnerPricelist = extendModel('res.partner', {
 
 export const salesShutro = defineModule({
   name: 'sales',
-  version: '0.4.0',
+  version: '0.5.0',
   migrations: [
     {
       version: '0.4.0',
@@ -523,6 +691,6 @@ export const salesShutro = defineModule({
   sequences: [
     orm.defineSequence({ code: 'sale.order', prefix: 'SO/{year}/', padding: 5, reset: 'yearly' }),
   ],
-  models: [SaleOrder, SaleOrderLine],
+  models: [SaleOrder, SaleOrderLine, SaleOrderTemplate, SaleOrderTemplateLine, SaleOrderOption],
   extensions: [CompanySales, PartnerPricelist],
 });

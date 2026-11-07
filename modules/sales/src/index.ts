@@ -11,7 +11,7 @@ import { product } from '@kosh/product';
 import { reporting } from '@kosh/reporting';
 import { action, calendar, field, form, kanban, list, search, stat } from '@kosh/views';
 import { salesDemo } from './demo.js';
-import { SaleOrder, SaleOrderLine, salesShutro } from './module.js';
+import { SaleOrder, SaleOrderLine, SaleOrderTemplate, salesShutro } from './module.js';
 
 export { SaleOrder, SaleOrderLine, salesShutro } from './module.js';
 
@@ -21,7 +21,10 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
   hooks: { demo: salesDemo },
   depends: [contacts, product, messaging, reporting],
   // What webhooks may subscribe to besides record changes (RFC 0017 §5.3).
-  events: [{ topic: 'sale.order.confirmed', model: 'sale.order', label: 'Sales order confirmed' }],
+  events: [
+    { topic: 'sale.order.confirmed', model: 'sale.order', label: 'Sales order confirmed' },
+    { topic: 'sale.order.cancelled', model: 'sale.order', label: 'Sales order cancelled' },
+  ],
   app: {
     code: 'sales',
     label: 'Sales',
@@ -31,6 +34,16 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
     summary: 'Quotations, sales orders, discounts and taxes',
   },
   importTemplates: [
+    {
+      key: 'sale_order_template',
+      model: 'sale.order.template',
+      label: 'Quotation template',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'Valid for (days)', field: 'validityDays' },
+        { header: 'Terms and conditions', field: 'note' },
+      ],
+    },
     {
       key: 'sale_order',
       model: 'sale.order',
@@ -319,6 +332,11 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
       views: ['list', 'form'],
       domain: { isCustomer: true },
     },
+    'sales.action_templates': action(SaleOrderTemplate, {
+      label: 'Quotation templates',
+      views: ['list', 'form'],
+      visibleTo: ['sales.manager'],
+    }),
   },
   menus: [
     { id: 'sales.root', label: 'Sales', app: 'sales' },
@@ -342,6 +360,20 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
       label: 'Customers',
       action: 'sales.action_customers',
       sequence: 3,
+    },
+    {
+      id: 'sales.config',
+      parent: 'sales.root',
+      label: 'Configuration',
+      sequence: 90,
+      visibleTo: ['sales.manager'],
+    },
+    {
+      id: 'sales.templates',
+      parent: 'sales.config',
+      label: 'Quotation templates',
+      action: 'sales.action_templates',
+      visibleTo: ['sales.manager'],
     },
   ],
   views: {
@@ -367,6 +399,7 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
       header: {
         statusbar: 'state',
         buttons: [
+          k.button('fill', { label: 'Fill from template' }),
           k.button('send', { label: 'Mark as sent' }),
           k.button('confirm', { primary: true, label: 'Confirm' }),
           k.button('lock', { label: 'Lock' }),
@@ -409,10 +442,36 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
             label: 'Totals',
           },
         ),
-        k.group('terms', ['note'], { columns: 1 }),
+        k.group('terms', ['template', 'note'], { columns: 1 }),
+        k.lines('options', [
+          { field: 'product', id: 'option_product' },
+          { field: 'name', id: 'option_name' },
+          { field: 'quantity', id: 'option_quantity' },
+          { field: 'priceUnit', id: 'option_price' },
+          { field: 'state', id: 'option_state' },
+        ]),
       ],
       readonlyWhen: { state: { in: ['done', 'cancel'] } },
       chatter: true,
+    })),
+    'sale.order.template.list': list(SaleOrderTemplate, {
+      columns: ['name', 'validityDays', 'active'],
+    }),
+    'sale.order.template.form': form(SaleOrderTemplate, (k) => ({
+      sheet: [
+        k.group('main', ['name', 'validityDays'], {
+          description:
+            'A quotation filled from the template gets its lines, its optional products (offered to the customer), its validity and its terms.',
+        }),
+        k.lines('lines', [
+          'sequence',
+          'product',
+          { field: 'name', id: 'template_line_name' },
+          'quantity',
+          'optional',
+        ]),
+        k.group('terms_page', ['note'], { columns: 1, label: 'Terms and conditions' }),
+      ],
     })),
     // Quotations by the day they expire: what to chase this week.
     'sale.order.calendar': calendar(SaleOrder, {
@@ -426,6 +485,7 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
     }),
   },
   search: {
+    'sale.order.template': search(SaleOrderTemplate, { fields: ['name'] }),
     'sale.order.line': search(SaleOrderLine, {
       fields: ['name', 'product.name', 'order.name'],
       groupBy: ['product', 'order'],

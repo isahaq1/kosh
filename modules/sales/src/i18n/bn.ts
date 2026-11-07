@@ -1,19 +1,28 @@
 /** Bangla for the module's labels, keyed by their English text (RFC 0023 §3.1; `pnpm i18n:extract`). */
 export const bn: Readonly<Record<string, string>> = {
+  '“Fill from template” fills the quotation’s lines, options, validity and terms from it.':
+    '“টেমপ্লেট থেকে পূরণ” এর থেকে কোটেশনের লাইন, অপশন, মেয়াদ ও শর্ত পূরণ করে।',
   'A discount is between 0 and 100 %.': 'ছাড় ০ থেকে ১০০ %-এর মধ্যে হতে হবে।',
   'A new quotation is valid until its date plus these days; 0 leaves it open.':
     'নতুন উদ্ধৃতি তার তারিখ থেকে এত দিন পর্যন্ত বৈধ থাকে; ০ দিলে কোনো সীমা থাকে না।',
+  'A quotation filled from the template gets its lines, its optional products (offered to the customer), its validity and its terms.':
+    'টেমপ্লেট থেকে পূরণ করা কোটেশন এর লাইন, ঐচ্ছিক পণ্য (গ্রাহককে দেওয়া প্রস্তাব), মেয়াদ ও শর্ত পায়।',
   'A quotation until it is confirmed as a sales order, which can then be locked or cancelled.':
     'বিক্রয় আদেশ হিসেবে নিশ্চিত না হওয়া পর্যন্ত এটি উদ্ধৃতি; এরপর তা লক বা বাতিল করা যায়।',
+  Active: 'সক্রিয়',
   'Add at least one line before confirming the order.':
     'অর্ডার নিশ্চিত করার আগে অন্তত একটি লাইন যোগ করুন।',
+  Added: 'যোগ হয়েছে',
+  'Added as': 'যে লাইনে যোগ হয়েছে',
   'Average order': 'গড় অর্ডার',
   'Biggest open quotations': 'সবচেয়ে বড় খোলা উদ্ধৃতি',
   'By salesperson': 'বিক্রয়কর্মী অনুযায়ী',
   Cancel: 'বাতিল করুন',
   'Cancel this order?': 'এই অর্ডার বাতিল করবেন?',
   Cancelled: 'বাতিল',
+  'Choose a quotation template first.': 'আগে একটি কোটেশন টেমপ্লেট বাছুন।',
   Company: 'প্রতিষ্ঠান',
+  Configuration: 'কনফিগারেশন',
   Confirm: 'নিশ্চিত করুন',
   'Created At': 'তৈরির সময়',
   'Created By': 'তৈরি করেছেন',
@@ -26,6 +35,7 @@ export const bn: Readonly<Record<string, string>> = {
   Description: 'বিবরণ',
   'Discount %': 'ছাড় %',
   'Display Name': 'প্রদর্শিত নাম',
+  'Fill from template': 'টেমপ্লেট থেকে পূরণ',
   'Filled in on new quotations; each can still be changed.':
     'নতুন উদ্ধৃতিতে আপনা-আপনি বসে; প্রতিটিতে পরে বদলানো যায়।',
   'How long new quotations stay valid, and the terms they start with.':
@@ -49,8 +59,18 @@ export const bn: Readonly<Record<string, string>> = {
   'Margin this month': 'এ মাসের মার্জিন',
   'Mark as sent': 'পাঠানো হিসেবে চিহ্নিত করুন',
   'My orders': 'আমার অর্ডার',
+  Name: 'নাম',
   Number: 'নম্বর',
+  Offered: 'প্রস্তাবিত',
+  'Offered until it is added to the quotation as a line.':
+    'কোটেশনে লাইন হিসেবে যোগ না হওয়া পর্যন্ত প্রস্তাবিত।',
+  'Offered with the quotation; the customer adds it, or not.':
+    'কোটেশনের সঙ্গে প্রস্তাবিত; গ্রাহক যোগ করতে পারেন, না-ও পারেন।',
   'Open quotations': 'খোলা উদ্ধৃতি',
+  Optional: 'ঐচ্ছিক',
+  'Optional product': 'ঐচ্ছিক পণ্য',
+  'Optional products': 'ঐচ্ছিক পণ্য',
+  'Options are added while the quotation is open.': 'কোটেশন খোলা থাকতেই অপশন যোগ করা যায়।',
   Order: 'অর্ডার',
   'Order date': 'অর্ডারের তারিখ',
   'Order line': 'অর্ডার লাইন',
@@ -64,6 +84,8 @@ export const bn: Readonly<Record<string, string>> = {
   Quantity: 'পরিমাণ',
   Quotation: 'উদ্ধৃতি',
   'Quotation sent': 'উদ্ধৃতি পাঠানো হয়েছে',
+  'Quotation template': 'কোটেশন টেমপ্লেট',
+  'Quotation templates': 'কোটেশন টেমপ্লেট',
   Quotations: 'উদ্ধৃতি',
   'Quotations valid for (days, 0: no limit)': 'উদ্ধৃতির মেয়াদ (দিন, ০: সীমাহীন)',
   'Quotations, sales orders, discounts and taxes': 'উদ্ধৃতি, বিক্রয় আদেশ, ছাড় ও কর',
@@ -73,11 +95,13 @@ export const bn: Readonly<Record<string, string>> = {
   'Sales by month': 'মাসভিত্তিক বিক্রয়',
   'Sales manager': 'বিক্রয় ব্যবস্থাপক',
   'Sales order': 'বিক্রয় আদেশ',
+  'Sales order cancelled': 'বিক্রয় অর্ডার বাতিল',
   'Sales order confirmed': 'বিক্রয় আদেশ নিশ্চিত হয়েছে',
   'Sales orders': 'বিক্রয় আদেশ',
   'Sales this month': 'এ মাসের বিক্রয়',
   Salesperson: 'বিক্রয়কর্মী',
   'Salesperson (own orders)': 'বিক্রয়কর্মী (নিজের অর্ডার)',
+  Sequence: 'ক্রম',
   'Set to quotation': 'উদ্ধৃতিতে ফেরত নিন',
   Sold: 'বিক্রীত',
   State: 'অবস্থা',
@@ -85,6 +109,8 @@ export const bn: Readonly<Record<string, string>> = {
   Tax: 'কর',
   'Tax (before 0.2.0)': 'কর (0.2.0-এর আগে)',
   Taxes: 'কর',
+  Template: 'টেমপ্লেট',
+  'Template line': 'টেমপ্লেটের লাইন',
   'Terms and conditions': 'শর্তাবলি',
   'The contact the invoice is addressed to; empty: the customer.':
     'চালান যে যোগাযোগের নামে; খালি: গ্রাহক।',
@@ -93,6 +119,8 @@ export const bn: Readonly<Record<string, string>> = {
   'The margin as a percentage of the untaxed amount.': 'করবিহীন অঙ্কের শতাংশ হিসেবে মার্জিন।',
   'The price typed in, else the order’s price list’s (see why on the line), else the product’s list price.':
     'হাতে লেখা মূল্য, নইলে অর্ডারের মূল্যতালিকার (কারণ লাইনে দেখুন), নইলে পণ্যের তালিকা মূল্য।',
+  'The quotation is valid until its date plus these days; 0 keeps the quotation’s own.':
+    'কোটেশনটি এর তারিখের সঙ্গে এই কয়দিন পর্যন্ত বৈধ; ০ হলে কোটেশনের নিজের মেয়াদ থাকে।',
   'The sum of the lines’ amounts before taxes.': 'লাইনগুলোর করবিহীন অঙ্কের যোগফল।',
   'The sum of the taxes on the lines.': 'লাইনগুলোর করের যোগফল।',
   'The taxes on this line, computed from its amount and its taxes.':
@@ -106,6 +134,7 @@ export const bn: Readonly<Record<string, string>> = {
   Untaxed: 'করবিহীন',
   'Updated At': 'হালনাগাদের সময়',
   'Updated By': 'হালনাগাদ করেছেন',
+  'Valid for (days)': 'বৈধতা (দিন)',
   'Valid until': 'বৈধ থাকবে',
   'What the customer pays: the untaxed amount plus the taxes.':
     'গ্রাহক যা পরিশোধ করেন: করবিহীন অঙ্কের সাথে কর যোগ করে।',
