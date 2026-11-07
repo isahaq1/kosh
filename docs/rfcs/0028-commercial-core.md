@@ -109,3 +109,23 @@ the module standard (`pnpm check:modules`), the business apps' E2E, demo data an
 Product variants and attributes (the next RFC: they change product, lines and stock), loyalty and gift cards (one
 engine for Sales, the Shop and Counter, after price lists), fiscal positions and follow-ups (with the accounting
 RFC: bank statements and reconciliation rules).
+
+## 6. Notes
+
+- **Step 1 (2026-11-07).** `product.pricelist` and `product.pricelist.rule`, `priceFor` (read as the caller: product
+  users read lists, so it runs in reads), `res.partner.pricelist` (Sales), `sale.order.pricelist` from the customer
+  by onchange, its currency followed. `sale.order.line.priceUnit` is a stored compute with an inverse: the price typed
+  in (`manualPrice`, written by the inverse, refused without `sales.price_override`), else the list's, else the list
+  price; `priceReason` says why. A migration keeps existing lines' prices as typed in. Creating a line with a price
+  needed Shutro to run inverses on create too (request #36, Shutro 0.3.6). The Shop prices carts by the customer's
+  list; Counter's shop has a list (the catalogue and lines without a price), and a customer's own list when Sales is
+  installed. Not yet: the Shop's product pages at the customer's prices, an order-level "Update prices", the
+  discount under the same permission.
+- **Step 2 (2026-11-07).** In `sale_account` (the exposure needs invoices): `res.company.creditControl`
+  (`off | warn | block | approval`) and `creditLimitDefault` in an app settings section, `res.partner.creditLimit` and
+  `customerPaymentTerm`; Sales' `confirm` calls `confirming()` (a hook like Purchase's `submitting()`), which the
+  bridge overrides with the check (as the system). Approval mode adds the `credit` state with `askCredit`,
+  `creditApprove` (guarded by the approvals, emitting `sale.order.confirmed` like `confirm`) and `creditReject`, and a
+  shipped *Credit approvals* policy (Accounting managers, on `creditHeld`). `partnerInvoice` and `partnerShipping` on
+  orders; the invoice takes the invoice address and the payment terms. Not yet: the delivery address on Stockroom's
+  delivery (sale_stock), amounts in other currencies than the company's in the exposure.

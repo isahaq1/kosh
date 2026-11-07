@@ -227,6 +227,40 @@ export const SaleOrder = defineModel('sale.order', {
 The views come from Shutro's own type generator, run through Shutro ERP's single Shutro gateway (`loadCodegen` in
 `@kosh/server/orm`). Their imports point at `@kosh/server/orm`, and other modules are referenced by package name.
 
+### Price lists (`modules/product`, RFC 0028)
+
+**Products › Price lists**: a list holds rules for a product, a category (and the categories under it) or every
+product, from a quantity and between dates. Each gives a fixed price, a percent off a base, or a formula (a percent
+off, plus an amount, rounded to a step, kept within a margin over the cost). The base is the list price, the cost or
+another list (a list based on itself, even through others, is refused). The most specific rule wins: a product's
+over a category's (the nearest first) over every product's, then the highest quantity reached.
+
+- **Sales:** a customer's price list (on the contact) starts their orders; the order's list prices each line that
+  has no price typed in, and the line says why ("Wholesale: 10 % off the list price"). A typed price is kept when
+  the quantity or the list changes. Typing prices needs `sales.price_override` (Salespeople have it; take it away
+  in Settings › Roles to make prices fixed). Lines of orders from before price lists keep their price.
+- **Shop:** a signed-in customer's cart is priced by their list.
+- **Counter:** a shop's list prices the catalogue and every line sold without a price; a customer with a list of
+  their own (when Sales is installed) gets theirs.
+- `priceFor(env, pricelist, product, quantity, date)` in `@kosh/product` prices one product, as the caller, and
+  explains it.
+
+### Credit control, payment terms and addresses (`modules/sale_account`, RFC 0028)
+
+With Sales and Accounting installed, a customer has a **credit limit** (else the company's default, Settings › App
+settings › Credit control). What they owe is their unpaid posted invoices (less credit notes) plus confirmed orders
+not invoiced yet; confirming an order that takes them over the limit does what the company's **Credit control**
+says:
+
+- **Warn on the order:** confirmed, with the amounts on the order (**Credit**).
+- **Refuse the confirmation:** refused, with what they owe and the limit.
+- **Ask for an approval:** refused with a pointer to **Ask for credit approval**; the order then waits in **Credit
+  approval** for an Accounting manager (the shipped *Credit approvals* policy, through the Approvals app), is
+  confirmed when approved and goes back to a quotation when refused or sent back.
+
+Orders also carry **Invoice to** and **Deliver to** (contacts) and **Payment terms**; the invoice goes to the invoice
+address with the order's payment terms, else the customer's (**Customer payment terms** on the contact).
+
 ### Projects for programmes (`modules/project`, RFC 0026)
 
 Projects carries a programme's structure, not only a to-do list. Configuration holds **project types**, **task
