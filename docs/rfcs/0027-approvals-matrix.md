@@ -1,6 +1,6 @@
 # RFC 0027 — Approvals: the matrix, beyond Paragon's `dynamic_approval`
 
-- Status: Accepted (2026-11-07)
+- Status: Accepted (2026-11-07); implemented (2026-11-07)
 - Builds on: RFC 0025 (Approvals, an app of its own), RFC 0003 §5.3, RFC 0024 step 5 (cost centres)
 - Reference: `pg-odoo/custom-addons/dynamic_approval` (Odoo 19, Paragon) — templates per model by companies or
   segment, levels by role type, backup approvers, reassignment, skip duplicate approvers, pending sync, a matrix log
@@ -155,3 +155,9 @@ inbox and the policy form, docs/approvals.md (new; today the engine is in docs/p
   keep `company` and gain `companies` and `segment`: covered together, none for every company — no migration, every
   existing policy unchanged. Every covering policy applies (Kosh's rule since RFC 0003) rather than a company's own
   overriding the segment's: conditions or archiving decide, and the preview names the companies covered.
+- **Step 4 (2026-11-07).** `approvalMatrix` and `GET /api/v1/approvals/matrix`: cards per policy (archived ones
+  named too) of the period's requests the user decides directly or for others, a level counted once its turn came;
+  for Approvals managers the average hours per level from its turn to its decision, and the ten approvers with the
+  most late and waiting. The Matrix page in the Approvals app. The waiting count opens the inbox (not yet filtered by
+  policy). Found on the way: `active: { in: [true, false] }` does not show archived records — Shutro's
+  `withFlags({ activeTest: false })` does —, fixed where Kosh looked up archived users (automation, inbound mail).

@@ -1,0 +1,111 @@
+# RFC 0028 — The commercial core: price lists, credit control, invoicing by what was delivered, deals to quotations, quotation templates
+
+- Status: Accepted (2026-11-07)
+- Builds on: RFC 0008 (Sales, Purchase, Products), RFC 0009 (Accounting), RFC 0021 (Pipeline, Stockroom, Shop,
+  Counter), RFC 0025 / 0027 (Approvals)
+- Source: [docs/odoo-gaps/README.md](../odoo-gaps/README.md) — the gaps several apps wait on (#1, #4) and the most
+  valuable ones in Sales and Accounting
+
+## 1. Why
+
+The comparison with Odoo 19 found that selling in Kosh stops short in places every business meets in its first week:
+
+- **One price per product.** There are no price lists: no customer prices, no quantity breaks, no promotions by
+  date, no prices in another currency. RFC 0008 promised them. Sales, the Shop and Counter all wait on this.
+- **One invoice per order, for everything.** There are no down payments, and an order can't be invoiced by what was
+  delivered, even though Stockroom tracks it (`qtyDelivered`). There's no "to invoice" per line and no batch
+  invoicing. Purchase has the same problem with bills and received quantities.
+- **No credit control.** A customer's limit is neither warned about nor enforced, and orders carry no payment terms
+  and no invoice or delivery address.
+- **Pipeline is cut off from Sales.** A won deal can't become a quotation, and a confirmed quotation doesn't win its
+  deal.
+- **Every quotation starts empty.** There are no templates and no optional products the customer can add from the
+  portal.
+
+## 2. Where we go further than Odoo
+
+| | Odoo 19 | Kosh after this RFC |
+| --- | --- | --- |
+| Price lists | Rules by product, category, quantity, dates; formula | The same, plus **"why this price"** on every line (the rule, the list, the break), like replenishment explains itself; lists per company, partner, Shop and Counter |
+| Credit limit | Warn, or block (Enterprise-grade setup) | Warn or block per customer and company default, open orders and unpaid invoices counted, and **an approval to go over** through the Approvals engine instead of a dead end |
+| Partial invoicing | Down payments, delivered quantities | The same, plus **purchase bills by received quantity** with the three-way check shown on the bill, and the invoice plan on the order |
+| Deals | Quotations from opportunities | The same, plus the deal won on confirmation and **lost when every quotation is cancelled**, with the reason asked |
+| Templates | Templates, optional products (Enterprise for some) | Templates with sections, notes and optional lines; the customer adds optional lines in the **portal before signing**, priced by the server |
+
+## 3. Design
+
+### 3.1 Price lists (`product`, with `sales`, `website_sale`, `pos`)
+
+- `product.pricelist`: name, currency, company (empty: every company), active, `sequence`; `rules`.
+- `product.pricelist.rule`: applies to a product, a category (and its children) or everything; `minQuantity`;
+  `dateFrom` / `dateTo`; `compute`: `fixed` (a price), `discount` (a % off the base), `formula` (base × (1 − %) +
+  surcharge, rounded to a step, within a min / max margin). The base is the list price, the cost, or **another
+  price list** (no cycles: checked when saved).
+- The most specific rule wins: product over category over all, then the highest minimum quantity met, then the
+  rule's sequence.
+- `priceFor(pricelist, product, quantity, date, uom)` in `@kosh/product` is pure and shared, so Sales, the Shop and
+  Counter price the same way on the server. It returns `{ price, rule, explanation }`.
+- `res.partner.pricelist` (empty: the company's default list); `sale.order.pricelist` defaults from the customer.
+  Lines take `priceUnit` from it on product or quantity change, and show **why** (`priceReason`). A manual price
+  stays manual, and is marked as such.
+- The Shop prices carts by the visitor's list (signed-in customers) or the Shop's; Counter by the shop's list or the
+  sale's customer.
+- Who may change prices: `sales.price_override` (a permission). Without it, a line's price and discount are
+  read-only, enforced by the server.
+
+### 3.2 Credit control, payment terms and addresses (`contacts`, `sales`, `sale_account`)
+
+- `res.partner.creditLimit` (money, empty: the company default) and `res.company.creditLimitDefault`,
+  `creditControl`: `off | warn | block | approval`.
+- At confirmation, exposure = unpaid posted invoices + confirmed orders not invoiced + this order. Over the limit:
+  - `warn` shows it;
+  - `block` refuses;
+  - `approval` asks for an approval through the Approvals engine (a shipped policy: an Accounting manager).
+  The order waits in `to_approve` and is confirmed on approval.
+- `sale.order.paymentTerm` (defaults from the customer, then the company), passed to the invoice. `partnerInvoice`
+  and `partnerShipping` (the customer's contacts) on the order, carried to the invoice and the delivery.
+
+### 3.3 Invoicing by what was delivered (`sale_account`, `purchase_account`, with the stock bridges)
+
+- `product.invoicePolicy`: `ordered | delivered`, used for sales and purchases.
+- Lines: `qtyInvoiced` (computed from posted and draft invoice lines linked to the line) and `qtyToInvoice` (ordered
+  or delivered, minus invoiced).
+- **Create invoice** makes an invoice of what is to invoice now, so several invoices per order are possible, and
+  marks the order `invoiced` when nothing is left. The same runs in batch from the order list.
+- **Down payments**: a % or a fixed amount as an invoice line on a "down payment" product (an account from the
+  company's settings). The final invoice deducts it as a negative line, and the order shows the invoice plan.
+- **Purchase**: bills by received quantity (`purchase_stock_account`), with **the three-way check** on the bill
+  (ordered / received / billed per line, differences flagged before posting).
+
+### 3.4 Deals to quotations (`sale_crm`, a bridge of `crm` and `sales`)
+
+- `sale.order.deal`; on the deal, **New quotation** (customer, salesperson, team and source carried over), its
+  quotations as stat tiles, and the amount of confirmed orders.
+- When a quotation is confirmed, its deal moves to its won stage (`emitting('sale.order.confirmed')` through the
+  outbox). When every quotation of a deal is cancelled, the deal is marked lost and asks for the reason.
+
+### 3.5 Quotation templates and optional lines (`sales`, `sale_portal`)
+
+- `sale.order.template`: name, validity days, terms, lines (product, description, quantity, sections and notes) and
+  optional lines. Choosing a template fills an empty quotation.
+- `sale.order.line.optional` (or `optional: true` lines kept out of the totals). In the portal, the customer adds an
+  optional line before signing; the server prices it and adds it, once, audited.
+
+## 4. Steps
+
+1. Price lists: models, `priceFor` with its explanation, on partners and orders, the price-override permission,
+   Shop and Counter pricing.
+2. Credit control (warn, block, approval), payment terms, and invoice and delivery addresses on orders.
+3. Invoicing by delivered and received quantity: to-invoice per line, several invoices per order, down payments,
+   batch invoicing, the three-way check on bills.
+4. `sale_crm`: deals to quotations, won on confirmation, lost when all are cancelled.
+5. Quotation templates and optional lines in the portal.
+
+Each step: real-PostgreSQL tests (permission tests for price overrides and credit approvals), English and Bangla,
+the module standard (`pnpm check:modules`), the business apps' E2E, demo data and docs.
+
+## 5. Not in this RFC
+
+Product variants and attributes (the next RFC: they change product, lines and stock), loyalty and gift cards (one
+engine for Sales, the Shop and Counter, after price lists), fiscal positions and follow-ups (with the accounting
+RFC: bank statements and reconciliation rules).

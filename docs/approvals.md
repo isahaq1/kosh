@@ -83,6 +83,10 @@ Poultry, Dairy — managed by Approvals managers; a company is in one segment at
 record's company and whose condition it meets applies, so a segment-wide policy and a company's own can stand side
 by side (give them conditions, or archive one). The policy's preview says which companies it covers.
 
-## Next (RFC 0027)
+## The matrix
 
-The matrix dashboard (step 4).
+**Approvals › Matrix** shows, for a period (7 days to all time), the requests you decide as a card per policy:
+what waits now (opening the inbox), what was approved and what was rejected or sent back. **Mine** counts the
+requests you decide yourself (named, or holding the role); **For others** those you may decide as a backup or for
+someone away. Approvals managers also see how many hours each level takes to decide, on average, and who has the
+most requests waiting and late. `GET /api/v1/approvals/matrix?period=7d|30d|3m|6m|1y|all&mode=direct|delegated`.
