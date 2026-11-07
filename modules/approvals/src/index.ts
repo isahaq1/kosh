@@ -589,6 +589,12 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
         views: ['list', 'form'],
         visibleTo: ['approvals.manager'],
       },
+      'approvals.action_segments': {
+        model: 'res.segment',
+        label: 'Segments',
+        views: ['list', 'form'],
+        visibleTo: ['approvals.manager'],
+      },
     },
     menus: [
       { id: 'approvals.root', label: 'Approvals', app: 'approvals' },
@@ -650,8 +656,36 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
         sequence: 1,
         visibleTo: ['approvals.manager'],
       },
+      {
+        id: 'approvals.segments',
+        parent: 'approvals.configuration',
+        label: 'Segments',
+        action: 'approvals.action_segments',
+        sequence: 2,
+        visibleTo: ['approvals.manager'],
+      },
     ],
     views: {
+      'res.segment.list': list('res.segment' as never, {
+        columns: ['name', 'code', 'companies', 'active'] as never,
+      }),
+      'res.segment.form': form('res.segment' as never, (k) => ({
+        sheet: [
+          k.group('main', ['name', 'code'] as never, {
+            description:
+              'A group of companies (Feed, Poultry, Dairy): an approval policy of the segment covers every company in it.',
+          }),
+          k.group(
+            'members',
+            [{ field: 'companies', id: 'segment_companies', widget: 'tags' }] as never,
+            {
+              label: 'Companies',
+              description: 'A company is in one segment at most.',
+            },
+          ),
+          k.group('notes', ['note'] as never, { label: 'Note' }),
+        ],
+      })),
       'approval.delegation.list': list('approval.delegation' as never, {
         columns: ['user', 'delegate', 'dateFrom', 'dateTo', 'note'] as never,
       }),
@@ -803,6 +837,7 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
           'name',
           'targetModel',
           'company',
+          'segment',
           'onApproved',
           'reasonRequired',
           'active',
@@ -811,10 +846,23 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
       'approval.policy.form': form('approval.policy' as never, (k) => ({
         sheet: [
           k.component('preview', 'approvals.PolicyPreview'),
-          k.group('main', ['name', 'targetModel', 'company', 'sequence', 'condition'] as never, {
+          k.group('main', ['name', 'targetModel', 'sequence', 'condition'] as never, {
             description:
               'A record of the model gets one approval per level whose condition it meets; levels with a lower sequence are decided first, those with the same side by side.',
           }),
+          k.group(
+            'scope',
+            [
+              'company',
+              { field: 'companies', id: 'policy_companies', widget: 'tags' },
+              'segment',
+            ] as never,
+            {
+              label: 'Companies',
+              description:
+                'The policy covers this company, these companies and every company of the segment together; leave all three empty for every company.',
+            },
+          ),
           k.group(
             'outcomes',
             [
@@ -855,6 +903,9 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
       })),
     },
     search: {
+      'res.segment': search('res.segment' as never, {
+        fields: ['name', 'code'] as never,
+      }),
       'approval.delegation': search('approval.delegation' as never, {
         fields: ['user.name', 'delegate.name'] as never,
         groupBy: ['user', 'delegate'] as never,

@@ -1,5 +1,8 @@
 /** Bangla for the module's labels, keyed by their English text (RFC 0023 §3.1; `pnpm i18n:extract`). */
 export const bn: Readonly<Record<string, string>> = {
+  'A company is in one segment at most.': 'একটি প্রতিষ্ঠান সর্বোচ্চ একটি সেগমেন্টে থাকে।',
+  'A group of companies (Feed, Poultry, Dairy): an approval policy of the segment covers every company in it.':
+    'প্রতিষ্ঠানের একটি দল (ফিড, পোলট্রি, ডেইরি): সেগমেন্টের অনুমোদন নীতি এর প্রতিটি প্রতিষ্ঠানে প্রযোজ্য।',
   'A line asks for a positive quantity at a price not below zero.':
     'প্রতিটি লাইনে পরিমাণ শূন্যের বেশি এবং মূল্য শূন্যের কম নয় হতে হবে।',
   'A period ends on or after it starts.': 'সময়কাল শুরুর দিনে বা তার পরে শেষ হয়।',
@@ -31,6 +34,7 @@ export const bn: Readonly<Record<string, string>> = {
   Cancelled: 'বাতিল',
   Category: 'শ্রেণি',
   Code: 'কোড',
+  Companies: 'প্রতিষ্ঠানসমূহ',
   Company: 'প্রতিষ্ঠান',
   Configuration: 'কনফিগারেশন',
   Contact: 'যোগাযোগ',
@@ -66,6 +70,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Not asked': 'চাওয়া হয়নি',
   'Not asked, optional or required; submitting checks the required ones.':
     'চাওয়া হয়নি, ঐচ্ছিক বা আবশ্যক; জমা দেওয়ার সময় আবশ্যকগুলো যাচাই করা হয়।',
+  Note: 'নোট',
   Number: 'নম্বর',
   'On approval': 'অনুমোদনের পর',
   Optional: 'ঐচ্ছিক',
@@ -91,6 +96,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Required: the request is submitted only with a file attached.':
     'আবশ্যক: ফাইল সংযুক্ত থাকলেই কেবল অনুরোধ জমা দেওয়া যায়।',
   'Result Id': 'ফলাফল আইডি',
+  Segments: 'সেগমেন্ট',
   Sequence: 'ক্রম',
   'Set to draft': 'খসড়ায় ফেরত নিন',
   'Shown to whoever asks: what to give and why.': 'অনুরোধকারীকে দেখানো হয়: কী দিতে হবে এবং কেন।',
@@ -100,6 +106,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Submitted to the category’s approvers; approved, its outcome runs.':
     'শ্রেণির অনুমোদনকারীদের কাছে জমা দেওয়া হয়; অনুমোদিত হলে এর ফলাফল কার্যকর হয়।',
   Subtotal: 'উপমোট',
+  'The policy covers this company, these companies and every company of the segment together; leave all three empty for every company.':
+    'নীতিটি এই প্রতিষ্ঠান, এই প্রতিষ্ঠানগুলো এবং সেগমেন্টের প্রতিটি প্রতিষ্ঠানে একসঙ্গে প্রযোজ্য; সব প্রতিষ্ঠানের জন্য তিনটিই খালি রাখুন।',
   'The policy’s levels decide (made with the first request: the requester’s manager, else an Approvals manager); edit them on the policy. The outcome runs once approved.':
     'নীতির স্তরগুলো সিদ্ধান্ত নেয় (প্রথম অনুরোধের সাথে তৈরি হয়: অনুরোধকারীর ব্যবস্থাপক, না থাকলে একজন অনুমোদন ব্যবস্থাপক); নীতিতে এগুলো সম্পাদনা করুন। অনুমোদিত হলে ফলাফল কার্যকর হয়।',
   'The quantity times the unit price.': 'পরিমাণ গুণ একক মূল্য।',

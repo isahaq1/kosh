@@ -410,3 +410,62 @@ test('approved already, backups, reassignment, waiting requests in step with the
   expectStatus(await call('POST', `/api/v1/approvals/requests/${third?.id}/approve`, 'dina'), 200);
   expect((await call('GET', `${PO}/${id}?fields=state`, 'pia')).json.state).toBe('purchase');
 });
+
+test('policies by segment and companies: a segment covers its companies, an empty one none; the preview says which', async () => {
+  for (const name of ['Matrix 2'])
+    for (const p of (
+      await call('GET', `/api/v1/models/approval.policy?fields=id&filter[name]=${name}`, 'pia')
+    ).json.items as Json[])
+      expectStatus(
+        await call('PATCH', `/api/v1/models/approval.policy/${p.id}`, 'pia', { active: false }),
+        200,
+      );
+  // Approvals managers make segments and put companies in them (the segment holds its companies).
+  expect((await call('POST', '/api/v1/models/res.segment', 'bob', { name: 'Nope' })).status).toBe(
+    403,
+  );
+  const feed = await call('POST', '/api/v1/models/res.segment', 'pia', {
+    name: 'Feed',
+    code: 'FD',
+    companies: { set: [company] },
+  });
+  expectStatus(feed, 201);
+  expect((await call('POST', '/api/v1/models/res.segment', 'pia', { name: 'Feed' })).status).toBe(
+    422,
+  );
+  const dairy = await call('POST', '/api/v1/models/res.segment', 'pia', { name: 'Dairy' });
+  expectStatus(dairy, 201);
+  // A company is in one segment at most.
+  expect(
+    (
+      await call('PATCH', `/api/v1/models/res.segment/${dairy.json.id}`, 'pia', {
+        companies: { set: [company] },
+      })
+    ).status,
+  ).toBe(422);
+  const policy = async (name: string, scope: Record<string, unknown>, approver: string) => {
+    const made = await call('POST', '/api/v1/models/approval.policy', 'pia', {
+      name,
+      targetModel: 'purchase.order',
+      onApproved: 'confirm',
+      onRejected: 'reject',
+      ...scope,
+      levels: {
+        create: [{ name, approverKind: 'users', approverUsers: { set: [users[approver]] } }],
+      },
+    });
+    expectStatus(made, 201);
+    return made.json.id as number;
+  };
+  const forFeed = await policy('Feed segment', { segment: feed.json.id }, 'extra');
+  const forDairy = await policy('Dairy segment', { segment: dairy.json.id }, 'cat');
+  await policy('These companies', { companies: { set: [company] } }, 'karim');
+  const id = await order('bob');
+  expectStatus(await call('POST', `${PO}/${id}/transitions/submit`, 'bob'), 200);
+  const { requests } = await approvalsOf(id);
+  expect(requests.map((r) => r.levelName).sort()).toEqual(['Feed segment', 'These companies']);
+  const preview = async (p: number) =>
+    (await call('GET', `/api/v1/approvals/policies/${p}/preview`, 'pia')).json.covers;
+  expect(await preview(forFeed)).toEqual({ all: false, companies: ['Paragon Feed'] });
+  expect(await preview(forDairy)).toEqual({ all: false, companies: [] });
+});

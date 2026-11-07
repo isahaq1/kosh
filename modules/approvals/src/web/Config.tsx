@@ -18,10 +18,11 @@ export function PolicyPreview({ api, record, version }: NodeComponentProps): Rea
     queryKey: ['approvals.preview', id, version],
     enabled: id !== null,
     queryFn: () =>
-      api.call<{ records: number; levels: { id: number; name: string; matched: number[] }[] }>(
-        'GET',
-        `/api/v1/approvals/policies/${String(id)}/preview`,
-      ),
+      api.call<{
+        records: number;
+        levels: { id: number; name: string; matched: number[] }[];
+        covers?: { all: boolean; companies: string[] };
+      }>('GET', `/api/v1/approvals/policies/${String(id)}/preview`),
   });
   const [synced, setSynced] = useState<number | null>(null);
   const sync = useMutation({
@@ -31,13 +32,22 @@ export function PolicyPreview({ api, record, version }: NodeComponentProps): Rea
   });
   if (id === null || preview.isError) return null;
   if (preview.isPending) return <p className="text-sm text-muted-foreground">{t('loading')}</p>;
-  const { records, levels } = preview.data;
+  const { records, levels, covers } = preview.data;
   return (
     <section
       aria-label={t('preview.title')}
       className="grid gap-1 rounded-md border border-border p-3"
     >
       <h3 className="text-sm font-semibold">{t('preview.title')}</h3>
+      {covers === undefined ? null : (
+        <p className="text-xs">
+          {covers.all
+            ? t('preview.everyCompany')
+            : covers.companies.length === 0
+              ? t('preview.noCompany')
+              : t('preview.covers', { companies: covers.companies.join(', ') })}
+        </p>
+      )}
       <p className="text-xs text-muted-foreground">{t('preview.explain', { count: records })}</p>
       <ul className="grid gap-1 text-sm">
         {levels.map((l) => (
