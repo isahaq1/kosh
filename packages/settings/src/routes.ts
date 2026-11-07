@@ -59,14 +59,27 @@ export interface PlanInfo {
   readonly unchanged: readonly string[];
   readonly statements: readonly string[];
   readonly empty: boolean;
+  /** Apps removed with their data (RFC 0008 §5.4), and what goes: each table or column with its rows. */
+  readonly uninstall: readonly { readonly name: string; readonly cascade: boolean }[];
+  readonly drops: readonly {
+    readonly table: string;
+    readonly column: string | null;
+    readonly rows: number;
+  }[];
 }
 
 const NAME = /^[a-z][a-z0-9_]{0,63}$/;
 
 function changeOf(body: unknown): AppChange {
   const b = (body ?? {}) as Record<string, unknown>;
-  const out: { install?: string[]; enable?: string[]; disable?: string[]; upgrade?: string[] } = {};
-  for (const key of ['install', 'enable', 'disable', 'upgrade'] as const) {
+  const out: {
+    install?: string[];
+    enable?: string[];
+    disable?: string[];
+    upgrade?: string[];
+    uninstall?: string[];
+  } = {};
+  for (const key of ['install', 'enable', 'disable', 'upgrade', 'uninstall'] as const) {
     const value = b[key];
     if (value === undefined) continue;
     if (
@@ -86,14 +99,15 @@ function changeOf(body: unknown): AppChange {
     (out.install?.length ?? 0) +
       (out.enable?.length ?? 0) +
       (out.disable?.length ?? 0) +
-      (out.upgrade?.length ?? 0) ===
+      (out.upgrade?.length ?? 0) +
+      (out.uninstall?.length ?? 0) ===
     0
   )
     throw new HttpProblem(
       400,
       'invalid-body',
       'Invalid request',
-      'Name at least one app to install, enable, disable or upgrade.',
+      'Name at least one app to install, enable, disable, upgrade or uninstall.',
     );
   return out;
 }
@@ -120,6 +134,8 @@ function planInfo(change: AppChange, prepared: PreparedApps): PlanInfo {
     enable: plan.enable,
     disable: plan.disable,
     upgrade: plan.upgrade,
+    uninstall: plan.uninstall,
+    drops: prepared.drops,
     unchanged: plan.unchanged,
     statements: prepared.migration.statements.map((s) => s.sql),
     empty: prepared.empty,
@@ -205,7 +221,12 @@ export function registerAppRoutes(context: ModuleContext): void {
 
   app.post('/api/v1/settings/apps/apply', async (request) => {
     const uid = await guard(request);
-    const body = (request.body ?? {}) as { change?: unknown; planId?: unknown };
+    const body = (request.body ?? {}) as {
+      change?: unknown;
+      planId?: unknown;
+      confirm?: unknown;
+      code?: unknown;
+    };
     const change = changeOf(body.change);
     if (typeof body.planId !== 'string')
       throw new HttpProblem(
@@ -231,6 +252,27 @@ export function registerAppRoutes(context: ModuleContext): void {
         'Review the new plan, then apply it.',
       );
     if (prepared.empty) return { installed: [], enabled: [], disabled: [], migration: null };
+    // Removing data (RFC 0008 §5.4): the apps' names typed back, and a fresh code from the authenticator app.
+    if ((change.uninstall ?? []).length > 0) {
+      const expected = (change.uninstall ?? []).join(' ');
+      if (typeof body.confirm !== 'string' || body.confirm.trim() !== expected)
+        throw new HttpProblem(
+          422,
+          'confirm-name',
+          'Type the app’s name',
+          `Removing data needs the app’s name typed: ${expected}.`,
+        );
+      if (typeof body.code !== 'string' || body.code.trim() === '')
+        throw new HttpProblem(
+          422,
+          'code-required',
+          'A code is needed',
+          'Removing data needs a code from your authenticator app.',
+        );
+      if (context.auth === undefined)
+        throw new HttpProblem(503, 'auth-unavailable', 'Sign-in unavailable', 'No sign-in here.');
+      await context.auth.confirmSecondFactor(uid, body.code);
+    }
     const result = await applyApps(prepared, {
       driver,
       dir: apps.migrationsDir,
@@ -243,6 +285,8 @@ export function registerAppRoutes(context: ModuleContext): void {
       installed: result.installed,
       enabled: result.enabled,
       disabled: result.disabled,
+      uninstalled: result.uninstalled,
+      snapshot: result.snapshot,
       migration:
         result.migration === null
           ? null

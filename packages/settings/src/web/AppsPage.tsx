@@ -1,7 +1,8 @@
 /**
  * Settings → Apps (RFC 0008 §5.5): the App manager. A card per app with its icon, state and what it needs; search,
- * category and state filters; Install, Enable and Disable open the server's plan (what comes along, what goes, the
- * database changes and their SQL) and apply it after confirmation. The server decides and checks everything; this
+ * category and state filters; Install, Enable, Disable, Upgrade and Uninstall open the server's plan (what comes
+ * along, what goes, the database changes and their SQL) and apply it after confirmation — an uninstall, which removes
+ * the data, after the app's name is typed back and a code from the authenticator app is given. The server decides and checks everything; this
  * page only shows what it says. After a change every cached query is refreshed: the menus and the launcher follow.
  */
 import {
@@ -24,7 +25,7 @@ import { type ReactElement, useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AppInfo, PlanInfo } from '../routes.js';
 
-type Kind = 'install' | 'enable' | 'disable' | 'upgrade';
+type Kind = 'install' | 'enable' | 'disable' | 'upgrade' | 'uninstall';
 type Filter = 'all' | 'installed' | 'available';
 
 interface Pending {
@@ -69,12 +70,19 @@ export function AppsPage({ api, label }: PageProps): ReactElement {
     },
   });
   const apply = useMutation({
-    mutationFn: (p: Pending) =>
-      api.call<{ installed: string[]; enabled: string[]; disabled: string[]; upgraded: string[] }>(
-        'POST',
-        '/api/v1/settings/apps/apply',
-        { change: { [p.kind]: [p.app.name] }, planId: p.plan.planId },
-      ),
+    mutationFn: ({ p, confirm, code }: { p: Pending; confirm?: string; code?: string }) =>
+      api.call<{
+        installed: string[];
+        enabled: string[];
+        disabled: string[];
+        upgraded: string[];
+        uninstalled?: string[];
+      }>('POST', '/api/v1/settings/apps/apply', {
+        change: { [p.kind]: [p.app.name] },
+        planId: p.plan.planId,
+        ...(confirm === undefined ? {} : { confirm }),
+        ...(code === undefined ? {} : { code }),
+      }),
     onSuccess: async (result) => {
       const labelOf = (name: string) =>
         catalogue.data?.apps.find((a) => a.name === name)?.label ?? name;
@@ -83,6 +91,7 @@ export function AppsPage({ api, label }: PageProps): ReactElement {
         ...result.enabled.map((n) => t('doneEnabled', { name: labelOf(n) })),
         ...result.disabled.map((n) => t('doneDisabled', { name: labelOf(n) })),
         ...(result.upgraded ?? []).map((n) => t('doneUpgraded', { name: labelOf(n) })),
+        ...(result.uninstalled ?? []).map((n) => t('doneUninstalled', { name: labelOf(n) })),
       ];
       setPending(null);
       setDone(parts.length === 0 ? t('nothingToDo') : t('done', { list: parts.join(', ') }));
@@ -253,6 +262,21 @@ export function AppsPage({ api, label }: PageProps): ReactElement {
                         {t(kind)}
                       </Button>
                     )}
+                    {a.state === 'available' || a.protected ? null : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        busy={
+                          plan.isPending &&
+                          plan.variables?.kind === 'uninstall' &&
+                          plan.variables.app.name === a.name
+                        }
+                        aria-label={`${t('uninstall')} ${a.label}`}
+                        onClick={() => plan.mutate({ kind: 'uninstall', app: a })}
+                      >
+                        {t('uninstall')}
+                      </Button>
+                    )}
                   </div>
                 </Card>
               </li>
@@ -271,7 +295,11 @@ export function AppsPage({ api, label }: PageProps): ReactElement {
             apply.reset();
             setPending(null);
           }}
-          onConfirm={() => apply.mutate(pending)}
+          onConfirm={(confirm, code) =>
+            apply.mutate(
+              confirm === undefined ? { p: pending } : { p: pending, confirm, code: code ?? '' },
+            )
+          }
         />
       )}
     </section>
@@ -291,10 +319,15 @@ function PlanDialog({
   readonly busy: boolean;
   readonly error: string | null;
   readonly onCancel: () => void;
-  readonly onConfirm: () => void;
+  readonly onConfirm: (confirm?: string, code?: string) => void;
 }): ReactElement {
   const { t } = useTranslation('settings');
   const { kind, app, plan } = pending;
+  const formId = useId();
+  const [typed, setTyped] = useState('');
+  const [code, setCode] = useState('');
+  const removing = kind === 'uninstall';
+  const ready = !removing || (typed.trim() === app.name && code.trim() !== '');
   const title = t(
     kind === 'install'
       ? 'planTitleInstall'
@@ -302,7 +335,9 @@ function PlanDialog({
         ? 'planTitleEnable'
         : kind === 'upgrade'
           ? 'planTitleUpgrade'
-          : 'planTitleDisable',
+          : kind === 'uninstall'
+            ? 'planTitleUninstall'
+            : 'planTitleDisable',
     { name: app.label },
   );
   return (
@@ -318,10 +353,10 @@ function PlanDialog({
             {t('cancel')}
           </Button>
           <Button
-            variant={kind === 'disable' ? 'danger' : 'primary'}
+            variant={kind === 'disable' || removing ? 'danger' : 'primary'}
             busy={busy}
-            disabled={plan.empty}
-            onClick={onConfirm}
+            disabled={plan.empty || !ready}
+            onClick={() => (removing ? onConfirm(typed.trim(), code.trim()) : onConfirm())}
           >
             {busy
               ? t('applying')
@@ -332,7 +367,9 @@ function PlanDialog({
                       ? 'confirmEnable'
                       : kind === 'upgrade'
                         ? 'confirmUpgrade'
-                        : 'confirmDisable',
+                        : removing
+                          ? 'confirmUninstall'
+                          : 'confirmDisable',
                 )}
           </Button>
         </>
@@ -383,6 +420,65 @@ function PlanDialog({
             ))}
           </PlanList>
         )}
+        {plan.uninstall.length === 0 ? null : (
+          <PlanList title={t('planUninstall')}>
+            {plan.uninstall.map((m) => (
+              <li key={m.name}>
+                {labelOf(m.name)}
+                {m.cascade ? (
+                  <span className="text-muted-foreground"> · {t('planCascade')}</span>
+                ) : null}
+              </li>
+            ))}
+          </PlanList>
+        )}
+        {plan.drops.length === 0 ? null : (
+          <div>
+            <h3 className="mb-1 font-medium">{t('planDrops')}</h3>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-muted-foreground">
+                  <th className="text-start font-normal">{t('planDropWhat')}</th>
+                  <th className="text-end font-normal">{t('planDropRows')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {plan.drops.map((d) => (
+                  <tr key={`${d.table}.${d.column ?? ''}`}>
+                    <td dir="ltr" className="text-start">
+                      {d.column === null ? d.table : `${d.table}.${d.column}`}
+                    </td>
+                    <td className="text-end tabular-nums">{d.rows}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {removing ? (
+          <>
+            <Alert>{t('planRemovesData')}</Alert>
+            <label htmlFor={`${formId}-name`} className="grid gap-1">
+              <span>{t('typeName', { name: app.name })}</span>
+              <Input
+                id={`${formId}-name`}
+                autoComplete="off"
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+              />
+            </label>
+            <label htmlFor={`${formId}-code`} className="grid gap-1">
+              <span>{t('authCode')}</span>
+              <Input
+                id={`${formId}-code`}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+              />
+            </label>
+          </>
+        ) : null}
         {kind === 'disable' ? <Alert tone="warning">{t('planKeepsData')}</Alert> : null}
         {kind === 'install' ? <p className="text-muted-foreground">{t('planAccess')}</p> : null}
         <p className="text-muted-foreground">

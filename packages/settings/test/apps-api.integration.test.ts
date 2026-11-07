@@ -57,6 +57,7 @@ let host: AppHost;
 let url: string;
 const users: Record<string, number> = {};
 const tokens = new Map<string, string>();
+const secrets = new Map<string, string>();
 
 // biome-ignore lint/suspicious/noExplicitAny: test assertions read untyped JSON responses
 type Json = any;
@@ -95,6 +96,7 @@ async function tokenOf(login: string): Promise<string> {
       body: '{}',
     });
     const { secret } = (await setup.json()) as { secret: string };
+    secrets.set(login, secret);
     await fetch(`${url}/api/v1/auth/2fa/enable`, {
       method: 'POST',
       headers: auth,
@@ -266,4 +268,40 @@ test('the Apps page is a client action in the Settings menu', async () => {
   expect((await http('GET', '/api/v1/actions/settings.action_apps', { as: 'bob' })).status).toBe(
     403,
   );
+});
+
+test('uninstall removes the data: the name typed back and a fresh authenticator code, two-factor needed', async () => {
+  const plan = await http('POST', '/api/v1/settings/apps/plan', {
+    as: 'admin',
+    body: { uninstall: ['library'] },
+  });
+  expect(plan.status, JSON.stringify(plan.json)).toBe(200);
+  expect(plan.json.uninstall).toEqual([{ name: 'library', cascade: false }]);
+  expect(plan.json.drops.length).toBeGreaterThan(0);
+  const apply = (as: string, extra: Record<string, unknown>) =>
+    http('POST', '/api/v1/settings/apps/apply', {
+      as,
+      body: { change: { uninstall: ['library'] }, planId: plan.json.planId, ...extra },
+    });
+  expect((await apply('admin', {})).json.type).toContain('confirm-name');
+  expect((await apply('admin', { confirm: 'Library' })).status).toBe(422);
+  expect((await apply('admin', { confirm: 'library' })).json.type).toContain('code-required');
+  // An App manager without two-factor sign-in cannot remove data.
+  const manager = await apply('manager', { confirm: 'library', code: '123456' });
+  expect(manager.status).toBe(409);
+  expect(manager.json.type).toContain('two-factor-off');
+  const wrong = await apply('admin', { confirm: 'library', code: 'abcdef' });
+  expect(wrong.status).toBe(422);
+  const done = await apply('admin', {
+    confirm: 'library',
+    code: totp(secrets.get('admin') as string),
+  });
+  expect(done.status, JSON.stringify(done.json)).toBe(200);
+  expect(done.json.uninstalled).toEqual(['library']);
+  expect(typeof done.json.snapshot).toBe('number');
+  const apps = (await http('GET', '/api/v1/settings/apps', { as: 'admin' })).json.apps as {
+    name: string;
+    state: string;
+  }[];
+  expect(apps.find((a) => a.name === 'library')?.state).toBe('available');
 });
