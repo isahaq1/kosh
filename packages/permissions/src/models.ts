@@ -27,10 +27,10 @@ const modelOf = (env: Env, name: string) =>
 async function readAll(records: unknown, keys: string[]): Promise<Row[]> {
   const set = records as Rows;
   // A many-to-many is loaded by the object spec (defaults plus the relation) and read as ids.
-  const spec = keys.includes('approverUsers')
+  const spec = keys.some((k) => k === 'approverUsers' || k === 'companies')
     ? Object.fromEntries(
         keys
-          .filter((k) => k === 'approverUsers' || k === 'extraUsers' || k === 'backupUsers')
+          .filter((k) => ['approverUsers', 'extraUsers', 'backupUsers', 'companies'].includes(k))
           .map((k) => [k, true as const]),
       )
     : keys;
@@ -56,8 +56,16 @@ const ApprovalPolicy = defineModel('approval.policy', {
     name: f.char({ required: true }),
     targetModel: f.char({ required: true, index: true, label: 'Model' }),
     sequence: f.integer({ default: 10 }),
-    /** Empty: every company. */
+    /**
+     * The companies it covers (RFC 0027 §2.3): this company, these companies and every company of this segment
+     * together; all three empty: every company.
+     */
     company: f.many2one('res.company', { ondelete: 'cascade' }),
+    companies: f.many2many('res.company', {
+      relation: 'approval_policy_company_rel',
+      label: 'Companies',
+    }),
+    segment: f.many2one('res.segment', { ondelete: 'restrict', label: 'Segment' }),
     /** A transition of the record run when every level approved (as the system, attributed in the audit log). */
     onApproved: f.char(),
     /** A transition run when a level rejects. */
@@ -135,6 +143,55 @@ const ApprovalPolicy = defineModel('approval.policy', {
         });
       },
       message: 'The policy names a model that is not installed.',
+    },
+  },
+});
+
+/**
+ * A business segment (RFC 0027 §2.3): a group of companies — Feed, Poultry, Dairy — that approval policies cover at
+ * once; a company belongs to one segment.
+ */
+const ResSegment = defineModel('res.segment', {
+  label: 'Segment',
+  recName: 'name',
+  archivable: true,
+  order: ['name asc'],
+  access: { 'base.user': ['read'], 'approvals.manager': ['read', 'write', 'create', 'unlink'] },
+  fields: {
+    name: f.char({ required: true, label: 'Name' }),
+    code: f.char({ label: 'Code' }),
+    /** Its companies; a company is in one segment at most. */
+    companies: f.many2many('res.company', {
+      relation: 'res_segment_company_rel',
+      label: 'Companies',
+    }),
+    note: f.text({ label: 'Note' }),
+  },
+  sqlConstraints: { uniqueName: { unique: ['name'], message: 'Another segment has this name.' } },
+  constraints: {
+    oneSegment: {
+      depends: ['companies', 'active'],
+      check: async (records: never) => {
+        const { env, ids } = records as { env: Env; ids: readonly number[] };
+        return env.asSuperuser({ reason: 'validate segments' }, async (su) => {
+          const all = await readAll(
+            await modelOf(su, 'res.segment').search({ where: { active: true } }),
+            ['companies'],
+          );
+          const seen = new Map<number, number>();
+          const failing = new Set<number>();
+          for (const row of all)
+            for (const c of (row['companies'] as number[] | undefined) ?? []) {
+              const other = seen.get(c);
+              if (other !== undefined) {
+                if (ids.includes(row['id'] as number)) failing.add(row['id'] as number);
+                if (ids.includes(other)) failing.add(other);
+              } else seen.set(c, row['id'] as number);
+            }
+          return [...failing];
+        });
+      },
+      message: 'A company is in one segment at most.',
     },
   },
 });
@@ -473,6 +530,7 @@ export const permissionsShutro: ReturnType<typeof orm.defineModule> = defineModu
     }),
   ],
   models: [
+    ResSegment,
     ApprovalPolicy,
     ApprovalLevel,
     ApprovalRequest,

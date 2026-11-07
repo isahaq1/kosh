@@ -40,7 +40,14 @@ interface Ref {
 const ref = (env: Env, name: string): Ref => env.model(name as never) as unknown as Ref;
 
 /** Many-to-many fields read here: loaded by the object spec (defaults plus the relation), read as ids. */
-const MANY = new Set(['approvers', 'backups', 'approverUsers', 'extraUsers', 'backupUsers']);
+const MANY = new Set([
+  'approvers',
+  'backups',
+  'approverUsers',
+  'extraUsers',
+  'backupUsers',
+  'companies',
+]);
 const specOf = (keys: readonly string[]): readonly string[] | Readonly<Record<string, true>> =>
   keys.some((k) => MANY.has(k))
     ? Object.fromEntries(keys.filter((k) => MANY.has(k)).map((k) => [k, true as const]))
@@ -393,6 +400,44 @@ async function approversOf(
   };
 }
 
+/** A company's segment (RFC 0027 §2.3), or null. */
+async function segmentOf(su: Env, company: number | null): Promise<number | null> {
+  if (company === null) return null;
+  const segments = await find(su, 'res.segment', { active: true }, ['companies']);
+  const mine = segments.find((s) =>
+    ((s['companies'] as number[] | undefined) ?? []).includes(company),
+  );
+  return mine === undefined ? null : (mine['id'] as number);
+}
+
+/** Whether a policy covers a company: its company, its companies and its segment's together; none: every company. */
+function covers(policy: Row, company: number | null, segment: number | null): boolean {
+  const one = typeof policy['company'] === 'number' ? (policy['company'] as number) : null;
+  const many = Array.isArray(policy['companies']) ? (policy['companies'] as number[]) : [];
+  const group = typeof policy['segment'] === 'number' ? (policy['segment'] as number) : null;
+  if (one === null && many.length === 0 && group === null) return true;
+  if (company === null) return false;
+  return one === company || many.includes(company) || (group !== null && group === segment);
+}
+
+/** The active policies of a model that cover a company, in order. */
+async function policiesFor(
+  su: Env,
+  model: string,
+  company: number | null,
+  keys: string[],
+): Promise<Row[]> {
+  const segment = await segmentOf(su, company);
+  const rows = await find(
+    su,
+    'approval.policy',
+    { targetModel: model },
+    [...keys, 'company', 'companies', 'segment'],
+    ['sequence asc', 'id asc'],
+  );
+  return rows.filter((p) => covers(p, company, segment));
+}
+
 /** The record's company, when the model has one. */
 async function companyOf(su: Env, model: string, id: number): Promise<number | null> {
   try {
@@ -429,10 +474,17 @@ export async function previewPolicy(
   su: Env,
   policyId: number,
   limit = 50,
-): Promise<{ records: number; levels: { id: number; name: string; matched: number[] }[] }> {
+): Promise<{
+  records: number;
+  levels: { id: number; name: string; matched: number[] }[];
+  covers: { all: boolean; companies: string[] };
+}> {
   const [policy] = await find(su, 'approval.policy', { id: policyId }, [
     'targetModel',
     'condition',
+    'company',
+    'companies',
+    'segment',
   ]);
   if (policy === undefined)
     throw new HttpProblem(404, 'missing-record', 'Not found', 'No such policy.');
@@ -462,7 +514,25 @@ export async function previewPolicy(
               .ids as unknown as number[]);
     out.push({ id: level['id'] as number, name: String(level['name']), matched });
   }
-  return { records: ids.length, levels: out };
+  // The companies it covers: its company, its companies and its segment's, or every company.
+  const ids2 = new Set<number>(
+    Array.isArray(policy['companies']) ? (policy['companies'] as number[]) : [],
+  );
+  if (typeof policy['company'] === 'number') ids2.add(policy['company'] as number);
+  if (typeof policy['segment'] === 'number')
+    for (const s of await find(su, 'res.segment', { id: policy['segment'] }, ['companies']))
+      for (const c of (s['companies'] as number[] | undefined) ?? []) ids2.add(c);
+  const all =
+    ids2.size === 0 &&
+    typeof policy['segment'] !== 'number' &&
+    typeof policy['company'] !== 'number';
+  const names =
+    ids2.size === 0
+      ? []
+      : (await find(su, 'res.company', { id: { in: [...ids2] } }, ['name'], ['name asc'])).map(
+          (c) => String(c['name']),
+        );
+  return { records: ids.length, levels: out, covers: { all, companies: names } };
 }
 
 /** Writes steps to the matrix log (RFC 0027 §2.5). */
@@ -684,13 +754,11 @@ export async function requestApprovals(records: unknown): Promise<number> {
       );
       const round = Number(last?.['round'] ?? 0) + 1;
       const company = (await companyOf(su, modelName, id)) ?? env.companyId;
-      const policies = await find(
-        su,
-        'approval.policy',
-        { targetModel: modelName, or: [{ company: null }, { company }] },
-        ['name', 'condition', 'whenNobody'],
-        ['sequence asc', 'id asc'],
-      );
+      const policies = await policiesFor(su, modelName, company, [
+        'name',
+        'condition',
+        'whenNobody',
+      ]);
       const rows: Row[] = [];
       for (const policy of policies) {
         // A policy for some records only (a request category's): the record must match its condition.
@@ -1670,6 +1738,157 @@ export async function approvalStats(env: Env): Promise<{
       overdue,
       decidedThisMonth: votes.length,
       medianHours: median === null ? null : Math.round(median * 10) / 10,
+    };
+  });
+}
+
+/** The periods of the matrix dashboard, in days (`all`: no limit). */
+const MATRIX_DAYS = { '7d': 7, '30d': 30, '3m': 91, '6m': 182, '1y': 365, all: null } as const;
+export type MatrixPeriod = keyof typeof MATRIX_DAYS;
+export const MATRIX_PERIODS: readonly MatrixPeriod[] = Object.keys(MATRIX_DAYS) as MatrixPeriod[];
+
+/** One card of the matrix: a policy's requests the user decides, by state. */
+export interface MatrixCard {
+  readonly policy: number | null;
+  readonly title: string;
+  readonly waiting: number;
+  readonly approved: number;
+  readonly rejected: number;
+  readonly total: number;
+}
+
+/**
+ * The matrix dashboard (RFC 0027 §2.7): the requests of the period the user decides — directly (named, or holding
+ * the role) or delegated (as a backup or for someone away) — a card per policy with what waits, what was approved
+ * and rejected; for Approvals managers also the hours each level takes to decide and the bottlenecks (who has the
+ * most requests late).
+ */
+export async function approvalMatrix(
+  env: Env,
+  period: MatrixPeriod,
+  mode: 'direct' | 'delegated',
+): Promise<{
+  cards: MatrixCard[];
+  direct: number;
+  delegated: number;
+  levels: { policy: string; level: string; decided: number; averageHours: number }[] | null;
+  bottlenecks: { user: number; name: string; late: number; waiting: number }[] | null;
+}> {
+  const manages = managesApprovals(env);
+  return env.asSuperuser({ reason: 'approval matrix' }, async (su) => {
+    const who = await whoIs(su, env);
+    const days = MATRIX_DAYS[period];
+    const since = days === null ? null : new Date(Date.now() - days * 86_400_000);
+    const rows = await loadRequests(
+      su,
+      {
+        state: { ne: 'cancelled' },
+        ...(since === null ? {} : { createdAt: { gte: since } }),
+      },
+      ['id asc'],
+    );
+    const mine = (r: ApprovalRequestInfo): boolean =>
+      r.approvers.includes(who.uid) ||
+      (r.approvers.length === 0 &&
+        r.approverRole !== '' &&
+        (r.company === null || r.company === who.companyId) &&
+        who.groups.has(r.approverRole));
+    const forOthers = (r: ApprovalRequestInfo): boolean =>
+      !mine(r) &&
+      (r.backups.includes(who.uid) ||
+        who.delegators.some(
+          (d) =>
+            d.user !== r.requestedBy &&
+            (r.approvers.includes(d.user) ||
+              (r.approvers.length === 0 && holds(d.roles, r.approverRole, r.company))),
+        ));
+    const waitingNow = (r: ApprovalRequestInfo) => r.state === 'pending' && r.startedAt !== null;
+    const scoped = rows.filter((r) => r.requestedBy !== who.uid);
+    const direct = scoped.filter(mine);
+    const delegated = scoped.filter(forOthers);
+    const names = new Map(
+      (
+        await find(
+          su,
+          'approval.policy',
+          {
+            id: {
+              in: [...new Set(rows.map((r) => r.policy).filter((p): p is number => p !== null))],
+            },
+          },
+          ['name'],
+        )
+      ).map((p) => [p['id'] as number, String(p['name'])]),
+    );
+    const cards = new Map<string, MatrixCard>();
+    for (const r of mode === 'direct' ? direct : delegated) {
+      const key = String(r.policy ?? 0);
+      const card = cards.get(key) ?? {
+        policy: r.policy,
+        title: (r.policy === null ? undefined : names.get(r.policy)) ?? r.targetModel,
+        waiting: 0,
+        approved: 0,
+        rejected: 0,
+        total: 0,
+      };
+      if (r.state === 'pending' && !waitingNow(r)) continue; // a later level: not anyone's turn yet
+      cards.set(key, {
+        ...card,
+        waiting: card.waiting + (waitingNow(r) ? 1 : 0),
+        approved: card.approved + (r.state === 'approved' ? 1 : 0),
+        rejected: card.rejected + (r.state === 'rejected' || r.state === 'sent_back' ? 1 : 0),
+        total: card.total + 1,
+      });
+    }
+    let levels: { policy: string; level: string; decided: number; averageHours: number }[] | null =
+      null;
+    let bottlenecks: { user: number; name: string; late: number; waiting: number }[] | null = null;
+    if (manages) {
+      const byLevel = new Map<string, { policy: string; level: string; hours: number[] }>();
+      for (const r of rows) {
+        if (r.decidedAt === null || r.startedAt === null || r.state === 'pending') continue;
+        const policy = (r.policy === null ? undefined : names.get(r.policy)) ?? r.targetModel;
+        const key = `${policy}\u0000${r.levelName}`;
+        const entry = byLevel.get(key) ?? { policy, level: r.levelName, hours: [] };
+        entry.hours.push((Date.parse(r.decidedAt) - Date.parse(r.startedAt)) / 3_600_000);
+        byLevel.set(key, entry);
+      }
+      levels = [...byLevel.values()]
+        .map((e) => ({
+          policy: e.policy,
+          level: e.level,
+          decided: e.hours.length,
+          averageHours: Math.round((e.hours.reduce((a, b) => a + b, 0) / e.hours.length) * 10) / 10,
+        }))
+        .sort((a, b) => b.averageHours - a.averageHours);
+      const load = new Map<number, { late: number; waiting: number }>();
+      const now = Date.now();
+      for (const r of rows.filter(waitingNow))
+        for (const u of r.approvers) {
+          const entry = load.get(u) ?? { late: 0, waiting: 0 };
+          entry.waiting += 1;
+          if (r.dueAt !== null && Date.parse(r.dueAt) <= now) entry.late += 1;
+          load.set(u, entry);
+        }
+      const people = new Map(
+        load.size === 0
+          ? []
+          : (await find(su, 'res.users', { id: { in: [...load.keys()] } }, ['name'])).map((u) => [
+              u['id'] as number,
+              String(u['name']),
+            ]),
+      );
+      bottlenecks = [...load.entries()]
+        .map(([user, l]) => ({ user, name: people.get(user) ?? `#${user}`, ...l }))
+        .sort((a, b) => b.late - a.late || b.waiting - a.waiting)
+        .slice(0, 10);
+    }
+    return {
+      cards: [...cards.values()].sort((a, b) => a.title.localeCompare(b.title)),
+      direct: direct.filter(waitingNow).length,
+      delegated: delegated.filter(waitingNow).length,
+      levels,
+      bottlenecks,
     };
   });
 }
