@@ -469,3 +469,25 @@ test('policies by segment and companies: a segment covers its companies, an empt
   expect(await preview(forFeed)).toEqual({ all: false, companies: ['Paragon Feed'] });
   expect(await preview(forDairy)).toEqual({ all: false, companies: [] });
 });
+
+test('the matrix: cards per policy for my decisions and for others, time per level and bottlenecks for managers', async () => {
+  const matrix = async (as: string, query: string) =>
+    call('GET', `/api/v1/approvals/matrix?${query}`, as);
+  expect((await matrix('dina', 'period=2w')).status).toBe(400);
+  // Dina decided Matrix's Head level herself, and Matrix 2's Third as a backup.
+  const mine = await matrix('dina', 'period=all&mode=direct');
+  expectStatus(mine, 200);
+  const cards = mine.json.cards as Json[];
+  expect(cards.find((c) => c.title === 'Matrix')?.approved).toBeGreaterThanOrEqual(1);
+  const forOthers = (await matrix('dina', 'period=all&mode=delegated')).json.cards as Json[];
+  expect(forOthers.find((c) => c.title === 'Matrix 2')?.approved).toBe(1);
+  // Not a manager: no levels, no bottlenecks; the requester sees no card of his own requests.
+  expect(mine.json.levels).toBeNull();
+  const bob = (await matrix('bob', 'period=all')).json;
+  expect(bob.cards).toEqual([]);
+  // Approvals managers: the hours each level takes, and who has the most waiting.
+  const manager = (await matrix('pia', 'period=all')).json;
+  expect(manager.levels.length).toBeGreaterThan(0);
+  expect(manager.levels.every((l: Json) => typeof l.averageHours === 'number')).toBe(true);
+  expect(Array.isArray(manager.bottlenecks)).toBe(true);
+});

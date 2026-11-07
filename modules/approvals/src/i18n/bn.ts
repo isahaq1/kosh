@@ -63,6 +63,7 @@ export const bn: Readonly<Record<string, string>> = {
   Made: 'তৈরি হয়েছে',
   'Made document': 'তৈরি নথি',
   'Manager (policies)': 'ব্যবস্থাপক (নীতি)',
+  Matrix: 'ম্যাট্রিক্স',
   Mine: 'আমার',
   'My requests': 'আমার অনুরোধ',
   Name: 'নাম',

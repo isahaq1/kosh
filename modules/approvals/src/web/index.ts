@@ -7,12 +7,14 @@ import type { i18n } from 'i18next';
 import { CategoryPolicy, PolicyPreview } from './Config.js';
 import { History } from './History.js';
 import { Inbox } from './Inbox.js';
+import { Matrix } from './Matrix.js';
 import { Mine } from './Mine.js';
 import { messages } from './messages.js';
 
 export { CategoryPolicy, PolicyPreview } from './Config.js';
 export { History } from './History.js';
 export { Inbox } from './Inbox.js';
+export { Matrix } from './Matrix.js';
 export { Mine } from './Mine.js';
 
 /** Registers the pages (and the messages in `i18n`, when given). */
@@ -20,6 +22,7 @@ export function registerApprovalsWeb(registry: Registry, i18n?: i18n): Registry 
   registry.registerPage('approvals.Inbox', Inbox);
   registry.registerPage('approvals.Mine', Mine);
   registry.registerPage('approvals.History', History);
+  registry.registerPage('approvals.Matrix', Matrix);
   registry.registerComponent('approvals.PolicyPreview', PolicyPreview);
   registry.registerComponent('approvals.CategoryPolicy', CategoryPolicy);
   if (i18n !== undefined) addMessages(i18n, 'approvals', messages);

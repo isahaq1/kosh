@@ -570,6 +570,7 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
         page: 'approvals.History',
         label: 'What I decided',
       },
+      'approvals.action_matrix': { type: 'client', page: 'approvals.Matrix', label: 'Matrix' },
       'approvals.action_away': {
         model: 'approval.delegation',
         label: 'Away',
@@ -618,6 +619,13 @@ export function approvalsModule(options: ApprovalsOptions = {}): ReturnType<type
         label: 'What I decided',
         action: 'approvals.action_history',
         sequence: 3,
+      },
+      {
+        id: 'approvals.matrix',
+        parent: 'approvals.root',
+        label: 'Matrix',
+        action: 'approvals.action_matrix',
+        sequence: 3.5,
       },
       {
         id: 'approvals.asks',
