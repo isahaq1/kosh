@@ -25,6 +25,16 @@ export const purchaseAccount: ReturnType<typeof defineModule> = defineModule({
     user: { label: 'Bill purchase orders', groups: ['purchase_account.user'] },
   },
   viewExtensions: [
+    // The three-way check on each bill line (RFC 0028 §3.3): ordered, received and billed on its order line.
+    {
+      view: 'account.move.invoice.form',
+      operations: [
+        {
+          insertAfter: 'quantity',
+          nodes: [{ kind: 'field', id: 'line_match', field: 'matchNote', readonlyWhen: {} }],
+        },
+      ],
+    },
     {
       view: 'purchase.order.form',
       operations: [
