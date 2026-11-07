@@ -119,3 +119,35 @@ test('upgrade: installed modules move to their code version; never back; unchang
   expect(() => planApps([mod('a', '0.9.0')], current, { upgrade: ['a'] })).toThrow('go back');
   expect(() => planApps(cat, [], { upgrade: ['a'] })).toThrow('Not installed');
 });
+
+test('uninstall takes installed and disabled dependents along, alone, never base', () => {
+  const current = [
+    row('base'),
+    row('contacts'),
+    row('product'),
+    row('sales'),
+    row('projects', 'disabled'),
+  ];
+  const plan = planApps(catalogue, current, { uninstall: ['contacts'] });
+  // Dependents first (in either order), the asked module last.
+  expect(plan.uninstall).toHaveLength(3);
+  expect(plan.uninstall).toEqual(
+    expect.arrayContaining([
+      { name: 'projects', cascade: true },
+      { name: 'sales', cascade: true },
+    ]),
+  );
+  expect(plan.uninstall.at(-1)).toEqual({ name: 'contacts', cascade: false });
+  expect(plan.after.map((r) => r.name)).toEqual(['base', 'product']);
+  // Not installed: nothing to do.
+  expect(
+    planApps(catalogue, [row('base'), row('contacts')], { uninstall: ['projects'] }).unchanged,
+  ).toEqual(['projects']);
+  expect(() => planApps(catalogue, current, { uninstall: ['base'] })).toThrow(AppPlanError);
+  expect(() => planApps(catalogue, current, { uninstall: ['sales'], disable: ['sales'] })).toThrow(
+    'uninstall and change at once',
+  );
+  expect(() =>
+    planApps(catalogue, current, { uninstall: ['sales'], enable: ['projects'] }),
+  ).toThrow('change of its own');
+});

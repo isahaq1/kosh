@@ -31,6 +31,11 @@ export interface AppChange {
   readonly withoutBridges?: readonly string[];
   /** Installed modules whose code is newer than the installed version (RFC 0012 §5.4). */
   readonly upgrade?: readonly string[];
+  /**
+   * Installed or disabled modules removed with their data (RFC 0008 §5.4): every module that depends on one goes
+   * too.
+   */
+  readonly uninstall?: readonly string[];
 }
 
 /** What a change does to the installed set. */
@@ -47,6 +52,8 @@ export interface AppPlan {
     readonly from: string;
     readonly to: string;
   }[];
+  /** Modules removed with their data, dependents first; `cascade` when it goes because a module it needs does. */
+  readonly uninstall: readonly { readonly name: string; readonly cascade: boolean }[];
   /** Asked for but already in the requested state. */
   readonly unchanged: readonly string[];
   /** The installed set afterwards. */
@@ -108,6 +115,7 @@ export function planApps(
     ...(change.enable ?? []),
     ...(change.disable ?? []),
     ...(change.upgrade ?? []),
+    ...(change.uninstall ?? []),
   ];
   const unknown = asked.filter((n) => !catalogue.has(n));
   if (unknown.length > 0)
@@ -121,6 +129,14 @@ export function planApps(
     throw new AppPlanError(
       `Asked to switch on and off at once: ${both.join(', ')}.`,
       'Ask for one change per module.',
+    );
+  const removing = (change.uninstall ?? []).filter(
+    (n) => up.has(n) || (change.disable ?? []).includes(n) || (change.upgrade ?? []).includes(n),
+  );
+  if (removing.length > 0)
+    throw new AppPlanError(
+      `Asked to uninstall and change at once: ${removing.join(', ')}.`,
+      'Uninstall in a change of its own.',
     );
   const notInstalled = (change.enable ?? []).filter((n) => state.get(n) === undefined);
   if (notInstalled.length > 0)
@@ -226,7 +242,37 @@ export function planApps(
     else upgrade.push({ name, from: row.version, to });
   }
 
+  // Uninstalling takes every module that depends on it (installed or disabled) along; bridges included.
+  const removed = new Map<string, boolean>();
+  const users = (name: string) =>
+    current.filter((row) => (catalogue.get(row.name)?.depends ?? []).some((d) => d.name === name));
+  const remove = (name: string, cascade: boolean) => {
+    if (removed.has(name)) return;
+    removed.set(name, cascade);
+    for (const d of users(name)) remove(d.name, true);
+  };
+  for (const name of change.uninstall ?? []) {
+    if (state.get(name) === undefined) unchanged.push(name);
+    else remove(name, false);
+  }
+  const kept = [...removed.keys()].filter((n) => protect.includes(n));
+  if (kept.length > 0)
+    throw new AppPlanError(
+      `${kept.join(', ')} cannot be uninstalled${kept.some((n) => !(change.uninstall ?? []).includes(n)) ? ' (it would go with a module that depends on it)' : ''}.`,
+      'Every installation needs it.',
+    );
+  if (removed.size > 0 && (install.length > 0 || enable.length > 0 || switchedOff.size > 0))
+    throw new AppPlanError(
+      'An uninstall cannot be planned with other changes.',
+      'Uninstall in a change of its own.',
+    );
+  const uninstall = withDependencies([...removed.keys()], catalogue)
+    .filter((n) => removed.has(n))
+    .reverse() // dependents first
+    .map((name) => ({ name, cascade: removed.get(name) === true }));
+
   const after = new Map(current.map((row) => [row.name, row]));
+  for (const { name } of uninstall) after.delete(name);
   for (const u of upgrade) {
     const row = after.get(u.name);
     if (row !== undefined) after.set(u.name, { ...row, version: u.to });
@@ -251,6 +297,7 @@ export function planApps(
     enable,
     disable,
     upgrade,
+    uninstall,
     unchanged: [...new Set(unchanged)],
     after: withDependencies([...after.keys()], catalogue)
       .map((n) => after.get(n))
