@@ -119,3 +119,10 @@ with exceptions, cheque printing, currency revaluation, UBL / Peppol — a later
   Deviation: a line not matched yet stays open on the statement instead of being posted to a suspense account — the
   bank's balance in the books is then the matched lines; to revisit with reconciliation rules. Not yet: taxes on
   write-offs, partial matches of one document by several lines.
+- **Step 2 (2026-11-07).** `account.reconcile.rule` (journals, direction, label contains, amount range, partner;
+  match / write off / suggest; `hits`), the line's `rule`, `applyRules` from `importStatement` and
+  `POST …/reconcile-rules/run`, `dryRunRule` (hit rate over the last days, examples on open lines), `undoLine`
+  (unreconcile, reverse and match the payment with its reversal; reverse a write-off), each automatic match and undo
+  audited; Run rules, Recently matched and Undo on the Reconcile bank page. Deviations: *label matches* is a plain
+  case-insensitive "contains" (no regular expressions from users); *match* finds the open document of the same amount
+  among the explained proposals, not by a reference pattern; write-offs without taxes, as in step 1.

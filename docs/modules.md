@@ -318,6 +318,17 @@ statements** lists them; a statement closes when every line is matched and its o
 closing balance. A journal with a **bank feed** (`registerBankFeed(feed)`, then the journal's *Bank feed*) pulls new
 lines into a statement (`POST /api/v1/accounting/journals/:id/pull`); real banks are adapters like the test feed.
 
+**Reconciliation rules** (Accounting › Configuration, set up by Accounting managers) match the routine lines for
+you. Each says which lines — journals, money in or out, *label contains*, an amount range, a partner — and what to
+do: **match the document** (the open document of the same amount the proposals rank first; nothing happens when
+none has it), **write off** to an account with a label, or **only suggest** (the rule is shown on the line). They run
+in sequence on every import (as the importing accountant) and with **Run rules** on the Reconcile bank page; the
+first that applies and can act wins. Each automatic match counts on the rule (*Applied*) and is in the audit log. A
+rule's **dry run** (`GET /api/v1/accounting/reconcile-rules/:id/dry-run?days=90`) says how many lines of those days
+it applies to, its hit rate and what it would do to the open ones, without changing anything. **Recently matched**
+lines have **Undo** (`POST /api/v1/accounting/statement-lines/:id/undo`): a payment comes off its documents and is
+reversed, a write-off is reversed, and the line is open again.
+
 ### Projects for programmes (`modules/project`, RFC 0026)
 
 Projects carries a programme's structure, not only a to-do list. Configuration holds **project types**, **task
