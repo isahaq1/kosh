@@ -10,6 +10,8 @@
  * - `GET  /api/v1/approvals/cards?list=inbox|mine|history` the Approvals app's cards (RFC 0025)
  * - `GET  /api/v1/approvals/stats`                       waiting, overdue, decided this month, the median time
  * - `POST /api/v1/approvals/bulk`                        `{ requests, comment? }`: approves each it may
+ * - `POST /api/v1/approvals/requests/:id/reassign`       `{ users, mode: 'replace' | 'add', reason }` (RFC 0027)
+ * - `POST /api/v1/approvals/requests/:id/notify-backups` tells the level's backups it waits (RFC 0027)
  */
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import type { FastifyRequest } from 'fastify';
@@ -20,6 +22,8 @@ import {
   decide,
   eventsOf,
   inbox,
+  notifyBackups,
+  reassign,
   requestsOf,
   withdraw,
 } from './approvals.js';
@@ -56,6 +60,8 @@ export function registerApprovalRoutes({ app }: ModuleContext): void {
       async (env) => ({
         requests: await requestsOf(env, model, recordId),
         events: await eventsOf(env, model, recordId),
+        // Approvals managers reassign waiting requests (RFC 0027 §2.6).
+        manage: env.administrator || env.groups.has('approvals.manager'),
       }),
       {
         write: true, // reads through audited system scopes
@@ -72,6 +78,28 @@ export function registerApprovalRoutes({ app }: ModuleContext): void {
       const text = comment(request);
       return request.env(async (env) => decide(env, id, decision, text));
     });
+  // RFC 0027: reassigning a waiting request; telling its backups.
+  app.post('/api/v1/approvals/requests/:id/reassign', async (request) => {
+    const id = positive((request.params as { id?: unknown }).id, 'id');
+    const body = (request.body ?? {}) as { users?: unknown; mode?: unknown; reason?: unknown };
+    const users = Array.isArray(body.users) ? body.users.map((u) => positive(u, 'users')) : [];
+    if (body.mode !== undefined && body.mode !== 'replace' && body.mode !== 'add')
+      throw new HttpProblem(400, 'invalid-body', 'Invalid body', "mode is 'replace' or 'add'.");
+    if (typeof body.reason !== 'string' || body.reason.length > 2000)
+      throw new HttpProblem(
+        400,
+        'invalid-body',
+        'Invalid body',
+        'reason is a string (at most 2000).',
+      );
+    const mode = body.mode === 'add' ? 'add' : 'replace';
+    const reason = body.reason;
+    return request.env(async (env) => reassign(env, id, users, mode, reason));
+  });
+  app.post('/api/v1/approvals/requests/:id/notify-backups', async (request) => {
+    const id = positive((request.params as { id?: unknown }).id, 'id');
+    return request.env(async (env) => ({ notified: await notifyBackups(env, id) }));
+  });
   // The Approvals app (RFC 0025): its lists, its header, approving many at once.
   app.get('/api/v1/approvals/cards', async (request) => {
     const list = String((request.query as { list?: unknown } | null)?.list ?? 'inbox');

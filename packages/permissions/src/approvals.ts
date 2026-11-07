@@ -40,7 +40,7 @@ interface Ref {
 const ref = (env: Env, name: string): Ref => env.model(name as never) as unknown as Ref;
 
 /** Many-to-many fields read here: loaded by the object spec (defaults plus the relation), read as ids. */
-const MANY = new Set(['approvers', 'approverUsers', 'extraUsers']);
+const MANY = new Set(['approvers', 'backups', 'approverUsers', 'extraUsers', 'backupUsers']);
 const specOf = (keys: readonly string[]): readonly string[] | Readonly<Record<string, true>> =>
   keys.some((k) => MANY.has(k))
     ? Object.fromEntries(keys.filter((k) => MANY.has(k)).map((k) => [k, true as const]))
@@ -53,6 +53,7 @@ async function find(env: Env, model: string, where: unknown, keys: string[], ord
 
 const REQUEST_KEYS = [
   'dueAt',
+  'backups',
   'startedAt',
   'explanation',
   'escalatedTo',
@@ -85,6 +86,8 @@ export interface ApprovalRequestInfo {
   readonly approverRole: string;
   /** The people who decide (empty: the role's holders). */
   readonly approvers: readonly number[];
+  /** Backups who may decide it too. */
+  readonly backups: readonly number[];
   /** How many approvals it needs, and how many it has. */
   readonly required: number;
   readonly approvals: number;
@@ -114,6 +117,7 @@ function info(row: Row): ApprovalRequestInfo {
     company: (row['company'] as number | null) ?? null,
     approverRole: String(row['approverRole'] ?? ''),
     approvers: Array.isArray(row['approvers']) ? (row['approvers'] as number[]) : [],
+    backups: Array.isArray(row['backups']) ? (row['backups'] as number[]) : [],
     required: Number(row['required'] ?? 1),
     approvals: Number(row['approvals'] ?? 0),
     round: Number(row['round'] ?? 1),
@@ -512,6 +516,99 @@ async function startTurn(su: Env, model: string, id: number, now: Date): Promise
     su,
     turn.map((r) => ({ request: r.id, kind: 'started', at: now })),
   );
+  await skipDuplicates(su, model, id, turn, now);
+}
+
+/**
+ * Skip approvers who already approved (RFC 0027 §2.2): for the levels just started, under a policy that asks for it,
+ * the approval of someone who approved an earlier level of this round counts here too — a vote marked `auto` —;
+ * a level that reaches its quorum this way is approved and the next turn starts (the record approved when it was
+ * the last).
+ */
+async function skipDuplicates(
+  su: Env,
+  model: string,
+  id: number,
+  started: readonly ApprovalRequestInfo[],
+  now: Date,
+): Promise<void> {
+  const policyIds = [
+    ...new Set(started.map((r) => r.policy).filter((p): p is number => p !== null)),
+  ];
+  if (policyIds.length === 0) return;
+  const skipping = new Set(
+    (
+      await find(su, 'approval.policy', { id: { in: policyIds }, skipDuplicates: true }, ['id'])
+    ).map((p) => p['id'] as number),
+  );
+  if (skipping.size === 0) return;
+  const round = await currentRequests(su, model, id);
+  const earlier = round.filter((r) => r.state === 'approved');
+  if (earlier.length === 0) return;
+  const votes = await find(
+    su,
+    'approval.vote',
+    { request: { in: earlier.map((r) => r.id) }, decision: 'approve' },
+    ['request', 'user'],
+  );
+  let approvedAny = false;
+  for (const request of started) {
+    if (request.policy === null || !skipping.has(request.policy)) continue;
+    const already = new Set(
+      (await find(su, 'approval.vote', { request: request.id }, ['user'])).map(
+        (v) => v['user'] as number,
+      ),
+    );
+    const allowed = new Set([
+      ...request.approvers,
+      ...request.backups,
+      ...(request.approvers.length === 0 && request.approverRole !== ''
+        ? await holders(su, request.approverRole, request.company)
+        : []),
+    ]);
+    let approvals = request.approvals;
+    let last: number | null = null;
+    for (const v of votes) {
+      const user = v['user'] as number;
+      if (approvals >= request.required) break;
+      if (user === request.requestedBy || already.has(user) || !allowed.has(user)) continue;
+      const level = earlier.find((r) => r.id === v['request'])?.levelName ?? '';
+      await ref(su, 'approval.vote').create([
+        {
+          request: request.id,
+          user,
+          decision: 'approve',
+          comment: `Approved already at ${level}.`,
+          at: now,
+          auto: true,
+        },
+      ]);
+      await logEvents(su, [
+        { request: request.id, kind: 'auto', user, note: `Approved already at ${level}.`, at: now },
+      ]);
+      already.add(user);
+      approvals += 1;
+      last = user;
+    }
+    if (approvals >= request.required && last !== null) {
+      await ref(su, 'approval.request')
+        .browse([request.id])
+        .write({ state: 'approved', decidedBy: last, decidedAt: now });
+      approvedAny = true;
+    }
+  }
+  if (!approvedAny) return;
+  const after = await currentRequests(su, model, id);
+  if (after.every((r) => r.state === 'approved')) {
+    await su.emit('approval.decided', { model, id, state: 'approved', final: true });
+    for (const pid of new Set(after.map((r) => r.policy).filter((p) => p !== null))) {
+      const [policy] = await find(su, 'approval.policy', { id: pid }, ['onApproved']);
+      await runTransition(su, { model, id }, policy?.['onApproved']);
+    }
+    return;
+  }
+  await su.emit('approval.decided', { model, id, state: 'approved', final: false });
+  await startTurn(su, model, id, now);
 }
 
 /** The matrix log of a record's requests, when `env` may read the record. */
@@ -610,6 +707,7 @@ export async function requestApprovals(records: unknown): Promise<number> {
             'approverRole',
             'approverUsers',
             'extraUsers',
+            'backupUsers',
             'approverField',
             'quorum',
             'quorumCount',
@@ -640,10 +738,23 @@ export async function requestApprovals(records: unknown): Promise<number> {
             company,
             approverRole: who.role,
             approvers: { set: who.approvers },
+            backups: {
+              set: ((level['backupUsers'] as number[] | undefined) ?? []).filter(
+                (u) => u !== requester,
+              ),
+            },
             required: who.required,
             round,
             explanation: [
               ...who.explanation,
+              ...(((level['backupUsers'] as number[] | undefined) ?? []).length > 0
+                ? [
+                    `Backups: ${await namesOf(
+                      su,
+                      (level['backupUsers'] as number[]).filter((u) => u !== requester),
+                    )}.`,
+                  ]
+                : []),
               ...(skipped ? ['Nobody could decide: the level is skipped.'] : []),
             ].join(' '),
             ...(skipped ? { state: 'approved', decidedAt: new Date() } : {}),
@@ -780,14 +891,16 @@ const holds = (roles: Who['delegators'][number]['roles'], role: string, company:
  * the escalation role once it is late —, or for someone away who delegated to them (`{ for: <user> }`); null when not.
  */
 function approverFor(who: Who, request: ApprovalRequestInfo): { for: number | null } | null {
-  if (request.approvers.includes(who.uid)) return { for: null };
+  if (request.approvers.includes(who.uid) || request.backups.includes(who.uid))
+    return { for: null };
   if (request.approvers.length === 0 && (who.administrator || who.groups.has(request.approverRole)))
     return { for: null };
   if (request.escalatedTo !== null && (who.administrator || who.groups.has(request.escalatedTo)))
     return { for: null };
   for (const d of who.delegators) {
     if (d.user === request.requestedBy) continue;
-    if (request.approvers.includes(d.user)) return { for: d.user };
+    if (request.approvers.includes(d.user) || request.backups.includes(d.user))
+      return { for: d.user };
     if (request.approvers.length === 0 && holds(d.roles, request.approverRole, request.company))
       return { for: d.user };
     if (request.escalatedTo !== null && holds(d.roles, request.escalatedTo, request.company))
@@ -927,6 +1040,10 @@ export async function decide(
         at: new Date(),
         onBehalfOf,
         ip: from?.ip ?? null,
+        asBackup:
+          onBehalfOf === null &&
+          request.backups.includes(actor) &&
+          !request.approvers.includes(actor),
       },
     ]);
     const approvals = request.approvals + (decision === 'approve' ? 1 : 0);
@@ -1068,6 +1185,210 @@ export async function withdraw(env: Env, model: string, id: number): Promise<num
     }
     return pending.length;
   });
+}
+
+const managesApprovals = (env: Env): boolean =>
+  env.administrator || env.groups.has('approvals.manager');
+
+/**
+ * Reassigns a pending request (RFC 0027 §2.6), for Approvals managers: its approvers replaced by `users`, or `users`
+ * added to them (a role's holders named first); never the requester; a reason required; logged, audited and
+ * announced (`approval.reassigned`, with the people added). @throws {HttpProblem} 403 / 404 / 409 / 422
+ */
+export async function reassign(
+  env: Env,
+  requestId: number,
+  users: readonly number[],
+  mode: 'replace' | 'add',
+  reason: string,
+): Promise<ApprovalRequestInfo> {
+  if (!managesApprovals(env))
+    refuse(403, 'access', 'Approvals managers', 'Reassigning needs the Approvals manager role.');
+  const text = reason.trim();
+  if (text === '') refuse(422, 'reason-required', 'Say why', 'A reassignment says why.');
+  const actor = env.uid;
+  return env.asSuperuser({ reason: `reassign approval ${requestId}` }, async (su) => {
+    const [request] = await loadRequests(su, { id: requestId }, ['id asc']);
+    if (request === undefined)
+      refuse(404, 'missing-record', 'Not found', `No approval request ${requestId}.`);
+    if (request.state !== 'pending')
+      refuse(409, 'approval-decided', 'Already decided', `This request is ${request.state}.`);
+    const chosen = [...new Set(users)];
+    if (chosen.length === 0) refuse(422, 'validation', 'Nobody chosen', 'Choose who decides.');
+    if (request.requestedBy !== null && chosen.includes(request.requestedBy))
+      refuse(
+        422,
+        'separation-of-duties',
+        'Separation of duties',
+        'The requester cannot approve their own record.',
+      );
+    const found = await find(su, 'res.users', { id: { in: chosen } }, ['id']);
+    if (found.length !== chosen.length)
+      refuse(422, 'validation', 'Unknown people', 'Every person must be a user.');
+    const before =
+      request.approvers.length > 0
+        ? [...request.approvers]
+        : request.approverRole === ''
+          ? []
+          : (await holders(su, request.approverRole, request.company)).filter(
+              (u) => u !== request.requestedBy,
+            );
+    const next = mode === 'replace' ? chosen : [...new Set([...before, ...chosen])];
+    const required = Math.min(request.required, Math.max(1, next.length));
+    await ref(su, 'approval.request')
+      .browse([request.id])
+      .write({ approvers: { set: next }, required });
+    const note = `${await namesOf(su, before)} → ${await namesOf(su, next)}. ${text}`;
+    await logEvents(su, [{ request: request.id, kind: 'reassigned', user: actor, note }]);
+    await audit(su, {
+      kind: 'approval.reassigned',
+      summary: `${request.levelName} reassigned for ${request.targetModel} ${request.targetId}.`,
+      actor,
+      company: request.company,
+      targetModel: request.targetModel,
+      targetId: request.targetId,
+      details: { request: request.id, before, after: next, reason: text },
+    });
+    const added = next.filter((u) => !before.includes(u));
+    if (added.length > 0 && request.startedAt !== null)
+      await su.emit('approval.reassigned', { request: request.id, users: added });
+    const [after] = await loadRequests(su, { id: request.id }, ['id asc']);
+    return after as ApprovalRequestInfo;
+  });
+}
+
+/**
+ * Tells a current request's backups that it waits (RFC 0027 §2.6): for Approvals managers and the request's
+ * approvers; logged and announced (`approval.backups`). @throws {HttpProblem} 403 / 404 / 409
+ */
+export async function notifyBackups(env: Env, requestId: number): Promise<number> {
+  const actor = env.uid;
+  return env.asSuperuser({ reason: `notify backups of approval ${requestId}` }, async (su) => {
+    const [request] = await loadRequests(su, { id: requestId }, ['id asc']);
+    if (request === undefined)
+      refuse(404, 'missing-record', 'Not found', `No approval request ${requestId}.`);
+    if (!managesApprovals(env) && !request.approvers.includes(actor))
+      refuse(403, 'access', 'Not an approver', 'Approvers and Approvals managers tell backups.');
+    if (request.state !== 'pending' || request.startedAt === null)
+      refuse(409, 'approval-not-current', 'Not waiting', 'Only a request whose turn it is.');
+    if (request.backups.length === 0)
+      refuse(409, 'no-backups', 'No backups', 'This level has no backups.');
+    await logEvents(su, [
+      {
+        request: request.id,
+        kind: 'notified',
+        user: actor,
+        note: await namesOf(su, request.backups),
+      },
+    ]);
+    await su.emit('approval.backups', { request: request.id, users: [...request.backups] });
+    return request.backups.length;
+  });
+}
+
+/** The fields of a level that decide its approvers: a change to one is synced to its waiting requests. */
+export const APPROVER_KEYS: readonly string[] = [
+  'approverKind',
+  'approverRole',
+  'approverUsers',
+  'extraUsers',
+  'backupUsers',
+  'approverField',
+  'quorum',
+  'quorumCount',
+];
+
+/**
+ * Keeps waiting requests in step with their levels (RFC 0027 §2.6), as the system: each pending request of these
+ * levels gets its approvers found again — added to the ones it has, or replacing them, as its policy says (`mode`
+ * overrides it, for "Sync now") — logged when they change. Returns what changed, with the people added to requests
+ * whose turn it is (to tell, when the policy says so).
+ */
+export async function syncLevels(
+  su: Env,
+  levelIds: readonly number[],
+  mode?: 'add' | 'replace',
+): Promise<{ request: ApprovalRequestInfo; added: number[]; notify: boolean }[]> {
+  const out: { request: ApprovalRequestInfo; added: number[]; notify: boolean }[] = [];
+  if (levelIds.length === 0) return out;
+  const levels = await find(su, 'approval.level', { id: { in: [...levelIds] } }, [
+    'policy',
+    'name',
+    'approverKind',
+    'approverRole',
+    'approverUsers',
+    'extraUsers',
+    'backupUsers',
+    'approverField',
+    'quorum',
+    'quorumCount',
+  ]);
+  for (const level of levels) {
+    const [policy] = await find(su, 'approval.policy', { id: level['policy'] }, [
+      'syncPending',
+      'notifyOnSync',
+    ]);
+    const how = mode ?? (String(policy?.['syncPending'] ?? 'add') as 'off' | 'add' | 'replace');
+    if (how === 'off') continue;
+    const pending = await loadRequests(su, { level: level['id'], state: 'pending' }, ['id asc']);
+    for (const request of pending) {
+      const requester = request.requestedBy ?? 0;
+      const who = await approversOf(
+        su,
+        level,
+        { model: request.targetModel, id: request.targetId, company: request.company },
+        requester,
+      );
+      const levelBackups = ((level['backupUsers'] as number[] | undefined) ?? []).filter(
+        (u) => u !== requester,
+      );
+      const approvers =
+        how === 'add'
+          ? [...new Set([...request.approvers, ...who.approvers])]
+          : who.approvers.length > 0 || who.role !== ''
+            ? who.approvers
+            : request.approvers;
+      const backups =
+        how === 'add' ? [...new Set([...request.backups, ...levelBackups])] : levelBackups;
+      const same = (a: readonly number[], b: readonly number[]) =>
+        a.length === b.length && a.every((x) => b.includes(x));
+      const role = how === 'replace' ? who.role : request.approverRole;
+      if (
+        same(approvers, request.approvers) &&
+        same(backups, request.backups) &&
+        role === request.approverRole
+      )
+        continue;
+      await ref(su, 'approval.request')
+        .browse([request.id])
+        .write({
+          approvers: { set: approvers },
+          backups: { set: backups },
+          approverRole: role,
+          required: how === 'replace' ? who.required : request.required,
+          explanation: who.explanation.join(' '),
+        });
+      await logEvents(su, [
+        {
+          request: request.id,
+          kind: 'synced',
+          note: `${how === 'add' ? 'Added' : 'Replaced'}: ${await namesOf(su, approvers)}${backups.length > 0 ? `; backups: ${await namesOf(su, backups)}` : ''}.`,
+        },
+      ]);
+      const [after] = await loadRequests(su, { id: request.id }, ['id asc']);
+      if (after === undefined) continue;
+      const added = [
+        ...approvers.filter((u) => !request.approvers.includes(u)),
+        ...backups.filter((u) => !request.backups.includes(u)),
+      ];
+      out.push({
+        request: after,
+        added: request.startedAt === null ? [] : added,
+        notify: policy?.['notifyOnSync'] !== false,
+      });
+    }
+  }
+  return out;
 }
 
 /** A request as the Approvals app shows it (RFC 0025 §3.1): the record, who asked, since when, every level. */
@@ -1360,7 +1681,7 @@ export async function decidersOf(
   request: ApprovalRequestInfo,
   today: string,
 ): Promise<number[]> {
-  const people = new Set<number>(request.approvers);
+  const people = new Set<number>([...request.approvers, ...request.backups]);
   if (request.approvers.length === 0 && request.approverRole !== '')
     for (const u of await holders(su, request.approverRole, request.company)) people.add(u);
   if (request.escalatedTo !== null)
@@ -1456,10 +1777,12 @@ export async function issueLinks(
   today: string,
   newToken: () => string,
   digestOf: (token: string) => string,
+  only?: readonly number[],
 ): Promise<{ user: number; token: string }[]> {
   const out: { user: number; token: string }[] = [];
   const expiresAt = new Date(Date.now() + 7 * 86_400_000);
   for (const user of await decidersOf(su, request, today)) {
+    if (only !== undefined && !only.includes(user)) continue;
     const token = newToken();
     await ref(su, 'approval.link').create([
       { request: request.id, user, tokenHash: digestOf(token), expiresAt },

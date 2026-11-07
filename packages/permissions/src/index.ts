@@ -15,6 +15,7 @@ import { registerApprovalRoutes } from './routes.js';
 
 export { registerAdminApi } from './admin.js';
 export {
+  APPROVER_KEYS,
   type ApprovalCard,
   type ApprovalRequestInfo,
   approvalCards,
@@ -31,10 +32,13 @@ export {
   installApprovalPolicies,
   issueLinks,
   linkOf,
+  notifyBackups,
   previewPolicy,
+  reassign,
   requestApprovals,
   requestsOf,
   sweepDeadlines,
+  syncLevels,
   turnOf,
   useLink,
   type Who,
@@ -59,7 +63,7 @@ export const permissions: ReturnType<typeof defineModule> = defineModule({
   accessLevels: {
     auditor: { label: 'Security auditor', groups: ['permissions.auditor'] },
   },
-  privateModels: ['approval.request', 'approval.vote', 'approval.link'],
+  privateModels: ['approval.request', 'approval.vote', 'approval.link', 'approval.event'],
   hooks: {
     defaults: async (env, modules) => {
       const n = await installApprovalPolicies(env as Env, modules);

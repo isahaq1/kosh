@@ -30,7 +30,7 @@ async function readAll(records: unknown, keys: string[]): Promise<Row[]> {
   const spec = keys.includes('approverUsers')
     ? Object.fromEntries(
         keys
-          .filter((k) => k === 'approverUsers' || k === 'extraUsers')
+          .filter((k) => k === 'approverUsers' || k === 'extraUsers' || k === 'backupUsers')
           .map((k) => [k, true as const]),
       )
     : keys;
@@ -81,6 +81,18 @@ const ApprovalPolicy = defineModel('approval.policy', {
       { refuse: 'Refuse the submission', admins: 'Administrators decide', skip: 'Skip the level' },
       { required: true, default: 'refuse', label: 'When nobody is found' },
     ),
+    /**
+     * A level whose approvers include someone who already approved this round is approved for them, marked as
+     * such (RFC 0027 §2.2); a level needing more approvals still waits for the others.
+     */
+    skipDuplicates: f.boolean({ default: false, label: 'Skip approvers who already approved' }),
+    /** When a level's approvers change, its waiting requests follow: not, adding the new people, or replacing. */
+    syncPending: f.selection(
+      { off: 'No', add: 'Add the new approvers', replace: 'Replace the approvers' },
+      { required: true, default: 'add', label: 'Waiting requests follow changes' },
+    ),
+    /** Email the people added to a waiting request whose turn it is. */
+    notifyOnSync: f.boolean({ default: true, label: 'Tell the people added' }),
     levels: f.one2many('approval.level', 'policy'),
   },
   constraints: {
@@ -130,6 +142,8 @@ const ApprovalPolicy = defineModel('approval.policy', {
 const ApprovalLevel = defineModel('approval.level', {
   access: { 'base.user': ['read'], 'approvals.manager': ['read', 'write', 'create', 'unlink'] },
   order: ['policy asc', 'sequence asc'],
+  // Waiting requests follow changes of their level's approvers (RFC 0027 §2.6), after the save commits.
+  changeEvents: true,
   fields: {
     policy: f.many2one('approval.policy', { required: true, ondelete: 'cascade' }),
     sequence: f.integer({ default: 10 }),
@@ -156,6 +170,11 @@ const ApprovalLevel = defineModel('approval.level', {
     extraUsers: f.many2many('res.users', {
       relation: 'approval_level_extra_user_rel',
       label: 'Also',
+    }),
+    /** Standing backups: may always decide the level beside its approvers (RFC 0027 §2.2). */
+    backupUsers: f.many2many('res.users', {
+      relation: 'approval_level_backup_user_rel',
+      label: 'Backups',
     }),
     /** The role (or, for a manager or a field, the role used when there is nobody). */
     approverRole: f.char({ label: 'Role' }),
@@ -275,6 +294,11 @@ const ApprovalRequest = defineModel('approval.request', {
       relation: 'approval_request_user_rel',
       label: 'Approvers',
     }),
+    /** Backups who may decide it too (from the level). */
+    backups: f.many2many('res.users', {
+      relation: 'approval_request_backup_rel',
+      label: 'Backups',
+    }),
     /** How many approvals it needs. */
     required: f.integer({ required: true, default: 1, label: 'Approvals needed' }),
     /** The submission it belongs to (a resubmission after sending back is the next round). */
@@ -329,6 +353,10 @@ const ApprovalEvent = defineModel('approval.event', {
         skipped: 'Skipped',
         reminded: 'Reminded',
         escalated: 'Escalated',
+        auto: 'Approved already',
+        reassigned: 'Reassigned',
+        synced: 'Synced',
+        notified: 'Backups told',
       },
       { required: true },
     ),
@@ -352,6 +380,10 @@ const ApprovalVote = defineModel('approval.vote', {
     onBehalfOf: f.many2one('res.users', { ondelete: 'set null', label: 'For' }),
     /** Decided from an email link: the address it came from. */
     ip: f.char({ label: 'From address' }),
+    /** Copied from the person's approval at an earlier level (skip approvers who already approved). */
+    auto: f.boolean({ default: false, label: 'Approved already' }),
+    /** Decided as one of the level's backups. */
+    asBackup: f.boolean({ default: false, label: 'As backup' }),
   },
   sqlConstraints: {
     once: { unique: ['request', 'user'], message: 'Each approver decides a request once.' },

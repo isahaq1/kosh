@@ -21,6 +21,8 @@ interface Request {
   readonly required: number;
   readonly state: State;
   readonly requestedBy: number | null;
+  readonly approvers: readonly number[];
+  readonly backups: readonly number[];
   readonly comment: string | null;
   readonly startedAt: string | null;
   readonly decidedAt: string | null;
@@ -130,7 +132,7 @@ export function ApprovalPanel({
   const requests = useQuery({
     queryKey: ['approvals', model, recordId, version],
     queryFn: () =>
-      api.call<{ requests: Request[]; events?: Event[] }>(
+      api.call<{ requests: Request[]; events?: Event[]; manage?: boolean }>(
         'GET',
         `/api/v1/approvals/${model}/${recordId}`,
       ),
@@ -162,6 +164,38 @@ export function ApprovalPanel({
       ),
     onSuccess: done,
   });
+  const [reassigning, setReassigning] = useState(false);
+  const [chosen, setChosen] = useState<number[]>([]);
+  const [mode, setMode] = useState<'replace' | 'add'>('replace');
+  const [reason, setReason] = useState('');
+  const people = useQuery({
+    queryKey: ['approvals', 'people'],
+    queryFn: () =>
+      api.call<{ items: { id: number; name: string }[] }>(
+        'GET',
+        '/api/v1/models/res.users?fields=id,name&limit=200&order=name',
+      ),
+    enabled: reassigning,
+  });
+  const reassign = useMutation({
+    mutationFn: (request: number) =>
+      api.call('POST', `/api/v1/approvals/requests/${request}/reassign`, {
+        users: chosen,
+        mode,
+        reason: reason.trim(),
+      }),
+    onSuccess: async () => {
+      setReassigning(false);
+      setChosen([]);
+      setReason('');
+      await done();
+    },
+  });
+  const tell = useMutation({
+    mutationFn: (request: number) =>
+      api.call('POST', `/api/v1/approvals/requests/${request}/notify-backups`, {}),
+    onSuccess: done,
+  });
   const withdraw = useMutation({
     mutationFn: () => api.call('POST', `/api/v1/approvals/${model}/${recordId}/withdraw`),
     onSuccess: done,
@@ -175,7 +209,14 @@ export function ApprovalPanel({
   const mine = new Set((inbox.data?.requests ?? []).map((r) => r.id));
   const actionable = current.find((r) => mine.has(r.id));
   const asked = current.some((r) => r.state === 'pending' && r.requestedBy === me.data?.id);
-  const error = decide.error ?? withdraw.error;
+  const error = decide.error ?? withdraw.error ?? reassign.error ?? tell.error;
+  const manage = requests.data?.manage === true;
+  // The waiting request whose turn it is (the first, when levels decide side by side).
+  const waiting = current.find((r) => r.state === 'pending' && r.startedAt !== null);
+  const mayTell =
+    waiting !== undefined &&
+    waiting.backups.length > 0 &&
+    (manage || waiting.approvers.includes(me.data?.id ?? -1));
   return (
     <section aria-labelledby={`${id}-title`} className="rounded-lg border bg-surface p-4">
       <h2 id={`${id}-title`} className="mb-3 flex items-center gap-2 text-sm font-semibold">
@@ -232,6 +273,79 @@ export function ApprovalPanel({
           </div>
         </div>
       )}
+      {waiting !== undefined && (manage || mayTell) ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {manage ? (
+            <Button variant="ghost" onClick={() => setReassigning((v) => !v)}>
+              {t('reassign')}
+            </Button>
+          ) : null}
+          {mayTell ? (
+            <Button
+              variant="ghost"
+              disabled={tell.isPending}
+              onClick={() => tell.mutate(waiting.id)}
+            >
+              {t('tellBackups')}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {reassigning && waiting !== undefined ? (
+        <fieldset className="mt-3 grid gap-2 rounded-md border p-3">
+          <legend className="px-1 text-sm font-medium">
+            {t('reassignLevel', { level: waiting.levelName })}
+          </legend>
+          <label htmlFor={`${id}-people`} className="text-sm">
+            {t('newApprovers')}
+          </label>
+          <select
+            id={`${id}-people`}
+            multiple
+            className="min-h-24 rounded-md border bg-surface p-1 text-sm"
+            value={chosen.map(String)}
+            onChange={(e) => setChosen([...e.target.selectedOptions].map((o) => Number(o.value)))}
+          >
+            {(people.data?.items ?? [])
+              .filter((u) => u.id !== waiting.requestedBy)
+              .map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+          </select>
+          <div className="flex flex-wrap gap-3 text-sm">
+            {(['replace', 'add'] as const).map((m) => (
+              <label key={m} className="flex items-center gap-1">
+                <input
+                  type="radio"
+                  name={`${id}-mode`}
+                  checked={mode === m}
+                  onChange={() => setMode(m)}
+                />
+                {t(`mode.${m}`)}
+              </label>
+            ))}
+          </div>
+          <label htmlFor={`${id}-reason`} className="text-sm">
+            {t('reason')}
+          </label>
+          <Textarea
+            id={`${id}-reason`}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+          <div>
+            <Button
+              variant="primary"
+              disabled={reassign.isPending || chosen.length === 0 || reason.trim() === ''}
+              onClick={() => reassign.mutate(waiting.id)}
+            >
+              {t('reassignConfirm')}
+            </Button>
+          </div>
+        </fieldset>
+      ) : null}
       {asked ? (
         <div className="mt-3">
           <Button variant="ghost" disabled={withdraw.isPending} onClick={() => withdraw.mutate()}>
