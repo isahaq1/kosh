@@ -374,7 +374,7 @@ test('approved already, backups, reassignment, waiting requests in step with the
   const levels = (
     await call(
       'GET',
-      `/api/v1/models/approval.level?fields=id,name&filter[policy]=${policy}`,
+      `/api/v1/models/approval.level?fields=id,name&filter=${encodeURIComponent(JSON.stringify({ policy }))}`,
       'pia',
     )
   ).json.items as Json[];
@@ -414,7 +414,11 @@ test('approved already, backups, reassignment, waiting requests in step with the
 test('policies by segment and companies: a segment covers its companies, an empty one none; the preview says which', async () => {
   for (const name of ['Matrix 2'])
     for (const p of (
-      await call('GET', `/api/v1/models/approval.policy?fields=id&filter[name]=${name}`, 'pia')
+      await call(
+        'GET',
+        `/api/v1/models/approval.policy?fields=id&filter=${encodeURIComponent(JSON.stringify({ name }))}`,
+        'pia',
+      )
     ).json.items as Json[])
       expectStatus(
         await call('PATCH', `/api/v1/models/approval.policy/${p.id}`, 'pia', { active: false }),
