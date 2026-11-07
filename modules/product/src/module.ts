@@ -7,6 +7,7 @@ import { baseShutro } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
 import { storageShutro } from '@kosh/storage';
 import { check, defineModel, defineModule, f, record } from './.kosh/bindings.js';
+import { ProductPricelist, ProductPricelistRule } from './pricelist.js';
 
 const ALL = ['read', 'write', 'create', 'unlink', 'export', 'import'] as const;
 const READ = ['read'] as const;
@@ -179,7 +180,7 @@ const uom = (id: string, name: string, category: string, ratio: string, rounding
 
 export const productShutro = defineModule({
   name: 'product',
-  version: '0.4.0',
+  version: '0.5.0',
   migrations: [
     {
       version: '0.2.0',
@@ -213,7 +214,14 @@ export const productShutro = defineModule({
   sequences: [
     orm.defineSequence({ code: 'product.product', prefix: 'P', padding: 5, perCompany: false }),
   ],
-  models: [UomUom, ProductCategory, AccountTax, ProductProduct],
+  models: [
+    UomUom,
+    ProductCategory,
+    AccountTax,
+    ProductProduct,
+    ProductPricelist,
+    ProductPricelistRule,
+  ],
   // Created once, then the users' to change (noupdate).
   data: [
     uom('uom_unit', 'Units', 'unit', '1', '1'),

@@ -10,8 +10,10 @@ import { storage } from '@kosh/storage';
 import { action, form, kanban, list, search } from '@kosh/views';
 import { productDemo } from './demo.js';
 import { AccountTax, ProductCategory, ProductProduct, productShutro, UomUom } from './module.js';
+import { ProductPricelist } from './pricelist.js';
 
 export { AccountTax, ProductCategory, ProductProduct, productShutro, UomUom } from './module.js';
+export { type PriceFound, ProductPricelist, ProductPricelistRule, priceFor } from './pricelist.js';
 export {
   computeTaxes,
   ordered,
@@ -35,6 +37,16 @@ export const product: ReturnType<typeof defineModule> = defineModule({
     summary: 'Products and services, prices, units of measure and taxes',
   },
   importTemplates: [
+    {
+      key: 'product_pricelist',
+      model: 'product.pricelist',
+      label: 'Price list',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'Currency', field: 'currency' },
+        { header: 'Sequence', field: 'sequence' },
+      ],
+    },
     {
       key: 'uom_uom',
       model: 'uom.uom',
@@ -164,6 +176,10 @@ export const product: ReturnType<typeof defineModule> = defineModule({
     }),
     'product.action_uoms': action(UomUom, { label: 'Units of measure', views: ['list', 'form'] }),
     'product.action_taxes': action(AccountTax, { label: 'Taxes', views: ['list', 'form'] }),
+    'product.action_pricelists': action(ProductPricelist, {
+      label: 'Price lists',
+      views: ['list', 'form'],
+    }),
   },
   menus: [
     { id: 'product.root', label: 'Products', app: 'product' },
@@ -175,6 +191,13 @@ export const product: ReturnType<typeof defineModule> = defineModule({
       sequence: 1,
     },
     { id: 'product.config', parent: 'product.root', label: 'Configuration', sequence: 90 },
+    {
+      id: 'product.pricelists',
+      parent: 'product.root',
+      label: 'Price lists',
+      action: 'product.action_pricelists',
+      sequence: 2,
+    },
     {
       id: 'product.categories',
       parent: 'product.config',
@@ -234,6 +257,36 @@ export const product: ReturnType<typeof defineModule> = defineModule({
         ]),
       ],
     })),
+    'product.pricelist.list': list(ProductPricelist, {
+      columns: ['sequence', 'name', 'currency', 'company', 'active'],
+    }),
+    'product.pricelist.form': form(ProductPricelist, (k) => ({
+      sheet: [
+        k.group('main', ['name', 'currency', 'company', 'sequence'], {
+          description:
+            'Each line gets the most specific rule: a product’s over a category’s over every product, then the highest quantity reached. Without a rule, the list price.',
+        }),
+        k.lines('rules', [
+          { field: 'sequence', id: 'rule_sequence' },
+          { field: 'appliesTo', id: 'rule_applies' },
+          { field: 'product', id: 'rule_product' },
+          { field: 'category', id: 'rule_category' },
+          { field: 'minQuantity', id: 'rule_quantity' },
+          { field: 'dateFrom', id: 'rule_from' },
+          { field: 'dateTo', id: 'rule_to' },
+          { field: 'compute', id: 'rule_compute' },
+          { field: 'fixedPrice', id: 'rule_fixed' },
+          { field: 'base', id: 'rule_base' },
+          { field: 'basePricelist', id: 'rule_base_list' },
+          { field: 'discount', id: 'rule_discount' },
+          { field: 'surcharge', id: 'rule_surcharge' },
+          { field: 'rounding', id: 'rule_rounding' },
+          { field: 'minMargin', id: 'rule_min_margin' },
+          { field: 'maxMargin', id: 'rule_max_margin' },
+        ]),
+        k.group('notes', ['note'], { label: 'Note' }),
+      ],
+    })),
     'product.category.list': list(ProductCategory, { columns: ['name', 'parent'] }),
     'product.category.form': form(ProductCategory, (k) => ({
       sheet: [k.group('main', ['name', 'parent'])],
@@ -260,6 +313,10 @@ export const product: ReturnType<typeof defineModule> = defineModule({
     })),
   },
   search: {
+    'product.pricelist': search(ProductPricelist, {
+      fields: ['name'],
+      groupBy: ['currency', 'company'],
+    }),
     'uom.uom': search(UomUom, { fields: ['name'], groupBy: ['category'] }),
     'product.category': search(ProductCategory, {
       fields: ['name', 'parent.name'],
