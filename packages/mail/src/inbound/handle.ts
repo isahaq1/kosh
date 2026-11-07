@@ -332,9 +332,12 @@ export async function processInbound(
       message: null,
     });
   const recipientEmail = await context.shutro.bootstrap({ reason: 'inbound email' }, async (su) => {
-    const [user] = await rows(su, 'res.users', { id: target.uid, active: { in: [true, false] } }, [
-      'email',
-    ]);
+    const [user] = await rows(
+      su.withFlags({ activeTest: false }) as typeof su,
+      'res.users',
+      { id: target.uid },
+      ['email'],
+    );
     return typeof user?.['email'] === 'string' ? user['email'].toLowerCase() : '';
   });
   if (sender !== '' && sender === recipientEmail) {
@@ -500,9 +503,9 @@ async function recordBounce(context: InboundContext, mail: InboundMail): Promise
       ]);
       if (n === undefined || typeof n['actor'] !== 'number' || n['actor'] === n['user']) continue;
       const [recipient] = await rows(
-        su,
+        su.withFlags({ activeTest: false }) as typeof su,
         'res.users',
-        { id: n['user'], active: { in: [true, false] } },
+        { id: n['user'] },
         ['name', 'email'],
       );
       const [record] = (

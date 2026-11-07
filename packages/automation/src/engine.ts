@@ -685,7 +685,12 @@ async function scopeFor(
         : (rule.runAsUser ?? null);
   const actorName = async (id: number) =>
     context.shutro.bootstrap({ reason: 'automation actor' }, async (su) => {
-      const [u] = await rows(su, 'res.users', { id, active: { in: [true, false] } }, ['name']);
+      const [u] = await rows(
+        su.withFlags({ activeTest: false }) as typeof su,
+        'res.users',
+        { id },
+        ['name'],
+      );
       return String(u?.['name'] ?? '');
     });
   if ((rule.runAs === 'system' || change.timed !== undefined) && uid === null)
