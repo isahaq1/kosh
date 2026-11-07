@@ -55,7 +55,16 @@ export async function hrDemo(ctx: DemoContext): Promise<string> {
   await ctx.as(RAHIM, async (raw) => {
     const env = raw as Env;
     const casual = await idByName(env as never, 'hr.leave.type', 'Casual leave');
-    const day = await workday(ctx, env, 30);
+    // A working day about a month ahead on which Rahim has no leave yet.
+    let day = await workday(ctx, env, 30);
+    for (let from = 31; ; from += 1) {
+      const taken = await env.model('hr.leave').search({
+        where: { employee: rahim as never, dateFrom: { lte: day }, dateTo: { gte: day } } as never,
+        limit: 1,
+      });
+      if (taken.ids.length === 0) break;
+      day = await workday(ctx, env, from);
+    }
     const made = await env.model('hr.leave').create([
       {
         employee: rahim as never,
