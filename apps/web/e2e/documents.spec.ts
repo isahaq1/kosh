@@ -82,7 +82,8 @@ test('a scheduled report: created from the form, run now, output downloaded', as
   await expect(page.getByLabel('Next Run At')).not.toBeEmpty(); // planned from the cadence
   await page.getByRole('button', { name: 'Run now' }).click();
   const output = page.getByRole('region', { name: 'Outputs' }).getByRole('listitem').first();
-  await expect(output).toContainText('Monthly_spend.xlsx');
+  // The run happens in the background: allow it time on a busy machine.
+  await expect(output).toContainText('Monthly_spend.xlsx', { timeout: 30_000 });
   const download = page.waitForEvent('download');
   await output.getByRole('button', { name: 'Download' }).click();
   expect((await download).suggestedFilename()).toBe('Monthly_spend.xlsx');

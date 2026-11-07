@@ -54,9 +54,9 @@ test('a shop, a session, a sale paid in cash, the session closed', async ({ page
 
   await page.getByRole('button', { name: 'Close the session' }).click();
   const closing = page.getByRole('dialog');
-  const expected = await closing.getByText(/Cash expected in the drawer/).textContent();
-  const amount = /:\s*([\d,.]+)/.exec(expected ?? '')?.[1]?.replaceAll(',', '') ?? '1000';
-  await closing.getByLabel('Cash counted').fill(amount);
+  // The sale and its refund cancel out: the drawer holds the opening cash again (waited for, not read once).
+  await expect(closing.getByText(/Cash expected in the drawer/)).toContainText(/1,?000/);
+  await closing.getByLabel('Cash counted').fill('1000');
   await closing.getByRole('button', { name: 'Close the session' }).click();
   await expect(page.getByText(/closed: .* sold, difference/)).toBeVisible();
 });
