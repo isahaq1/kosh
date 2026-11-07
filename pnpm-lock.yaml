@@ -2181,6 +2181,18 @@ importers:
         specifier: workspace:*
         version: link:../../packages/views
     devDependencies:
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/sale_stock':
+        specifier: workspace:*
+        version: link:../sale_stock
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@kosh/stock':
+        specifier: workspace:*
+        version: link:../stock
       '@testcontainers/postgresql':
         specifier: ^12.2.1
         version: 12.2.1

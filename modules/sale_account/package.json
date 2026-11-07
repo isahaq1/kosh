@@ -51,6 +51,10 @@
     "@kosh/permissions": "workspace:*"
   },
   "devDependencies": {
-    "@testcontainers/postgresql": "^12.2.1"
+    "@testcontainers/postgresql": "^12.2.1",
+    "@kosh/stock": "workspace:*",
+    "@kosh/sale_stock": "workspace:*",
+    "@kosh/settings": "workspace:*",
+    "@kosh/messaging": "workspace:*"
   }
 }

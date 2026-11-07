@@ -98,6 +98,13 @@ export const saleAccount: ReturnType<typeof defineModule> = defineModule({
             },
             {
               kind: 'button',
+              id: 'invoice_down_payment',
+              transition: 'invoiceDownPayment',
+              label: 'Invoice a down payment',
+              visibleWhen: { state: 'sale' },
+            },
+            {
+              kind: 'button',
               id: 'ask_credit',
               transition: 'askCredit',
               label: 'Ask for credit approval',
@@ -110,6 +117,16 @@ export const saleAccount: ReturnType<typeof defineModule> = defineModule({
           nodes: [
             field({ field: 'invoiceState', id: 'invoice_state' }),
             field({ field: 'paymentTerm', id: 'payment_term' }),
+            field({
+              field: 'downPaymentPercent',
+              id: 'down_payment_percent',
+              visibleWhen: { state: 'sale' },
+            }),
+            field({
+              field: 'downPaymentAmount',
+              id: 'down_payment_amount',
+              visibleWhen: { state: 'sale' },
+            }),
             field({ field: 'creditNote', id: 'credit_note', readonlyWhen: {} }),
           ],
         },
@@ -121,6 +138,14 @@ export const saleAccount: ReturnType<typeof defineModule> = defineModule({
               label: 'Invoices',
               model: 'account.move',
               where: { saleOrder: { $record: 'id' } },
+              action: 'accounting.action_customer_invoices',
+            }),
+            stat({
+              id: 'order_down_payments',
+              label: 'Down payments',
+              model: 'account.move.line',
+              where: { downPaymentOf: { $record: 'id' }, 'move.state': { ne: 'cancel' } },
+              measure: { sum: 'subtotal' },
               action: 'accounting.action_customer_invoices',
             }),
             stat({
