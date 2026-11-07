@@ -1000,3 +1000,22 @@ receipts as documents (RFC 0005), notifications for receipts by SMS or email (RF
   adapters do not have yet — and Mushak 6.3 receipts for `l10n_bd` shops (the receipt template is where it goes).
 - Tests: the refund refused without a reason or beyond what was sold, made with its link and reason, refused to
   a cashier for another session's sale and made by a manager, the expected cash and the entry net of it.
+
+## Implementation notes (2026-11-07): Counter, step 4 part 1 — Mushak 6.3 receipts
+
+- **The shop decides its receipt**: `pos.shop.receiptTemplate()` gives each shop's receipt template key (the
+  Counter's own `pos.receipt`); apps extend it. `GET /api/v1/counter/orders/:id/receipt-template` serves a sale's
+  template; the register prints it and the receipt sent by email renders it.
+- **`l10n_bd_pos`** (Bangladesh × Counter, proposed when both are installed): shops issue **Mushak 6.3** receipts
+  unless switched off (`mushakReceipt`, on by default, on the shop's form). The receipt is the tax invoice at the
+  till:
+  - the seller with its BIN and address, and the shop;
+  - the buyer and their BIN when the sale has a customer;
+  - the invoice number, the date and time of issue, the cashier;
+  - each line's value and VAT, the totals with VAT, the payment and change;
+  - the amount in words, and a QR of the number.
+  In English and Bangla; registered in the installer, the demo, the npm package and the apps' E2E server.
+- **Tests**: on real PostgreSQL a sale's receipt template is the Mushak 6.3 one and renders with the seller's BIN;
+  switched off, the plain receipt.
+- **Next**: payment providers at the counter — bKash and cards paid from the customer's phone by a QR, the sale
+  completed when the provider confirms.

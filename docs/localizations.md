@@ -76,6 +76,10 @@ Printed from an invoice or a payment (Reporting's documents), editable in the de
 
 - **Tax invoice (Mushak 6.3)**: seller and buyer with their BIN, the date and time of issue, each line's value,
   SD, VAT and total, the totals and the total in words.
+- **At the counter** (`l10n_bd_pos`, with Counter): each sale's receipt is a Mushak 6.3 tax invoice — the seller's
+  BIN, the buyer's when the sale has a customer, the number and time of issue, each line's value and VAT, the totals
+  and the amount in words. A shop that does not issue them switches *Mushak 6.3 receipts* off and prints the plain
+  receipt.
 - **Credit note (Mushak 6.7)**: the same, with the tax invoice it corrects and the reason.
 - **Certificate of VAT deducted at source (Mushak 6.6)**: on a payment with VDS — the withholding entity and the
   supplier with their BIN, each deduction with what it was computed on.
