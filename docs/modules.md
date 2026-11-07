@@ -272,6 +272,14 @@ typed on a confirmed order (on the company's *Down payment* service, made on fir
 total; the next invoice deducts every down payment not deducted yet. Several orders are invoiced at once with the
 list's bulk actions. Orders invoiced before this keep their invoice links (a migration matches the lines).
 
+### Bills by what was received, the three-way check (`modules/purchase_account`, RFC 0028)
+
+Purchases follow the product's **Invoice** policy too: **Create bill** bills what is due — ordered, or received by
+Stockroom for products on *Delivered quantities* — so an order can have several bills, and is refused when nothing is
+due. Each order line knows what is **Billed** (its bill lines, less refunds); the order is *Billed* when every
+ordered quantity is. On the bill, each line shows **Ordered / received / billed** for its order line, flagged
+*more than received* or *more than ordered* before anyone posts it. Orders billed before this keep their bill links.
+
 ### Projects for programmes (`modules/project`, RFC 0026)
 
 Projects carries a programme's structure, not only a to-do list. Configuration holds **project types**, **task

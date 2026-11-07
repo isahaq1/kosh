@@ -138,3 +138,11 @@ RFC: bank statements and reconciliation rules).
   and deducted by the next invoice. Batch invoicing is the lists' bulk transitions. A migration links existing invoice
   lines to their order lines. Not yet: taxes on down payments, credit notes from orders; Purchase (bills by received
   quantity, the three-way check) is part 2.
+- **Step 3 part 2 (2026-11-07), Purchase.** The same in `purchase_account`: `account.move.line.purchaseLine`,
+  `purchase.order.line.qtyBilled`, `toBill()` (Stockroom's `qtyReceived` read when installed), the `bill` transition
+  billing what is due, `billState` by quantities, a migration linking existing bill lines. The three-way check is
+  `matchNote` on bill lines (a non-stored compute: ordered, received, billed, flagged beyond received or ordered),
+  a column of the invoice form; it warns, it does not block posting. Step 3 complete.
+- **Open (2026-11-07).** The Trade Finance overview E2E sometimes renders "Something went wrong!" (the error
+  boundary) under parallel load since step 3: it failed in three full runs and passed alone, serially and paired in
+  later runs; the cards read `trade.lc` only and no console error was caught in the passing runs. To investigate.
