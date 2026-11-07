@@ -727,6 +727,7 @@ async function modulesFor(apps: readonly AppName[]): Promise<KoshModule[]> {
       modules.push((await import('@kosh/payroll_account')).payrollAccount);
     if (app === 'l10n_bd_payroll')
       modules.push((await import('@kosh/l10n_bd_payroll')).l10nBdPayroll);
+    if (app === 'l10n_bd_pos') modules.push((await import('@kosh/l10n_bd_pos')).l10nBdPos);
     if (app === 'l10n_bd') modules.push((await import('@kosh/l10n_bd')).l10nBd);
     if (app === 'l10n_in') modules.push((await import('@kosh/l10n_in')).l10nIn);
   }

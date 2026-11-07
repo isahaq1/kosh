@@ -35,6 +35,7 @@ import { hr } from '@kosh/hr';
 import { dataImport } from '@kosh/import';
 import { l10nBd } from '@kosh/l10n_bd';
 import { l10nBdPayroll } from '@kosh/l10n_bd_payroll';
+import { l10nBdPos } from '@kosh/l10n_bd_pos';
 import { l10nIn } from '@kosh/l10n_in';
 import { mail } from '@kosh/mail';
 import { maintenance } from '@kosh/maintenance';
@@ -189,6 +190,7 @@ const CATALOGUE = [
   accountAsset,
   accountBudget,
   l10nBdPayroll,
+  l10nBdPos,
   assistant,
   dataImport,
   l10nBd,

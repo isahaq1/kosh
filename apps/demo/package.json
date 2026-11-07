@@ -26,6 +26,7 @@
     "@kosh/hr": "workspace:*",
     "@kosh/l10n_bd": "workspace:*",
     "@kosh/l10n_bd_payroll": "workspace:*",
+    "@kosh/l10n_bd_pos": "workspace:*",
     "@kosh/mail": "workspace:*",
     "@kosh/maintenance": "workspace:*",
     "@kosh/maintenance_stock": "workspace:*",

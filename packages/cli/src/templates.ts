@@ -57,6 +57,7 @@ export type AppName =
   | 'expense_account'
   | 'payroll_account'
   | 'l10n_bd_payroll'
+  | 'l10n_bd_pos'
   | 'l10n_bd'
   | 'l10n_in';
 export interface AppSpec {
@@ -393,6 +394,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🇧🇩',
     server: 'l10nBdPayroll',
     bridge: ['l10n_bd', 'payroll'],
+  },
+  l10n_bd_pos: {
+    label: 'Bangladesh at the counter: Mushak 6.3 receipts',
+    icon: '🇧🇩',
+    server: 'l10nBdPos',
+    bridge: ['l10n_bd', 'pos'],
   },
   l10n_in: {
     label:

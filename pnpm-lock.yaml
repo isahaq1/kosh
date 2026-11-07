@@ -89,6 +89,9 @@ importers:
       '@kosh/l10n_bd_payroll':
         specifier: workspace:*
         version: link:../../modules/l10n_bd_payroll
+      '@kosh/l10n_bd_pos':
+        specifier: workspace:*
+        version: link:../../modules/l10n_bd_pos
       '@kosh/mail':
         specifier: workspace:*
         version: link:../../packages/mail
@@ -346,6 +349,9 @@ importers:
       '@kosh/l10n_bd_payroll':
         specifier: workspace:*
         version: link:../../modules/l10n_bd_payroll
+      '@kosh/l10n_bd_pos':
+        specifier: workspace:*
+        version: link:../../modules/l10n_bd_pos
       '@kosh/messaging':
         specifier: workspace:*
         version: link:../../packages/messaging
@@ -1272,6 +1278,55 @@ importers:
       '@kosh/hr':
         specifier: workspace:*
         version: link:../hr
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/l10n_bd_pos:
+    dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../accounting
+      '@kosh/l10n_bd':
+        specifier: workspace:*
+        version: link:../l10n_bd
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/pos':
+        specifier: workspace:*
+        version: link:../pos
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/mail':
+        specifier: workspace:*
+        version: link:../../packages/mail
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/notify':
+        specifier: workspace:*
+        version: link:../../packages/notify
+      '@kosh/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
       '@kosh/reporting':
         specifier: workspace:*
         version: link:../../packages/reporting
@@ -2897,6 +2952,9 @@ importers:
       '@kosh/l10n_bd_payroll':
         specifier: workspace:*
         version: link:../../modules/l10n_bd_payroll
+      '@kosh/l10n_bd_pos':
+        specifier: workspace:*
+        version: link:../../modules/l10n_bd_pos
       '@kosh/l10n_in':
         specifier: workspace:*
         version: link:../../modules/l10n_in
