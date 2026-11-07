@@ -260,3 +260,17 @@ Measured on the demo catalogue (41 modules: 19 apps, 22 extensions).
   by module on purpose (an Indian state is রাজ্য; a till receipt is রসিদ and goods received প্রাপ্তি).
 - **Tests**: unit tests of merging, language fallback, what is and is not translated, and problems; on real PostgreSQL
   a Bangla request getting Bangla menus and field labels and an English one English.
+
+## Implementation notes (2026-11-04): step 6 — help, and the standard complete
+
+- **M5, enforced**: every state, selection and computed amount has its help — 192 fields across 28 modules:
+  - what the value means, or how it is computed, in one sentence for the person reading the form;
+  - with its Bangla, so T1 still holds;
+  - the e-invoice fields l10n_in mirrors onto invoices carry the same help as their originals.
+- **A1, enforced**: every app has an overview and demo data.
+  - Approvals, Documents and Sign now have overviews: requests waiting and decided, files received, signatures out
+    and signed, with charts by category, folder, state or template. They depend on Reporting for them.
+  - Approvals' demo data is a business trip waiting for approval and a draft purchase request.
+  - Sign is waived: demo signature requests need a template made from an uploaded PDF.
+- **Every rule of version 1 is enforced by `pnpm lint`**: M1–M5, V1, P1–P2, I1–I2, E1, T1, A1, plus R1 on the
+  platform. A new module meets the standard or explains, in its manifest, why not.
