@@ -44,6 +44,7 @@ import { realtime } from '@kosh/realtime';
 import { recruitment } from '@kosh/recruitment';
 import { reporting } from '@kosh/reporting';
 import { saleAccount } from '@kosh/sale_account';
+import { saleCrm } from '@kosh/sale_crm';
 import { saleProject } from '@kosh/sale_project';
 import { saleStock } from '@kosh/sale_stock';
 import { sales } from '@kosh/sales';
@@ -153,6 +154,7 @@ export function demoCatalogue(): KoshModule[] {
     tradeFinanceSale,
     eventAccount,
     websiteCrm,
+    saleCrm,
     websiteSale,
     websiteSaleStock,
     posStock,

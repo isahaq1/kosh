@@ -62,6 +62,7 @@ import { realtime } from '@kosh/realtime';
 import { recruitment } from '@kosh/recruitment';
 import { installTemplates, reporting } from '@kosh/reporting';
 import { saleAccount } from '@kosh/sale_account';
+import { saleCrm } from '@kosh/sale_crm';
 import { salePortal } from '@kosh/sale_portal';
 import { saleProject } from '@kosh/sale_project';
 import { saleStock } from '@kosh/sale_stock';
@@ -175,6 +176,7 @@ const CATALOGUE = [
   tradeFinanceSale,
   eventAccount,
   websiteCrm,
+  saleCrm,
   websiteSale,
   websiteSaleStock,
   posStock,

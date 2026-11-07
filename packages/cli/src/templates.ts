@@ -52,6 +52,7 @@ export type AppName =
   | 'trade_finance_sale'
   | 'event_account'
   | 'website_crm'
+  | 'sale_crm'
   | 'website_sale_stock'
   | 'pos_stock'
   | 'expense_account'
@@ -354,6 +355,13 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'websiteCrm',
     bridge: ['website', 'crm'],
+  },
+  sale_crm: {
+    label:
+      'Bridge: quotations from deals, deals won and lost with their quotations (Pipeline ↔ Sales)',
+    icon: '🔗',
+    server: 'saleCrm',
+    bridge: ['sales', 'crm'],
   },
   website_sale_stock: {
     label: 'Bridge: stock shown on the shop, carts kept within it (Shop ↔ Stockroom)',

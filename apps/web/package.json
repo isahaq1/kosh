@@ -45,7 +45,8 @@
     "@kosh/website_sale": "workspace:*",
     "@kosh/website_sale_stock": "workspace:*",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "@kosh/sale_crm": "workspace:*"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

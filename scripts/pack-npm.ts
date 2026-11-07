@@ -89,6 +89,7 @@ const PACKAGES = [
   'trade_finance_sale',
   'event_account',
   'website_crm',
+  'sale_crm',
   'website_sale',
   'website_sale_stock',
   'documents',

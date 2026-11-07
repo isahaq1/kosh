@@ -167,6 +167,9 @@ importers:
       '@kosh/sale_account':
         specifier: workspace:*
         version: link:../../modules/sale_account
+      '@kosh/sale_crm':
+        specifier: workspace:*
+        version: link:../../modules/sale_crm
       '@kosh/sale_project':
         specifier: workspace:*
         version: link:../../modules/sale_project
@@ -379,6 +382,9 @@ importers:
       '@kosh/reporting':
         specifier: workspace:*
         version: link:../../packages/reporting
+      '@kosh/sale_crm':
+        specifier: workspace:*
+        version: link:../../modules/sale_crm
       '@kosh/settings':
         specifier: workspace:*
         version: link:../../packages/settings
@@ -2197,6 +2203,31 @@ importers:
         specifier: ^12.2.1
         version: 12.2.1
 
+  modules/sale_crm:
+    dependencies:
+      '@kosh/crm':
+        specifier: workspace:*
+        version: link:../crm
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/sales':
+        specifier: workspace:*
+        version: link:../sales
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   modules/sale_portal:
     dependencies:
       '@kosh/contacts':
@@ -3051,6 +3082,9 @@ importers:
       '@kosh/sale_account':
         specifier: workspace:*
         version: link:../../modules/sale_account
+      '@kosh/sale_crm':
+        specifier: workspace:*
+        version: link:../../modules/sale_crm
       '@kosh/sale_project':
         specifier: workspace:*
         version: link:../../modules/sale_project
