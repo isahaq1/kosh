@@ -27,7 +27,13 @@ const modelOf = (env: Env, name: string) =>
 async function readAll(records: unknown, keys: string[]): Promise<Row[]> {
   const set = records as Rows;
   // A many-to-many is loaded by the object spec (defaults plus the relation) and read as ids.
-  const spec = keys.includes('approverUsers') ? { approverUsers: true as const } : keys;
+  const spec = keys.includes('approverUsers')
+    ? Object.fromEntries(
+        keys
+          .filter((k) => k === 'approverUsers' || k === 'extraUsers')
+          .map((k) => [k, true as const]),
+      )
+    : keys;
   return set.length === 0 ? [] : (await set.load(spec)).read(keys);
 }
 
@@ -67,6 +73,14 @@ const ApprovalPolicy = defineModel('approval.policy', {
      * covers that category's requests); empty: every record.
      */
     condition: f.json({ label: 'For records where' }),
+    /**
+     * When a level finds nobody to decide — no person, and no role to stand in (RFC 0027 §2.4): refuse the submission
+     * and say why, let administrators decide, or skip the level (recorded as skipped).
+     */
+    whenNobody: f.selection(
+      { refuse: 'Refuse the submission', admins: 'Administrators decide', skip: 'Skip the level' },
+      { required: true, default: 'refuse', label: 'When nobody is found' },
+    ),
     levels: f.one2many('approval.level', 'policy'),
   },
   constraints: {
@@ -131,17 +145,28 @@ const ApprovalLevel = defineModel('approval.level', {
         role: 'A role',
         users: 'Named people',
         manager: 'The requester’s manager',
+        department_head: 'The head of the requester’s department',
+        department_approvers: 'The approvers of the requester’s department',
         field: 'A person on the record',
+        record: 'The record decides',
       },
       { required: true, default: 'role', label: 'Approved by' },
     ),
+    /** People added to whoever the kind finds (RFC 0027 §2.1). */
+    extraUsers: f.many2many('res.users', {
+      relation: 'approval_level_extra_user_rel',
+      label: 'Also',
+    }),
     /** The role (or, for a manager or a field, the role used when there is nobody). */
     approverRole: f.char({ label: 'Role' }),
     approverUsers: f.many2many('res.users', {
       relation: 'approval_level_user_rel',
       label: 'People',
     }),
-    /** A many-to-one field of the record to a user (`user`, `project.user`). */
+    /**
+     * A many-to-one field of the record to a user (`user`, `project.user`); for "the record decides", the key passed
+     * to the model's `approvalUsers(key)` (optional).
+     */
     approverField: f.char({ label: 'Field' }),
     /** How many decide: any one, all of them, or a number. */
     quorum: f.selection(
@@ -183,7 +208,7 @@ const ApprovalLevel = defineModel('approval.level', {
               const users = Array.isArray(r['approverUsers']) ? r['approverUsers'].length : 0;
               const kind = r['approverKind'];
               return (
-                (kind !== 'users' && !role) ||
+                (kind === 'role' && !role) ||
                 (kind === 'users' && users === 0) ||
                 (kind === 'field' &&
                   !(typeof r['approverField'] === 'string' && r['approverField'] !== '')) ||
@@ -194,7 +219,7 @@ const ApprovalLevel = defineModel('approval.level', {
         });
       },
       message:
-        'A level names its approvers: a role (also the fallback of a manager or a field), people, or a field; a quorum by number needs the number.',
+        'A level names its approvers: a role, people, or a field; a quorum by number needs the number.',
     },
     // A broken condition is refused when saved, not when a user submits a record.
     validCondition: {
@@ -261,6 +286,10 @@ const ApprovalRequest = defineModel('approval.request', {
     /** The role that may also decide since the deadline passed. */
     escalatedTo: f.char({ label: 'Escalated to' }),
     escalatedAt: f.datetime({ label: 'Escalated at' }),
+    /** When the level's turn came (every lower level approved); the deadline counts from it (RFC 0027 §2.5). */
+    startedAt: f.datetime({ label: 'Started' }),
+    /** How its approvers were found, written when it was made. */
+    explanation: f.text({ label: 'How the approvers were found' }),
     state: f.selection(
       {
         pending: 'Pending',
@@ -275,6 +304,35 @@ const ApprovalRequest = defineModel('approval.request', {
     decidedBy: f.many2one('res.users', { ondelete: 'set null' }),
     decidedAt: f.datetime(),
     comment: f.text(),
+  },
+});
+
+/**
+ * The matrix log (RFC 0027 §2.5): every step of a request — made, its turn, votes, decisions, cancelled, skipped,
+ * reminded, escalated — with who and a note. Private like requests: read through the record's approvals.
+ */
+const ApprovalEvent = defineModel('approval.event', {
+  order: ['at asc', 'id asc'],
+  fields: {
+    request: f.many2one('approval.request', { required: true, ondelete: 'cascade', index: true }),
+    at: f.datetime({ required: true }),
+    user: f.many2one('res.users', { ondelete: 'set null' }),
+    kind: f.selection(
+      {
+        created: 'Created',
+        started: 'Its turn',
+        voted: 'Voted',
+        approved: 'Approved',
+        rejected: 'Rejected',
+        sent_back: 'Sent back',
+        cancelled: 'Cancelled',
+        skipped: 'Skipped',
+        reminded: 'Reminded',
+        escalated: 'Escalated',
+      },
+      { required: true },
+    ),
+    note: f.text(),
   },
 });
 
@@ -386,6 +444,7 @@ export const permissionsShutro: ReturnType<typeof orm.defineModule> = defineModu
     ApprovalPolicy,
     ApprovalLevel,
     ApprovalRequest,
+    ApprovalEvent,
     ApprovalVote,
     ApprovalDelegation,
     ApprovalLink,

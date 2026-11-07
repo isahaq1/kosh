@@ -40,7 +40,7 @@ interface Ref {
 const ref = (env: Env, name: string): Ref => env.model(name as never) as unknown as Ref;
 
 /** Many-to-many fields read here: loaded by the object spec (defaults plus the relation), read as ids. */
-const MANY = new Set(['approvers', 'approverUsers']);
+const MANY = new Set(['approvers', 'approverUsers', 'extraUsers']);
 const specOf = (keys: readonly string[]): readonly string[] | Readonly<Record<string, true>> =>
   keys.some((k) => MANY.has(k))
     ? Object.fromEntries(keys.filter((k) => MANY.has(k)).map((k) => [k, true as const]))
@@ -53,6 +53,8 @@ async function find(env: Env, model: string, where: unknown, keys: string[], ord
 
 const REQUEST_KEYS = [
   'dueAt',
+  'startedAt',
+  'explanation',
   'escalatedTo',
   'approvers',
   'required',
@@ -90,6 +92,9 @@ export interface ApprovalRequestInfo {
   /** When it should be decided by, and the role it was escalated to once late. */
   readonly dueAt: string | null;
   readonly escalatedTo: string | null;
+  /** When its turn came (null: earlier levels still decide), and how its approvers were found. */
+  readonly startedAt: string | null;
+  readonly explanation: string | null;
   readonly state: 'pending' | 'approved' | 'rejected' | 'sent_back' | 'cancelled';
   readonly requestedBy: number | null;
   readonly decidedBy: number | null;
@@ -122,6 +127,13 @@ function info(row: Row): ApprovalRequestInfo {
       typeof row['escalatedTo'] === 'string' && row['escalatedTo'] !== ''
         ? row['escalatedTo']
         : null,
+    startedAt:
+      row['startedAt'] instanceof Date
+        ? row['startedAt'].toISOString()
+        : typeof row['startedAt'] === 'string'
+          ? row['startedAt']
+          : null,
+    explanation: (row['explanation'] as string | null) ?? null,
     state: row['state'] as ApprovalRequestInfo['state'],
     requestedBy: (row['requestedBy'] as number | null) ?? null,
     decidedBy: (row['decidedBy'] as number | null) ?? null,
@@ -198,31 +210,168 @@ async function userIn(su: Env, model: string, id: number, field: string): Promis
   }
 }
 
+/** The requester's employee in Workforce, with its department (null when Workforce is not installed or none). */
+async function employeeOf(
+  su: Env,
+  requester: number,
+): Promise<{ name: string; department: number | null } | null> {
+  try {
+    const [me] = await find(
+      su,
+      'hr.employee',
+      { user: requester },
+      ['name', 'department'],
+      ['id asc'],
+    );
+    if (me === undefined) return null;
+    return {
+      name: String(me['name']),
+      department: typeof me['department'] === 'number' ? (me['department'] as number) : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** The head of a department and its approvers, with its name. */
+async function departmentOf(
+  su: Env,
+  id: number,
+): Promise<{ name: string; head: number | null; approvers: number[] }> {
+  const set = await ref(su, 'hr.department').search({ where: { id } });
+  const [row] =
+    set.length === 0
+      ? []
+      : (await set.load({ approvalUsers: true } as never)).read(['name', 'head', 'approvalUsers']);
+  const headEmployee = typeof row?.['head'] === 'number' ? (row['head'] as number) : null;
+  const [head] =
+    headEmployee === null ? [] : await find(su, 'hr.employee', { id: headEmployee }, ['user']);
+  return {
+    name: String(row?.['name'] ?? id),
+    head: typeof head?.['user'] === 'number' ? (head['user'] as number) : null,
+    approvers: Array.isArray(row?.['approvalUsers']) ? (row['approvalUsers'] as number[]) : [],
+  };
+}
+
+/** The people the record names for a level (its model's `approvalUsers(key)`), or null when it names none. */
+async function recordApprovers(
+  su: Env,
+  model: string,
+  id: number,
+  key: string,
+): Promise<number[] | null> {
+  const record = ref(su, model).browse([id]) as unknown as {
+    approvalUsers?: (key: string) => Promise<Map<number, readonly number[]>>;
+  };
+  if (typeof record.approvalUsers !== 'function') return null;
+  return [...((await record.approvalUsers(key)).get(id) ?? [])];
+}
+
+/** People's names, for explanations. */
+async function namesOf(su: Env, ids: readonly number[]): Promise<string> {
+  if (ids.length === 0) return 'nobody';
+  const rows = await find(su, 'res.users', { id: { in: [...ids] } }, ['name']);
+  const by = new Map(rows.map((r) => [r['id'] as number, String(r['name'])]));
+  return ids.map((u) => by.get(u) ?? `#${u}`).join(', ');
+}
+
 /**
- * Who decides a level, and how many approvals it needs: named people, a manager or a field's person (the role when
- * there is nobody), a role's holders when all or a number of them must approve; never the requester.
+ * Who decides a level, how many approvals it needs and how they were found (RFC 0027 §2.1): named people, the
+ * requester's manager, their department's head or approvers, a field's person, the people the record names — plus
+ * the level's extra people —; a role's holders for a role, and when all or a number of them must approve. Never the
+ * requester. `nobody` when no one can decide (the policy's `whenNobody` decides what then).
  */
 async function approversOf(
   su: Env,
   level: Row,
   target: { model: string; id: number; company: number | null },
   requester: number,
-): Promise<{ role: string; approvers: number[]; required: number }> {
+): Promise<{
+  role: string;
+  approvers: number[];
+  required: number;
+  explanation: string[];
+  nobody: boolean;
+}> {
   const role = typeof level['approverRole'] === 'string' ? (level['approverRole'] as string) : '';
+  const notes: string[] = [];
   let people: number[] = [];
-  const kind = level['approverKind'] ?? 'role';
-  if (kind === 'users') people = (level['approverUsers'] as number[] | undefined) ?? [];
-  else if (kind === 'manager') {
+  const kind = String(level['approverKind'] ?? 'role');
+  const who = await namesOf(su, [requester]);
+  if (kind === 'users') {
+    people = (level['approverUsers'] as number[] | undefined) ?? [];
+    notes.push(`Named people: ${await namesOf(su, people)}.`);
+  } else if (kind === 'manager') {
     const manager = await managerOf(su, requester);
     if (manager !== null) people = [manager];
+    notes.push(
+      manager === null
+        ? `${who} has no manager with a user in Workforce.`
+        : `${who}’s manager: ${await namesOf(su, people)}.`,
+    );
+  } else if (kind === 'department_head' || kind === 'department_approvers') {
+    const employee = await employeeOf(su, requester);
+    if (employee === null) notes.push(`${who} is not an employee in Workforce.`);
+    else if (employee.department === null) notes.push(`${employee.name} has no department.`);
+    else {
+      const department = await departmentOf(su, employee.department);
+      if (kind === 'department_head') {
+        if (department.head !== null) people = [department.head];
+        notes.push(
+          department.head === null
+            ? `${department.name} has no head with a user.`
+            : `${department.name}’s head: ${await namesOf(su, people)}.`,
+        );
+      } else {
+        people = department.approvers;
+        notes.push(`${department.name}’s approvers: ${await namesOf(su, people)}.`);
+      }
+    }
   } else if (kind === 'field') {
-    const person = await userIn(su, target.model, target.id, String(level['approverField'] ?? ''));
+    const field = String(level['approverField'] ?? '');
+    const person = await userIn(su, target.model, target.id, field);
     if (person !== null) people = [person];
+    notes.push(`The record’s ${field}: ${await namesOf(su, people)}.`);
+  } else if (kind === 'record') {
+    const named = await recordApprovers(
+      su,
+      target.model,
+      target.id,
+      String(level['approverField'] ?? ''),
+    );
+    people = named ?? [];
+    notes.push(
+      named === null
+        ? `${target.model} names no approvers.`
+        : `Named by the record: ${await namesOf(su, people)}.`,
+    );
   }
+  // A role decides a role level, and stands in when nobody else was found.
+  const roleHolders =
+    role === '' ? [] : (await holders(su, role, target.company)).filter((u) => u !== requester);
+  const extra = (level['extraUsers'] as number[] | undefined) ?? [];
+  if (extra.length > 0) {
+    // A role with extra people: its holders by name, beside them.
+    if (kind === 'role') {
+      people = roleHolders;
+      notes.push(`Role ${role}: ${await namesOf(su, roleHolders)}.`);
+    }
+    people = [...new Set([...people, ...extra])];
+    notes.push(`Also: ${await namesOf(su, extra)}.`);
+  }
+  if (people.includes(requester)) notes.push(`${who} asked, so does not decide.`);
   people = people.filter((u) => u !== requester);
   const quorum = level['quorum'] ?? 'any';
-  if (people.length === 0 && quorum !== 'any' && role !== '')
-    people = (await holders(su, role, target.company)).filter((u) => u !== requester);
+  const byRole = people.length === 0 && role !== '';
+  if (byRole) {
+    notes.push(
+      kind === 'role'
+        ? `Role ${role}: ${roleHolders.length} ${roleHolders.length === 1 ? 'person' : 'people'} in the company.`
+        : `Instead, role ${role}: ${roleHolders.length} ${roleHolders.length === 1 ? 'person' : 'people'} in the company.`,
+    );
+    if (roleHolders.length === 0) notes.push('Nobody holds it yet: administrators decide.');
+    if (quorum !== 'any') people = roleHolders;
+  }
   const count = Math.max(1, Number(level['quorumCount'] ?? 1));
   const required =
     quorum === 'all'
@@ -230,7 +379,14 @@ async function approversOf(
       : quorum === 'count'
         ? Math.min(count, Math.max(1, people.length))
         : 1;
-  return { role: people.length > 0 && kind === 'users' ? '' : role, approvers: people, required };
+  return {
+    role: byRole ? role : '',
+    approvers: people,
+    required,
+    explanation: notes,
+    // A role always has someone: administrators decide a role nobody holds yet.
+    nobody: people.length === 0 && !byRole,
+  };
 }
 
 /** The record's company, when the model has one. */
@@ -305,6 +461,98 @@ export async function previewPolicy(
   return { records: ids.length, levels: out };
 }
 
+/** Writes steps to the matrix log (RFC 0027 §2.5). */
+async function logEvents(
+  su: Env,
+  events: readonly {
+    request: number;
+    kind: string;
+    user?: number | null;
+    note?: string | null;
+    at?: Date;
+  }[],
+): Promise<void> {
+  if (events.length === 0) return;
+  const at = new Date();
+  await ref(su, 'approval.event').create(
+    events.map((e) => ({
+      request: e.request,
+      kind: e.kind,
+      user: e.user ?? null,
+      note: e.note === undefined || e.note === '' ? null : e.note,
+      at: e.at ?? at,
+    })),
+  );
+}
+
+/**
+ * Starts the levels whose turn it is and that have not started: `startedAt` now, the deadline counted from it
+ * (RFC 0027 §2.5), logged.
+ */
+async function startTurn(su: Env, model: string, id: number, now: Date): Promise<void> {
+  const turn = (await turnOf(su, model, id)).filter((r) => r.startedAt === null);
+  if (turn.length === 0) return;
+  const rows = await find(su, 'approval.request', { id: { in: turn.map((r) => r.id) } }, ['level']);
+  const levelIds = rows.map((r) => r['level']).filter((l): l is number => typeof l === 'number');
+  const levels =
+    levelIds.length === 0
+      ? []
+      : await find(su, 'approval.level', { id: { in: levelIds } }, ['deadlineHours']);
+  const hours = new Map(levels.map((l) => [l['id'] as number, Number(l['deadlineHours'] ?? 0)]));
+  for (const row of rows) {
+    const h = typeof row['level'] === 'number' ? (hours.get(row['level'] as number) ?? 0) : 0;
+    await ref(su, 'approval.request')
+      .browse([row['id'] as number])
+      .write({
+        startedAt: now,
+        ...(h > 0 ? { dueAt: new Date(now.getTime() + h * 3_600_000) } : {}),
+      });
+  }
+  await logEvents(
+    su,
+    turn.map((r) => ({ request: r.id, kind: 'started', at: now })),
+  );
+}
+
+/** The matrix log of a record's requests, when `env` may read the record. */
+export async function eventsOf(
+  env: Env,
+  model: string,
+  id: number,
+): Promise<
+  {
+    id: number;
+    request: number;
+    at: string;
+    user: number | null;
+    kind: string;
+    note: string | null;
+  }[]
+> {
+  await ref(env, model).browse([id]).load(['id']); // as the caller: ACL and rules decide
+  return env.asSuperuser({ reason: 'approval log' }, async (su) => {
+    const requests = await find(su, 'approval.request', { targetModel: model, targetId: id }, [
+      'id',
+    ]);
+    if (requests.length === 0) return [];
+    const rows = await find(
+      su,
+      'approval.event',
+      { request: { in: requests.map((r) => r['id']) } },
+      ['request', 'at', 'user', 'kind', 'note'],
+      ['at asc', 'id asc'],
+    );
+    return rows.map((r) => ({
+      id: r['id'] as number,
+      request: r['request'] as number,
+      at: r['at'] instanceof Date ? r['at'].toISOString() : String(r['at']),
+      user: (r['user'] as number | null) ?? null,
+      kind: String(r['kind']),
+      note: (r['note'] as string | null) ?? null,
+    }));
+  });
+}
+
 export async function requestApprovals(records: unknown): Promise<number> {
   const { env, modelName, ids } = records as {
     env: Env;
@@ -318,7 +566,18 @@ export async function requestApprovals(records: unknown): Promise<number> {
       const stale = await ref(su, 'approval.request').search({
         where: { targetModel: modelName, targetId: id, state: 'pending' },
       });
-      if (stale.length > 0) await stale.write({ state: 'cancelled' });
+      if (stale.length > 0) {
+        await stale.write({ state: 'cancelled' });
+        await logEvents(
+          su,
+          stale.ids.map((request) => ({
+            request,
+            kind: 'cancelled',
+            user: requester,
+            note: 'Submitted again.',
+          })),
+        );
+      }
       const [last] = await find(
         su,
         'approval.request',
@@ -332,7 +591,7 @@ export async function requestApprovals(records: unknown): Promise<number> {
         su,
         'approval.policy',
         { targetModel: modelName, or: [{ company: null }, { company }] },
-        ['name', 'condition'],
+        ['name', 'condition', 'whenNobody'],
         ['sequence asc', 'id asc'],
       );
       const rows: Row[] = [];
@@ -350,6 +609,7 @@ export async function requestApprovals(records: unknown): Promise<number> {
             'approverKind',
             'approverRole',
             'approverUsers',
+            'extraUsers',
             'approverField',
             'quorum',
             'quorumCount',
@@ -360,6 +620,16 @@ export async function requestApprovals(records: unknown): Promise<number> {
         for (const level of levels) {
           if (!(await matches(su, modelName, id, level['condition'] as Row | null))) continue;
           const who = await approversOf(su, level, { model: modelName, id, company }, requester);
+          const whenNobody = String(policy['whenNobody'] ?? 'refuse');
+          if (who.nobody && whenNobody === 'refuse')
+            refuse(
+              422,
+              'no-approver',
+              'Nobody to approve',
+              `Nobody can decide the level “${String(level['name'])}” of “${String(policy['name'])}”. ${who.explanation.join(' ')}`,
+              'Set who approves (Workforce: the manager or the department), or change the approval policy.',
+            );
+          const skipped = who.nobody && whenNobody === 'skip';
           rows.push({
             policy: policy['id'],
             level: level['id'],
@@ -372,16 +642,36 @@ export async function requestApprovals(records: unknown): Promise<number> {
             approvers: { set: who.approvers },
             required: who.required,
             round,
-            ...(typeof level['deadlineHours'] === 'number' && level['deadlineHours'] > 0
-              ? { dueAt: new Date(Date.now() + (level['deadlineHours'] as number) * 3_600_000) }
-              : {}),
+            explanation: [
+              ...who.explanation,
+              ...(skipped ? ['Nobody could decide: the level is skipped.'] : []),
+            ].join(' '),
+            ...(skipped ? { state: 'approved', decidedAt: new Date() } : {}),
             requestedBy: requester,
           });
         }
       }
       if (rows.length === 0) continue;
-      await ref(su, 'approval.request').create(rows);
+      const made = await ref(su, 'approval.request').create(rows);
       created += rows.length;
+      const now = new Date();
+      await logEvents(
+        su,
+        made.ids.map((request, i) => ({
+          request,
+          kind: rows[i]?.['state'] === 'approved' ? 'skipped' : 'created',
+          user: requester,
+          note: String(rows[i]?.['explanation'] ?? ''),
+          at: now,
+        })),
+      );
+      await startTurn(su, modelName, id, now);
+      // Every level skipped (nobody to ask, the policy says skip): approved now.
+      if (rows.every((r) => r['state'] === 'approved'))
+        for (const pid of new Set(rows.map((r) => r['policy'] as number))) {
+          const [policy] = await find(su, 'approval.policy', { id: pid }, ['onApproved']);
+          await runTransition(su, { model: modelName, id }, policy?.['onApproved']);
+        }
       await audit(su, {
         kind: 'approval.requested',
         summary: `${rows.length} approval(s) requested for ${modelName} ${id}.`,
@@ -657,12 +947,33 @@ export async function decide(
           ? {}
           : { decidedBy: actor, decidedAt: new Date(), comment: text === '' ? null : text }),
       });
+    await logEvents(su, [
+      {
+        request: request.id,
+        kind: state === 'pending' ? 'voted' : state,
+        user: actor,
+        note:
+          [onBehalfOf === null ? '' : `For user ${onBehalfOf}.`, text]
+            .filter((x) => x !== '')
+            .join(' ') || null,
+      },
+    ]);
     if (state === 'rejected' || state === 'sent_back') {
       const open = round
         .filter((r) => r.id !== request.id && r.state === 'pending')
         .map((r) => r.id);
-      if (open.length > 0)
+      if (open.length > 0) {
         await ref(su, 'approval.request').browse(open).write({ state: 'cancelled' });
+        await logEvents(
+          su,
+          open.map((id) => ({
+            request: id,
+            kind: 'cancelled',
+            user: actor,
+            note: `${request.levelName} ${state === 'rejected' ? 'rejected' : 'sent back'}.`,
+          })),
+        );
+      }
     }
     const done =
       state === 'rejected' ||
@@ -684,6 +995,7 @@ export async function decide(
         ip: from?.ip ?? null,
       },
     });
+    if (state === 'approved' && !done) await startTurn(su, target.model, target.id, new Date());
     await su.emit('approval.decided', { ...target, request: request.id, state, final: done });
     if (done && policy !== undefined) {
       const key =
@@ -733,6 +1045,10 @@ export async function withdraw(env: Env, model: string, id: number): Promise<num
     await ref(su, 'approval.request')
       .browse(pending.map((r) => r.id))
       .write({ state: 'cancelled' });
+    await logEvents(
+      su,
+      pending.map((r) => ({ request: r.id, kind: 'cancelled', user: actor, note: 'Withdrawn.' })),
+    );
     await audit(su, {
       kind: 'approval.withdrawn',
       summary: `Approvals withdrawn for ${model} ${id}.`,
@@ -1086,11 +1402,12 @@ export async function sweepDeadlines(
     'remindedAt',
     'escalatedTo',
     'createdAt',
+    'startedAt',
     'level',
   ]);
   for (const row of rows) {
     const due = new Date(row['dueAt'] as Date).getTime();
-    const start = new Date(row['createdAt'] as Date).getTime();
+    const start = new Date((row['startedAt'] ?? row['createdAt']) as Date).getTime();
     const [request] = await loadRequests(su, { id: row['id'] }, ['id asc']);
     if (request === undefined) continue;
     if (now.getTime() >= due && (row['escalatedTo'] ?? null) === null) {
@@ -1117,6 +1434,7 @@ export async function sweepDeadlines(
           targetId: request.targetId,
           details: { request: request.id, role },
         });
+        await logEvents(su, [{ request: request.id, kind: 'escalated', note: role, at: now }]);
         await su.emit('approval.escalated', { request: request.id, role });
         out.push({ kind: 'escalated', request: { ...request, escalatedTo: role } });
         continue;
@@ -1124,6 +1442,7 @@ export async function sweepDeadlines(
     }
     if ((row['remindedAt'] ?? null) === null && now.getTime() >= start + (due - start) / 2) {
       await ref(su, 'approval.request').browse([request.id]).write({ remindedAt: now });
+      await logEvents(su, [{ request: request.id, kind: 'reminded', at: now }]);
       out.push({ kind: 'reminded', request });
     }
   }

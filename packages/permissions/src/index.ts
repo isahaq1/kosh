@@ -25,6 +25,7 @@ export {
   type Decision,
   decide,
   decidersOf,
+  eventsOf,
   groupsOf,
   inbox,
   installApprovalPolicies,

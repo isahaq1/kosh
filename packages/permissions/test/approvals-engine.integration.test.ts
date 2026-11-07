@@ -175,7 +175,7 @@ describe('a manager level without Workforce', () => {
 });
 
 describe('levels name their approvers', () => {
-  test('people without anyone, a field without its name, a number without the number: refused', async () => {
+  test('people without anyone, a field without its name, a role without its role, a number without the number: refused', async () => {
     const [policy] = (
       await t.call({ url: '/api/v1/models/approval.policy?fields=id&limit=1', as: 'admin' })
     ).json().items;
@@ -183,7 +183,7 @@ describe('levels name their approvers', () => {
       { approverKind: 'users' },
       { approverKind: 'field', approverRole: 'purchase.approver' },
       { approverRole: 'purchase.approver', quorum: 'count' },
-      { approverKind: 'manager' },
+      { approverKind: 'role' },
     ]) {
       const res = await t.call({
         method: 'POST',

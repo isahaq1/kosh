@@ -18,6 +18,7 @@ import {
   approvalStats,
   approveMany,
   decide,
+  eventsOf,
   inbox,
   requestsOf,
   withdraw,
@@ -51,9 +52,15 @@ export function registerApprovalRoutes({ app }: ModuleContext): void {
   app.get('/api/v1/approvals/:model/:id', async (request) => {
     const { model, id } = request.params as { model: string; id: string };
     const recordId = positive(id, 'id');
-    return request.env(async (env) => ({ requests: await requestsOf(env, model, recordId) }), {
-      write: true, // reads through audited system scopes
-    });
+    return request.env(
+      async (env) => ({
+        requests: await requestsOf(env, model, recordId),
+        events: await eventsOf(env, model, recordId),
+      }),
+      {
+        write: true, // reads through audited system scopes
+      },
+    );
   });
   for (const [path, decision] of [
     ['approve', 'approve'],

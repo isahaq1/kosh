@@ -22,7 +22,24 @@ interface Request {
   readonly state: State;
   readonly requestedBy: number | null;
   readonly comment: string | null;
+  readonly startedAt: string | null;
+  readonly decidedAt: string | null;
+  readonly explanation: string | null;
 }
+interface Event {
+  readonly id: number;
+  readonly request: number;
+  readonly at: string;
+  readonly kind: string;
+  readonly note: string | null;
+}
+
+/** Whole hours between two instants (to now when `to` is null). */
+const hoursBetween = (from: string, to: string | null): number =>
+  Math.max(
+    0,
+    Math.round(((to === null ? Date.now() : Date.parse(to)) - Date.parse(from)) / 3_600_000),
+  );
 
 const TONE = {
   pending: 'warning',
@@ -39,8 +56,14 @@ const DOT: Record<State, string> = {
   cancelled: 'border-muted-foreground bg-muted',
 };
 
-function Round({ requests }: { readonly requests: readonly Request[] }): ReactElement {
-  const { t } = useTranslation('approvalPanel');
+function Round({
+  requests,
+  events = [],
+}: {
+  readonly requests: readonly Request[];
+  readonly events?: readonly Event[];
+}): ReactElement {
+  const { t, i18n } = useTranslation('approvalPanel');
   return (
     <ol className="grid gap-3">
       {requests.map((r) => (
@@ -63,6 +86,28 @@ function Round({ requests }: { readonly requests: readonly Request[] }): ReactEl
               <span className="text-xs text-muted-foreground">{r.approverRole}</span>
             )}
             {r.comment === null ? null : <span className="text-xs">“{r.comment}”</span>}
+            {r.state === 'pending' && r.startedAt !== null ? (
+              <span className="text-xs text-muted-foreground">
+                {t('since', { hours: hoursBetween(r.startedAt, null) })}
+              </span>
+            ) : null}
+            {r.explanation === null && !events.some((e) => e.request === r.id) ? null : (
+              <details className="text-xs text-muted-foreground">
+                <summary className="cursor-pointer">{t('how')}</summary>
+                {r.explanation === null ? null : <p className="mt-1">{r.explanation}</p>}
+                <ul className="mt-1 grid gap-0.5" aria-label={t('log')}>
+                  {events
+                    .filter((e) => e.request === r.id)
+                    .map((e) => (
+                      <li key={e.id}>
+                        <time dateTime={e.at}>{new Date(e.at).toLocaleString(i18n.language)}</time>{' '}
+                        · {t(`event.${e.kind}`)}
+                        {e.note === null || e.kind === 'created' ? '' : ` — ${e.note}`}
+                      </li>
+                    ))}
+                </ul>
+              </details>
+            )}
           </span>
         </li>
       ))}
@@ -85,7 +130,10 @@ export function ApprovalPanel({
   const requests = useQuery({
     queryKey: ['approvals', model, recordId, version],
     queryFn: () =>
-      api.call<{ requests: Request[] }>('GET', `/api/v1/approvals/${model}/${recordId}`),
+      api.call<{ requests: Request[]; events?: Event[] }>(
+        'GET',
+        `/api/v1/approvals/${model}/${recordId}`,
+      ),
     enabled: recordId !== undefined,
   });
   const inbox = useQuery({
@@ -137,7 +185,7 @@ export function ApprovalPanel({
       {current.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t('withdrawn')}</p>
       ) : (
-        <Round requests={current} />
+        <Round requests={current} events={requests.data?.events ?? []} />
       )}
       {earlier.length === 0 ? null : (
         <details className="mt-3 text-sm">
