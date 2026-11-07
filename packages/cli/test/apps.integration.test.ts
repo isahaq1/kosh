@@ -162,3 +162,29 @@ test('asking: no applies nothing; unknown apps and uninstall are refused', async
   expect(base.text).toContain('base cannot be disabled');
   expect((await run('apps', 'uninstall', 'shelf')).code).toBe(2);
 });
+
+test('uninstall --remove-data: the name typed back, then the app and its data go; a wrong name changes nothing', async () => {
+  const typing = (answer: string): Prompter => ({
+    ask: async () => answer,
+    confirm: async () => true,
+    close: () => {},
+  });
+  const out: string[] = [];
+  const io = (answer: string) => ({
+    write: (t: string) => out.push(t),
+    cwd: dir,
+    prompter: typing(answer),
+  });
+  expect(await runApps(['uninstall', 'shelf', '--remove-data'], io('shelves'))).toBe(1);
+  expect(await query("SELECT to_regclass('public.library_shelf')::text AS t")).toEqual([
+    { t: 'library_shelf' },
+  ]);
+  expect(await runApps(['uninstall', 'shelf', '--remove-data'], io('shelf'))).toBe(0);
+  const text = out.join('');
+  expect(text).toContain('uninstall, data removed');
+  expect(text).toContain('uninstalled shelf');
+  expect(await query("SELECT to_regclass('public.library_shelf')::text AS t")).toEqual([
+    { t: null },
+  ]);
+  expect(await query("SELECT name FROM kosh_module WHERE name = 'shelf'")).toEqual([]);
+});

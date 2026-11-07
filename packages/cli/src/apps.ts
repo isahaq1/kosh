@@ -31,10 +31,14 @@ export const APPS_USAGE: string = `Usage: shutro-erp apps [command] [app …] [o
                                 (apps that depend on them are disabled too)
   shutro-erp apps upgrade [app …]     move installed apps to their code's version: schema, data migrations,
                                 seed data (default: every app whose code is newer)
+  shutro-erp apps uninstall <app …> --remove-data
+                                remove apps and their data for good (apps that depend on them too);
+                                a snapshot is kept for 30 days — to keep the data, disable instead
 
 Options:
   --plan              only show the plan
-  --remove-data       an upgrade may drop the columns and tables its code no longer has
+  --remove-data       an upgrade may drop the columns and tables its code no longer has; an uninstall
+                      removes the apps' data (required)
   --yes               apply without asking
   --modules <file>    the catalogue (default src/modules.ts)
   --dir <dir>         migration files (default migrations)
@@ -138,6 +142,14 @@ function showPlan(ui: Ui, prepared: PreparedApps, catalogue: readonly KoshModule
     ui.write(
       `  ${ui.style('cyan', ui.terminal.unicode ? '⇧' : '^')} ${iconOf(ui, u.name)}  ${u.name.padEnd(width)}  ${ui.style('gray', u.to.padEnd(8))} upgrade from ${u.from}\n`,
     );
+  for (const r of plan.uninstall)
+    ui.write(
+      `  ${ui.style('red', u ? '✕' : 'x')} ${iconOf(ui, r.name)}  ${r.name.padEnd(width)}  ${' '.repeat(8)} uninstall, data removed${r.cascade ? ui.style('gray', ' (it depends on an app removed)') : ''}\n`,
+    );
+  for (const d of prepared.drops)
+    ui.detail(
+      `deletes ${d.column === null ? d.table : `${d.table}.${d.column}`}: ${d.rows} row(s)`,
+    );
   for (const name of plan.unchanged) ui.detail(`${name}: already so`);
   if (prepared.allowDestructive && migration.destructive.length > 0)
     ui.warn(`removes data: ${migration.destructive.length} column(s) or table(s) dropped`);
@@ -172,10 +184,10 @@ export async function runApps(argv: readonly string[], io: AppsIo): Promise<numb
     io.write(APPS_USAGE);
     return 2;
   }
-  if (command === 'uninstall') {
-    ui.warn('Removing an app and its data comes with a later step of RFC 0008.');
+  if (command === 'uninstall' && values['remove-data'] !== true) {
+    ui.warn('Uninstalling removes the apps and their data for good.');
     ui.info(
-      `Meanwhile: shutro-erp apps disable ${names.join(' ') || '<app>'} (reversible, keeps the data).`,
+      `Add --remove-data to go ahead, or keep the data: shutro-erp apps disable ${names.join(' ') || '<app>'}.`,
     );
     return 2;
   }
@@ -237,7 +249,19 @@ export async function runApps(argv: readonly string[], io: AppsIo): Promise<numb
     if (values.plan === true) return 0;
     ui.write('\n');
     ui.pause();
-    const go = values.yes === true || (await prompter.confirm('Apply this change?', true));
+    // Removing data: the apps' names typed back (unless --yes); a snapshot is kept for 30 days.
+    const typed =
+      command !== 'uninstall' || values.yes === true
+        ? true
+        : (
+            await prompter.ask({
+              message: `Type ${targets.join(' ')} to remove the data for good`,
+            })
+          ).trim() === targets.join(' ');
+    const go =
+      typed &&
+      (values.yes === true ||
+        (await prompter.confirm('Apply this change?', command !== 'uninstall')));
     ui.resume();
     if (!go) {
       ui.info('Nothing changed.');
@@ -275,6 +299,7 @@ export async function runApps(argv: readonly string[], io: AppsIo): Promise<numb
       ...result.enabled.map((n) => `enabled ${n}`),
       ...result.disabled.map((n) => `disabled ${n}`),
       ...result.upgraded.map((n) => `upgraded ${n}`),
+      ...result.uninstalled.map((n) => `uninstalled ${n}`),
     ];
     ui.card(`${ui.terminal.emoji ? '🧩 ' : ''}Apps changed`, [
       ['Changes', done.join(', ')],
@@ -284,6 +309,12 @@ export async function runApps(argv: readonly string[], io: AppsIo): Promise<numb
           ? 'none'
           : `migrations/${result.migration.version}_${result.migration.name}.sql`,
       ],
+      ...(result.snapshot === null
+        ? []
+        : ([['Snapshot', `kosh_app_snapshot #${result.snapshot}, kept 30 days`]] as [
+            string,
+            string,
+          ][])),
       ['Next', 'restart the API (npm start) to serve the new set'],
     ]);
     return 0;
