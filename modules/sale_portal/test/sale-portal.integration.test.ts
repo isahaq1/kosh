@@ -379,3 +379,34 @@ test('the quotation prints as a PDF for its customer only', async () => {
     (await call('GET', `/api/portal/v1/documents/quotations/${orders['a']}/pdf`, BINA)).status,
   ).toBe(404);
 }, 60_000);
+
+test('optional products: the customer sees what is on offer and adds it before signing, once (RFC 0028 §3.5)', async () => {
+  const lines = (
+    await call(
+      'GET',
+      `/api/v1/models/sale.order.line?fields=product&filter=${encodeURIComponent(JSON.stringify({ order: orders['c'] }))}`,
+      'maria',
+    )
+  ).json.items as { product: number }[];
+  const offered = await call('POST', '/api/v1/models/sale.order.option', 'maria', {
+    order: orders['c'],
+    product: lines[0]?.product,
+    name: 'Spare bag',
+    quantity: '2',
+    priceUnit: '900',
+  });
+  expect(offered.status, JSON.stringify(offered.json)).toBe(201);
+  const option = offered.json.id as number;
+  const path = `/api/portal/v1/documents/quotations/${orders['c']}`;
+  const doc = await call('GET', path, BINA);
+  expect(doc.json).toMatchObject({ optionsOpen: true });
+  expect(doc.json.options.map((o: { name: string }) => o.name)).toEqual(['Spare bag']);
+  // Not hers: another customer's quotation.
+  expect((await call('POST', `${path}/options/${option}/add`, RINA)).status).toBe(404);
+  const added = await call('POST', `${path}/options/${option}/add`, BINA);
+  expect(added.status, JSON.stringify(added.json)).toBe(200);
+  const after = await call('GET', path, BINA);
+  expect(after.json.options).toEqual([]);
+  expect(after.json.lines.map((l: { name: string }) => l.name)).toEqual(['Jute bag', 'Spare bag']);
+  expect((await call('POST', `${path}/options/${option}/add`, BINA)).status).toBe(409);
+});

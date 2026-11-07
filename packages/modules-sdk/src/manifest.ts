@@ -222,6 +222,18 @@ export interface PortalDocumentSpec {
   readonly fields: readonly string[];
   /** Its lines: a one2many and the fields of each line. */
   readonly lines?: { readonly field: string; readonly fields: readonly string[] };
+  /**
+   * Optional items the user may add (RFC 0028 §3.5: a quotation's optional products): a one2many, the fields shown,
+   * which items are on offer (a domain on them), when the document takes them (a domain on it), and the item's
+   * transition that adds it — run as the system once the portal checked the document is the user's.
+   */
+  readonly options?: {
+    readonly field: string;
+    readonly fields: readonly string[];
+    readonly offered: Readonly<Record<string, unknown>>;
+    readonly when: Readonly<Record<string, unknown>>;
+    readonly add: string;
+  };
   /** A document template (`module.key`, RFC 0005) printed as the PDF. */
   readonly pdf?: string;
   readonly actions?: readonly PortalActionSpec[];

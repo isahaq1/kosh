@@ -179,6 +179,10 @@ export function Document(): ReactElement {
     queryFn: () => api.call<DocumentView>('GET', path),
     retry: false,
   });
+  const addOption = useMutation({
+    mutationFn: (option: number) => api.call('POST', `${path}/options/${option}/add`, {}),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['portal'] }),
+  });
   const pdf = useMutation({
     mutationFn: async () => {
       const { blob, filename } = await api.download(`${path}/pdf`, undefined, 'GET');
@@ -265,6 +269,43 @@ export function Document(): ReactElement {
               </tbody>
             </table>
           </div>
+        </Card>
+      )}
+      {view.data.optionFields === undefined ||
+      view.data.options === undefined ||
+      view.data.options.length === 0 ? null : (
+        <Card className="grid gap-2 p-4">
+          <h2 className="font-semibold">{t('options')}</h2>
+          <p className="text-sm text-muted-foreground">
+            {view.data.optionsOpen === true ? t('optionsHint') : t('optionsClosed')}
+          </p>
+          <ul className="grid gap-2">
+            {view.data.options.map((option) => (
+              <li
+                key={option.id}
+                className="flex flex-wrap items-center justify-between gap-2 border-b pb-2 last:border-0"
+              >
+                <span className="flex flex-wrap gap-3 text-sm">
+                  {(view.data.optionFields ?? []).map((f) => (
+                    <span key={f.key}>
+                      <Value field={f} value={option[f.key]} />
+                    </span>
+                  ))}
+                </span>
+                {view.data.optionsOpen === true ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    busy={addOption.isPending && addOption.variables === option.id}
+                    onClick={() => addOption.mutate(option.id as number)}
+                  >
+                    {t('addOption')}
+                  </Button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+          {addOption.error === null ? null : <Alert>{addOption.error.message}</Alert>}
         </Card>
       )}
       {view.data.thread ? <Thread path={path} /> : null}

@@ -49,6 +49,14 @@ export const salePortal: ReturnType<typeof defineModule> = defineModule({
           field: 'lines',
           fields: ['product', 'name', 'quantity', 'priceUnit', 'discount', 'subtotal'],
         },
+        // Optional products the customer adds before signing (RFC 0028 §3.5).
+        options: {
+          field: 'options',
+          fields: ['product', 'name', 'quantity', 'priceUnit'],
+          offered: { state: 'offered' },
+          when: { state: 'sent' },
+          add: 'add',
+        },
         pdf: 'sales.quotation',
         actions: [
           {

@@ -141,6 +141,22 @@ export function registerPortalDocumentRoutes(context: ModuleContext): void {
         });
     return out;
   };
+  /** The optional items on offer and whether the document takes them now (RFC 0028 §3.5). */
+  const optionsOf = async (su: Env, d: PortalDocument, id: number) => {
+    const spec = d.spec.options;
+    if (spec === undefined || d.optionModel === null || d.optionParent === null) return {};
+    const offered = await ref(su, d.optionModel.name).search({
+      where: { and: [{ [d.optionParent]: id }, spec.offered] },
+    });
+    const open =
+      (await ref(su, d.model.name).search({ where: { and: [{ id }, spec.when] }, limit: 1 }))
+        .length > 0;
+    return {
+      optionFields: meta(d.optionModel, spec.fields),
+      options: await values(su, d.optionModel, offered.ids, spec.fields),
+      optionsOpen: open,
+    };
+  };
   /** The document as the user sees it: what a signature's hash covers. */
   const documentOfRecord = async (su: Env, d: PortalDocument, id: number) => {
     const [record] = await values(su, d.model, [id], d.spec.fields);
@@ -252,6 +268,7 @@ export function registerPortalDocumentRoutes(context: ModuleContext): void {
           ? {}
           : { lineFields: meta(d.lineModel, d.spec.lines.fields), lines }),
         actions: await available(su, d, id),
+        ...(await optionsOf(su, d, id)),
         payable:
           d.spec.payment !== undefined &&
           (
@@ -408,6 +425,91 @@ export function registerPortalDocumentRoutes(context: ModuleContext): void {
             },
           );
           return { status: 200, body: { done: key } };
+        }),
+      { write: true },
+    );
+    return reply.status(outcome.status).send(outcome.body);
+  });
+
+  // `POST /api/portal/v1/documents/:key/:id/options/:option/add`: the user adds an optional item to their document
+  // while it takes them (RFC 0028 §3.5) — checked as the user, added as the system, on the thread and audited.
+  app.post('/api/portal/v1/documents/:key/:id/options/:option/add', async (request, reply) => {
+    const d = documentOf(request.params);
+    const id = idOf(request.params);
+    const option = Number((request.params as Row)['option']);
+    const spec = d.spec.options;
+    if (spec === undefined || d.optionModel === null || d.optionParent === null)
+      throw new HttpProblem(404, 'not-found', 'No options', `${d.spec.label} have no options.`);
+    if (!Number.isSafeInteger(option) || option <= 0)
+      throw new HttpProblem(404, 'not-found', 'No such option', 'No such option.');
+    const optionModel = d.optionModel.name;
+    const parent = d.optionParent;
+    const outcome = await request.env(
+      (env) =>
+        idempotent(request, env, driver, async () => {
+          portalOnly(env);
+          await mine(env, d, id);
+          const who = await env.asSuperuser({ reason: 'portal option' }, async (su) => {
+            const open =
+              (
+                await ref(su, d.model.name).search({
+                  where: { and: [{ id }, spec.when] },
+                  limit: 1,
+                })
+              ).length > 0;
+            const onOffer =
+              (
+                await ref(su, optionModel).search({
+                  where: { and: [{ id: option, [parent]: id }, spec.offered] },
+                  limit: 1,
+                })
+              ).length > 0;
+            if (!open || !onOffer)
+              throw new HttpProblem(
+                409,
+                'not-available',
+                'Not possible any more',
+                'This option cannot be added to this document now.',
+              );
+            const [user] = (
+              await ref(su, 'res.users').browse([env.uid]).load(['login', 'name'])
+            ).read(['login', 'name']);
+            const [item] = (await ref(su, optionModel).browse([option]).load(['displayName'])).read(
+              ['displayName'],
+            );
+            return {
+              login: String(user?.['login'] ?? ''),
+              name: String(user?.['name'] ?? ''),
+              item: String(item?.['displayName'] ?? `#${option}`),
+            };
+          });
+          await context.shutro.bootstrap(
+            { reason: `portal ${d.spec.key} option by ${who.login}`, company: env.companyId },
+            async (su) => {
+              const target = ref(su, optionModel).browse([option]) as unknown as Record<
+                string,
+                () => Promise<void>
+              >;
+              await (target[spec.add] as () => Promise<void>).call(target);
+              await postExternalMessage(su, chatter, d.model.name, id, {
+                text: `${who.name} added “${who.item}” in the portal.`,
+                authorEmail: who.login,
+                authorName: who.name,
+              });
+              await audit(su, {
+                kind: 'portal.option',
+                summary: `${who.name} (${who.login}) added ${who.item} to ${d.model.name} #${id} in the portal.`,
+                actor: env.uid,
+                company: env.companyId,
+                targetModel: d.model.name,
+                targetId: id,
+                details: { option },
+                ip: request.ip,
+              });
+              await su.flush();
+            },
+          );
+          return { status: 200, body: { added: option } };
         }),
       { write: true },
     );

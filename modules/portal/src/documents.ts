@@ -13,6 +13,9 @@ export interface PortalDocument {
   readonly model: ApiModel;
   /** The lines' model, when the document has lines. */
   readonly lineModel: ApiModel | null;
+  /** The optional items' model and the field that points back at the document, when it has options. */
+  readonly optionModel: ApiModel | null;
+  readonly optionParent: string | null;
 }
 
 const fail = (key: string, problem: string, hint: string): never => {
@@ -78,6 +81,34 @@ export function portalDocuments(registry: KoshRegistry): ReadonlyMap<string, Por
           if (!(lineModel as ApiModel).byKey.has(field))
             fail(key, `${lines?.target} has no field '${field}'.`, 'Declare existing line fields.');
       }
+      let optionModel: ApiModel | null = null;
+      let optionParent: string | null = null;
+      if (spec.options !== undefined) {
+        const options = m.byKey.get(spec.options.field);
+        if (options?.kind !== 'one2many' || options.target === null)
+          fail(key, `'${spec.options.field}' is not a one2many.`, 'Name the options field.');
+        optionModel = models.get(options?.target ?? '') ?? null;
+        if (optionModel === null)
+          fail(key, `the options' model ${options?.target} is not served.`, 'Use a served model.');
+        const om = optionModel as ApiModel;
+        for (const field of spec.options.fields)
+          if (!om.byKey.has(field))
+            fail(key, `${om.name} has no field '${field}'.`, 'Declare existing option fields.');
+        if (!om.transitions.includes(spec.options.add))
+          fail(
+            key,
+            `${om.name} has no transition '${spec.options.add}'.`,
+            'Name the transition that adds an option.',
+          );
+        optionParent =
+          om.fields.find((f) => f.kind === 'many2one' && f.target === spec.model)?.key ?? null;
+        if (optionParent === null)
+          fail(
+            key,
+            `${om.name} has no many2one to ${spec.model}.`,
+            'Options point at their document.',
+          );
+      }
       for (const action of spec.actions ?? [])
         if (!m.transitions.includes(action.transition))
           fail(
@@ -91,7 +122,7 @@ export function portalDocuments(registry: KoshRegistry): ReadonlyMap<string, Por
           `no document template '${spec.pdf}'.`,
           'Name a template a module ships (module.key).',
         );
-      out.set(key, { spec, model: m, lineModel });
+      out.set(key, { spec, model: m, lineModel, optionModel, optionParent });
     }
   return out;
 }
