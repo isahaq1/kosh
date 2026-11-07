@@ -150,3 +150,8 @@ inbox and the policy form, docs/approvals.md (new; today the engine is in docs/p
   subscriber on the level's change events, and "Sync waiting requests" on the policy. A write of many-to-many fields
   alone emitted no change event: Shutro request #35, fixed in Shutro 0.3.5. The cost-centre approvers wait for a
   cost centre on the records approved (purchase orders carry it on their lines only).
+- **Step 3 (2026-11-07).** `res.segment` (name, code, its companies — a many-to-many held by the segment, so
+  Approvals managers manage segments without writing companies; a company in one active segment at most). Policies
+  keep `company` and gain `companies` and `segment`: covered together, none for every company — no migration, every
+  existing policy unchanged. Every covering policy applies (Kosh's rule since RFC 0003) rather than a company's own
+  overriding the segment's: conditions or archiving decide, and the preview names the companies covered.

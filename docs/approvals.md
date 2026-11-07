@@ -75,6 +75,14 @@ it is. This runs after the change is saved, from the level's change events; **Sy
 brings them in step at any time
 (`POST /api/v1/approvals/policies/:id/sync` `{ mode? }`).
 
+## Which companies a policy covers
+
+A policy covers its **Company**, its **Companies** and every company of its **Segment** together; with all three
+empty it covers every company. A segment (Approvals › Configuration › Segments) is a group of companies — Feed,
+Poultry, Dairy — managed by Approvals managers; a company is in one segment at most. Every policy that covers the
+record's company and whose condition it meets applies, so a segment-wide policy and a company's own can stand side
+by side (give them conditions, or archive one). The policy's preview says which companies it covers.
+
 ## Next (RFC 0027)
 
-Policies by several companies or a segment; the matrix dashboard.
+The matrix dashboard (step 4).
