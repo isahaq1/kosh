@@ -62,7 +62,10 @@ import {
 } from './payments.js';
 import {
   AccountBankStatement,
+  AccountReconcileRule,
+  applyRules,
   type CsvMapping,
+  dryRunRule,
   importStatement,
   matchLine,
   parseCamt,
@@ -70,6 +73,7 @@ import {
   parseOfx,
   proposalsFor,
   pullFeed,
+  undoLine,
   writeOffLine,
 } from './statements.js';
 
@@ -148,9 +152,12 @@ export {
   type WithholdingProposal,
 } from './payments.js';
 export {
+  AccountReconcileRule,
+  applyRules,
   type BankFeed,
   bankFeed,
   type CsvMapping,
+  dryRunRule,
   importStatement,
   matchLine,
   type Proposal,
@@ -162,6 +169,7 @@ export {
   registerBankFeed,
   type StatementRow,
   testBankFeed,
+  undoLine,
   writeOffLine,
 } from './statements.js';
 
@@ -268,6 +276,11 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
         model: 'account.bank.statement',
         reason:
           'Imported by its own CSV / OFX / CAMT import (Accounting › Reconcile bank), or pulled from a feed.',
+      },
+      {
+        rule: 'I1',
+        model: 'account.reconcile.rule',
+        reason: 'A handful per company, set up on screen with its dry run.',
       },
       {
         rule: 'I1',
@@ -565,6 +578,10 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       label: 'Settings',
       visibleTo: ['account.manager'],
     },
+    'accounting.action_reconcile_rules': action(AccountReconcileRule, {
+      label: 'Reconciliation rules',
+      views: ['list', 'form'],
+    }),
     'accounting.action_payment_terms': action(AccountPaymentTerm, {
       label: 'Payment terms',
       views: ['list', 'form'],
@@ -781,6 +798,13 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       label: 'Payment terms',
       action: 'accounting.action_payment_terms',
       sequence: 5,
+    },
+    {
+      id: 'accounting.reconcile_rules',
+      parent: 'accounting.configuration',
+      label: 'Reconciliation rules',
+      action: 'accounting.action_reconcile_rules',
+      sequence: 6,
     },
   ],
   // What webhooks may subscribe to besides record changes (RFC 0017 §5.3).
@@ -1211,6 +1235,26 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       ],
       chatter: true,
     })),
+    'account.reconcile.rule.list': list(AccountReconcileRule, {
+      columns: ['sequence', 'name', 'direction', 'labelContains', 'outcome', 'hits'],
+    }),
+    'account.reconcile.rule.form': form(AccountReconcileRule, (k) => ({
+      header: { buttons: [] },
+      sheet: [
+        k.group('main', ['name', 'sequence', 'company'], {
+          description:
+            'Rules run in order on every imported line; the first that applies wins. Try one with its dry run from Reconcile bank.',
+        }),
+        k.group(
+          'when',
+          ['journals', 'direction', 'labelContains', 'amountMin', 'amountMax', 'partner'],
+          {
+            label: 'When',
+          },
+        ),
+        k.group('then', ['outcome', 'writeOffAccount', 'writeOffLabel', 'hits'], { label: 'Then' }),
+      ],
+    })),
     'account.move.invoice.list': list(AccountMove, {
       columns: [
         'name',
@@ -1541,6 +1585,10 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       groupBy: ['journal', 'state'],
     }),
     'account.payment.term': search(AccountPaymentTerm, { fields: ['name'] }),
+    'account.reconcile.rule': search(AccountReconcileRule, {
+      fields: ['name', 'labelContains'],
+      groupBy: ['outcome', 'direction'],
+    }),
     'account.journal': search(AccountJournal, { fields: ['name', 'code'], groupBy: ['type'] }),
     'account.fiscal.year': search(AccountFiscalYear, {
       fields: ['name'],
@@ -1896,6 +1944,30 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
           }),
         { write: true },
       );
+    });
+    context.app.post('/api/v1/accounting/statement-lines/:id/undo', async (request) => {
+      const id = positiveId((request.params as { id?: unknown }).id, 'id');
+      return request.env((raw) => undoLine(raw as Env, id), { write: true });
+    });
+    // Reconciliation rules (RFC 0029 §3.2): run on the open lines now, or a rule's dry run over the last days.
+    context.app.post('/api/v1/accounting/reconcile-rules/run', async (request) =>
+      request.env(
+        async (raw) => {
+          const env = raw as Env;
+          reconciler(env);
+          const open = await env
+            .model('account.bank.statement.line')
+            .search({ where: { state: 'open' } as never, limit: 2000 });
+          return { results: await applyRules(env, open.ids as unknown as number[]) };
+        },
+        { write: true },
+      ),
+    );
+    context.app.get('/api/v1/accounting/reconcile-rules/:id/dry-run', async (request) => {
+      const id = positiveId((request.params as { id?: unknown }).id, 'id');
+      const raw = Number((request.query as { days?: unknown }).days ?? 90);
+      const days = Number.isInteger(raw) && raw > 0 && raw <= 366 ? raw : 90;
+      return request.env((env) => dryRunRule(env as Env, id, days));
     });
     context.app.post('/api/v1/accounting/journals/:id/pull', async (request) => {
       const id = positiveId((request.params as { id?: unknown }).id, 'id');

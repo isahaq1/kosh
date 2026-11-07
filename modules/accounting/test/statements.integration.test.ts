@@ -323,3 +323,90 @@ test('a journal with a bank feed: each pull makes a statement of the lines since
   const second = await call('POST', `/api/v1/accounting/journals/${journals['BNK']}/pull`, 'rahim');
   expect(second.json).toMatchObject({ statement: null, created: 0 });
 });
+
+test('reconciliation rules: run on import, first that applies wins, counted, a dry run, and every match undone', async () => {
+  const inv = await invoice('800');
+  const fees = Object.entries(accounts).find(([code]) => code.startsWith('6'))?.[1];
+  const R = '/api/v1/models/account.reconcile.rule';
+  // Accountants use rules; managers set them up.
+  expect((await call('POST', R, 'rahim', { name: 'No', company, outcome: 'suggest' })).status).toBe(
+    403,
+  );
+  // A write-off rule names its account.
+  expect(
+    (await call('POST', R, 'maria', { name: 'Bad', company, outcome: 'write_off' })).status,
+  ).toBe(422);
+  const sms = await call('POST', R, 'maria', {
+    name: 'SMS charges',
+    company,
+    sequence: 1,
+    labelContains: 'sms',
+    direction: 'out',
+    amountMax: '100',
+    outcome: 'write_off',
+    writeOffAccount: fees,
+    writeOffLabel: 'SMS banking',
+  });
+  expectStatus(sms, 201);
+  const pay = await call('POST', R, 'maria', {
+    name: 'Customer payments',
+    company,
+    sequence: 2,
+    direction: 'in',
+    outcome: 'match',
+  });
+  expectStatus(pay, 201);
+  const csv = [
+    'Date,Details,Amount,Ref',
+    `${today},Customer transfer,800.00,RR1`,
+    `${today},SMS charges Oct,-15.00,RR2`,
+    `${today},SMS charges big,-500.00,RR3`,
+  ].join('\n');
+  const imported = await call('POST', S, 'rahim', {
+    journal: journals['BNK'],
+    format: 'csv',
+    content: csv,
+    mapping: { date: 'Date', label: 'Details', amount: 'Amount', reference: 'Ref' },
+  });
+  expectStatus(imported, 200);
+  expect(imported.json).toMatchObject({ created: 3, applied: 2 });
+  const [payment, fee, big] = await lineOf(imported.json.statement as number);
+  expect([payment.state, fee.state, big.state]).toEqual(['matched', 'matched', 'open']);
+  expect((await move(inv)).json.paymentState).toBe('paid');
+  const rules = await call('GET', `${R}?fields=id,hits&order=sequence+asc`, 'maria');
+  expect(rules.json.items.map((r: Json) => r.hits)).toEqual([1, 1]);
+
+  const dry = await call(
+    'GET',
+    `/api/v1/accounting/reconcile-rules/${sms.json.id}/dry-run?days=30`,
+    'rahim',
+  );
+  expectStatus(dry, 200);
+  expect(dry.json.hits).toBeGreaterThanOrEqual(1);
+  expect(dry.json.rate).toBeGreaterThan(0);
+
+  // Undone: the invoice is open again, the write-off reversed, both lines open.
+  expect(
+    (await call('POST', `/api/v1/accounting/statement-lines/${payment.id}/undo`, 'eve')).status,
+  ).toBe(403);
+  expectStatus(
+    await call('POST', `/api/v1/accounting/statement-lines/${payment.id}/undo`, 'rahim'),
+    200,
+  );
+  expect((await move(inv)).json.paymentState).not.toBe('paid');
+  const feeMove = fee.move as number;
+  expectStatus(
+    await call('POST', `/api/v1/accounting/statement-lines/${fee.id}/undo`, 'rahim'),
+    200,
+  );
+  expect((await move(feeMove, 'state')).json.state).toBe('posted');
+  const after = await lineOf(imported.json.statement as number);
+  expect(after.map((l) => l.state)).toEqual(['open', 'open', 'open']);
+  expect(
+    (await call('POST', `/api/v1/accounting/statement-lines/${fee.id}/undo`, 'rahim')).status,
+  ).toBe(409);
+  // Matched again by running the rules on demand.
+  const run = await call('POST', '/api/v1/accounting/reconcile-rules/run', 'rahim');
+  expectStatus(run, 200);
+  expect((await move(inv)).json.paymentState).toBe('paid');
+});

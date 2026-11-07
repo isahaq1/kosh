@@ -30,6 +30,7 @@ export const bn: Readonly<Record<string, string>> = {
     'প্রতিটি লাইন মিললে এবং শুরুর ব্যালান্স ও লাইনগুলো মিলে শেষের ব্যালান্স হলে স্টেটমেন্ট সম্পন্ন হয়।',
   'A withholding rate is above 0 and at most 1 (0.05 for 5 %).':
     'উৎসে কর্তনের হার 0-এর বেশি এবং সর্বোচ্চ 1 (5 %-এর জন্য 0.05)।',
+  'A write-off rule names its account.': 'খরচ লেখার নিয়মে হিসাবের নাম থাকতে হয়।',
   Account: 'হিসাব',
   'Account currency': 'হিসাবের মুদ্রা',
   'Account for reverse charge (payable)': 'রিভার্স চার্জের হিসাব (প্রদেয়)',
@@ -52,6 +53,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Amount in currency': 'মুদ্রায় অঙ্ক',
   'Amount paid': 'পরিশোধিত অঙ্ক',
   'An account code is used once per company.': 'প্রতিটি প্রতিষ্ঠানে একটি হিসাব কোড একবারই ব্যবহার হয়।',
+  Applied: 'প্রয়োগ হয়েছে',
   'Applies from (document total)': 'প্রযোজ্য (নথির মোট থেকে)',
   Balance: 'ব্যালান্স',
   'Balance sheet': 'স্থিতিপত্র',
@@ -145,8 +147,10 @@ export const bn: Readonly<Record<string, string>> = {
   'Fiscal years of a company do not overlap.': 'একটি প্রতিষ্ঠানের অর্থবছরগুলো একটির ওপর আরেকটি পড়ে না।',
   'Fixed assets': 'স্থায়ী সম্পদ',
   From: 'থেকে',
+  'From amount': 'যে পরিমাণ থেকে',
   'Full Reconcile': 'পূর্ণ মিলকরণ',
   'General ledger': 'সাধারণ খতিয়ান',
+  'How many lines it matched or wrote off.': 'কতগুলো লাইন এটি মিলিয়েছে বা খরচ লিখেছে।',
   ID: 'আইডি',
   'Import key': 'আমদানির চাবি',
   Income: 'আয়',
@@ -168,6 +172,7 @@ export const bn: Readonly<Record<string, string>> = {
   Journals: 'জার্নাল',
   Kind: 'ধরন',
   Label: 'লেবেল',
+  'Label contains': 'বিবরণে আছে',
   Lines: 'লাইন',
   'Lines › Account': 'লাইন › হিসাব',
   'Lines › Days': 'লাইন › দিন',
@@ -176,14 +181,22 @@ export const bn: Readonly<Record<string, string>> = {
   'Lines › Label': 'লাইন › লেবেল',
   'Lines › Partner': 'লাইন › অংশীদার',
   'Lines › Percent': 'লাইন › শতাংশ',
+  'Lines whose label or reference contains this text (any case); empty: any label.':
+    'যেসব লাইনের বিবরণ বা রেফারেন্সে এই লেখা আছে (বড়-ছোট হাতের অক্ষর নির্বিশেষে); খালি: যেকোনো বিবরণ।',
   'Lock date': 'লক তারিখ',
   'Locked until': 'লক থাকবে যে তারিখ পর্যন্ত',
   'Manager (chart, lock dates, closing)': 'ব্যবস্থাপক (হিসাবের তালিকা, লক তারিখ, সমাপনী)',
   'Match its lines in Accounting › Reconcile bank; it closes once every line is matched and the balances agree.':
     'হিসাব › ব্যাংক মিলান-এ এর লাইন মেলান; প্রতিটি লাইন মিললে ও ব্যালান্স মিলে গেলে এটি বন্ধ হয়।',
+  'Match the document': 'নথির সঙ্গে মেলান',
+  'Match: the open document of the same amount the proposals rank first. Write off: to the account. Suggest: shown on the line, nothing done.':
+    'মেলান: প্রস্তাবের প্রথমে থাকা একই পরিমাণের খোলা নথি। খরচ লিখুন: হিসাবে। প্রস্তাব: লাইনে দেখানো হয়, কিছু করা হয় না।',
   Matched: 'মিলানো',
   Memo: 'মেমো',
   Miscellaneous: 'বিবিধ',
+  'Money in': 'টাকা জমা',
+  'Money in or out': 'টাকা জমা বা খরচ',
+  'Money out': 'টাকা খরচ',
   Name: 'নাম',
   'Non-current assets': 'অচলতি সম্পদ',
   'Non-current liabilities': 'অচলতি দায়',
@@ -200,6 +213,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Number Sale': 'নম্বর (বিক্রয়)',
   'Off-balance sheet': 'স্থিতিপত্র-বহির্ভূত',
   'One rate per currency, company and day.': 'প্রতিটি মুদ্রা, প্রতিষ্ঠান ও দিনের জন্য একটি হার।',
+  'Only suggest': 'শুধু প্রস্তাব',
   Open: 'খোলা',
   'Open items': 'খোলা আইটেম',
   'Open until matched to documents (a payment) or written off to an account.':
@@ -255,6 +269,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Reconcile bank': 'ব্যাংক মিলান',
   Reconciled: 'মিলকৃত',
   Reconciliation: 'মিলকরণ',
+  'Reconciliation rule': 'মিলানোর নিয়ম',
+  'Reconciliation rules': 'মিলানোর নিয়ম',
   'Records must reference shared records or records of their own company.':
     'রেকর্ড কেবল শেয়ার করা রেকর্ড বা নিজের প্রতিষ্ঠানের রেকর্ড উল্লেখ করতে পারে।',
   Reference: 'রেফারেন্স',
@@ -268,6 +284,9 @@ export const bn: Readonly<Record<string, string>> = {
   'Reverse charge': 'রিভার্স চার্জ',
   'Reversed by': 'যে এন্ট্রি দিয়ে উল্টানো',
   'Routing number': 'রাউটিং নম্বর',
+  Rule: 'নিয়ম',
+  'Rules run in order on every imported line; the first that applies wins. Try one with its dry run from Reconcile bank.':
+    'আমদানি করা প্রতিটি লাইনে নিয়মগুলো ক্রমানুসারে চলে; প্রথম যেটি খাটে সেটিই প্রয়োগ হয়। ব্যাংক মিলান থেকে পরীক্ষামূলক চালিয়ে দেখুন।',
   Sales: 'বিক্রয়',
   Scope: 'প্রযোজ্যতা',
   Send: 'প্রেরণ',
@@ -302,6 +321,7 @@ export const bn: Readonly<Record<string, string>> = {
     'এই তারিখ পর্যন্ত কর রিটার্ন জমা হয়েছে: এই তারিখে বা তার আগে করের লাইন বদলানো যায় না।',
   Taxes: 'কর',
   Term: 'শর্ত',
+  'The bank and cash journals it watches; empty: all.': 'যে ব্যাংক ও নগদ জার্নাল এটি দেখে; খালি: সব।',
   'The department, project or branch the amount belongs to; reports and budgets read it.':
     'যে বিভাগ, প্রকল্প বা শাখার অঙ্ক; প্রতিবেদন ও বাজেট এটি ব্যবহার করে।',
   'The lines of a posted entry cannot be changed. Reverse the entry instead.':
@@ -323,7 +343,9 @@ export const bn: Readonly<Record<string, string>> = {
     'লাইনের হিসাবের ধরন, প্রতিবেদনে গোষ্ঠীভুক্ত করার জন্য।',
   'The untaxed amount plus the taxes: what the document is for.':
     'করবিহীন অঙ্ক যোগ কর: নথিটির মোট অঙ্ক।',
+  Then: 'তারপর',
   To: 'পর্যন্ত',
+  'To amount': 'যে পরিমাণ পর্যন্ত',
   Total: 'মোট',
   Totals: 'মোট',
   'Trial balance': 'রেওয়ামিল',
@@ -350,6 +372,7 @@ export const bn: Readonly<Record<string, string>> = {
     'এই প্রাপ্য বা প্রদেয় লাইনে যা এখনো মিলকরণ হয়নি, এন্ট্রির মুদ্রায়।',
   'What the journal records: sales, purchases, cash, bank or miscellaneous entries.':
     'জার্নালে যা লিপিবদ্ধ হয়: বিক্রয়, ক্রয়, নগদ, ব্যাংক বা বিবিধ এন্ট্রি।',
+  When: 'যখন',
   'When paying vendors': 'সরবরাহকারীকে পরিশোধের সময়',
   'When the fiscal year starts, and the dates before which nothing may change.':
     'অর্থবছর কখন শুরু হয় এবং কোন তারিখের আগে কিছুই বদলানো যাবে না।',
@@ -363,6 +386,7 @@ export const bn: Readonly<Record<string, string>> = {
     'পোস্টকৃত নথিটি অপরিশোধিত, আংশিক পরিশোধিত নাকি পরিশোধিত, তাতে যা বকেয়া আছে তা থেকে নির্ধারিত।',
   'Whether we keep the amount back when paying vendors, or customers keep it back when paying us.':
     'সরবরাহকারীকে পরিশোধের সময় আমরা অঙ্কটি কেটে রাখি, নাকি গ্রাহক আমাদের পরিশোধের সময় তা কেটে রাখেন।',
+  'Which lines: money in, money out, or both.': 'কোন লাইন: টাকা জমা, টাকা খরচ, বা দুটোই।',
   'Who owes most': 'সবচেয়ে বেশি বকেয়া কার',
   Withheld: 'কর্তিত',
   'Withheld by customers': 'গ্রাহকদের দ্বারা কর্তিত',
@@ -374,4 +398,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Withholdings › Base': 'উৎসে কর্তন › ভিত্তি',
   'Withholdings › Withholding': 'উৎসে কর্তন › উৎসে কর্তন',
   'Within the state': 'রাজ্যের ভেতরে',
+  'Write off': 'খরচ লিখুন',
+  'Write off to': 'যে হিসাবে খরচ লিখবেন',
+  'Write-off label': 'খরচের বিবরণ',
 };

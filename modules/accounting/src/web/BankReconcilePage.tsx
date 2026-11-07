@@ -1,7 +1,8 @@
 /**
  * Accounting › Reconcile bank (RFC 0029 §3.1): statements imported (CSV with its columns, OFX, CAMT.053), then the
  * open lines one by one — the documents each may pay, proposed by the server with why, matched in one click; a line
- * that pays nothing written off to an account. J / K move between lines. The server proposes, matches and refuses.
+ * that pays nothing written off to an account. J / K move between lines. Reconciliation rules (§3.2) run on import
+ * or with Run rules; recently matched lines can be undone. The server proposes, matches and refuses.
  */
 import { Alert, Button, Checkbox, Input, Label, type PageProps, Select, useKosh } from '@kosh/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -65,6 +66,16 @@ export function BankReconcilePage({ api, label }: PageProps): ReactElement {
         limit: 200,
       }),
   });
+  const recent = useQuery({
+    queryKey: ['accounting', 'statement-lines', 'matched'],
+    queryFn: () =>
+      api.list('account.bank.statement.line', {
+        filter: { state: 'matched' },
+        fields: ['id', 'date', 'label', 'reference', 'amount'],
+        order: ['updatedAt desc', 'id desc'],
+        limit: 10,
+      }),
+  });
   const open = (lines.data?.items ?? []) as unknown as Line[];
   const line = open[Math.min(current, Math.max(0, open.length - 1))];
   const proposals = useQuery({
@@ -110,9 +121,23 @@ export function BankReconcilePage({ api, label }: PageProps): ReactElement {
       }),
     onSuccess: () => done(t('bank.writtenOff')),
   });
+  const undo = useMutation({
+    mutationFn: (lineId: number) =>
+      api.call('POST', `/api/v1/accounting/statement-lines/${lineId}/undo`),
+    onSuccess: () => done(t('bank.undone')),
+  });
+  const runRules = useMutation({
+    mutationFn: () =>
+      api.call<{ results: { outcome: string }[] }>(
+        'POST',
+        '/api/v1/accounting/reconcile-rules/run',
+      ),
+    onSuccess: (r) =>
+      done(t('bank.rulesRun', { count: r.results.filter((x) => x.outcome !== 'suggest').length })),
+  });
   const importFile = useMutation({
     mutationFn: async (file: File) =>
-      api.call<{ created: number; skipped: number }>(
+      api.call<{ created: number; skipped: number; applied: number }>(
         'POST',
         '/api/v1/accounting/statements/import',
         {
@@ -122,9 +147,14 @@ export function BankReconcilePage({ api, label }: PageProps): ReactElement {
           ...(fileFormat === 'csv' ? { mapping: columns } : {}),
         },
       ),
-    onSuccess: (r) => done(t('bank.imported', { created: r.created, skipped: r.skipped })),
+    onSuccess: (r) =>
+      done(
+        t('bank.imported', { created: r.created, skipped: r.skipped }) +
+          (r.applied > 0 ? ` ${t('bank.rulesRun', { count: r.applied })}` : ''),
+      ),
   });
-  const error = match.error ?? writeOff.error ?? importFile.error;
+  const error = match.error ?? writeOff.error ?? importFile.error ?? undo.error ?? runRules.error;
+  const matched = (recent.data?.items ?? []) as unknown as Line[];
 
   return (
     <section aria-labelledby={`${id}-title`} className="grid gap-4">
@@ -180,6 +210,11 @@ export function BankReconcilePage({ api, label }: PageProps): ReactElement {
           </div>
         </div>
       </details>
+      <div>
+        <Button busy={runRules.isPending} onClick={() => runRules.mutate()}>
+          {t('bank.runRules')}
+        </Button>
+      </div>
       {message === null ? null : <Alert tone="info">{message}</Alert>}
       {error === null ? null : <Alert>{error.message}</Alert>}
       {line === undefined ? (
@@ -275,6 +310,31 @@ export function BankReconcilePage({ api, label }: PageProps): ReactElement {
             <p className="text-xs text-muted-foreground">{t('bank.keys')}</p>
           </div>
         </div>
+      )}
+      {matched.length === 0 ? null : (
+        <section aria-labelledby={`${id}-recent`} className="grid gap-1">
+          <h2 id={`${id}-recent`} className="font-medium">
+            {t('bank.recent')}
+          </h2>
+          <ul className="grid gap-1">
+            {matched.map((l) => (
+              <li key={l.id} className="flex items-center justify-between gap-2 text-sm">
+                <span className="truncate">
+                  {format.date(l.date)} · {l.label} ·{' '}
+                  <span className="tabular-nums">{l.amount}</span>
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  busy={undo.isPending && undo.variables === l.id}
+                  onClick={() => undo.mutate(l.id)}
+                >
+                  {t('bank.undo')}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
     </section>
   );

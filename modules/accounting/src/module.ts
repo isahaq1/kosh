@@ -36,7 +36,11 @@ import {
   ref,
 } from './.kosh/bindings.js';
 import { postPayments } from './payments.js';
-import { AccountBankStatement, AccountBankStatementLine } from './statements.js';
+import {
+  AccountBankStatement,
+  AccountBankStatementLine,
+  AccountReconcileRule,
+} from './statements.js';
 
 const READ = ['read'] as const;
 const WRITE = ['read', 'write', 'create'] as const;
@@ -1701,6 +1705,7 @@ export const accountingShutro = defineModule({
   models: [
     AccountBankStatement,
     AccountBankStatementLine,
+    AccountReconcileRule,
     ResCurrencyRate,
     ResBankAccount,
     AccountWithholding,
