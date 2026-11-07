@@ -148,5 +148,5 @@ inbox and the policy form, docs/approvals.md (new; today the engine is in docs/p
   (Approvals managers, a reason, never the requester; the people added emailed) and `notifyBackups` (approvers and
   managers); `syncPending` (`off | add | replace`, default `add`) and `notifyOnSync`, run by the Approvals module's
   subscriber on the level's change events, and "Sync waiting requests" on the policy. A write of many-to-many fields
-  alone emits no change event: Shutro request #35, asked before a work-around. The cost-centre approvers wait for a
+  alone emitted no change event: Shutro request #35, fixed in Shutro 0.3.5. The cost-centre approvers wait for a
   cost centre on the records approved (purchase orders carry it on their lines only).

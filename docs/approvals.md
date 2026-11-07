@@ -71,8 +71,8 @@ skipped, reminded and escalated, with who and when. `GET /api/v1/approvals/:mode
 
 When a level's approvers change, its waiting requests follow, as the policy's **Waiting requests follow changes**
 says: add the new approvers (the default), replace them, or not. **Tell the people added** emails those whose turn
-it is. This runs after the change is saved, from the level's change events. A change to a level's people or backups
-alone is not seen yet (Shutro request #35); **Sync waiting requests** on the policy brings them in step at any time
+it is. This runs after the change is saved, from the level's change events; **Sync waiting requests** on the policy
+brings them in step at any time
 (`POST /api/v1/approvals/policies/:id/sync` `{ mode? }`).
 
 ## Next (RFC 0027)

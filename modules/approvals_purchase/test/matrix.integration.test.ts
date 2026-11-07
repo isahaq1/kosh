@@ -369,8 +369,8 @@ test('approved already, backups, reassignment, waiting requests in step with the
     (await call('POST', `/api/v1/approvals/requests/${third?.id}/approve`, 'cat')).status,
   ).toBe(403);
 
-  // The level changes (the record decides now): once the change is served, the waiting request follows, adding
-  // the category's approver. (A change of many-to-many fields alone emits no change event yet: Shutro request #35.)
+  // Only the level's backups change (a many-to-many alone: Shutro request #35): once the change is served, the
+  // waiting request follows, adding.
   const levels = (
     await call(
       'GET',
@@ -381,16 +381,14 @@ test('approved already, backups, reassignment, waiting requests in step with the
   const thirdLevel = levels.find((l) => l.name === 'Third');
   expectStatus(
     await call('PATCH', `/api/v1/models/approval.level/${thirdLevel.id}`, 'pia', {
-      approverKind: 'record',
       backupUsers: { set: [users['dina']] },
     }),
     200,
   );
   for (const w of approvalMailWorkers({ shutro: host.server.shutro })) await w.drain();
   ({ requests } = await approvalsOf(id));
-  expect([...(requests[2] as Json).approvers].sort()).toEqual(
-    [users['extra'], users['cat']].sort(),
-  );
+  // Adding: the level's own approver comes back beside the one it was reassigned to.
+  expect([...(requests[2]?.approvers ?? [])].sort()).toEqual([users['extra'], users['cat']].sort());
   expect([...(requests[2] as Json).backups].sort()).toEqual([users['karim'], users['dina']].sort());
   // "Sync now", replacing: the level's people again, its backups as they are now.
   const synced = await call('POST', `/api/v1/approvals/policies/${policy}/sync`, 'pia', {
