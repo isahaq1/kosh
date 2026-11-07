@@ -305,6 +305,8 @@ async function checkPolicy(sheets: unknown): Promise<void> {
         if (!beyond && c.limitPerMonth !== null) {
           const date = isoDate(e.date);
           const month = date.slice(0, 7);
+          const [y, m] = month.split('-').map(Number) as [number, number];
+          const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
           const others = await (
             await su.model('expense.expense').search({
               where: {
@@ -312,7 +314,7 @@ async function checkPolicy(sheets: unknown): Promise<void> {
                 category: c.id,
                 id: { ne: e.id },
                 status: { notIn: ['refused', 'draft'] },
-                date: { gte: `${month}-01`, lte: `${month}-31` },
+                date: { gte: `${month}-01`, lt: `${next}-01` },
               },
             })
           ).load(['amount']);
