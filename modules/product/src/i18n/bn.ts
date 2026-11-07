@@ -38,6 +38,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Created At': 'তৈরির সময়',
   'Created By': 'তৈরি করেছেন',
   Currency: 'মুদ্রা',
+  'Delivered quantities': 'সরবরাহ করা পরিমাণ',
   Description: 'বিবরণ',
   'Display Name': 'প্রদর্শিত নাম',
   'Each line gets the most specific rule: a product’s over a category’s over every product, then the highest quantity reached. Without a rule, the list price.':
@@ -55,6 +56,7 @@ export const bn: Readonly<Record<string, string>> = {
   ID: 'আইডি',
   'Included in price': 'মূল্যের মধ্যে অন্তর্ভুক্ত',
   Inventory: 'মজুদ',
+  Invoice: 'চালান',
   Kind: 'ধরন',
   Length: 'দৈর্ঘ্য',
   Manager: 'ব্যবস্থাপক',
@@ -63,6 +65,9 @@ export const bn: Readonly<Record<string, string>> = {
   'Off the base; negative for a markup.': 'ভিত্তি থেকে ছাড়; বাড়াতে ঋণাত্মক দিন।',
   'On purchases': 'ক্রয়ে',
   'On sales': 'বিক্রয়ে',
+  'Ordered quantities': 'অর্ডার করা পরিমাণ',
+  'Ordered: the whole ordered quantity can be invoiced at once. Delivered: only what was delivered (services count as delivered).':
+    'অর্ডার করা: পুরো অর্ডার করা পরিমাণ একবারে চালান করা যায়। সরবরাহ করা: শুধু যা সরবরাহ হয়েছে (সেবা সরবরাহ হয়েছে বলে ধরা হয়)।',
   'Other list': 'অন্য তালিকা',
   Overview: 'সারসংক্ষেপ',
   Parent: 'মূল শ্রেণি',

@@ -135,6 +135,15 @@ export const ProductProduct = defineModel('product.product', {
       },
     ),
     category: f.many2one('product.category'),
+    /** Invoiced as ordered or as delivered (RFC 0028 §3.3). */
+    invoicePolicy: f.selection(
+      { ordered: 'Ordered quantities', delivered: 'Delivered quantities' },
+      {
+        default: 'ordered',
+        label: 'Invoice',
+        help: 'Ordered: the whole ordered quantity can be invoiced at once. Delivered: only what was delivered (services count as delivered).',
+      },
+    ),
     uom: f.many2one('uom.uom', { label: 'Unit of measure' }),
     barcode: f.char({ index: 'unique' }),
     /** A picture: an attachment of the product (RFC 0022 §3.3), with its 256 px thumbnail. */

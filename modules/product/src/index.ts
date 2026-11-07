@@ -250,7 +250,7 @@ export const product: ReturnType<typeof defineModule> = defineModule({
         k.group('prices', ['listPrice', 'standardPrice', 'uom'], { label: 'Prices' }),
         k.notebook('more', [
           k.page('sales', 'Sales & purchase', [
-            k.group('sell', ['saleOk', 'taxes']),
+            k.group('sell', ['saleOk', 'invoicePolicy', 'taxes']),
             k.group('buy', ['purchaseOk', 'purchaseTaxes']),
           ]),
           k.page('description_page', 'Description', ['description']),
