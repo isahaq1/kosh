@@ -22,6 +22,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Customer reference': 'গ্রাহকের রেফারেন্স',
   Customers: 'গ্রাহক',
   'Default terms and conditions': 'ডিফল্ট শর্তাবলি',
+  'Deliver to': 'সরবরাহের ঠিকানা',
   Description: 'বিবরণ',
   'Discount %': 'ছাড় %',
   'Display Name': 'প্রদর্শিত নাম',
@@ -30,6 +31,7 @@ export const bn: Readonly<Record<string, string>> = {
   'How long new quotations stay valid, and the terms they start with.':
     'নতুন উদ্ধৃতি কত দিন বৈধ থাকবে, এবং কোন শর্তাবলি নিয়ে শুরু হবে।',
   ID: 'আইডি',
+  'Invoice to': 'চালানের ঠিকানা',
   'Line quantities must be positive.': 'লাইনের পরিমাণ শূন্যের বেশি হতে হবে।',
   Lines: 'লাইন',
   'Lines › Description': 'লাইন › বিবরণ',
@@ -37,6 +39,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Lines › Quantity': 'লাইন › পরিমাণ',
   'Lines › Unit': 'লাইন › একক',
   'Lines › Unit price': 'লাইন › একক মূল্য',
+  'Lines without a price typed in are priced by this list; each line says why.':
+    'হাতে মূল্য লেখা না থাকা লাইনের মূল্য এই তালিকা থেকে হয়; প্রতিটি লাইন কারণ জানায়।',
   Lock: 'লক করুন',
   Locked: 'লক করা',
   'Manager (all orders)': 'ব্যবস্থাপক (সব অর্ডার)',
@@ -50,9 +54,12 @@ export const bn: Readonly<Record<string, string>> = {
   Order: 'অর্ডার',
   'Order date': 'অর্ডারের তারিখ',
   'Order line': 'অর্ডার লাইন',
+  'Orders for this customer start on this price list.': 'এই গ্রাহকের অর্ডার এই মূল্যতালিকা দিয়ে শুরু হয়।',
   'Orders this month': 'এ মাসের অর্ডার',
   Overview: 'সারসংক্ষেপ',
   'Page {{page}} of {{pages}}': 'পৃষ্ঠা {{page}} / {{pages}}',
+  'Price list': 'মূল্যতালিকা',
+  'Price typed in': 'হাতে লেখা মূল্য',
   Product: 'পণ্য',
   Quantity: 'পরিমাণ',
   Quotation: 'উদ্ধৃতি',
@@ -79,9 +86,13 @@ export const bn: Readonly<Record<string, string>> = {
   'Tax (before 0.2.0)': 'কর (0.2.0-এর আগে)',
   Taxes: 'কর',
   'Terms and conditions': 'শর্তাবলি',
+  'The contact the invoice is addressed to; empty: the customer.':
+    'চালান যে যোগাযোগের নামে; খালি: গ্রাহক।',
   'The line’s amount before taxes: the quantity times the unit price, less the discount and any tax included in the price.':
     'লাইনের করবিহীন অঙ্ক: পরিমাণ গুণ একক মূল্য, ছাড় ও মূল্যে অন্তর্ভুক্ত কর বাদ দিয়ে।',
   'The margin as a percentage of the untaxed amount.': 'করবিহীন অঙ্কের শতাংশ হিসেবে মার্জিন।',
+  'The price typed in, else the order’s price list’s (see why on the line), else the product’s list price.':
+    'হাতে লেখা মূল্য, নইলে অর্ডারের মূল্যতালিকার (কারণ লাইনে দেখুন), নইলে পণ্যের তালিকা মূল্য।',
   'The sum of the lines’ amounts before taxes.': 'লাইনগুলোর করবিহীন অঙ্কের যোগফল।',
   'The sum of the taxes on the lines.': 'লাইনগুলোর করের যোগফল।',
   'The taxes on this line, computed from its amount and its taxes.':
@@ -102,4 +113,6 @@ export const bn: Readonly<Record<string, string>> = {
     'লাইনটি যা আয় করে: করবিহীন অঙ্ক থেকে পরিমাণ অনুযায়ী পণ্যের খরচ বাদ দিয়ে।',
   'What the order earns: its lines’ untaxed amounts less their products’ cost.':
     'অর্ডারটি যা আয় করে: লাইনগুলোর করবিহীন অঙ্ক থেকে তাদের পণ্যের খরচ বাদ দিয়ে।',
+  'Where the goods go; empty: the customer’s address.': 'পণ্য যেখানে যাবে; খালি: গ্রাহকের ঠিকানা।',
+  'Why this price': 'এই মূল্য কেন',
 };

@@ -9,7 +9,7 @@ import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
 import { product } from '@kosh/product';
 import { reporting } from '@kosh/reporting';
-import { action, calendar, form, kanban, list, search, stat } from '@kosh/views';
+import { action, calendar, field, form, kanban, list, search, stat } from '@kosh/views';
 import { salesDemo } from './demo.js';
 import { SaleOrder, SaleOrderLine, salesShutro } from './module.js';
 
@@ -243,6 +243,13 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
     ],
   },
   viewExtensions: [
+    // The customer's price list on the contact (RFC 0028 §3.1).
+    {
+      view: 'res.partner.form',
+      operations: [
+        { append: 'roles', nodes: [field({ field: 'pricelist', id: 'partner_pricelist' })] },
+      ],
+    },
     {
       view: 'product.product.form',
       operations: [
@@ -371,7 +378,14 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
       sheet: [
         // Invoices, deliveries, tasks: the bridges append their tiles (RFC 0022 §3.1).
         k.stats('related', []),
-        k.group('customer', ['partner', 'clientReference', 'currency']),
+        k.group('customer', [
+          'partner',
+          'partnerInvoice',
+          'partnerShipping',
+          'pricelist',
+          'clientReference',
+          'currency',
+        ]),
         k.group('dates', ['name', 'dateOrder', 'validityDate', 'user']),
         k.lines(
           'lines',
@@ -381,6 +395,7 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
             'quantity',
             'uom',
             'priceUnit',
+            { field: 'priceReason', id: 'line_price_reason' },
             'discount',
             'taxes',
             'subtotal',

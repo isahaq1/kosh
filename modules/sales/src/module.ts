@@ -5,7 +5,7 @@
  */
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
-import { computeTaxes, productShutro, taxRule } from '@kosh/product';
+import { computeTaxes, priceFor, productShutro, taxRule } from '@kosh/product';
 import { type Decimal, orm } from '@kosh/server/orm';
 import {
   check,
@@ -15,6 +15,7 @@ import {
   type Env,
   extendModel,
   f,
+  method,
   onchange,
   records,
 } from './.kosh/bindings.js';
@@ -22,11 +23,15 @@ import {
 /** A line's taxes through the engine (RFC 0016): its amount after discount, its taxes in order. */
 function taxesOf(l: {
   readonly quantity: ReturnType<typeof orm.toDecimal>;
-  readonly priceUnit: ReturnType<typeof orm.toDecimal>;
+  /** Null while the price list has not priced it yet. */
+  readonly priceUnit: ReturnType<typeof orm.toDecimal> | null;
   readonly discount: ReturnType<typeof orm.toDecimal>;
   readonly taxes: Iterable<Parameters<typeof taxRule>[0]>;
 }) {
-  const amount = l.quantity.times(l.priceUnit).times(orm.toDecimal(100).minus(l.discount)).div(100);
+  const amount = l.quantity
+    .times(l.priceUnit ?? orm.toDecimal('0'))
+    .times(orm.toDecimal(100).minus(l.discount))
+    .div(100);
   return computeTaxes(amount, l.quantity, [...l.taxes].map(taxRule));
 }
 
@@ -85,6 +90,23 @@ export const SaleOrder = defineModel('sale.order', {
       label: 'Salesperson',
     }),
     partner: f.many2one('res.partner', { required: true, checkCompany: true, label: 'Customer' }),
+    /** Where the invoice goes and where the goods go (RFC 0028 §3.2); empty: the customer's own address. */
+    partnerInvoice: f.many2one('res.partner', {
+      checkCompany: true,
+      label: 'Invoice to',
+      help: 'The contact the invoice is addressed to; empty: the customer.',
+    }),
+    partnerShipping: f.many2one('res.partner', {
+      checkCompany: true,
+      label: 'Deliver to',
+      help: 'Where the goods go; empty: the customer’s address.',
+    }),
+    /** The price list its lines are priced by (RFC 0028 §3.1); from the customer, else none (list prices). */
+    pricelist: f.many2one('product.pricelist', {
+      ondelete: 'restrict',
+      label: 'Price list',
+      help: 'Lines without a price typed in are priced by this list; each line says why.',
+    }),
     currency: f.many2one('res.currency', { required: true }),
     dateOrder: f.date({ required: true, default: (env: Env) => env.today(), label: 'Order date' }),
     validityDate: f.date({ label: 'Valid until' }),
@@ -159,6 +181,11 @@ export const SaleOrder = defineModel('sale.order', {
             return loaded.filter((o) => o.lines.length === 0);
           }),
           message: 'Add at least one line before confirming the order.',
+          // Other apps check the order first (sale_account: the customer's credit).
+          before: records('sale.order', async (orders) => {
+            const env = orders.env as unknown as Env;
+            await env.model('sale.order').browse(orders.ids).confirming();
+          }),
           // Other apps act on a confirmation through the outbox (sale_project creates the tasks).
           after: records('sale.order', async (orders) => {
             for (const o of await orders.load({}))
@@ -173,11 +200,27 @@ export const SaleOrder = defineModel('sale.order', {
       extensible: true, // Accounting adds invoicing states through its bridge
     }),
   },
+  methods: {
+    /** Before a confirmation: nothing here; sale_account checks the customer's credit (RFC 0028 §3.2). */
+    confirming: method('sale.order', async () => undefined),
+  },
   onchange: {
     // The customer's currency, else the company's; an empty validity and terms from the company's settings.
     partner: onchange('sale.order', async (d, env) => {
       await quotationDefaults(d, env);
       const p = await d.record('partner');
+      const [priced] =
+        p === null
+          ? []
+          : await env
+              .model('res.partner')
+              .browse([p.id])
+              .load({ pricelist: { currency: true } });
+      d.set('pricelist', priced?.pricelist?.id ?? null);
+      if (priced?.pricelist?.currency) {
+        d.set('currency', priced.pricelist.currency.id);
+        return;
+      }
       if (p?.currency) {
         d.set('currency', p.currency.id);
         return;
@@ -187,6 +230,11 @@ export const SaleOrder = defineModel('sale.order', {
         .browse([env.companyId])
         .load({ currency: true });
       if (company !== undefined) d.set('currency', company.currency.id);
+    }),
+    // A price list in another currency puts the order in it.
+    pricelist: onchange('sale.order', async (d) => {
+      const list = await d.record('pricelist');
+      if (list?.currency) d.set('currency', list.currency.id);
     }),
     // A new order date moves the validity with it.
     dateOrder: onchange('sale.order', async (d, env) => {
@@ -223,6 +271,30 @@ async function quotationDefaults(
     d.set('note', terms);
 }
 
+/** A line's price and why (RFC 0028 §3.1): typed in, else its order's price list, else the list price. */
+async function linePrice(l: {
+  readonly env: unknown;
+  readonly manualPrice: Decimal | null;
+  readonly product: { readonly id: unknown } | null;
+  readonly quantity: Decimal;
+  readonly order: {
+    readonly pricelist: { readonly id: unknown } | null;
+    readonly dateOrder: unknown;
+  } | null;
+}): Promise<{ price: Decimal; reason: string | null }> {
+  if (l.manualPrice !== null) return { price: l.manualPrice, reason: 'Typed in.' };
+  if (l.product === null) return { price: orm.toDecimal('0'), reason: null };
+  const env = l.env as { today(): string };
+  const found = await priceFor(
+    l.env as never,
+    (l.order?.pricelist?.id as number | undefined) ?? null,
+    l.product.id as number,
+    l.quantity,
+    String(l.order?.dateOrder ?? env.today()).slice(0, 10),
+  );
+  return { price: found.price, reason: found.explanation };
+}
+
 export const SaleOrderLine = defineModel('sale.order.line', {
   label: 'Order line',
   access: {
@@ -235,7 +307,60 @@ export const SaleOrderLine = defineModel('sale.order.line', {
     name: f.char({ required: true, label: 'Description' }),
     quantity: f.decimal({ scale: 3, required: true, default: '1' }),
     uom: f.many2one('uom.uom', { label: 'Unit' }),
-    priceUnit: f.decimal({ scale: 2, required: true, default: '0', label: 'Unit price' }),
+    /**
+     * The unit price: the one typed in, else the order's price list's (RFC 0028 §3.1). Typing a price keeps it
+     * (`manualPrice`); changing the product, the quantity or the list reprices the lines without one.
+     */
+    priceUnit: f.decimal({
+      scale: 2,
+      store: true,
+      label: 'Unit price',
+      help: 'The price typed in, else the order’s price list’s (see why on the line), else the product’s list price.',
+      ...compute(
+        'sale.order.line',
+        'priceUnit',
+        ['product', 'quantity', 'manualPrice', 'order.pricelist', 'order.dateOrder'],
+        async (lines) => {
+          for (const l of lines) l.priceUnit = (await linePrice(l)).price;
+        },
+      ),
+      inverse: async (records: never) => {
+        const lines = records as Iterable<{
+          id: number;
+          env: Env;
+          priceUnit: Decimal | null;
+        }> & { env: Env };
+        const env = (records as { env: Env }).env;
+        // Who may set prices by hand (RFC 0028 §3.1): the server decides.
+        if (!env.su && !env.access.has('sales.price_override'))
+          throw new orm.ValidationError(
+            'sale.order.line',
+            ['priceUnit'],
+            'You may not change prices.',
+            'Prices come from the price list; ask a Sales manager.',
+          );
+        for (const l of lines)
+          await env
+            .model('sale.order.line')
+            .browse([l.id as never])
+            .write({ manualPrice: l.priceUnit });
+      },
+    }),
+    /** The price typed in, kept when the product, the quantity or the list changes (empty: the list's price). */
+    manualPrice: f.decimal({ scale: 2, label: 'Price typed in' }),
+    /** Why the line has its price: the list and rule, or "typed in". */
+    priceReason: f.char({
+      store: true,
+      label: 'Why this price',
+      ...compute(
+        'sale.order.line',
+        'priceReason',
+        ['product', 'quantity', 'manualPrice', 'order.pricelist', 'order.dateOrder'],
+        async (lines) => {
+          for (const l of lines) l.priceReason = (await linePrice(l)).reason;
+        },
+      ),
+    }),
     /** Percent off the unit price (0–100). */
     discount: f.decimal({ scale: 2, required: true, default: '0', label: 'Discount %' }),
     /** The line's taxes, applied in order (RFC 0016). */
@@ -346,10 +471,30 @@ export const SaleOrderLine = defineModel('sale.order.line', {
   },
 });
 
+/** The customer's price list (RFC 0028 §3.1): their orders start on it. */
+export const PartnerPricelist = extendModel('res.partner', {
+  fields: {
+    pricelist: f.many2one('product.pricelist', {
+      ondelete: 'set null',
+      label: 'Price list',
+      help: 'Orders for this customer start on this price list.',
+    }),
+  },
+});
+
 export const salesShutro = defineModule({
   name: 'sales',
-  version: '0.3.0',
+  version: '0.4.0',
   migrations: [
+    {
+      version: '0.4.0',
+      description:
+        'Price lists: existing lines keep the price they have, as typed in (no order is repriced)',
+      up: async (ctx) => {
+        await ctx.sql`UPDATE sale_order_line SET manual_price = price_unit WHERE manual_price IS NULL`;
+        await ctx.sql`UPDATE sale_order_line SET price_reason = 'Typed in.' WHERE price_reason IS NULL`;
+      },
+    },
     {
       version: '0.2.0',
       description: 'Several taxes per line: the single tax of each line becomes its first',
@@ -368,9 +513,16 @@ export const salesShutro = defineModule({
     }),
     orm.defineGroup({ code: 'sales.manager', label: 'Sales manager', implies: ['sales.user'] }),
   ],
+  permissions: [
+    orm.definePermission({
+      code: 'sales.price_override',
+      label: 'Type in prices on order lines (instead of the price list)',
+      groups: ['sales.user'],
+    }),
+  ],
   sequences: [
     orm.defineSequence({ code: 'sale.order', prefix: 'SO/{year}/', padding: 5, reset: 'yearly' }),
   ],
   models: [SaleOrder, SaleOrderLine],
-  extensions: [CompanySales],
+  extensions: [CompanySales, PartnerPricelist],
 });
