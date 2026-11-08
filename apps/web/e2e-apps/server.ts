@@ -34,6 +34,7 @@ import { helpdesk } from '@kosh/helpdesk';
 import { hr } from '@kosh/hr';
 import { dataImport } from '@kosh/import';
 import { indent } from '@kosh/indent';
+import { indentPurchase } from '@kosh/indent_purchase';
 import { l10nBd } from '@kosh/l10n_bd';
 import { l10nBdPayroll } from '@kosh/l10n_bd_payroll';
 import { l10nBdPos } from '@kosh/l10n_bd_pos';
@@ -168,6 +169,7 @@ const CATALOGUE = [
   projectAccount,
   projectPurchase,
   approvalsPurchase,
+  indentPurchase,
   saleStock,
   purchaseStock,
   stockAccount,

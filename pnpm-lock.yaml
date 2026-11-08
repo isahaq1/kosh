@@ -86,6 +86,9 @@ importers:
       '@kosh/indent':
         specifier: workspace:*
         version: link:../../modules/indent
+      '@kosh/indent_purchase':
+        specifier: workspace:*
+        version: link:../../modules/indent_purchase
       '@kosh/l10n_bd':
         specifier: workspace:*
         version: link:../../modules/l10n_bd
@@ -455,6 +458,9 @@ importers:
       '@kosh/hr':
         specifier: workspace:*
         version: link:../../modules/hr
+      '@kosh/indent_purchase':
+        specifier: workspace:*
+        version: link:../../modules/indent_purchase
       '@kosh/integrations':
         specifier: workspace:*
         version: link:../../packages/integrations
@@ -1256,6 +1262,37 @@ importers:
         specifier: workspace:*
         version: link:../../packages/views
     devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/indent_purchase:
+    dependencies:
+      '@kosh/indent':
+        specifier: workspace:*
+        version: link:../indent
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/purchase':
+        specifier: workspace:*
+        version: link:../purchase
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/stock':
+        specifier: workspace:*
+        version: link:../stock
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@kosh/settings':
         specifier: workspace:*
         version: link:../../packages/settings
@@ -3089,6 +3126,9 @@ importers:
       '@kosh/indent':
         specifier: workspace:*
         version: link:../../modules/indent
+      '@kosh/indent_purchase':
+        specifier: workspace:*
+        version: link:../../modules/indent_purchase
       '@kosh/integrations':
         specifier: workspace:*
         version: link:../integrations

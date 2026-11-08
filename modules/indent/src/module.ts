@@ -343,6 +343,7 @@ export const IndentRequest = defineModel('indent.request', {
           }),
         },
       },
+      extensible: true, // indent_purchase asks Purchase for the shortfall
     }),
   },
   constraints: {

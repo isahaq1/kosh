@@ -42,6 +42,7 @@ export type AppName =
   | 'project_account'
   | 'project_purchase'
   | 'approvals_purchase'
+  | 'indent_purchase'
   | 'sale_stock'
   | 'purchase_stock'
   | 'stock_account'
@@ -292,6 +293,13 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'approvalsPurchase',
     bridge: ['approvals', 'purchase'],
+  },
+  indent_purchase: {
+    label:
+      'Bridge: what the store lacks for an approved indent becomes a purchase request (Requests ↔ Purchase)',
+    icon: '🔗',
+    server: 'indentPurchase',
+    bridge: ['indent', 'purchase'],
   },
   sale_stock: {
     label: 'Bridge: deliveries from sales orders (Sales ↔ Stockroom)',

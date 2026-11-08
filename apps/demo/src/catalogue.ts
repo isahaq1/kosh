@@ -17,6 +17,7 @@ import { expenseAccount } from '@kosh/expense_account';
 import { helpdesk } from '@kosh/helpdesk';
 import { hr } from '@kosh/hr';
 import { indent } from '@kosh/indent';
+import { indentPurchase } from '@kosh/indent_purchase';
 import { l10nBd } from '@kosh/l10n_bd';
 import { l10nBdPayroll } from '@kosh/l10n_bd_payroll';
 import { l10nBdPos } from '@kosh/l10n_bd_pos';
@@ -146,6 +147,7 @@ export function demoCatalogue(): KoshModule[] {
     projectAccount,
     projectPurchase,
     approvalsPurchase,
+    indentPurchase,
     saleStock,
     purchaseStock,
     stockAccount,
