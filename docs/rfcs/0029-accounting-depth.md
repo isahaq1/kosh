@@ -135,4 +135,13 @@ with exceptions, cheque printing, currency revaluation, UBL / Peppol — a later
   instead of `sentAt` / `sentCount` fields added to every sendable model; recipients are the partner's address (and
   any typed), not yet its contacts. Next (part 2): Send from a list's selection, auto-send on posting per customer,
   delivery and open tracking through `@kosh/notify`.
+- **Step 3 part 2 (2026-11-08).** Send from a list's selection (`POST /api/v1/mail/send-many/:model`, the
+  `selectionAction` kind of the UI registry; skipped documents with their reason); auto-send through `autoSend: {
+  topic, flag }` on a sendable document, run by an outbox subscriber as the user who emitted the event, with
+  `res.partner.sendInvoicesByEmail` for invoices and credit notes. Deviations: one choice per customer (email or
+  not) instead of `none | email | email_and_whatsapp` — WhatsApp documents wait for a provider that sends files; the
+  delivery state is the outgoing email's (queued, sent, failed with the reason), opens are not tracked (a tracking
+  pixel is left out on purpose). Step 3 complete. Seen once under the full parallel E2E run and not
+  reproduced alone or on reruns: the accounting spec's trial balance without its `1010 Bank` row — open, like the
+  Trade Finance overview flake.
 

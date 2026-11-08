@@ -361,9 +361,15 @@ defineModule({
 });
 ```
 
+**Send by email** in a list's bar of selected rows sends each document to its own partner, with its own template,
+language and PDF (at most 100 at once); the ones that cannot go — no address, not posted — are skipped and the
+reason given. A customer whose contact has **Send invoices by email** (Accounting, on the contact) gets each invoice
+and credit note by itself when it is posted, as the user who posted it: a sendable document's
+`autoSend: { topic, flag }` sends it when `topic` is emitted for the record and the partner's boolean `flag` is set.
+
 `when` limits Send to records in a state (`{ state: 'posted' }`). The routes: `GET /api/v1/mail/sendable`,
-`GET /api/v1/mail/compose/:model/:id` and `POST /api/v1/mail/send/:model/:id` (`{ to, cc?, subject, body,
-attach? }`), as the user: who cannot read the record cannot send it. Email needs `SMTP_URL` (and `MAIL_FROM`) and
+`GET /api/v1/mail/compose/:model/:id`, `POST /api/v1/mail/send/:model/:id` (`{ to, cc?, subject, body, attach? }`)
+and `POST /api/v1/mail/send-many/:model` (`{ ids }`), as the user: who cannot read the record cannot send it. Email needs `SMTP_URL` (and `MAIL_FROM`) and
 file storage for the PDF.
 
 ### Projects for programmes (`modules/project`, RFC 0026)
