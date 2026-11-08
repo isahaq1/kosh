@@ -400,9 +400,81 @@ export const PickingValued = extendModel('stock.picking', {
     validated: async function (this: unknown, next: () => Promise<void>): Promise<void> {
       await next();
       await valueTransfers(this as Records<'stock.picking'>);
+      await transportBills(this as Records<'stock.picking'>);
     },
   },
 });
+
+/**
+ * The transport of validated transfers in the books (RFC 0032 §3.3), as drafts an accountant completes (the account)
+ * and posts: the transport vendor's freight bill — the freight with its additions and deductions — and, for a receipt
+ * whose supplier bears a deduction, a vendor refund to the supplier. Each is made once, when the transfer is validated.
+ */
+async function transportBills(pickings: Records<'stock.picking'>): Promise<void> {
+  const env = pickings.env;
+  for (const p of await pickings.load({
+    charges: true,
+    partner: true,
+    transporter: true,
+    company: true,
+  })) {
+    const journal = (
+      await env.model('account.journal').search({
+        where: { company: p.company.id, type: 'purchase' },
+        limit: 1,
+      })
+    ).ids[0];
+    if (journal === undefined) continue; // no chart yet
+    const [company] = await env.model('res.company').browse([p.company.id]).load({});
+    const draft = async (
+      kind: 'in_invoice' | 'in_refund',
+      partner: number,
+      lines: { name: string; amount: Decimal }[],
+    ) =>
+      env.model('account.move').create([
+        {
+          kind,
+          journal,
+          partner,
+          company: p.company.id,
+          currency: company?.currency.id,
+          date: env.today(),
+          invoiceOrigin: p.name,
+          ref: p.origin ? `${p.name} (${p.origin})` : p.name,
+          lines: {
+            create: lines.map((l) => ({
+              lineKind: 'product',
+              name: l.name,
+              quantity: '1',
+              priceUnit: l.amount,
+              debit: '0',
+              credit: '0',
+            })),
+          },
+        },
+      ] as never);
+    if (p.transporter !== null && p.freightAmount !== null && p.freightAmount.gt(0)) {
+      const lines = [{ name: `Freight ${p.name}`, amount: p.freightAmount }];
+      for (const c of p.charges)
+        if (c.amount.gt(0))
+          lines.push({
+            name: `${c.name} (${p.name})`,
+            amount: c.kind === 'deduction' ? c.amount.negated() : c.amount,
+          });
+      await draft('in_invoice', p.transporter.id, lines);
+    }
+    if (
+      p.kind === 'receipt' &&
+      p.deductFromSupplier &&
+      p.partner !== null &&
+      p.supplierDeduction !== null &&
+      p.supplierDeduction.gt(0)
+    )
+      await draft('in_refund', p.partner.id, [
+        { name: `Deduction on receipt ${p.name}`, amount: p.supplierDeduction },
+      ]);
+  }
+}
 
 export const stockAccountShutro = defineModule({
   name: 'stock_account',

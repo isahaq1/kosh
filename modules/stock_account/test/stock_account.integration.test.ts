@@ -325,6 +325,52 @@ test('scrap: a loss to Stock adjustments', async () => {
   ]);
 });
 
+test('transport (RFC 0032 §3.3): the freight bill with its charges and the supplier’s deduction, drafted once', async () => {
+  const contact = async (name: string) =>
+    (await call('POST', '/api/v1/models/res.partner', 'maria', { name })).json.id as number;
+  const supplier = await contact('Bengal Cement');
+  const trucks = await contact('Padma Transport');
+  const made = await call('POST', T, 'maria', {
+    kind: 'receipt',
+    partner: supplier,
+    source: ids['vendors'],
+    destination: ids['stock'],
+    vehicleNumber: 'DHAKA-METRO-TA-11-2233',
+    driverName: 'Karim',
+    transporter: trucks,
+    freightAmount: '5000',
+    deductFromSupplier: true,
+    supplierDeduction: '750',
+    charges: {
+      create: [
+        { name: 'Unloading', kind: 'addition', amount: '300' },
+        { name: 'Late arrival', kind: 'deduction', amount: '200' },
+      ],
+    },
+    extras: { create: [{ name: 'Empty bags', quantity: '20' }] },
+    moves: { create: [{ product: ids['Panel'], quantity: '4' }] },
+  });
+  expect(made.status, JSON.stringify(made.json)).toBe(201);
+  await run(`${T}/${made.json.id}/transitions/confirm`);
+  await run(`${T}/${made.json.id}/transitions/validate`);
+  const name = (await call('GET', `${T}/${made.json.id}?fields=name`, 'maria')).json.name;
+  const bills = await find(
+    'account.move',
+    { invoiceOrigin: name },
+    'kind,partner,state,amountTotal',
+  );
+  const of = (kind: string) => bills.filter((b) => b.kind === kind);
+  expect(of('in_invoice').length).toBe(1);
+  expect(of('in_refund').length).toBe(1);
+  const freight = of('in_invoice')[0];
+  expect(freight.partner?.id ?? freight.partner).toBe(trucks);
+  expect(freight.state).toBe('draft');
+  expect(Number(freight.amountTotal?.amount ?? freight.amountTotal)).toBe(5100);
+  const refund = of('in_refund')[0];
+  expect(refund.partner?.id ?? refund.partner).toBe(supplier);
+  expect(Number(refund.amountTotal?.amount ?? refund.amountTotal)).toBe(750);
+});
+
 test('nobody edits the valuation; stock users do not read it', async () => {
   const [layer] = await find('stock.valuation.layer', {}, 'id');
   expect(
