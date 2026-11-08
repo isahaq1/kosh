@@ -155,7 +155,13 @@ test('installing Purchase brings its dependencies and its approval policy', asyn
     text: 'SELECT name FROM approval_level ORDER BY sequence, id',
     params: [],
   });
-  expect(levels.map((l) => l.name)).toEqual(['Purchase manager', 'Purchase director']);
+  // The orders' two levels and the purchase requests' two (RFC 0032 §3.4).
+  expect(levels.map((l) => l.name).sort()).toEqual([
+    'Department head',
+    'Purchase director',
+    'Purchase manager',
+    'Purchase manager',
+  ]);
 });
 
 test('a large order waits for a manager, whose approval confirms it', async () => {
@@ -214,6 +220,84 @@ test('the Purchase overview (RFC 0022 step 2) is served to a purchase user', asy
   const overview = await call('GET', '/api/v1/reports/overview?app=purchase', 'farid');
   expect(overview.status, JSON.stringify(overview.json)).toBe(200);
   expect(overview.json.cards.map((c: { id: string }) => c.id)).toContain('spend_month');
+});
+
+test('a purchase request (RFC 0032 §3.4): approved, made into a request for quotation, followed by the line tracker', async () => {
+  const R = '/api/v1/models/purchase.request';
+  const L = '/api/v1/models/purchase.request.line';
+  const made = await call('POST', R, 'nadia', {
+    dateRequired: '2026-12-15',
+    priority: 'high',
+    vendor,
+    purpose: 'Spare belts for the pellet mill',
+    lines: { create: [{ product, quantity: '12' }] },
+  });
+  expect(made.status, JSON.stringify(made.json)).toBe(201);
+  const id = made.json.id as number;
+  // Nobody outside Purchase; a buyer sees nothing of a draft, so may not make RFQs before approval.
+  expect((await call('GET', `${R}/${id}`, 'bob')).status).toBe(403);
+  expect((await call('POST', `${R}/${id}/transitions/rfq`, 'farid')).status).toBe(403);
+  expect((await call('POST', `${R}/${id}/transitions/submit`, 'nadia')).status).toBe(200);
+  // No Workforce here: the department head level falls back to its role, a Purchase manager.
+  const inbox = (await call('GET', '/api/v1/approvals/inbox', 'dina')).json.requests as Json[];
+  const mine = inbox.filter((r) => r.targetModel === 'purchase.request' && r.targetId === id);
+  expect(mine.length).toBeGreaterThanOrEqual(1);
+  for (const r of mine)
+    expect((await call('POST', `/api/v1/approvals/requests/${r.id}/approve`, 'dina')).status).toBe(
+      200,
+    );
+  expect((await call('GET', `${R}/${id}?fields=state`, 'nadia')).json.state).toBe('approved');
+  const lines = async () =>
+    (
+      await call(
+        'GET',
+        `${L}?filter=${encodeURIComponent(JSON.stringify({ request: id }))}&fields=status,qtyApproved,qtyOnRfq,qtyOrdered,qtyRemaining`,
+        'farid',
+      )
+    ).json.items as Json[];
+  expect((await lines())[0]).toMatchObject({ status: 'approved' });
+  expect(Number((await lines())[0].qtyRemaining)).toBe(12);
+  // The buyer makes the request for quotation: one to the preferred vendor, its line linked back.
+  const rfq = await call('POST', `${R}/${id}/transitions/rfq`, 'farid');
+  expect(rfq.status, JSON.stringify(rfq.json)).toBe(200);
+  const orders = (
+    await call(
+      'GET',
+      `/api/v1/models/purchase.order?filter=${encodeURIComponent(JSON.stringify({ origin: made.json.name ?? '' }))}&fields=partner,state,origin`,
+      'farid',
+    )
+  ).json.items as Json[];
+  const reference = (await call('GET', `${R}/${id}?fields=name`, 'farid')).json.name as string;
+  const linked = (
+    await call(
+      'GET',
+      `/api/v1/models/purchase.order?filter=${encodeURIComponent(JSON.stringify({ origin: reference }))}&fields=partner,state`,
+      'farid',
+    )
+  ).json.items as Json[];
+  void orders;
+  expect(linked.length).toBe(1);
+  expect(linked[0].partner?.id ?? linked[0].partner).toBe(vendor);
+  let [line] = await lines();
+  expect(line.status).toBe('rfq');
+  expect(Number(line.qtyRemaining)).toBe(0);
+  expect((await call('POST', `${R}/${id}/transitions/rfq`, 'farid')).status).toBe(409);
+  // The order confirmed: the line is ordered.
+  const order = linked[0].id as number;
+  expect((await run(order, 'submit')).status).toBe(200);
+  expect((await run(order, 'confirm')).status).toBe(200);
+  [line] = await lines();
+  expect(line.status).toBe('ordered');
+  expect(Number(line.qtyOrdered)).toBe(12);
+  // The tracker's filters.
+  const tracked = (
+    await call(
+      'GET',
+      `${L}?filter=${encodeURIComponent(JSON.stringify({ status: 'ordered' }))}&fields=request`,
+      'dina',
+    )
+  ).json.items as Json[];
+  expect(tracked.some((l) => (l.request?.id ?? l.request) === id)).toBe(true);
 });
 
 test('the line onchange fills the product; the price comes from the vendor, else the cost, when saved', async () => {

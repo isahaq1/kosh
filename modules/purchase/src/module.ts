@@ -21,6 +21,7 @@ import {
   onchange,
   records,
 } from './.kosh/bindings.js';
+import { PurchaseRequest, PurchaseRequestLine } from './request.js';
 import { ProductVendorPrice, vendorPriceFor } from './vendorprice.js';
 
 type Decimal = ReturnType<typeof orm.toDecimal>;
@@ -336,6 +337,11 @@ export const PurchaseOrderLine = defineModel('purchase.order.line', {
     /** Before 0.2.0, one tax per line: copied into `taxes` by the migration; dropped later. */
     tax: f.many2one('account.tax', { label: 'Tax (before 0.2.0)', readonly: true }),
     datePlanned: f.date({ label: 'Expected arrival' }),
+    /** The purchase request line this one buys for (RFC 0032 §3.4). */
+    requestLine: f.many2one('purchase.request.line', {
+      ondelete: 'set null',
+      label: 'Request line',
+    }),
     currency: f.many2one('res.currency', {
       store: true,
       ...compute('purchase.order.line', 'currency', ['order.currency'], (lines) => {
@@ -439,9 +445,14 @@ export const purchaseShutro = defineModule({
   depends: [contactsShutro, productShutro, messagingShutro, permissionsShutro],
   groups: [
     orm.defineGroup({
+      code: 'purchase.requester',
+      label: 'Purchase requester',
+      implies: ['product.user', 'messaging.user'],
+    }),
+    orm.defineGroup({
       code: 'purchase.user',
       label: 'Buyer',
-      implies: ['contacts.user', 'product.user', 'messaging.user'],
+      implies: ['purchase.requester', 'contacts.user', 'product.user', 'messaging.user'],
     }),
     orm.defineGroup({
       code: 'purchase.manager',
@@ -454,6 +465,13 @@ export const purchaseShutro = defineModule({
       implies: ['purchase.manager'],
     }),
   ],
+  permissions: [
+    orm.definePermission({
+      code: 'purchase.request_buy',
+      label: 'Turn purchase requests into requests for quotation',
+      groups: ['purchase.user'],
+    }),
+  ],
   sequences: [
     orm.defineSequence({
       code: 'purchase.order',
@@ -461,7 +479,19 @@ export const purchaseShutro = defineModule({
       padding: 5,
       reset: 'yearly',
     }),
+    orm.defineSequence({
+      code: 'purchase.request',
+      prefix: 'PR/{year}/',
+      padding: 5,
+      reset: 'yearly',
+    }),
   ],
-  models: [PurchaseOrder, PurchaseOrderLine, ProductVendorPrice],
+  models: [
+    PurchaseOrder,
+    PurchaseOrderLine,
+    ProductVendorPrice,
+    PurchaseRequest,
+    PurchaseRequestLine,
+  ],
   extensions: [CompanyPurchase],
 });

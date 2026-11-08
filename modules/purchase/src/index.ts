@@ -10,12 +10,14 @@ import { defineModule } from '@kosh/modules-sdk';
 import { permissions } from '@kosh/permissions';
 import { product } from '@kosh/product';
 import { reporting } from '@kosh/reporting';
-import { action, calendar, form, kanban, list, search, stat } from '@kosh/views';
+import { action, calendar, form, kanban, list, pivot, search, stat } from '@kosh/views';
 import { purchaseDemo } from './demo.js';
 import { PurchaseOrder, purchaseShutro } from './module.js';
+import { PurchaseRequest, PurchaseRequestLine } from './request.js';
 import { ProductVendorPrice } from './vendorprice.js';
 
 export { PurchaseOrder, PurchaseOrderLine, purchaseShutro } from './module.js';
+export { createRfqs, PurchaseRequest, PurchaseRequestLine } from './request.js';
 export { ProductVendorPrice, type VendorChoice, vendorPriceFor } from './vendorprice.js';
 
 export const purchase: ReturnType<typeof defineModule> = defineModule({
@@ -23,7 +25,32 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
   kosh: '^0.1.0',
   hooks: { demo: purchaseDemo },
   depends: [contacts, product, messaging, permissions, reporting],
+  // Exceptions to the module standard (RFC 0023), each with its reason.
+  standard: {
+    waive: [
+      {
+        rule: 'I1',
+        model: 'purchase.request.line',
+        reason: 'Lines import with their request (the purchase requests template).',
+      },
+    ],
+  },
   events: [
+    {
+      topic: 'purchase.request.submitted',
+      model: 'purchase.request',
+      label: 'Purchase request submitted',
+    },
+    {
+      topic: 'purchase.request.approved',
+      model: 'purchase.request',
+      label: 'Purchase request approved',
+    },
+    {
+      topic: 'purchase.request.rfq',
+      model: 'purchase.request',
+      label: 'Requests for quotation made from a purchase request',
+    },
     {
       topic: 'purchase.order.confirmed',
       model: 'purchase.order',
@@ -57,6 +84,46 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
   ],
   sendable: [{ model: 'purchase.order', template: 'purchase.purchase_order', partner: 'partner' }],
   documents: [
+    {
+      key: 'purchase_request',
+      name: 'Purchase request',
+      model: 'purchase.request',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Purchase request {{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'who',
+            items: [
+              { label: 'Requested by', bind: 'requester.name' },
+              { label: 'Request date', bind: 'date' },
+              { label: 'Needed by', bind: 'dateRequired' },
+              { label: 'Priority', bind: 'priority' },
+              { label: 'Preferred vendor', bind: 'vendor.name' },
+              { label: 'Status', bind: 'state' },
+            ],
+          },
+          {
+            kind: 'table',
+            id: 'lines',
+            bind: 'lines',
+            columns: [
+              { label: 'Product', bind: 'product.name' },
+              { label: 'Description', bind: 'name' },
+              { label: 'Unit', bind: 'uom.name' },
+              { label: 'Requested', bind: 'quantity' },
+              { label: 'Approved', bind: 'qtyApproved' },
+              { label: 'Ordered', bind: 'qtyOrdered' },
+            ],
+          },
+          { kind: 'text', id: 'purpose', text: '{{purpose}}' },
+          { kind: 'qr', id: 'qr', bind: 'name', size: 24, label: 'Request reference' },
+        ],
+      },
+    },
     {
       key: 'purchase_order',
       name: 'Purchase order',
@@ -110,6 +177,20 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
   ],
   importTemplates: [
     {
+      key: 'purchase_requests',
+      model: 'purchase.request',
+      label: 'Purchase requests',
+      columns: [
+        { header: 'Requested by', field: 'requester' },
+        { header: 'Needed by', field: 'dateRequired' },
+        { header: 'Priority', field: 'priority' },
+        { header: 'Preferred vendor', field: 'vendor' },
+        { header: 'Purpose', field: 'purpose' },
+        { header: 'Lines › Product', field: 'lines.product' },
+        { header: 'Lines › Quantity', field: 'lines.quantity' },
+      ],
+    },
+    {
       key: 'vendor_prices',
       model: 'product.vendor.price',
       label: 'Vendor prices',
@@ -152,7 +233,12 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
   // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
   i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
-    user: { label: 'Buyer (own orders)', groups: ['purchase.user'] },
+    requester: { label: 'Requester (own purchase requests)', groups: ['purchase.requester'] },
+    user: {
+      label: 'Buyer (own orders, every request)',
+      groups: ['purchase.user'],
+      implies: ['requester'],
+    },
     manager: { label: 'Manager (all orders)', groups: ['purchase.manager'], implies: ['user'] },
     director: { label: 'Director', groups: ['purchase.director'], implies: ['manager'] },
   },
@@ -173,6 +259,25 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
     ],
   },
   approvals: [
+    {
+      name: 'Purchase request approvals',
+      model: 'purchase.request',
+      onApproved: 'approve',
+      onRejected: 'reject',
+      levels: [
+        {
+          name: 'Department head',
+          condition: {},
+          approver: 'department_head',
+          approverRole: 'purchase.manager',
+        },
+        {
+          name: 'Purchase manager',
+          condition: { amountEstimate: { gt: '100000' } },
+          approverRole: 'purchase.manager',
+        },
+      ],
+    },
     {
       name: 'Purchase approvals',
       model: 'purchase.order',
@@ -335,6 +440,15 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
     },
   ],
   actions: {
+    'purchase.action_requests': action(PurchaseRequest, {
+      label: 'Purchase requests',
+      views: ['list', 'kanban', 'form'],
+    }),
+    'purchase.action_request_lines': action(PurchaseRequestLine, {
+      label: 'Request lines',
+      views: ['list', 'pivot'],
+      defaultFilters: ['open'],
+    }),
     'purchase.action_rfqs': action(PurchaseOrder, {
       label: 'Requests for quotation',
       views: ['list', 'kanban', 'form'],
@@ -364,6 +478,21 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
   },
   menus: [
     { id: 'purchase.root', label: 'Purchase', app: 'purchase' },
+    {
+      id: 'purchase.requests',
+      parent: 'purchase.root',
+      label: 'Purchase requests',
+      action: 'purchase.action_requests',
+      sequence: 0,
+    },
+    {
+      id: 'purchase.request_lines',
+      parent: 'purchase.root',
+      label: 'Request lines',
+      action: 'purchase.action_request_lines',
+      sequence: 6,
+      visibleTo: ['purchase.user'],
+    },
     {
       id: 'purchase.rfqs',
       parent: 'purchase.root',
@@ -402,6 +531,93 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
     },
   ],
   views: {
+    'purchase.request.list': list(PurchaseRequest, {
+      columns: [
+        'name',
+        'requester',
+        'date',
+        'dateRequired',
+        { field: 'priority', widget: 'priority' },
+        'amountEstimate',
+        'state',
+      ],
+      decorations: { danger: { priority: 'critical' }, warning: { priority: 'urgent' } },
+    }),
+    'purchase.request.kanban': kanban(PurchaseRequest, {
+      groupBy: 'state',
+      card: {
+        title: 'name',
+        subtitle: 'requester',
+        footer: ['dateRequired', { field: 'priority', widget: 'priority' }],
+      },
+    }),
+    'purchase.request.form': form(PurchaseRequest, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('submit', { primary: true, label: 'Submit for approval' }),
+          k.button('rfq', { primary: true, label: 'Make requests for quotation' }),
+          k.button('close', { label: 'Close' }),
+          k.button('redraft', { label: 'Set to draft' }),
+          k.button('cancel', { label: 'Cancel', confirm: 'Cancel this request?' }),
+        ],
+      },
+      sheet: [
+        k.stats('related', [
+          {
+            id: 'request_orders',
+            label: 'Requests for quotation and orders',
+            model: PurchaseOrder,
+            where: { origin: { $record: 'name' } },
+            action: 'purchase.action_orders',
+          },
+        ]),
+        k.group('main', ['name', 'requester', 'date', 'purpose']),
+        k.group('when', [
+          'dateRequired',
+          { field: 'priority', widget: 'priority' },
+          'vendor',
+          'amountEstimate',
+        ]),
+        k.component('approvals', 'approvals.Panel'),
+        k.lines('lines', [
+          'product',
+          { field: 'name', id: 'line_name' },
+          'uom',
+          'quantity',
+          'qtyApproved',
+          'qtyOnRfq',
+          'qtyOrdered',
+          'qtyRemaining',
+          { field: 'buyers', id: 'line_buyers', widget: 'tags' },
+          { field: 'status', id: 'line_status', widget: 'badge' },
+        ]),
+        k.group('after', ['rejectReason'], { label: 'Decision' }),
+      ],
+      chatter: true,
+    })),
+    // The line tracker (RFC 0032 §3.4): every request line through the chain.
+    'purchase.request.line.list': list(PurchaseRequestLine, {
+      columns: [
+        'request',
+        'product',
+        'uom',
+        'quantity',
+        'qtyApproved',
+        'qtyOnRfq',
+        'qtyOrdered',
+        'qtyRemaining',
+        'dateRequired',
+        { field: 'buyers', widget: 'tags' },
+        { field: 'status', widget: 'badge' },
+      ],
+      inlineEdit: ['buyers'],
+    }),
+    'purchase.request.line.pivot': pivot(PurchaseRequestLine, {
+      rows: ['product'],
+      cols: ['status'],
+      measures: [{ sum: 'qtyApproved' }, { sum: 'qtyOrdered' }],
+    }),
     'purchase.order.list': list(PurchaseOrder, {
       columns: [
         'name',
@@ -495,6 +711,44 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
     }),
   },
   search: {
+    'purchase.request': search(PurchaseRequest, {
+      fields: ['name', 'purpose', 'requester.name', 'lines.product.name'],
+      filters: {
+        mine: { label: 'Mine', domain: { requester: { $env: 'uid' } }, group: 'who' },
+        waiting: { label: 'Waiting for approval', domain: { state: 'to_approve' }, group: 'state' },
+        approved: { label: 'Approved', domain: { state: 'approved' }, group: 'state' },
+        urgent: {
+          label: 'Urgent',
+          domain: { priority: { in: ['urgent', 'critical'] } },
+          group: 'priority',
+        },
+      },
+      groupBy: ['requester', 'state', 'dateRequired:month'],
+    }),
+    'purchase.request.line': search(PurchaseRequestLine, {
+      fields: ['product.name', 'request.name'],
+      filters: {
+        open: {
+          label: 'Approved, to buy',
+          domain: { status: { in: ['approved', 'rfq'] } },
+          group: 'status',
+        },
+        assigned_me: {
+          label: 'Assigned to me',
+          domain: { buyers: { any: { id: { $env: 'uid' } } } },
+          group: 'who',
+        },
+        unassigned: {
+          label: 'Not assigned',
+          domain: { buyers: { none: { id: { gt: 0 } } } },
+          group: 'who',
+        },
+        rfq: { label: 'RFQ made', domain: { status: 'rfq' }, group: 'status' },
+        ordered: { label: 'Ordered', domain: { status: 'ordered' }, group: 'status' },
+        cancelled: { label: 'Cancelled', domain: { status: 'cancelled' }, group: 'status' },
+      },
+      groupBy: ['request', 'product', 'status'],
+    }),
     'product.vendor.price': search(ProductVendorPrice, {
       fields: ['vendor.name', 'product.name', 'vendorCode'],
       filters: {
