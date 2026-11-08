@@ -53,7 +53,8 @@
     "@kosh/contacts": "workspace:*",
     "@kosh/product": "workspace:*",
     "@kosh/ui": "workspace:*",
-    "@kosh/reporting": "workspace:*"
+    "@kosh/reporting": "workspace:*",
+    "fastify": "^5.12.7"
   },
   "devDependencies": {
     "@kosh/settings": "workspace:*",

@@ -15,6 +15,7 @@ import { type Decimal, type Id, orm } from '@kosh/server/orm';
 import { action, field, form, kanban, list, search, stat } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import { stockDemo } from './demo.js';
+import { registerLedgerRoutes } from './ledger.js';
 import {
   onHandIn,
   StockCount,
@@ -40,6 +41,21 @@ import {
   StockReturnReason,
 } from './returns.js';
 
+export {
+  IN_TYPES,
+  type InType,
+  type LedgerRow,
+  type LedgerScope,
+  ledgerDetails,
+  ledgerSummary,
+  type MovementRow,
+  type MovementType,
+  OUT_TYPES,
+  type OutType,
+  type StockRow,
+  stockReport,
+  TYPE_LABELS,
+} from './ledger.js';
 export {
   defaultLocations,
   inProductUnit,
@@ -710,6 +726,7 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
     registerCountRoutes(context);
     registerReturnRoutes(context);
     registerReplenishmentRoutes(context);
+    registerLedgerRoutes(context);
   },
   settings: {
     sections: [
@@ -883,6 +900,11 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       page: 'stock.Operations',
       label: 'My operations',
     },
+    'stockroom.action_ledger': {
+      type: 'client',
+      page: 'stock.Ledger',
+      label: 'Stock ledger',
+    },
     'stockroom.action_putaway': action(StockPutaway, {
       label: 'Putaway rules',
       views: ['list', 'form'],
@@ -986,6 +1008,13 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       label: 'Scrap',
       action: 'stockroom.action_scraps',
       sequence: 8,
+    },
+    {
+      id: 'stockroom.ledger',
+      parent: 'stockroom.root',
+      label: 'Stock ledger',
+      action: 'stockroom.action_ledger',
+      sequence: 9,
     },
     {
       id: 'stockroom.configuration',

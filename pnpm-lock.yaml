@@ -2494,6 +2494,9 @@ importers:
       '@kosh/views':
         specifier: workspace:*
         version: link:../../packages/views
+      fastify:
+        specifier: ^5.12.7
+        version: 5.12.7
     devDependencies:
       '@kosh/settings':
         specifier: workspace:*

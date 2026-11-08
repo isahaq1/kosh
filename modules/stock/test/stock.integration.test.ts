@@ -915,6 +915,55 @@ test('My operations (RFC 0032 §3.3): ready, waiting and late per warehouse and 
   expect((await call('GET', '/api/v1/stockroom/operations', 'nobody')).status).not.toBe(200);
 });
 
+test('the stock ledger (RFC 0032 §3.3): opening, in and out by movement type, closing; movements; the stock report; files for managers', async () => {
+  const all = '/api/v1/stockroom/ledger?from=2000-01-01&to=2100-12-31';
+  const res = await call('GET', all, 'rahim');
+  expect(res.status, JSON.stringify(res.json)).toBe(200);
+  const panel = (res.json.rows as Json[]).find((r) => r.product.id === ids['LED panel']);
+  expect(panel).toBeDefined();
+  expect(Number(panel.in.purchase_receipt.qty)).toBeGreaterThan(0);
+  expect(Number(panel.out.sales_delivery.qty)).toBeGreaterThan(0);
+  // The closing quantity is what the product has in stock now.
+  const quants = await find('stock.quant', { product: ids['LED panel'] }, 'quantity', 'rahim');
+  const held = quants.reduce((t, q) => t + Number(q.quantity), 0);
+  expect(Number(panel.closing.qty)).toBe(held);
+  // Before any movement: nothing; an opening carries over.
+  const early = await call(
+    'GET',
+    '/api/v1/stockroom/ledger?from=2000-01-01&to=2000-01-02',
+    'rahim',
+  );
+  expect(early.json.rows).toEqual([]);
+  const later = await call(
+    'GET',
+    '/api/v1/stockroom/ledger?from=2100-01-01&to=2100-12-31',
+    'rahim',
+  );
+  const carried = (later.json.rows as Json[]).find((r) => r.product.id === ids['LED panel']);
+  expect(Number(carried.opening.qty)).toBe(held);
+  const details = await call('GET', `${all}&mode=details`, 'rahim');
+  expect((details.json.rows as Json[]).some((r) => r.type === 'purchase_receipt')).toBe(true);
+  const stock = await call('GET', '/api/v1/stockroom/stock', 'rahim');
+  expect(
+    (stock.json.rows as Json[]).some(
+      (r) => r.product.id === ids['LED panel'] && Number(r.onHand) > 0,
+    ),
+  ).toBe(true);
+  // A bad period; files need the export right, a manager's.
+  expect(
+    (await call('GET', '/api/v1/stockroom/ledger?from=2026-02-01&to=2026-01-01', 'rahim')).status,
+  ).toBe(400);
+  expect((await call('GET', `${all}&format=xlsx`, 'rahim')).status).toBe(403);
+  await call('GET', '/api/v1/models/stock.warehouse', 'dina');
+  const file = await host.server.app.inject({
+    method: 'GET',
+    url: `${all}&format=xlsx`,
+    headers: { authorization: `Bearer ${tokens.get('dina')}` },
+  });
+  expect(file.statusCode, file.body.slice(0, 200)).toBe(200);
+  expect(file.headers['content-type']).toContain('spreadsheetml');
+});
+
 test('the demo data loads', async () => {
   const auth = host.server.auth;
   if (auth === undefined) throw new Error('base is installed');

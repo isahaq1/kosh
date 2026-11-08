@@ -496,6 +496,11 @@ export const StockMove = defineModel('stock.move', {
   },
   methods: {
     /**
+     * Each of these lines' stock value as it moved, by line, as a signed decimal string (positive in, negative out),
+     * for the stock ledger (RFC 0032 §3.3). Nothing here; `stock_account` overrides it with its valuation layers.
+     */
+    moveValues: method('stock.move', async (): Promise<Map<number, string>> => new Map()),
+    /**
      * What a backorder's line copies from each of these lines: the product, description and unit. A bridge adds
      * its link by overriding it (`sale_stock`: the order line), so the rest of a line stays tied to its origin.
      */

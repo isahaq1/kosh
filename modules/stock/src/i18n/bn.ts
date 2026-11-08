@@ -273,6 +273,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Stock count applied': 'মজুদ গণনা প্রয়োগকৃত',
   'Stock count sheet': 'মজুদ গণনার শিট',
   'Stock is counted in an internal location.': 'মজুদ অভ্যন্তরীণ অবস্থানে গণনা করা হয়।',
+  'Stock ledger': 'স্টক লেজার',
   Stockroom: 'স্টকরুম',
   'Stockroom manager': 'স্টকরুম ব্যবস্থাপক',
   'Stockroom user': 'স্টকরুম ব্যবহারকারী',

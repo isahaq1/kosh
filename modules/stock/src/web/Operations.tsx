@@ -38,7 +38,8 @@ export function Operations({ api, app = 'stockroom' }: PageProps): ReactElement 
   if (operations.isError) return <Alert tone="danger">{(operations.error as Error).message}</Alert>;
   const list = operations.data?.operations ?? [];
   return (
-    <div className="space-y-4">
+    <div className="grid gap-4 p-4">
+      <h1 className="text-xl font-semibold">{t('operations.title')}</h1>
       <p className="max-w-3xl text-sm text-muted-foreground">{t('operations.hint')}</p>
       {operations.isLoading ? (
         <p className="text-sm text-muted-foreground">{t('operations.loading')}</p>
