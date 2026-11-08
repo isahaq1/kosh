@@ -13,6 +13,7 @@ import Fastify, {
   type FastifyServerOptions,
 } from 'fastify';
 import { Valkey } from 'iovalkey';
+import { registerExplain } from './api/explain.js';
 import { idempotencyTableStatements } from './api/idempotency.js';
 import { publicApiModels } from './api/metadata.js';
 import { Navigation } from './api/navigation.js';
@@ -390,6 +391,8 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
       return openapi;
     },
   });
+  // What models, fields and buttons are, for Developer mode (RFC 0031 §3.1).
+  registerExplain(app, { registry, models });
   new Navigation(registry.loaded, models).register(app);
   views.register(app);
 

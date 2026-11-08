@@ -13,6 +13,7 @@ const USERS: Record<string, { user: number; groups: string[] }> = {
   alice: { user: 1, groups: ['contacts.user'] },
   maria: { user: 2, groups: ['contacts.manager'] },
   bob: { user: 3, groups: ['base.user'] },
+  dev: { user: 3, groups: ['base.user', 'base.developer'] },
 };
 const authenticate: Authenticator = async (request) => {
   const u = USERS[String(request.headers['x-test-user'])];
@@ -378,5 +379,41 @@ describe('OpenAPI', () => {
       'Idempotency-Key',
     );
     expect(doc.paths[`${P}/{id}`].patch.responses['412']).toBeDefined();
+  });
+});
+
+describe('explain (RFC 0031 §3.1)', () => {
+  test('developers read what a model, its fields and buttons are; others are refused', async () => {
+    expect((await call({ url: '/api/v1/meta/explain/res.partner', as: 'bob' })).statusCode).toBe(
+      403,
+    );
+    expect((await call({ url: '/api/v1/meta/explain/no.such', as: 'dev' })).statusCode).toBe(404);
+    const res = await call({ url: '/api/v1/meta/explain/res.partner', as: 'dev' });
+    expect(res.statusCode, res.body).toBe(200);
+    const explained = res.json() as {
+      module: string;
+      fields: {
+        key: string;
+        kind: string;
+        module: string;
+        hasDefault: boolean;
+        default: string | null;
+        required: boolean;
+        options: unknown;
+      }[];
+      transitions: { name: string; from: string[]; to: string }[];
+      incoming: { model: string; field: string }[];
+    };
+    expect(explained.module).toBe('contacts');
+    const name = explained.fields.find((f) => f.key === 'name');
+    expect(name).toMatchObject({ kind: 'char', required: true, module: 'contacts' });
+    const isCompany = explained.fields.find((f) => f.key === 'isCompany');
+    expect(isCompany).toMatchObject({ hasDefault: true, default: 'false' });
+    expect(explained.fields.find((f) => f.key === 'stage')?.options).not.toBeNull();
+    expect(explained.transitions.length).toBeGreaterThan(0);
+    expect(explained.transitions[0]).toMatchObject({
+      from: expect.any(Array),
+      to: expect.any(String),
+    });
   });
 });

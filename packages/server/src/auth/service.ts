@@ -67,6 +67,8 @@ export interface UserInfo {
   readonly administrator: boolean;
   /** Administrator rights are withheld until this session has a second factor (enable or verify 2FA). */
   readonly administratorNeedsSecondFactor: boolean;
+  /** May turn on Developer mode (RFC 0031 §3.1): administrators and the `base.developer` group. */
+  readonly developer: boolean;
   /** The policy requires two-factor sign-in of everyone and it is not on: nothing but setting it up is allowed. */
   readonly twoFactorSetupRequired: boolean;
 }
@@ -878,6 +880,13 @@ export class AuthService {
         administrator,
         administratorNeedsSecondFactor:
           administrator && !(session.secondFactor && twoFactorEnabled),
+        developer:
+          administrator ||
+          (
+            await model(env, 'auth.user_group').search({
+              where: { user: session.user, group: 'base.developer' },
+            })
+          ).length > 0,
         twoFactorSetupRequired: !twoFactorEnabled && (await this.policy()).twoFactor === 'everyone',
       };
     });

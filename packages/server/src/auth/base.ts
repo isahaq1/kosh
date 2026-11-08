@@ -318,6 +318,8 @@ export const baseShutro: ReturnType<typeof orm.defineModule> = defineModule({
   version: '0.1.0',
   groups: [
     defineGroup({ code: 'base.user', label: 'Internal user' }),
+    // Developer mode (RFC 0031 §3.1): the explain popovers of fields, buttons and models.
+    defineGroup({ code: 'base.developer', label: 'Developer', implies: ['base.user'] }),
     defineGroup({
       code: 'base.admin',
       label: 'Administrator',
