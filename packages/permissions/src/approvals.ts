@@ -2108,12 +2108,19 @@ export async function installApprovalPolicies(
           condition: level.condition ?? null,
           approverRole: level.approverRole,
           approverKind:
-            level.approver === 'manager'
-              ? 'manager'
+            typeof level.approver === 'string'
+              ? level.approver
               : typeof level.approver === 'object'
-                ? 'field'
+                ? 'record' in level.approver
+                  ? 'record'
+                  : 'field'
                 : 'role',
-          ...(typeof level.approver === 'object' ? { approverField: level.approver.field } : {}),
+          ...(typeof level.approver === 'object'
+            ? {
+                approverField:
+                  'record' in level.approver ? level.approver.record : level.approver.field,
+              }
+            : {}),
           quorum:
             level.quorum === undefined || level.quorum === 'any'
               ? 'any'

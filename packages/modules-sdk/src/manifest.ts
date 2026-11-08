@@ -63,8 +63,16 @@ export interface ApprovalLevelSpec {
    * nobody (no manager, an empty field).
    */
   readonly approverRole: string;
-  /** Decided by the requester's manager (Workforce), or the person in a field of the record (RFC 0025). */
-  readonly approver?: 'manager' | { readonly field: string };
+  /**
+   * Decided by the requester's manager, their department's head or approvers (Workforce), the person in a field of
+   * the record (RFC 0025), or the people the record names through its `approvalUsers(key)` method (RFC 0027).
+   */
+  readonly approver?:
+    | 'manager'
+    | 'department_head'
+    | 'department_approvers'
+    | { readonly field: string }
+    | { readonly record: string };
   /** How many decide: any one (default), all of them, or a number. */
   readonly quorum?: 'any' | 'all' | number;
 }
