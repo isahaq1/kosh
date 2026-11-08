@@ -6,6 +6,8 @@ export const bn: Readonly<Record<string, string>> = {
     'উপাদানের অংশ 0-এর বেশি এবং সর্বোচ্চ 1 (অর্ধেকের জন্য 0.5)।',
   'A cost centre code is used once per company.':
     'প্রতিটি প্রতিষ্ঠানে একটি খরচ কেন্দ্রের কোড একবারই ব্যবহার হয়।',
+  'A document uses the position chosen on it, else its partner’s, else the first that applies by itself.':
+    'একটি নথি তাতে বেছে নেওয়া পজিশন ব্যবহার করে, নইলে পার্টনারের, নইলে নিজে থেকে প্রযোজ্য প্রথমটি।',
   'A draft can be changed; a bill may wait for approval; a posted entry is in the books and is corrected only by a reversal.':
     'খসড়া বদলানো যায়; বিল অনুমোদনের অপেক্ষায় থাকতে পারে; পোস্টকৃত এন্ট্রি হিসাবের খাতায় ওঠে এবং কেবল বিপরীত এন্ট্রি দিয়ে সংশোধন করা যায়।',
   'A draft payment can be changed; posting records it in the journal and matches it with the documents it pays.':
@@ -37,6 +39,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Account currency': 'হিসাবের মুদ্রা',
   'Account for reverse charge (payable)': 'রিভার্স চার্জের হিসাব (প্রদেয়)',
   'Account holder': 'হিসাবধারী',
+  'Account mapping': 'হিসাবের রূপান্তর',
   'Account number': 'হিসাব নম্বর',
   'Account on credit notes': 'ক্রেডিট নোটের হিসাব',
   'Account type': 'হিসাবের ধরন',
@@ -49,6 +52,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Aged balances': 'বয়সভিত্তিক ব্যালান্স',
   'Allow reconciliation': 'মিলকরণের অনুমতি',
   Always: 'সবসময়',
+  'Always used for their documents; empty: chosen by the positions that apply by themselves.':
+    'তাদের নথিতে সবসময় ব্যবহৃত; খালি: নিজে থেকে প্রযোজ্য পজিশনগুলো বেছে নেয়।',
   Amount: 'অঙ্ক',
   'Amount Currency': 'মুদ্রায় অঙ্ক',
   'Amount due': 'বকেয়া অঙ্ক',
@@ -57,6 +62,8 @@ export const bn: Readonly<Record<string, string>> = {
   'An account code is used once per company.': 'প্রতিটি প্রতিষ্ঠানে একটি হিসাব কোড একবারই ব্যবহার হয়।',
   Applied: 'প্রয়োগ হয়েছে',
   'Applies from (document total)': 'প্রযোজ্য (নথির মোট থেকে)',
+  'Applies to': 'যাদের ক্ষেত্রে প্রযোজ্য',
+  'Apply by itself': 'নিজে থেকে প্রয়োগ',
   Automatic: 'স্বয়ংক্রিয়',
   Balance: 'ব্যালান্স',
   'Balance sheet': 'স্থিতিপত্র',
@@ -70,6 +77,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Bank statement closed': 'ব্যাংক স্টেটমেন্ট বন্ধ হয়েছে',
   'Bank statements': 'ব্যাংক স্টেটমেন্ট',
   Base: 'ভিত্তি',
+  Becomes: 'হয়ে যায়',
   'Between states or abroad': 'রাজ্যের বাইরে বা বিদেশে',
   'Biggest open invoices': 'সবচেয়ে বড় খোলা চালান',
   Bills: 'বিল',
@@ -84,6 +92,8 @@ export const bn: Readonly<Record<string, string>> = {
   Cash: 'নগদ',
   'Certificate of withholding at source': 'উৎসে কর্তনের সনদ',
   'Chart of accounts': 'হিসাবের তালিকা',
+  'Chosen for partners who meet its conditions, unless a document or the partner names another.':
+    'যেসব পার্টনার এর শর্ত পূরণ করে তাদের জন্য বেছে নেওয়া হয়, যদি না নথি বা পার্টনার অন্যটি উল্লেখ করে।',
   Close: 'বন্ধ করুন',
   Closed: 'বন্ধ',
   'Closing balance': 'শেষের ব্যালান্স',
@@ -98,6 +108,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Cost centre': 'খরচ কেন্দ্র',
   'Cost centres': 'খরচ কেন্দ্র',
   'Cost of revenue': 'আয়ের ব্যয়',
+  Countries: 'দেশ',
   Country: 'দেশ',
   'Created At': 'তৈরির সময়',
   'Created By': 'তৈরি করেছেন',
@@ -139,15 +150,20 @@ export const bn: Readonly<Record<string, string>> = {
     'প্রতিটি ইনভয়েস ও ক্রেডিট নোট পোস্ট হলে PDF-সহ ইমেইলে পাঠানো হয়।',
   Email: 'ইমেইল',
   'Empty: shared by every company.': 'ফাঁকা থাকলে: সব প্রতিষ্ঠানের জন্য সাধারণ।',
+  'Empty: the tax is removed (an export, an exempt customer).':
+    'খালি: করটি বাদ যায় (রপ্তানি, অব্যাহতিপ্রাপ্ত গ্রাহক)।',
   Entry: 'এন্ট্রি',
   'Entry, invoice or bill posted': 'এন্ট্রি, চালান বা বিল পোস্টকৃত',
   Equity: 'মালিকানা স্বত্ব',
   'Exchange difference entry': 'বিনিময় পার্থক্যের এন্ট্রি',
   'Exchange gain account': 'বিনিময় লাভের হিসাব',
   'Exchange loss account': 'বিনিময় ক্ষতির হিসাব',
+  'Expense account': 'খরচের হিসাব',
   Expenses: 'খরচ',
   'Feed cursor': 'ফিডের অবস্থান',
   Finance: 'অর্থ',
+  'Fiscal position': 'ফিসকাল পজিশন',
+  'Fiscal positions': 'ফিসকাল পজিশন',
   'Fiscal year': 'অর্থবছর',
   'Fiscal year {{name}}': 'অর্থবছর {{name}}',
   'Fiscal year and lock dates': 'অর্থবছর ও লক তারিখ',
@@ -171,6 +187,7 @@ export const bn: Readonly<Record<string, string>> = {
   ID: 'আইডি',
   'Import key': 'আমদানির চাবি',
   Income: 'আয়',
+  'Income account': 'আয়ের হিসাব',
   Invoice: 'চালান',
   'Invoice Lines': 'চালানের লাইন',
   'Invoiced by month': 'মাস অনুযায়ী চালানকৃত',
@@ -181,6 +198,9 @@ export const bn: Readonly<Record<string, string>> = {
     'চালান, বিল, জার্নাল ও এন্ট্রি নির্ভুল অঙ্কে পোস্টকৃত',
   Invoicing: 'চালান প্রস্তুত',
   'Invoicing (invoices and their payments)': 'চালান প্রস্তুত (চালান ও তার পেমেন্ট)',
+  'ISO codes (IN-MH) separated by commas; empty: any.': 'কমা দিয়ে আলাদা ISO কোড (IN-MH); খালি: যেকোনো।',
+  'ISO codes separated by commas (BD, IN); empty: any country. "!BD" means any country but BD.':
+    'কমা দিয়ে আলাদা ISO কোড (BD, IN); খালি: যেকোনো দেশ। "!BD" মানে BD ছাড়া যেকোনো দেশ।',
   Journal: 'জার্নাল',
   'Journal entries': 'জার্নাল এন্ট্রি',
   'Journal entry': 'জার্নাল এন্ট্রি',
@@ -206,6 +226,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Lock date': 'লক তারিখ',
   'Locked until': 'লক থাকবে যে তারিখ পর্যন্ত',
   'Manager (chart, lock dates, closing)': 'ব্যবস্থাপক (হিসাবের তালিকা, লক তারিখ, সমাপনী)',
+  'Maps taxes and accounts when posted; empty: the partner’s, or one that applies by itself.':
+    'পোস্ট করার সময় কর ও হিসাব বদলায়; খালি: পার্টনারের, বা নিজে থেকে প্রযোজ্য একটি।',
   'Match its lines in Accounting › Reconcile bank; it closes once every line is matched and the balances agree.':
     'হিসাব › ব্যাংক মিলান-এ এর লাইন মেলান; প্রতিটি লাইন মিললে ও ব্যালান্স মিলে গেলে এটি বন্ধ হয়।',
   'Match the document': 'নথির সঙ্গে মেলান',
@@ -224,6 +246,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Non-current liabilities': 'অচলতি দায়',
   'Not paid': 'অপরিশোধিত',
   Note: 'নোট',
+  'Note on documents': 'নথিতে নোট',
   Notes: 'নোট',
   'Nothing is posted, reversed or reconciled on or before it.':
     'এই তারিখে বা তার আগে কিছু পোস্ট, উল্টানো বা মিলকরণ করা যায় না।',
@@ -275,6 +298,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Place of supply': 'সরবরাহের স্থান',
   'Placeholders: {{partner}}, {{company}}, {{amount}} (all that is overdue), {{days}} (the oldest), {{invoices}} (one line each, with its link).':
     'প্লেসহোল্ডার: {{partner}}, {{company}}, {{amount}} (সব বকেয়া), {{days}} (সবচেয়ে পুরোনো), {{invoices}} (প্রতিটি এক লাইনে, লিংকসহ)।',
+  Position: 'পজিশন',
   Post: 'পোস্ট করুন',
   Posted: 'পোস্টকৃত',
   'Posted at': 'পোস্টের সময়',
@@ -337,6 +361,7 @@ export const bn: Readonly<Record<string, string>> = {
   State: 'অবস্থা',
   Statement: 'স্টেটমেন্ট',
   'Statement line': 'স্টেটমেন্টের লাইন',
+  States: 'রাজ্য',
   Status: 'অবস্থা',
   'Stop sales': 'বিক্রয় বন্ধ',
   Subject: 'বিষয়',
@@ -354,6 +379,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Tax component': 'করের উপাদান',
   'Tax line for': 'যার করের লাইন',
   'Tax lock date': 'কর লক তারিখ',
+  'Tax mapping': 'করের রূপান্তর',
+  'Tax number': 'কর নম্বর',
   'Tax returns are filed up to it: tax lines cannot change on or before it.':
     'এই তারিখ পর্যন্ত কর রিটার্ন জমা হয়েছে: এই তারিখে বা তার আগে করের লাইন বদলানো যায় না।',
   Taxes: 'কর',
@@ -411,6 +438,10 @@ export const bn: Readonly<Record<string, string>> = {
   'What it says': 'যা লেখা থাকে',
   'What the journal records: sales, purchases, cash, bank or miscellaneous entries.':
     'জার্নালে যা লিপিবদ্ধ হয়: বিক্রয়, ক্রয়, নগদ, ব্যাংক বা বিবিধ এন্ট্রি।',
+  'What they owe us posts here; empty: the company’s.':
+    'তারা আমাদের যা দেয় তা এখানে পোস্ট হয়; খালি: প্রতিষ্ঠানের।',
+  'What we owe them posts here; empty: the company’s.':
+    'আমরা তাদের যা দিই তা এখানে পোস্ট হয়; খালি: প্রতিষ্ঠানের।',
   WhatsApp: 'WhatsApp',
   When: 'যখন',
   'When paying vendors': 'সরবরাহকারীকে পরিশোধের সময়',
@@ -418,16 +449,28 @@ export const bn: Readonly<Record<string, string>> = {
     'অর্থবছর কখন শুরু হয় এবং কোন তারিখের আগে কিছুই বদলানো যাবে না।',
   'When this part of the tax applies: always, only for supplies within the state, or only between states and abroad.':
     'করের এই অংশ কখন প্রযোজ্য: সবসময়, কেবল রাজ্যের ভেতরের সরবরাহে, অথবা কেবল রাজ্যের বাইরে ও বিদেশে।',
+  'Where its products’ purchases post when they name none.':
+    'এর পণ্যগুলো কোনো হিসাব না দিলে তাদের ক্রয় এখানে পোস্ট হয়।',
+  'Where its products’ sales post when they name none.':
+    'এর পণ্যগুলো কোনো হিসাব না দিলে তাদের বিক্রয় এখানে পোস্ট হয়।',
+  'Where its purchases post; empty: its category’s, else the journal’s.':
+    'এর ক্রয় যেখানে পোস্ট হয়; খালি: এর শ্রেণির, নইলে জার্নালের।',
+  'Where its sales post; empty: its category’s, else the journal’s.':
+    'এর বিক্রয় যেখানে পোস্ট হয়; খালি: এর শ্রেণির, নইলে জার্নালের।',
   'Where the account appears in the balance sheet or the profit and loss, and whether it holds receivables, payables or money.':
     'হিসাবটি স্থিতিপত্রে না লাভ-ক্ষতিতে দেখা যায়, এবং এতে প্রাপ্য, প্রদেয় না অর্থ থাকে।',
   'Whether the money is received from the partner or sent to them.':
     'টাকা অংশীদারের কাছ থেকে গ্রহণ করা হয় নাকি তাকে পাঠানো হয়।',
+  'Whether the partner must have a tax number (BIN, GSTIN, VAT) for it to apply.':
+    'প্রযোজ্য হতে পার্টনারের কর নম্বর (BIN, GSTIN, VAT) থাকতে হবে কি না।',
   'Whether the posted document is not paid, partially paid or paid, from what is still due on it.':
     'পোস্টকৃত নথিটি অপরিশোধিত, আংশিক পরিশোধিত নাকি পরিশোধিত, তাতে যা বকেয়া আছে তা থেকে নির্ধারিত।',
   'Whether we keep the amount back when paying vendors, or customers keep it back when paying us.':
     'সরবরাহকারীকে পরিশোধের সময় আমরা অঙ্কটি কেটে রাখি, নাকি গ্রাহক আমাদের পরিশোধের সময় তা কেটে রাখেন।',
   'Which lines: money in, money out, or both.': 'কোন লাইন: টাকা জমা, টাকা খরচ, বা দুটোই।',
   'Who owes most': 'সবচেয়ে বেশি বকেয়া কার',
+  'With a tax number': 'কর নম্বরসহ',
+  'With or without': 'থাকুক বা না থাকুক',
   Withheld: 'কর্তিত',
   'Withheld by customers': 'গ্রাহকদের দ্বারা কর্তিত',
   'Withheld: {{amountWithheld|words}}': 'কর্তিত: {{amountWithheld|words}}',
@@ -438,6 +481,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Withholdings › Base': 'উৎসে কর্তন › ভিত্তি',
   'Withholdings › Withholding': 'উৎসে কর্তন › উৎসে কর্তন',
   'Within the state': 'রাজ্যের ভেতরে',
+  'Without a tax number': 'কর নম্বর ছাড়া',
   'Write off': 'খরচ লিখুন',
   'Write off to': 'যে হিসাবে খরচ লিখবেন',
   'Write-off label': 'খরচের বিবরণ',

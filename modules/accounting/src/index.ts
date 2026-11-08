@@ -40,6 +40,7 @@ import {
   updateSettings,
 } from './closing.js';
 import { accountingDemo } from './demo.js';
+import { AccountFiscalPosition, previewMove } from './fiscal.js';
 import {
   AccountFollowupLevel,
   AccountFollowupSent,
@@ -298,6 +299,21 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
         model: 'account.bank.statement',
         reason:
           'Imported by its own CSV / OFX / CAMT import (Accounting › Reconcile bank), or pulled from a feed.',
+      },
+      {
+        rule: 'I1',
+        model: 'account.fiscal.position',
+        reason: 'A few per company, set up on screen with their mappings.',
+      },
+      {
+        rule: 'I1',
+        model: 'account.fiscal.position.tax',
+        reason: 'Lines of a fiscal position, edited on its form.',
+      },
+      {
+        rule: 'I1',
+        model: 'account.fiscal.position.account',
+        reason: 'Lines of a fiscal position, edited on its form.',
       },
       {
         rule: 'I1',
@@ -610,6 +626,10 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       label: 'Follow-ups',
       visibleTo: ['account.user'],
     },
+    'accounting.action_fiscal_positions': action(AccountFiscalPosition, {
+      label: 'Fiscal positions',
+      views: ['list', 'form'],
+    }),
     'accounting.action_followup_levels': action(AccountFollowupLevel, {
       label: 'Follow-up levels',
       views: ['list', 'form'],
@@ -724,6 +744,13 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       action: 'accounting.action_followups',
       sequence: 4.7,
       visibleTo: ['account.user'],
+    },
+    {
+      id: 'accounting.fiscal_positions',
+      parent: 'accounting.configuration',
+      label: 'Fiscal positions',
+      action: 'accounting.action_fiscal_positions',
+      sequence: 8,
     },
     {
       id: 'accounting.followup_levels',
@@ -1112,6 +1139,34 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
           nodes: [
             field({ field: 'withholdings', id: 'withholdings' }),
             field({ field: 'sendInvoicesByEmail', id: 'send_invoices_by_email' }),
+            field({ field: 'fiscalPosition', id: 'partner_fiscal_position' }),
+            field({ field: 'receivableAccount', id: 'partner_receivable_account' }),
+            field({ field: 'payableAccount', id: 'partner_payable_account' }),
+          ],
+        },
+      ],
+    },
+    {
+      view: 'product.product.form',
+      operations: [
+        {
+          append: 'sell',
+          nodes: [field({ field: 'incomeAccount', id: 'product_income_account' })],
+        },
+        {
+          append: 'buy',
+          nodes: [field({ field: 'expenseAccount', id: 'product_expense_account' })],
+        },
+      ],
+    },
+    {
+      view: 'product.category.form',
+      operations: [
+        {
+          append: 'main',
+          nodes: [
+            field({ field: 'incomeAccount', id: 'category_income_account' }),
+            field({ field: 'expenseAccount', id: 'category_expense_account' }),
           ],
         },
       ],
@@ -1340,6 +1395,34 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       ],
       chatter: true,
     })),
+    'account.fiscal.position.list': list(AccountFiscalPosition, {
+      columns: ['sequence', 'name', 'autoApply', 'countries', 'states', 'vatRequired'],
+    }),
+    'account.fiscal.position.form': form(AccountFiscalPosition, (k) => ({
+      header: { buttons: [] },
+      sheet: [
+        k.group('main', ['name', 'sequence', 'company', 'note']),
+        k.group('when', ['autoApply', 'countries', 'states', 'vatRequired'], {
+          label: 'Applies to',
+          description:
+            'A document uses the position chosen on it, else its partner’s, else the first that applies by itself.',
+        }),
+        k.lines(
+          'taxes' as never,
+          [
+            { field: 'taxSrc', id: 'map_tax_src' },
+            { field: 'taxDest', id: 'map_tax_dest' },
+          ] as never,
+        ),
+        k.lines(
+          'accounts' as never,
+          [
+            { field: 'accountSrc', id: 'map_account_src' },
+            { field: 'accountDest', id: 'map_account_dest' },
+          ] as never,
+        ),
+      ],
+    })),
     'account.followup.level.list': list(AccountFollowupLevel, {
       columns: ['days', 'name', 'sendEmail', 'sendSms', 'sendWhatsapp', 'blockSales'],
     }),
@@ -1426,7 +1509,15 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
             tone: 'success',
           },
         ]),
-        k.group('party', ['partner', 'kind', 'invoiceOrigin', 'ref', 'debitOf', 'placeOfSupply']),
+        k.group('party', [
+          'partner',
+          'kind',
+          'invoiceOrigin',
+          'ref',
+          'debitOf',
+          'placeOfSupply',
+          'fiscalPosition',
+        ]),
         k.group('dates', ['date', 'dateDue', 'paymentTerm', 'journal']),
         k.lines(
           'lines',
@@ -1443,6 +1534,8 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
           ],
           { readonlyWhen: { state: { ne: 'draft' } } },
         ),
+        // What posting will do: each line's taxes and account after the fiscal position, and why (RFC 0029 §3.5).
+        k.component('posting_preview', 'accounting.PostingPreview'),
         k.group(
           'totals',
           [
@@ -1708,6 +1801,10 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
     }),
     'account.payment.term': search(AccountPaymentTerm, { fields: ['name'] }),
     'account.followup.level': search(AccountFollowupLevel, { fields: ['name'] }),
+    'account.fiscal.position': search(AccountFiscalPosition, {
+      fields: ['name', 'countries'],
+      groupBy: ['autoApply'],
+    }),
     'account.followup.sent': search(AccountFollowupSent, {
       fields: ['partner.name', 'amount'],
       groupBy: ['partner', 'level'],
@@ -1862,6 +1959,13 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
         throw new HttpProblem(400, 'invalid-path', 'Invalid customer', 'A customer id.');
       return id;
     };
+    // What posting a draft would do (RFC 0029 §3.5).
+    context.app.get('/api/v1/accounting/moves/:id/preview', async (request) => {
+      const id = Number((request.params as { id?: unknown }).id);
+      if (!Number.isSafeInteger(id) || id <= 0)
+        throw new HttpProblem(400, 'invalid-path', 'Invalid entry', 'An entry id.');
+      return request.env((env) => previewMove(env as Env, id));
+    });
     context.app.get('/api/v1/accounting/followups', async (request) =>
       request.env(async (env) => ({ rows: await followupRows(env as Env) })),
     );

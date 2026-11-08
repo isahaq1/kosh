@@ -24,3 +24,17 @@ test('the Follow-ups page and the follow-up levels', async ({ page }) => {
   for (const name of ['First reminder', 'Second reminder', 'Final notice'])
     await expect(page.getByRole('row', { name: new RegExp(name) })).toBeVisible();
 });
+
+test('fiscal positions are set up in Configuration; a draft invoice says what confirming will do', async ({
+  page,
+}) => {
+  await signIn(page, 'dina');
+  await page.goto('/accounting/a/accounting.action_fiscal_positions');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await page.goto('/accounting/a/accounting.action_customer_invoices');
+  const drafts = page.getByRole('row', { name: /Draft/ });
+  if ((await drafts.count()) === 0) return; // every invoice of the data set is posted
+  await drafts.first().click();
+  await expect(page.getByRole('heading', { name: 'When confirmed' })).toBeVisible();
+  await expect(page.getByText(/No fiscal position|Fiscal position /)).toBeVisible();
+});

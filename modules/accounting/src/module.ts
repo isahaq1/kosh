@@ -35,6 +35,16 @@ import {
   records,
   ref,
 } from './.kosh/bindings.js';
+import {
+  AccountFiscalPosition,
+  AccountFiscalPositionAccount,
+  AccountFiscalPositionTax,
+  applyFiscalPositions,
+  CategoryAccounts,
+  determineAccounts,
+  PartnerAccounts,
+  ProductAccounts,
+} from './fiscal.js';
 import { AccountFollowup, AccountFollowupLevel, AccountFollowupSent } from './followups.js';
 import { postPayments } from './payments.js';
 import {
@@ -684,6 +694,13 @@ export const AccountMove = defineModel('account.move', {
       ),
     }),
     paymentTerm: f.many2one('account.payment.term', { label: 'Payment terms' }),
+    /** Maps taxes and accounts when posted (RFC 0029 §3.5); empty: the partner's, or one that applies by itself. */
+    fiscalPosition: f.many2one('account.fiscal.position', {
+      ondelete: 'restrict',
+      checkCompany: true,
+      label: 'Fiscal position',
+      help: 'Maps taxes and accounts when posted; empty: the partner’s, or one that applies by itself.',
+    }),
     invoiceOrigin: f.char({ label: 'Source document' }),
     amountUntaxed: f.monetary({
       currency: 'currency',
@@ -1169,6 +1186,8 @@ async function currentTx(env: Env): Promise<string> {
  */
 async function postMoves(moves: Moves): Promise<void> {
   const env = moves.env;
+  // The fiscal position of each document, and its taxes mapped, before anything is computed (RFC 0029 §3.5).
+  await applyFiscalPositions(env as unknown as Env, moves.ids as unknown as number[]);
   const loaded = await moves.load({
     lines: { taxes: { components: true } },
     partner: true,
@@ -1243,8 +1262,10 @@ async function postMoves(moves: Moves): Promise<void> {
         .model('account.move')
         .browse([m.id])
         .productLineAccounts();
+      // Each line's account: its own, an app's, the product's, its category's or the journal's, then the position.
+      const determined = await determineAccounts(env as unknown as Env, m.id as number, proposed);
       for (const l of products) {
-        const account = l.account?.id ?? proposed.get(l.id) ?? m.journal.defaultAccount?.id ?? null;
+        const account = determined.lines.get(l.id as number)?.account ?? null;
         if (account === null)
           throw fail(
             ['lines'],
@@ -1371,7 +1392,9 @@ async function postMoves(moves: Moves): Promise<void> {
         }
       }
       // Customers' documents settle on the receivable account, vendors' on the payable one.
-      const counterpart = customer ? m.company.accountReceivable : m.company.accountPayable;
+      // The partner's account, else the company's, through the fiscal position.
+      const counterpart =
+        determined.counterpart.account === null ? null : { id: determined.counterpart.account };
       if (counterpart === null)
         throw fail(
           ['partner'],
@@ -1400,7 +1423,7 @@ async function postMoves(moves: Moves): Promise<void> {
           {
             move: m.id,
             lineKind: 'counterpart',
-            account: counterpart.id,
+            account: orm.asId(counterpart.id, 'account.account'),
             partner: m.partner.id,
             name: m.ref ?? m.invoiceOrigin ?? m.name,
             dateMaturity: due,
@@ -1677,7 +1700,7 @@ const sequence = (type: JournalType, prefix: string) =>
 
 export const accountingShutro = defineModule({
   name: 'accounting',
-  version: '0.7.0',
+  version: '0.8.0',
   migrations: [
     {
       version: '0.2.0',
@@ -1716,6 +1739,9 @@ export const accountingShutro = defineModule({
     AccountFollowupLevel,
     AccountFollowup,
     AccountFollowupSent,
+    AccountFiscalPosition,
+    AccountFiscalPositionTax,
+    AccountFiscalPositionAccount,
     ResCurrencyRate,
     ResBankAccount,
     AccountWithholding,
@@ -1798,5 +1824,12 @@ export const accountingShutro = defineModule({
       { noupdate: true },
     ),
   ],
-  extensions: [CompanyAccounting, TaxAccounts, PartnerWithholdings],
+  extensions: [
+    CompanyAccounting,
+    TaxAccounts,
+    PartnerWithholdings,
+    PartnerAccounts,
+    ProductAccounts,
+    CategoryAccounts,
+  ],
 });

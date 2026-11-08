@@ -1,6 +1,25 @@
 /** Messages of the accounting screens (namespace `accounting`), in English and Bangla. */
 export const messages: Readonly<Record<string, object>> = {
   en: {
+    preview: {
+      title: 'When confirmed',
+      noPosition: 'No fiscal position: taxes and accounts as they are.',
+      position: 'Fiscal position {{name}}: {{why}}.',
+      noTax: 'no tax',
+      noAccount: 'no account',
+      mapped: 'mapped by the fiscal position',
+      counterpart: 'Owed on {{account}} ({{source}})',
+      source: {
+        line: 'set on the line',
+        app: 'from the order',
+        product: 'the product’s',
+        category: 'the category’s',
+        journal: 'the journal’s',
+        partner: 'the partner’s',
+        company: 'the company’s',
+        none: 'none',
+      },
+    },
     followups: {
       title: 'Follow-ups',
       intro:
@@ -116,6 +135,25 @@ export const messages: Readonly<Record<string, object>> = {
     },
   },
   bn: {
+    preview: {
+      title: 'নিশ্চিত করলে',
+      noPosition: 'কোনো ফিসকাল পজিশন নেই: কর ও হিসাব যেমন আছে।',
+      position: 'ফিসকাল পজিশন {{name}}: {{why}}।',
+      noTax: 'কর নেই',
+      noAccount: 'হিসাব নেই',
+      mapped: 'ফিসকাল পজিশনে বদলানো',
+      counterpart: 'পাওনা {{account}}-এ ({{source}})',
+      source: {
+        line: 'লাইনে দেওয়া',
+        app: 'অর্ডার থেকে',
+        product: 'পণ্যের',
+        category: 'শ্রেণির',
+        journal: 'জার্নালের',
+        partner: 'পার্টনারের',
+        company: 'প্রতিষ্ঠানের',
+        none: 'কিছু নেই',
+      },
+    },
     followups: {
       title: 'তাগাদা',
       intro:

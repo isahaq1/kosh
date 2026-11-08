@@ -9,6 +9,7 @@ import { AgingPage } from './AgingPage.js';
 import { BankReconcilePage } from './BankReconcilePage.js';
 import { FollowupsPage } from './FollowupsPage.js';
 import { messages } from './messages.js';
+import { PostingPreview } from './PostingPreview.js';
 import { ReconcilePage } from './ReconcilePage.js';
 import { RegisterPayment } from './RegisterPayment.js';
 import { SettingsPage } from './SettingsPage.js';
@@ -16,6 +17,7 @@ import { SettingsPage } from './SettingsPage.js';
 export { AgingPage } from './AgingPage.js';
 export { BankReconcilePage } from './BankReconcilePage.js';
 export { FollowupsPage } from './FollowupsPage.js';
+export { PostingPreview } from './PostingPreview.js';
 export { ReconcilePage } from './ReconcilePage.js';
 export { RegisterPayment } from './RegisterPayment.js';
 export { SettingsPage } from './SettingsPage.js';
@@ -28,6 +30,7 @@ export function registerAccountingWeb(registry: Registry, i18n?: i18n): Registry
   registry.registerPage('accounting.BankReconcile', BankReconcilePage);
   registry.registerPage('accounting.Followups', FollowupsPage);
   registry.registerComponent('accounting.RegisterPayment', RegisterPayment);
+  registry.registerComponent('accounting.PostingPreview', PostingPreview);
   if (i18n !== undefined) addMessages(i18n, 'accounting', messages);
   return registry;
 }
