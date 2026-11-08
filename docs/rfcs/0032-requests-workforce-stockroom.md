@@ -211,4 +211,11 @@ Each step ends with the full gate (typecheck, lint, tests, both E2E projects), d
   (the video's "IC transfer"), cost centres on request lines (`account_budget` carries them on orders), received
   quantities on the tracker (through `purchase_stock`), a purchase request submitted by the bridge itself (it is
   drafted for the requester).
+- **Step 7 (2026-11-08).** RFQs to many vendors (`modules/purchase/src/tender.ts`): `purchase.tender` with its
+  lines and vendors, one `purchase.tender.response` per vendor with quoted lines, the quote link (a token's digest on
+  the response, the page and its POST under `/api/v1/public/purchase/quotes/:token`, no sign-in, CSP with a nonce,
+  audited), the invitation emailed through a mailer when one is configured (`configurePurchaseMails`), **Ask several
+  vendors** on purchase requests, RFQ lines counted by the tracker, the overview's RFQ counts. Not yet: evaluation
+  criteria with weights (step 8 with the comparison), the RFQ dashboard as a page (the overview's KPIs stand in),
+  reminders before the deadline, attachments by vendors through the link.
 

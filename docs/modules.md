@@ -372,6 +372,15 @@ is on RFQs, ordered and still to buy, filtered by status and by buyer. With Requ
 for the shortfall** on an approved indent drafts a purchase request for what the store lacks, its lines linked to the
 indent's, for the requester to submit.
 
+**RFQs to vendors** (Purchase › RFQs to vendors): the same lines asked of several vendors by a response deadline —
+local or import, with the delivery date, payment terms and whether a technical comparison comes first. **Ask several
+vendors** on an approved purchase request makes one from what is left to buy. Sending it makes a **vendor response**
+per vendor and emails each a **quote link** (single use until submitted, valid a day past the deadline, only its
+digest kept): a page where the vendor prices the lines, gives a delivery date and terms, saves and comes back, then
+submits once — audited with their address; a buyer may make a new link (`POST /api/v1/purchase/responses/:id/link`)
+to paste or email, or type the quotation in. A submitted response moves the RFQ to *Responses received*; the request
+line tracker counts the lines on an RFQ. The Purchase overview counts RFQs waiting and with responses.
+
 ### Vendor prices (`modules/purchase`, `modules/purchase_stock`, RFC 0030)
 
 **Purchase › Vendor prices** (buyers) records what each vendor charges: for a product or for every product of a
