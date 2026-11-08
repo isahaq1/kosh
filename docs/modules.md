@@ -329,6 +329,22 @@ it applies to, its hit rate and what it would do to the open ones, without chang
 lines have **Undo** (`POST /api/v1/accounting/statement-lines/:id/undo`): a payment comes off its documents and is
 reversed, a write-off is reversed, and the line is open again.
 
+### Returns (`modules/stock`, with the order and valuation bridges, RFC 0030)
+
+A done delivery or receipt has **Return**: each line with what was done and what can still come back (returns in
+progress count, so nothing is returned twice), a quantity for each, a **reason** (Stockroom › Configuration › Return
+reasons: damaged, wrong item, not as ordered, surplus, quality to start with) and a note. The return is a transfer
+the other way — a customer's goods back in, goods back to the vendor — linked to the original (*Return of*) and line
+by line, carrying the order it belongs to, with the lots taken back from the original's. It is confirmed, and
+validated like any transfer. **Stockroom › Returns** lists them; group them by reason, product or partner.
+
+With valuation (`stock_account`) a return moves at the original's cost: goods going back to the vendor leave at
+what they came in at (off their own layer with FIFO), a customer's goods come back at what they went out at — not
+at today's average. On orders, what came back is subtracted: a sales line's *Delivered* and a purchase line's
+*Received* count the returns, and *Returned* shows them (`sale_stock`, `purchase_stock`). **Credit note for returns** on a sales order (`sale_account`) and **Vendor refund for returns** on a purchase order (`purchase_account`) draft the credit note for what came back once it is validated — the returned quantity, as far as it is invoiced beyond what is still delivered (or received), at the line's price — so a return is credited once, whatever the invoicing policy. The routes:
+`GET /api/v1/stockroom/pickings/:id/returnable` and `POST /api/v1/stockroom/pickings/:id/return`
+(`{ lines: [{ move, quantity }], reason, note?, location? }`), for Stockroom users.
+
 ### Vendor prices (`modules/purchase`, `modules/purchase_stock`, RFC 0030)
 
 **Purchase › Vendor prices** (buyers) records what each vendor charges: for a product or for every product of a

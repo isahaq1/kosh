@@ -103,4 +103,15 @@ and units per vendor, product configurator rules beyond exclusions, Shop attribu
   new `stock.reorder.sourcing` hook; the vendor scorecard on contacts (`purchase_stock` now has a web entry); the
   import template. Deviation: vendor prices live in `purchase`, not `product`, since a vendor is a contact and
   Products do not depend on Contacts.
+- **Step 2 part 1 (2026-11-08).** `stock.return.reason` with five defaults; `returnOf` / `returnReason` on transfers
+  and `returnOf` on lines; `returnableLines` and `createReturn` (partial, never more than done less what is being
+  returned, the other way, links carried through `backorderValues`, lots from the original's, confirmed); the Return
+  dialog on done deliveries and receipts, Stockroom › Returns; returns valued at the original's cost in
+  `stock_account` (incoming through `incomingUnitCost`, outgoing off the original layer); delivered and received
+  quantities net of returns; stock 0.4.0. Next (part 2): credit notes and vendor refunds proposed for what came back.
+- **Step 2 part 2 (2026-11-08).** `qtyReturned` on sales and purchase lines; `toCredit` / `toRefund` (the returned
+  quantity capped at what is invoiced or billed beyond what is still delivered or received); the `refund`
+  transitions drafting a credit note (`out_refund`) or a vendor refund (`in_refund`) at the line's price, once;
+  their buttons on the orders. Step 2 complete. Not yet: choosing which lot goes back (the original's lots are taken
+  in order), a returns report with charts (the list groups by reason, product and partner).
 
