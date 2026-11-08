@@ -89,7 +89,10 @@ export const bn: Readonly<Record<string, string>> = {
   'From warehouse': 'যে গুদাম থেকে',
   'Give the lot or serial number: an existing one, or the name of a new one.':
     'লট বা সিরিয়াল নম্বর দিন: বিদ্যমান একটি, অথবা নতুন একটির নাম।',
+  'Goods in transit': 'ট্রানজিটে থাকা পণ্য',
   History: 'ইতিহাস',
+  'Holds goods shipped from this warehouse to another and not received yet: the company’s stock, not counted in the warehouse’s.':
+    'এই গুদাম থেকে অন্য গুদামে পাঠানো, এখনো গৃহীত হয়নি এমন পণ্য রাখে: প্রতিষ্ঠানের স্টক, গুদামের হিসাবে নয়।',
   'How it is ordered': 'যেভাবে অর্ডার করা হয়',
   'How many steps incoming goods go through before they reach stock.':
     'আসা মাল মজুদে পৌঁছানোর আগে কয়টি ধাপ পার হয়।',

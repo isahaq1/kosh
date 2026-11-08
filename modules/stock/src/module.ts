@@ -189,6 +189,12 @@ export const StockLocation = defineModel('stock.location', {
         help: 'Only internal locations hold stock; the others are where goods come from or go to.',
       },
     ),
+    /** Goods on the road between warehouses (RFC 0032 §3.3): held as stock, not counted in the warehouse's. */
+    transit: f.boolean({
+      default: false,
+      label: 'Goods in transit',
+      help: 'Holds goods shipped from this warehouse to another and not received yet: the company’s stock, not counted in the warehouse’s.',
+    }),
     /** The step of the warehouse's routes this location is for (its Input, Quality control, Packing or Output). */
     step: f.selection(
       { input: 'Input', quality: 'Quality control', packing: 'Packing', output: 'Output' },
@@ -837,6 +843,35 @@ const STEP_NAMES: Record<Step, string> = {
   output: 'Output',
 };
 
+/**
+ * The warehouse's transit location (RFC 0032 §3.3): where goods shipped to another warehouse wait until they are
+ * received, made beside its stock location the first time it is needed.
+ */
+export async function transitLocation(
+  env: Env,
+  warehouse: Id<'stock.warehouse'>,
+): Promise<Id<'stock.location'>> {
+  return env.asSuperuser({ reason: 'warehouse transit location' }, async (su) => {
+    const found = await su
+      .withFlags({ activeTest: false })
+      .model('stock.location')
+      .search({ where: { warehouse, transit: true }, limit: 1 });
+    if (found.ids[0] !== undefined) return found.ids[0];
+    const [wh] = await su.model('stock.warehouse').browse([warehouse]).load({});
+    const made = await su.model('stock.location').create([
+      {
+        name: 'Transit',
+        usage: 'internal',
+        warehouse,
+        company: wh?.company.id ?? (su.companyId as Id<'res.company'>),
+        transit: true,
+      },
+    ]);
+    await su.flush();
+    return made.ids[0] as Id<'stock.location'>;
+  });
+}
+
 /** The warehouse's location for a step of its routes, made beside its stock location the first time it is needed. */
 export async function stepLocation(
   env: Env,
@@ -872,7 +907,13 @@ async function stockRoot(
   return (
     (
       await env.model('stock.location').search({
-        where: { warehouse, usage: 'internal', parent: { isNull: true }, step: { isNull: true } },
+        where: {
+          warehouse,
+          usage: 'internal',
+          parent: { isNull: true },
+          step: { isNull: true },
+          transit: { ne: true },
+        },
         order: ['id asc'],
         limit: 1,
       })
@@ -1979,7 +2020,7 @@ export async function warehouseStock(
   if (root === null) return { root, inside: new Set() };
   const inside = await env
     .model('stock.location')
-    .search({ where: { warehouse, usage: 'internal' } });
+    .search({ where: { warehouse, usage: 'internal', transit: { ne: true } } });
   return { root, inside: new Set(inside.ids) };
 }
 

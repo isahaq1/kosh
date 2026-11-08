@@ -63,6 +63,7 @@ export {
   StockWarehouse,
   stepLocation,
   stockShutro,
+  transitLocation,
   warehouseStock,
 } from './module.js';
 export { orderAutomatic, orderRules, reckon, refreshRules } from './replenish.js';
