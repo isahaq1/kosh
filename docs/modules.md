@@ -559,6 +559,27 @@ days by the weekend set in App settings › Workforce, keeps to the year's balan
 the line manager (`POST /api/v1/workforce/leaves/:id/decide`) or HR — never by the person asking. Personal details
 and wages are for HR managers only. Install it with `shutro-erp apps install hr`.
 
+For groups of companies (RFC 0032 §3.2, after Paragon's `pg_employee`), the employee also has a job title, a work
+mobile, tags, a **unit head** beside the line manager, a coach, the **property** (mill, farm, depot) they work for,
+an **expense approver** — who approves their expense reports first (Spend's level *Approver* asks for it, the Spend
+approvers standing in when it is empty) — and a **leave approver**, who then decides their leave instead of the line
+manager (HR managers still may), and their time zone. Contracts take an **employment type** (Workforce ›
+Configuration › Employment types: name, code, country). In a manifest, `approver: { employee: 'unitHead' }` makes a
+level decided by a person on the requester's employee record.
+
+#### The depot's screens (RFC 0032 §3.3)
+
+**My operations** (Stockroom's first menu, `GET /api/v1/stockroom/operations`): a card per warehouse and kind of
+transfer — receipts, deliveries, internal moves — with what is **ready** (reserved in full, or a receipt confirmed),
+**waiting** (confirmed, not all reserved) and **late** (not done, scheduled before today), counted as the user; each
+count opens the transfers it counts. Every transfer carries **additional information** (responsible, carrier,
+tracking reference, the lines' weight) and **transport details** at the gate: vehicle, driver and mobile, the
+transport vendor and date, gate in / out, the freight bill, additions and deductions to it (unloading, a short
+weight), extra products that came along (empty bags, pallets), gate and QC notes. A receipt may **deduct from the
+supplier** an amount they bear. With `stock_account`, validating a transfer drafts — once — the transport vendor's
+freight bill (the freight with its additions and deductions) and, for such a receipt, a vendor refund to the supplier;
+an accountant completes the accounts and posts them.
+
 ### Hiring (`modules/recruitment`, RFC 0021)
 
 Openings for Workforce positions with a headcount, applicants on a board of stages, and scorecards each interviewer

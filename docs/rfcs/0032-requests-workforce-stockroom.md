@@ -179,4 +179,19 @@ Each step ends with the full gate (typecheck, lint, tests, both E2E projects), d
   adjustment; shipped / in transit / short per line. STN and SRN are transfers numbered by Stockroom (their kind is on
   the transfer). Not yet: `indent_purchase` (the shortfall into purchase requests moves to step 6, where purchase
   requests are built), a Goods in transit account (transit stays in the Inventory account).
+- **Step 3 (2026-11-08).** Workforce: the employee's job title, work mobile, tags (`hr.employee.tag`), unit head,
+  coach, property, expense and leave approvers and time zone, the form laid out as `pg_employee` (contact and property
+  beside the reporting line, Approvers and Schedule cards); employment types (`hr.contract.type`: name, code, country
+  as an ISO code — Kosh has no country model) on contracts; the approval engine's kind **a person on the requester's
+  employee record** (`approver: { employee }` in manifests); Spend's first level asks for the expense approver; leave
+  decided by the leave approver instead of the manager. Not copied: the addon's empty Sales Territories tab, the hidden
+  Payroll tab (Kosh's Payroll keeps its own screens), the Attendance shift on the employee (Attendance's rosters hold
+  it).
+- **Step 4 (2026-11-08).** Stockroom part 1: additional information and transport details on every transfer
+  (`stock.picking.charge` for additions and deductions, `stock.picking.extra` for goods that came along); the freight
+  bill and the supplier's refund drafted by `stock_account` when the transfer is validated, each once (as drafts: the
+  accountant chooses the accounts); **My operations** as a client page over `GET /api/v1/stockroom/operations`, the
+  counts computed as the user with the domain each one opens. Not yet: the sale / purchase order and project links in
+  one card (the bridges already append their own fields to the transfer form), the freight bill as a landed cost
+  (drafted by hand from the bill, RFC 0030 §3.3).
 
