@@ -293,3 +293,44 @@ test('an order of services only gets no delivery', async () => {
   expect(made).toBeNull();
   expect((await call('GET', `${O}/${id}`, 'sumi')).json.deliveryState).toBe('nothing');
 });
+
+test('a customer return: linked to the delivery and its order, back in stock, the order line delivered less', async () => {
+  const worker = saleStockWorker({ shutro: host.server.shutro });
+  await receive('Steel beam', '5');
+  const id = await order('sumi', [
+    { product: ids['Steel beam'], name: 'Steel beam', quantity: '5', priceUnit: '1000' },
+  ]);
+  await worker.drain();
+  const [delivery] = await find('stock.picking', { saleOrder: id }, 'id,name');
+  await run(`${T}/${delivery.id}/transitions/validate`);
+  const { lines } = (
+    await call('GET', `/api/v1/stockroom/pickings/${delivery.id}/returnable`, 'sumi')
+  ).json;
+  const [reason] = await find('stock.return.reason', { code: 'wrong_item' }, 'id');
+  const made = await call('POST', `/api/v1/stockroom/pickings/${delivery.id}/return`, 'sumi', {
+    lines: [{ move: lines[0].move, quantity: '2' }],
+    reason: reason.id,
+  });
+  expect(made.status, JSON.stringify(made.json)).toBe(200);
+  const [back] = await find(
+    'stock.picking',
+    { id: made.json.picking },
+    'kind,saleOrder,source,destination',
+  );
+  expect(back).toMatchObject({ kind: 'receipt', saleOrder: id });
+  const [move] = await find('stock.move', { picking: back.id }, 'saleLine,returnOf,quantity');
+  expect(move).toMatchObject({ quantity: '2', returnOf: lines[0].move });
+  expect(move.saleLine).not.toBeNull();
+  // Only Stockroom users return goods.
+  expect(
+    (
+      await call('POST', `/api/v1/stockroom/pickings/${delivery.id}/return`, 'rahim', {
+        lines: [{ move: lines[0].move, quantity: '1' }],
+        reason: reason.id,
+      })
+    ).status,
+  ).toBe(403);
+  await run(`${T}/${back.id}/transitions/validate`);
+  const [orderLine] = await find('sale.order.line', { order: id }, 'qtyDelivered');
+  expect(orderLine.qtyDelivered).toBe('3');
+});

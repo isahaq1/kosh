@@ -48,6 +48,24 @@ export const MoveSale = extendModel('stock.move', {
 
 export const LineDelivered = extendModel('sale.order.line', {
   fields: {
+    /** What came back from the customer by validated returns (RFC 0030 §3.2), in the line's unit. */
+    qtyReturned: f.decimal({
+      scale: 3,
+      store: true,
+      label: 'Returned',
+      help: 'What the customer sent back by validated returns of its deliveries.',
+      ...compute(
+        'sale.order.line',
+        'qtyReturned',
+        ['moves.quantity', 'moves.quantityDone', 'moves.picking.state', 'moves.returnOf'],
+        (lines) => {
+          for (const l of lines)
+            l.qtyReturned = [...l.moves]
+              .filter((m) => m.picking.state === 'done' && m.returnOf !== null)
+              .reduce((s, m) => s.plus(m.quantityDone ?? m.quantity), zero);
+        },
+      ),
+    }),
     moves: f.one2many('stock.move', 'saleLine'),
     /** Delivered by validated deliveries, in the line's unit. */
     qtyDelivered: f.decimal({
@@ -57,12 +75,16 @@ export const LineDelivered = extendModel('sale.order.line', {
       ...compute(
         'sale.order.line',
         'qtyDelivered',
-        ['moves.quantity', 'moves.quantityDone', 'moves.picking.state'],
+        ['moves.quantity', 'moves.quantityDone', 'moves.picking.state', 'moves.returnOf'],
         (lines) => {
+          // What came back (a return of a delivery, RFC 0030 §3.2) is not delivered any more.
           for (const l of lines)
             l.qtyDelivered = [...l.moves]
               .filter((m) => m.picking.state === 'done')
-              .reduce((s, m) => s.plus(m.quantityDone ?? m.quantity), zero);
+              .reduce((s, m) => {
+                const qty = m.quantityDone ?? m.quantity;
+                return m.returnOf === null ? s.plus(qty) : s.minus(qty);
+              }, zero);
         },
       ),
     }),
@@ -160,7 +182,7 @@ export async function createDeliveryFor(env: Env, orderId: number): Promise<numb
 
 export const saleStockShutro = defineModule({
   name: 'sale_stock',
-  version: '0.1.0',
+  version: '0.2.0',
   depends: [salesShutro, stockShutro, productShutro],
   groups: [
     orm.defineGroup({

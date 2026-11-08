@@ -11,5 +11,8 @@ export const bn: Readonly<Record<string, string>> = {
   Receipt: 'প্রাপ্তি',
   Receipts: 'প্রাপ্তি',
   Received: 'গৃহীত',
+  Returned: 'ফেরত',
   'To receive': 'গ্রহণ বাকি',
+  'What was sent back to the vendor by validated returns of its receipts.':
+    'রিসিটের যাচাই করা ফেরতে সরবরাহকারীকে যা ফেরত পাঠানো হয়েছে।',
 };

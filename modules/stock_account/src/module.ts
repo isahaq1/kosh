@@ -186,6 +186,19 @@ export async function stockAccountsOf(
  * at `incomingUnitCost` (the product's cost; a bridge may know better, a purchase order's price); outgoing stock at
  * the average cost or, FIFO, from the oldest incoming layers still in stock.
  */
+/** The unit cost each original move was valued at (its layer's), by move. */
+async function originalCosts(
+  env: Env,
+  moves: readonly (number | null)[],
+): Promise<Map<number, Decimal>> {
+  const ids = moves.filter((m): m is number => m !== null);
+  if (ids.length === 0) return new Map();
+  const layers = await (
+    await env.model('stock.valuation.layer').search({ where: { move: { in: ids } } as never })
+  ).load({ move: true });
+  return new Map(layers.map((l) => [l.move?.id as number, l.unitCost.abs()]));
+}
+
 async function valueTransfers(pickings: Records<'stock.picking'>): Promise<void> {
   const env = pickings.env;
   const loaded = await pickings.load({
@@ -193,7 +206,7 @@ async function valueTransfers(pickings: Records<'stock.picking'>): Promise<void>
     destination: true,
     company: true,
     partner: true,
-    moves: { product: { category: true } },
+    moves: { product: { category: true }, returnOf: true },
   });
   for (const p of loaded) {
     const incoming = p.source.usage !== 'internal' && p.destination.usage === 'internal';
@@ -250,7 +263,32 @@ async function valueTransfers(pickings: Records<'stock.picking'>): Promise<void>
         });
       } else {
         let left = quantity;
-        if (fifo) {
+        // Goods going back to the vendor leave at what they came in at (RFC 0030 §3.2), off their own layer.
+        const back =
+          m.returnOf === null
+            ? null
+            : await (
+                await env.model('stock.valuation.layer').search({
+                  where: { move: m.returnOf.id, quantity: { gt: '0' } } as never,
+                  limit: 1,
+                })
+              ).load(['unitCost', 'remainingQty', 'remainingValue']);
+        const [layer] = back === null ? [] : [...back];
+        if (layer !== undefined) {
+          value = money(quantity.times(layer.unitCost));
+          left = zero;
+          if (fifo && layer.remainingQty.gt(0)) {
+            const take = quantity.lt(layer.remainingQty) ? quantity : layer.remainingQty;
+            const part = take.eq(layer.remainingQty)
+              ? layer.remainingValue
+              : money(layer.remainingValue.times(take).div(layer.remainingQty));
+            await layer.write({
+              remainingQty: layer.remainingQty.minus(take),
+              remainingValue: layer.remainingValue.minus(part),
+            });
+          }
+        }
+        if (fifo && left.gt(0)) {
           const open = await (
             await env.model('stock.valuation.layer').search({
               where: { company: p.company.id, product: product.id, remainingQty: { gt: '0' } },
@@ -340,8 +378,16 @@ export const MoveCost = extendModel('stock.move', {
      */
     incomingUnitCost: method('stock.move', async function (): Promise<Map<number, string>> {
       const out = new Map<number, string>();
-      for (const m of await this.load({ product: true }))
-        out.set(m.id, m.product.standardPrice.toString());
+      const moves = await this.load({ product: true, returnOf: true });
+      // A customer's return comes back at what it went out at (RFC 0030 §3.2).
+      const original = await originalCosts(
+        this.env as unknown as Env,
+        moves.map((m) => (m.returnOf?.id as number | undefined) ?? null),
+      );
+      for (const m of moves) {
+        const cost = m.returnOf === null ? undefined : original.get(m.returnOf.id as number);
+        out.set(m.id, (cost ?? m.product.standardPrice).toString());
+      }
       return out;
     }),
   },

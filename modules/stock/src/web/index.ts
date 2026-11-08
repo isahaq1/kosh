@@ -7,14 +7,17 @@ import { addMessages, type Registry } from '@kosh/ui';
 import type { i18n } from 'i18next';
 import { messages } from './messages.js';
 import { Replenishment } from './Replenishment.js';
+import { ReturnButton } from './ReturnButton.js';
 import { ScanBox } from './ScanBox.js';
 
 export { Replenishment } from './Replenishment.js';
+export { ReturnButton } from './ReturnButton.js';
 export { ScanBox } from './ScanBox.js';
 
 /** Registers the component and the page (and the messages in `i18n`, when given). */
 export function registerStockWeb(registry: Registry, i18n?: i18n): Registry {
   registry.registerComponent('stock.Scan', ScanBox);
+  registry.registerComponent('stock.Return', ReturnButton);
   registry.registerPage('stock.Replenishment', Replenishment);
   if (i18n !== undefined) addMessages(i18n, 'stock', messages);
   return registry;

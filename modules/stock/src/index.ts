@@ -33,6 +33,12 @@ import {
   stockShutro,
 } from './module.js';
 import { orderAutomatic, orderRules, refreshRules } from './replenish.js';
+import {
+  createReturn,
+  installReturnReasons,
+  returnableLines,
+  StockReturnReason,
+} from './returns.js';
 
 export {
   defaultLocations,
@@ -60,6 +66,13 @@ export {
   warehouseStock,
 } from './module.js';
 export { orderAutomatic, orderRules, reckon, refreshRules } from './replenish.js';
+export {
+  createReturn,
+  DEFAULT_RETURN_REASONS,
+  type Returnable,
+  returnableLines,
+  StockReturnReason,
+} from './returns.js';
 
 /** Every company without a warehouse gets its main one, `WH`, with its stock location `WH/Stock`. */
 async function mainWarehouses(env: Env): Promise<string | undefined> {
@@ -90,6 +103,59 @@ async function mainWarehouses(env: Env): Promise<string | undefined> {
  * name counts that lot, a product's barcode the product — on the count's line, made with what is expected when it
  * was not listed. As the user: their rights apply; the count must be counting.
  */
+/**
+ * Returns (RFC 0030 §3.2): what a done delivery or receipt can still return, and the return made with its reason.
+ * As the user: Stockroom rights apply.
+ */
+function registerReturnRoutes({ app }: ModuleContext): void {
+  const pickingId = (params: unknown) => {
+    const id = Number((params as { id?: unknown }).id);
+    if (!Number.isSafeInteger(id) || id <= 0)
+      throw new HttpProblem(400, 'invalid-id', 'Invalid id', 'A transfer id.');
+    return id;
+  };
+  app.get('/api/v1/stockroom/pickings/:id/returnable', async (request) => {
+    const id = pickingId(request.params);
+    return request.env(async (env) => ({ lines: await returnableLines(env as Env, id) }));
+  });
+  app.post('/api/v1/stockroom/pickings/:id/return', async (request) => {
+    const id = pickingId(request.params);
+    const body = (request.body ?? {}) as {
+      lines?: unknown;
+      reason?: unknown;
+      note?: unknown;
+      location?: unknown;
+    };
+    const lines = Array.isArray(body.lines)
+      ? body.lines.map((l) => ({
+          move: Number((l as { move?: unknown }).move),
+          quantity: String((l as { quantity?: unknown }).quantity ?? ''),
+        }))
+      : [];
+    if (lines.some((l) => !Number.isSafeInteger(l.move) || !/^\d+(\.\d+)?$/.test(l.quantity)))
+      throw new HttpProblem(400, 'invalid-body', 'Invalid lines', 'lines: [{ move, quantity }].');
+    const reason = Number(body.reason);
+    if (!Number.isSafeInteger(reason) || reason <= 0)
+      throw new HttpProblem(
+        400,
+        'invalid-body',
+        'Reason required',
+        'Give the reason of the return.',
+      );
+    const location = body.location == null ? null : Number(body.location);
+    return request.env(
+      (env) =>
+        createReturn(env as Env, id, {
+          lines,
+          reason,
+          note: typeof body.note === 'string' ? body.note : null,
+          location: location !== null && Number.isSafeInteger(location) ? location : null,
+        }),
+      { write: true },
+    );
+  });
+}
+
 function registerCountRoutes({ app }: ModuleContext): void {
   app.post('/api/v1/stockroom/counts/:id/scan', async (request) => {
     const id = Number((request.params as { id?: string }).id);
@@ -293,12 +359,25 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
   kosh: '^0.1.0',
   hooks: {
     defaults: async (env) =>
-      (env as Env).asSuperuser({ reason: 'main warehouses' }, (su) => mainWarehouses(su)),
+      (env as Env).asSuperuser({ reason: 'main warehouses and return reasons' }, async (su) => {
+        const made = await mainWarehouses(su);
+        const reasons = await installReturnReasons(su);
+        return (
+          [made, reasons > 0 ? `${reasons} return reason(s)` : undefined]
+            .filter((x) => x !== undefined)
+            .join('; ') || undefined
+        );
+      }),
     demo: stockDemo,
   },
   // Exceptions to the module standard (RFC 0023), each with its reason.
   standard: {
     waive: [
+      {
+        rule: 'I1',
+        model: 'stock.return.reason',
+        reason: 'A short list of reasons, installed with the app and edited on screen.',
+      },
       {
         rule: 'M3',
         model: 'stock.quant',
@@ -530,6 +609,7 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
   },
   routes: (context: ModuleContext) => {
     registerCountRoutes(context);
+    registerReturnRoutes(context);
     registerReplenishmentRoutes(context);
   },
   settings: {
@@ -650,6 +730,15 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       defaults: { kind: 'internal' },
       defaultFilters: ['open'],
     }),
+    'stockroom.action_returns': action(StockPicking, {
+      label: 'Returns',
+      views: ['list', 'form'],
+      domain: { returnOf: { ne: null } },
+    }),
+    'stockroom.action_return_reasons': action(StockReturnReason, {
+      label: 'Return reasons',
+      views: ['list', 'form'],
+    }),
     'stockroom.action_receipts': action(StockPicking, {
       label: 'Receipts',
       views: ['list', 'kanban', 'form'],
@@ -730,6 +819,20 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       label: 'Deliveries',
       action: 'stockroom.action_deliveries',
       sequence: 3,
+    },
+    {
+      id: 'stockroom.returns',
+      parent: 'stockroom.root',
+      label: 'Returns',
+      action: 'stockroom.action_returns',
+      sequence: 3.5,
+    },
+    {
+      id: 'stockroom.return_reasons',
+      parent: 'stockroom.configuration',
+      label: 'Return reasons',
+      action: 'stockroom.action_return_reasons',
+      sequence: 8,
     },
     {
       id: 'stockroom.stock',
@@ -861,7 +964,11 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
           'availability',
           'backorderOf',
           'next',
+          'returnOf',
+          'returnReason',
         ]),
+        // Return part of a done delivery or receipt, with a reason (RFC 0030 §3.2).
+        k.component('return', 'stock.Return'),
         k.lines('moves', [
           'product',
           'name',
@@ -882,6 +989,14 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
         k.group('about', ['note'], { columns: 1 }),
       ],
       chatter: true,
+    })),
+    'stock.return.reason.list': list(StockReturnReason, {
+      columns: ['sequence', 'name', 'code'],
+      inlineEdit: ['sequence', 'name'],
+    }),
+    'stock.return.reason.form': form(StockReturnReason, (k) => ({
+      header: { buttons: [] },
+      sheet: [k.group('main', ['name', 'code', 'sequence'])],
     })),
     'stock.quant.list': list(StockQuant, {
       columns: ['product', 'location', 'lot', 'quantity', 'reserved', 'available'],
@@ -1061,6 +1176,7 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
     }),
   },
   search: {
+    'stock.return.reason': search(StockReturnReason, { fields: ['name', 'code'] }),
     'stock.picking': search(StockPicking, {
       fields: ['name', 'origin', 'partner.name', 'moves.product.name'],
       filters: {
@@ -1075,6 +1191,7 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
         receipts: { label: 'Receipts', domain: { kind: 'receipt' }, group: 'kind' },
         deliveries: { label: 'Deliveries', domain: { kind: 'delivery' }, group: 'kind' },
         dropships: { label: 'Dropships', domain: { kind: 'dropship' }, group: 'kind' },
+        returns: { label: 'Returns', domain: { returnOf: { ne: null } }, group: 'kind' },
         internal: { label: 'Internal moves', domain: { kind: 'internal' }, group: 'kind' },
         steps: {
           label: 'Steps of a route',
@@ -1082,7 +1199,7 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
           group: 'kind',
         },
       },
-      groupBy: ['kind', 'status', 'partner', 'scheduledDate'],
+      groupBy: ['kind', 'status', 'partner', 'scheduledDate', 'returnReason'],
     }),
     'stock.quant': search(StockQuant, {
       fields: ['product.name', 'location.fullName'],

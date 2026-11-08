@@ -60,6 +60,58 @@ export async function toBill(env: Env, orderIds: readonly number[]): Promise<Map
   return out;
 }
 
+/**
+ * What each line of `orders` has to get back from the vendor for what went back (RFC 0030 §3.2): the returned
+ * quantity, as far as it is billed beyond what is still received — refunded once, whatever the billing policy.
+ */
+export async function toRefund(
+  env: Env,
+  orderIds: readonly number[],
+): Promise<Map<number, Decimal>> {
+  const out = new Map<number, Decimal>();
+  const lines = await (
+    await env
+      .model('purchase.order.line')
+      .search({ where: { order: { in: [...orderIds] } } as never })
+  ).load({});
+  const ids = lines.map((l) => l.id as number);
+  const returned = await optionalLineField(env, 'purchase.order.line', ids, 'qtyReturned');
+  const received = await optionalLineField(env, 'purchase.order.line', ids, 'qtyReceived');
+  if (returned === null || received === null) return out;
+  for (const l of lines) {
+    const back = returned.get(l.id as number) ?? zero;
+    if (back.lte(0)) continue;
+    const over = (l.qtyBilled ?? zero).minus(received.get(l.id as number) ?? zero);
+    const refund = back.lt(over) ? back : over;
+    if (refund.gt(0)) out.set(l.id as number, refund);
+  }
+  return out;
+}
+
+/** A numeric field of order lines a bridge may add (Stockroom's), by line; null when it is not there. */
+async function optionalLineField(
+  env: Env,
+  model: string,
+  ids: readonly number[],
+  field: string,
+): Promise<Map<number, Decimal> | null> {
+  if (ids.length === 0) return new Map();
+  try {
+    const raw = env.model(model as never) as unknown as {
+      browse(ids: number[]): {
+        load(keys: string[]): Promise<{ read(keys: string[]): Record<string, unknown>[] }>;
+      };
+    };
+    return new Map(
+      (await raw.browse([...ids]).load([field]))
+        .read([field])
+        .map((r) => [r['id'] as number, orm.toDecimal(String(r[field] ?? '0'))]),
+    );
+  } catch {
+    return null;
+  }
+}
+
 /** A bill line's order line, and the three-way check (RFC 0028 §3.3). */
 export const MoveLinePurchase = extendModel('account.move.line', {
   fields: {
@@ -181,6 +233,68 @@ export const PurchaseOrderBilling = extendModel('purchase.order', {
   fieldOverrides: {
     state: {
       transitionsAdd: {
+        // A vendor refund for what went back to them (RFC 0030 §3.2), at the line's price.
+        refund: {
+          from: ['purchase'],
+          to: 'purchase',
+          guard: records('purchase.order', async (orders) => {
+            const due = await toRefund(orders.env as unknown as Env, [...orders.ids] as number[]);
+            const loaded = await orders.load({ lines: true });
+            return loaded.filter((o) => ![...o.lines].some((l) => due.has(l.id as number)));
+          }),
+          message: 'Nothing to refund: no return of this order is billed and not refunded yet.',
+          after: records('purchase.order', async (orders) => {
+            const env = orders.env;
+            const due = await toRefund(env as unknown as Env, [...orders.ids] as number[]);
+            for (const o of await orders.load({
+              lines: { product: true, taxes: true },
+              partner: true,
+              currency: true,
+              company: true,
+            })) {
+              const wanted = [...o.lines].filter((l) => due.has(l.id as number));
+              if (wanted.length === 0) continue;
+              const journal = await env.model('account.journal').search({
+                where: { company: o.company.id, type: 'purchase' },
+                limit: 1,
+              });
+              const journalId = journal.ids[0];
+              if (journalId === undefined)
+                throw new orm.ValidationError(
+                  'purchase.order',
+                  ['state'],
+                  'The company has no purchases journal.',
+                  'Install a chart of accounts (Accounting › Configuration).',
+                );
+              await env.model('account.move').create([
+                {
+                  kind: 'in_refund',
+                  journal: journalId,
+                  partner: o.partner.id,
+                  currency: o.currency.id,
+                  company: o.company.id,
+                  date: env.today(),
+                  invoiceOrigin: o.name,
+                  purchaseOrder: o.id,
+                  lines: {
+                    create: wanted.map((l) => ({
+                      lineKind: 'product' as const,
+                      product: l.product.id,
+                      name: `${String(l.name)} (returned)`,
+                      quantity: (due.get(l.id as number) ?? zero).toString(),
+                      priceUnit: l.priceUnit,
+                      taxes: { set: [...l.taxes].map((t) => t.id) },
+                      analytic: l.analytic?.id ?? null,
+                      purchaseLine: l.id,
+                      debit: '0',
+                      credit: '0',
+                    })),
+                  },
+                },
+              ]);
+            }
+          }),
+        },
         bill: {
           from: ['purchase'],
           to: 'purchase',

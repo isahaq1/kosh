@@ -98,6 +98,13 @@ export const saleAccount: ReturnType<typeof defineModule> = defineModule({
             },
             {
               kind: 'button',
+              id: 'refund',
+              transition: 'refund',
+              label: 'Credit note for returns',
+              visibleWhen: { state: 'sale' },
+            },
+            {
+              kind: 'button',
               id: 'invoice_down_payment',
               transition: 'invoiceDownPayment',
               label: 'Invoice a down payment',

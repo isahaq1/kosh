@@ -1,6 +1,17 @@
 /** Messages of the Stockroom screens (namespace `stock`), in English and Bangla. */
 export const messages: Readonly<Record<string, object>> = {
   en: {
+    returns: {
+      button: 'Return',
+      title: 'Return goods',
+      intro:
+        'How much of each line comes back, and why. The return is linked to this transfer and confirmed; validate it when the goods move.',
+      left: '{{done}} done, {{left}} can come back',
+      reason: 'Reason',
+      note: 'Note',
+      confirm: 'Make the return',
+      made: 'Return {{name}} made.',
+    },
     replenish: {
       title: 'Replenishment',
       hint: 'Each rule keeps a product between its minimum and maximum in a warehouse. The forecast counts what is on hand, going out, coming in and on order; below the minimum, it proposes enough to reach the maximum.',
@@ -38,6 +49,17 @@ export const messages: Readonly<Record<string, object>> = {
     },
   },
   bn: {
+    returns: {
+      button: 'ফেরত',
+      title: 'পণ্য ফেরত',
+      intro:
+        'প্রতিটি লাইনের কতটা ফেরত আসে এবং কেন। ফেরতটি এই ট্রান্সফারের সঙ্গে যুক্ত ও নিশ্চিত হয়; পণ্য সরলে তা যাচাই করুন।',
+      left: '{{done}} সম্পন্ন, {{left}} ফেরত আসতে পারে',
+      reason: 'কারণ',
+      note: 'নোট',
+      confirm: 'ফেরত তৈরি করুন',
+      made: 'ফেরত {{name}} তৈরি হয়েছে।',
+    },
     replenish: {
       title: 'পুনঃপূরণ',
       hint: 'প্রতিটি নিয়ম একটি গুদামে পণ্যকে সর্বনিম্ন ও সর্বোচ্চ পরিমাণের মধ্যে রাখে। পূর্বাভাসে মজুত, বেরিয়ে যাওয়া, আসছে এবং অর্ডারে থাকা পরিমাণ গোনা হয়; সর্বনিম্নের নিচে নামলে সর্বোচ্চ পর্যন্ত পৌঁছাতে যতটুকু লাগে তা প্রস্তাব করে।',

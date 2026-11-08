@@ -349,3 +349,121 @@ test('billed as received: the bill takes what came in; the three-way check flags
   const [checked] = await find('account.move.line', { id: line.id }, 'matchNote');
   expect(checked.matchNote).toBe('ordered 10, received 4, billed 6 — more than received');
 });
+
+test('returns: part of a receipt goes back to the vendor at its own cost, linked, with a reason; never more than came in', async () => {
+  const worker = purchaseStockWorker({ shutro: host.server.shutro });
+  const receive = async (quantity: string, price: string) => {
+    const made = await call('POST', O, 'maria', {
+      partner: ids['vendor'],
+      currency: ids['bdt'],
+      lines: { create: [{ product: ids['Panel'], name: 'Panel', quantity, priceUnit: price }] },
+    });
+    expect(made.status, JSON.stringify(made.json)).toBe(201);
+    await run(`${O}/${made.json.id}/transitions/submit`);
+    await run(`${O}/${made.json.id}/transitions/confirm`);
+    expect(await worker.drain()).toBe(1);
+    const [receipt] = await find('stock.picking', { purchaseOrder: made.json.id }, 'id,name');
+    await run(`/api/v1/models/stock.picking/${receipt.id}/transitions/validate`);
+    return { order: made.json.id as number, receipt };
+  };
+  const first = await receive('10', '300');
+  await receive('10', '500'); // the average cost moves on
+
+  const returnable = await call(
+    'GET',
+    `/api/v1/stockroom/pickings/${first.receipt.id}/returnable`,
+    'maria',
+  );
+  expect(returnable.status, JSON.stringify(returnable.json)).toBe(200);
+  const [line] = returnable.json.lines;
+  expect(line).toMatchObject({ done: '10', returned: '0', returnable: '10' });
+  const [damaged] = await find('stock.return.reason', { code: 'damaged' }, 'id,name');
+  expect(damaged.name).toBe('Damaged');
+  const R = `/api/v1/stockroom/pickings/${first.receipt.id}/return`;
+  expect(
+    (await call('POST', R, 'maria', { lines: [{ move: line.move, quantity: '3' }] })).status,
+  ).toBe(400); // a reason is required
+  expect(
+    (
+      await call('POST', R, 'maria', {
+        lines: [{ move: line.move, quantity: '11' }],
+        reason: damaged.id,
+      })
+    ).status,
+  ).toBe(409);
+  const made = await call('POST', R, 'maria', {
+    lines: [{ move: line.move, quantity: '3' }],
+    reason: damaged.id,
+    note: 'Cracked glass',
+  });
+  expect(made.status, JSON.stringify(made.json)).toBe(200);
+  const [back] = await find(
+    'stock.picking',
+    { id: made.json.picking },
+    'kind,state,returnOf,returnReason,origin,purchaseOrder',
+  );
+  expect(back).toMatchObject({ kind: 'delivery', state: 'confirmed' });
+  expect(back.returnOf?.id ?? back.returnOf).toBe(first.receipt.id);
+  expect(back.purchaseOrder?.id ?? back.purchaseOrder).toBe(first.order);
+  expect(back.origin).toBe(`Return of ${first.receipt.name}`);
+  // What is being returned counts: only 7 can still go back.
+  const after = await call(
+    'GET',
+    `/api/v1/stockroom/pickings/${first.receipt.id}/returnable`,
+    'maria',
+  );
+  expect(after.json.lines[0]).toMatchObject({ returned: '3', returnable: '7' });
+
+  await run(`/api/v1/models/stock.picking/${back.id}/transitions/validate`);
+  // Valued at the receipt's 300, not the average 400.
+  const [layer] = await find('stock.valuation.layer', { picking: back.id }, 'unitCost,value');
+  expect([Number(layer.unitCost), Number(layer.value)]).toEqual([300, -900]);
+  // The order line received 10 and returned 3: 7 received, 3 returned.
+  const [orderLine] = await find(
+    'purchase.order.line',
+    { order: first.order },
+    'qtyReceived,qtyReturned,qtyBilled',
+  );
+  expect([Number(orderLine.qtyReceived), Number(orderLine.qtyReturned)]).toEqual([7, 3]);
+  // Nothing billed yet: nothing to refund.
+  expect((await call('POST', `${O}/${first.order}/transitions/refund`, 'maria')).status).toBe(409);
+  // Billed as ordered (10), the 3 that went back are refunded once, at the order's price.
+  await run(`${O}/${first.order}/transitions/bill`);
+  await run(`${O}/${first.order}/transitions/refund`);
+  const [refund] = await find(
+    'account.move',
+    { purchaseOrder: first.order, kind: 'in_refund' },
+    'id,state',
+  );
+  const [refundLine] = await find(
+    'account.move.line',
+    { move: refund.id, lineKind: 'product' },
+    'quantity,priceUnit,name',
+  );
+  expect([Number(refundLine.quantity), Number(refundLine.priceUnit)]).toEqual([3, 300]);
+  expect(refundLine.name).toContain('(returned)');
+  const [billed] = await find('purchase.order.line', { order: first.order }, 'qtyBilled');
+  expect(Number(billed.qtyBilled)).toBe(7);
+  expect((await call('POST', `${O}/${first.order}/transitions/refund`, 'maria')).status).toBe(409);
+  // Buyers without Stockroom rights do not return goods.
+  await host.server.auth?.createUser({
+    login: 'pat',
+    name: 'Pat',
+    password: PASSWORD,
+    company,
+    companies: [company],
+    groups: ['purchase.user'],
+  });
+  expect(
+    (
+      await call('POST', R, 'pat', {
+        lines: [{ move: line.move, quantity: '1' }],
+        reason: damaged.id,
+      })
+    ).status,
+  ).toBe(403);
+  // An unknown transfer cannot be returned.
+  expect(
+    (await call('GET', `/api/v1/stockroom/pickings/${back.id + 1000}/returnable`, 'maria')).status,
+  ).toBe(404);
+});

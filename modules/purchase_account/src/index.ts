@@ -73,6 +73,13 @@ export const purchaseAccount: ReturnType<typeof defineModule> = defineModule({
               label: 'Create bill',
               visibleWhen: { state: 'purchase' },
             },
+            {
+              kind: 'button',
+              id: 'refund',
+              transition: 'refund',
+              label: 'Vendor refund for returns',
+              visibleWhen: { state: 'purchase' },
+            },
           ],
         },
         { append: 'dates', nodes: [field({ field: 'billState', id: 'bill_state' })] },

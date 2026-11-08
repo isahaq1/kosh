@@ -212,6 +212,56 @@ export async function toInvoice(
   return out;
 }
 
+/**
+ * What each line of `orders` has to credit for what came back (RFC 0030 §3.2): the returned quantity, as far as it is
+ * invoiced beyond what is still delivered — so a return is credited once, whatever the invoicing policy.
+ */
+export async function toCredit(
+  env: Env,
+  orderIds: readonly number[],
+): Promise<Map<number, Decimal>> {
+  const out = new Map<number, Decimal>();
+  const lines = await (
+    await env.model('sale.order.line').search({ where: { order: { in: [...orderIds] } } as never })
+  ).load({});
+  const ids = lines.map((l) => l.id as number);
+  const returned = await optionalLineField(env, 'sale.order.line', ids, 'qtyReturned');
+  const delivered = await optionalLineField(env, 'sale.order.line', ids, 'qtyDelivered');
+  if (returned === null || delivered === null) return out; // no Stockroom: nothing comes back
+  for (const l of lines) {
+    const back = returned.get(l.id as number) ?? zero;
+    if (back.lte(0)) continue;
+    const over = (l.qtyInvoiced ?? zero).minus(delivered.get(l.id as number) ?? zero);
+    const credit = back.lt(over) ? back : over;
+    if (credit.gt(0)) out.set(l.id as number, credit);
+  }
+  return out;
+}
+
+/** A numeric field of order lines a bridge may add (Stockroom's), by line; null when it is not there. */
+async function optionalLineField(
+  env: Env,
+  model: string,
+  ids: readonly number[],
+  field: string,
+): Promise<Map<number, Decimal> | null> {
+  if (ids.length === 0) return new Map();
+  try {
+    const raw = env.model(model as never) as unknown as {
+      browse(ids: number[]): {
+        load(keys: string[]): Promise<{ read(keys: string[]): Record<string, unknown>[] }>;
+      };
+    };
+    return new Map(
+      (await raw.browse([...ids]).load([field]))
+        .read([field])
+        .map((r) => [r['id'] as number, orm.toDecimal(String(r[field] ?? '0'))]),
+    );
+  } catch {
+    return null;
+  }
+}
+
 /** The down payments of an order not deducted yet (invoiced, less the deductions), as the system. */
 async function downPaymentsLeft(env: Env, order: number): Promise<Decimal> {
   return env.asSuperuser({ reason: 'down payments' }, async (su) => {
@@ -256,6 +306,7 @@ async function invoiceFor(
   env: Env,
   order: number,
   lines: readonly Record<string, unknown>[],
+  kind: 'out_invoice' | 'out_refund' = 'out_invoice',
 ): Promise<number> {
   const [o] = await env
     .model('sale.order')
@@ -282,7 +333,7 @@ async function invoiceFor(
     );
   const made = await env.model('account.move').create([
     {
-      kind: 'out_invoice',
+      kind,
       journal: journalId,
       // The invoice address and payment terms of the order, else the customer's (RFC 0028 §3.2).
       partner: o.partnerInvoice?.id ?? o.partner.id,
@@ -530,6 +581,38 @@ export const SaleOrderInvoicing = extendModel('sale.order', {
                 .model('sale.order')
                 .browse([o.id])
                 .write({ downPaymentAmount: null, downPaymentPercent: null });
+            }
+          }),
+        },
+        // A credit note for what the customer sent back (RFC 0030 §3.2), at the line's price.
+        refund: {
+          from: ['sale'],
+          to: 'sale',
+          guard: records('sale.order', async (orders) => {
+            const due = await toCredit(orders.env as unknown as Env, [...orders.ids] as number[]);
+            const loaded = await orders.load({ lines: true });
+            return loaded.filter((o) => ![...o.lines].some((l) => due.has(l.id as number)));
+          }),
+          message: 'Nothing to credit: no return of this order is invoiced and not credited yet.',
+          after: records('sale.order', async (orders) => {
+            const env = orders.env as unknown as Env;
+            const due = await toCredit(env, [...orders.ids] as number[]);
+            for (const o of await orders.load({ lines: { product: true, taxes: true } })) {
+              const lines = [...o.lines]
+                .filter((l) => due.has(l.id as number))
+                .map((l) => ({
+                  lineKind: 'product' as const,
+                  product: l.product.id,
+                  name: `${String(l.name)} (returned)`,
+                  quantity: (due.get(l.id as number) ?? zero).toString(),
+                  priceUnit: l.priceUnit,
+                  discount: l.discount,
+                  taxes: { set: [...l.taxes].map((t) => t.id) },
+                  saleLine: l.id,
+                  debit: '0',
+                  credit: '0',
+                }));
+              if (lines.length > 0) await invoiceFor(env, o.id as number, lines, 'out_refund');
             }
           }),
         },

@@ -61,6 +61,24 @@ export const MovePurchase = extendModel('stock.move', {
 
 export const LineReceived = extendModel('purchase.order.line', {
   fields: {
+    /** What went back to the vendor by validated returns (RFC 0030 §3.2), in the line's unit. */
+    qtyReturned: f.decimal({
+      scale: 3,
+      store: true,
+      label: 'Returned',
+      help: 'What was sent back to the vendor by validated returns of its receipts.',
+      ...compute(
+        'purchase.order.line',
+        'qtyReturned',
+        ['moves.quantity', 'moves.quantityDone', 'moves.picking.state', 'moves.returnOf'],
+        (lines) => {
+          for (const l of lines)
+            l.qtyReturned = [...l.moves]
+              .filter((m) => m.picking.state === 'done' && m.returnOf !== null)
+              .reduce((s, m) => s.plus(m.quantityDone ?? m.quantity), zero);
+        },
+      ),
+    }),
     moves: f.one2many('stock.move', 'purchaseLine'),
     /** Received by validated receipts, in the line's unit. */
     qtyReceived: f.decimal({
@@ -70,12 +88,16 @@ export const LineReceived = extendModel('purchase.order.line', {
       ...compute(
         'purchase.order.line',
         'qtyReceived',
-        ['moves.quantity', 'moves.quantityDone', 'moves.picking.state'],
+        ['moves.quantity', 'moves.quantityDone', 'moves.picking.state', 'moves.returnOf'],
         (lines) => {
+          // What went back to the vendor (a return of a receipt, RFC 0030 §3.2) is not received any more.
           for (const l of lines)
             l.qtyReceived = [...l.moves]
               .filter((m) => m.picking.state === 'done')
-              .reduce((s, m) => s.plus(m.quantityDone ?? m.quantity), zero);
+              .reduce((s, m) => {
+                const qty = m.quantityDone ?? m.quantity;
+                return m.returnOf === null ? s.plus(qty) : s.minus(qty);
+              }, zero);
         },
       ),
     }),
@@ -469,7 +491,7 @@ export const ReorderBuy = extendModel('stock.reorder', {
 
 export const purchaseStockShutro = defineModule({
   name: 'purchase_stock',
-  version: '0.2.0',
+  version: '0.3.0',
   depends: [purchaseShutro, stockShutro, productShutro],
   groups: [
     orm.defineGroup({

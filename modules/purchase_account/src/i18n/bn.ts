@@ -22,4 +22,5 @@ export const bn: Readonly<Record<string, string>> = {
   'To bill': 'বিল করতে হবে',
   'To bill while some ordered quantity is not billed yet; billed when all of it is.':
     'অর্ডারের কিছু পরিমাণ বিল না হওয়া পর্যন্ত বিল বাকি; সবটুকু হলে বিল হয়েছে।',
+  'Vendor refund for returns': 'ফেরতের জন্য সরবরাহকারীর রিফান্ড',
 };

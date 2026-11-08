@@ -11,6 +11,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Credit approvals': 'ক্রেডিট অনুমোদন',
   'Credit control': 'ক্রেডিট নিয়ন্ত্রণ',
   'Credit limit': 'ক্রেডিট সীমা',
+  'Credit note for returns': 'ফেরতের জন্য ক্রেডিট নোট',
   'Customer payment terms': 'গ্রাহকের পরিশোধের শর্ত',
   'Default credit limit': 'ডিফল্ট ক্রেডিট সীমা',
   'Down payment %': 'অগ্রিম %',

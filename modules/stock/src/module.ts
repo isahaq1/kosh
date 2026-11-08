@@ -25,6 +25,7 @@ import {
   record,
   records,
 } from './.kosh/bindings.js';
+import { StockReturnReason } from './returns.js';
 
 const READ = ['read'] as const;
 const ALL = ['read', 'write', 'create', 'unlink'] as const;
@@ -431,6 +432,9 @@ export const StockMove = defineModel('stock.move', {
      * quantity validates part of the line; the rest goes to a backorder.
      */
     quantityDone: f.decimal({ scale: 4, label: 'Done' }),
+    /** The line of the original transfer this one returns (RFC 0030 §3.2). */
+    returnOf: f.many2one('stock.move', { ondelete: 'restrict', label: 'Returns line' }),
+    returns: f.one2many('stock.move', 'returnOf', { label: 'Returned by' }),
     /** The done quantity in the product's unit. */
     doneQty: f.decimal({
       scale: 4,
@@ -1299,6 +1303,13 @@ export const StockPicking = defineModel('stock.picking', {
     /** The transfer this one takes the rest of. */
     backorderOf: f.many2one('stock.picking', { ondelete: 'set null', label: 'Backorder of' }),
     backorders: f.one2many('stock.picking', 'backorderOf'),
+    /** The delivery or receipt this one returns (RFC 0030 §3.2), and why. */
+    returnOf: f.many2one('stock.picking', { ondelete: 'restrict', label: 'Return of' }),
+    returns: f.one2many('stock.picking', 'returnOf', { label: 'Returns' }),
+    returnReason: f.many2one('stock.return.reason', {
+      ondelete: 'restrict',
+      label: 'Return reason',
+    }),
     /** The step this one brings its stock to (a pick's pack or delivery). */
     next: f.many2one('stock.picking', { ondelete: 'set null', label: 'Next step' }),
     previousSteps: f.one2many('stock.picking', 'next', { label: 'Steps before' }),
@@ -2175,7 +2186,7 @@ const shared = (
 
 export const stockShutro = defineModule({
   name: 'stock',
-  version: '0.3.0',
+  version: '0.4.0',
   depends: [productShutro, contactsShutro, messagingShutro],
   groups: [
     orm.defineGroup({ code: 'stock.user', label: 'Stockroom user', implies: ['product.user'] }),
@@ -2209,6 +2220,7 @@ export const stockShutro = defineModule({
     }),
   ],
   models: [
+    StockReturnReason,
     StockWarehouse,
     StockLocation,
     StockLot,
