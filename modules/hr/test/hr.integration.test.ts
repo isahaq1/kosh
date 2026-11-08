@@ -301,6 +301,43 @@ test('an HR manager does not approve their own leave, through the route or the t
   ).toBe(403);
 });
 
+test('the group’s fields (RFC 0032 §3.2): unit head, property, approvers; a leave approver decides instead of the manager', async () => {
+  const E = '/api/v1/models/hr.employee';
+  const kinds = (await call('GET', '/api/v1/models/hr.contract.type?fields=name,code', 'hana')).json
+    .items as Json[];
+  expect(kinds.map((t) => t.code)).toContain('PERM');
+  const set = await call('PATCH', `${E}/${employees['sumi']}`, 'hana', {
+    unitHead: employees['dina'],
+    property: 'Feed mill, Ashulia',
+    jobTitle: 'Store officer',
+    leaveApprover: users['rahim'],
+  });
+  expect(set.status, JSON.stringify(set.json)).toBe(200);
+  const read = (
+    await call('GET', `${E}/${employees['sumi']}?fields=unitHead,property,jobTitle`, 'rahim')
+  ).json;
+  expect(read).toMatchObject({ property: 'Feed mill, Ashulia', jobTitle: 'Store officer' });
+  expect(read.unitHead?.id ?? read.unitHead).toBe(employees['dina']);
+  // Sumi's leave: her manager Dina no longer decides it; Rahim, her leave approver, does.
+  const made = await call('POST', L, 'sumi', {
+    employee: employees['sumi'],
+    type: types['Casual leave'],
+    dateFrom: '2026-12-01',
+    dateTo: '2026-12-01',
+    days: 1,
+  });
+  expect(made.status, JSON.stringify(made.json)).toBe(201);
+  const id = made.json.id as number;
+  expect((await call('POST', `${L}/${id}/transitions/submit`, 'sumi')).status).toBe(200);
+  const decide = (as: string) =>
+    call('POST', `/api/v1/workforce/leaves/${id}/decide`, as, { decision: 'approve' });
+  expect((await decide('dina')).status).toBe(403);
+  expect((await call('GET', `${L}/${id}`, 'rahim')).status).toBe(200);
+  const approved = await decide('rahim');
+  expect(approved.status, JSON.stringify(approved.json)).toBe(200);
+  expect((await call('GET', `${L}/${id}?fields=state`, 'sumi')).json.state).toBe('approved');
+});
+
 test('the demo data loads', async () => {
   const auth = host.server.auth;
   if (auth === undefined) throw new Error('base is installed');

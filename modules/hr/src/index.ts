@@ -4,7 +4,8 @@
  * contracts, and leave — working days by the company's week, the year's balance enforced, no overlaps, decided by
  * the line manager or HR, never by the person asking. Personal details and wages for HR managers only.
  *
- * - `POST /api/v1/workforce/leaves/:id/decide`   `{ decision: 'approve' | 'refuse' }`: HR, or the requester's manager
+ * - `POST /api/v1/workforce/leaves/:id/decide`   `{ decision: 'approve' | 'refuse' }`: HR, or the requester's leave
+ *   approver (else their manager)
  * - `GET  /api/v1/workforce/balance?employee=&year=`   per leave type: days allowed, taken, waiting and left
  */
 import { contacts } from '@kosh/contacts';
@@ -17,8 +18,10 @@ import { action, calendar, form, hierarchy, kanban, list, search } from '@kosh/v
 import { hrDemo } from './demo.js';
 import {
   HrContract,
+  HrContractType,
   HrDepartment,
   HrEmployee,
+  HrEmployeeTag,
   HrJob,
   HrLeave,
   HrLeaveType,
@@ -27,8 +30,10 @@ import {
 
 export {
   HrContract,
+  HrContractType,
   HrDepartment,
   HrEmployee,
+  HrEmployeeTag,
   HrJob,
   HrLeave,
   HrLeaveType,
@@ -76,7 +81,7 @@ function registerWorkforceRoutes({ app }: ModuleContext): void {
             throw new HttpProblem(404, 'missing-record', 'Not found', `There is no leave ${id}.`);
           const [employee] = await rows(
             await ref(su, 'hr.employee').search({ where: { id: leave['employee'] } }),
-            ['user', 'manager'],
+            ['user', 'manager', 'leaveApprover'],
           );
           const [manager] =
             typeof employee?.['manager'] === 'number'
@@ -93,12 +98,17 @@ function registerWorkforceRoutes({ app }: ModuleContext): void {
               'Someone else decides your leave.',
             );
           const hr = env.administrator || env.access.has('hr.leave_decide');
-          if (!hr && manager?.['user'] !== env.uid)
+          // The employee's leave approver when they have one (RFC 0032 §3.2), else their manager.
+          const approver =
+            typeof employee?.['leaveApprover'] === 'number'
+              ? employee['leaveApprover']
+              : manager?.['user'];
+          if (!hr && approver !== env.uid)
             throw new HttpProblem(
               403,
               'access',
               'Leave decisions',
-              'The person’s manager or an HR manager decides this leave.',
+              'The person’s leave approver (else their manager) or an HR manager decides this leave.',
             );
           if (leave['state'] !== 'submitted')
             throw new HttpProblem(
@@ -191,6 +201,22 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
   },
   importTemplates: [
     {
+      key: 'hr_contract_type',
+      model: 'hr.contract.type',
+      label: 'Employment types',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'Code', field: 'code' },
+        { header: 'Country', field: 'country' },
+      ],
+    },
+    {
+      key: 'hr_employee_tag',
+      model: 'hr.employee.tag',
+      label: 'Employee tags',
+      columns: [{ header: 'Name', field: 'name' }],
+    },
+    {
       key: 'hr_department',
       model: 'hr.department',
       label: 'Department',
@@ -219,6 +245,13 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
         { header: 'Department', field: 'department' },
         { header: 'Position', field: 'job' },
         { header: 'Manager', field: 'manager' },
+        { header: 'Job title', field: 'jobTitle' },
+        { header: 'Unit head', field: 'unitHead' },
+        { header: 'Coach', field: 'coach' },
+        { header: 'Property', field: 'property' },
+        { header: 'Work mobile', field: 'mobile' },
+        { header: 'Expense approver', field: 'expenseApprover' },
+        { header: 'Leave approver', field: 'leaveApprover' },
         { header: 'Work email', field: 'workEmail' },
         { header: 'Work phone', field: 'workPhone' },
         { header: 'Joined', field: 'hireDate' },
@@ -376,6 +409,14 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
       label: 'Leave types',
       views: ['list', 'form'],
     }),
+    'workforce.action_contract_types': action(HrContractType, {
+      label: 'Employment types',
+      views: ['list', 'form'],
+    }),
+    'workforce.action_employee_tags': action(HrEmployeeTag, {
+      label: 'Employee tags',
+      views: ['list', 'form'],
+    }),
   },
   menus: [
     { id: 'workforce.root', label: 'Workforce', app: 'workforce' },
@@ -427,14 +468,31 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
       action: 'workforce.action_leave_types',
       sequence: 3,
     },
+    {
+      id: 'workforce.contract_types',
+      parent: 'workforce.configuration',
+      label: 'Employment types',
+      action: 'workforce.action_contract_types',
+      sequence: 4,
+    },
+    {
+      id: 'workforce.employee_tags',
+      parent: 'workforce.configuration',
+      label: 'Employee tags',
+      action: 'workforce.action_employee_tags',
+      sequence: 5,
+    },
   ],
   views: {
     'hr.employee.list': list(HrEmployee, {
       columns: [
         'name',
-        'job',
+        'jobTitle',
         'department',
         'manager',
+        'unitHead',
+        'property',
+        { field: 'tags', widget: 'tags' },
         { field: 'workEmail', widget: 'email' },
         { field: 'workPhone', widget: 'phone' },
       ],
@@ -481,8 +539,24 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
             action: 'workforce.action_contracts',
           },
         ]),
-        k.group('work', ['name', 'job', 'department', 'manager', 'user', 'hireDate']),
-        k.group('contact', ['workEmail', 'workPhone']),
+        k.group('identity', ['name', 'jobTitle', 'user', 'hireDate']),
+        // As Paragon's pg_employee lays it out: how to reach the person and where, beside whom they answer to.
+        k.group('contact', [
+          { field: 'workEmail', widget: 'email' },
+          { field: 'workPhone', widget: 'phone' },
+          { field: 'mobile', widget: 'phone' },
+          { field: 'tags', widget: 'tags' },
+          'company',
+          'property',
+        ]),
+        k.group('work', ['department', 'job', 'manager', 'unitHead', 'coach'], {
+          label: 'Reports to',
+        }),
+        k.group('approvers', ['expenseApprover', 'leaveApprover'], {
+          label: 'Approvers',
+          description: 'Who approves this person’s expenses and leave first.',
+        }),
+        k.group('schedule', ['timezone'], { label: 'Schedule' }),
         k.group('personal', ['birthday', 'nationalId', 'emergencyContact', 'privateAddress']),
       ],
       chatter: true,
@@ -526,10 +600,26 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
         ],
       },
       sheet: [
-        k.group('main', ['name', 'employee', 'kind', 'state']),
+        k.group('main', ['name', 'employee', 'employmentType', 'kind', 'state']),
         k.group('terms', ['dateStart', 'dateEnd', 'wage']),
       ],
       chatter: true,
+    })),
+    'hr.contract.type.list': list(HrContractType, {
+      columns: ['name', 'code', 'country'],
+      inlineEdit: ['name', 'code', 'country'],
+    }),
+    'hr.contract.type.form': form(HrContractType, (k) => ({
+      header: { buttons: [] },
+      sheet: [k.group('main', ['name', 'code', 'country', 'sequence'])],
+    })),
+    'hr.employee.tag.list': list(HrEmployeeTag, {
+      columns: ['name', 'color'],
+      inlineEdit: ['name', 'color'],
+    }),
+    'hr.employee.tag.form': form(HrEmployeeTag, (k) => ({
+      header: { buttons: [] },
+      sheet: [k.group('main', ['name', 'color'])],
     })),
     'hr.leave.type.list': list(HrLeaveType, {
       columns: ['name', 'daysPerYear'],
@@ -582,8 +672,16 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
   },
   search: {
     'hr.employee': search(HrEmployee, {
-      fields: ['name', 'workEmail', 'job.name', 'department.name'],
-      groupBy: ['department', 'job', 'manager'],
+      fields: [
+        'name',
+        'jobTitle',
+        'workEmail',
+        'mobile',
+        'property',
+        'job.name',
+        'department.name',
+      ],
+      groupBy: ['department', 'job', 'manager', 'unitHead', 'property'],
     }),
     'hr.leave': search(HrLeave, {
       fields: ['employee.name', 'reason'],
@@ -603,5 +701,7 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
     'hr.department': search(HrDepartment, { fields: ['name'] }),
     'hr.job': search(HrJob, { fields: ['name'], groupBy: ['department'] }),
     'hr.leave.type': search(HrLeaveType, { fields: ['name'] }),
+    'hr.contract.type': search(HrContractType, { fields: ['name', 'code'] }),
+    'hr.employee.tag': search(HrEmployeeTag, { fields: ['name'] }),
   },
 });

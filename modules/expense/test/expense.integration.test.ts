@@ -304,6 +304,30 @@ test('a cash advance: approved, paid out by a Spend manager, settled by a later 
   void other;
 });
 
+test('the employee’s expense approver decides first (RFC 0032 §3.2), not the Spend approvers', async () => {
+  const mona = (
+    await call('GET', `/api/v1/models/hr.employee/${employees['mona']}?fields=user`, 'hana')
+  ).json.user;
+  expect(
+    (
+      await call('PATCH', `/api/v1/models/hr.employee/${employees['sumi']}`, 'hana', {
+        expenseApprover: mona?.id ?? mona,
+      })
+    ).status,
+  ).toBe(200);
+  const taxi = await newExpense('sumi', {
+    name: 'Taxi to the bank',
+    date: '2026-10-25',
+    category: categories['Travel'],
+    amount: '300',
+  });
+  const sheet = await newSheet('sumi', [taxi]);
+  expect((await run('expense.sheet', sheet, 'submit', 'sumi')).status).toBe(200);
+  expect(await decideAll('expense.sheet', sheet, 'anna')).toBe(0);
+  expect(await decideAll('expense.sheet', sheet, 'mona')).toBe(1);
+  expect((await call('GET', `${S}/${sheet}?fields=state`, 'sumi')).json.state).toBe('approved');
+});
+
 test('the demo data loads', async () => {
   const auth = host.server.auth;
   if (auth === undefined) throw new Error('base is installed');

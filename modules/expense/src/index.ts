@@ -75,7 +75,12 @@ export const expense: ReturnType<typeof defineModule> = defineModule({
       onApproved: 'approve',
       onRejected: 'refuse',
       levels: [
-        { name: 'Approver', condition: {}, approverRole: 'expense.approver' },
+        {
+          name: 'Approver',
+          condition: {},
+          approver: { employee: 'expenseApprover' },
+          approverRole: 'expense.approver',
+        },
         {
           name: 'Beyond the policy',
           condition: { overPolicy: true },

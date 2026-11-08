@@ -92,24 +92,85 @@ export const HrJob = defineModel('hr.job', {
   },
 });
 
+export const HrEmployeeTag = defineModel('hr.employee.tag', {
+  label: 'Employee tag',
+  recName: 'name',
+  order: ['name asc'],
+  archivable: true,
+  access: { 'hr.user': READ, 'hr.manager': [...ALL, 'export', 'import'] },
+  fields: {
+    name: f.char({ required: true, translate: true }),
+    color: f.integer({ default: 0, label: 'Colour' }),
+  },
+});
+
+/** Employment types (RFC 0032 §3.2): permanent, contractual, casual… with a code and the country they apply in. */
+export const HrContractType = defineModel('hr.contract.type', {
+  label: 'Employment type',
+  recName: 'name',
+  order: ['sequence asc', 'name asc'],
+  archivable: true,
+  access: { 'hr.user': READ, 'hr.manager': [...ALL, 'export', 'import'] },
+  fields: {
+    name: f.char({ required: true, translate: true }),
+    code: f.char({ size: 20, help: 'A short code used in reports and payroll files.' }),
+    country: f.char({
+      size: 2,
+      help: 'The country whose labour law the type follows, as its two-letter code (BD, IN); empty: any.',
+    }),
+    sequence: f.integer({ default: 10 }),
+  },
+});
+
 export const HrEmployee = defineModel('hr.employee', {
   label: 'Employee',
   recName: 'name',
   order: ['name asc'],
   archivable: true,
   companyScoped: { required: true },
-  tracking: ['department', 'job', 'manager'],
+  tracking: ['department', 'job', 'manager', 'unitHead', 'expenseApprover', 'leaveApprover'],
   access: { 'hr.user': READ, 'hr.manager': [...ALL, 'export', 'import'] },
   fields: {
     name: f.char({ required: true }),
+    jobTitle: f.char({
+      label: 'Job title',
+      help: 'As printed on cards and letters; the position may differ.',
+    }),
     /** The person's sign-in, when they have one. */
     user: f.many2one('res.users', { ondelete: 'set null', label: 'User' }),
     department: f.many2one('hr.department', { ondelete: 'set null' }),
     job: f.many2one('hr.job', { ondelete: 'set null', label: 'Position' }),
     manager: f.many2one('hr.employee', { ondelete: 'set null' }),
     team: f.one2many('hr.employee', 'manager', { label: 'Team' }),
+    unitHead: f.many2one('hr.employee', {
+      ondelete: 'set null',
+      label: 'Unit head',
+      help: 'The head of the person’s unit (a plant, a depot, a farm), beside the line manager; approvals may ask them.',
+    }),
+    coach: f.many2one('hr.employee', { ondelete: 'set null' }),
+    property: f.char({
+      label: 'Property',
+      help: 'The property or unit the person works for (a mill, a farm, a depot).',
+    }),
+    tags: f.many2many('hr.employee.tag', { relation: 'hr_employee_tag_rel' }),
     workEmail: f.char({ label: 'Work email' }),
     workPhone: f.char({ label: 'Work phone' }),
+    mobile: f.char({ label: 'Work mobile' }),
+    expenseApprover: f.many2one('res.users', {
+      ondelete: 'set null',
+      label: 'Expense approver',
+      help: 'Approves this person’s expense reports first (else the Spend approvers).',
+    }),
+    leaveApprover: f.many2one('res.users', {
+      ondelete: 'set null',
+      label: 'Leave approver',
+      help: 'Decides this person’s leave beside HR managers.',
+    }),
+    timezone: f.char({
+      label: 'Time zone',
+      default: 'Asia/Dhaka',
+      help: 'An IANA time zone (Asia/Dhaka, Asia/Kolkata): the person’s working hours and reminders follow it.',
+    }),
     hireDate: f.date({ label: 'Joined' }),
     // Personal: HR managers only.
     birthday: f.date({ groups: HR }),
@@ -152,6 +213,10 @@ export const HrContract = defineModel('hr.contract', {
   fields: {
     name: f.char({ required: true, label: 'Reference' }),
     employee: f.many2one('hr.employee', { required: true, ondelete: 'cascade' }),
+    employmentType: f.many2one('hr.contract.type', {
+      ondelete: 'restrict',
+      label: 'Employment type',
+    }),
     kind: f.selection(
       { permanent: 'Permanent', fixed: 'Fixed term', probation: 'Probation', intern: 'Internship' },
       {
@@ -212,6 +277,12 @@ export const HrLeave = defineModel('hr.leave', {
     },
     // Line managers see their team's.
     team: { groups: ['hr.user'], perms: ['read'], domain: { 'employee.manager.user': me } },
+    // The employee's leave approver decides their requests.
+    approver: {
+      groups: ['hr.user'],
+      perms: ['read', 'write'],
+      domain: { 'employee.leaveApprover': me, state: { in: ['submitted', 'approved', 'refused'] } },
+    },
     all: { groups: ['hr.manager'], perms: [...ALL], domain: {} },
   },
   fields: {
@@ -228,20 +299,20 @@ export const HrLeave = defineModel('hr.leave', {
       initial: 'draft',
       transitions: {
         submit: { from: ['draft'], to: 'submitted' },
-        // Never by the person asking, HR managers included.
+        // Never by the person asking, HR managers included; by an HR manager or the employee's leave approver.
         approve: {
           from: ['submitted'],
           to: 'approved',
-          requires: 'hr.leave_decide',
-          guard: records('hr.leave', (leaves) => notOwn(leaves)),
-          message: 'Someone else decides your leave.',
+          guard: records('hr.leave', (leaves) => undecidable(leaves)),
+          message:
+            'Your own leave is decided by someone else; others’ by an HR manager or their leave approver.',
         },
         refuse: {
           from: ['submitted'],
           to: 'refused',
-          requires: 'hr.leave_decide',
-          guard: records('hr.leave', (leaves) => notOwn(leaves)),
-          message: 'Someone else decides your leave.',
+          guard: records('hr.leave', (leaves) => undecidable(leaves)),
+          message:
+            'Your own leave is decided by someone else; others’ by an HR manager or their leave approver.',
         },
         redraft: { from: ['submitted', 'refused'], to: 'draft' },
       },
@@ -332,9 +403,10 @@ export const HrLeave = defineModel('hr.leave', {
 });
 
 /** The leaves among `records` that the acting user asked for themself. */
-async function notOwn(records: unknown): Promise<number[]> {
+async function undecidable(records: unknown): Promise<number[]> {
   const { env, ids } = records as { env: Env; ids: readonly number[] };
-  return env.asSuperuser({ reason: 'own leave' }, async (su) => {
+  const decides = env.su || env.access.has('hr.leave_decide');
+  return env.asSuperuser({ reason: 'who decides leave' }, async (su) => {
     const leaves = (
       await su
         .model('hr.leave')
@@ -346,13 +418,16 @@ async function notOwn(records: unknown): Promise<number[]> {
         await su
           .model('hr.employee')
           .browse(leaves.map((l) => l['employee'] as never))
-          .load(['user'])
+          .load(['user', 'leaveApprover'])
       )
-        .read(['id', 'user'])
-        .map((e) => [e['id'], e['user']]),
+        .read(['id', 'user', 'leaveApprover'])
+        .map((e) => [e['id'], e]),
     );
     return leaves
-      .filter((l) => people.get(l['employee']) === env.uid)
+      .filter((l) => {
+        const person = people.get(l['employee']);
+        return person?.['user'] === env.uid || (!decides && person?.['leaveApprover'] !== env.uid);
+      })
       .map((l) => l['id'] as number);
   });
 }
@@ -371,7 +446,7 @@ async function fillDays(
 
 export const hrShutro = defineModule({
   name: 'hr',
-  version: '0.1.0',
+  version: '0.2.0',
   depends: [contactsShutro, messagingShutro],
   groups: [
     orm.defineGroup({ code: 'hr.user', label: 'Employee', implies: ['messaging.user'] }),
@@ -388,7 +463,16 @@ export const hrShutro = defineModule({
       groups: ['hr.manager'],
     }),
   ],
-  models: [HrDepartment, HrJob, HrEmployee, HrContract, HrLeaveType, HrLeave],
+  models: [
+    HrDepartment,
+    HrJob,
+    HrEmployeeTag,
+    HrContractType,
+    HrEmployee,
+    HrContract,
+    HrLeaveType,
+    HrLeave,
+  ],
   data: [
     record(
       'hr.leave.type',
@@ -409,5 +493,29 @@ export const hrShutro = defineModule({
       { noupdate: true },
     ),
     record('hr.leave.type', 'leave_unpaid', { name: 'Unpaid leave' }, { noupdate: true }),
+    record(
+      'hr.contract.type',
+      'type_permanent',
+      { name: 'Permanent', code: 'PERM', sequence: 1 },
+      { noupdate: true },
+    ),
+    record(
+      'hr.contract.type',
+      'type_contractual',
+      { name: 'Contractual', code: 'CONT', sequence: 2 },
+      { noupdate: true },
+    ),
+    record(
+      'hr.contract.type',
+      'type_casual',
+      { name: 'Casual (daily)', code: 'CASU', sequence: 3 },
+      { noupdate: true },
+    ),
+    record(
+      'hr.contract.type',
+      'type_intern',
+      { name: 'Intern', code: 'INTN', sequence: 4 },
+      { noupdate: true },
+    ),
   ],
 });
