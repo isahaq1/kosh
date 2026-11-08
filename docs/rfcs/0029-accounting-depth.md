@@ -144,4 +144,11 @@ with exceptions, cheque printing, currency revaluation, UBL / Peppol — a later
   pixel is left out on purpose). Step 3 complete. Seen once under the full parallel E2E run and not
   reproduced alone or on reruns: the accounting spec's trial balance without its `1010 Bank` row — open, like the
   Trade Finance overview flake.
+- **Step 4 (2026-11-08).** `account.followup.level` (days, email / SMS / WhatsApp, subject, body and short text
+  translated, stop sales), `account.followup` (the last level sent, the pause with its promise) and
+  `account.followup.sent` (the log); three default levels per company; `followUp` / `runFollowups` (once a day, a
+  level sent once, reset once paid), notes on the invoices' chatter, the audit; the Follow-ups page with Send now and
+  Pause; `salesStopped` refusing confirmations in `sale_account`; accounting 0.7.0. Deviations: the reminder is noted
+  on each overdue invoice's chatter, as contacts have no chatter; the link is the portal's invoice page, where Pay now
+  is (RFC 0017), not a separate pay link.
 

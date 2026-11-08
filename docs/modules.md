@@ -329,6 +329,25 @@ it applies to, its hit rate and what it would do to the open ones, without chang
 lines have **Undo** (`POST /api/v1/accounting/statement-lines/:id/undo`): a payment comes off its documents and is
 reversed, a write-off is reversed, and the line is open again.
 
+### Payment follow-ups (`modules/accounting`, RFC 0029)
+
+**Follow-up levels** (Accounting › Configuration, Accounting managers) say how late an invoice must be — days past
+its due date —, how the customer is reminded (email, SMS, WhatsApp), the text (subject, email body and a short text
+for messages, each language its own; `{{partner}}`, `{{company}}`, `{{amount}}`, `{{days}}`, `{{invoices}}`,
+`{{count}}`, `{{link}}`), and whether sales stop. A company starts with three: a first reminder at 15 days, a second
+with a text at 30, and a final notice at 60 that stops sales. Once a day each customer with overdue invoices gets one
+reminder for the highest level their oldest invoice reached, with every overdue invoice and — with the portal
+installed — its link to pay (`KOSH_PORTAL_URL`); a level is sent once, and a customer who paid starts over. Each
+reminder is noted on the invoices' chatter and logged (Accounting › Reporting › Reminders sent).
+
+**Accounting › Follow-ups** lists who is late: how much, how many days, the level reached, the last one sent and when.
+**Send now** sends the reminder of the level reached at once (even when it was sent, or the customer is paused);
+**Pause** holds the daily reminders until a date, with the customer's promise. While a customer is at a level that
+stops sales, their sales orders cannot be confirmed (`sale_account`), until they pay. Email needs `SMTP_URL`; texts a
+Twilio account (`TWILIO_*`). The routes: `GET /api/v1/accounting/followups`,
+`POST /api/v1/accounting/followups/:partner/send` and `POST /api/v1/accounting/followups/:partner/pause`
+(`{ until: 'YYYY-MM-DD' | null, note? }`), for accountants.
+
 ### Sending documents (`@kosh/mail`, RFC 0029)
 
 A document declared **sendable** has **Send** beside Print on its form: invoices and credit notes once posted, sales
