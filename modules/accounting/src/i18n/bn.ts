@@ -16,6 +16,8 @@ export const bn: Readonly<Record<string, string>> = {
   'A journal code is used once per company.': 'প্রতিটি প্রতিষ্ঠানে একটি জার্নাল কোড একবারই ব্যবহার হয়।',
   'A journal entry, or the kind of document: customer or vendor invoice, credit note or debit note.':
     'জার্নাল এন্ট্রি, অথবা নথির ধরন: গ্রাহক চালান বা সরবরাহকারীর বিল, ক্রেডিট নোট বা ডেবিট নোট।',
+  'A level starts at least one day after the due date.':
+    'একটি স্তর নির্ধারিত তারিখের অন্তত এক দিন পরে শুরু হয়।',
   'A line is a debit or a credit, never both, and never negative.':
     'একটি লাইন হয় ডেবিট নয়তো ক্রেডিট, কখনো দুটোই নয় এবং কখনো ঋণাত্মক নয়।',
   'A line of a journal entry, a product line of a document, or a tax or receivable / payable line made at posting.':
@@ -55,6 +57,7 @@ export const bn: Readonly<Record<string, string>> = {
   'An account code is used once per company.': 'প্রতিটি প্রতিষ্ঠানে একটি হিসাব কোড একবারই ব্যবহার হয়।',
   Applied: 'প্রয়োগ হয়েছে',
   'Applies from (document total)': 'প্রযোজ্য (নথির মোট থেকে)',
+  Automatic: 'স্বয়ংক্রিয়',
   Balance: 'ব্যালান্স',
   'Balance sheet': 'স্থিতিপত্র',
   Bank: 'ব্যাংক',
@@ -106,6 +109,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Current assets': 'চলতি সম্পদ',
   'Current liabilities': 'চলতি দায়',
   'Current year earnings': 'চলতি বছরের আয়',
+  Customer: 'গ্রাহক',
   'Customer credit note': 'গ্রাহক ক্রেডিট নোট',
   'Customer debit note': 'গ্রাহক ডেবিট নোট',
   'Customer invoice': 'গ্রাহক চালান',
@@ -114,6 +118,7 @@ export const bn: Readonly<Record<string, string>> = {
   Date: 'তারিখ',
   Days: 'দিন',
   'Days are zero or more.': 'দিন শূন্য বা তার বেশি।',
+  'Days overdue': 'যত দিন বকেয়া',
   Debit: 'ডেবিট',
   'Debit Line': 'ডেবিট লাইন',
   'Debit minus credit, in the company currency.': 'ডেবিট বিয়োগ ক্রেডিট, প্রতিষ্ঠানের মুদ্রায়।',
@@ -128,8 +133,11 @@ export const bn: Readonly<Record<string, string>> = {
   'Draft invoices and bills': 'খসড়া চালান ও বিল',
   'Due date': 'নির্ধারিত তারিখ',
   'Due from them': 'তাদের কাছে প্রাপ্য',
+  'Each day, a late customer gets one reminder for the highest level their oldest overdue invoice reached.':
+    'প্রতিদিন, দেরি করা গ্রাহক তার সবচেয়ে পুরোনো বকেয়া ইনভয়েস যে সর্বোচ্চ স্তরে পৌঁছেছে তার একটি অনুস্মারক পান।',
   'Each invoice and credit note is emailed with its PDF when it is posted.':
     'প্রতিটি ইনভয়েস ও ক্রেডিট নোট পোস্ট হলে PDF-সহ ইমেইলে পাঠানো হয়।',
+  Email: 'ইমেইল',
   'Empty: shared by every company.': 'ফাঁকা থাকলে: সব প্রতিষ্ঠানের জন্য সাধারণ।',
   Entry: 'এন্ট্রি',
   'Entry, invoice or bill posted': 'এন্ট্রি, চালান বা বিল পোস্টকৃত',
@@ -148,6 +156,13 @@ export const bn: Readonly<Record<string, string>> = {
   'Fiscal years': 'অর্থবছর',
   'Fiscal years of a company do not overlap.': 'একটি প্রতিষ্ঠানের অর্থবছরগুলো একটির ওপর আরেকটি পড়ে না।',
   'Fixed assets': 'স্থায়ী সম্পদ',
+  'Follow-up': 'তাগাদা',
+  'Follow-up level': 'তাগাদার স্তর',
+  'Follow-up levels': 'তাগাদার স্তর',
+  'Follow-up sent': 'পাঠানো তাগাদা',
+  'Follow-ups': 'তাগাদা',
+  'For SMS and WhatsApp: {{company}}, {{amount}}, {{count}} and {{link}}.':
+    'SMS ও WhatsApp-এর জন্য: {{company}}, {{amount}}, {{count}} ও {{link}}।',
   From: 'থেকে',
   'From amount': 'যে পরিমাণ থেকে',
   'Full Reconcile': 'পূর্ণ মিলকরণ',
@@ -175,6 +190,9 @@ export const bn: Readonly<Record<string, string>> = {
   Kind: 'ধরন',
   Label: 'লেবেল',
   'Label contains': 'বিবরণে আছে',
+  'Last level sent': 'শেষ পাঠানো স্তর',
+  'Last sent': 'শেষ পাঠানো',
+  Level: 'স্তর',
   Lines: 'লাইন',
   'Lines › Account': 'লাইন › হিসাব',
   'Lines › Days': 'লাইন › দিন',
@@ -200,6 +218,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Money in or out': 'টাকা জমা বা খরচ',
   'Money out': 'টাকা খরচ',
   Name: 'নাম',
+  'No reminder before this date: the customer promised to pay.':
+    'এই তারিখের আগে কোনো অনুস্মারক নয়: গ্রাহক পরিশোধের প্রতিশ্রুতি দিয়েছেন।',
   'Non-current assets': 'অচলতি সম্পদ',
   'Non-current liabilities': 'অচলতি দায়',
   'Not paid': 'অপরিশোধিত',
@@ -224,6 +244,7 @@ export const bn: Readonly<Record<string, string>> = {
     'লাইন মেলানোর অপেক্ষায় থাকলে খোলা; প্রতিটি লাইন মিললে ও শেষের ব্যালান্স মিলে গেলে সম্পন্ন।',
   'Opening balance': 'শুরুর ব্যালান্স',
   'Other income': 'অন্যান্য আয়',
+  Overdue: 'বকেয়া',
   Overview: 'সারসংক্ষেপ',
   'Page {{page}} of {{pages}}': 'পৃষ্ঠা {{page}} / {{pages}}',
   Paid: 'পরিশোধিত',
@@ -237,6 +258,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Partials As Debit': 'ডেবিট হিসেবে আংশিক মিলকরণ',
   Partner: 'অংশীদার',
   'Partner ledger': 'অংশীদার খতিয়ান',
+  'Paused until': 'যে তারিখ পর্যন্ত বিরতি',
   Payable: 'প্রদেয়',
   'Payable account': 'প্রদেয় হিসাব',
   Payment: 'পেমেন্ট',
@@ -251,6 +273,8 @@ export const bn: Readonly<Record<string, string>> = {
   Pays: 'পরিশোধ করে',
   Percent: 'শতাংশ',
   'Place of supply': 'সরবরাহের স্থান',
+  'Placeholders: {{partner}}, {{company}}, {{amount}} (all that is overdue), {{days}} (the oldest), {{invoices}} (one line each, with its link).':
+    'প্লেসহোল্ডার: {{partner}}, {{company}}, {{amount}} (সব বকেয়া), {{days}} (সবচেয়ে পুরোনো), {{invoices}} (প্রতিটি এক লাইনে, লিংকসহ)।',
   Post: 'পোস্ট করুন',
   Posted: 'পোস্টকৃত',
   'Posted at': 'পোস্টের সময়',
@@ -258,11 +282,14 @@ export const bn: Readonly<Record<string, string>> = {
   Prepayments: 'অগ্রিম পরিশোধ',
   Product: 'পণ্য',
   'Profit and loss': 'লাভ-ক্ষতি',
+  Promise: 'প্রতিশ্রুতি',
   Purchases: 'ক্রয়',
   Quantity: 'পরিমাণ',
   'Quantity times unit price less the discount, before taxes, in the document’s currency.':
     'পরিমাণ গুণ একক মূল্য থেকে ছাড় বাদে, করের আগে, নথির মুদ্রায়।',
   Rate: 'হার',
+  'Reached when an invoice is this many days past its due date.':
+    'কোনো ইনভয়েস নির্ধারিত তারিখের এত দিন পেরোলে পৌঁছায়।',
   Receivable: 'প্রাপ্য',
   'Receivable / payable': 'প্রাপ্য / প্রদেয়',
   'Receivable account': 'প্রাপ্য হিসাব',
@@ -276,6 +303,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Records must reference shared records or records of their own company.':
     'রেকর্ড কেবল শেয়ার করা রেকর্ড বা নিজের প্রতিষ্ঠানের রেকর্ড উল্লেখ করতে পারে।',
   Reference: 'রেফারেন্স',
+  'Reminders sent': 'পাঠানো অনুস্মারক',
   Reopen: 'আবার খুলুন',
   'Reopened because': 'পুনরায় খোলার কারণ',
   Reporting: 'প্রতিবেদন',
@@ -290,22 +318,28 @@ export const bn: Readonly<Record<string, string>> = {
   'Rules run in order on every imported line; the first that applies wins. Try one with its dry run from Reconcile bank.':
     'আমদানি করা প্রতিটি লাইনে নিয়মগুলো ক্রমানুসারে চলে; প্রথম যেটি খাটে সেটিই প্রয়োগ হয়। ব্যাংক মিলান থেকে পরীক্ষামূলক চালিয়ে দেখুন।',
   Sales: 'বিক্রয়',
+  'Sales orders for the customer cannot be confirmed while they are at this level.':
+    'গ্রাহক এই স্তরে থাকা অবস্থায় তার বিক্রয় অর্ডার নিশ্চিত করা যায় না।',
   Scope: 'প্রযোজ্যতা',
   Send: 'প্রেরণ',
   'Send back': 'ফেরত পাঠান',
   'Send invoices by email': 'ইনভয়েস ইমেইলে পাঠান',
   Sent: 'প্রেরিত',
+  'Sent by': 'যেভাবে পাঠানো',
   Sequence: 'ক্রম',
   'Set to draft': 'খসড়ায় ফেরত নিন',
   Settings: 'সেটিংস',
   Share: 'অংশ',
   'Shown on documents': 'নথিতে দেখানো হয়',
+  SMS: 'SMS',
   Source: 'উৎস',
   'Source document': 'উৎস নথি',
   State: 'অবস্থা',
   Statement: 'স্টেটমেন্ট',
   'Statement line': 'স্টেটমেন্টের লাইন',
   Status: 'অবস্থা',
+  'Stop sales': 'বিক্রয় বন্ধ',
+  Subject: 'বিষয়',
   'Submit for approval': 'অনুমোদনের জন্য জমা দিন',
   Subtotal: 'উপমোট',
   'SWIFT / BIC': 'SWIFT / BIC',
@@ -324,6 +358,7 @@ export const bn: Readonly<Record<string, string>> = {
     'এই তারিখ পর্যন্ত কর রিটার্ন জমা হয়েছে: এই তারিখে বা তার আগে করের লাইন বদলানো যায় না।',
   Taxes: 'কর',
   Term: 'শর্ত',
+  'Text message': 'টেক্সট বার্তা',
   'The bank and cash journals it watches; empty: all.': 'যে ব্যাংক ও নগদ জার্নাল এটি দেখে; খালি: সব।',
   'The department, project or branch the amount belongs to; reports and budgets read it.':
     'যে বিভাগ, প্রকল্প বা শাখার অঙ্ক; প্রতিবেদন ও বাজেট এটি ব্যবহার করে।',
@@ -373,8 +408,10 @@ export const bn: Readonly<Record<string, string>> = {
     'এই প্রাপ্য বা প্রদেয় লাইনে যা এখনো মিলকরণ হয়নি, প্রতিষ্ঠানের মুদ্রায়।',
   'What is still unmatched on this receivable or payable line, in the entry’s currency.':
     'এই প্রাপ্য বা প্রদেয় লাইনে যা এখনো মিলকরণ হয়নি, এন্ট্রির মুদ্রায়।',
+  'What it says': 'যা লেখা থাকে',
   'What the journal records: sales, purchases, cash, bank or miscellaneous entries.':
     'জার্নালে যা লিপিবদ্ধ হয়: বিক্রয়, ক্রয়, নগদ, ব্যাংক বা বিবিধ এন্ট্রি।',
+  WhatsApp: 'WhatsApp',
   When: 'যখন',
   'When paying vendors': 'সরবরাহকারীকে পরিশোধের সময়',
   'When the fiscal year starts, and the dates before which nothing may change.':

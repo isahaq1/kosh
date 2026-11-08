@@ -35,6 +35,7 @@ import {
   records,
   ref,
 } from './.kosh/bindings.js';
+import { AccountFollowup, AccountFollowupLevel, AccountFollowupSent } from './followups.js';
 import { postPayments } from './payments.js';
 import {
   AccountBankStatement,
@@ -1676,7 +1677,7 @@ const sequence = (type: JournalType, prefix: string) =>
 
 export const accountingShutro = defineModule({
   name: 'accounting',
-  version: '0.6.0',
+  version: '0.7.0',
   migrations: [
     {
       version: '0.2.0',
@@ -1712,6 +1713,9 @@ export const accountingShutro = defineModule({
     AccountBankStatement,
     AccountBankStatementLine,
     AccountReconcileRule,
+    AccountFollowupLevel,
+    AccountFollowup,
+    AccountFollowupSent,
     ResCurrencyRate,
     ResBankAccount,
     AccountWithholding,

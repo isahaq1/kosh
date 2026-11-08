@@ -55,6 +55,8 @@
     "@kosh/stock": "workspace:*",
     "@kosh/sale_stock": "workspace:*",
     "@kosh/settings": "workspace:*",
-    "@kosh/messaging": "workspace:*"
+    "@kosh/messaging": "workspace:*",
+    "@kosh/mail": "workspace:*",
+    "@kosh/notify": "workspace:*"
   }
 }

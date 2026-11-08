@@ -12,8 +12,10 @@
  * (`@kosh/accounting/web`).
  */
 import { contacts } from '@kosh/contacts';
+import { mailerFromEnv } from '@kosh/mail';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
+import { messengerFromEnv } from '@kosh/notify';
 import { permissions } from '@kosh/permissions';
 import { product } from '@kosh/product';
 import { reporting } from '@kosh/reporting';
@@ -38,6 +40,16 @@ import {
   updateSettings,
 } from './closing.js';
 import { accountingDemo } from './demo.js';
+import {
+  AccountFollowupLevel,
+  AccountFollowupSent,
+  configureFollowups,
+  followUp,
+  followupRows,
+  installFollowupLevels,
+  pauseFollowup,
+  runFollowups,
+} from './followups.js';
 import {
   AccountAccount,
   AccountAnalytic,
@@ -105,6 +117,16 @@ export {
   type Settings,
   updateSettings,
 } from './closing.js';
+export {
+  configureFollowups,
+  followUp,
+  followupRows,
+  type Overdue,
+  overdueCustomers,
+  pauseFollowup,
+  runFollowups,
+  salesStopped,
+} from './followups.js';
 export {
   ACCOUNT_TYPES,
   AccountAccount,
@@ -276,6 +298,21 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
         model: 'account.bank.statement',
         reason:
           'Imported by its own CSV / OFX / CAMT import (Accounting › Reconcile bank), or pulled from a feed.',
+      },
+      {
+        rule: 'I1',
+        model: 'account.followup.level',
+        reason: 'Three per company to start with, set up on screen.',
+      },
+      {
+        rule: 'I1',
+        model: 'account.followup',
+        reason: 'Kept by the follow-up run and the Follow-ups screen, never imported.',
+      },
+      {
+        rule: 'I1',
+        model: 'account.followup.sent',
+        reason: 'A log written when a reminder is sent.',
       },
       {
         rule: 'I1',
@@ -567,6 +604,20 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       label: 'Reconcile bank',
       visibleTo: ['account.reconcile'],
     },
+    'accounting.action_followups': {
+      type: 'client',
+      page: 'accounting.Followups',
+      label: 'Follow-ups',
+      visibleTo: ['account.user'],
+    },
+    'accounting.action_followup_levels': action(AccountFollowupLevel, {
+      label: 'Follow-up levels',
+      views: ['list', 'form'],
+    }),
+    'accounting.action_followup_sent': action(AccountFollowupSent, {
+      label: 'Reminders sent',
+      views: ['list'],
+    }),
     'accounting.action_statements': {
       model: 'account.bank.statement',
       label: 'Bank statements',
@@ -665,6 +716,28 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       action: 'accounting.action_bank_reconcile',
       sequence: 4.5,
       visibleTo: ['account.reconcile'],
+    },
+    {
+      id: 'accounting.followups',
+      parent: 'accounting.root',
+      label: 'Follow-ups',
+      action: 'accounting.action_followups',
+      sequence: 4.7,
+      visibleTo: ['account.user'],
+    },
+    {
+      id: 'accounting.followup_levels',
+      parent: 'accounting.configuration',
+      label: 'Follow-up levels',
+      action: 'accounting.action_followup_levels',
+      sequence: 7,
+    },
+    {
+      id: 'accounting.followup_sent',
+      parent: 'accounting.reporting',
+      label: 'Reminders sent',
+      action: 'accounting.action_followup_sent',
+      sequence: 9,
     },
     {
       id: 'accounting.statements',
@@ -1267,6 +1340,23 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       ],
       chatter: true,
     })),
+    'account.followup.level.list': list(AccountFollowupLevel, {
+      columns: ['days', 'name', 'sendEmail', 'sendSms', 'sendWhatsapp', 'blockSales'],
+    }),
+    'account.followup.level.form': form(AccountFollowupLevel, (k) => ({
+      header: { buttons: [] },
+      sheet: [
+        k.group('main', ['name', 'days', 'company', 'blockSales'], {
+          description:
+            'Each day, a late customer gets one reminder for the highest level their oldest overdue invoice reached.',
+        }),
+        k.group('how', ['sendEmail', 'sendSms', 'sendWhatsapp'], { label: 'Sent by' }),
+        k.group('text', ['subject', 'body', 'shortText'], { label: 'What it says', columns: 1 }),
+      ],
+    })),
+    'account.followup.sent.list': list(AccountFollowupSent, {
+      columns: ['createdAt', 'partner', 'level', 'amount', 'channels', 'automatic'],
+    }),
     'account.reconcile.rule.list': list(AccountReconcileRule, {
       columns: ['sequence', 'name', 'direction', 'labelContains', 'outcome', 'hits'],
     }),
@@ -1617,6 +1707,11 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       groupBy: ['journal', 'state'],
     }),
     'account.payment.term': search(AccountPaymentTerm, { fields: ['name'] }),
+    'account.followup.level': search(AccountFollowupLevel, { fields: ['name'] }),
+    'account.followup.sent': search(AccountFollowupSent, {
+      fields: ['partner.name', 'amount'],
+      groupBy: ['partner', 'level'],
+    }),
     'account.reconcile.rule': search(AccountReconcileRule, {
       fields: ['name', 'labelContains'],
       groupBy: ['outcome', 'direction'],
@@ -1725,6 +1820,18 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
     // The immutability triggers, idempotent (with every seed and app install).
     defaults: async (env) => {
       await installImmutability(env as Env);
+      // The follow-up levels a company starts with (RFC 0029 §3.4).
+      const company = Number((env as Env).companyId);
+      if (
+        Number.isSafeInteger(company) &&
+        company > 0 &&
+        (
+          await (env as Env)
+            .model('res.company' as never)
+            .search({ where: { id: company } } as never)
+        ).ids.length > 0
+      )
+        await installFollowupLevels(env as Env);
       return undefined;
     },
     demo: accountingDemo,
@@ -1740,6 +1847,71 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
     },
   },
   routes: (context: ModuleContext) => {
+    // Payment follow-ups (RFC 0029 §3.4): reminders by email and texts, links to the portal when it is installed.
+    const portal = context.registry.loaded.modules.some((m) => m.name === 'account_portal');
+    configureFollowups({
+      mailer: mailerFromEnv(),
+      messenger: messengerFromEnv(),
+      portalUrl: portal
+        ? (process.env['KOSH_PORTAL_URL'] ?? 'http://localhost:5174').replace(/\/$/, '')
+        : null,
+    });
+    const partnerId = (params: unknown) => {
+      const id = Number((params as { partner?: unknown }).partner);
+      if (!Number.isSafeInteger(id) || id <= 0)
+        throw new HttpProblem(400, 'invalid-path', 'Invalid customer', 'A customer id.');
+      return id;
+    };
+    context.app.get('/api/v1/accounting/followups', async (request) =>
+      request.env(async (env) => ({ rows: await followupRows(env as Env) })),
+    );
+    context.app.post('/api/v1/accounting/followups/:partner/send', async (request) => {
+      const partner = partnerId(request.params);
+      return request.env((env) => followUp(env as Env, partner, { force: true }), {
+        write: true,
+      });
+    });
+    context.app.post('/api/v1/accounting/followups/:partner/pause', async (request) => {
+      const partner = partnerId(request.params);
+      const body = (request.body ?? {}) as { until?: unknown; note?: unknown };
+      const until = body.until === null || body.until === undefined ? null : String(body.until);
+      const note =
+        typeof body.note === 'string' && body.note.trim() !== '' ? body.note.trim() : null;
+      return request.env(
+        async (env) => {
+          await pauseFollowup(env as Env, partner, until, note);
+          return { partner, pausedUntil: until };
+        },
+        { write: true },
+      );
+    });
+    if (process.env['KOSH_SCHEDULES'] !== 'off') {
+      const run = async () => {
+        try {
+          const companies = await context.shutro.bootstrap(
+            { reason: 'payment follow-ups' },
+            async (env) =>
+              (await (env as Env).model('res.company' as never).search({} as never))
+                .ids as unknown as number[],
+          );
+          for (const company of companies)
+            await context.shutro.bootstrap({ reason: 'payment follow-ups', company }, (env) =>
+              runFollowups(env as Env),
+            );
+        } catch (error) {
+          context.app.log.error({ err: error }, 'payment follow-ups');
+        }
+      };
+      // Once a day (a run sends each level once, so a restart sending again finds nothing new).
+      const timer = setInterval(() => void run(), 86_400_000);
+      timer.unref();
+      const first = setTimeout(() => void run(), 60_000);
+      first.unref();
+      context.app.addHook('onClose', async () => {
+        clearInterval(timer);
+        clearTimeout(first);
+      });
+    }
     // The charts: the generic one and the installed localizations' (RFC 0016).
     const charts = chartsOf(context.registry.loaded.modules);
     const localizations = localizationsOf(context.registry.loaded.modules);

@@ -10,7 +10,7 @@
  * Accounting managers through the Approvals engine, and is confirmed when approved). Payment terms on the order (else
  * the customer's) and its invoice address go to the invoice.
  */
-import { accountingShutro } from '@kosh/accounting';
+import { accountingShutro, salesStopped } from '@kosh/accounting';
 import { approvalGuard, permissionsShutro, requestApprovals } from '@kosh/permissions';
 import { salesShutro } from '@kosh/sales';
 import { type Decimal, orm } from '@kosh/server/orm';
@@ -403,6 +403,15 @@ export const SaleOrderInvoicing = extendModel('sale.order', {
         .model('sale.order')
         .browse([...orders.ids] as never)
         .load({ company: true, partner: true })) {
+        // A customer at a follow-up level that stops sales (RFC 0029 §3.4) is not sold to until they pay.
+        const stopped = await salesStopped(env as never, o.partner.id as number);
+        if (stopped !== null)
+          throw new orm.ValidationError(
+            'sale.order',
+            ['state'],
+            `Sales to ${String(o.partner.name)} are on hold: their payment follow-up reached "${stopped.level}".`,
+            'Collect the overdue invoices first, or pause their follow-up in Accounting › Follow-ups.',
+          );
         const mode = String(o.company.creditControl ?? 'off');
         if (mode === 'off') continue;
         const { owed, limit } = await creditOf(

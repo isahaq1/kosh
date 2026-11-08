@@ -677,12 +677,18 @@ importers:
       '@kosh/contacts':
         specifier: workspace:*
         version: link:../contacts
+      '@kosh/mail':
+        specifier: workspace:*
+        version: link:../../packages/mail
       '@kosh/messaging':
         specifier: workspace:*
         version: link:../../packages/messaging
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
+      '@kosh/notify':
+        specifier: workspace:*
+        version: link:../../packages/notify
       '@kosh/permissions':
         specifier: workspace:*
         version: link:../../packages/permissions
@@ -702,9 +708,6 @@ importers:
         specifier: workspace:*
         version: link:../../packages/views
     devDependencies:
-      '@kosh/mail':
-        specifier: workspace:*
-        version: link:../../packages/mail
       '@tanstack/react-query':
         specifier: ^5.104.3
         version: 5.104.3(react@19.3.1)
@@ -2190,9 +2193,15 @@ importers:
         specifier: workspace:*
         version: link:../../packages/views
     devDependencies:
+      '@kosh/mail':
+        specifier: workspace:*
+        version: link:../../packages/mail
       '@kosh/messaging':
         specifier: workspace:*
         version: link:../../packages/messaging
+      '@kosh/notify':
+        specifier: workspace:*
+        version: link:../../packages/notify
       '@kosh/sale_stock':
         specifier: workspace:*
         version: link:../sale_stock
