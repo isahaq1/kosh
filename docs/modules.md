@@ -329,6 +329,31 @@ it applies to, its hit rate and what it would do to the open ones, without chang
 lines have **Undo** (`POST /api/v1/accounting/statement-lines/:id/undo`): a payment comes off its documents and is
 reversed, a write-off is reversed, and the line is open again.
 
+### Fiscal positions and accounts (`modules/accounting`, RFC 0029)
+
+**Where a line posts.** A product line posts to its own account if one is set, else to what an app proposes (a
+purchase order's receipt account), else to the product's **Income account** (sales) or **Expense account**
+(purchases), else to its category's, else to the journal's default account. What a customer owes posts to their
+**Receivable account**, what we owe a vendor to their **Payable account**, else to the company's. Accounts of
+another company are never used (products and categories are shared).
+
+**Fiscal positions** (Accounting › Configuration, Accounting managers) map taxes — a tax to another, or to none — and
+accounts. A document uses the position chosen on it, else the contact's **Fiscal position**, else the first position
+marked **Apply by itself** whose conditions the contact meets: countries (`BD, IN`, or `!BD` for any but Bangladesh),
+states (`IN-MH`) and whether they have a tax number. Taxes are mapped when the document is confirmed, and the
+position is then written on it. A draft invoice or bill shows **When confirmed**: the position and why it applies,
+each line's taxes after the mapping, its account and where it came from, and the receivable or payable account
+(`GET /api/v1/accounting/moves/:id/preview`).
+
+```ts
+// An export position: no VAT, sales on their own account.
+await api.create('account.fiscal.position', {
+  name: 'Export', autoApply: true, countries: '!BD',
+  taxes: { create: [{ taxSrc: vat15, taxDest: null }] },
+  accounts: { create: [{ accountSrc: sales, accountDest: exportSales }] },
+});
+```
+
 ### Payment follow-ups (`modules/accounting`, RFC 0029)
 
 **Follow-up levels** (Accounting › Configuration, Accounting managers) say how late an invoice must be — days past

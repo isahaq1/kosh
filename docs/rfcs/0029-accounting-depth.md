@@ -151,4 +151,12 @@ with exceptions, cheque printing, currency revaluation, UBL / Peppol — a later
   Pause; `salesStopped` refusing confirmations in `sale_account`; accounting 0.7.0. Deviations: the reminder is noted
   on each overdue invoice's chatter, as contacts have no chatter; the link is the portal's invoice page, where Pay now
   is (RFC 0017), not a separate pay link.
+- **Step 5 (2026-11-08).** `account.fiscal.position` with tax and account mappings, automatic by countries (with
+  `!` exclusions), states and tax number; the position on documents and contacts; taxes mapped when posting
+  (`applyFiscalPositions`) and the position written on the document; `determineAccounts` (the line, an app, the
+  product, its category, the journal; the partner's receivable or payable, else the company's; each through the
+  position, each with its source); the When confirmed preview on draft invoices and bills; income and expense
+  accounts on products and categories; accounting 0.8.0. Deviations: orders are not mapped (the position applies
+  when their invoice or bill is confirmed, which is where taxes and accounts post); conditions use the contact's
+  country, state and tax number rather than a separate VAT status. RFC 0029 complete.
 
