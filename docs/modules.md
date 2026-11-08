@@ -698,6 +698,14 @@ Each line shows what was approved, issued and is still owed; the requester **ack
 see their own indents and those they decide, store keepers every indent of their companies. Install it with
 `shutro-erp apps install indent`.
 
+A **transfer** indent asks the store to send stock to another warehouse (*Goes to*: that warehouse's stock location).
+**Issue** makes the **Stock Transfer Note** from the store into its **Transit** location (made the first time, held as
+the company's stock but not the warehouse's); validating it makes the **Stock Receive Note** from transit to the other
+warehouse for exactly what was shipped, reserved on the goods in transit. A partial receipt leaves the rest in transit
+on a backorder; **Write off the shortage**, with its reason, takes what never arrived out of transit as an inventory
+adjustment (a loss with `stock_account`). Lines show shipped, in transit, received and short; the indent is settled
+when everything approved was received or written off.
+
 ```ts
 // A manifest's approval level whose approvers the record names (RFC 0027): `approvalUsers('groups')` on the model.
 { name: 'Product group approvers', approver: { record: 'groups' }, approverRole: 'indent.manager' }

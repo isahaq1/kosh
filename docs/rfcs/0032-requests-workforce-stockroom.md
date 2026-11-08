@@ -171,4 +171,12 @@ Each step ends with the full gate (typecheck, lint, tests, both E2E projects), d
   `department_head`, `department_approvers` and `{ record }` approvers. Not yet: the reminder for unacknowledged
   indents, a per-section expense account for consumption (the product category's cost of goods sold is used), header
   fields locked after approval (only the rules' states guard them).
+- **Step 2 (2026-11-08).** Transfer indents: the kind (issue / transfer), a transfer going to a stock location of
+  another warehouse; each warehouse's *Transit* location (`transit` on locations: held as stock, left out of the
+  warehouse's own stock and on-hand) made by `transitLocation()`; the Stock Transfer Note into transit on Issue, the
+  Stock Receive Note made when it is validated (`validated` override) and reserved on the goods in transit, partial
+  receipts on backorders that keep their note; the shortage written off from transit with its reason as an
+  adjustment; shipped / in transit / short per line. STN and SRN are transfers numbered by Stockroom (their kind is on
+  the transfer). Not yet: `indent_purchase` (the shortfall into purchase requests moves to step 6, where purchase
+  requests are built), a Goods in transit account (transit stays in the Inventory account).
 
