@@ -22,6 +22,12 @@ import {
   records,
 } from './.kosh/bindings.js';
 import { PurchaseRequest, PurchaseRequestLine } from './request.js';
+import {
+  PurchaseTender,
+  PurchaseTenderLine,
+  PurchaseTenderResponse,
+  PurchaseTenderResponseLine,
+} from './tender.js';
 import { ProductVendorPrice, vendorPriceFor } from './vendorprice.js';
 
 type Decimal = ReturnType<typeof orm.toDecimal>;
@@ -485,6 +491,18 @@ export const purchaseShutro = defineModule({
       padding: 5,
       reset: 'yearly',
     }),
+    orm.defineSequence({
+      code: 'purchase.tender',
+      prefix: 'RFQ/{year}/',
+      padding: 5,
+      reset: 'yearly',
+    }),
+    orm.defineSequence({
+      code: 'purchase.tender.response',
+      prefix: 'RSP/{year}/',
+      padding: 5,
+      reset: 'yearly',
+    }),
   ],
   models: [
     PurchaseOrder,
@@ -492,6 +510,10 @@ export const purchaseShutro = defineModule({
     ProductVendorPrice,
     PurchaseRequest,
     PurchaseRequestLine,
+    PurchaseTender,
+    PurchaseTenderLine,
+    PurchaseTenderResponse,
+    PurchaseTenderResponseLine,
   ],
   extensions: [CompanyPurchase],
 });

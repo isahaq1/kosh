@@ -2026,6 +2026,9 @@ importers:
       '@kosh/contacts':
         specifier: workspace:*
         version: link:../contacts
+      '@kosh/mail':
+        specifier: workspace:*
+        version: link:../../packages/mail
       '@kosh/messaging':
         specifier: workspace:*
         version: link:../../packages/messaging

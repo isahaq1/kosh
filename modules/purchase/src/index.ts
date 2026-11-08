@@ -10,20 +10,32 @@ import { defineModule } from '@kosh/modules-sdk';
 import { permissions } from '@kosh/permissions';
 import { product } from '@kosh/product';
 import { reporting } from '@kosh/reporting';
+import type { ModuleContext } from '@kosh/server';
 import { action, calendar, form, kanban, list, pivot, search, stat } from '@kosh/views';
 import { purchaseDemo } from './demo.js';
 import { PurchaseOrder, purchaseShutro } from './module.js';
 import { PurchaseRequest, PurchaseRequestLine } from './request.js';
+import { PurchaseTender, PurchaseTenderResponse, registerTenderRoutes } from './tender.js';
 import { ProductVendorPrice } from './vendorprice.js';
 
 export { PurchaseOrder, PurchaseOrderLine, purchaseShutro } from './module.js';
-export { createRfqs, PurchaseRequest, PurchaseRequestLine } from './request.js';
+export { createRfqs, createTender, PurchaseRequest, PurchaseRequestLine } from './request.js';
+export {
+  configurePurchaseMails,
+  PurchaseTender,
+  PurchaseTenderLine,
+  PurchaseTenderResponse,
+  PurchaseTenderResponseLine,
+} from './tender.js';
 export { ProductVendorPrice, type VendorChoice, vendorPriceFor } from './vendorprice.js';
 
 export const purchase: ReturnType<typeof defineModule> = defineModule({
   shutro: purchaseShutro,
   kosh: '^0.1.0',
   hooks: { demo: purchaseDemo },
+  routes: (context: ModuleContext) => {
+    registerTenderRoutes(context);
+  },
   depends: [contacts, product, messaging, permissions, reporting],
   // Exceptions to the module standard (RFC 0023), each with its reason.
   standard: {
@@ -32,6 +44,21 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
         rule: 'I1',
         model: 'purchase.request.line',
         reason: 'Lines import with their request (the purchase requests template).',
+      },
+      {
+        rule: 'I1',
+        model: 'purchase.tender.line',
+        reason: 'Lines import with their RFQ (the RFQs to vendors template).',
+      },
+      {
+        rule: 'I1',
+        model: 'purchase.tender.response',
+        reason: 'Made by the system when an RFQ is sent, one per vendor.',
+      },
+      {
+        rule: 'I1',
+        model: 'purchase.tender.response.line',
+        reason: 'Made with its response from the RFQ’s lines.',
       },
     ],
   },
@@ -50,6 +77,12 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
       topic: 'purchase.request.rfq',
       model: 'purchase.request',
       label: 'Requests for quotation made from a purchase request',
+    },
+    { topic: 'purchase.tender.sent', model: 'purchase.tender', label: 'RFQ sent to its vendors' },
+    {
+      topic: 'purchase.tender.response_submitted',
+      model: 'purchase.tender.response',
+      label: 'A vendor submitted their quotation',
     },
     {
       topic: 'purchase.order.confirmed',
@@ -84,6 +117,44 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
   ],
   sendable: [{ model: 'purchase.order', template: 'purchase.purchase_order', partner: 'partner' }],
   documents: [
+    {
+      key: 'purchase_tender',
+      name: 'RFQ to vendors',
+      model: 'purchase.tender',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Request for quotation {{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'terms',
+            items: [
+              { label: 'Topic', bind: 'topic' },
+              { label: 'Response deadline', bind: 'deadline' },
+              { label: 'Delivery date', bind: 'dateDelivery' },
+              { label: 'Payment terms', bind: 'paymentTerms' },
+              { label: 'Sourcing', bind: 'sourcing' },
+              { label: 'Status', bind: 'state' },
+            ],
+          },
+          {
+            kind: 'table',
+            id: 'lines',
+            bind: 'lines',
+            columns: [
+              { label: 'Product', bind: 'product.name' },
+              { label: 'Description', bind: 'name' },
+              { label: 'Unit', bind: 'uom.name' },
+              { label: 'Quantity', bind: 'quantity' },
+            ],
+          },
+          { kind: 'text', id: 'note', text: '{{note}}' },
+          { kind: 'qr', id: 'qr', bind: 'name', size: 24, label: 'RFQ reference' },
+        ],
+      },
+    },
     {
       key: 'purchase_request',
       name: 'Purchase request',
@@ -176,6 +247,21 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
     },
   ],
   importTemplates: [
+    {
+      key: 'purchase_tenders',
+      model: 'purchase.tender',
+      label: 'RFQs to vendors',
+      columns: [
+        { header: 'Topic', field: 'topic' },
+        { header: 'Response deadline', field: 'deadline' },
+        { header: 'Delivery date', field: 'dateDelivery' },
+        { header: 'Sourcing', field: 'sourcing' },
+        { header: 'Vendors', field: 'vendors' },
+        { header: 'Payment terms', field: 'paymentTerms' },
+        { header: 'Lines › Product', field: 'lines.product' },
+        { header: 'Lines › Quantity', field: 'lines.quantity' },
+      ],
+    },
     {
       key: 'purchase_requests',
       model: 'purchase.request',
@@ -300,6 +386,25 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
   // The Overview (RFC 0022 step 2): spend against last month, what waits, who we buy from.
   overview: {
     cards: [
+      // The RFQ dashboard (RFC 0032 §3.4): RFQs to vendors by state.
+      {
+        id: 'tenders_sent',
+        title: 'RFQs waiting for responses',
+        kind: 'kpi',
+        model: 'purchase.tender',
+        measure: 'count',
+        filter: { state: 'sent' },
+        w: 3,
+      },
+      {
+        id: 'tenders_received',
+        title: 'RFQs with responses',
+        kind: 'kpi',
+        model: 'purchase.tender',
+        measure: 'count',
+        filter: { state: { in: ['received', 'comparing'] } },
+        w: 3,
+      },
       {
         id: 'spend_month',
         title: 'Purchases this month',
@@ -449,6 +554,14 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
       views: ['list', 'pivot'],
       defaultFilters: ['open'],
     }),
+    'purchase.action_tenders': action(PurchaseTender, {
+      label: 'RFQs to vendors',
+      views: ['list', 'kanban', 'form'],
+    }),
+    'purchase.action_responses': action(PurchaseTenderResponse, {
+      label: 'Vendor responses',
+      views: ['list', 'form'],
+    }),
     'purchase.action_rfqs': action(PurchaseOrder, {
       label: 'Requests for quotation',
       views: ['list', 'kanban', 'form'],
@@ -491,6 +604,22 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
       label: 'Request lines',
       action: 'purchase.action_request_lines',
       sequence: 6,
+      visibleTo: ['purchase.user'],
+    },
+    {
+      id: 'purchase.tenders',
+      parent: 'purchase.root',
+      label: 'RFQs to vendors',
+      action: 'purchase.action_tenders',
+      sequence: 7,
+      visibleTo: ['purchase.user'],
+    },
+    {
+      id: 'purchase.responses',
+      parent: 'purchase.root',
+      label: 'Vendor responses',
+      action: 'purchase.action_responses',
+      sequence: 8,
       visibleTo: ['purchase.user'],
     },
     {
@@ -557,6 +686,7 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
         buttons: [
           k.button('submit', { primary: true, label: 'Submit for approval' }),
           k.button('rfq', { primary: true, label: 'Make requests for quotation' }),
+          k.button('tender', { label: 'Ask several vendors' }),
           k.button('close', { label: 'Close' }),
           k.button('redraft', { label: 'Set to draft' }),
           k.button('cancel', { label: 'Cancel', confirm: 'Cancel this request?' }),
@@ -593,6 +723,83 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
           { field: 'status', id: 'line_status', widget: 'badge' },
         ]),
         k.group('after', ['rejectReason'], { label: 'Decision' }),
+      ],
+      chatter: true,
+    })),
+    'purchase.tender.list': list(PurchaseTender, {
+      columns: ['name', 'topic', 'buyer', 'date', 'deadline', 'sourcing', 'responseCount', 'state'],
+    }),
+    'purchase.tender.kanban': kanban(PurchaseTender, {
+      groupBy: 'state',
+      card: { title: 'name', subtitle: 'topic', footer: ['deadline', 'responseCount'] },
+    }),
+    'purchase.tender.form': form(PurchaseTender, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('send', { primary: true, label: 'Send to the vendors' }),
+          k.button('close', { label: 'Close the responses' }),
+          k.button('redraft', { label: 'Set to draft' }),
+          k.button('cancel', { label: 'Cancel', confirm: 'Cancel this RFQ?' }),
+        ],
+      },
+      sheet: [
+        k.group('main', ['name', 'topic', 'buyer', 'request', 'sourcing', 'technical']),
+        k.group('terms', ['date', 'deadline', 'dateDelivery', 'currency', 'paymentTerms'], {
+          label: 'Terms',
+        }),
+        k.group('who', [{ field: 'vendors', widget: 'tags' }], {
+          label: 'Vendors',
+          description:
+            'Each vendor gets a response of their own and a quote link by email; a buyer may also type their quotation.',
+        }),
+        k.lines('lines', [
+          'product',
+          { field: 'name', id: 'line_name' },
+          'uom',
+          'quantity',
+          { field: 'requestLine', id: 'line_request' },
+        ]),
+        k.lines('responses', [
+          { field: 'name', id: 'response_name' },
+          { field: 'vendor', id: 'response_vendor' },
+          { field: 'amountTotal', id: 'response_total' },
+          { field: 'dateDelivery', id: 'response_delivery' },
+          { field: 'state', id: 'response_state' },
+        ]),
+        k.group('about', ['note'], { columns: 1 }),
+      ],
+      chatter: true,
+    })),
+    'purchase.tender.response.list': list(PurchaseTenderResponse, {
+      columns: ['name', 'tender', 'vendor', 'responseDate', 'amountTotal', 'dateDelivery', 'state'],
+    }),
+    'purchase.tender.response.form': form(PurchaseTenderResponse, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('submit', { primary: true, label: 'Submit the quotation' }),
+          k.button('unanswered', { label: 'Did not respond' }),
+          k.button('reject', { label: 'Reject', confirm: 'Reject this quotation?' }),
+          k.button('reopen', { label: 'Reopen' }),
+        ],
+      },
+      sheet: [
+        k.group('main', ['name', 'tender', 'vendor', 'responseDate', 'technicalRank']),
+        k.group('terms', ['dateDelivery', 'paymentTerms', 'advancePercent', 'tokenExpiresAt'], {
+          label: 'Terms',
+          description:
+            'What the vendor offers; the quote link is valid until the date shown (a new one is made on request).',
+        }),
+        k.lines('lines', [
+          { field: 'product', id: 'quote_product' },
+          { field: 'quantity', id: 'quote_quantity' },
+          { field: 'priceUnit', id: 'quote_price' },
+          { field: 'subtotal', id: 'quote_subtotal' },
+          { field: 'note', id: 'quote_note' },
+        ]),
+        k.group('totals', ['amountTotal'], { label: 'Total' }),
+        k.group('remarks', ['remark'], { columns: 1 }),
       ],
       chatter: true,
     })),
@@ -724,6 +931,32 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
         },
       },
       groupBy: ['requester', 'state', 'dateRequired:month'],
+    }),
+    'purchase.tender': search(PurchaseTender, {
+      fields: ['name', 'topic', 'vendors.name', 'lines.product.name'],
+      filters: {
+        mine: { label: 'Mine', domain: { buyer: { $env: 'uid' } }, group: 'who' },
+        open: {
+          label: 'Waiting for responses',
+          domain: { state: 'sent' },
+          group: 'state',
+        },
+        received: { label: 'Responses received', domain: { state: 'received' }, group: 'state' },
+        import: { label: 'Import', domain: { sourcing: 'import' }, group: 'sourcing' },
+      },
+      groupBy: ['buyer', 'state', 'sourcing', 'deadline:month'],
+    }),
+    'purchase.tender.response': search(PurchaseTenderResponse, {
+      fields: ['name', 'tender.name', 'vendor.name'],
+      filters: {
+        submitted: { label: 'Submitted', domain: { state: 'submitted' }, group: 'state' },
+        waiting: {
+          label: 'Waiting for the vendor',
+          domain: { state: { in: ['invited', 'quoted'] } },
+          group: 'state',
+        },
+      },
+      groupBy: ['tender', 'vendor', 'state'],
     }),
     'purchase.request.line': search(PurchaseRequestLine, {
       fields: ['product.name', 'request.name'],

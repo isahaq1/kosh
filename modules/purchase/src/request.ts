@@ -23,6 +23,8 @@ function isoDay(v: unknown): string {
 
 const OPEN_ORDER = new Set(['draft', 'sent', 'to_approve', 'purchase', 'done']);
 const ORDERED = new Set(['purchase', 'done']);
+/** RFQs to vendors that still hold their lines (until the orders are made, which then count). */
+const OPEN_TENDER = new Set(['draft', 'sent', 'received', 'comparing', 'selected']);
 
 export const PurchaseRequest = defineModel('purchase.request', {
   label: 'Purchase request',
@@ -160,6 +162,23 @@ export const PurchaseRequest = defineModel('purchase.request', {
             for (const id of requests.ids) await createRfqs(env, id as number);
           }),
         },
+        /** What is still to buy is asked of several vendors at once (RFC 0032 §3.4, step 7). */
+        tender: {
+          from: ['approved'],
+          to: 'approved',
+          requires: 'purchase.request_buy',
+          guard: records('purchase.request', async (requests) =>
+            [...(await requests.load({ lines: true }))]
+              .filter((r) => [...r.lines].every((l) => (l.qtyRemaining ?? zero).lte(0)))
+              .map((r) => r.id),
+          ),
+          message: 'Nothing is left to buy: every approved quantity is on a request for quotation.',
+          after: records('purchase.request', async (requests) => {
+            const env = requests.env as unknown as Env;
+            await env.flush();
+            for (const id of requests.ids) await createTender(env, id as number);
+          }),
+        },
         close: { from: ['approved'], to: 'done', requires: 'purchase.request_buy' },
       },
       extensible: true,
@@ -241,6 +260,41 @@ export async function createRfqs(env: Env, id: number): Promise<number[]> {
   return made;
 }
 
+/** An RFQ to vendors for what a request still has to buy: the buyer adds the vendors and sends it. */
+export async function createTender(env: Env, id: number): Promise<number | null> {
+  const [r] = await env
+    .model('purchase.request')
+    .browse([id as never])
+    .load({ lines: { product: true, uom: true }, company: { currency: true } });
+  if (r === undefined) return null;
+  const owed = [...r.lines].filter((l) => (l.qtyRemaining ?? zero).gt(0));
+  if (owed.length === 0) return null;
+  const deadline = new Date(`${isoDay(env.today())}T00:00:00`);
+  deadline.setDate(deadline.getDate() + 7);
+  const made = await env.model('purchase.tender').create([
+    {
+      buyer: env.userId,
+      company: r.company.id,
+      currency: r.company.currency.id,
+      deadline: isoDay(deadline),
+      dateDelivery: r.dateRequired,
+      topic: r.purpose === null ? null : r.purpose.slice(0, 120),
+      request: r.id,
+      lines: {
+        create: owed.map((l, i) => ({
+          sequence: (i + 1) * 10,
+          product: l.product.id,
+          name: l.name ?? l.product.name,
+          uom: l.uom?.id ?? null,
+          quantity: l.qtyRemaining,
+          requestLine: l.id,
+        })),
+      },
+    },
+  ] as never);
+  return (made.ids[0] as number | undefined) ?? null;
+}
+
 export const PurchaseRequestLine = defineModel('purchase.request.line', {
   label: 'Purchase request line',
   order: ['request desc', 'id asc'],
@@ -289,20 +343,31 @@ export const PurchaseRequestLine = defineModel('purchase.request.line', {
       help: 'The buyers who work this line.',
     }),
     purchaseLines: f.one2many('purchase.order.line', 'requestLine', { label: 'Order lines' }),
+    tenderLines: f.one2many('purchase.tender.line', 'requestLine', { label: 'RFQ lines' }),
     qtyOnRfq: f.decimal({
       scale: 3,
       store: true,
       label: 'On RFQs',
-      help: 'On requests for quotation not confirmed yet.',
+      help: 'On requests for quotation not confirmed yet, or asked of several vendors.',
       ...compute(
         'purchase.request.line',
         'qtyOnRfq',
-        ['purchaseLines.quantity', 'purchaseLines.order.state'],
+        [
+          'purchaseLines.quantity',
+          'purchaseLines.order.state',
+          'tenderLines.quantity',
+          'tenderLines.tender.state',
+        ],
         (lines) => {
           for (const l of lines)
             l.qtyOnRfq = [...l.purchaseLines]
               .filter((p) => OPEN_ORDER.has(p.order.state) && !ORDERED.has(p.order.state))
-              .reduce((s, p) => s.plus(p.quantity), zero);
+              .reduce((s, p) => s.plus(p.quantity), zero)
+              .plus(
+                [...l.tenderLines]
+                  .filter((t) => OPEN_TENDER.has(t.tender.state))
+                  .reduce((s, t) => s.plus(t.quantity), zero),
+              );
         },
       ),
     }),
@@ -331,7 +396,14 @@ export const PurchaseRequestLine = defineModel('purchase.request.line', {
       ...compute(
         'purchase.request.line',
         'qtyRemaining',
-        ['qtyApproved', 'purchaseLines.quantity', 'purchaseLines.order.state', 'request.state'],
+        [
+          'qtyApproved',
+          'purchaseLines.quantity',
+          'purchaseLines.order.state',
+          'tenderLines.quantity',
+          'tenderLines.tender.state',
+          'request.state',
+        ],
         (lines) => {
           for (const l of lines) {
             if (l.request.state !== 'approved') {
@@ -340,7 +412,12 @@ export const PurchaseRequestLine = defineModel('purchase.request.line', {
             }
             const covered = [...l.purchaseLines]
               .filter((p) => OPEN_ORDER.has(p.order.state))
-              .reduce((s, p) => s.plus(p.quantity), zero);
+              .reduce((s, p) => s.plus(p.quantity), zero)
+              .plus(
+                [...l.tenderLines]
+                  .filter((t) => OPEN_TENDER.has(t.tender.state))
+                  .reduce((s, t) => s.plus(t.quantity), zero),
+              );
             const left = (l.qtyApproved ?? zero).minus(covered);
             l.qtyRemaining = left.gt(0) ? left : zero;
           }

@@ -38,7 +38,7 @@ const tokens = new Map<string, string>();
 // biome-ignore lint/suspicious/noExplicitAny: test assertions read untyped JSON responses
 type Json = any;
 async function call(
-  method: 'GET' | 'POST',
+  method: 'GET' | 'POST' | 'PATCH',
   url: string,
   as: string,
   payload?: unknown,
@@ -298,6 +298,123 @@ test('a purchase request (RFC 0032 §3.4): approved, made into a request for quo
     )
   ).json.items as Json[];
   expect(tracked.some((l) => (l.request?.id ?? l.request) === id)).toBe(true);
+});
+
+test('an RFQ to several vendors (RFC 0032 §3.4): responses with quote links, a quotation submitted through its link', async () => {
+  const R = '/api/v1/models/purchase.request';
+  const T = '/api/v1/models/purchase.tender';
+  const made = await call('POST', R, 'nadia', {
+    dateRequired: '2026-12-20',
+    purpose: 'Rollers for the conveyor',
+    lines: { create: [{ product, quantity: '30' }] },
+  });
+  expect(made.status, JSON.stringify(made.json)).toBe(201);
+  const id = made.json.id as number;
+  expect((await call('POST', `${R}/${id}/transitions/submit`, 'nadia')).status).toBe(200);
+  const inbox = (await call('GET', '/api/v1/approvals/inbox', 'dina')).json.requests as Json[];
+  for (const r of inbox.filter((x) => x.targetModel === 'purchase.request' && x.targetId === id))
+    expect((await call('POST', `/api/v1/approvals/requests/${r.id}/approve`, 'dina')).status).toBe(
+      200,
+    );
+  // The buyer asks several vendors: an RFQ with the request's lines, to send once the vendors are chosen.
+  const asked = await call('POST', `${R}/${id}/transitions/tender`, 'farid');
+  expect(asked.status, JSON.stringify(asked.json)).toBe(200);
+  const [tender] = (
+    await call(
+      'GET',
+      `${T}?filter=${encodeURIComponent(JSON.stringify({ request: id }))}&fields=name,state,deadline,lines`,
+      'farid',
+    )
+  ).json.items as Json[];
+  expect(tender.state).toBe('draft');
+  expect((await call('POST', `${T}/${tender.id}/transitions/send`, 'farid')).status).toBe(409); // no vendors yet
+  // The request line counts the RFQ as covering it.
+  const [line] = (
+    await call(
+      'GET',
+      `/api/v1/models/purchase.request.line?filter=${encodeURIComponent(JSON.stringify({ request: id }))}&fields=status,qtyOnRfq,qtyRemaining`,
+      'farid',
+    )
+  ).json.items as Json[];
+  expect([line.status, Number(line.qtyOnRfq), Number(line.qtyRemaining)]).toEqual(['rfq', 30, 0]);
+  expect(
+    (
+      await call('PATCH', `${T}/${tender.id}`, 'farid', {
+        vendors: { set: [vendor] },
+        deadline: '2026-12-01',
+      })
+    ).status,
+  ).toBe(200);
+  const sent = await call('POST', `${T}/${tender.id}/transitions/send`, 'farid');
+  expect(sent.status, JSON.stringify(sent.json)).toBe(200);
+  const [response] = (
+    await call(
+      'GET',
+      `/api/v1/models/purchase.tender.response?filter=${encodeURIComponent(JSON.stringify({ tender: tender.id }))}&fields=vendor,state,tokenHash`,
+      'farid',
+    )
+  ).json.items as Json[];
+  expect(response.state).toBe('invited');
+  expect(response.vendor?.id ?? response.vendor).toBe(vendor);
+  // A fresh quote link for the vendor; the page needs no sign-in.
+  const link = await call('POST', `/api/v1/purchase/responses/${response.id}/link`, 'farid');
+  expect(link.status, JSON.stringify(link.json)).toBe(200);
+  const path = (link.json.url as string).replace(/^https?:\/\/[^/]+/, '');
+  const page = await host.server.app.inject({ method: 'GET', url: path });
+  expect(page.statusCode).toBe(200);
+  expect(page.body).toContain('Request for quotation');
+  expect((await host.server.app.inject({ method: 'GET', url: `${path}x` })).statusCode).toBe(404);
+  const quoteLines = (
+    await call(
+      'GET',
+      `/api/v1/models/purchase.tender.response.line?filter=${encodeURIComponent(JSON.stringify({ response: response.id }))}&fields=id`,
+      'farid',
+    )
+  ).json.items as Json[];
+  // Saved for later, then submitted once; the RFQ has its responses.
+  const saved = await host.server.app.inject({
+    method: 'POST',
+    url: path,
+    payload: {
+      lines: quoteLines.map((l) => ({ id: l.id, priceUnit: '480.50' })),
+      dateDelivery: '2026-12-10',
+      paymentTerms: '30 days',
+      submit: false,
+    },
+  });
+  expect(saved.statusCode, saved.body).toBe(200);
+  expect(
+    (
+      await call(
+        'GET',
+        `/api/v1/models/purchase.tender.response/${response.id}?fields=state`,
+        'farid',
+      )
+    ).json.state,
+  ).toBe('quoted');
+  const submitted = await host.server.app.inject({
+    method: 'POST',
+    url: path,
+    payload: { lines: quoteLines.map((l) => ({ id: l.id, priceUnit: '475' })), submit: true },
+  });
+  expect(submitted.statusCode, submitted.body).toBe(200);
+  const after = (
+    await call(
+      'GET',
+      `/api/v1/models/purchase.tender.response/${response.id}?fields=state,amountTotal,paymentTerms`,
+      'farid',
+    )
+  ).json;
+  expect(after.state).toBe('submitted');
+  expect(Number(after.amountTotal)).toBe(14250);
+  expect(after.paymentTerms).toBe('30 days');
+  expect(
+    (await call('GET', `${T}/${tender.id}?fields=state,responseCount`, 'farid')).json,
+  ).toMatchObject({ state: 'received', responseCount: 1 });
+  expect(
+    (await host.server.app.inject({ method: 'POST', url: path, payload: { submit: true } }))
+      .statusCode,
+  ).toBe(409);
 });
 
 test('the line onchange fills the product; the price comes from the vendor, else the cost, when saved', async () => {
