@@ -58,6 +58,7 @@
     "@kosh/event": "workspace:*",
     "@kosh/event_account": "workspace:*",
     "@kosh/expense": "workspace:*",
+    "@kosh/indent": "workspace:*",
     "@kosh/expense_account": "workspace:*",
     "@kosh/helpdesk": "workspace:*",
     "@kosh/hr": "workspace:*",

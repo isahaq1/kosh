@@ -33,6 +33,7 @@ import { expenseAccount } from '@kosh/expense_account';
 import { helpdesk } from '@kosh/helpdesk';
 import { hr } from '@kosh/hr';
 import { dataImport } from '@kosh/import';
+import { indent } from '@kosh/indent';
 import { l10nBd } from '@kosh/l10n_bd';
 import { l10nBdPayroll } from '@kosh/l10n_bd_payroll';
 import { l10nBdPos } from '@kosh/l10n_bd_pos';
@@ -183,6 +184,7 @@ const CATALOGUE = [
   websiteSaleStock,
   posStock,
   expense,
+  indent,
   expenseAccount,
   attendance,
   payroll,
@@ -234,6 +236,7 @@ await applyApps(
         'website',
         'pos',
         'expense',
+        'indent',
         'attendance',
         'payroll',
         'helpdesk',
@@ -313,6 +316,7 @@ for (const [login, name, groups] of [
       'website_sale.manager',
       'pos.manager',
       'expense.manager',
+      'indent.manager',
       'attendance.manager',
       'payroll.manager',
       'helpdesk.manager',
@@ -326,7 +330,11 @@ for (const [login, name, groups] of [
       'portal.manager',
     ],
   ],
-  ['nadia', 'Nadia Islam', ['expense.user', 'attendance.user', 'payroll.user', 'messaging.user']],
+  [
+    'nadia',
+    'Nadia Islam',
+    ['expense.user', 'indent.user', 'attendance.user', 'payroll.user', 'messaging.user'],
+  ],
   ['gate', 'Main gate kiosk', ['attendance.kiosk']],
   [
     'rahim',

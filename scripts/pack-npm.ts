@@ -69,6 +69,7 @@ const PACKAGES = [
   'website',
   'pos',
   'expense',
+  'indent',
   'attendance',
   'payroll',
   'helpdesk',

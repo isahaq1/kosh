@@ -28,6 +28,7 @@ export type AppName =
   | 'website'
   | 'pos'
   | 'expense'
+  | 'indent'
   | 'attendance'
   | 'payroll'
   | 'helpdesk'
@@ -207,6 +208,11 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     label: 'Spend: expenses with receipts, policies, approvals and cash advances',
     icon: '💳',
     server: 'expense',
+  },
+  indent: {
+    label: 'Requests: indents to the store, approved, issued by transfers and acknowledged',
+    icon: '📋',
+    server: 'indent',
   },
   attendance: {
     label: 'Attendance: shifts, check-in by phone, kiosk or device, overtime',
