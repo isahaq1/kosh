@@ -37,6 +37,11 @@ export interface KoshContextValue {
   readonly offline?: OfflineQueue;
   /** Switches to another of the user's companies, when the shell offers it (Settings › Companies). */
   readonly switchCompany?: (company: number) => void;
+  /** Developer mode is on (RFC 0031 §3.1): fields, buttons and models explain themselves on hover. */
+  readonly developer: boolean;
+  /** The user may turn Developer mode on (administrators and developers). */
+  readonly canDevelop: boolean;
+  setDeveloper(on: boolean): void;
 }
 
 const Context = createContext<KoshContextValue | null>(null);
@@ -50,6 +55,29 @@ export function useKosh(): KoshContextValue {
 
 const THEME_KEY = 'kosh.theme';
 const DENSITY_KEY = 'kosh.density';
+const DEVELOPER_KEY = 'kosh.developer';
+
+function readDeveloper(): boolean {
+  try {
+    return localStorage.getItem(DEVELOPER_KEY) === 'on';
+  } catch {
+    return false;
+  }
+}
+
+/** Developer mode, remembered per browser. */
+function useDeveloper(): [boolean, (on: boolean) => void] {
+  const [on, setOn] = useState<boolean>(readDeveloper);
+  useEffect(() => {
+    try {
+      if (on) localStorage.setItem(DEVELOPER_KEY, 'on');
+      else localStorage.removeItem(DEVELOPER_KEY);
+    } catch {
+      // storage unavailable: the choice lasts for this page only
+    }
+  }, [on]);
+  return [on, setOn];
+}
 
 export type Density = 'comfortable' | 'compact';
 
@@ -133,6 +161,7 @@ export function KoshProvider({
   realtime,
   offline,
   switchCompany,
+  canDevelop = false,
   children,
 }: {
   readonly api: KoshApi;
@@ -148,10 +177,14 @@ export function KoshProvider({
   readonly realtime?: RealtimeClient;
   readonly offline?: OfflineQueue;
   readonly switchCompany?: (company: number) => void;
+  /** The user may turn Developer mode on (`me.developer`). */
+  readonly canDevelop?: boolean;
   readonly children: ReactNode;
 }): ReactElement {
   const [theme, setTheme] = useTheme();
   const [density, setDensity] = useDensity();
+  const [developerOn, setDeveloper] = useDeveloper();
+  const developer = canDevelop && developerOn;
   useAccent(accent);
   const format = useMemo(
     () => createFormatter(lang, tz, grouping === undefined ? {} : { grouping }),
@@ -168,6 +201,9 @@ export function KoshProvider({
       setTheme,
       density,
       setDensity,
+      developer,
+      canDevelop,
+      setDeveloper,
       ...(realtime === undefined ? {} : { realtime }),
       ...(offline === undefined ? {} : { offline }),
       ...(switchCompany === undefined ? {} : { switchCompany }),
@@ -182,6 +218,9 @@ export function KoshProvider({
       setTheme,
       density,
       setDensity,
+      developer,
+      canDevelop,
+      setDeveloper,
       realtime,
       offline,
       switchCompany,

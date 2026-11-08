@@ -6,6 +6,7 @@
  * while loading and an empty state that offers the next step. Rows are a semantic table: keyboard users move with
  * Tab and open with Enter. Every bulk action is one request per record to the existing, permission-checked routes.
  */
+
 import { type Condition, type FieldNode, holds } from '@kosh/views';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table';
@@ -34,6 +35,7 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, type Row, type ServedView, type ViewField } from '../api.js';
+import { Explain } from '../components/Explain.js';
 import {
   Alert,
   Button,
@@ -890,18 +892,20 @@ function Rows({
                         pinnedClass(node.id),
                       )}
                     >
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1"
-                        onClick={() => toggleOrder(node.field)}
-                      >
-                        <table.FlexRender header={header} />
-                        {direction === 'asc' ? (
-                          <ArrowUp className="size-3" aria-hidden />
-                        ) : direction === 'desc' ? (
-                          <ArrowDown className="size-3" aria-hidden />
-                        ) : null}
-                      </button>
+                      <Explain model={model} target={{ field: node.field }} asChild>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1"
+                          onClick={() => toggleOrder(node.field)}
+                        >
+                          <table.FlexRender header={header} />
+                          {direction === 'asc' ? (
+                            <ArrowUp className="size-3" aria-hidden />
+                          ) : direction === 'desc' ? (
+                            <ArrowDown className="size-3" aria-hidden />
+                          ) : null}
+                        </button>
+                      </Explain>
                       <ResizeHandle
                         label={t('views.resize', {
                           column: node.label ?? fields[node.field]?.label ?? node.field,

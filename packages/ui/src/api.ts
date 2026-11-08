@@ -94,6 +94,8 @@ export interface CurrentUser {
   readonly twoFactorEnabled: boolean;
   readonly administrator: boolean;
   readonly administratorNeedsSecondFactor: boolean;
+  /** May turn on Developer mode (RFC 0031 §3.1); older servers send none. */
+  readonly developer?: boolean;
   /** The policy requires two-factor sign-in of everyone and it is not on (RFC 0019 §3.5); older servers send none. */
   readonly twoFactorSetupRequired?: boolean;
   /** The user's photo version, or null (older servers send none). */

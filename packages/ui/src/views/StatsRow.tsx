@@ -3,6 +3,7 @@
  * record, computed by the server with the user's rights (`aggregate`), live with the record's version, each tile a
  * jump to that list filtered the same way. Other modules append their tiles to the row (view extensions).
  */
+
 import {
   type Condition,
   type ConditionEnv,
@@ -13,6 +14,7 @@ import {
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
+import { Explain } from '../components/Explain.js';
 import { useKosh } from '../context.js';
 import { cn } from '../lib/cn.js';
 
@@ -106,7 +108,15 @@ export function StatsRow({
         const clickable = routes.data?.[tile.model]?.app !== undefined;
         const body = (
           <>
-            <span className="text-xs font-medium text-muted-foreground">{tile.label}</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              <Explain
+                model={tile.model}
+                focusable={false}
+                target={{ action: tile.id, domain: wheres[i] }}
+              >
+                {tile.label}
+              </Explain>
+            </span>
             <span
               className={cn(
                 'text-xl font-semibold tabular-nums leading-tight',

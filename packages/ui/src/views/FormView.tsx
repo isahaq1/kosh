@@ -4,6 +4,7 @@
  * assistance, and saves with compare-and-set (a record changed by someone else since it was opened is not
  * overwritten: the user reloads). Conditions only decide display; the server re-checks every write.
  */
+
 import {
   type ButtonNode,
   type Condition,
@@ -38,6 +39,7 @@ import {
   type Versioned,
   type ViewField,
 } from '../api.js';
+import { Explain } from '../components/Explain.js';
 import {
   Alert,
   Button,
@@ -667,7 +669,9 @@ export function FormView({
         )}
       >
         <Label htmlFor={id}>
-          {node.label ?? field.label}
+          <Explain model={model} target={{ field: node.field }}>
+            {node.label ?? field.label}
+          </Explain>
           {(field.required || holds(node.requiredWhen, values, env)) && !readonly ? (
             <span aria-hidden className="text-danger">
               {' '}
@@ -1055,7 +1059,11 @@ export function FormView({
             </Button>
             <div className="min-w-0">
               <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-                <h1 className="truncate text-xl font-semibold">{title}</h1>
+                <h1 className="truncate text-xl font-semibold">
+                  <Explain model={model} target={{ model: true }}>
+                    {title}
+                  </Explain>
+                </h1>
                 {statusbar === undefined || fields[statusbar] === undefined || isNew ? null : (
                   <StatusChip
                     field={fields[statusbar]}
@@ -1312,26 +1320,35 @@ export function FormView({
                 )}
                 <div className="contents">
                   {buttons.map((b, i) => (
-                    <Button
+                    <Explain
                       key={b.id}
-                      type="button"
-                      size="sm"
-                      variant={
-                        b.primary === true || (i === 0 && !buttons.some((x) => x.primary === true))
-                          ? 'primary'
-                          : 'secondary'
-                      }
-                      busy={transition.isPending && transition.variables === b.transition}
-                      onClick={() =>
-                        b.open !== undefined
-                          ? openNew(b.open)
-                          : b.confirm === undefined
-                            ? transition.mutate(b.transition ?? '')
-                            : setConfirming(b)
+                      model={model}
+                      asChild
+                      target={
+                        b.transition === undefined ? { action: b.id } : { transition: b.transition }
                       }
                     >
-                      {b.label ?? b.transition ?? b.id}
-                    </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={
+                          b.primary === true ||
+                          (i === 0 && !buttons.some((x) => x.primary === true))
+                            ? 'primary'
+                            : 'secondary'
+                        }
+                        busy={transition.isPending && transition.variables === b.transition}
+                        onClick={() =>
+                          b.open !== undefined
+                            ? openNew(b.open)
+                            : b.confirm === undefined
+                              ? transition.mutate(b.transition ?? '')
+                              : setConfirming(b)
+                        }
+                      >
+                        {b.label ?? b.transition ?? b.id}
+                      </Button>
+                    </Explain>
                   ))}
                 </div>
               </div>

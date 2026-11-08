@@ -7,6 +7,7 @@
  * Routes: `/login`, `/` (launcher), `/:app` (first menu entry), `/:app/a/:action` (list / kanban),
  * `/:app/a/:action/:id` (form; `new` for a new record).
  */
+
 import { compileSearch, decodeSearch, encodeSearch, type SearchState } from '@kosh/search';
 import type { ClientAction, Condition, ViewType, WindowAction } from '@kosh/views';
 import {
@@ -70,6 +71,7 @@ import {
 import { I18nextProvider, useTranslation } from 'react-i18next';
 import { ApiError, type CurrentUser, type KoshApi, type MenuNode } from './api.js';
 import { Avatar, imageUrl } from './components/Avatar.js';
+import { Explain } from './components/Explain.js';
 import {
   Alert,
   Button,
@@ -403,7 +405,7 @@ function UserMenu({
 }): ReactElement {
   const { t } = useTranslation();
   const { api, registry, persister, lang, setLang } = useServices();
-  const { theme, setTheme, density, setDensity } = useKosh();
+  const { theme, setTheme, density, setDensity, developer, canDevelop, setDeveloper } = useKosh();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   return (
@@ -443,6 +445,11 @@ function UserMenu({
             {t(p.label)}
           </MenuItem>
         ))}
+        {canDevelop ? (
+          <MenuCheckboxItem checked={developer} onCheckedChange={(on) => setDeveloper(on === true)}>
+            {t('explain.developerMode')}
+          </MenuCheckboxItem>
+        ) : null}
         {corner === undefined ? null : (
           <>
             {corner.companies.length < 2 && !user.administrator ? null : (
@@ -638,6 +645,7 @@ function Shell(): ReactElement {
       {...(realtime === undefined ? {} : { realtime })}
       {...(offline === undefined ? {} : { offline })}
       switchCompany={switchCompany}
+      canDevelop={user.developer === true}
     >
       <ToastProvider>
         <DesignProvider>
@@ -957,7 +965,9 @@ function WindowActionPage(): ReactElement {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <h1 id="action-title" className="text-lg font-semibold">
-            {action.data.label ?? served.data.view.label ?? model}
+            <Explain model={model} target={{ model: true }}>
+              {action.data.label ?? served.data.view.label ?? model}
+            </Explain>
           </h1>
           {served.data.operations.create && action.data.views.includes('form') ? (
             <>
@@ -1144,6 +1154,20 @@ function OpenRecordPage(): ReactElement {
   );
 }
 
+/** A model's list where this user may open it (the explain popovers' relation links, RFC 0031 §3.1). */
+function OpenModelPage(): ReactElement {
+  const { api } = useServices();
+  const { t } = useTranslation();
+  const { model } = useParams({ strict: false }) as { model: string };
+  const routes = useQuery({ queryKey: ['routes'], queryFn: () => api.routes() });
+  if (routes.isPending) return <Spinner label={t('app.loading')} />;
+  const route = routes.data?.[model];
+  if (route?.app === undefined) return <Alert>{t('app.notFound')}</Alert>;
+  return (
+    <Navigate to="/$app/a/$action" params={{ app: route.app, action: route.action }} replace />
+  );
+}
+
 function ActivatePage(): ReactElement {
   const navigate = useNavigate();
   return <Activate api={useServices().api} onSignedIn={() => void navigate({ to: '/' })} />;
@@ -1223,6 +1247,11 @@ const openRoute = createRoute({
   path: '/open/$model/$id',
   component: OpenRecordPage,
 });
+const openModelRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/open/$model',
+  component: OpenModelPage,
+});
 /** A personal page from the user menu (`registry.registerUserPage`), outside any app. */
 function UserPage(): ReactElement {
   const { page } = useParams({ strict: false }) as { page: string };
@@ -1245,6 +1274,7 @@ const routeTree = rootRoute.addChildren([
   shellRoute.addChildren([
     indexRoute,
     openRoute,
+    openModelRoute,
     userPageRoute,
     appRoute,
     actionRoute,

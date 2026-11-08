@@ -31,6 +31,13 @@ export {
 export { KoshApp, type KoshAppProps, useLanguage } from './app.js';
 export { AppIcon } from './components/AppIcon.js';
 export * from './components/Avatar.js';
+export {
+  Explain,
+  type Explained,
+  type ExplainedField,
+  type ExplainTarget,
+  useExplain,
+} from './components/Explain.js';
 export * from './components/primitives.js';
 export {
   type KoshContextValue,
