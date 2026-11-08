@@ -467,3 +467,123 @@ test('returns: part of a receipt goes back to the vendor at its own cost, linked
     (await call('GET', `/api/v1/stockroom/pickings/${back.id + 1000}/returnable`, 'maria')).status,
   ).toBe(404);
 });
+
+test('landed costs: split by quantity, previewed, posted once — on hand to stock and its average cost, sold to cost of sales', async () => {
+  const product = async (name: string, extra: Record<string, unknown> = {}) =>
+    (
+      await call('POST', '/api/v1/models/product.product', 'maria', {
+        name,
+        uom: ids['Units'],
+        ...extra,
+      })
+    ).json.id as number;
+  const rice = await product('Rice');
+  const beans = await product('Beans');
+  const freight = await product('Freight', {
+    kind: 'service',
+    landedCost: true,
+    landedSplit: 'quantity',
+  });
+  const made = await call('POST', O, 'maria', {
+    partner: ids['vendor'],
+    currency: ids['bdt'],
+    lines: {
+      create: [
+        { product: rice, name: 'Rice', quantity: '10', priceUnit: '100' },
+        { product: beans, name: 'Beans', quantity: '30', priceUnit: '100' },
+      ],
+    },
+  });
+  expect(made.status, JSON.stringify(made.json)).toBe(201);
+  await run(`${O}/${made.json.id}/transitions/submit`);
+  await run(`${O}/${made.json.id}/transitions/confirm`);
+  expect(await purchaseStockWorker({ shutro: host.server.shutro }).drain()).toBe(1);
+  const [receipt] = await find(
+    'stock.picking',
+    { purchaseOrder: made.json.id },
+    'id,source,destination',
+  );
+  await run(`/api/v1/models/stock.picking/${receipt.id}/transitions/validate`);
+  // Half the rice is sold before the freight is known.
+  const [customers] = await find('stock.location', { usage: 'customer' }, 'id');
+  const out = await call('POST', '/api/v1/models/stock.picking', 'maria', {
+    kind: 'delivery',
+    source: receipt.destination?.id ?? receipt.destination,
+    destination: customers.id,
+    moves: { create: [{ product: rice, quantity: '5' }] },
+  });
+  await run(`/api/v1/models/stock.picking/${out.json.id}/transitions/confirm`);
+  await run(`/api/v1/models/stock.picking/${out.json.id}/transitions/validate`);
+
+  const L = '/api/v1/models/stock.landed.cost';
+  const cost = await call('POST', L, 'maria', {
+    company,
+    pickings: { set: [receipt.id] },
+    lines: {
+      create: [{ product: freight, name: 'Sea freight', amount: '400', split: 'quantity' }],
+    },
+  });
+  expect(cost.status, JSON.stringify(cost.json)).toBe(201);
+  const preview = await call(
+    'GET',
+    `/api/v1/stockroom/landed-costs/${cost.json.id}/preview`,
+    'maria',
+  );
+  expect(preview.status, JSON.stringify(preview.json)).toBe(200);
+  expect(preview.json.lines.map((l: Json) => [l.product, l.added, l.toStock, l.toCogs])).toEqual([
+    ['Rice', '100.00', '50.00', '50.00'],
+    ['Beans', '300.00', '300.00', '0.00'],
+  ]);
+  // Stock users prepare landed costs; posting them takes Accounting.
+  await host.server.auth?.createUser({
+    login: 'sam',
+    name: 'Sam',
+    password: PASSWORD,
+    company,
+    companies: [company],
+    groups: ['stock_account.user'],
+  });
+  expect((await call('POST', `${L}/${cost.json.id}/transitions/post`, 'sam')).status).toBe(403);
+  const before = { stock: await balanceOf('1200'), cogs: await balanceOf('5000') };
+  await run(`${L}/${cost.json.id}/transitions/post`);
+  expect(
+    orm
+      .toDecimal(await balanceOf('1200'))
+      .minus(before.stock)
+      .toFixed(2),
+  ).toBe('350.00');
+  expect(
+    orm
+      .toDecimal(await balanceOf('5000'))
+      .minus(before.cogs)
+      .toFixed(2),
+  ).toBe('50.00');
+  const prices = await find('product.product', { id: { in: [rice, beans] } }, 'standardPrice');
+  expect(prices.map((p) => Number(p.standardPrice))).toEqual([110, 110]);
+  // Posted once.
+  expect((await call('POST', `${L}/${cost.json.id}/transitions/post`, 'maria')).status).toBe(409);
+
+  // From a vendor bill's freight line: a draft with its amount.
+  const [journal] = await find('account.journal', { type: 'purchase' }, 'id');
+  const bill = await call('POST', '/api/v1/models/account.move', 'maria', {
+    kind: 'in_invoice',
+    journal: journal.id,
+    partner: ids['vendor'],
+    currency: ids['bdt'],
+    date: new Date().toISOString().slice(0, 10),
+    lines: {
+      create: [
+        { lineKind: 'product', product: freight, name: 'Freight', quantity: '1', priceUnit: '250' },
+      ],
+    },
+  });
+  expect(bill.status, JSON.stringify(bill.json)).toBe(201);
+  const drafted = await call(
+    'POST',
+    `/api/v1/stockroom/landed-costs/from-bill/${bill.json.id}`,
+    'maria',
+  );
+  expect(drafted.status, JSON.stringify(drafted.json)).toBe(200);
+  const [line] = await find('stock.landed.cost.line', { cost: drafted.json.id }, 'amount,split');
+  expect([Number(line.amount), line.split]).toEqual([250, 'quantity']);
+});

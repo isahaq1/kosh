@@ -303,6 +303,7 @@ for (const [login, name, groups] of [
       'hr.manager',
       'hiring.manager',
       'stock.manager',
+      'stock_account.user',
       'mrp.manager',
       'maintenance.manager',
       'trade_finance.manager',

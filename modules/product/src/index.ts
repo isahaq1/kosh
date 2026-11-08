@@ -248,6 +248,7 @@ export const product: ReturnType<typeof defineModule> = defineModule({
           'barcode',
         ]),
         k.group('prices', ['listPrice', 'standardPrice', 'uom'], { label: 'Prices' }),
+        k.group('size', ['weight', 'volume'], { label: 'Size' }),
         k.notebook('more', [
           k.page('sales', 'Sales & purchase', [
             k.group('sell', ['saleOk', 'invoicePolicy', 'taxes']),

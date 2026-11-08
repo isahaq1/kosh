@@ -18,6 +18,7 @@ import {
   method,
   type Records,
 } from './.kosh/bindings.js';
+import { ProductLanded, StockLandedCost, StockLandedCostLine } from './landed.js';
 
 const zero = orm.toDecimal(0);
 const money = (d: Decimal) => d.toDecimalPlaces(2);
@@ -405,7 +406,15 @@ export const PickingValued = extendModel('stock.picking', {
 
 export const stockAccountShutro = defineModule({
   name: 'stock_account',
-  version: '0.1.0',
+  version: '0.2.0',
+  sequences: [
+    orm.defineSequence({
+      code: 'stock.landed.cost',
+      prefix: 'LC/{year}/',
+      padding: 5,
+      reset: 'yearly',
+    }),
+  ],
   depends: [stockShutro, accountingShutro, productShutro],
   groups: [
     orm.defineGroup({
@@ -414,8 +423,9 @@ export const stockAccountShutro = defineModule({
       implies: ['stock.user'],
     }),
   ],
-  models: [StockValuationLayer],
+  models: [StockValuationLayer, StockLandedCost, StockLandedCostLine],
   extensions: [
+    ProductLanded,
     CategoryValuation,
     ProductValuation,
     CompanyStockAccounts,

@@ -107,6 +107,7 @@ export const bn: Readonly<Record<string, string>> = {
   Sequence: 'ক্রম',
   Service: 'সেবা',
   Services: 'সেবা',
+  Size: 'আকার',
   Tax: 'কর',
   Taxes: 'কর',
   'The category and every category under it.': 'শ্রেণিটি এবং এর অধীন প্রতিটি শ্রেণি।',
@@ -128,7 +129,9 @@ export const bn: Readonly<Record<string, string>> = {
   Use: 'ব্যবহার',
   User: 'ব্যবহারকারী',
   Volume: 'আয়তন',
+  'Volume (m³)': 'আয়তন (ঘনমিটার)',
   Weight: 'ওজন',
+  'Weight (kg)': 'ওজন (কেজি)',
   'What the percent is taken off: the product’s list price, its cost, or its price on another list.':
     'শতাংশটি কিসের থেকে কাটা হবে: পণ্যের তালিকা মূল্য, খরচ, বা অন্য তালিকায় এর মূল্য।',
   'Whether the tax applies to sales documents or to purchase documents.':

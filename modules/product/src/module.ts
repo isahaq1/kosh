@@ -146,6 +146,10 @@ export const ProductProduct = defineModel('product.product', {
     ),
     uom: f.many2one('uom.uom', { label: 'Unit of measure' }),
     barcode: f.char({ index: 'unique' }),
+    /** For delivery fees by weight and landed costs split by weight (RFC 0030 §3.3). */
+    weight: f.decimal({ scale: 3, label: 'Weight (kg)' }),
+    /** For landed costs split by volume. */
+    volume: f.decimal({ scale: 4, label: 'Volume (m³)' }),
     /** A picture: an attachment of the product (RFC 0022 §3.3), with its 256 px thumbnail. */
     image: f.many2one('storage.attachment', { ondelete: 'set null', label: 'Picture' }),
     /** The sales price, in the company currency. */
@@ -189,7 +193,7 @@ const uom = (id: string, name: string, category: string, ratio: string, rounding
 
 export const productShutro = defineModule({
   name: 'product',
-  version: '0.5.0',
+  version: '0.6.0',
   migrations: [
     {
       version: '0.2.0',

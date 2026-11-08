@@ -647,7 +647,6 @@ export function websiteSaleModule(options: ShopOptions = {}): ReturnType<typeof 
                 children: [
                   field({ field: 'published', id: 'shop_published' }),
                   field({ field: 'shopSequence', id: 'shop_sequence' }),
-                  field({ field: 'weight', id: 'shop_weight' }),
                   field({ field: 'related', id: 'shop_related', widget: 'tags' }),
                   field({ field: 'websiteDescription', id: 'shop_description' }),
                   field({ field: 'seoTitle', id: 'shop_seo_title' }),

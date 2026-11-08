@@ -26,6 +26,7 @@ import { recruitmentMessages, registerRecruitmentWeb } from '@kosh/recruitment/w
 import { registerReportingWeb, reportingMessages } from '@kosh/reporting/web';
 import { registerSettingsWeb, settingsMessages } from '@kosh/settings/web';
 import { registerStockWeb, stockMessages } from '@kosh/stock/web';
+import { registerStockAccountWeb, stockAccountMessages } from '@kosh/stock_account/web';
 import { registerStudioWeb, studioMessages } from '@kosh/studio/web';
 import { createDefaultRegistry, createKoshApi, KoshApp } from '@kosh/ui';
 import { registerWebsiteWeb, websiteMessages } from '@kosh/website/web';
@@ -53,6 +54,7 @@ registerProjectWeb(registry);
 registerRecruitmentWeb(registry);
 registerStockWeb(registry);
 registerPurchaseStockWeb(registry);
+registerStockAccountWeb(registry);
 registerEventWeb(registry);
 registerWebsiteWeb(registry);
 registerPosWeb(registry);
@@ -73,6 +75,7 @@ const messages = {
   recruitment: recruitmentMessages,
   stock: stockMessages,
   purchase_stock: purchaseStockMessages,
+  stock_account: stockAccountMessages,
   event: eventMessages,
   website: websiteMessages,
   pos: posMessages,

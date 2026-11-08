@@ -50,8 +50,6 @@ export const ProductShop = extendModel('product.product', {
     published: f.boolean({ default: false, label: 'On the shop' }),
     /** What the shop says about it (English and Bangla). */
     websiteDescription: f.text({ translate: true, label: 'Shop description' }),
-    /** For fees by weight, in kg. */
-    weight: f.decimal({ scale: 3, label: 'Weight (kg)' }),
     /** Shown with it on its page. */
     related: f.many2many('product.product', {
       relation: 'product_shop_related_rel',
@@ -460,7 +458,7 @@ export const DeliveryShipmentEvent = defineModel('delivery.shipment.event', {
 
 export const websiteSaleShutro = defineModule({
   name: 'website_sale',
-  version: '0.3.0',
+  version: '0.4.0',
   depends: [websiteShutro, salesShutro, saleAccountShutro, paymentShutro, productShutro],
   groups: [
     orm.defineGroup({

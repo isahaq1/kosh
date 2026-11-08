@@ -12,9 +12,18 @@ import { product } from '@kosh/product';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
 import { stock } from '@kosh/stock';
-import { action, field, list, pivot, search } from '@kosh/views';
+import { action, field, form, list, pivot, search } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
+import { landedCostFromBill, previewLandedCost, StockLandedCost } from './landed.js';
 import { StockValuationLayer, stockAccountShutro, stockAccountsOf } from './module.js';
+
+export {
+  landedCostFromBill,
+  previewLandedCost,
+  type Share,
+  StockLandedCost,
+  StockLandedCostLine,
+} from './landed.js';
 
 export {
   CategoryValuation,
@@ -37,6 +46,24 @@ async function stockDefaults(env: Env): Promise<string | undefined> {
       if ((await stockAccountsOf(su, company)) !== null) ready += 1;
     await su.flush();
     return ready === 0 ? undefined : `stock accounts ready in ${ready} company(ies)`;
+  });
+}
+
+/** Landed costs (RFC 0030 §3.3): the split before posting, and a draft from a vendor bill's landed-cost lines. */
+function registerLandedCostRoutes({ app }: ModuleContext): void {
+  const id = (params: unknown) => {
+    const n = Number((params as { id?: unknown }).id);
+    if (!Number.isSafeInteger(n) || n <= 0)
+      throw new HttpProblem(400, 'invalid-id', 'Invalid id', 'A record id.');
+    return n;
+  };
+  app.get('/api/v1/stockroom/landed-costs/:id/preview', async (request) => {
+    const cost = id(request.params);
+    return request.env(async (env) => ({ lines: await previewLandedCost(env as Env, cost) }));
+  });
+  app.post('/api/v1/stockroom/landed-costs/from-bill/:id', async (request) => {
+    const bill = id(request.params);
+    return request.env((env) => landedCostFromBill(env as Env, bill), { write: true });
   });
 }
 
@@ -71,6 +98,12 @@ export const stockAccount: ReturnType<typeof defineModule> = defineModule({
   standard: {
     waive: [
       {
+        rule: 'I1',
+        model: 'stock.landed.cost',
+        reason:
+          'Made from a vendor bill or by hand for chosen receipts, then posted; never imported.',
+      },
+      {
         rule: 'V1',
         model: 'stock.valuation.layer',
         reason: 'A ledger read in lists and pivots; layers are written by transfers.',
@@ -85,8 +118,59 @@ export const stockAccount: ReturnType<typeof defineModule> = defineModule({
   accessLevels: {
     user: { label: 'Stock valuation (read)', groups: ['stock_account.user'] },
   },
-  routes: (context: ModuleContext) => registerValuationRoutes(context),
+  routes: (context: ModuleContext) => {
+    registerValuationRoutes(context);
+    registerLandedCostRoutes(context);
+  },
+  events: [
+    {
+      topic: 'stock.landed.cost.posted',
+      model: 'stock.landed.cost',
+      label: 'Landed cost posted',
+    },
+  ],
+  documents: [
+    {
+      key: 'landed_cost',
+      name: 'Landed cost',
+      model: 'stock.landed.cost',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Landed cost {{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'about',
+            items: [
+              { label: 'Date', bind: 'date' },
+              { label: 'Vendor bill', bind: 'vendorBill.name' },
+              { label: 'Status', bind: 'state' },
+              { label: 'Total', bind: 'amountTotal' },
+            ],
+          },
+          {
+            kind: 'table',
+            id: 'lines',
+            bind: 'lines',
+            columns: [
+              { label: 'Cost', bind: 'product.name' },
+              { label: 'Description', bind: 'name' },
+              { label: 'Split', bind: 'split' },
+              { label: 'Amount', bind: 'amount' },
+            ],
+          },
+          { kind: 'text', id: 'note', text: '{{note}}' },
+        ],
+      },
+    },
+  ],
   actions: {
+    'stockroom.action_landed_costs': action(StockLandedCost, {
+      label: 'Landed costs',
+      views: ['list', 'form'],
+    }),
     'stockroom.action_valuation': action(StockValuationLayer, {
       label: 'Valuation',
       views: ['pivot', 'list'],
@@ -99,6 +183,13 @@ export const stockAccount: ReturnType<typeof defineModule> = defineModule({
       label: 'Valuation',
       action: 'stockroom.action_valuation',
       sequence: 7,
+    },
+    {
+      id: 'stockroom.landed_costs',
+      parent: 'stockroom.root',
+      label: 'Landed costs',
+      action: 'stockroom.action_landed_costs',
+      sequence: 7.5,
     },
   ],
   views: {
@@ -115,12 +206,56 @@ export const stockAccount: ReturnType<typeof defineModule> = defineModule({
       ],
       defaultOrder: ['date desc', 'id desc'],
     }),
+    'stock.landed.cost.list': list(StockLandedCost, {
+      columns: ['name', 'date', 'vendorBill', { field: 'amountTotal', sum: true }, 'state'],
+      defaultOrder: ['date desc', 'id desc'],
+    }),
+    'stock.landed.cost.form': form(StockLandedCost, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('post', { primary: true, label: 'Post' }),
+          k.button('cancel', { label: 'Cancel', confirm: 'Cancel this landed cost?' }),
+        ],
+      },
+      sheet: [
+        k.group('main', ['name', 'date', 'vendorBill', 'move', 'amountTotal'], {
+          description:
+            'Choose the done receipts, add the costs and how each is split; the preview shows each line’s share before posting.',
+        }),
+        k.group('receipts', [{ field: 'pickings', widget: 'tags' }], {
+          label: 'Receipts',
+          columns: 1,
+        }),
+        k.lines(
+          'lines' as never,
+          [
+            { field: 'product', id: 'cost_product' },
+            { field: 'name', id: 'cost_name' },
+            { field: 'split', id: 'cost_split' },
+            { field: 'amount', id: 'cost_amount' },
+          ] as never,
+        ),
+        k.component('landed_preview', 'stock_account.LandedPreview'),
+        k.group('about', ['note'], { columns: 1 }),
+      ],
+      readonlyWhen: { state: { ne: 'draft' } },
+      chatter: true,
+    })),
     'stock.valuation.layer.pivot': pivot(StockValuationLayer, {
       rows: ['product'],
       measures: [{ sum: 'quantity' }, { sum: 'value' }],
     }),
   },
   search: {
+    'stock.landed.cost': search(StockLandedCost, {
+      fields: ['name', 'vendorBill.name', 'pickings.name'],
+      filters: {
+        draft: { label: 'Draft', domain: { state: 'draft' }, group: 'state' },
+        posted: { label: 'Posted', domain: { state: 'posted' }, group: 'state' },
+      },
+      groupBy: ['state', 'date:month'],
+    }),
     'stock.valuation.layer': search(StockValuationLayer, {
       fields: ['product.name', 'picking.name'],
       filters: {
@@ -149,7 +284,11 @@ export const stockAccount: ReturnType<typeof defineModule> = defineModule({
       operations: [
         {
           append: 'stock_quantities',
-          nodes: [field({ field: 'costMethod', id: 'product_cost_method' })],
+          nodes: [
+            field({ field: 'costMethod', id: 'product_cost_method' }),
+            field({ field: 'landedCost', id: 'product_landed_cost' }),
+            field({ field: 'landedSplit', id: 'product_landed_split' }),
+          ],
         },
       ],
     },
