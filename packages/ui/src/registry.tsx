@@ -102,6 +102,15 @@ export interface CreateAssistProps {
   ) => void;
 }
 
+/** Props of a selection action: a control in a list's bar of selected rows (Send by email). */
+export interface SelectionActionProps {
+  readonly api: KoshApi;
+  readonly model: string;
+  readonly ids: readonly number[];
+  /** Clears the selection, refreshes the list and says `message`. */
+  readonly done: (message: string, tone?: 'info' | 'danger') => void;
+}
+
 /** Props of a page: what a client action opens (`{ type: 'client', page: 'settings.Apps' }`). */
 export interface PageProps {
   readonly api: KoshApi;
@@ -128,7 +137,8 @@ type Kind =
   | 'userPage'
   | 'searchAssist'
   | 'chatterAssist'
-  | 'createAssist';
+  | 'createAssist'
+  | 'selectionAction';
 
 /** Renderers, widgets and components by name. */
 export class Registry {
@@ -142,6 +152,7 @@ export class Registry {
     searchAssist: new Map(),
     chatterAssist: new Map(),
     createAssist: new Map(),
+    selectionAction: new Map(),
   };
 
   #add(kind: Kind, name: string, component: ComponentType<never>, replace: boolean): this {
@@ -331,6 +342,25 @@ export class Registry {
     return [...this.#entries.createAssist.values()] as ComponentType<CreateAssistProps>[];
   }
 
+  /** Controls in every list's bar of selected rows; each decides whether it applies to the model. */
+  registerSelectionAction(
+    name: string,
+    component: ComponentType<SelectionActionProps>,
+    options: { readonly replace?: boolean } = {},
+  ): this {
+    return this.#add(
+      'selectionAction',
+      name,
+      component as ComponentType<never>,
+      options.replace === true,
+    );
+  }
+
+  /** The selection actions, in registration order. */
+  selectionActions(): readonly ComponentType<SelectionActionProps>[] {
+    return [...this.#entries.selectionAction.values()] as ComponentType<SelectionActionProps>[];
+  }
+
   page(name: string): ComponentType<PageProps> | undefined {
     return this.#entries.page.get(name) as ComponentType<PageProps> | undefined;
   }
@@ -347,6 +377,7 @@ export class Registry {
       'searchAssist',
       'chatterAssist',
       'createAssist',
+      'selectionAction',
     ] as const)
       for (const [name, c] of this.#entries[kind]) copy.#entries[kind].set(name, c);
     return copy;

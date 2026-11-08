@@ -702,6 +702,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/views
     devDependencies:
+      '@kosh/mail':
+        specifier: workspace:*
+        version: link:../../packages/mail
       '@tanstack/react-query':
         specifier: ^5.104.3
         version: 5.104.3(react@19.3.1)

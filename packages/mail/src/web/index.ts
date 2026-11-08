@@ -8,14 +8,17 @@ import type { i18n } from 'i18next';
 import { InboundPage } from './InboundPage.js';
 import { messages } from './messages.js';
 import { SendButton } from './SendButton.js';
+import { SendSelected } from './SendSelected.js';
 
 export { InboundPage } from './InboundPage.js';
 export { SendButton } from './SendButton.js';
+export { SendSelected } from './SendSelected.js';
 
 /** Registers the page (and its messages in `i18n`, when given). */
 export function registerMailWeb(registry: Registry, i18n?: i18n): Registry {
   registry.registerPage('mail.Inbound', InboundPage);
   registry.registerComponent('mail.Send', SendButton);
+  registry.registerSelectionAction('mail.SendSelected', SendSelected);
   if (i18n !== undefined) addMessages(i18n, 'mail', messages);
   return registry;
 }

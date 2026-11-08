@@ -62,7 +62,8 @@
     "@types/react": "^19.3.0",
     "i18next": "^26.4.7",
     "react": "^19.3.1",
-    "react-i18next": "^17.0.21"
+    "react-i18next": "^17.0.21",
+    "@kosh/mail": "workspace:*"
   },
   "peerDependencies": {
     "@tanstack/react-query": "^5.104.3",

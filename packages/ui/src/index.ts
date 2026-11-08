@@ -79,6 +79,7 @@ export {
   Registry,
   RegistryError,
   type SearchAssistProps,
+  type SelectionActionProps,
   type ViewProps,
   type WidgetProps,
 } from './registry.js';

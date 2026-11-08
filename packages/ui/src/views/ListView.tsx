@@ -1212,7 +1212,7 @@ export function totalLabel(word: string, label: string): string {
 }
 
 export function ListView(props: ViewProps): ReactElement {
-  const { api, uid } = useKosh();
+  const { api, uid, registry } = useKosh();
   const { t } = useTranslation();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -1432,6 +1432,20 @@ export function ListView(props: ViewProps): ReactElement {
           >
             {tr.name.charAt(0).toUpperCase() + tr.name.slice(1).replace(/_/g, ' ')}
           </Button>
+        ))}
+        {registry.selectionActions().map((Action, i) => (
+          <Action
+            // biome-ignore lint/suspicious/noArrayIndexKey: registered once, in a fixed order
+            key={i}
+            api={api}
+            model={model}
+            ids={ids}
+            done={(message, tone) => {
+              setSelected(new Set());
+              void refresh();
+              toast({ title: message, tone: tone ?? 'info' });
+            }}
+          />
         ))}
         {archivable ? (
           <Button size="sm" busy={archive.isPending} onClick={() => archive.mutate(ids)}>

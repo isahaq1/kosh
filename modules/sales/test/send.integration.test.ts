@@ -230,3 +230,35 @@ test('a quotation sent: composed in Bangla, edited, its PDF on the chatter and i
   await new Promise((r) => setTimeout(r, 2500));
   expect(mailer.sent).toHaveLength(1);
 }, 60_000);
+
+test('a selection sent at once: each to its customer, the ones without an address skipped and said why', async () => {
+  const before = mailer.sent.length;
+  const other = await host.server.shutro.bootstrap({ reason: 'test: no address', company }, (env) =>
+    (
+      env.model('res.partner' as never) as unknown as {
+        create(rows: unknown[]): Promise<{ ids: number[] }>;
+      }
+    ).create([{ name: 'No Mail Ltd', isCompany: true, isCustomer: true }]),
+  );
+  const order = async (partner: number) =>
+    (
+      await call('POST', '/api/v1/models/sale.order', 'rahim', {
+        partner,
+        currency,
+        lines: { create: [{ product, name: 'Jute bag', quantity: '1', priceUnit: '1000' }] },
+      })
+    ).json.id as number;
+  const ids = [await order(customer), await order(other.ids[0] as number)];
+  expect(
+    (await call('POST', '/api/v1/mail/send-many/sale.order', 'rahim', { ids: [] })).status,
+  ).toBe(400);
+  const batch = await call('POST', '/api/v1/mail/send-many/sale.order', 'rahim', { ids });
+  expectStatus(batch, 200);
+  expect(batch.json.sent).toBe(1);
+  expect(batch.json.skipped).toEqual([{ id: ids[1], reason: 'No Mail Ltd has no email address.' }]);
+  const deadline = Date.now() + 20_000;
+  while (mailer.sent.length === before && Date.now() < deadline)
+    await new Promise((r) => setTimeout(r, 200));
+  expect(mailer.sent.length).toBe(before + 1);
+  expect(mailer.sent.at(-1)?.to).toBe('buy@bengal.test');
+}, 60_000);

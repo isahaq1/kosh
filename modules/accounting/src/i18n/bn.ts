@@ -128,6 +128,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Draft invoices and bills': 'খসড়া চালান ও বিল',
   'Due date': 'নির্ধারিত তারিখ',
   'Due from them': 'তাদের কাছে প্রাপ্য',
+  'Each invoice and credit note is emailed with its PDF when it is posted.':
+    'প্রতিটি ইনভয়েস ও ক্রেডিট নোট পোস্ট হলে PDF-সহ ইমেইলে পাঠানো হয়।',
   'Empty: shared by every company.': 'ফাঁকা থাকলে: সব প্রতিষ্ঠানের জন্য সাধারণ।',
   Entry: 'এন্ট্রি',
   'Entry, invoice or bill posted': 'এন্ট্রি, চালান বা বিল পোস্টকৃত',
@@ -291,6 +293,7 @@ export const bn: Readonly<Record<string, string>> = {
   Scope: 'প্রযোজ্যতা',
   Send: 'প্রেরণ',
   'Send back': 'ফেরত পাঠান',
+  'Send invoices by email': 'ইনভয়েস ইমেইলে পাঠান',
   Sent: 'প্রেরিত',
   Sequence: 'ক্রম',
   'Set to draft': 'খসড়ায় ফেরত নিন',

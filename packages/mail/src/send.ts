@@ -193,6 +193,16 @@ export interface SendEngine {
     input: { to?: unknown; cc?: unknown; subject?: unknown; body?: unknown; attach?: unknown },
   ): Promise<{ outgoing: number; message: number; attachment: number | null }>;
   deliver(su: Env, outgoing: number): Promise<void>;
+  /** Sends each record as its template says, to its partner; the ones that cannot be sent are said why. */
+  sendMany(env: Env, model: string, ids: readonly number[]): Promise<BatchResult>;
+  /** Sends a record by itself (an `autoSend` event) when its partner asked for it; whether it was sent. */
+  autoSend(env: Env, model: string, id: number): Promise<boolean>;
+}
+
+/** What a batch send did. */
+export interface BatchResult {
+  readonly sent: number;
+  readonly skipped: readonly { readonly id: number; readonly reason: string }[];
 }
 
 /** The send engine of one server: the sendable documents, the models' metadata, the mailer. */
@@ -451,5 +461,55 @@ export function sendEngine(context: ModuleContext, mailer: () => Mailer | undefi
     }
   }
 
-  return { sendables, compose, send, deliver };
+  /** The composition sent as it is, to the partner's address; refused (before any write) when it cannot be. */
+  async function sendComposed(env: Env, model: string, id: number) {
+    const c = await compose(env, model, id);
+    const to = c.to.map((r) => r.email).filter((e): e is string => e !== null && e !== '');
+    if (to.length === 0)
+      throw new HttpProblem(
+        409,
+        'no-address',
+        'No email address',
+        `${c.to[0]?.name ?? 'The partner'} has no email address.`,
+      );
+    return send(env, model, id, { to, subject: c.subject, body: c.body });
+  }
+
+  async function sendMany(env: Env, model: string, ids: readonly number[]): Promise<BatchResult> {
+    if (ids.length === 0 || ids.length > 100)
+      throw new HttpProblem(400, 'invalid-body', 'Invalid batch', 'Send 1 to 100 records at once.');
+    let sent = 0;
+    const skipped: { id: number; reason: string }[] = [];
+    for (const id of ids)
+      try {
+        await sendComposed(env, model, id);
+        sent++;
+      } catch (error) {
+        // Refusals happen before anything is written (the record, its state, its address): the batch goes on.
+        if (!(error instanceof HttpProblem) || error.problem.status >= 500) throw error;
+        skipped.push({ id, reason: error.problem.detail ?? error.problem.title });
+      }
+    return { sent, skipped };
+  }
+
+  async function autoSend(env: Env, model: string, id: number): Promise<boolean> {
+    const spec = sendables.get(model);
+    if (spec?.autoSend === undefined || mailer() === undefined) return false;
+    const found = await ref(env, model).search({ where: { id, ...(spec.when ?? {}) }, limit: 1 });
+    if (found.length === 0) return false;
+    const [record] = (await ref(env, model).browse([id]).load([spec.partner])).read([spec.partner]);
+    const value = record?.[spec.partner] as { id?: number } | number | null | undefined;
+    const partner = typeof value === 'number' ? value : (value?.id ?? null);
+    if (partner === null) return false;
+    const flag = spec.autoSend.flag;
+    const [p] = (await ref(env, 'res.partner').browse([partner]).load([flag, 'email'])).read([
+      flag,
+      'email',
+    ]);
+    if (p?.[flag] !== true || typeof p['email'] !== 'string' || p['email'] === '') return false;
+    await sendComposed(env, model, id);
+    return true;
+  }
+
+  return { sendables, compose, send, deliver, sendMany, autoSend };
 }

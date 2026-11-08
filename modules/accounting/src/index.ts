@@ -1034,7 +1034,13 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
     {
       view: 'res.partner.form',
       operations: [
-        { append: 'roles', nodes: [field({ field: 'withholdings', id: 'withholdings' })] },
+        {
+          append: 'roles',
+          nodes: [
+            field({ field: 'withholdings', id: 'withholdings' }),
+            field({ field: 'sendInvoicesByEmail', id: 'send_invoices_by_email' }),
+          ],
+        },
       ],
     },
   ],
@@ -1061,6 +1067,7 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       template: 'accounting.invoice',
       partner: 'partner',
       when: { state: 'posted', kind: { in: ['out_invoice', 'out_refund'] } },
+      autoSend: { topic: 'account.move.posted', flag: 'sendInvoicesByEmail' },
     },
   ],
   documents: [

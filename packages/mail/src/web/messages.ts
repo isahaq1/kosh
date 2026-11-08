@@ -14,6 +14,12 @@ export const messages: Readonly<Record<string, object>> = {
       noEmail: '{{name}} has no email address: type one.',
       confirm: 'Send',
       queued: 'Sent: the email is on its way and on the chatter.',
+      many: 'Send by email',
+      manyTitle: 'Send {{count}} documents by email?',
+      manyIntro:
+        'Each goes to its customer or vendor with its own template, in their language, with its PDF; it is posted on its chatter.',
+      sentMany: '{{count}} sent by email.',
+      skipped: '{{count}} not sent: {{reason}}',
     },
     inbound: {
       title: 'Inbound email',
@@ -67,6 +73,12 @@ export const messages: Readonly<Record<string, object>> = {
       noEmail: '{{name}}-এর কোনো ইমেইল ঠিকানা নেই: একটি লিখুন।',
       confirm: 'পাঠান',
       queued: 'পাঠানো হয়েছে: ইমেইলটি যাচ্ছে এবং চ্যাটারে আছে।',
+      many: 'ইমেইলে পাঠান',
+      manyTitle: '{{count}}টি নথি ইমেইলে পাঠাবেন?',
+      manyIntro:
+        'প্রতিটি নিজ টেমপ্লেটে, প্রাপকের ভাষায়, PDF-সহ তার গ্রাহক বা সরবরাহকারীর কাছে যায়; এর চ্যাটারেও থাকে।',
+      sentMany: '{{count}}টি ইমেইলে পাঠানো হয়েছে।',
+      skipped: '{{count}}টি পাঠানো হয়নি: {{reason}}',
     },
     inbound: {
       title: 'আগত ইমেইল',

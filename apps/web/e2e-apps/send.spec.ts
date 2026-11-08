@@ -41,6 +41,25 @@ test('a sales order sent by email: the dialog filled from the template, the mess
   await dialog.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(dialog).toBeHidden({ timeout: 30_000 });
   await expect(page.getByRole('status').filter({ hasText: 'Sent:' })).toBeVisible();
-  await expect(page.getByText('Your order is attached.')).toBeVisible();
+  await expect(page.getByText('Your order is attached.').first()).toBeVisible();
   await expect(page.getByText(`${name.replaceAll('/', '-')}.pdf`).first()).toBeVisible();
+});
+
+test('documents sent from a list: the selection sent at once, the ones without an address said so', async ({
+  page,
+}) => {
+  await signIn(page, 'dina');
+  await page.goto('/sales/a/sales.action_orders');
+  const rows = page.getByRole('row', { name: /Bengal Steel/ });
+  await rows.first().getByRole('checkbox').check();
+  const bar = page.getByRole('toolbar', { name: /selected/ });
+  await bar.getByRole('button', { name: 'Send by email' }).click();
+  const dialog = page.getByRole('dialog', { name: /Send 1 documents by email/ });
+  await dialog.getByRole('button', { name: 'Send', exact: true }).click();
+  // Bengal Steel has no address: nothing is sent, and the reason is given.
+  await expect(
+    page.getByText('0 sent by email. 1 not sent: Bengal Steel has no email address.', {
+      exact: true,
+    }),
+  ).toBeVisible();
 });

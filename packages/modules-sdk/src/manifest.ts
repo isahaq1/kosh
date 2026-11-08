@@ -204,6 +204,11 @@ export interface SendableSpec {
   readonly partner: string;
   /** A domain the record must match to be sent (`{ state: 'posted' }`); default: any record. */
   readonly when?: Readonly<Record<string, unknown>>;
+  /**
+   * Sent by itself when `topic` is emitted for the record (its payload's `id`), as the user who caused it, to
+   * partners whose boolean `flag` field is set (`account.move.posted`, `sendInvoicesByEmail`).
+   */
+  readonly autoSend?: { readonly topic: string; readonly flag: string };
 }
 
 /**

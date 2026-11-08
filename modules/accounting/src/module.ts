@@ -1561,6 +1561,12 @@ export const AccountWithholding = defineModel('account.withholding', {
 /** The withholdings that apply to a partner (vendor or customer): what a payment of their documents proposes. */
 export const PartnerWithholdings = extendModel('res.partner', {
   fields: {
+    /** Invoices and credit notes emailed with their PDF once posted (RFC 0029 §3.3). */
+    sendInvoicesByEmail: f.boolean({
+      default: false,
+      label: 'Send invoices by email',
+      help: 'Each invoice and credit note is emailed with its PDF when it is posted.',
+    }),
     withholdings: f.many2many('account.withholding', {
       relation: 'res_partner_withholding_rel',
       label: 'Withholdings',
@@ -1670,7 +1676,7 @@ const sequence = (type: JournalType, prefix: string) =>
 
 export const accountingShutro = defineModule({
   name: 'accounting',
-  version: '0.5.0',
+  version: '0.6.0',
   migrations: [
     {
       version: '0.2.0',

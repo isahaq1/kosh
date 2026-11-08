@@ -24,6 +24,7 @@ import { mailShutro } from './inbound/models.js';
 import { installMailTemplates, sendEngine } from './send.js';
 
 export {
+  type BatchResult,
   type Composition,
   installMailTemplates,
   type SendEngine,
@@ -334,8 +335,44 @@ export function mailModule(options: MailOptions = {}): ReturnType<typeof defineM
           { write: true },
         );
       });
+      context.app.post('/api/v1/mail/send-many/:model', async (request) => {
+        const model = (request.params as { model?: unknown }).model;
+        const ids = (request.body as { ids?: unknown } | null)?.ids;
+        if (
+          typeof model !== 'string' ||
+          !Array.isArray(ids) ||
+          !ids.every((i) => Number.isSafeInteger(i) && (i as number) > 0)
+        )
+          throw new HttpProblem(400, 'invalid-body', 'Invalid batch', '{ ids: [record ids] }.');
+        return request.env((env) => engine.sendMany(env as never, model, ids as number[]), {
+          write: true,
+        });
+      });
       // Background work is off in the CLI (kosh init, migrate), like the schedules.
       if (!(options.workers ?? process.env['KOSH_SCHEDULES'] !== 'off')) return;
+      // Documents sent by themselves (`autoSend`): as the user whose change emitted the event.
+      for (const [model, spec] of engine.sendables) {
+        if (spec.autoSend === undefined) continue;
+        const worker = context.shutro.subscribe(
+          `mail.auto.${model}`,
+          spec.autoSend.topic,
+          async (event, env) => {
+            const id = Number((event.payload as { id?: unknown } | null)?.id);
+            if (!Number.isSafeInteger(id)) return;
+            try {
+              await engine.autoSend(env as never, model, id);
+            } catch (error) {
+              // A document that cannot be sent (no template, no storage) is logged, never retried forever.
+              context.app.log.warn({ err: error, model, id }, 'automatic email not sent');
+            }
+          },
+          { pollMs: 2000 },
+        );
+        worker.start();
+        context.app.addHook('onClose', async () => {
+          await worker.stop();
+        });
+      }
       const sender = context.shutro.subscribe(
         'mail.send',
         'mail.outgoing.queued',
