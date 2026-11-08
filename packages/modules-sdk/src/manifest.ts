@@ -72,7 +72,9 @@ export interface ApprovalLevelSpec {
     | 'department_head'
     | 'department_approvers'
     | { readonly field: string }
-    | { readonly record: string };
+    | { readonly record: string }
+    /** A person on the requester's employee record (RFC 0032 §3.2): `unitHead`, `coach`, `expenseApprover`. */
+    | { readonly employee: string };
   /** How many decide: any one (default), all of them, or a number. */
   readonly quorum?: 'any' | 'all' | number;
 }

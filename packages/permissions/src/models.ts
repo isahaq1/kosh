@@ -218,6 +218,7 @@ const ApprovalLevel = defineModel('approval.level', {
         manager: 'The requester’s manager',
         department_head: 'The head of the requester’s department',
         department_approvers: 'The approvers of the requester’s department',
+        employee: 'A person on the requester’s employee record',
         field: 'A person on the record',
         record: 'The record decides',
       },

@@ -221,6 +221,34 @@ async function userIn(su: Env, model: string, id: number, field: string): Promis
   }
 }
 
+/**
+ * The user in a field of the requester's employee: the field's employee's user (`unitHead`, `coach`), or the user
+ * itself (`expenseApprover`); null when there is none or Workforce is not installed.
+ */
+async function employeePerson(su: Env, requester: number, field: string): Promise<number | null> {
+  let me: Row | undefined;
+  try {
+    [me] = await find(su, 'hr.employee', { user: requester }, [field], ['id asc']);
+  } catch {
+    return null;
+  }
+  const value = me?.[field];
+  if (me === undefined || typeof value !== 'number') return null;
+  try {
+    // A field to an employee: that employee's user.
+    const [row] = (await ref(su, 'hr.employee')
+      .browse([me['id'] as number])
+      .load({ [field]: { user: true } } as never)) as unknown as Record<
+      string,
+      { user: { id: number } | null } | null
+    >[];
+    return row?.[field]?.user?.id ?? null;
+  } catch {
+    // A field to a user: the user.
+    return value;
+  }
+}
+
 /** The requester's employee in Workforce, with its department (null when Workforce is not installed or none). */
 async function employeeOf(
   su: Env,
@@ -338,6 +366,16 @@ async function approversOf(
         notes.push(`${department.name}’s approvers: ${await namesOf(su, people)}.`);
       }
     }
+  } else if (kind === 'employee') {
+    // A person on the requester's employee record (RFC 0032 §3.2): their unit head, coach, expense approver…
+    const field = String(level['approverField'] ?? '');
+    const person = await employeePerson(su, requester, field);
+    if (person !== null) people = [person];
+    notes.push(
+      person === null
+        ? `${who} has no ${field} with a user in Workforce.`
+        : `${who}’s ${field}: ${await namesOf(su, people)}.`,
+    );
   } else if (kind === 'field') {
     const field = String(level['approverField'] ?? '');
     const person = await userIn(su, target.model, target.id, field);
@@ -2113,12 +2151,18 @@ export async function installApprovalPolicies(
               : typeof level.approver === 'object'
                 ? 'record' in level.approver
                   ? 'record'
-                  : 'field'
+                  : 'employee' in level.approver
+                    ? 'employee'
+                    : 'field'
                 : 'role',
           ...(typeof level.approver === 'object'
             ? {
                 approverField:
-                  'record' in level.approver ? level.approver.record : level.approver.field,
+                  'record' in level.approver
+                    ? level.approver.record
+                    : 'employee' in level.approver
+                      ? level.approver.employee
+                      : level.approver.field,
               }
             : {}),
           quorum:
