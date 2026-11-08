@@ -114,4 +114,10 @@ and units per vendor, product configurator rules beyond exclusions, Shop attribu
   transitions drafting a credit note (`out_refund`) or a vendor refund (`in_refund`) at the line's price, once;
   their buttons on the orders. Step 2 complete. Not yet: choosing which lot goes back (the original's lots are taken
   in order), a returns report with charts (the list groups by reason, product and partner).
+- **Step 3 (2026-11-08).** `stock.landed.cost` and its lines (split by quantity, weight, volume, value or equally;
+  `post` emitting `stock.landed.cost.posted`), `landedCost` / `landedSplit` on products, `weight` (moved from the
+  Shop to Products) and `volume`; the preview (the on-hand part from FIFO layers, or the product's stock for average
+  cost); posting the entry as the user and the layers and average costs as the system; a draft from a vendor bill's
+  landed-cost lines; the print template; `stock_account` now has a web entry. Not yet: from a Trade Finance
+  shipment's charges, `l10n_bd`'s customs duties as data, and reversing a posted landed cost (cancel only drafts).
 

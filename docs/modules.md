@@ -329,6 +329,19 @@ it applies to, its hit rate and what it would do to the open ones, without chang
 lines have **Undo** (`POST /api/v1/accounting/statement-lines/:id/undo`): a payment comes off its documents and is
 reversed, a write-off is reversed, and the line is open again.
 
+### Landed costs (`modules/stock_account`, RFC 0030)
+
+Freight, customs duty, insurance or LC charges belong to the goods they brought in. A product marked **Landed cost**
+(with its default **Split**: by quantity, weight, volume, value or equally) is such a cost. **Stockroom › Landed
+costs** (stock valuation users prepare, Accounting posts) names the done **receipts** and the **costs** — each with
+its amount and split — and shows, before posting, how they are shared: each receipt line's part, what goes to the
+stock still on hand and what to the cost of goods sold for what has already left. **Post** adds the on-hand part to
+the receipt lines' value and to the average cost of average-costed products, the rest to the cost of goods sold, in
+one entry against each cost's expense account (where its bill put it), once. A vendor bill with landed-cost lines
+makes a draft in one call (`POST /api/v1/stockroom/landed-costs/from-bill/:id`); the split comes from
+`GET /api/v1/stockroom/landed-costs/:id/preview`. Products have a **Weight (kg)** and a **Volume (m³)** for the
+splits (and the Shop's delivery fees).
+
 ### Returns (`modules/stock`, with the order and valuation bridges, RFC 0030)
 
 A done delivery or receipt has **Return**: each line with what was done and what can still come back (returns in
