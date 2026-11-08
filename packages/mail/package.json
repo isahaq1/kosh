@@ -31,9 +31,11 @@
   "dependencies": {
     "@kosh/messaging": "workspace:*",
     "@kosh/modules-sdk": "workspace:*",
+    "@kosh/reporting": "workspace:*",
     "@kosh/server": "workspace:*",
     "@kosh/storage": "workspace:*",
     "@kosh/ui": "workspace:*",
+    "@kosh/views": "workspace:*",
     "fastify": "^5.12.7",
     "imapflow": "^2.9.1",
     "lucide-react": "^1.59.0",

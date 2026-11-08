@@ -6,6 +6,8 @@
  */
 import { messagingShutro } from '@kosh/messaging';
 import { orm } from '@kosh/server/orm';
+import { storageShutro } from '@kosh/storage';
+import { SEND_MODELS } from '../send.js';
 
 const { defineGroup, defineModel, defineModule, f } = orm;
 
@@ -61,8 +63,8 @@ const InboundMessage = defineModel('mail.inbound_message', {
 
 export const mailShutro: ReturnType<typeof orm.defineModule> = defineModule({
   name: 'mail',
-  version: '0.1.0',
-  depends: [messagingShutro],
+  version: '0.2.0',
+  depends: [messagingShutro, storageShutro],
   groups: [
     defineGroup({
       code: 'mail.manager',
@@ -70,5 +72,5 @@ export const mailShutro: ReturnType<typeof orm.defineModule> = defineModule({
       implies: ['base.user', 'messaging.user'],
     }),
   ],
-  models: [InboundMessage],
+  models: [InboundMessage, ...(SEND_MODELS as [])],
 });

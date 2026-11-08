@@ -221,6 +221,7 @@ export const contacts: ReturnType<typeof defineModule> = defineModule({
           { field: 'phone', widget: 'phone' },
           { field: 'mobile', widget: 'phone' },
           { field: 'website', widget: 'url' },
+          'lang',
         ]),
         k.notebook('more', [
           k.page('address', 'Address', [

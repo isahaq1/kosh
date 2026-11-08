@@ -2345,6 +2345,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/views
     devDependencies:
+      '@kosh/mail':
+        specifier: workspace:*
+        version: link:../../packages/mail
       '@testcontainers/postgresql':
         specifier: ^12.2.1
         version: 12.2.1
@@ -3237,6 +3240,9 @@ importers:
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../modules-sdk
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../reporting
       '@kosh/server':
         specifier: workspace:*
         version: link:../server
@@ -3246,6 +3252,9 @@ importers:
       '@kosh/ui':
         specifier: workspace:*
         version: link:../ui
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../views
       fastify:
         specifier: ^5.12.7
         version: 5.12.7

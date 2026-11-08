@@ -84,6 +84,14 @@ export const ResPartner = defineModel('res.partner', {
     parent: f.many2one('res.partner', { ondelete: 'set null', label: 'Company' }),
     contacts: f.one2many('res.partner', 'parent'),
     email: f.char(),
+    /** The language documents are sent in (RFC 0029 §3.3). */
+    lang: f.selection(
+      { en: 'English', bn: 'বাংলা' },
+      {
+        label: 'Language',
+        help: 'The language documents and emails are sent in; empty: the sender’s.',
+      },
+    ),
     phone: f.char(),
     mobile: f.char(),
     website: f.char(),
@@ -141,7 +149,7 @@ export const ResPartner = defineModel('res.partner', {
 
 export const contactsShutro = defineModule({
   name: 'contacts',
-  version: '0.3.0',
+  version: '0.4.0',
   depends: [baseShutro, storageShutro],
   groups: [
     orm.defineGroup({

@@ -36,6 +36,24 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
     category: 'Inventory',
     summary: 'Requests for quotation, purchase orders and their approvals',
   },
+  // Requests for quotation and purchase orders sent by email with their PDF (RFC 0029 §3.3).
+  mailTemplates: [
+    {
+      key: 'purchase_order',
+      name: 'Purchase order',
+      model: 'purchase.order',
+      document: 'purchase.purchase_order',
+      subject: '{{company.name}}: {{name}}',
+      body: 'Dear {{partner.name}},\n\nPlease find attached {{name}} of {{amountTotal}}, expected on {{datePlanned}}. Kindly confirm the order and the delivery date.\n\n{{company.name}}',
+      translations: {
+        bn_BD: {
+          subject: '{{company.name}}: {{name}}',
+          body: 'প্রিয় {{partner.name}},\n\n{{amountTotal}}-এর {{name}} সংযুক্ত করা হলো, প্রত্যাশিত তারিখ {{datePlanned}}। অনুগ্রহ করে অর্ডার ও সরবরাহের তারিখ নিশ্চিত করুন।\n\n{{company.name}}',
+        },
+      },
+    },
+  ],
+  sendable: [{ model: 'purchase.order', template: 'purchase.purchase_order', partner: 'partner' }],
   documents: [
     {
       key: 'purchase_order',

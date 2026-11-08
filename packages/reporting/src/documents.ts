@@ -179,7 +179,24 @@ function resolve(data: DocumentData, fields: DocumentFields, path: string): Reso
 
 /** `{{path}}`, or `{{path|words}}`: an amount in words, in the document's language (RFC 0016). */
 function text(data: DocumentData, fields: DocumentFields, template: string): string {
-  return esc(template).replace(
+  return fill(data, fields, esc(template), esc);
+}
+
+/**
+ * A template's placeholders filled as plain text (RFC 0029 §3.3: an email's subject and body), formatted as in
+ * documents; nothing escaped.
+ */
+export function fillText(data: DocumentData, fields: DocumentFields, template: string): string {
+  return fill(data, fields, template, (v) => String(v ?? ''));
+}
+
+function fill(
+  data: DocumentData,
+  fields: DocumentFields,
+  template: string,
+  esc: (text: unknown) => string,
+): string {
+  return template.replace(
     /\{\{\s*([\w.]+)\s*(?:\|\s*(\w+)\s*)?\}\}/g,
     (_, path: string, filter?: string) => {
       if (path === 'page' || path === 'pages') return `<span class="${path}"></span>`;

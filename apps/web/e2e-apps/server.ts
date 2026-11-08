@@ -37,7 +37,7 @@ import { l10nBd } from '@kosh/l10n_bd';
 import { l10nBdPayroll } from '@kosh/l10n_bd_payroll';
 import { l10nBdPos } from '@kosh/l10n_bd_pos';
 import { l10nIn } from '@kosh/l10n_in';
-import { mail } from '@kosh/mail';
+import { createMemoryMailer, mailModule } from '@kosh/mail';
 import { maintenance } from '@kosh/maintenance';
 import { maintenanceStock } from '@kosh/maintenance_stock';
 import { installActivityTypes, messaging } from '@kosh/messaging';
@@ -131,6 +131,8 @@ const assistant = createAssistant({
     return { fields: { partner: customer }, lines: { lines }, notes: '' };
   }, 'fake-claude'),
 });
+// Documents sent from forms are queued with a mailer that keeps them (RFC 0029 §3.3).
+const mail = mailModule({ mailer: createMemoryMailer() });
 const CATALOGUE = [
   base,
   settings,

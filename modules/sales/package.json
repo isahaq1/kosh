@@ -50,6 +50,7 @@
     "@kosh/reporting": "workspace:*"
   },
   "devDependencies": {
-    "@testcontainers/postgresql": "^12.2.1"
+    "@testcontainers/postgresql": "^12.2.1",
+    "@kosh/mail": "workspace:*"
   }
 }

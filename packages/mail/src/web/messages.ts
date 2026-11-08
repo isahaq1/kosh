@@ -1,6 +1,20 @@
 /** Messages of the inbound email page (namespace `mail`). */
 export const messages: Readonly<Record<string, object>> = {
   en: {
+    send: {
+      button: 'Send',
+      title: 'Send by email',
+      intro:
+        'The text comes from the template, in the customer’s language; change anything before sending.',
+      already: 'Sent {{count}} times already, last on {{date}}.',
+      to: 'To',
+      cc: 'Cc',
+      subject: 'Subject',
+      body: 'Message',
+      noEmail: '{{name}} has no email address: type one.',
+      confirm: 'Send',
+      queued: 'Sent: the email is on its way and on the chatter.',
+    },
     inbound: {
       title: 'Inbound email',
       intro:
@@ -41,6 +55,19 @@ export const messages: Readonly<Record<string, object>> = {
     },
   },
   bn: {
+    send: {
+      button: 'পাঠান',
+      title: 'ইমেইলে পাঠান',
+      intro: 'লেখাটি টেমপ্লেট থেকে, গ্রাহকের ভাষায়; পাঠানোর আগে যেকোনো কিছু বদলাতে পারেন।',
+      already: 'আগে {{count}} বার পাঠানো হয়েছে, শেষবার {{date}}।',
+      to: 'প্রাপক',
+      cc: 'অনুলিপি',
+      subject: 'বিষয়',
+      body: 'বার্তা',
+      noEmail: '{{name}}-এর কোনো ইমেইল ঠিকানা নেই: একটি লিখুন।',
+      confirm: 'পাঠান',
+      queued: 'পাঠানো হয়েছে: ইমেইলটি যাচ্ছে এবং চ্যাটারে আছে।',
+    },
     inbound: {
       title: 'আগত ইমেইল',
       intro:

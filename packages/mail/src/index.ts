@@ -9,8 +9,9 @@
  */
 import { chatterContext, messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
-import { base, type ModuleContext } from '@kosh/server';
+import { base, HttpProblem, type ModuleContext } from '@kosh/server';
 import { type Storage, storage, storageOf } from '@kosh/storage';
+import { form, list } from '@kosh/views';
 import nodemailer from 'nodemailer';
 import {
   type ImapConfig,
@@ -20,6 +21,15 @@ import {
   startPoller,
 } from './inbound/index.js';
 import { mailShutro } from './inbound/models.js';
+import { installMailTemplates, sendEngine } from './send.js';
+
+export {
+  type Composition,
+  installMailTemplates,
+  type SendEngine,
+  sendablesOf,
+} from './send.js';
+
 import { type InboundConfig, inboundConfigFromEnv } from './inbound/token.js';
 
 export * from './inbound/index.js';
@@ -32,6 +42,14 @@ export interface OutboundMail {
   readonly text: string;
   readonly html: string;
   readonly replyTo?: string;
+  /** Copies (RFC 0029 §3.3). */
+  readonly cc?: readonly string[];
+  /** Files sent with it: a document's PDF. */
+  readonly attachments?: readonly {
+    readonly filename: string;
+    readonly content: Uint8Array;
+    readonly contentType: string;
+  }[];
 }
 
 /** Sends messages; the provider's id of each, when it gives one. */
@@ -55,6 +73,16 @@ export function createSmtpMailer(options: { readonly url: string; readonly from:
         text: mail.text,
         html: mail.html,
         ...(mail.replyTo === undefined ? {} : { replyTo: mail.replyTo }),
+        ...(mail.cc === undefined || mail.cc.length === 0 ? {} : { cc: [...mail.cc] }),
+        ...(mail.attachments === undefined
+          ? {}
+          : {
+              attachments: mail.attachments.map((a) => ({
+                filename: a.filename,
+                content: Buffer.from(a.content),
+                contentType: a.contentType,
+              })),
+            }),
       });
       return { id: typeof info.messageId === 'string' ? info.messageId : null };
     },
@@ -164,8 +192,10 @@ export interface MailOptions {
   readonly webhookSecret?: string | undefined;
   /** The mailbox to poll; default `IMAP_URL`. Without one, no poller runs. */
   readonly imap?: ImapConfig | undefined;
-  /** Start the poller (default: unless `KOSH_SCHEDULES=off`). */
+  /** Start the poller and the sender (default: unless `KOSH_SCHEDULES=off`). */
   readonly workers?: boolean | undefined;
+  /** The mailer documents are sent with (RFC 0029 §3.3); default: `SMTP_URL`. `null`: none. */
+  readonly mailer?: Mailer | null | undefined;
 }
 
 /** The store attachments go to, or none when the installation has no file storage. */
@@ -189,19 +219,82 @@ export function mailModule(options: MailOptions = {}): ReturnType<typeof defineM
       icon: 'mail',
       sequence: 950,
       category: 'Administration',
-      summary: 'Inbound email: replies posted on records, and the ones that matched no one',
+      summary:
+        'Documents sent with their PDF, email templates, and replies posted on records or quarantined',
     },
     accessLevels: {
       manager: { label: 'Email manager (the inbound log)', groups: ['mail.manager'] },
     },
     actions: {
       'mail.action_inbound': { type: 'client', page: 'mail.Inbound', label: 'Inbound email' },
+      'mail.action_templates': {
+        model: 'mail.template',
+        label: 'Email templates',
+        views: ['list', 'form'],
+      },
+      'mail.action_outgoing': { model: 'mail.outgoing', label: 'Sent', views: ['list', 'form'] },
     },
     menus: [
       { id: 'mail.root', label: 'Email', app: 'mail' },
       { id: 'mail.inbound', parent: 'mail.root', label: 'Inbound', action: 'mail.action_inbound' },
+      {
+        id: 'mail.outgoing',
+        parent: 'mail.root',
+        label: 'Sent',
+        action: 'mail.action_outgoing',
+        sequence: 2,
+      },
+      {
+        id: 'mail.templates',
+        parent: 'mail.root',
+        label: 'Email templates',
+        action: 'mail.action_templates',
+        sequence: 3,
+      },
     ],
+    views: {
+      'mail.template.list': list('mail.template', {
+        columns: ['name', 'targetModel', 'subject', 'document'],
+      }),
+      'mail.template.form': form('mail.template', (k) => ({
+        header: { buttons: [] },
+        sheet: [
+          k.group('main', ['name', 'targetModel', 'subject', 'body', 'document'], {
+            columns: 1,
+            description:
+              'Placeholders like {{name}} or {{partner.name}} are filled from the document; each language keeps its own text.',
+          }),
+        ],
+      })),
+      'mail.outgoing.list': list('mail.outgoing', {
+        columns: ['createdAt', 'to', 'subject', 'resModel', 'author', 'state'],
+      }),
+      'mail.outgoing.form': form('mail.outgoing', (k) => ({
+        header: { buttons: [], statusbar: 'state' },
+        sheet: [
+          k.group('main', ['to', 'cc', 'subject', 'resModel', 'resId', 'author', 'sentAt']),
+          k.group('content', ['text', 'attachments', 'error', 'providerId'], { columns: 1 }),
+        ],
+      })),
+    },
+    search: {
+      'mail.template': {
+        fields: ['name', 'targetModel', 'subject'],
+      },
+      'mail.outgoing': {
+        fields: ['to', 'subject'],
+        filters: {
+          failed: { label: 'Failed', domain: { state: 'failed' }, group: 'state' },
+          queued: { label: 'Queued', domain: { state: 'queued' }, group: 'state' },
+        },
+        groupBy: ['state', 'resModel'],
+      },
+    },
     privateModels: ['mail.inbound_message'],
+    hooks: {
+      defaults: async (env, modules) =>
+        `${await installMailTemplates(env as never, modules)} email template(s) installed`,
+    },
     routes: (context: ModuleContext) => {
       const inbound: InboundContext = {
         shutro: context.shutro,
@@ -215,8 +308,51 @@ export function mailModule(options: MailOptions = {}): ReturnType<typeof defineM
       registerInboundRoutes(context, inbound, {
         webhookSecret: options.webhookSecret ?? process.env['MAIL_INBOUND_WEBHOOK_SECRET'],
       });
+      // Sending documents (RFC 0029 §3.3).
+      const outbound =
+        options.mailer === undefined ? mailerFromEnv() : (options.mailer ?? undefined);
+      const engine = sendEngine(context, () => outbound);
+      const target = (params: unknown) => {
+        const p = params as { model?: unknown; id?: unknown };
+        const id = Number(p.id);
+        if (typeof p.model !== 'string' || !Number.isSafeInteger(id) || id <= 0)
+          throw new HttpProblem(400, 'invalid-path', 'Invalid record', 'A model and a record id.');
+        return { model: p.model, id };
+      };
+      context.app.get('/api/v1/mail/sendable', async () => ({
+        models: [...engine.sendables.keys()],
+        mailer: outbound !== undefined,
+      }));
+      context.app.get('/api/v1/mail/compose/:model/:id', async (request) => {
+        const { model, id } = target(request.params);
+        return request.env((env) => engine.compose(env as never, model, id));
+      });
+      context.app.post('/api/v1/mail/send/:model/:id', async (request) => {
+        const { model, id } = target(request.params);
+        return request.env(
+          (env) => engine.send(env as never, model, id, (request.body ?? {}) as never),
+          { write: true },
+        );
+      });
       // Background work is off in the CLI (kosh init, migrate), like the schedules.
       if (!(options.workers ?? process.env['KOSH_SCHEDULES'] !== 'off')) return;
+      const sender = context.shutro.subscribe(
+        'mail.send',
+        'mail.outgoing.queued',
+        async (event, env) => {
+          const id = Number((event.payload as { outgoing?: unknown } | null)?.outgoing);
+          if (!Number.isSafeInteger(id)) return;
+          await (env as never as Parameters<typeof engine.deliver>[0]).asSuperuser(
+            { reason: 'email sent from a record' },
+            (su) => engine.deliver(su, id),
+          );
+        },
+        { pollMs: 2000 },
+      );
+      sender.start();
+      context.app.addHook('onClose', async () => {
+        await sender.stop();
+      });
       const imap = options.imap ?? imapConfigFromEnv();
       if (imap === undefined) return;
       const poller = startPoller(inbound, imap, {

@@ -96,6 +96,24 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
     ],
   },
   // The printed quotation (RFC 0005), installed as a template designers can change; the portal prints it too.
+  // Quotations and orders sent by email with their PDF (RFC 0029 §3.3).
+  mailTemplates: [
+    {
+      key: 'quotation',
+      name: 'Quotation',
+      model: 'sale.order',
+      document: 'sales.quotation',
+      subject: '{{company.name}}: {{name}}',
+      body: 'Dear {{partner.name}},\n\nPlease find attached {{name}} of {{amountTotal}}, valid until {{validityDate}}.\n\nWe are glad to answer any question.\n\n{{company.name}}',
+      translations: {
+        bn_BD: {
+          subject: '{{company.name}}: {{name}}',
+          body: 'প্রিয় {{partner.name}},\n\n{{amountTotal}}-এর {{name}} সংযুক্ত করা হলো, {{validityDate}} পর্যন্ত বৈধ।\n\nযেকোনো প্রশ্নের উত্তর দিতে পেরে আমরা খুশি হব।\n\n{{company.name}}',
+        },
+      },
+    },
+  ],
+  sendable: [{ model: 'sale.order', template: 'sales.quotation', partner: 'partner' }],
   documents: [
     {
       key: 'quotation',

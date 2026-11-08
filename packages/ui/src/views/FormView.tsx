@@ -879,6 +879,7 @@ export function FormView({
   };
   // RFC 0022 §3.5: the record's document templates as a Print menu, when reporting's web is registered.
   const Print = registry.component('reporting.Documents');
+  const Send = registry.component('mail.Send');
   const buttons = view.header.buttons.filter((b) => {
     if (b.open !== undefined) return !isNew && visible(b.visibleWhen);
     const spec = served.transitions.find((tr) => tr.name === b.transition);
@@ -1280,7 +1281,8 @@ export function FormView({
               </Alert>
             )}
 
-            {buttons.length === 0 && (isNew || Print === undefined) ? null : (
+            {buttons.length === 0 &&
+            (isNew || (Print === undefined && Send === undefined)) ? null : (
               <div
                 role="toolbar"
                 aria-label={t('views.recordActions')}
@@ -1289,6 +1291,17 @@ export function FormView({
                 {isNew || Print === undefined ? null : (
                   <Print
                     node={{ kind: 'component', id: 'print', component: 'reporting.Documents' }}
+                    record={record ?? null}
+                    model={model}
+                    served={served}
+                    api={api}
+                    version={loaded.data?.etag ?? null}
+                    reload={() => void loaded.refetch()}
+                  />
+                )}
+                {isNew || Send === undefined ? null : (
+                  <Send
+                    node={{ kind: 'component', id: 'send', component: 'mail.Send' }}
                     record={record ?? null}
                     model={model}
                     served={served}

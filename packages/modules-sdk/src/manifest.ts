@@ -173,6 +173,40 @@ export interface DocumentSpec {
 }
 
 /**
+ * An email template a module ships (RFC 0029 §3.3), installed as data (`key` = `module.key`) and editable by Email
+ * managers. Subject and body take `{{path}}` placeholders on the record (`{{name}}`, `{{partner.name}}`,
+ * `{{amountTotal}}`, `{{company.name}}`); the body is plain text, paragraphs separated by a blank line.
+ */
+export interface MailTemplateSpec {
+  /** Unique within the module (`invoice`); stored as `module.key`. */
+  readonly key: string;
+  readonly name: string;
+  readonly model: string;
+  readonly subject: string;
+  readonly body: string;
+  /** The document template attached as a PDF, as `module.key` (`accounting.invoice`); none: no attachment. */
+  readonly document?: string;
+  /** The subject and body in other languages, by language code (`bn_BD`). */
+  readonly translations?: Readonly<
+    Record<string, { readonly subject: string; readonly body: string }>
+  >;
+}
+
+/**
+ * A document that can be sent by email from its form (RFC 0029 §3.3): the Send dialog fills the recipient from
+ * `partner`, the text from `template` in the partner's language, and attaches the template's document.
+ */
+export interface SendableSpec {
+  readonly model: string;
+  /** The email template, as `module.key` (`accounting.invoice`). */
+  readonly template: string;
+  /** The many-to-one field to `res.partner` the document is for. */
+  readonly partner: string;
+  /** A domain the record must match to be sent (`{ state: 'posted' }`); default: any record. */
+  readonly when?: Readonly<Record<string, unknown>>;
+}
+
+/**
  * An import template a module ships (RFC 0014 §5.4): the columns of a file for one of its models, offered on the
  * import screen and downloadable as a sample workbook. Read-only for users, who save their own mappings beside it.
  */
@@ -463,6 +497,10 @@ export interface ModuleInput {
   readonly automationRules?: Readonly<Record<string, AutomationRuleSpec>>;
   /** Default document templates (RFC 0005), installed as data (`key` = `module.name`) and editable by designers. */
   readonly documents?: readonly DocumentSpec[];
+  /** Email templates (RFC 0029 §3.3), installed as data by `mail` and editable by Email managers. */
+  readonly mailTemplates?: readonly MailTemplateSpec[];
+  /** Documents sent by email from their form, with their template and PDF (RFC 0029 §3.3). */
+  readonly sendable?: readonly SendableSpec[];
   /**
    * Groups of users from outside the company: the customers and vendors of the portal (RFC 0015 §5.1). A user whose
    * groups are all external reaches only the sign-in routes and `/api/portal/`; every other route answers 403. An

@@ -1038,6 +1038,31 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       ],
     },
   ],
+  // Invoices and credit notes sent by email with their PDF (RFC 0029 §3.3).
+  mailTemplates: [
+    {
+      key: 'invoice',
+      name: 'Invoice',
+      model: 'account.move',
+      document: 'accounting.invoice',
+      subject: '{{company.name}}: {{kind}} {{name}}',
+      body: 'Dear {{partner.name}},\n\nPlease find attached {{kind}} {{name}} of {{amountTotal}}, due on {{dateDue}}.\n\nThank you for your business.\n\n{{company.name}}',
+      translations: {
+        bn_BD: {
+          subject: '{{company.name}}: {{kind}} {{name}}',
+          body: 'প্রিয় {{partner.name}},\n\n{{amountTotal}}-এর {{kind}} {{name}} সংযুক্ত করা হলো, পরিশোধের তারিখ {{dateDue}}।\n\nআপনার সঙ্গে ব্যবসার জন্য ধন্যবাদ।\n\n{{company.name}}',
+        },
+      },
+    },
+  ],
+  sendable: [
+    {
+      model: 'account.move',
+      template: 'accounting.invoice',
+      partner: 'partner',
+      when: { state: 'posted', kind: { in: ['out_invoice', 'out_refund'] } },
+    },
+  ],
   documents: [
     {
       key: 'bank_statement',

@@ -22,6 +22,7 @@ export {
   type DocumentData,
   type DocumentFields,
   type DocumentFormat,
+  fillText,
   formatValue as formatDocumentValue,
   type Layout,
   loadDocumentData,
