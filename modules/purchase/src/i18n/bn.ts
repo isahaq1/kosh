@@ -2,6 +2,10 @@
 export const bn: Readonly<Record<string, string>> = {
   'A request for quotation until it is submitted; once approved it becomes a purchase order, which can then be locked or cancelled.':
     'জমা দেওয়া পর্যন্ত এটি উদ্ধৃতির অনুরোধ; অনুমোদিত হলে ক্রয় আদেশে পরিণত হয়, যা পরে লক বা বাতিল করা যায়।',
+  'A vendor price ends on or after the day it starts.': 'সরবরাহকারীর দাম শুরুর দিনে বা তার পরে শেষ হয়।',
+  'A vendor price is for a product or for a category, one of the two.':
+    'সরবরাহকারীর দাম একটি পণ্য বা একটি শ্রেণির জন্য, দুটির একটি।',
+  Active: 'সক্রিয়',
   'Add at least one line before submitting the order.': 'অর্ডার জমা দেওয়ার আগে অন্তত একটি লাইন যোগ করুন।',
   Amount: 'অঙ্ক',
   'Biggest open requests': 'সবচেয়ে বড় খোলা অনুরোধ',
@@ -12,11 +16,15 @@ export const bn: Readonly<Record<string, string>> = {
   Cancel: 'বাতিল করুন',
   'Cancel this order?': 'এই অর্ডার বাতিল করবেন?',
   Cancelled: 'বাতিল',
+  Category: 'শ্রেণি',
+  'Chosen before cheaper vendors when its price fits (and it arrives in time).':
+    'দাম খাটলে (এবং সময়মতো পৌঁছালে) সস্তা সরবরাহকারীর আগে বেছে নেওয়া হয়।',
   Company: 'প্রতিষ্ঠান',
   'Confirm order': 'অর্ডার নিশ্চিত করুন',
   'Created At': 'তৈরির সময়',
   'Created By': 'তৈরি করেছেন',
   Currency: 'মুদ্রা',
+  'Days from ordering to arrival.': 'অর্ডার থেকে পৌঁছানো পর্যন্ত দিন।',
   'Default terms and conditions': 'ডিফল্ট শর্তাবলি',
   Description: 'বিবরণ',
   Director: 'পরিচালক',
@@ -25,8 +33,12 @@ export const bn: Readonly<Record<string, string>> = {
   'Expected arrival': 'প্রত্যাশিত আগমন',
   'Filled in on new orders; each can still be changed.':
     'নতুন অর্ডারে আপনা-আপনি বসে; প্রতিটিতে পরে বদলানো যায়।',
+  'For every product of the category that has no price of its own from this vendor.':
+    'শ্রেণির যেসব পণ্যের এই সরবরাহকারীর নিজস্ব দাম নেই সেগুলোর জন্য।',
+  'From quantity': 'যে পরিমাণ থেকে',
   ID: 'আইডি',
   Inventory: 'মজুদ',
+  'Lead days': 'সরবরাহের দিন',
   'Line quantities must be positive.': 'লাইনের পরিমাণ শূন্যের বেশি হতে হবে।',
   Lines: 'লাইন',
   'Lines › Description': 'লাইন › বিবরণ',
@@ -46,11 +58,16 @@ export const bn: Readonly<Record<string, string>> = {
   'Orders this month': 'এ মাসের অর্ডার',
   Overview: 'সারসংক্ষেপ',
   'Page {{page}} of {{pages}}': 'পৃষ্ঠা {{page}} / {{pages}}',
+  Preferred: 'পছন্দের',
+  Price: 'দাম',
+  'Price typed in': 'লেখা দাম',
   Product: 'পণ্য',
   Purchase: 'ক্রয়',
   'Purchase approvals': 'ক্রয় অনুমোদন',
   'Purchase director': 'ক্রয় পরিচালক',
   'Purchase line': 'ক্রয় লাইন',
+  'Purchase lines take the price of the order’s vendor for their quantity; Replenishment picks the preferred vendor, else the cheapest that arrives in time.':
+    'ক্রয়ের লাইন তার পরিমাণের জন্য অর্ডারের সরবরাহকারীর দাম নেয়; পুনঃপূরণ পছন্দের সরবরাহকারী বেছে নেয়, নইলে সময়মতো পৌঁছানো সবচেয়ে সস্তাটি।',
   'Purchase manager': 'ক্রয় ব্যবস্থাপক',
   'Purchase order': 'ক্রয় আদেশ',
   'Purchase order {{name}}': 'ক্রয় আদেশ {{name}}',
@@ -68,6 +85,7 @@ export const bn: Readonly<Record<string, string>> = {
   RFQ: 'উদ্ধৃতির অনুরোধ',
   'RFQ sent': 'উদ্ধৃতির অনুরোধ পাঠানো হয়েছে',
   RFQs: 'উদ্ধৃতির অনুরোধ',
+  Sequence: 'ক্রম',
   'Set to draft': 'খসড়ায় ফেরত নিন',
   'Source document': 'উৎস নথি',
   State: 'অবস্থা',
@@ -80,6 +98,10 @@ export const bn: Readonly<Record<string, string>> = {
   'Terms and conditions': 'শর্তাবলি',
   'The line’s amount before taxes: the quantity times the unit price, less any tax included in the price.':
     'লাইনের করবিহীন অঙ্ক: পরিমাণ গুণ একক মূল্য, মূল্যে অন্তর্ভুক্ত কর বাদ দিয়ে।',
+  'The price applies from this quantity on (price breaks: one row per break).':
+    'এই পরিমাণ থেকে দামটি খাটে (ধাপে ধাপে দাম: প্রতি ধাপে একটি সারি)।',
+  'The price typed in, else the vendor’s price for this quantity and date (see why on the line), else the product’s cost.':
+    'লেখা দাম, নইলে এই পরিমাণ ও তারিখে সরবরাহকারীর দাম (কারণ লাইনে দেখুন), নইলে পণ্যের খরচ।',
   'The sum of the lines’ amounts before taxes.': 'লাইনগুলোর করবিহীন অঙ্কের যোগফল।',
   'The sum of the taxes on the lines.': 'লাইনগুলোর করের যোগফল।',
   'The taxes on this line, computed from its amount and its taxes.':
@@ -96,11 +118,22 @@ export const bn: Readonly<Record<string, string>> = {
   Untaxed: 'করবিহীন',
   'Updated At': 'হালনাগাদের সময়',
   'Updated By': 'হালনাগাদ করেছেন',
+  'Used on orders in this currency; empty: any.': 'এই মুদ্রার অর্ডারে ব্যবহৃত; খালি: যেকোনো।',
+  Valid: 'বৈধ',
+  'Valid from': 'যে তারিখ থেকে বৈধ',
+  'Valid until': 'যে তারিখ পর্যন্ত বৈধ',
   Vendor: 'সরবরাহকারী',
+  'Vendor code': 'সরবরাহকারীর কোড',
+  'Vendor name': 'সরবরাহকারীর নাম',
+  'Vendor price': 'সরবরাহকারীর দাম',
+  'Vendor prices': 'সরবরাহকারীর দাম',
   'Vendor reference': 'সরবরাহকারীর রেফারেন্স',
+  'Vendor’s code': 'সরবরাহকারীর কোড',
+  'Vendor’s name for it': 'সরবরাহকারীর দেওয়া নাম',
   Vendors: 'সরবরাহকারী',
   'Waiting approval': 'অনুমোদনের অপেক্ষায়',
   'Waiting for approvals.': 'অনুমোদনের অপেক্ষায়।',
   'What the order costs with its taxes: the untaxed amount plus the taxes.':
     'করসহ অর্ডারের খরচ: করবিহীন অঙ্কের সাথে কর যোগ করে।',
+  'Why this price': 'কেন এই দাম',
 };

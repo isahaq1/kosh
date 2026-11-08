@@ -8,12 +8,13 @@ import type { DemoContext } from '@kosh/modules-sdk';
 import { defineModule } from '@kosh/modules-sdk';
 import { product } from '@kosh/product';
 import { purchase } from '@kosh/purchase';
-import type { ModuleContext } from '@kosh/server';
+import { HttpProblem, type ModuleContext } from '@kosh/server';
 import type { Worker } from '@kosh/server/orm';
 import { stock } from '@kosh/stock';
 import { field, stat } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import { createReceiptFor, purchaseStockShutro } from './module.js';
+import { vendorScorecard } from './scorecard.js';
 
 export {
   createReceiptFor,
@@ -66,6 +67,18 @@ export const purchaseStock: ReturnType<typeof defineModule> = defineModule({
     user: { label: 'Purchase with receipts', groups: ['purchase_stock.user'] },
   },
   viewExtensions: [
+    // The vendor's scorecard on their contact (RFC 0030 §3.1).
+    {
+      view: 'res.partner.form',
+      operations: [
+        {
+          insertAfter: 'related',
+          nodes: [
+            { kind: 'component', id: 'vendor_scorecard', component: 'purchase_stock.Scorecard' },
+          ],
+        },
+      ],
+    },
     {
       view: 'purchase.order.form',
       operations: [
@@ -113,6 +126,13 @@ export const purchaseStock: ReturnType<typeof defineModule> = defineModule({
     },
   ],
   routes: (context: ModuleContext) => {
+    // A vendor's scorecard (RFC 0030 §3.1), as the caller.
+    context.app.get('/api/v1/purchase/vendors/:id/scorecard', async (request) => {
+      const id = Number((request.params as { id?: unknown }).id);
+      if (!Number.isSafeInteger(id) || id <= 0)
+        throw new HttpProblem(400, 'invalid-path', 'Invalid vendor', 'A vendor id.');
+      return request.env((env) => vendorScorecard(env as Env, id));
+    });
     if (process.env['KOSH_SCHEDULES'] === 'off') return;
     const worker = purchaseStockWorker(context);
     worker.start();

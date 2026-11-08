@@ -199,15 +199,6 @@ test('a small order needs no approval: submit, then confirm', async () => {
   expect(confirmed.json.state).toBe('purchase');
 });
 
-test('the line onchange takes the product cost', async () => {
-  const res = await call('POST', '/api/v1/models/purchase.order.line/onchange', 'farid', {
-    values: { product },
-    changed: ['product'],
-  });
-  expect(res.status, JSON.stringify(res.json)).toBe(200);
-  expect(Number(res.json.values.priceUnit)).toBe(100);
-});
-
 test('buyers see their own orders, managers all, others none', async () => {
   expect((await call('GET', '/api/v1/models/purchase.order', 'farid')).json.items).toHaveLength(2);
   expect((await call('GET', '/api/v1/models/purchase.order', 'nadia')).json.items).toEqual([]);
@@ -223,4 +214,26 @@ test('the Purchase overview (RFC 0022 step 2) is served to a purchase user', asy
   const overview = await call('GET', '/api/v1/reports/overview?app=purchase', 'farid');
   expect(overview.status, JSON.stringify(overview.json)).toBe(200);
   expect(overview.json.cards.map((c: { id: string }) => c.id)).toContain('spend_month');
+});
+
+test('the line onchange fills the product; the price comes from the vendor, else the cost, when saved', async () => {
+  const res = await call('POST', '/api/v1/models/purchase.order.line/onchange', 'farid', {
+    values: { product },
+    changed: ['product'],
+  });
+  expect(res.status, JSON.stringify(res.json)).toBe(200);
+  // The onchange no longer sets a price: one set there would be kept as typed in (RFC 0030 §3.1).
+  expect(res.json.values.priceUnit).toBeUndefined();
+  const created = await call('POST', '/api/v1/models/purchase.order', 'farid', {
+    partner: vendor,
+    currency,
+    lines: { create: [{ product, name: 'Raw jute (kg)', quantity: '1' }] },
+  });
+  expect(created.status, JSON.stringify(created.json)).toBe(201);
+  const lines = await call(
+    'GET',
+    `/api/v1/models/purchase.order.line?filter=${encodeURIComponent(JSON.stringify({ order: created.json.id }))}&fields=priceUnit`,
+    'farid',
+  );
+  expect(lines.json.items.map((l: { priceUnit: string }) => Number(l.priceUnit))).toEqual([100]);
 });

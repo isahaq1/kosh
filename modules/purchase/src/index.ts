@@ -13,8 +13,10 @@ import { reporting } from '@kosh/reporting';
 import { action, calendar, form, kanban, list, search, stat } from '@kosh/views';
 import { purchaseDemo } from './demo.js';
 import { PurchaseOrder, purchaseShutro } from './module.js';
+import { ProductVendorPrice } from './vendorprice.js';
 
 export { PurchaseOrder, PurchaseOrderLine, purchaseShutro } from './module.js';
+export { ProductVendorPrice, type VendorChoice, vendorPriceFor } from './vendorprice.js';
 
 export const purchase: ReturnType<typeof defineModule> = defineModule({
   shutro: purchaseShutro,
@@ -107,6 +109,25 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
     },
   ],
   importTemplates: [
+    {
+      key: 'vendor_prices',
+      model: 'product.vendor.price',
+      label: 'Vendor prices',
+      columns: [
+        { header: 'Vendor', field: 'vendor' },
+        { header: 'Product', field: 'product' },
+        { header: 'Category', field: 'category' },
+        { header: 'Vendor code', field: 'vendorCode' },
+        { header: 'Vendor name', field: 'vendorName' },
+        { header: 'Currency', field: 'currency' },
+        { header: 'From quantity', field: 'minQuantity' },
+        { header: 'Price', field: 'price' },
+        { header: 'Valid from', field: 'dateFrom' },
+        { header: 'Valid until', field: 'dateTo' },
+        { header: 'Lead days', field: 'leadDays' },
+        { header: 'Preferred', field: 'preferred' },
+      ],
+    },
     {
       key: 'purchase_order',
       model: 'purchase.order',
@@ -269,6 +290,13 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
               where: { product: { $record: 'id' }, 'order.state': { in: ['purchase', 'done'] } },
               measure: { sum: 'quantity' },
             }),
+            stat({
+              id: 'product_vendor_prices',
+              label: 'Vendor prices',
+              model: ProductVendorPrice,
+              where: { product: { $record: 'id' } },
+              action: 'purchase.action_vendor_prices',
+            }),
           ],
         },
       ],
@@ -294,6 +322,13 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
               measure: { sum: 'amountTotal' },
               action: 'purchase.action_orders',
             }),
+            stat({
+              id: 'vendor_prices',
+              label: 'Vendor prices',
+              model: ProductVendorPrice,
+              where: { vendor: { $record: 'id' } },
+              action: 'purchase.action_vendor_prices',
+            }),
           ],
         },
       ],
@@ -315,6 +350,10 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
       views: ['list', 'form'],
       domain: { state: 'to_approve' },
       visibleTo: ['purchase.manager'],
+    }),
+    'purchase.action_vendor_prices': action(ProductVendorPrice, {
+      label: 'Vendor prices',
+      views: ['list', 'form'],
     }),
     'purchase.action_vendors': {
       model: 'res.partner',
@@ -353,6 +392,13 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
       label: 'Vendors',
       action: 'purchase.action_vendors',
       sequence: 4,
+    },
+    {
+      id: 'purchase.vendor_prices',
+      parent: 'purchase.root',
+      label: 'Vendor prices',
+      action: 'purchase.action_vendor_prices',
+      sequence: 5,
     },
   ],
   views: {
@@ -398,6 +444,8 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
             'quantity',
             'uom',
             'priceUnit',
+            { field: 'vendorCode', id: 'line_vendor_code' },
+            { field: 'priceReason', id: 'line_price_reason' },
             'taxes',
             { field: 'datePlanned', id: 'line_date_planned' },
             'subtotal',
@@ -411,6 +459,34 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
       readonlyWhen: { state: { in: ['done', 'cancel'] } },
       chatter: true,
     })),
+    'product.vendor.price.list': list(ProductVendorPrice, {
+      columns: [
+        'vendor',
+        'product',
+        'category',
+        'vendorCode',
+        'minQuantity',
+        'price',
+        'currency',
+        'leadDays',
+        'preferred',
+        'dateTo',
+      ],
+      inlineEdit: ['minQuantity', 'price', 'leadDays', 'preferred', 'dateTo'],
+    }),
+    'product.vendor.price.form': form(ProductVendorPrice, (k) => ({
+      header: { buttons: [] },
+      sheet: [
+        k.group('what', ['vendor', 'product', 'category', 'vendorCode', 'vendorName'], {
+          description:
+            'Purchase lines take the price of the order’s vendor for their quantity; Replenishment picks the preferred vendor, else the cheapest that arrives in time.',
+        }),
+        k.group('pricing', ['minQuantity', 'price', 'currency', 'leadDays', 'preferred'], {
+          label: 'Price',
+        }),
+        k.group('when', ['dateFrom', 'dateTo', 'company', 'sequence'], { label: 'Valid' }),
+      ],
+    })),
     'purchase.order.calendar': calendar(PurchaseOrder, {
       dateStart: 'datePlanned',
       title: 'name',
@@ -419,6 +495,13 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
     }),
   },
   search: {
+    'product.vendor.price': search(ProductVendorPrice, {
+      fields: ['vendor.name', 'product.name', 'vendorCode'],
+      filters: {
+        preferred: { label: 'Preferred', domain: { preferred: true } },
+      },
+      groupBy: ['vendor', 'product', 'category'],
+    }),
     'purchase.order': search(PurchaseOrder, {
       fields: ['name', 'partner.name', 'partnerReference', 'origin'],
       filters: {

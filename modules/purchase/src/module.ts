@@ -21,14 +21,21 @@ import {
   onchange,
   records,
 } from './.kosh/bindings.js';
+import { ProductVendorPrice, vendorPriceFor } from './vendorprice.js';
+
+type Decimal = ReturnType<typeof orm.toDecimal>;
 
 /** A line's taxes through the engine (RFC 0016): its amount, its taxes in order. */
 function taxesOf(l: {
   readonly quantity: ReturnType<typeof orm.toDecimal>;
-  readonly priceUnit: ReturnType<typeof orm.toDecimal>;
+  readonly priceUnit: ReturnType<typeof orm.toDecimal> | null;
   readonly taxes: Iterable<Parameters<typeof taxRule>[0]>;
 }) {
-  return computeTaxes(l.quantity.times(l.priceUnit), l.quantity, [...l.taxes].map(taxRule));
+  return computeTaxes(
+    l.quantity.times(l.priceUnit ?? orm.toDecimal('0')),
+    l.quantity,
+    [...l.taxes].map(taxRule),
+  );
 }
 
 const amounts = compute(
@@ -223,6 +230,55 @@ export const CompanyPurchase = extendModel('res.company', {
   },
 });
 
+/** A purchase line's price and why (RFC 0030 §3.1): typed in, else the vendor's price, else the product's cost. */
+async function purchaseLinePrice(l: {
+  readonly env: unknown;
+  readonly manualPrice: Decimal | null;
+  readonly product: { readonly id: unknown; readonly standardPrice?: Decimal } | null;
+  readonly quantity: Decimal;
+  readonly order: {
+    readonly partner: { readonly id: unknown } | null;
+    readonly dateOrder: unknown;
+    readonly currency: { readonly id: unknown } | null;
+  } | null;
+}): Promise<{ price: Decimal; reason: string | null; code: string | null }> {
+  if (l.manualPrice !== null) return { price: l.manualPrice, reason: 'Typed in.', code: null };
+  if (l.product === null) return { price: orm.toDecimal('0'), reason: null, code: null };
+  const env = l.env as Env;
+  const date = String(l.order?.dateOrder ?? env.today()).slice(0, 10);
+  const vendor = (l.order?.partner?.id as number | undefined) ?? null;
+  const choice =
+    vendor === null
+      ? null
+      : await vendorPriceFor(env, {
+          product: l.product.id as number,
+          quantity: l.quantity,
+          date,
+          vendor,
+          currency: (l.order?.currency?.id as number | undefined) ?? null,
+        });
+  if (choice !== null)
+    return { price: choice.price, reason: choice.explanation, code: choice.vendorCode };
+  const [product] = await env
+    .model('product.product')
+    .browse([l.product.id as never])
+    .load(['standardPrice']);
+  return {
+    price: product?.standardPrice ?? orm.toDecimal('0'),
+    reason: 'The product’s cost: this vendor has no price for it.',
+    code: null,
+  };
+}
+
+const PRICE_DEPENDS = [
+  'product',
+  'quantity',
+  'manualPrice',
+  'order.partner',
+  'order.dateOrder',
+  'order.currency',
+] as const;
+
 export const PurchaseOrderLine = defineModel('purchase.order.line', {
   label: 'Purchase line',
   access: {
@@ -235,7 +291,46 @@ export const PurchaseOrderLine = defineModel('purchase.order.line', {
     name: f.char({ required: true, label: 'Description' }),
     quantity: f.decimal({ scale: 3, required: true, default: '1' }),
     uom: f.many2one('uom.uom', { label: 'Unit' }),
-    priceUnit: f.decimal({ scale: 2, required: true, default: '0', label: 'Unit price' }),
+    /**
+     * The unit price: the one typed in, else the vendor's price for the quantity and date (RFC 0030 §3.1), else the
+     * product's cost. Typing a price keeps it (`manualPrice`).
+     */
+    priceUnit: f.decimal({
+      scale: 2,
+      store: true,
+      label: 'Unit price',
+      help: 'The price typed in, else the vendor’s price for this quantity and date (see why on the line), else the product’s cost.',
+      ...compute('purchase.order.line', 'priceUnit', [...PRICE_DEPENDS], async (lines) => {
+        for (const l of lines) l.priceUnit = (await purchaseLinePrice(l)).price;
+      }),
+      inverse: async (records: never) => {
+        const lines = records as Iterable<{ id: number; priceUnit: Decimal | null }>;
+        const env = (records as { env: Env }).env;
+        for (const l of lines)
+          await env
+            .model('purchase.order.line')
+            .browse([l.id as never])
+            .write({ manualPrice: l.priceUnit });
+      },
+    }),
+    /** The price typed in, kept when the product, the quantity or the vendor changes (empty: the vendor's price). */
+    manualPrice: f.decimal({ scale: 2, label: 'Price typed in' }),
+    /** Why the line has its price: the vendor price and its break, or "typed in". */
+    priceReason: f.char({
+      store: true,
+      label: 'Why this price',
+      ...compute('purchase.order.line', 'priceReason', [...PRICE_DEPENDS], async (lines) => {
+        for (const l of lines) l.priceReason = (await purchaseLinePrice(l)).reason;
+      }),
+    }),
+    /** The vendor's own code for the product, from their price. */
+    vendorCode: f.char({
+      store: true,
+      label: 'Vendor’s code',
+      ...compute('purchase.order.line', 'vendorCode', [...PRICE_DEPENDS], async (lines) => {
+        for (const l of lines) l.vendorCode = (await purchaseLinePrice(l)).code;
+      }),
+    }),
     /** The line's taxes, applied in order (RFC 0016). */
     taxes: f.many2many('account.tax'),
     /** Before 0.2.0, one tax per line: copied into `taxes` by the migration; dropped later. */
@@ -300,7 +395,6 @@ export const PurchaseOrderLine = defineModel('purchase.order.line', {
       const p = await d.record('product');
       if (p === null) return;
       d.set('name', p.name);
-      d.set('priceUnit', p.standardPrice);
       d.set('uom', p.uom?.id ?? null);
       // The product's taxes, loaded (a draft's related record has its plain fields only).
       const [taxed] = await env
@@ -322,8 +416,17 @@ export const PurchaseOrderLine = defineModel('purchase.order.line', {
 
 export const purchaseShutro = defineModule({
   name: 'purchase',
-  version: '0.3.0',
+  version: '0.4.0',
   migrations: [
+    {
+      version: '0.4.0',
+      description:
+        'Vendor prices: existing lines keep the price they have, as typed in (no order is repriced)',
+      up: async (ctx) => {
+        await ctx.sql`UPDATE purchase_order_line SET manual_price = price_unit WHERE manual_price IS NULL`;
+        await ctx.sql`UPDATE purchase_order_line SET price_reason = 'Typed in.' WHERE price_reason IS NULL`;
+      },
+    },
     {
       version: '0.2.0',
       description: 'Several taxes per line: the single tax of each line becomes its first',
@@ -359,6 +462,6 @@ export const purchaseShutro = defineModule({
       reset: 'yearly',
     }),
   ],
-  models: [PurchaseOrder, PurchaseOrderLine],
+  models: [PurchaseOrder, PurchaseOrderLine, ProductVendorPrice],
   extensions: [CompanyPurchase],
 });

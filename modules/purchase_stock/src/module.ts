@@ -10,7 +10,7 @@
  * delivers).
  */
 import { productShutro } from '@kosh/product';
-import { purchaseShutro } from '@kosh/purchase';
+import { purchaseShutro, type VendorChoice, vendorPriceFor } from '@kosh/purchase';
 import { type Decimal, type Id, orm } from '@kosh/server/orm';
 import { defaultLocations, inProductUnit, stockShutro } from '@kosh/stock';
 import { compute, defineModule, type Env, extendModel, f, type Records } from './.kosh/bindings.js';
@@ -323,6 +323,24 @@ async function receivedInto(
   return warehouse ?? (await defaultLocations(env as never, 'receipt', null, company)).warehouse;
 }
 
+/** The vendor price a buying rule would use for `qty`: in the company's currency, arriving within the rule's days. */
+async function chooseVendor(
+  env: Env,
+  r: { product: { id: unknown }; leadDays: number; company: { currency: { id: unknown } } },
+  qty: string,
+): Promise<VendorChoice | null> {
+  const today = env.today();
+  const needBy = new Date(`${today}T00:00:00Z`);
+  needBy.setUTCDate(needBy.getUTCDate() + r.leadDays);
+  return vendorPriceFor(env as never, {
+    product: r.product.id as number,
+    quantity: orm.toDecimal(qty),
+    date: today,
+    currency: r.company.currency.id as number,
+    needBy: needBy.toISOString().slice(0, 10),
+  });
+}
+
 export const ReorderBuy = extendModel('stock.reorder', {
   overrides: {
     // Requests for quotation and orders not received yet (their receipt is still to be made) are on order.
@@ -359,6 +377,30 @@ export const ReorderBuy = extendModel('stock.reorder', {
       }
       return out;
     },
+    // The vendor a buying rule would order from, and why (RFC 0030 §3.1).
+    sourcing: async function (
+      this: unknown,
+      next: (proposed: ReadonlyMap<number, string>) => Promise<Map<number, string>>,
+      proposed: ReadonlyMap<number, string>,
+    ): Promise<Map<number, string>> {
+      const out = await next(proposed);
+      const rules = this as Records<'stock.reorder'>;
+      const env = rules.env as unknown as Env;
+      for (const r of await rules.load({ company: true, vendor: true })) {
+        const qty = proposed.get(r.id);
+        if (r.method !== 'buy' || qty === undefined) continue;
+        const choice = await chooseVendor(env, r, qty);
+        out.set(
+          r.id,
+          choice === null
+            ? r.vendor === null
+              ? ''
+              : `Bought from ${String(r.vendor.name)} (the rule’s vendor: no vendor price fits).`
+            : `Bought from ${choice.vendorName}: ${choice.explanation}`,
+        );
+      }
+      return out;
+    },
     // Buying: one request for quotation per vendor and warehouse — a draft one from replenishment gets the lines.
     procure: async function (
       this: unknown,
@@ -371,21 +413,25 @@ export const ReorderBuy = extendModel('stock.reorder', {
       const today = env.today();
       for (const r of await rules.load({ product: { purchaseTaxes: true }, company: true })) {
         const qty = quantities.get(r.id);
-        if (r.method !== 'buy' || r.vendor === null || qty === undefined) continue;
+        if (r.method !== 'buy' || qty === undefined) continue;
+        // The vendor prices choose the vendor (the cheapest that arrives in time); else the rule's vendor.
+        const choice = await chooseVendor(env, r, qty);
+        const vendor = choice?.vendor ?? (r.vendor?.id as number | undefined) ?? null;
+        if (vendor === null) continue;
         const arrival = new Date(`${today}T00:00:00Z`);
-        arrival.setUTCDate(arrival.getUTCDate() + r.leadDays);
+        arrival.setUTCDate(arrival.getUTCDate() + (choice?.leadDays ?? r.leadDays));
+        // The price comes from the vendor's price on the line (or the product's cost).
         const line = {
           product: r.product.id,
           name: r.product.name,
           quantity: qty,
           uom: r.product.uom?.id ?? null,
-          priceUnit: r.product.standardPrice,
           taxes: { set: [...r.product.purchaseTaxes.ids] },
         };
         const [open] = await (
           await env.model('purchase.order').search({
             where: {
-              partner: r.vendor.id,
+              partner: vendor,
               company: r.company.id,
               warehouse: r.warehouse.id,
               state: 'draft',
@@ -402,7 +448,7 @@ export const ReorderBuy = extendModel('stock.reorder', {
         }
         const made = await env.model('purchase.order').create([
           {
-            partner: r.vendor.id,
+            partner: vendor,
             company: r.company.id,
             currency: r.company.currency.id,
             warehouse: r.warehouse.id,

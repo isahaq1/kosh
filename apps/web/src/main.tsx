@@ -21,6 +21,7 @@ import { approvalPanelMessages, registerPermissionsWeb } from '@kosh/permissions
 import { portalMessages, registerPortalWeb } from '@kosh/portal/web';
 import { posMessages, registerPosWeb } from '@kosh/pos/web';
 import { projectMessages, registerProjectWeb } from '@kosh/project/web';
+import { purchaseStockMessages, registerPurchaseStockWeb } from '@kosh/purchase_stock/web';
 import { recruitmentMessages, registerRecruitmentWeb } from '@kosh/recruitment/web';
 import { registerReportingWeb, reportingMessages } from '@kosh/reporting/web';
 import { registerSettingsWeb, settingsMessages } from '@kosh/settings/web';
@@ -51,6 +52,7 @@ registerL10nInWeb(registry);
 registerProjectWeb(registry);
 registerRecruitmentWeb(registry);
 registerStockWeb(registry);
+registerPurchaseStockWeb(registry);
 registerEventWeb(registry);
 registerWebsiteWeb(registry);
 registerPosWeb(registry);
@@ -70,6 +72,7 @@ const messages = {
   project: projectMessages,
   recruitment: recruitmentMessages,
   stock: stockMessages,
+  purchase_stock: purchaseStockMessages,
   event: eventMessages,
   website: websiteMessages,
   pos: posMessages,

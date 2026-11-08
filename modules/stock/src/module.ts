@@ -2056,6 +2056,15 @@ export const StockReorder = defineModel('stock.reorder', {
       return new Map(this.ids.map((id) => [id, []]));
     }),
     /**
+     * Where each rule of these would order from, in words (`purchase_stock`: the vendor chosen and why, RFC 0030
+     * §3.1), for the explanation; `proposed` is what each would order. Empty here.
+     */
+    sourcing: method(
+      'stock.reorder',
+      async (_proposed: ReadonlyMap<number, string>): Promise<Map<number, string>> =>
+        new Map<number, string>(),
+    ),
+    /**
      * Orders `quantities` (decimal strings, in the product's unit) for these rules; returns the document each one made. Transfers
      * are made here, one per pair of warehouses, confirmed; a bridge orders its method (`purchase_stock`: buy,
      * `mrp`: make) after `next()`.

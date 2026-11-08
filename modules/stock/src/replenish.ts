@@ -37,6 +37,7 @@ export async function reckon(env: Env, ids?: readonly number[]): Promise<Map<num
   const rules = await found.load({ product: true });
   const pending = await found.pending();
   const out = new Map<number, Reckoning>();
+  const proposals = new Map<number, string>();
   for (const r of rules) {
     const { root, inside } = await warehouseStock(env, r.warehouse.id, r.company.id);
     if (root === null) continue;
@@ -105,6 +106,19 @@ export async function reckon(env: Env, ids?: readonly number[]): Promise<Map<num
       proposed,
       explanation: `${sum} = forecast ${n(forecast)}; ${verdict}.`,
     });
+    if (proposed.gt(0)) proposals.set(r.id, proposed.toString());
+  }
+  // Where it would come from (a bridge says: the vendor and why).
+  if (proposals.size > 0) {
+    const sources = await env
+      .model('stock.reorder')
+      .browse([...proposals.keys()] as never)
+      .sourcing(proposals);
+    for (const [id, text] of sources) {
+      const r = out.get(id);
+      if (r !== undefined && text !== '')
+        out.set(id, { ...r, explanation: `${r.explanation} ${text}` });
+    }
   }
   return out;
 }

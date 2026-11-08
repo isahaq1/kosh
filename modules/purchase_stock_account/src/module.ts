@@ -33,7 +33,7 @@ export const MoveOrderCost = extendModel('stock.move', {
         const line = m.purchaseLine;
         if (line === null || m.productQty === null || m.productQty.lte(0)) continue;
         // The order's price is per the line's unit; the move counts the same units.
-        let unit = line.priceUnit.times(m.quantity).div(m.productQty);
+        let unit = (line.priceUnit ?? orm.toDecimal('0')).times(m.quantity).div(m.productQty);
         const order = line.order;
         if (order.currency.id !== order.company.currency.id) {
           try {
