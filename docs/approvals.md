@@ -15,6 +15,7 @@ A policy (`approval.policy`) covers a model, optionally only its records that me
 | The requester's manager | Their manager in Workforce |
 | The head of the requester's department | The department's head in Workforce |
 | The approvers of the requester's department | The people on the department's **Approvers** (Workforce › Departments) |
+| A person on the requester's employee record | The user in a field of their Workforce employee (`approverField`: `unitHead`, `coach`, `manager` — that employee's user — or `expenseApprover`, `leaveApprover` — the user) |
 | A person on the record | The user in a field of the record (`approverField`, e.g. `user`) |
 | The record decides | The people the record's model names: `approvalUsers(key)` |
 
