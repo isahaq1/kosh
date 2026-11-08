@@ -194,4 +194,21 @@ Each step ends with the full gate (typecheck, lint, tests, both E2E projects), d
   counts computed as the user with the domain each one opens. Not yet: the sale / purchase order and project links in
   one card (the bridges already append their own fields to the transfer form), the freight bill as a landed cost
   (drafted by hand from the bill, RFC 0030 §3.3).
+- **Step 5 (2026-11-08).** Stockroom part 2: the stock ledger (`modules/stock/src/ledger.ts`) — a summary per
+  product with opening, in and out by movement type and closing, or the movements — and the stock report, over
+  `GET /api/v1/stockroom/ledger` and `/stock`, as JSON, XLSX or PDF; movement types derived from location usages and
+  the scope (the chosen warehouses' stock, transit left out unless chosen); values through `stock.move.moveValues()`
+  (empty in Stockroom, the valuation layers in `stock_account`, only for people who may read them; a transfer
+  without a layer at the product's cost); the Stock ledger page with its tabs and filters. Not yet: lots and owners as
+  filters, a per-location ledger (the scope is the whole set), a Goods in transit account.
+- **Step 6 (2026-11-08).** Purchase requests inside `modules/purchase` (`request.ts`): `purchase.request` and its
+  lines, the *Requester* level (`purchase.requester`, implied by buyers), approvals by the department head then a
+  Purchase manager above the estimated amount, **Make requests for quotation** grouping what is left to buy by the
+  vendor `vendorPriceFor` chooses (else the preferred vendor), `requestLine` on order lines, the line tracker with
+  on-RFQ / ordered / to-buy quantities and a status computed from the orders' states; `indent_purchase` (a bridge) with
+  **Ask Purchase for the shortfall** — what an approved indent owes beyond the store's stock and what is already asked,
+  as one drafted purchase request per indent, linked both ways. Not yet: quantities transferred from a sister company
+  (the video's "IC transfer"), cost centres on request lines (`account_budget` carries them on orders), received
+  quantities on the tracker (through `purchase_stock`), a purchase request submitted by the bridge itself (it is
+  drafted for the requester).
 

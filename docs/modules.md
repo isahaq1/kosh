@@ -358,6 +358,20 @@ at today's average. On orders, what came back is subtracted: a sales line's *Del
 `GET /api/v1/stockroom/pickings/:id/returnable` and `POST /api/v1/stockroom/pickings/:id/return`
 (`{ lines: [{ move, quantity }], reason, note?, location? }`), for Stockroom users.
 
+#### Purchase requests and the line tracker (RFC 0032 §3.4)
+
+Anyone with the *Requester* level asks Purchase for products by a **purchase request** (Purchase › Purchase requests):
+the products, how many, by when, a priority and, if known, a preferred vendor; the **estimated amount** (the lines at
+the products' cost) is what the approval levels go by. Submitted, the request goes to the requester's **department
+head** (Workforce), then to a Purchase manager above an amount; approvers may lower quantities. Buyers see approved
+requests, assign themselves to lines and press **Make requests for quotation**: one RFQ per vendor — the vendor the
+vendor prices choose for each line (RFC 0030), else the preferred vendor; a line with neither refuses the whole and
+says which product —, its lines linked back and priced by the vendor prices. The **line tracker** (Purchase › Request
+lines) follows every line through the chain — approved, RFQ made, ordered, done, cancelled — with what was approved,
+is on RFQs, ordered and still to buy, filtered by status and by buyer. With Requests (`indent_purchase`), **Ask Purchase
+for the shortfall** on an approved indent drafts a purchase request for what the store lacks, its lines linked to the
+indent's, for the requester to submit.
+
 ### Vendor prices (`modules/purchase`, `modules/purchase_stock`, RFC 0030)
 
 **Purchase › Vendor prices** (buyers) records what each vendor charges: for a product or for every product of a
@@ -579,6 +593,17 @@ weight), extra products that came along (empty bags, pallets), gate and QC notes
 supplier** an amount they bear. With `stock_account`, validating a transfer drafts — once — the transport vendor's
 freight bill (the freight with its additions and deductions) and, for such a receipt, a vendor refund to the supplier;
 an accountant completes the accounts and posts them.
+
+**Stock ledger** (Stockroom › Stock ledger; `GET /api/v1/stockroom/ledger?from&to&mode&warehouses&categories`): for a
+period and the chosen warehouses (or every one), each product's opening quantity, what came in by **movement type**
+— purchase receipt, sales return, production, transfer in, adjustment, other — and what went out — sales delivery,
+purchase return, production, transfer out, internal use, scrap, adjustment, other —, and the closing; or every
+movement of the period. The type comes from where the goods came from and went to (location usages), never typed by
+hand; goods in transit count only when their location is chosen. With `stock_account`, people who may read the
+valuation see each figure's value (from the valuation layers; a transfer without one at the product's cost). The
+**stock report** (`GET /api/v1/stockroom/stock`) lists what the scope holds now per product and location: on hand,
+reserved, available, and what confirmed transfers will bring in or take out. Both download as XLSX or PDF (the export
+right; audited).
 
 ### Hiring (`modules/recruitment`, RFC 0021)
 
