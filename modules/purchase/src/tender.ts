@@ -126,10 +126,16 @@ export const PurchaseTender = defineModel('purchase.tender', {
           ),
           message: 'No vendor has answered yet.',
         },
-        cancel: { from: ['draft', 'sent', 'received'], to: 'cancel' },
+        /** The comparative statement is being drawn up (step 8). */
+        compare: { from: ['received'], to: 'comparing' },
+        /** The statement is approved: the vendors are chosen. */
+        select: { from: ['comparing', 'received'], to: 'selected' },
+        /** The orders are made from the confirmed statement. */
+        order: { from: ['selected', 'comparing', 'received'], to: 'ordered' },
+        cancel: { from: ['draft', 'sent', 'received', 'comparing'], to: 'cancel' },
         redraft: { from: ['cancel'], to: 'draft' },
       },
-      extensible: true, // the comparison (step 8) selects vendors and makes the orders
+      extensible: true,
     }),
   },
   onchange: {

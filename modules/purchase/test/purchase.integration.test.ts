@@ -159,6 +159,8 @@ test('installing Purchase brings its dependencies and its approval policy', asyn
   expect(levels.map((l) => l.name).sort()).toEqual([
     'Department head',
     'Purchase director',
+    'Purchase director',
+    'Purchase manager',
     'Purchase manager',
     'Purchase manager',
   ]);
@@ -415,6 +417,124 @@ test('an RFQ to several vendors (RFC 0032 §3.4): responses with quote links, a 
     (await host.server.app.inject({ method: 'POST', url: path, payload: { submit: true } }))
       .statusCode,
   ).toBe(409);
+});
+
+test('a comparative statement (RFC 0032 §3.4): the workspace from the responses, negotiated, approved, confirmed into orders', async () => {
+  const T = '/api/v1/models/purchase.tender';
+  const C = '/api/v1/models/purchase.comparison';
+  // A second vendor who also quotes.
+  const other = (await call('POST', '/api/v1/models/res.partner', 'dina', { name: 'Tamim Agro' }))
+    .json.id as number;
+  const tender = await call('POST', T, 'farid', {
+    topic: 'Fish meal',
+    deadline: '2026-12-01',
+    vendors: { set: [vendor, other] },
+    lines: { create: [{ product, quantity: '100' }] },
+  });
+  expect(tender.status, JSON.stringify(tender.json)).toBe(201);
+  const tid = tender.json.id as number;
+  expect((await call('POST', `${T}/${tid}/transitions/send`, 'farid')).status).toBe(200);
+  const responses = (
+    await call(
+      'GET',
+      `/api/v1/models/purchase.tender.response?filter=${encodeURIComponent(JSON.stringify({ tender: tid }))}&fields=vendor,lines`,
+      'farid',
+    )
+  ).json.items as Json[];
+  expect(responses.length).toBe(2);
+  // The buyers type both quotations: 547 and 520.
+  for (const [r, price] of [
+    [responses[0], '547'],
+    [responses[1], '520'],
+  ] as const) {
+    const lines = (
+      await call(
+        'GET',
+        `/api/v1/models/purchase.tender.response.line?filter=${encodeURIComponent(JSON.stringify({ response: r.id }))}&fields=id`,
+        'farid',
+      )
+    ).json.items as Json[];
+    for (const l of lines)
+      expect(
+        (
+          await call('PATCH', `/api/v1/models/purchase.tender.response.line/${l.id}`, 'farid', {
+            priceUnit: price,
+          })
+        ).status,
+      ).toBe(200);
+    expect(
+      (
+        await call(
+          'POST',
+          `/api/v1/models/purchase.tender.response/${r.id}/transitions/submit`,
+          'farid',
+        )
+      ).status,
+    ).toBe(200);
+  }
+  expect((await call('GET', `${T}/${tid}?fields=state`, 'farid')).json.state).toBe('received');
+  // The statement: its workspace filled from the RFQ, the lowest final price marked.
+  const made = await call('POST', C, 'farid', { tender: tid });
+  expect(made.status, JSON.stringify(made.json)).toBe(201);
+  const cid = made.json.id as number;
+  expect((await call('POST', `${C}/${cid}/transitions/fill`, 'farid')).status).toBe(200);
+  const lines = async () =>
+    (
+      await call(
+        'GET',
+        `/api/v1/models/purchase.comparison.line?filter=${encodeURIComponent(JSON.stringify({ comparison: cid }))}&fields=response,quote,finalPrice,lowest,selected,total&order=id+asc`,
+        'farid',
+      )
+    ).json.items as Json[];
+  let rows = await lines();
+  expect(rows.length).toBe(2);
+  expect(rows.map((r) => [Number(r.quote), r.lowest])).toEqual([
+    [547, false],
+    [520, true],
+  ]);
+  // Nothing selected: refused. Negotiated to 500 with the first vendor, selected, the lowest moves.
+  expect((await call('POST', `${C}/${cid}/transitions/submit`, 'farid')).status).toBe(409);
+  const first = rows[0];
+  expect(
+    (
+      await call('PATCH', `/api/v1/models/purchase.comparison.line/${first.id}`, 'farid', {
+        nego1: '510',
+        nego2: '500',
+        finalPrice: '500',
+        selected: true,
+      })
+    ).status,
+  ).toBe(200);
+  rows = await lines();
+  expect(rows.map((r) => r.lowest)).toEqual([true, false]);
+  expect(
+    Number((await call('GET', `${C}/${cid}?fields=amountTotal`, 'farid')).json.amountTotal),
+  ).toBe(50000);
+  // Approved by a Purchase manager, confirmed by the buyer: one order to the first vendor at 500.
+  expect((await call('POST', `${C}/${cid}/transitions/submit`, 'farid')).status).toBe(200);
+  const inbox = (await call('GET', '/api/v1/approvals/inbox', 'dina')).json.requests as Json[];
+  for (const r of inbox.filter(
+    (x) => x.targetModel === 'purchase.comparison' && x.targetId === cid,
+  ))
+    expect((await call('POST', `/api/v1/approvals/requests/${r.id}/approve`, 'dina')).status).toBe(
+      200,
+    );
+  expect((await call('GET', `${C}/${cid}?fields=state`, 'farid')).json.state).toBe('approved');
+  const confirmed = await call('POST', `${C}/${cid}/transitions/confirm`, 'farid');
+  expect(confirmed.status, JSON.stringify(confirmed.json)).toBe(200);
+  const orders = (
+    await call(
+      'GET',
+      `/api/v1/models/purchase.order?filter=${encodeURIComponent(JSON.stringify({ origin: { ilike: '%CS/%' } }))}&fields=partner,amountUntaxed,state`,
+      'farid',
+    )
+  ).json.items as Json[];
+  expect(orders.length).toBe(1);
+  // To the vendor of the selected line (responses are not made in the vendors' order).
+  const chosen = responses.find((r) => r.id === (first.response?.id ?? first.response));
+  expect(orders[0].partner?.id ?? orders[0].partner).toBe(chosen.vendor?.id ?? chosen.vendor);
+  expect(Number(orders[0].amountUntaxed?.amount ?? orders[0].amountUntaxed)).toBe(50000);
+  expect((await call('GET', `${T}/${tid}?fields=state`, 'farid')).json.state).toBe('ordered');
 });
 
 test('the line onchange fills the product; the price comes from the vendor, else the cost, when saved', async () => {

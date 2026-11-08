@@ -12,12 +12,20 @@ import { product } from '@kosh/product';
 import { reporting } from '@kosh/reporting';
 import type { ModuleContext } from '@kosh/server';
 import { action, calendar, form, kanban, list, pivot, search, stat } from '@kosh/views';
+import { PurchaseComparison, PurchaseTechnicalComparison } from './comparison.js';
 import { purchaseDemo } from './demo.js';
 import { PurchaseOrder, purchaseShutro } from './module.js';
 import { PurchaseRequest, PurchaseRequestLine } from './request.js';
 import { PurchaseTender, PurchaseTenderResponse, registerTenderRoutes } from './tender.js';
 import { ProductVendorPrice } from './vendorprice.js';
 
+export {
+  confirmComparison,
+  PurchaseComparison,
+  PurchaseComparisonLine,
+  PurchaseTechnicalComparison,
+  PurchaseTechnicalComparisonLine,
+} from './comparison.js';
 export { PurchaseOrder, PurchaseOrderLine, purchaseShutro } from './module.js';
 export { createRfqs, createTender, PurchaseRequest, PurchaseRequestLine } from './request.js';
 export {
@@ -60,6 +68,26 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
         model: 'purchase.tender.response.line',
         reason: 'Made with its response from the RFQ’s lines.',
       },
+      {
+        rule: 'I1',
+        model: 'purchase.comparison',
+        reason: 'Drawn up from an RFQ’s responses on screen; nothing to import.',
+      },
+      {
+        rule: 'I1',
+        model: 'purchase.comparison.line',
+        reason: 'Made with its statement from the responses.',
+      },
+      {
+        rule: 'I1',
+        model: 'purchase.technical.comparison',
+        reason: 'Drawn up from an RFQ’s responses on screen; nothing to import.',
+      },
+      {
+        rule: 'I1',
+        model: 'purchase.technical.comparison.line',
+        reason: 'Made with its comparison from the responses.',
+      },
     ],
   },
   events: [
@@ -83,6 +111,16 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
       topic: 'purchase.tender.response_submitted',
       model: 'purchase.tender.response',
       label: 'A vendor submitted their quotation',
+    },
+    {
+      topic: 'purchase.comparison.submitted',
+      model: 'purchase.comparison',
+      label: 'Comparative statement submitted',
+    },
+    {
+      topic: 'purchase.comparison.confirmed',
+      model: 'purchase.comparison',
+      label: 'Comparative statement confirmed into orders',
     },
     {
       topic: 'purchase.order.confirmed',
@@ -117,6 +155,86 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
   ],
   sendable: [{ model: 'purchase.order', template: 'purchase.purchase_order', partner: 'partner' }],
   documents: [
+    {
+      key: 'purchase_comparison',
+      name: 'Comparative statement',
+      model: 'purchase.comparison',
+      layout: {
+        paper: 'A4',
+        orientation: 'landscape',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Comparative statement {{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'about',
+            items: [
+              { label: 'RFQ', bind: 'tender.name' },
+              { label: 'CS date', bind: 'date' },
+              { label: 'Expiry date', bind: 'expiryDate' },
+              { label: 'Delivery date', bind: 'dateDelivery' },
+              { label: 'Awarded total', bind: 'amountTotal' },
+              { label: 'Status', bind: 'state' },
+            ],
+          },
+          {
+            kind: 'table',
+            id: 'lines',
+            bind: 'lines',
+            columns: [
+              { label: 'Product', bind: 'tenderLine.product.name' },
+              { label: 'Vendor', bind: 'response.vendor.name' },
+              { label: 'CS qty', bind: 'csQty' },
+              { label: 'Quote', bind: 'quote' },
+              { label: 'Nego 1', bind: 'nego1' },
+              { label: 'Nego 2', bind: 'nego2' },
+              { label: 'Final', bind: 'finalPrice' },
+              { label: 'Total', bind: 'total' },
+              { label: 'Selected', bind: 'selected' },
+            ],
+          },
+          { kind: 'text', id: 'note', text: '{{note}}' },
+          { kind: 'qr', id: 'qr', bind: 'name', size: 24, label: 'CS reference' },
+        ],
+      },
+    },
+    {
+      key: 'purchase_technical_comparison',
+      name: 'Technical comparison',
+      model: 'purchase.technical.comparison',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Technical comparison {{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'about',
+            items: [
+              { label: 'RFQ', bind: 'tender.name' },
+              { label: 'Assigned engineer', bind: 'engineer.name' },
+              { label: 'CS type', bind: 'kind' },
+              { label: 'Date', bind: 'date' },
+              { label: 'Status', bind: 'state' },
+            ],
+          },
+          {
+            kind: 'table',
+            id: 'lines',
+            bind: 'lines',
+            columns: [
+              { label: 'Vendor response', bind: 'response.name' },
+              { label: 'Score', bind: 'score' },
+              { label: 'Meets the specifications', bind: 'meetsSpecifications' },
+              { label: 'Note', bind: 'note' },
+            ],
+          },
+          { kind: 'text', id: 'remarks', text: '{{remarks}}' },
+          { kind: 'qr', id: 'qr', bind: 'name', size: 24, label: 'TCS reference' },
+        ],
+      },
+    },
     {
       key: 'purchase_tender',
       name: 'RFQ to vendors',
@@ -346,6 +464,20 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
   },
   approvals: [
     {
+      name: 'Comparative statement approvals',
+      model: 'purchase.comparison',
+      onApproved: 'approve',
+      onRejected: 'reject',
+      levels: [
+        { name: 'Purchase manager', condition: {}, approverRole: 'purchase.manager' },
+        {
+          name: 'Purchase director',
+          condition: { amountTotal: { gt: '1000000' } },
+          approverRole: 'purchase.director',
+        },
+      ],
+    },
+    {
       name: 'Purchase request approvals',
       model: 'purchase.request',
       onApproved: 'approve',
@@ -403,6 +535,15 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
         model: 'purchase.tender',
         measure: 'count',
         filter: { state: { in: ['received', 'comparing'] } },
+        w: 3,
+      },
+      {
+        id: 'comparisons_waiting',
+        title: 'Comparative statements waiting',
+        kind: 'kpi',
+        model: 'purchase.comparison',
+        measure: 'count',
+        filter: { state: 'submitted' },
         w: 3,
       },
       {
@@ -562,6 +703,14 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
       label: 'Vendor responses',
       views: ['list', 'form'],
     }),
+    'purchase.action_comparisons': action(PurchaseComparison, {
+      label: 'Comparative statements',
+      views: ['list', 'kanban', 'form'],
+    }),
+    'purchase.action_technical_comparisons': action(PurchaseTechnicalComparison, {
+      label: 'Technical comparisons',
+      views: ['list', 'form'],
+    }),
     'purchase.action_rfqs': action(PurchaseOrder, {
       label: 'Requests for quotation',
       views: ['list', 'kanban', 'form'],
@@ -620,6 +769,22 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
       label: 'Vendor responses',
       action: 'purchase.action_responses',
       sequence: 8,
+      visibleTo: ['purchase.user'],
+    },
+    {
+      id: 'purchase.comparisons',
+      parent: 'purchase.root',
+      label: 'Comparative statements',
+      action: 'purchase.action_comparisons',
+      sequence: 9,
+      visibleTo: ['purchase.user'],
+    },
+    {
+      id: 'purchase.technical_comparisons',
+      parent: 'purchase.root',
+      label: 'Technical comparisons',
+      action: 'purchase.action_technical_comparisons',
+      sequence: 10,
       visibleTo: ['purchase.user'],
     },
     {
@@ -739,6 +904,7 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
         buttons: [
           k.button('send', { primary: true, label: 'Send to the vendors' }),
           k.button('close', { label: 'Close the responses' }),
+          k.button('compare', { label: 'Draw up the comparison' }),
           k.button('redraft', { label: 'Set to draft' }),
           k.button('cancel', { label: 'Cancel', confirm: 'Cancel this RFQ?' }),
         ],
@@ -768,6 +934,76 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
           { field: 'state', id: 'response_state' },
         ]),
         k.group('about', ['note'], { columns: 1 }),
+      ],
+      chatter: true,
+    })),
+    'purchase.comparison.list': list(PurchaseComparison, {
+      columns: ['name', 'tender', 'date', 'expiryDate', 'multiVendor', 'amountTotal', 'state'],
+    }),
+    'purchase.comparison.kanban': kanban(PurchaseComparison, {
+      groupBy: 'state',
+      card: { title: 'name', subtitle: 'tender', footer: ['amountTotal'] },
+    }),
+    'purchase.comparison.form': form(PurchaseComparison, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('fill', { label: 'Fill from the RFQ' }),
+          k.button('submit', { primary: true, label: 'Submit for approval' }),
+          k.button('confirm', { primary: true, label: 'Confirm: make the orders' }),
+          k.button('redraft', { label: 'Set to draft' }),
+          k.button('cancel', { label: 'Cancel', confirm: 'Cancel this statement?' }),
+        ],
+      },
+      sheet: [
+        k.group('main', ['name', 'tender', 'date', 'expiryDate', 'dateDelivery', 'multiVendor'], {
+          description:
+            'Fill from the RFQ: every line against every vendor who quoted. Negotiate in two rounds, set the final price, select the lines to award.',
+        }),
+        k.component('approvals', 'approvals.Panel'),
+        k.lines('lines', [
+          { field: 'tenderLine', id: 'cs_line' },
+          { field: 'response', id: 'cs_response' },
+          { field: 'csQty', id: 'cs_qty' },
+          { field: 'quote', id: 'cs_quote' },
+          { field: 'nego1', id: 'cs_nego1' },
+          { field: 'nego2', id: 'cs_nego2' },
+          { field: 'finalPrice', id: 'cs_final' },
+          { field: 'total', id: 'cs_total' },
+          { field: 'lowest', id: 'cs_lowest' },
+          { field: 'selected', id: 'cs_selected' },
+        ]),
+        k.group('totals', ['amountTotal'], { label: 'Awarded' }),
+        k.group('about', ['note'], { columns: 1 }),
+      ],
+      chatter: true,
+    })),
+    'purchase.technical.comparison.list': list(PurchaseTechnicalComparison, {
+      columns: ['name', 'tender', 'engineer', 'kind', 'date', 'state'],
+    }),
+    'purchase.technical.comparison.form': form(PurchaseTechnicalComparison, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('fill', { label: 'Fill from the RFQ' }),
+          k.button('submit', { primary: true, label: 'Submit' }),
+          k.button('approve', { primary: true, label: 'Approve' }),
+          k.button('confirm', { primary: true, label: 'Confirm' }),
+          k.button('redraft', { label: 'Set to draft' }),
+          k.button('cancel', { label: 'Cancel', confirm: 'Cancel this comparison?' }),
+        ],
+      },
+      sheet: [
+        k.group('main', ['name', 'tender', 'engineer', 'kind', 'date'], {
+          description: 'Fill from the RFQ: every vendor who quoted; score each out of 100.',
+        }),
+        k.lines('lines', [
+          { field: 'response', id: 'tcs_response' },
+          { field: 'score', id: 'tcs_score' },
+          { field: 'meetsSpecifications', id: 'tcs_meets' },
+          { field: 'note', id: 'tcs_note' },
+        ]),
+        k.group('about', ['remarks'], { columns: 1 }),
       ],
       chatter: true,
     })),
@@ -945,6 +1181,26 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
         import: { label: 'Import', domain: { sourcing: 'import' }, group: 'sourcing' },
       },
       groupBy: ['buyer', 'state', 'sourcing', 'deadline:month'],
+    }),
+    'purchase.comparison': search(PurchaseComparison, {
+      fields: ['name', 'tender.name'],
+      filters: {
+        waiting: { label: 'Waiting for approval', domain: { state: 'submitted' }, group: 'state' },
+        approved: { label: 'Approved', domain: { state: 'approved' }, group: 'state' },
+      },
+      groupBy: ['tender', 'state'],
+    }),
+    'purchase.technical.comparison': search(PurchaseTechnicalComparison, {
+      fields: ['name', 'tender.name', 'engineer.name'],
+      filters: {
+        mine: { label: 'Mine', domain: { engineer: { $env: 'uid' } }, group: 'who' },
+        open: {
+          label: 'Not confirmed',
+          domain: { state: { in: ['draft', 'submitted', 'approved'] } },
+          group: 'state',
+        },
+      },
+      groupBy: ['engineer', 'state'],
     }),
     'purchase.tender.response': search(PurchaseTenderResponse, {
       fields: ['name', 'tender.name', 'vendor.name'],

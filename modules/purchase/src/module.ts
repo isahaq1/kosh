@@ -21,6 +21,12 @@ import {
   onchange,
   records,
 } from './.kosh/bindings.js';
+import {
+  PurchaseComparison,
+  PurchaseComparisonLine,
+  PurchaseTechnicalComparison,
+  PurchaseTechnicalComparisonLine,
+} from './comparison.js';
 import { PurchaseRequest, PurchaseRequestLine } from './request.js';
 import {
   PurchaseTender,
@@ -477,6 +483,11 @@ export const purchaseShutro = defineModule({
       label: 'Turn purchase requests into requests for quotation',
       groups: ['purchase.user'],
     }),
+    orm.definePermission({
+      code: 'purchase.compare_approve',
+      label: 'Approve technical comparisons',
+      groups: ['purchase.manager'],
+    }),
   ],
   sequences: [
     orm.defineSequence({
@@ -503,6 +514,18 @@ export const purchaseShutro = defineModule({
       padding: 5,
       reset: 'yearly',
     }),
+    orm.defineSequence({
+      code: 'purchase.comparison',
+      prefix: 'CS/{year}/',
+      padding: 5,
+      reset: 'yearly',
+    }),
+    orm.defineSequence({
+      code: 'purchase.technical.comparison',
+      prefix: 'TCS/{year}/',
+      padding: 5,
+      reset: 'yearly',
+    }),
   ],
   models: [
     PurchaseOrder,
@@ -514,6 +537,10 @@ export const purchaseShutro = defineModule({
     PurchaseTenderLine,
     PurchaseTenderResponse,
     PurchaseTenderResponseLine,
+    PurchaseTechnicalComparison,
+    PurchaseTechnicalComparisonLine,
+    PurchaseComparison,
+    PurchaseComparisonLine,
   ],
   extensions: [CompanyPurchase],
 });
