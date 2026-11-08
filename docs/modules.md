@@ -329,6 +329,43 @@ it applies to, its hit rate and what it would do to the open ones, without chang
 lines have **Undo** (`POST /api/v1/accounting/statement-lines/:id/undo`): a payment comes off its documents and is
 reversed, a write-off is reversed, and the line is open again.
 
+### Sending documents (`@kosh/mail`, RFC 0029)
+
+A document declared **sendable** has **Send** beside Print on its form: invoices and credit notes once posted, sales
+orders and quotations, purchase orders and requests for quotation. The dialog is filled from the document's **email
+template** in the customer's language (the contact's *Language*: English or Bangla) — the address, the subject, the
+message, the PDF — and everything can be changed before sending; a customer without an address is said so. Sending
+renders the PDF, stores it on the record, posts the message with the PDF on the chatter and queues the email, which
+the outbox sends once (`mail.outgoing`: queued, sent or failed with the reason; **Email › Sent** for Email managers).
+The dialog says how often the document was sent already. Templates are data: **Email › Email templates** (Email
+managers) edits the subject and body of each language, with `{{name}}`, `{{partner.name}}`, `{{amountTotal}}` or
+`{{company.name}}` placeholders, and the document template attached.
+
+A module ships its own:
+
+```ts
+defineModule({
+  // ...
+  mailTemplates: [
+    {
+      key: 'quotation',
+      name: 'Quotation',
+      model: 'sale.order',
+      document: 'sales.quotation', // the document template sent as a PDF (module.key)
+      subject: '{{company.name}}: {{name}}',
+      body: 'Dear {{partner.name}},\n\nPlease find attached {{name}} of {{amountTotal}}.',
+      translations: { bn_BD: { subject: '…', body: '…' } },
+    },
+  ],
+  sendable: [{ model: 'sale.order', template: 'sales.quotation', partner: 'partner' }],
+});
+```
+
+`when` limits Send to records in a state (`{ state: 'posted' }`). The routes: `GET /api/v1/mail/sendable`,
+`GET /api/v1/mail/compose/:model/:id` and `POST /api/v1/mail/send/:model/:id` (`{ to, cc?, subject, body,
+attach? }`), as the user: who cannot read the record cannot send it. Email needs `SMTP_URL` (and `MAIL_FROM`) and
+file storage for the PDF.
+
 ### Projects for programmes (`modules/project`, RFC 0026)
 
 Projects carries a programme's structure, not only a to-do list. Configuration holds **project types**, **task

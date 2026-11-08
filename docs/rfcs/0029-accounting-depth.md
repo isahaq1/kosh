@@ -126,3 +126,13 @@ with exceptions, cheque printing, currency revaluation, UBL / Peppol — a later
   audited; Run rules, Recently matched and Undo on the Reconcile bank page. Deviations: *label matches* is a plain
   case-insensitive "contains" (no regular expressions from users); *match* finds the open document of the same amount
   among the explained proposals, not by a reference pattern; write-offs without taxes, as in step 1.
+- **Step 3 part 1 (2026-11-07).** `mailTemplates` and `sendable` in manifests; `mail.template` (subject and body
+  translated per language, the document attached) installed by `mail`'s defaults; `mail.outgoing` queued with the
+  record and sent once by the `mail.send` outbox subscriber (`Mailer` gained copies and attachments); the compose and
+  send routes; the Send dialog beside Print; `fillText` in `@kosh/reporting` fills placeholders as plain text; the
+  contact's language (`res.partner.lang`: English or Bangla); templates for invoices and credit notes, quotations and
+  orders, and purchase orders. Deviations: the sent count and date come from `mail.outgoing` (shown in the dialog)
+  instead of `sentAt` / `sentCount` fields added to every sendable model; recipients are the partner's address (and
+  any typed), not yet its contacts. Next (part 2): Send from a list's selection, auto-send on posting per customer,
+  delivery and open tracking through `@kosh/notify`.
+
