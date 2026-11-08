@@ -218,4 +218,12 @@ Each step ends with the full gate (typecheck, lint, tests, both E2E projects), d
   vendors** on purchase requests, RFQ lines counted by the tracker, the overview's RFQ counts. Not yet: evaluation
   criteria with weights (step 8 with the comparison), the RFQ dashboard as a page (the overview's KPIs stand in),
   reminders before the deadline, attachments by vendors through the link.
+- **Step 8 (2026-11-08).** Comparative statements (`modules/purchase/src/comparison.ts`): `purchase.comparison`
+  with its lines (RFQ line × vendor response: CS quantity, quote, Nego 1 / Nego 2 setting the final price, total,
+  selected, the lowest marked), filled from the RFQ by **Fill**, submitted through the approval engine (manager,
+  director above an amount), confirmed into one purchase order per selected vendor at the final prices (`manualPrice`),
+  the RFQ moved to *ordered*; `purchase.technical.comparison` scoring each response, approved with
+  `purchase.compare_approve`, confirmed into technical ranks, required before the financial statement when the RFQ
+  asks. Not yet: a matrix component for the workspace (the generic lines table stands in), evaluation criteria with
+  weights, comparing across several RFQs, the CS report's vendor columns side by side (the print lists the lines).
 

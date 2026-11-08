@@ -381,6 +381,15 @@ submits once — audited with their address; a buyer may make a new link (`POST 
 to paste or email, or type the quotation in. A submitted response moves the RFQ to *Responses received*; the request
 line tracker counts the lines on an RFQ. The Purchase overview counts RFQs waiting and with responses.
 
+**Comparative statements** (Purchase › Comparative statements): **Fill from the RFQ** fills the workspace —
+every line against every vendor who quoted, with the CS quantity, the quote, two negotiation rounds (each sets the
+final price), the final price and the total; the **lowest** final price of each line is marked. The buyer selects
+the lines to award (to one vendor, or several when the statement allows it), submits it through the approval engine
+(a Purchase manager, the director above an amount) and **confirms** it: one purchase order per selected vendor at the
+final prices, linked to the request lines, and the RFQ is *ordered*. When the RFQ asks for a **technical comparison
+first**, an engineer scores every vendor who quoted (out of 100, whether they meet the specifications), a Purchase
+manager approves it and its confirmation ranks the responses — only then may the financial statement be submitted.
+
 ### Vendor prices (`modules/purchase`, `modules/purchase_stock`, RFC 0030)
 
 **Purchase › Vendor prices** (buyers) records what each vendor charges: for a product or for every product of a
