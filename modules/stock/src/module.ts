@@ -1200,6 +1200,54 @@ async function putAway(ids: readonly Id<'stock.picking'>[], env: Env): Promise<v
  * A putaway rule: what arrives in `location` — of `product`, or of `category` (and the categories inside it) — is
  * put away in `destination`, a location inside it.
  */
+/** An addition or a deduction on a transfer's transport (RFC 0032 §3.3): unloading, weighbridge, a short weight… */
+export const StockPickingCharge = defineModel('stock.picking.charge', {
+  label: 'Transport addition or deduction',
+  order: ['picking asc', 'id asc'],
+  access: { 'stock.user': ALL, 'stock.manager': [...ALL, 'export'] },
+  fields: {
+    picking: f.many2one('stock.picking', {
+      required: true,
+      ondelete: 'cascade',
+      label: 'Transfer',
+    }),
+    name: f.char({ required: true, label: 'Description' }),
+    kind: f.selection(
+      { addition: 'Addition', deduction: 'Deduction' },
+      {
+        required: true,
+        default: 'addition',
+        help: 'Added to the freight bill, or deducted from it.',
+      },
+    ),
+    amount: f.decimal({ scale: 2, required: true, default: '0' }),
+  },
+  sqlConstraints: {
+    positive: {
+      check: orm.sql`amount >= 0`,
+      message: 'Amounts are positive; choose deduction instead.',
+    },
+  },
+});
+
+/** Goods that come with a transfer without being its lines (empty bags, pallets), kept for the record. */
+export const StockPickingExtra = defineModel('stock.picking.extra', {
+  label: 'Extra product',
+  order: ['picking asc', 'id asc'],
+  access: { 'stock.user': ALL, 'stock.manager': [...ALL, 'export'] },
+  fields: {
+    picking: f.many2one('stock.picking', {
+      required: true,
+      ondelete: 'cascade',
+      label: 'Transfer',
+    }),
+    product: f.many2one('product.product', { ondelete: 'restrict' }),
+    name: f.char({ required: true, label: 'Description' }),
+    quantity: f.decimal({ scale: 3, required: true, default: '1' }),
+    note: f.char(),
+  },
+});
+
 export const StockPutaway = defineModel('stock.putaway', {
   label: 'Putaway rule',
   order: ['location asc', 'sequence asc', 'id asc'],
@@ -1342,6 +1390,55 @@ export const StockPicking = defineModel('stock.picking', {
     lotLines: f.one2many('stock.lot.line', 'picking', { label: 'Lots and serial numbers' }),
     /** The count this adjustment applies. */
     count: f.many2one('stock.count', { ondelete: 'set null', label: 'Count' }),
+    // Additional information (RFC 0032 §3.3): who handles it and how it travels.
+    responsible: f.many2one('res.users', { ondelete: 'set null' }),
+    carrier: f.char({ label: 'Carrier' }),
+    trackingRef: f.char({ label: 'Tracking reference' }),
+    weight: f.decimal({
+      scale: 3,
+      label: 'Weight (kg)',
+      help: 'The lines’ products’ weight times their quantities.',
+      store: true,
+      ...compute(
+        'stock.picking',
+        'weight',
+        ['moves.productQty', 'moves.product.weight'],
+        (pickings) => {
+          for (const p of pickings)
+            p.weight = [...p.moves].reduce(
+              (s, m) => s.plus((m.product.weight ?? zero).times(m.productQty ?? zero)),
+              zero,
+            );
+        },
+      ),
+    }),
+    // Transport details at the gate (RFC 0032 §3.3).
+    vehicleNumber: f.char({ label: 'Vehicle number' }),
+    driverName: f.char({ label: 'Driver' }),
+    driverMobile: f.char({ label: 'Driver’s mobile' }),
+    transporter: f.many2one('res.partner', {
+      ondelete: 'restrict',
+      label: 'Transport vendor',
+      help: 'Who carried the goods: their freight bill is drafted when the transfer is validated (with Accounting).',
+    }),
+    transportDate: f.date({ label: 'Transport date' }),
+    gateIn: f.datetime({ label: 'Gate in' }),
+    gateOut: f.datetime({ label: 'Gate out' }),
+    freightAmount: f.decimal({
+      scale: 2,
+      label: 'Freight bill',
+      help: 'What the transport vendor bills for this transfer.',
+    }),
+    deductFromSupplier: f.boolean({
+      default: false,
+      label: 'Deduct from the supplier',
+      help: 'A receipt whose supplier bears part of the cost (freight agreed delivered, shortage, poor quality): a vendor refund is drafted for the deduction.',
+    }),
+    supplierDeduction: f.decimal({ scale: 2, label: 'Supplier deduction' }),
+    charges: f.one2many('stock.picking.charge', 'picking', { label: 'Additions and deductions' }),
+    extras: f.one2many('stock.picking.extra', 'picking', { label: 'Extra products' }),
+    gateNote: f.text({ label: 'Gate and QC details' }),
+    remarks: f.text(),
     /** The transfer this one takes the rest of. */
     backorderOf: f.many2one('stock.picking', { ondelete: 'set null', label: 'Backorder of' }),
     backorders: f.one2many('stock.picking', 'backorderOf'),
@@ -2265,6 +2362,8 @@ export const stockShutro = defineModule({
   ],
   models: [
     StockReturnReason,
+    StockPickingCharge,
+    StockPickingExtra,
     StockWarehouse,
     StockLocation,
     StockLot,

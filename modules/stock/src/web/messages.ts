@@ -1,6 +1,18 @@
 /** Messages of the Stockroom screens (namespace `stock`), in English and Bangla. */
 export const messages: Readonly<Record<string, object>> = {
   en: {
+    operations: {
+      hint: 'Each warehouse’s receipts, deliveries and internal moves: ready to process, waiting for stock, and late against their scheduled date. Each count opens its transfers.',
+      loading: 'Loading…',
+      empty: 'Nothing to do: no transfer waits in any warehouse.',
+      ready: 'Ready',
+      waiting: 'Waiting',
+      late: 'Late',
+      readyOf: '{{count}} ready: {{title}}',
+      waitingOf: '{{count}} waiting: {{title}}',
+      lateOf: '{{count}} late: {{title}}',
+      kind: { receipt: 'Receipts', delivery: 'Deliveries', internal: 'Internal moves' },
+    },
     returns: {
       button: 'Return',
       title: 'Return goods',
@@ -49,6 +61,18 @@ export const messages: Readonly<Record<string, object>> = {
     },
   },
   bn: {
+    operations: {
+      hint: 'প্রতিটি গুদামের রিসিপ্ট, ডেলিভারি ও অভ্যন্তরীণ স্থানান্তর: প্রক্রিয়ার জন্য প্রস্তুত, স্টকের অপেক্ষায়, এবং নির্ধারিত তারিখের চেয়ে দেরিতে। প্রতিটি সংখ্যা তার স্থানান্তরগুলো খোলে।',
+      loading: 'লোড হচ্ছে…',
+      empty: 'কিছু করার নেই: কোনো গুদামে কোনো স্থানান্তর অপেক্ষায় নেই।',
+      ready: 'প্রস্তুত',
+      waiting: 'অপেক্ষমাণ',
+      late: 'দেরি',
+      readyOf: '{{count}}টি প্রস্তুত: {{title}}',
+      waitingOf: '{{count}}টি অপেক্ষমাণ: {{title}}',
+      lateOf: '{{count}}টি দেরিতে: {{title}}',
+      kind: { receipt: 'রিসিপ্ট', delivery: 'ডেলিভারি', internal: 'অভ্যন্তরীণ স্থানান্তর' },
+    },
     returns: {
       button: 'ফেরত',
       title: 'পণ্য ফেরত',

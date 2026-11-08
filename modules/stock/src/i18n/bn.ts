@@ -14,6 +14,8 @@ export const bn: Readonly<Record<string, string>> = {
   'A product is counted once per count.': 'প্রতিটি গণনায় একটি পণ্য একবারই গণনা করা হয়।',
   'A putaway rule is for a product or a category (one of them), into a location inside the one it arrives in.':
     'পুটঅ্যাওয়ে নিয়ম একটি পণ্য বা একটি শ্রেণির (যেকোনো একটির) জন্য, যা পৌঁছানোর অবস্থানের ভেতরের কোনো অবস্থানে রাখে।',
+  'A receipt whose supplier bears part of the cost (freight agreed delivered, shortage, poor quality): a vendor refund is drafted for the deduction.':
+    'যে রিসিপ্টের খরচের একাংশ সরবরাহকারী বহন করেন (পৌঁছে দেওয়ার শর্তে ভাড়া, ঘাটতি, নিম্নমান): কর্তনের জন্য সরবরাহকারী ফেরত নোটের খসড়া হয়।',
   'A reservation holds a positive quantity.': 'সংরক্ষণে ধনাত্মক পরিমাণ থাকতে হবে।',
   'A rule keeps goods in stock; buying and dropshipping need a vendor (dropshipping is for each delivery), a transfer another warehouse to take from.':
     'নিয়ম মালামাল মজুদে রাখে; ক্রয় ও ড্রপশিপের জন্য সরবরাহকারী লাগে (ড্রপশিপ প্রতিটি সরবরাহের জন্য), আর স্থানান্তরের জন্য অন্য একটি গুদাম লাগে যেখান থেকে নেওয়া হবে।',
@@ -22,8 +24,14 @@ export const bn: Readonly<Record<string, string>> = {
   Active: 'সক্রিয়',
   'Add at least one line before confirming the transfer.':
     'স্থানান্তর নিশ্চিত করার আগে অন্তত একটি লাইন যোগ করুন।',
+  'Added to the freight bill, or deducted from it.': 'ভাড়ার বিলে যোগ, বা তা থেকে বাদ।',
+  Addition: 'যোগ',
+  'Additional information': 'অতিরিক্ত তথ্য',
+  'Additions and deductions': 'যোগ ও কর্তন',
   Address: 'ঠিকানা',
   Adjustments: 'সমন্বয়',
+  Amount: 'অঙ্ক',
+  'Amounts are positive; choose deduction instead.': 'অঙ্ক ধনাত্মক হবে; এর বদলে কর্তন বেছে নিন।',
   'An internal location belongs to a warehouse, the same as the location it is inside.':
     'অভ্যন্তরীণ অবস্থান একটি গুদামের অংশ, যে অবস্থানের ভেতরে আছে তারই গুদামের।',
   'Another warehouse has this short code.': 'অন্য একটি গুদামের এই সংক্ষিপ্ত কোড আছে।',
@@ -46,6 +54,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Cancel this transfer? Its reservations are released.':
     'এই স্থানান্তর বাতিল করবেন? এর সংরক্ষণগুলো ছেড়ে দেওয়া হবে।',
   Cancelled: 'বাতিল',
+  Carrier: 'বাহক',
   'Check availability': 'প্রাপ্যতা যাচাই করুন',
   Children: 'অন্তর্ভুক্ত অবস্থান',
   Code: 'কোড',
@@ -65,6 +74,8 @@ export const bn: Readonly<Record<string, string>> = {
   Customers: 'গ্রাহক',
   Damaged: 'ক্ষতিগ্রস্ত',
   Date: 'তারিখ',
+  'Deduct from the supplier': 'সরবরাহকারী থেকে কর্তন',
+  Deduction: 'কর্তন',
   Defective: 'ত্রুটিপূর্ণ',
   Deliveries: 'সরবরাহ',
   'Deliveries to do': 'বাকি সরবরাহ',
@@ -76,6 +87,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Done in the product’s unit': 'পণ্যের এককে সম্পন্ন',
   'Done on': 'সম্পন্নের তারিখ',
   Draft: 'খসড়া',
+  Driver: 'চালক',
+  'Driver’s mobile': 'চালকের মোবাইল',
   Dropship: 'ড্রপশিপ',
   'Dropship (the vendor delivers to the customer)': 'ড্রপশিপ (সরবরাহকারী সরাসরি গ্রাহককে সরবরাহ করে)',
   Dropships: 'ড্রপশিপ',
@@ -83,10 +96,17 @@ export const bn: Readonly<Record<string, string>> = {
   Expected: 'প্রত্যাশিত',
   Expired: 'মেয়াদোত্তীর্ণ',
   'Expires on': 'মেয়াদ শেষ',
+  'Extra product': 'অতিরিক্ত পণ্য',
+  'Extra products': 'অতিরিক্ত পণ্যসমূহ',
   'For each delivery (make to order)': 'প্রতিটি সরবরাহের জন্য (অর্ডার অনুযায়ী)',
   Forecast: 'পূর্বাভাস',
+  'Freight bill': 'ভাড়ার বিল',
   From: 'থেকে',
   'From warehouse': 'যে গুদাম থেকে',
+  'Gate and QC': 'গেট ও মান যাচাই',
+  'Gate and QC details': 'গেট ও মান যাচাইয়ের বিবরণ',
+  'Gate in': 'গেটে প্রবেশ',
+  'Gate out': 'গেট থেকে প্রস্থান',
   'Give the lot or serial number: an existing one, or the name of a new one.':
     'লট বা সিরিয়াল নম্বর দিন: বিদ্যমান একটি, অথবা নতুন একটির নাম।',
   'Goods in transit': 'ট্রানজিটে থাকা পণ্য',
@@ -151,6 +171,7 @@ export const bn: Readonly<Record<string, string>> = {
   Minimum: 'সর্বনিম্ন',
   'Most stocked products': 'সবচেয়ে বেশি মজুদকৃত পণ্য',
   Move: 'স্থানান্তর',
+  'My operations': 'আমার কার্যক্রম',
   Name: 'নাম',
   'New lot / serial number': 'নতুন লট / সিরিয়াল নম্বর',
   'Next step': 'পরবর্তী ধাপ',
@@ -201,6 +222,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Receipts to do': 'বাকি প্রাপ্তি',
   Reference: 'রেফারেন্স',
   Refreshed: 'হালনাগাদের সময়',
+  Remarks: 'মন্তব্য',
   'Reorder rule': 'পুনঃঅর্ডার নিয়ম',
   'Reorder rules': 'পুনঃঅর্ডার নিয়ম',
   'Replenish by': 'পূরণের উপায়',
@@ -210,6 +232,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Reserve when a transfer is confirmed': 'স্থানান্তর নিশ্চিত হলে সংরক্ষণ করুন',
   Reserved: 'সংরক্ষিত',
   'Reserved for': 'যার জন্য সংরক্ষিত',
+  Responsible: 'দায়িত্বপ্রাপ্ত',
   'Return of': 'যার ফেরত',
   'Return reason': 'ফেরতের কারণ',
   'Return reasons': 'ফেরতের কারণ',
@@ -253,10 +276,12 @@ export const bn: Readonly<Record<string, string>> = {
   Stockroom: 'স্টকরুম',
   'Stockroom manager': 'স্টকরুম ব্যবস্থাপক',
   'Stockroom user': 'স্টকরুম ব্যবহারকারী',
+  'Supplier deduction': 'সরবরাহকারী কর্তন',
   'The line’s quantity converted to the product’s unit, as stock is counted.':
     'লাইনের পরিমাণ পণ্যের এককে রূপান্তরিত, যে এককে মজুদ গোনা হয়।',
   'The line’s unit must measure the same thing as the product’s unit (a dozen of units, grams of kg).':
     'লাইনের একক অবশ্যই পণ্যের এককের মতো একই জিনিস মাপবে (যেমন পিসের জন্য ডজন, কেজির জন্য গ্রাম)।',
+  'The lines’ products’ weight times their quantities.': 'লাইনগুলোর পণ্যের ওজন গুণ তাদের পরিমাণ।',
   'The minimum is zero or more, the maximum at least the minimum, the step and the lead time positive.':
     'সর্বনিম্ন শূন্য বা তার বেশি, সর্বোচ্চ অন্তত সর্বনিম্নের সমান, আর গুণিতক ও সরবরাহ সময় ধনাত্মক হতে হবে।',
   'The part of the quantity on hand held for transfers waiting to go out.':
@@ -277,12 +302,17 @@ export const bn: Readonly<Record<string, string>> = {
   'To do': 'করণীয়',
   'To order': 'অর্ডার করতে হবে',
   Tracking: 'ট্র্যাকিং',
+  'Tracking reference': 'ট্র্যাকিং রেফারেন্স',
   Transfer: 'স্থানান্তর',
   'Transfer done': 'স্থানান্তর সম্পন্ন',
   'Transfer line': 'স্থানান্তরের লাইন',
   Transfers: 'স্থানান্তর',
   'Transfers by status': 'অবস্থা অনুযায়ী স্থানান্তর',
   'Transfers done this month': 'এ মাসে সম্পন্ন স্থানান্তর',
+  'Transport addition or deduction': 'পরিবহন যোগ বা কর্তন',
+  'Transport date': 'পরিবহনের তারিখ',
+  'Transport details': 'পরিবহনের বিবরণ',
+  'Transport vendor': 'পরিবহন সরবরাহকারী',
   Type: 'ধরন',
   Unit: 'একক',
   Unreserve: 'সংরক্ষণ ছাড়ুন',
@@ -293,6 +323,7 @@ export const bn: Readonly<Record<string, string>> = {
   Validate: 'চূড়ান্ত করুন',
   'Validated, the goods leave their location as a loss.':
     'যাচাই করা হলে মাল ক্ষতি হিসেবে তার অবস্থান থেকে বের হয়ে যায়।',
+  'Vehicle number': 'গাড়ির নম্বর',
   Vendor: 'সরবরাহকারী',
   Vendors: 'সরবরাহকারী',
   Waiting: 'অপেক্ষমাণ',
@@ -300,16 +331,23 @@ export const bn: Readonly<Record<string, string>> = {
   Warehouses: 'গুদাম',
   'Warehouses, transfers with one clear status, reservations that say what they are for':
     'গুদাম, একটি স্পষ্ট অবস্থাসহ স্থানান্তর, কীসের জন্য তা জানানো সংরক্ষণ',
+  'Weight (kg)': 'ওজন (কেজি)',
   'What arrives in the location — this product, or any product of this category — is put away in the location inside it.':
     'এই অবস্থানে যা আসে — এই পণ্য, অথবা এই শ্রেণির যেকোনো পণ্য — তা এর ভেতরের অবস্থানে রাখা হয়।',
   'What the transfer does: brings goods in, sends them out, moves them inside or adjusts stock.':
     'স্থানান্তরটি কী করে: মাল আনে, পাঠায়, ভেতরে সরায় বা মজুদ সমন্বয় করে।',
+  'What the transport vendor bills for this transfer.':
+    'এই স্থানান্তরের জন্য পরিবহন সরবরাহকারী যে বিল করেন।',
   'What was counted less what was expected; empty until the line is counted.':
     'গোনা পরিমাণ থেকে প্রত্যাশিত পরিমাণ বাদে; লাইনটি গোনা না হওয়া পর্যন্ত খালি।',
   'When it arrives in': 'যখন এখানে পৌঁছায়',
   'When transfers hold the stock they take.': 'স্থানান্তর কখন তার নেওয়া মজুদ সংরক্ষণ করে।',
   'Whether more is bought, made, transferred from another warehouse or shipped by the vendor straight to the customer.':
     'আরও কেনা হবে, তৈরি হবে, অন্য গুদাম থেকে আনা হবে, নাকি সরবরাহকারী সরাসরি গ্রাহককে পাঠাবে।',
+  'Who carried the goods: their freight bill is drafted when the transfer is validated (with Accounting).':
+    'যিনি পণ্য বহন করেছেন: স্থানান্তর যাচাই হলে তাঁর ভাড়ার বিলের খসড়া হয় (হিসাবসহ)।',
   Why: 'কেন',
   'Why the goods are thrown away.': 'মাল কেন ফেলে দেওয়া হচ্ছে।',
+  'With Accounting, validating drafts the transport vendor’s freight bill and, for a receipt, a vendor refund for the supplier’s deduction.':
+    'হিসাব থাকলে, যাচাই করলে পরিবহন সরবরাহকারীর ভাড়ার বিল এবং রিসিপ্টের ক্ষেত্রে সরবরাহকারীর কর্তনের ফেরত নোটের খসড়া হয়।',
 };

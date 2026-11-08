@@ -888,6 +888,33 @@ test('make to order: a delivery gets what it needs ordered by its rule, once, an
   ).toBe(422);
 });
 
+test('My operations (RFC 0032 §3.3): ready, waiting and late per warehouse and kind, as domains', async () => {
+  const warehouse = (await find('stock.warehouse', {}, 'name'))[0];
+  const product = (
+    await call('POST', '/api/v1/models/product.product', 'dina', { name: 'Gearbox oil drum' })
+  ).json.id;
+  const receipt = await transfer('receipt', [{ product, quantity: '2' }], {
+    warehouse: warehouse.id,
+  });
+  expect((await run(receipt, 'confirm')).status).toBe(200);
+  const late = await transfer('delivery', [{ product, quantity: '9' }], {
+    warehouse: warehouse.id,
+    scheduledDate: '2020-01-01',
+  });
+  expect((await run(late, 'confirm')).status).toBe(200);
+  const res = await call('GET', '/api/v1/stockroom/operations', 'rahim');
+  expect(res.status, JSON.stringify(res.json)).toBe(200);
+  const card = (kind: string) =>
+    (res.json.operations as Json[]).find((o) => o.warehouse.id === warehouse.id && o.kind === kind);
+  expect(card('receipt').ready.count).toBeGreaterThanOrEqual(1);
+  expect(card('delivery').waiting.count).toBeGreaterThanOrEqual(1);
+  expect(card('delivery').late.count).toBeGreaterThanOrEqual(1);
+  // Each count is the list it opens.
+  const listed = await find('stock.picking', card('delivery').late.domain, 'id', 'rahim');
+  expect(listed.length).toBe(card('delivery').late.count);
+  expect((await call('GET', '/api/v1/stockroom/operations', 'nobody')).status).not.toBe(200);
+});
+
 test('the demo data loads', async () => {
   const auth = host.server.auth;
   if (auth === undefined) throw new Error('base is installed');

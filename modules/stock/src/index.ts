@@ -248,6 +248,103 @@ const needs = (env: Env, group: 'stock.user' | 'stock.manager', who: string) => 
 };
 
 /**
+ * My operations (RFC 0032 §3.3): per warehouse and kind of transfer, what is ready (everything reserved, or a receipt
+ * confirmed), waiting (confirmed, not all reserved) and late (not done, scheduled before today) — counted as the user,
+ * so their record rules apply — with the domain each count stands for.
+ */
+function registerOperationsRoutes(context: ModuleContext): void {
+  const { app } = context;
+  const ACTIONS = {
+    receipt: 'stockroom.action_receipts',
+    delivery: 'stockroom.action_deliveries',
+    internal: 'stockroom.action_transfers',
+  } as const;
+  app.get('/api/v1/stockroom/operations', async (request) =>
+    request.env(async (raw) => {
+      const env = raw as Env;
+      needs(env, 'stock.user', 'Stockroom user');
+      const today = env.today();
+      const open = await (
+        await env.model('stock.picking').search({
+          where: {
+            state: { in: ['draft', 'confirmed'] },
+            kind: { in: ['receipt', 'delivery', 'internal'] },
+            warehouse: { isNull: false },
+          },
+          limit: 20000,
+        })
+      ).load({ warehouse: true });
+      const cards = new Map<
+        string,
+        { warehouse: { id: number; name: string }; kind: keyof typeof ACTIONS; n: number[] }
+      >();
+      for (const p of open) {
+        if (p.warehouse === null) continue;
+        const kind = p.kind as keyof typeof ACTIONS;
+        const key = `${p.warehouse.id}:${kind}`;
+        const card = cards.get(key) ?? {
+          warehouse: { id: p.warehouse.id as number, name: p.warehouse.name },
+          kind,
+          n: [0, 0, 0],
+        };
+        const ready =
+          p.state === 'confirmed' && (p.kind === 'receipt' || p.availability === 'full');
+        const counts = card.n as [number, number, number];
+        if (ready) counts[0] += 1;
+        else if (p.state === 'confirmed') counts[1] += 1;
+        if (p.scheduledDate !== null && isoDay(p.scheduledDate) < isoDay(today)) counts[2] += 1;
+        cards.set(key, card);
+      }
+      const order = { receipt: 0, delivery: 1, internal: 2 } as const;
+      return {
+        operations: [...cards.values()]
+          .sort(
+            (a, b) =>
+              a.warehouse.name.localeCompare(b.warehouse.name) || order[a.kind] - order[b.kind],
+          )
+          .map((c) => {
+            const base = { warehouse: c.warehouse.id, kind: c.kind };
+            return {
+              warehouse: c.warehouse,
+              kind: c.kind,
+              action: ACTIONS[c.kind],
+              ready: {
+                count: c.n[0],
+                domain:
+                  c.kind === 'receipt'
+                    ? { ...base, state: 'confirmed' }
+                    : { ...base, state: 'confirmed', availability: 'full' },
+              },
+              waiting: {
+                count: c.n[1],
+                domain:
+                  c.kind === 'receipt'
+                    ? { ...base, state: 'confirmed', id: { in: [] } }
+                    : { ...base, state: 'confirmed', availability: { ne: 'full' } },
+              },
+              late: {
+                count: c.n[2],
+                domain: {
+                  ...base,
+                  state: { in: ['draft', 'confirmed'] },
+                  scheduledDate: { lt: isoDay(today) },
+                },
+              },
+            };
+          }),
+      };
+    }),
+  );
+}
+
+/** A date as `YYYY-MM-DD`. */
+function isoDay(v: unknown): string {
+  if (!(v instanceof Date)) return String(v ?? '').slice(0, 10);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${v.getFullYear()}-${pad(v.getMonth() + 1)}-${pad(v.getDate())}`;
+}
+
+/**
  * Replenishment (RFC 0024 §2.6): the rules' figures refreshed now, the rules chosen ordered (what they propose, or
  * the quantities given), snoozed for some days. Ordering makes documents in other apps (requests for quotation,
  * production orders), so it runs in an audited superuser scope for Stockroom managers; the rules are read as the
@@ -609,6 +706,7 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
     },
   },
   routes: (context: ModuleContext) => {
+    registerOperationsRoutes(context);
     registerCountRoutes(context);
     registerReturnRoutes(context);
     registerReplenishmentRoutes(context);
@@ -780,6 +878,11 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
       page: 'stock.Replenishment',
       label: 'Replenishment',
     },
+    'stockroom.action_operations': {
+      type: 'client',
+      page: 'stock.Operations',
+      label: 'My operations',
+    },
     'stockroom.action_putaway': action(StockPutaway, {
       label: 'Putaway rules',
       views: ['list', 'form'],
@@ -800,6 +903,13 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
   },
   menus: [
     { id: 'stockroom.root', label: 'Stockroom', app: 'stockroom' },
+    {
+      id: 'stockroom.operations',
+      parent: 'stockroom.root',
+      label: 'My operations',
+      action: 'stockroom.action_operations',
+      sequence: 0,
+    },
     {
       id: 'stockroom.transfers',
       parent: 'stockroom.root',
@@ -987,6 +1097,41 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
           { field: 'lotName', id: 'lot_line_name' },
           { field: 'quantity', id: 'lot_line_quantity' },
         ]),
+        k.group('info', ['responsible', 'carrier', 'trackingRef', 'weight'], {
+          label: 'Additional information',
+        }),
+        k.group(
+          'transport',
+          [
+            'vehicleNumber',
+            'driverName',
+            { field: 'driverMobile', widget: 'phone' },
+            'transporter',
+            'transportDate',
+            'gateIn',
+            'gateOut',
+            'freightAmount',
+            'deductFromSupplier',
+            'supplierDeduction',
+          ],
+          {
+            label: 'Transport details',
+            description:
+              'With Accounting, validating drafts the transport vendor’s freight bill and, for a receipt, a vendor refund for the supplier’s deduction.',
+          },
+        ),
+        k.lines('charges', [
+          { field: 'name', id: 'charge_name' },
+          { field: 'kind', id: 'charge_kind' },
+          { field: 'amount', id: 'charge_amount' },
+        ]),
+        k.lines('extras', [
+          { field: 'product', id: 'extra_product' },
+          { field: 'name', id: 'extra_name' },
+          { field: 'quantity', id: 'extra_quantity' },
+          { field: 'note', id: 'extra_note' },
+        ]),
+        k.group('gate', ['gateNote', 'remarks'], { label: 'Gate and QC', columns: 1 }),
         k.group('about', ['note'], { columns: 1 }),
       ],
       chatter: true,
