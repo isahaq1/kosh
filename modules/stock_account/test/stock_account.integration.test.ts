@@ -371,6 +371,23 @@ test('transport (RFC 0032 §3.3): the freight bill with its charges and the supp
   expect(Number(refund.amountTotal?.amount ?? refund.amountTotal)).toBe(750);
 });
 
+test('the ledger carries values for those who read the valuation (RFC 0032 §3.3)', async () => {
+  const res = await call('GET', '/api/v1/stockroom/ledger?from=2000-01-01&to=2100-12-31', 'maria');
+  expect(res.status, JSON.stringify(res.json)).toBe(200);
+  expect(res.json.valued).toBe(true);
+  const cement = (res.json.rows as Json[]).find((r) => r.product.id === ids['Cement']);
+  expect(Number(cement.in.purchase_receipt.value)).toBeGreaterThan(0);
+  expect(Number(cement.closing.value)).toBeGreaterThanOrEqual(0);
+  // A stock user reads quantities, never values.
+  const plain = await call(
+    'GET',
+    '/api/v1/stockroom/ledger?from=2000-01-01&to=2100-12-31',
+    'rahim',
+  );
+  expect(plain.status, JSON.stringify(plain.json)).toBe(200);
+  expect(plain.json.valued).toBe(false);
+});
+
 test('nobody edits the valuation; stock users do not read it', async () => {
   const [layer] = await find('stock.valuation.layer', {}, 'id');
   expect(

@@ -372,6 +372,34 @@ async function valueTransfers(pickings: Records<'stock.picking'>): Promise<void>
 }
 
 export const MoveCost = extendModel('stock.move', {
+  overrides: {
+    // The ledger's values: each line's valuation layers, when this person may read the valuation.
+    moveValues: async function (
+      this: unknown,
+      next: () => Promise<Map<number, string>>,
+    ): Promise<Map<number, string>> {
+      const out = await next();
+      const moves = this as Records<'stock.move'>;
+      if (!moves.env.access.can('stock.valuation.layer', 'read')) return out;
+      const layers = await (
+        await moves.env
+          .model('stock.valuation.layer')
+          .search({ where: { move: { in: [...moves.ids] } } as never, limit: 50000 })
+      ).load({ move: true });
+      for (const l of layers) {
+        const id = l.move?.id as number | undefined;
+        if (id === undefined) continue;
+        out.set(
+          id,
+          orm
+            .toDecimal(out.get(id) ?? '0')
+            .plus(l.value)
+            .toString(),
+        );
+      }
+      return out;
+    },
+  },
   methods: {
     /**
      * What each of these lines' stock costs when it comes in, by line, in the product's unit, as a decimal string:
