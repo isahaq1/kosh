@@ -159,3 +159,16 @@ Each step ends with the full gate (typecheck, lint, tests, both E2E projects), d
 - Feed-specific production (shift and overhead costs) — covered by RFC 0031 steps 4–5.
 
 ## 6. Notes
+
+- **Step 1 (2026-11-08).** `modules/indent` (app *Requests*): product groups by category with their approvers;
+  indents with the requester's employee and department filled in, the store and an internal-use location; lines with
+  their group (computed from the category), approved / issued / still owed quantities and what the store holds;
+  approvals through the engine — department head, then product group approvers (`approvalUsers('groups')`), each
+  able to lower quantities —; **Issue** as one internal transfer to the internal-use location (backorders stay with
+  the indent), **Acknowledge** by the requester; record rules for requesters, deciders and store keepers; print and
+  import templates, events, the overview, demo data, Bangla. Stockroom gained the *Internal use (consumed)* location
+  usage and the shared `Internal use` location; internal transfers may end there. Manifests' approval levels may name
+  `department_head`, `department_approvers` and `{ record }` approvers. Not yet: the reminder for unacknowledged
+  indents, a per-section expense account for consumption (the product category's cost of goods sold is used), header
+  fields locked after approval (only the rules' states guard them).
+

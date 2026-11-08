@@ -684,6 +684,28 @@ reports settle. With Accounting (`expense_account`), an approved report is booke
 the cash or bank journal chosen on it; advances are paid out and returned through their journal. Install it with
 `shutro-erp apps install expense`.
 
+### Requests (`modules/indent`, RFC 0032)
+
+A section asks its store for goods by an **indent**: the store (the company's first warehouse by default), where the
+goods are used (an *internal-use* location — Stockroom's shared `Internal use`, or one per section), the date they are
+needed, a priority shown as stars, and the products with what the store holds of each. Submitted, it goes through the
+approval engine: the requester's **department head**, then the **approvers of the products' groups** (Requests ›
+Configuration › Product groups, by product category), with Requests managers standing in when nobody is named; each
+level may lower a quantity, never raise it. A store keeper presses **Issue**: one internal transfer from the store to
+the internal-use location, reserved like any transfer, validated partly or at once in Stockroom (the rest on a
+backorder that stays with the indent); issued goods leave stock and, with `stock_account`, are valued as consumed.
+Each line shows what was approved, issued and is still owed; the requester **acknowledges** what arrived. Requesters
+see their own indents and those they decide, store keepers every indent of their companies. Install it with
+`shutro-erp apps install indent`.
+
+```ts
+// A manifest's approval level whose approvers the record names (RFC 0027): `approvalUsers('groups')` on the model.
+{ name: 'Product group approvers', approver: { record: 'groups' }, approverRole: 'indent.manager' }
+```
+
+Manifests may now declare levels decided by `'department_head'`, `'department_approvers'` or `{ record: key }`, beside
+`'manager'` and `{ field }`.
+
 ### Attendance (`modules/attendance`, RFC 0024)
 
 Shifts (night shifts included) and rosters; check-in from the phone inside a site's geofence, at a kiosk by badge or
