@@ -11,7 +11,7 @@ import { permissions } from '@kosh/permissions';
 import { product } from '@kosh/product';
 import { reporting } from '@kosh/reporting';
 import { stock } from '@kosh/stock';
-import { action, form, kanban, list, pivot, search } from '@kosh/views';
+import { action, field, form, kanban, list, pivot, search } from '@kosh/views';
 import { indentDemo } from './demo.js';
 import { IndentProductGroup, IndentRequest, IndentRequestLine, indentShutro } from './module.js';
 
@@ -53,6 +53,21 @@ export const indent: ReturnType<typeof defineModule> = defineModule({
       implies: ['store'],
     },
   },
+  // Stockroom's transfers say which indent and which note they are.
+  viewExtensions: [
+    {
+      view: 'stock.picking.form',
+      operations: [
+        {
+          append: 'when',
+          nodes: [
+            field({ field: 'indent', id: 'indent' }),
+            field({ field: 'noteKind', id: 'indent_note' }),
+          ],
+        },
+      ],
+    },
+  ],
   approvals: [
     {
       name: 'Indent approvals',
@@ -80,6 +95,11 @@ export const indent: ReturnType<typeof defineModule> = defineModule({
     { topic: 'indent.request.approved', model: 'indent.request', label: 'Indent approved' },
     { topic: 'indent.request.issued', model: 'indent.request', label: 'Indent issued' },
     {
+      topic: 'indent.request.shipped',
+      model: 'indent.request',
+      label: 'Transfer shipped into transit',
+    },
+    {
       topic: 'indent.request.acknowledged',
       model: 'indent.request',
       label: 'Indent acknowledged',
@@ -102,8 +122,9 @@ export const indent: ReturnType<typeof defineModule> = defineModule({
             items: [
               { label: 'Requested by', bind: 'requester.name' },
               { label: 'Department', bind: 'department.name' },
+              { label: 'Request', bind: 'kind' },
               { label: 'Store', bind: 'warehouse.name' },
-              { label: 'Used at', bind: 'destination.name' },
+              { label: 'Goes to', bind: 'destination.name' },
               { label: 'Needed by', bind: 'dateRequired' },
               { label: 'Priority', bind: 'priority' },
               { label: 'Status', bind: 'state' },
@@ -119,7 +140,9 @@ export const indent: ReturnType<typeof defineModule> = defineModule({
               { label: 'Unit', bind: 'uom.name' },
               { label: 'Requested', bind: 'quantity' },
               { label: 'Approved', bind: 'qtyApproved' },
+              { label: 'Shipped', bind: 'qtyShipped' },
               { label: 'Issued', bind: 'qtyIssued' },
+              { label: 'Short', bind: 'qtyShort' },
             ],
           },
           { kind: 'text', id: 'purpose', text: '{{purpose}}' },
@@ -141,7 +164,8 @@ export const indent: ReturnType<typeof defineModule> = defineModule({
       columns: [
         { header: 'Requested by', field: 'requester' },
         { header: 'Store', field: 'warehouse' },
-        { header: 'Used at', field: 'destination' },
+        { header: 'Request', field: 'kind' },
+        { header: 'Goes to', field: 'destination' },
         { header: 'Needed by', field: 'dateRequired' },
         { header: 'Priority', field: 'priority' },
         { header: 'Purpose', field: 'purpose' },
@@ -286,6 +310,7 @@ export const indent: ReturnType<typeof defineModule> = defineModule({
     'indent.request.list': list(IndentRequest, {
       columns: [
         'name',
+        'kind',
         'requester',
         'department',
         'warehouse',
@@ -310,13 +335,17 @@ export const indent: ReturnType<typeof defineModule> = defineModule({
         buttons: [
           k.button('submit', { primary: true, label: 'Submit for approval' }),
           k.button('issue', { primary: true, label: 'Issue' }),
+          k.button('shortage', {
+            label: 'Write off the shortage',
+            confirm: 'Write off what is still in transit for this indent?',
+          }),
           k.button('acknowledge', { primary: true, label: 'Acknowledge receipt' }),
           k.button('redraft', { label: 'Set to draft' }),
           k.button('cancel', { label: 'Cancel', confirm: 'Cancel this indent?' }),
         ],
       },
       sheet: [
-        k.group('main', ['name', 'requester', 'employee', 'department', 'purpose']),
+        k.group('main', ['name', 'kind', 'requester', 'employee', 'department', 'purpose']),
         k.group('store', [
           'warehouse',
           'destination',
@@ -331,12 +360,23 @@ export const indent: ReturnType<typeof defineModule> = defineModule({
           'uom',
           'quantity',
           'qtyApproved',
+          'qtyShipped',
+          'inTransit',
           'qtyIssued',
+          'qtyShort',
           'qtyRemaining',
           'onHand',
           'note',
         ]),
-        k.group('after', ['rejectReason', 'acknowledgedOn'], { label: 'Decision and receipt' }),
+        k.lines('pickings', [
+          { field: 'name', id: 'picking_name' },
+          { field: 'noteKind', id: 'picking_note' },
+          { field: 'scheduledDate', id: 'picking_date' },
+          { field: 'state', id: 'picking_state' },
+        ]),
+        k.group('after', ['rejectReason', 'shortageReason', 'acknowledgedOn'], {
+          label: 'Decision and receipt',
+        }),
       ],
       chatter: true,
     })),
@@ -387,13 +427,19 @@ export const indent: ReturnType<typeof defineModule> = defineModule({
           domain: { state: 'approved', issueStatus: 'full' },
           group: 'state',
         },
+        transfers: { label: 'Transfers', domain: { kind: 'transfer' }, group: 'kind' },
+        in_transit: {
+          label: 'In transit',
+          domain: { pickings: { any: { noteKind: 'srn', state: 'confirmed' } } },
+          group: 'state',
+        },
         urgent: {
           label: 'Urgent',
           domain: { priority: { in: ['urgent', 'critical'] } },
           group: 'priority',
         },
       },
-      groupBy: ['department', 'warehouse', 'state', 'dateRequired:month'],
+      groupBy: ['kind', 'department', 'warehouse', 'state', 'dateRequired:month'],
     }),
     'indent.request.line': search(IndentRequestLine, {
       fields: ['product.name', 'request.name'],

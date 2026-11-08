@@ -21,7 +21,7 @@ test('a new indent: the store and where the goods are used filled in, saved as a
   await page.goto('/requests/a/requests.action_indents/new');
   await page.getByRole('textbox', { name: 'Purpose' }).fill('Bearings for the pellet mill');
   await page.getByRole('textbox', { name: 'Purpose' }).blur();
-  await expect(page.getByRole('combobox', { name: 'Used at' })).toContainText('Internal use');
+  await expect(page.getByRole('combobox', { name: 'Goes to' })).toContainText('Internal use');
   await expect(page.getByRole('combobox', { name: 'Store' })).not.toHaveText('');
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page).toHaveURL(/requests\.action_indents\/\d+$/);

@@ -13,7 +13,7 @@ import { hrShutro } from '@kosh/hr';
 import { approvalGuard, permissionsShutro, requestApprovals } from '@kosh/permissions';
 import { productShutro } from '@kosh/product';
 import { type Decimal, orm } from '@kosh/server/orm';
-import { defaultLocations, onHandIn, stockShutro } from '@kosh/stock';
+import { defaultLocations, onHandIn, stockShutro, transitLocation } from '@kosh/stock';
 import {
   check,
   compute,
@@ -80,6 +80,20 @@ async function groupOf(env: Env, product: number | null): Promise<number | null>
   return null;
 }
 
+/** What validated transfers of the given notes moved, by their moves. */
+function done(
+  moves: Iterable<{
+    quantity: Decimal;
+    quantityDone: Decimal | null;
+    picking: { state: string; noteKind: string | null };
+  }>,
+  note: (kind: string | null) => boolean,
+): Decimal {
+  return [...moves]
+    .filter((m) => m.picking.state === 'done' && note(m.picking.noteKind))
+    .reduce((s, m) => s.plus(m.quantityDone ?? m.quantity), zero);
+}
+
 /** The employee of a user, with their department, if they have one. */
 async function employeeOf(
   env: Env,
@@ -106,7 +120,7 @@ export const IndentRequest = defineModel('indent.request', {
   recName: 'name',
   order: ['id desc'],
   companyScoped: { required: true },
-  tracking: ['state', 'warehouse', 'priority', 'dateRequired'],
+  tracking: ['state', 'kind', 'warehouse', 'destination', 'priority', 'dateRequired'],
   access: {
     'indent.user': ALL,
     'indent.store': ALL,
@@ -149,6 +163,15 @@ export const IndentRequest = defineModel('indent.request', {
       default: (env: Env) => env.userId,
       label: 'Requested by',
     }),
+    kind: f.selection(
+      { issue: 'Issue for use', transfer: 'Transfer to a warehouse' },
+      {
+        required: true,
+        default: 'issue',
+        label: 'Request',
+        help: 'Goods issued for a section’s use, or stock sent from the store to another warehouse through transit.',
+      },
+    ),
     employee: f.many2one('hr.employee', { ondelete: 'set null' }),
     department: f.many2one('hr.department', {
       ondelete: 'set null',
@@ -163,8 +186,8 @@ export const IndentRequest = defineModel('indent.request', {
     destination: f.many2one('stock.location', {
       required: true,
       ondelete: 'restrict',
-      label: 'Used at',
-      help: 'Where the goods go: an internal-use location of the section; issued goods leave stock there.',
+      label: 'Goes to',
+      help: 'An internal-use location of the section (issued goods leave stock there), or the stock location of the warehouse receiving a transfer.',
     }),
     dateRequired: f.date({
       required: true,
@@ -177,9 +200,9 @@ export const IndentRequest = defineModel('indent.request', {
     ),
     purpose: f.text(),
     lines: f.one2many('indent.request.line', 'request', { label: 'Products' }),
-    pickings: f.one2many('stock.picking', 'indent', { label: 'Issues' }),
+    pickings: f.one2many('stock.picking', 'indent', { label: 'Transfers' }),
     issueCount: f.integer({
-      label: 'Issues',
+      label: 'Transfers',
       ...compute('indent.request', 'issueCount', ['pickings'], (requests) => {
         for (const r of requests) r.issueCount = r.pickings.length;
       }),
@@ -189,11 +212,11 @@ export const IndentRequest = defineModel('indent.request', {
       {
         store: true,
         label: 'Issued',
-        help: 'What the store issued of the approved quantities, by validated transfers.',
+        help: 'What arrived of the approved quantities, by validated transfers (for a transfer: received; a shortage recorded counts as settled).',
         ...compute(
           'indent.request',
           'issueStatus',
-          ['lines.qtyApproved', 'lines.qtyIssued'],
+          ['lines.qtyApproved', 'lines.qtyIssued', 'lines.qtyShort'],
           (requests) => {
             for (const r of requests) {
               const lines = [...r.lines].filter((l) => (l.qtyApproved ?? zero).gt(0));
@@ -201,7 +224,9 @@ export const IndentRequest = defineModel('indent.request', {
               r.issueStatus =
                 issued.length === 0
                   ? 'none'
-                  : lines.every((l) => (l.qtyIssued ?? zero).gte(l.qtyApproved ?? zero))
+                  : lines.every((l) =>
+                        (l.qtyIssued ?? zero).plus(l.qtyShort ?? zero).gte(l.qtyApproved ?? zero),
+                      )
                     ? 'full'
                     : 'partial';
             }
@@ -210,6 +235,11 @@ export const IndentRequest = defineModel('indent.request', {
       },
     ),
     rejectReason: f.char({ size: 300, label: 'Rejected because' }),
+    shortageReason: f.char({
+      size: 300,
+      label: 'Shortage because',
+      help: 'Why goods shipped were not received (lost, damaged on the road): written off from transit.',
+    }),
     acknowledgedOn: f.date({ label: 'Acknowledged on' }),
     state: f.state({
       states: STATES,
@@ -254,7 +284,10 @@ export const IndentRequest = defineModel('indent.request', {
           from: ['draft', 'to_approve', 'rejected'],
           to: 'cancel',
         },
-        /** Issues what is still owed: one transfer from the store to where the goods are used (RFC 0032 §3.1). */
+        /**
+         * Issues what is still owed: one transfer from the store to where the goods are used (RFC 0032 §3.1), or for a
+         * transfer the Stock Transfer Note into the store's transit location (§3.1, step 2).
+         */
         issue: {
           from: ['approved'],
           to: 'approved',
@@ -269,6 +302,27 @@ export const IndentRequest = defineModel('indent.request', {
             const env = requests.env as unknown as Env;
             await env.flush();
             for (const id of requests.ids) await issueRemaining(env, id as number);
+          }),
+        },
+        /** What was shipped and not received is written off from transit, with the reason (RFC 0032 §3.1). */
+        shortage: {
+          from: ['approved'],
+          to: 'approved',
+          requires: 'indent.issue',
+          guard: records('indent.request', async (requests) =>
+            [...(await requests.load({ pickings: true }))]
+              .filter(
+                (r) =>
+                  (r.shortageReason ?? '').trim() === '' ||
+                  ![...r.pickings].some((p) => p.noteKind === 'srn' && p.state === 'confirmed'),
+              )
+              .map((r) => r.id),
+          ),
+          message: 'Say why, on a transfer with goods still in transit.',
+          after: records('indent.request', async (requests) => {
+            const env = requests.env as unknown as Env;
+            await env.flush();
+            for (const id of requests.ids) await writeOffShortage(env, id as number);
           }),
         },
         /** The requester confirms what arrived; what was not issued is no longer owed. */
@@ -294,12 +348,28 @@ export const IndentRequest = defineModel('indent.request', {
   constraints: {
     // An internal-use location: issued goods leave stock there.
     usedAt: {
-      ...check('indent.request', ['destination'], async (requests) =>
+      ...check('indent.request', ['destination', 'kind'], async (requests) =>
         [...(await requests.load({ destination: true }))]
-          .filter((r) => r.destination.usage !== 'consumption')
+          .filter((r) => r.kind === 'issue' && r.destination.usage !== 'consumption')
           .map((r) => r.id),
       ),
       message: 'Goods are issued to an internal-use location.',
+    },
+    // A transfer goes to the stock of another warehouse.
+    transferTo: {
+      ...check('indent.request', ['destination', 'kind', 'warehouse'], async (requests) =>
+        [...(await requests.load({ destination: true }))]
+          .filter(
+            (r) =>
+              r.kind === 'transfer' &&
+              (r.destination.usage !== 'internal' ||
+                r.destination.transit === true ||
+                r.destination.warehouse === null ||
+                r.destination.warehouse.id === r.warehouse.id),
+          )
+          .map((r) => r.id),
+      ),
+      message: 'A transfer goes to a stock location of another warehouse.',
     },
   },
   methods: {
@@ -335,6 +405,11 @@ export const IndentRequest = defineModel('indent.request', {
       'indent.request',
       async (d, env): Promise<void> => fillRequest(d as never, env, false),
     ),
+    // Where the goods go follows the kind: internal use for an issue, chosen for a transfer.
+    kind: onchange('indent.request', async (d, env): Promise<void> => {
+      const draft = d as unknown as { get(k: string): unknown; set(k: string, v: unknown): void };
+      draft.set('destination', draft.get('kind') === 'transfer' ? null : await internalUse(env));
+    }),
   },
 });
 
@@ -353,7 +428,7 @@ async function fillRequest(
     const places = await defaultLocations(env as never, 'internal');
     if (places.warehouse !== null) d.set('warehouse', places.warehouse);
   }
-  if ((d.get('destination') ?? null) === null) {
+  if ((d.get('destination') ?? null) === null && d.get('kind') !== 'transfer') {
     const used = await internalUse(env);
     if (used !== null) d.set('destination', used);
   }
@@ -392,15 +467,20 @@ async function issueRemaining(env: Env, id: number): Promise<number | null> {
       `${r.warehouse.name} has no stock location.`,
       'Add its stock location in Stockroom › Configuration › Locations.',
     );
+  // A transfer ships into the store's transit location first (the Stock Transfer Note); the receipt follows.
+  const transfer = r.kind === 'transfer';
   const made = await env.model('stock.picking').create([
     {
       kind: 'internal',
       company: r.company.id,
       warehouse: r.warehouse.id,
       source: places.source,
-      destination: r.destination.id,
+      destination: transfer
+        ? await transitLocation(env as never, r.warehouse.id)
+        : r.destination.id,
       origin: r.name,
       indent: r.id,
+      noteKind: transfer ? 'stn' : null,
       moves: {
         create: owed.map((l) => ({
           product: l.product.id,
@@ -415,6 +495,95 @@ async function issueRemaining(env: Env, id: number): Promise<number | null> {
   await made.confirm();
   await env.emit('indent.request.issued', { id: r.id });
   return (made.ids[0] as number | undefined) ?? null;
+}
+
+/**
+ * For each validated Stock Transfer Note, the Stock Receive Note of what it shipped: from the store's transit
+ * location to the receiving warehouse, confirmed so the goods in transit are reserved for it. Runs in the
+ * validation's audited superuser scope.
+ */
+async function receiveNotes(env: Env, pickings: readonly number[]): Promise<void> {
+  for (const p of await env
+    .model('stock.picking')
+    .browse([...pickings] as never)
+    .load({
+      moves: { product: true, uom: true, indentLine: true },
+      indent: { destination: true },
+    })) {
+    if (p.noteKind !== 'stn' || p.indent === null) continue;
+    const shipped = p.moves.filter((m) => (m.doneQty ?? zero).gt(0));
+    if (shipped.length === 0) continue;
+    const made = await env.model('stock.picking').create([
+      {
+        kind: 'internal',
+        company: p.company.id,
+        warehouse: p.indent.destination.warehouse?.id ?? null,
+        source: p.destination.id,
+        destination: p.indent.destination.id,
+        origin: `${p.indent.name} · ${p.name}`,
+        indent: p.indent.id,
+        noteKind: 'srn',
+        moves: {
+          create: shipped.map((m) => ({
+            product: m.product.id,
+            name: m.name,
+            quantity: m.doneQty,
+            uom: m.uom?.id ?? null,
+            indentLine: m.indentLine?.id ?? null,
+          })),
+        },
+      },
+    ] as never);
+    await made.confirm();
+    await env.emit('indent.request.shipped', { id: p.indent.id });
+  }
+}
+
+/**
+ * Writes off what an indent's open receive notes still carry: each is cancelled (its reservations released) and an
+ * inventory adjustment takes the goods out of transit, valued as a loss by `stock_account`.
+ */
+async function writeOffShortage(env: Env, id: number): Promise<void> {
+  const [r] = await env
+    .model('indent.request')
+    .browse([id as never])
+    .load({ pickings: { moves: { product: true, uom: true, indentLine: true } }, company: true });
+  if (r === undefined) return;
+  const open = r.pickings.filter((p) => p.noteKind === 'srn' && p.state === 'confirmed');
+  if (open.length === 0) return;
+  const adjustment = (
+    await env
+      .model('stock.location')
+      .search({ where: { usage: 'adjustment' }, order: ['id asc'], limit: 1 })
+  ).ids[0];
+  if (adjustment === undefined) return;
+  for (const p of open) {
+    await env.model('stock.picking').browse([p.id]).cancel();
+    const loss = await env.model('stock.picking').create([
+      {
+        kind: 'adjustment',
+        company: r.company.id,
+        warehouse: p.warehouse?.id ?? null,
+        source: p.source.id,
+        destination: adjustment,
+        origin: `${r.name} · ${p.name} · ${r.shortageReason ?? ''}`,
+        indent: r.id,
+        noteKind: 'short',
+        note: r.shortageReason,
+        moves: {
+          create: p.moves.map((m) => ({
+            product: m.product.id,
+            name: m.name,
+            quantity: m.quantity,
+            uom: m.uom?.id ?? null,
+            indentLine: m.indentLine?.id ?? null,
+          })),
+        },
+      },
+    ] as never);
+    await loss.confirm();
+    await loss.validate();
+  }
 }
 
 export const IndentRequestLine = defineModel('indent.request.line', {
@@ -483,16 +652,59 @@ export const IndentRequestLine = defineModel('indent.request.line', {
       scale: 3,
       store: true,
       label: 'Issued',
-      help: 'Issued by validated transfers from the store.',
+      help: 'Issued by validated transfers from the store; for a transfer, received at the other warehouse.',
       ...compute(
         'indent.request.line',
         'qtyIssued',
-        ['moves.quantity', 'moves.quantityDone', 'moves.picking.state'],
+        ['moves.quantity', 'moves.quantityDone', 'moves.picking.state', 'moves.picking.noteKind'],
         (lines) => {
-          for (const l of lines)
-            l.qtyIssued = [...l.moves]
-              .filter((m) => m.picking.state === 'done')
-              .reduce((s, m) => s.plus(m.quantityDone ?? m.quantity), zero);
+          for (const l of lines) l.qtyIssued = done(l.moves, (k) => k === null || k === 'srn');
+        },
+      ),
+    }),
+    qtyShipped: f.decimal({
+      scale: 3,
+      store: true,
+      label: 'Shipped',
+      help: 'For a transfer: sent by validated Stock Transfer Notes.',
+      ...compute(
+        'indent.request.line',
+        'qtyShipped',
+        ['moves.quantity', 'moves.quantityDone', 'moves.picking.state', 'moves.picking.noteKind'],
+        (lines) => {
+          for (const l of lines) l.qtyShipped = done(l.moves, (k) => k === 'stn');
+        },
+      ),
+    }),
+    qtyShort: f.decimal({
+      scale: 3,
+      store: true,
+      label: 'Short',
+      help: 'Shipped and never received: written off from transit with the reason.',
+      ...compute(
+        'indent.request.line',
+        'qtyShort',
+        ['moves.quantity', 'moves.quantityDone', 'moves.picking.state', 'moves.picking.noteKind'],
+        (lines) => {
+          for (const l of lines) l.qtyShort = done(l.moves, (k) => k === 'short');
+        },
+      ),
+    }),
+    inTransit: f.decimal({
+      scale: 3,
+      label: 'In transit',
+      help: 'Shipped, not received yet and not written off.',
+      ...compute(
+        'indent.request.line',
+        'inTransit',
+        ['qtyShipped', 'qtyIssued', 'qtyShort', 'request.kind'],
+        (lines) => {
+          for (const l of lines) {
+            const left = (l.qtyShipped ?? zero)
+              .minus(l.qtyIssued ?? zero)
+              .minus(l.qtyShort ?? zero);
+            l.inTransit = l.request.kind === 'transfer' && left.gt(0) ? left : zero;
+          }
         },
       ),
     }),
@@ -509,6 +721,7 @@ export const IndentRequestLine = defineModel('indent.request.line', {
           'moves.quantity',
           'moves.quantityDone',
           'moves.picking.state',
+          'moves.picking.noteKind',
           'request.state',
         ],
         (lines) => {
@@ -517,9 +730,13 @@ export const IndentRequestLine = defineModel('indent.request.line', {
               l.qtyRemaining = zero;
               continue;
             }
-            // What open transfers already carry is not owed again.
+            // What open transfers already carry is not owed again (for a transfer: what was shipped or will be).
             const planned = [...l.moves]
-              .filter((m) => m.picking.state !== 'cancel')
+              .filter(
+                (m) =>
+                  m.picking.state !== 'cancel' &&
+                  (m.picking.noteKind === null || m.picking.noteKind === 'stn'),
+              )
               .reduce(
                 (s, m) =>
                   s.plus(m.picking.state === 'done' ? (m.quantityDone ?? m.quantity) : m.quantity),
@@ -606,6 +823,13 @@ export const PickingIndent = extendModel('stock.picking', {
   },
   fields: {
     indent: f.many2one('indent.request', { ondelete: 'set null', label: 'Indent' }),
+    noteKind: f.selection(
+      { stn: 'Stock Transfer Note', srn: 'Stock Receive Note', short: 'Shortage in transit' },
+      {
+        label: 'Note',
+        help: 'For a transfer indent: the shipment into transit, its receipt at the other warehouse, or what was lost on the road.',
+      },
+    ),
   },
   overrides: {
     // The rest of a partial issue stays with its indent.
@@ -616,11 +840,21 @@ export const PickingIndent = extendModel('stock.picking', {
       const out = await next();
       for (const p of await (
         this as {
-          load(spec: object): Promise<Iterable<{ id: number; indent: { id: number } | null }>>;
+          load(
+            spec: object,
+          ): Promise<
+            Iterable<{ id: number; indent: { id: number } | null; noteKind: string | null }>
+          >;
         }
       ).load({}))
-        out.set(p.id, { ...out.get(p.id), indent: p.indent?.id ?? null });
+        out.set(p.id, { ...out.get(p.id), indent: p.indent?.id ?? null, noteKind: p.noteKind });
       return out;
+    },
+    // A shipped Stock Transfer Note brings its Stock Receive Note.
+    validated: async function (this: unknown, next: () => Promise<void>): Promise<void> {
+      await next();
+      const pickings = this as { env: Env; ids: readonly number[] };
+      await receiveNotes(pickings.env, pickings.ids);
     },
   },
 });

@@ -1,5 +1,6 @@
 /** Bangla for the module's labels, keyed by their English text (RFC 0023 §3.1; `pnpm i18n:extract`). */
 export const bn: Readonly<Record<string, string>> = {
+  'A transfer goes to a stock location of another warehouse.': 'স্থানান্তর অন্য গুদামের স্টক লোকেশনে যায়।',
   'Acknowledge receipt': 'প্রাপ্তি স্বীকার করুন',
   Acknowledged: 'প্রাপ্তি স্বীকৃত',
   'Acknowledged on': 'প্রাপ্তি স্বীকারের তারিখ',
@@ -7,6 +8,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Add the products before submitting the indent.': 'ইন্ডেন্ট জমা দেওয়ার আগে পণ্যগুলো যোগ করুন।',
   'An approved quantity is never above the requested one.':
     'অনুমোদিত পরিমাণ কখনো অনুরোধকৃত পরিমাণের বেশি হয় না।',
+  'An internal-use location of the section (issued goods leave stock there), or the stock location of the warehouse receiving a transfer.':
+    'সেকশনের অভ্যন্তরীণ ব্যবহারের লোকেশন (ইস্যুকৃত পণ্য সেখানে স্টক থেকে বেরিয়ে যায়), অথবা স্থানান্তর গ্রহণকারী গুদামের স্টক লোকেশন।',
   Approved: 'অনুমোদিত',
   'Approved and not issued yet (in transfers waiting, or not issued at all).':
     'অনুমোদিত কিন্তু এখনো ইস্যু হয়নি (অপেক্ষমাণ স্থানান্তরে, বা একেবারেই ইস্যু হয়নি)।',
@@ -32,13 +35,21 @@ export const bn: Readonly<Record<string, string>> = {
   'Drafted by the requester, approved by the department head and the products’ group approvers, issued by the store, then acknowledged by the requester.':
     'অনুরোধকারী খসড়া করেন, বিভাগীয় প্রধান ও পণ্যগ্রুপের অনুমোদনকারীরা অনুমোদন করেন, স্টোর ইস্যু করে, তারপর অনুরোধকারী প্রাপ্তি স্বীকার করেন।',
   Employee: 'কর্মী',
+  'For a transfer indent: the shipment into transit, its receipt at the other warehouse, or what was lost on the road.':
+    'স্থানান্তর ইন্ডেন্টের জন্য: ট্রানজিটে পাঠানো, অন্য গুদামে গ্রহণ, বা পথে যা হারিয়েছে।',
+  'For a transfer: sent by validated Stock Transfer Notes.':
+    'স্থানান্তরের জন্য: যাচাইকৃত স্টক ট্রান্সফার নোটে পাঠানো।',
+  'Goes to': 'গন্তব্য',
   'Goods are issued to an internal-use location.': 'পণ্য অভ্যন্তরীণ ব্যবহারের লোকেশনে ইস্যু হয়।',
+  'Goods issued for a section’s use, or stock sent from the store to another warehouse through transit.':
+    'সেকশনের ব্যবহারের জন্য ইস্যুকৃত পণ্য, অথবা ট্রানজিট হয়ে স্টোর থেকে অন্য গুদামে পাঠানো স্টক।',
   Group: 'গ্রুপ',
   Guidance: 'নির্দেশনা',
   'Guidance for requesters': 'অনুরোধকারীদের জন্য নির্দেশনা',
   High: 'উচ্চ',
   'How soon the goods are needed, shown as stars.': 'পণ্য কত দ্রুত প্রয়োজন, তারকা দিয়ে দেখানো।',
   ID: 'আইডি',
+  'In transit': 'ট্রানজিটে',
   Indent: 'ইন্ডেন্ট',
   'Indent {{name}}': 'ইন্ডেন্ট {{name}}',
   'Indent acknowledged': 'ইন্ডেন্টের প্রাপ্তি স্বীকৃত',
@@ -56,11 +67,12 @@ export const bn: Readonly<Record<string, string>> = {
   'Indents to the store: approved, issued and acknowledged':
     'স্টোরে ইন্ডেন্ট: অনুমোদিত, ইস্যুকৃত ও প্রাপ্তি স্বীকৃত',
   Issue: 'ইস্যু করুন',
+  'Issue for use': 'ব্যবহারের জন্য ইস্যু',
   Issued: 'ইস্যুকৃত',
-  'Issued by validated transfers from the store.': 'স্টোর থেকে যাচাইকৃত স্থানান্তরে ইস্যুকৃত।',
+  'Issued by validated transfers from the store; for a transfer, received at the other warehouse.':
+    'স্টোর থেকে যাচাইকৃত স্থানান্তরে ইস্যুকৃত; স্থানান্তরের ক্ষেত্রে অন্য গুদামে গৃহীত।',
   'Issued in full': 'সম্পূর্ণ ইস্যুকৃত',
   'Issued, to acknowledge': 'ইস্যুকৃত, প্রাপ্তি স্বীকার বাকি',
-  Issues: 'ইস্যুসমূহ',
   'Lines › Product': 'লাইন › পণ্য',
   'Lines › Quantity': 'লাইন › পরিমাণ',
   'Lowered because': 'কমানোর কারণ',
@@ -89,6 +101,7 @@ export const bn: Readonly<Record<string, string>> = {
   Reference: 'রেফারেন্স',
   Rejected: 'প্রত্যাখ্যাত',
   'Rejected because': 'প্রত্যাখ্যানের কারণ',
+  Request: 'অনুরোধের ধরন',
   Requested: 'অনুরোধকৃত',
   'Requested by': 'অনুরোধকারী',
   'Requested by: ____________   Approved by: ____________   Issued by: ____________   Received by: ____________':
@@ -101,12 +114,23 @@ export const bn: Readonly<Record<string, string>> = {
   'Requests manager (product groups, everything)': 'অনুরোধ ব্যবস্থাপক (পণ্যগ্রুপ, সবকিছু)',
   'Requests: own indents': 'অনুরোধ: নিজের ইন্ডেন্ট',
   'Requests: store keeper': 'অনুরোধ: স্টোরকিপার',
+  'Say why, on a transfer with goods still in transit.':
+    'কারণ লিখুন, এমন স্থানান্তরে যার পণ্য এখনো ট্রানজিটে।',
   Sequence: 'ক্রম',
   'Set to draft': 'খসড়ায় ফেরত নিন',
+  Shipped: 'পাঠানো হয়েছে',
+  'Shipped and never received: written off from transit with the reason.':
+    'পাঠানো কিন্তু কখনো গৃহীত হয়নি: কারণসহ ট্রানজিট থেকে বাদ দেওয়া।',
+  'Shipped, not received yet and not written off.': 'পাঠানো, এখনো গৃহীত হয়নি এবং বাদ দেওয়া হয়নি।',
+  Short: 'ঘাটতি',
+  'Shortage because': 'ঘাটতির কারণ',
+  'Shortage in transit': 'ট্রানজিটে ঘাটতি',
   State: 'অবস্থা',
   Status: 'অবস্থা',
   'Still owed': 'এখনো বাকি',
   'Still owed by product': 'পণ্য অনুযায়ী বাকি',
+  'Stock Receive Note': 'স্টক রিসিভ নোট',
+  'Stock Transfer Note': 'স্টক ট্রান্সফার নোট',
   Store: 'স্টোর',
   'Store keeper (issues indents)': 'স্টোরকিপার (ইন্ডেন্ট ইস্যু করেন)',
   'Submit for approval': 'অনুমোদনের জন্য জমা দিন',
@@ -120,18 +144,23 @@ export const bn: Readonly<Record<string, string>> = {
   'The warehouse asked for the goods.': 'যে গুদামের কাছে পণ্য চাওয়া হয়েছে।',
   'To acknowledge': 'প্রাপ্তি স্বীকার বাকি',
   'To issue': 'ইস্যু বাকি',
+  'Transfer shipped into transit': 'স্থানান্তর ট্রানজিটে পাঠানো হয়েছে',
+  'Transfer to a warehouse': 'গুদামে স্থানান্তর',
+  Transfers: 'স্থানান্তরসমূহ',
   Unit: 'একক',
   'Updated At': 'হালনাগাদের সময়',
   'Updated By': 'হালনাগাদ করেছেন',
   Urgent: 'জরুরি',
-  'Used at': 'ব্যবহারের স্থান',
   'Waiting for approval': 'অনুমোদনের অপেক্ষায়',
   'Waiting for approvals.': 'অনুমোদনের অপেক্ষায়।',
-  'What the store issued of the approved quantities, by validated transfers.':
-    'যাচাইকৃত স্থানান্তরে অনুমোদিত পরিমাণের যতটা স্টোর ইস্যু করেছে।',
+  'What arrived of the approved quantities, by validated transfers (for a transfer: received; a shortage recorded counts as settled).':
+    'যাচাইকৃত স্থানান্তরে অনুমোদিত পরিমাণের যতটা পৌঁছেছে (স্থানান্তরে: গৃহীত; লিপিবদ্ধ ঘাটতি নিষ্পন্ন ধরা হয়)।',
   'What the store’s warehouse holds of the product now.': 'স্টোরের গুদামে এখন পণ্যটির যতটা আছে।',
-  'Where the goods go: an internal-use location of the section; issued goods leave stock there.':
-    'পণ্য যেখানে যায়: সেকশনের অভ্যন্তরীণ ব্যবহারের লোকেশন; ইস্যুকৃত পণ্য সেখানে স্টক থেকে বেরিয়ে যায়।',
   'Who approves indents for the group’s products (the approval level where the record names the approvers).':
     'গ্রুপের পণ্যের ইন্ডেন্ট যাঁরা অনুমোদন করেন (যে ধাপে রেকর্ড অনুমোদনকারীদের নাম দেয়)।',
+  'Why goods shipped were not received (lost, damaged on the road): written off from transit.':
+    'পাঠানো পণ্য কেন গৃহীত হয়নি (পথে হারানো, নষ্ট): ট্রানজিট থেকে বাদ দেওয়া হয়।',
+  'Write off the shortage': 'ঘাটতি বাদ দিন',
+  'Write off what is still in transit for this indent?':
+    'এই ইন্ডেন্টের যা এখনো ট্রানজিটে আছে তা বাদ দেবেন?',
 };

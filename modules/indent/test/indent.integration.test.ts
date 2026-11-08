@@ -86,7 +86,7 @@ const decide = async (id: number, who: string) => {
 const linesOf = async (id: number, as: string) => {
   const res = await call(
     'GET',
-    `${L}?filter=${encodeURIComponent(JSON.stringify({ request: id }))}&fields=product,group,quantity,qtyApproved,qtyIssued,qtyRemaining,onHand`,
+    `${L}?filter=${encodeURIComponent(JSON.stringify({ request: id }))}&fields=product,group,quantity,qtyApproved,qtyIssued,qtyRemaining,onHand,qtyShipped,inTransit,qtyShort`,
     as,
   );
   expect(res.status, JSON.stringify(res.json)).toBe(200);
@@ -336,6 +336,89 @@ test('department head, then product group approvers; lowered, issued partly, ack
   expect((await call('GET', `${R}/${id}?fields=state,acknowledgedOn`, 'rahim')).json).toMatchObject(
     { state: 'acknowledged' },
   );
+});
+
+test('a transfer to a depot: shipped into transit, received partly, the rest written off', async () => {
+  // The depot: another warehouse with its stock location.
+  const depot = (
+    await call('POST', '/api/v1/models/stock.warehouse', 'hana', { name: 'Depot', code: 'DP' })
+  ).json.id as number;
+  const depotStock = (
+    await call('POST', '/api/v1/models/stock.location', 'hana', {
+      name: 'Stock',
+      usage: 'internal',
+      warehouse: depot,
+    })
+  ).json.id as number;
+  // Not to the store itself, nor to internal use.
+  const wrong = await call('POST', R, 'rahim', {
+    kind: 'transfer',
+    warehouse,
+    destination: internalUse,
+    dateRequired: '2026-11-20',
+    lines: { create: [{ product: bolt, quantity: '10' }] },
+  });
+  expect(wrong.status).toBe(422);
+  const made = await call('POST', R, 'rahim', {
+    kind: 'transfer',
+    warehouse,
+    destination: depotStock,
+    dateRequired: '2026-11-20',
+    lines: { create: [{ product: bolt, quantity: '10' }] },
+  });
+  expect(made.status, JSON.stringify(made.json)).toBe(201);
+  const id = made.json.id as number;
+  const before = Number((await linesOf(id, 'rahim'))[0].onHand);
+  expect((await run('indent.request', id, 'submit', 'rahim')).status).toBe(200);
+  expect(await decide(id, 'head')).toBe(1);
+  expect(await decide(id, 'gina')).toBe(1);
+  expect((await run('indent.request', id, 'issue', 'stan')).status).toBe(200);
+  const notes = async () =>
+    (
+      await call(
+        'GET',
+        `/api/v1/models/stock.picking?filter=${encodeURIComponent(JSON.stringify({ indent: id }))}&fields=noteKind,state,destination&order=id`,
+        'stan',
+      )
+    ).json.items as Json[];
+  const [stn] = await notes();
+  expect(stn.noteKind).toBe('stn');
+  await validate(stn.id, { [bolt]: '10' });
+  // Shipped: out of the store, in transit, and the receive note waits for it at the depot.
+  let line = (await linesOf(id, 'rahim'))[0];
+  expect([Number(line.qtyShipped), Number(line.inTransit), Number(line.onHand)]).toEqual([
+    10,
+    10,
+    before - 10,
+  ]);
+  const srn = (await notes()).find((p) => p.noteKind === 'srn');
+  expect(srn).toMatchObject({ state: 'confirmed' });
+  expect(srn.destination?.id ?? srn.destination).toBe(depotStock);
+  // 7 arrive; 3 stay in transit on the backorder.
+  await validate(srn.id, { [bolt]: '7' });
+  line = (await linesOf(id, 'rahim'))[0];
+  expect([Number(line.qtyIssued), Number(line.inTransit)]).toEqual([7, 3]);
+  // The shortage needs its reason, then leaves transit as a loss.
+  expect((await run('indent.request', id, 'shortage', 'stan')).status).toBe(409);
+  expect(
+    (await call('PATCH', `${R}/${id}`, 'stan', { shortageReason: 'Bag torn on the road' })).status,
+  ).toBe(200);
+  const written = await run('indent.request', id, 'shortage', 'stan');
+  expect(written.status, JSON.stringify(written.json)).toBe(200);
+  line = (await linesOf(id, 'rahim'))[0];
+  expect([Number(line.qtyShort), Number(line.inTransit)]).toEqual([3, 0]);
+  expect((await call('GET', `${R}/${id}?fields=issueStatus`, 'rahim')).json.issueStatus).toBe(
+    'full',
+  );
+  const atDepot = (
+    await call(
+      'GET',
+      `/api/v1/models/stock.quant?filter=${encodeURIComponent(JSON.stringify({ location: depotStock, product: bolt }))}&fields=quantity`,
+      'hana',
+    )
+  ).json.items as Json[];
+  expect(atDepot.reduce((t, q) => t + Number(q.quantity), 0)).toBe(7);
+  expect((await run('indent.request', id, 'acknowledge', 'rahim')).status).toBe(200);
 });
 
 test('the demo data loads', async () => {
