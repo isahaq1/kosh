@@ -191,7 +191,13 @@ describe('report query', () => {
   });
 
   test('asOf: the report as it was before a change (models with history)', async () => {
-    const before = new Date().toISOString();
+    // The instant on the database's clock: a host clock a little ahead of the container's (after a sleep, say)
+    // would otherwise place it after the change.
+    const [{ at }] = (await server.driver.query({
+      text: 'SELECT clock_timestamp() AS at',
+      params: [],
+    })) as unknown as [{ at: Date }];
+    const before = new Date(at).toISOString();
     await new Promise((r) => setTimeout(r, 50));
     const change = await server.app.inject({
       method: 'POST',
