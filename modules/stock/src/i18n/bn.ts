@@ -17,8 +17,8 @@ export const bn: Readonly<Record<string, string>> = {
   'A reservation holds a positive quantity.': 'সংরক্ষণে ধনাত্মক পরিমাণ থাকতে হবে।',
   'A rule keeps goods in stock; buying and dropshipping need a vendor (dropshipping is for each delivery), a transfer another warehouse to take from.':
     'নিয়ম মালামাল মজুদে রাখে; ক্রয় ও ড্রপশিপের জন্য সরবরাহকারী লাগে (ড্রপশিপ প্রতিটি সরবরাহের জন্য), আর স্থানান্তরের জন্য অন্য একটি গুদাম লাগে যেখান থেকে নেওয়া হবে।',
-  'A transfer goes between two places: a receipt into stock, a delivery out of stock, an internal move between stock locations, an adjustment between stock and the adjustment location.':
-    'স্থানান্তর দুটি জায়গার মধ্যে হয়: প্রাপ্তি মজুদে আসে, সরবরাহ মজুদ থেকে যায়, অভ্যন্তরীণ স্থানান্তর মজুদের অবস্থানগুলোর মধ্যে হয়, সমন্বয় মজুদ ও সমন্বয় অবস্থানের মধ্যে হয়।',
+  'A transfer goes between two places: a receipt into stock, a delivery out of stock, an internal move between stock locations or out to internal use, an adjustment between stock and the adjustment location.':
+    'একটি স্থানান্তর দুটি জায়গার মধ্যে হয়: রিসিপ্ট স্টকে, ডেলিভারি স্টক থেকে বাইরে, অভ্যন্তরীণ স্থানান্তর স্টক লোকেশনগুলোর মধ্যে বা অভ্যন্তরীণ ব্যবহারে, সমন্বয় স্টক ও সমন্বয় লোকেশনের মধ্যে।',
   Active: 'সক্রিয়',
   'Add at least one line before confirming the transfer.':
     'স্থানান্তর নিশ্চিত করার আগে অন্তত একটি লাইন যোগ করুন।',
@@ -114,6 +114,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Internal (holds stock)': 'অভ্যন্তরীণ (মজুদ রাখে)',
   'Internal move': 'অভ্যন্তরীণ স্থানান্তর',
   'Internal moves': 'অভ্যন্তরীণ স্থানান্তর',
+  'Internal use (consumed)': 'অভ্যন্তরীণ ব্যবহার (খরচ)',
   'Inventory adjustment': 'মজুদ সমন্বয়',
   Kind: 'ধরন',
   'Last ordered': 'সর্বশেষ অর্ডার',

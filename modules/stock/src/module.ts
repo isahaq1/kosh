@@ -181,6 +181,7 @@ export const StockLocation = defineModel('stock.location', {
         adjustment: 'Inventory adjustment',
         production: 'Production',
         transit: 'In transit',
+        consumption: 'Internal use (consumed)',
       },
       {
         required: true,
@@ -1502,8 +1503,10 @@ export const StockPicking = defineModel('stock.picking', {
               (p.kind === 'delivery' && p.source.usage !== 'internal') ||
               (p.kind === 'dropship' &&
                 (p.source.usage !== 'vendor' || p.destination.usage !== 'customer')) ||
+              // Internal moves go between stock locations, or out to an internal-use location (RFC 0032).
               (p.kind === 'internal' &&
-                (p.source.usage !== 'internal' || p.destination.usage !== 'internal')) ||
+                (p.source.usage !== 'internal' ||
+                  (p.destination.usage !== 'internal' && p.destination.usage !== 'consumption'))) ||
               (p.kind === 'adjustment' &&
                 !(
                   (p.source.usage === 'adjustment' && p.destination.usage === 'internal') ||
@@ -1518,7 +1521,7 @@ export const StockPicking = defineModel('stock.picking', {
           .map((p) => p.id),
       ),
       message:
-        'A transfer goes between two places: a receipt into stock, a delivery out of stock, an internal move between stock locations, an adjustment between stock and the adjustment location.',
+        'A transfer goes between two places: a receipt into stock, a delivery out of stock, an internal move between stock locations or out to internal use, an adjustment between stock and the adjustment location.',
     },
   },
 });
@@ -2181,12 +2184,12 @@ export const StockReorder = defineModel('stock.reorder', {
 const shared = (
   id: string,
   name: string,
-  usage: 'vendor' | 'customer' | 'adjustment' | 'production',
+  usage: 'vendor' | 'customer' | 'adjustment' | 'production' | 'consumption',
 ) => record('stock.location', id, { name, usage, company: null }, { noupdate: true });
 
 export const stockShutro = defineModule({
   name: 'stock',
-  version: '0.4.0',
+  version: '0.5.0',
   depends: [productShutro, contactsShutro, messagingShutro],
   groups: [
     orm.defineGroup({ code: 'stock.user', label: 'Stockroom user', implies: ['product.user'] }),
@@ -2242,5 +2245,7 @@ export const stockShutro = defineModule({
     shared('location_adjustment', 'Inventory adjustment', 'adjustment'),
     shared('location_production', 'Production', 'production'),
     shared('location_scrap', 'Scrap', 'adjustment'),
+    // Goods issued for a section's own use leave stock here (RFC 0032 §3.1).
+    shared('location_internal_use', 'Internal use', 'consumption'),
   ],
 });
