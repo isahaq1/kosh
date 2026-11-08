@@ -329,6 +329,27 @@ it applies to, its hit rate and what it would do to the open ones, without chang
 lines have **Undo** (`POST /api/v1/accounting/statement-lines/:id/undo`): a payment comes off its documents and is
 reversed, a write-off is reversed, and the line is open again.
 
+### Vendor prices (`modules/purchase`, `modules/purchase_stock`, RFC 0030)
+
+**Purchase › Vendor prices** (buyers) records what each vendor charges: for a product or for every product of a
+category, their code and name for it, the currency, **from what quantity** (one row per price break), between which
+dates, how many **lead days** they take, and whether they are **preferred**. Prices come in through the import
+screen too (the *Vendor prices* template).
+
+A purchase line's price is the one typed in, else the order's vendor's price for the line's quantity and the
+order's date, else the product's cost; the line shows the vendor's code and **why** ("Padma Cement's price from
+100; 2 days to arrive.", "Typed in."). A typed price is kept when the quantity or the vendor changes. A reorder rule
+that buys orders from the preferred vendor if one fits, else the **cheapest that arrives within the rule's lead
+days** (else the cheapest), else the rule's own vendor; Replenishment says so in the rule's explanation ("Bought from
+Jamuna Supplies: Jamuna Supplies is the cheapest of 2; arrives in 4 days, in time."), and the request for quotation
+expects the goods after the vendor's lead days.
+
+A vendor's contact shows their **scorecard** for the last twelve months (`GET
+/api/v1/purchase/vendors/:id/scorecard`, with Purchase with receipts): the confirmed orders, the share of receipts
+done by the expected date, the average days from order to receipt, and the last price of what is bought most
+against the year's average — computed from the orders the user may read. `vendorPriceFor(env, { product, quantity,
+date, vendor?, currency?, needBy? })` gives other modules the same choice with its sentence.
+
 ### Fiscal positions and accounts (`modules/accounting`, RFC 0029)
 
 **Where a line posts.** A product line posts to its own account if one is set, else to what an app proposes (a

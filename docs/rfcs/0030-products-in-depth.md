@@ -1,6 +1,6 @@
 # RFC 0030 — Products in depth: vendor prices, returns, landed costs, variants
 
-- Status: Proposed (2026-11-08)
+- Status: Accepted (2026-11-08)
 - Builds on: RFC 0008 (Products, Purchase), RFC 0021 (Stockroom, its valuation and Trade Finance), RFC 0024
   (replenishment, the Shop), RFC 0028 (price lists, billing by received quantity)
 - Source: [docs/odoo-gaps/supply.md](../odoo-gaps/supply.md) §3 items 1–4, the cross-cutting gap #2 of
@@ -92,3 +92,15 @@ only accountants post landed costs), English and Bangla, the module standard, E2
 
 Purchase agreements and calls for tender, repair orders, traceable manufacturing (finished-goods lots), packaging
 and units per vendor, product configurator rules beyond exclusions, Shop attribute filters and feeds.
+
+## 6. Notes
+
+- **Step 1 (2026-11-08).** `product.vendor.price` and `vendorPriceFor` (the product's rows before its category's,
+  the highest break that fits per vendor, the preferred one when it fits, else the cheapest that arrives by
+  `needBy`, else the cheapest, each choice in words); purchase lines priced by it (`priceUnit` a stored compute with
+  the typed price kept in `manualPrice`, `priceReason`, `vendorCode`; migration 0.4.0 keeps existing prices as
+  typed); reorder rules choosing the vendor and arrival date, the choice in Replenishment's explanation through a
+  new `stock.reorder.sourcing` hook; the vendor scorecard on contacts (`purchase_stock` now has a web entry); the
+  import template. Deviation: vendor prices live in `purchase`, not `product`, since a vendor is a contact and
+  Products do not depend on Contacts.
+
