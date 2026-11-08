@@ -417,6 +417,25 @@ With the `realtime` module installed (every installation has it), the app keeps 
 - PostgreSQL `NOTIFY` reaches every server of the database, so a cluster needs no extra message bus. The dev and
   preview proxies (`ws: true`) and the starter's nginx forward WebSocket upgrades.
 
+## Developer mode (RFC 0031 §3.1)
+
+Administrators and members of the **Developer** group (`base.developer`) find **Developer mode** in their user menu
+(remembered per browser). With it on, things explain themselves in a dark card on hover or keyboard focus:
+
+- a **field label** (forms) or a **list column**: the label, the field key, the model, the type, the **relation** (the
+  model it points to, a link to its records, and for a one-to-many the field pointing back), on delete, required,
+  read-only, stored, **computed from** what, the default, translated, indexed, the selection's values and the
+  **module** that declared it;
+- a **button**: its transition, the states from and to, its guard and what it requires;
+- a **stat tile**: its model and filter;
+- the **page title**: the model, its module and the modules extending it, and **every relation out of it and into
+  it** from the other models.
+
+The facts come from `GET /api/v1/meta/explain/:model` (administrators and developers only; others get 403). In code,
+wrap anything with `<Explain model target>` from `@kosh/ui` (`{ field }`, `{ transition }`, `{ action, domain }` or
+`{ model: true }`; `asChild` attaches to a button without an extra tab stop, `focusable={false}` inside a control).
+Developer mode off, nothing changes on screen.
+
 ## Not yet
 
 Code splitting per app (ECharts and MapLibre load on demand; the rest is one bundle), `kosh inspect view` on the

@@ -114,3 +114,13 @@ user-facing flows, docs. Demo data: a feed mill (bulk feed and 50 kg bags) and a
 
 Quality checks on batches (a quality RFC), nutrient optimisation (least-cost formulation), maintenance-driven machine
 availability beyond the work centre's hours, OEE measured from the shop floor.
+
+## 6. Notes
+
+- **Step 1 (2026-11-08).** The `base.developer` group and the user's `developer` flag; `GET /api/v1/meta/explain/:model`
+  (each field's module from the loaded modules' Shutro models and extensions, compute dependencies, the one-to-many
+  inverse, default, on delete, index; transitions with their guards; relations into the model); Developer mode in the
+  user menu (remembered per browser); `<Explain>` on form labels, list columns, form buttons, stat tiles and page
+  titles, the relation links opening `/open/:model`. Not yet: menus (their actions' popovers), a transition's event
+  (events are declared per model, not per transition).
+
