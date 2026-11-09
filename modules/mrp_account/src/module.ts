@@ -9,7 +9,7 @@ import { mrpShutro } from '@kosh/mrp';
 import { type Decimal, type Id, orm } from '@kosh/server/orm';
 import { stockShutro } from '@kosh/stock';
 import { stockAccountShutro, stockAccountsOf } from '@kosh/stock_account';
-import { defineModule, type Env, extendModel, type Records } from './.kosh/bindings.js';
+import { defineModule, type Env, extendModel, f, type Records } from './.kosh/bindings.js';
 
 const zero = orm.toDecimal(0);
 const money = (d: Decimal) => d.toDecimalPlaces(2);
@@ -125,6 +125,17 @@ export const OperationsPosted = extendModel('stock.picking', {
   },
 });
 
+/** Where a work centre's operation costs are expensed (RFC 0031 §3.2); empty: the company's production account. */
+export const WorkcenterExpense = extendModel('mrp.workcenter', {
+  fields: {
+    expenseAccount: f.many2one('account.account', {
+      ondelete: 'set null',
+      label: 'Expense account',
+      help: 'The account the centre’s operation costs are expensed to; empty: Production’s default.',
+    }),
+  },
+});
+
 export const mrpAccountShutro = defineModule({
   name: 'mrp_account',
   version: '0.1.0',
@@ -137,5 +148,5 @@ export const mrpAccountShutro = defineModule({
     }),
   ],
   models: [],
-  extensions: [OutputCost, OperationsPosted],
+  extensions: [OutputCost, OperationsPosted, WorkcenterExpense],
 });
