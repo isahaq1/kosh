@@ -116,7 +116,7 @@ Measured on the demo catalogue (41 modules: 19 apps, 22 extensions).
 | M1 label | all | — |
 | M2 search | most | `uom.uom`, `product.category`, `account.tax`, `res.currency.rate`, `res.bank.account`, `account.withholding`, `account.journal`, `account.fiscal.year`, `account.payment.term`, `project.task.stage`, `pos.payment.method` (lists without a search); lines and private models to waive |
 | M3 archive | most masters | `product.category`, `project.task.stage`, `crm.stage`, `hiring.stage`, `res.currency.rate`, `stock.lot`, `trade.lc.limit` |
-| M4 chatter | the main documents | `mrp.workorder`, `trade.lc.amendment`, `trade.lc.presentation`, `trade.lc.charge`, `website.submission`, `account.fiscal.year` have a state without a chatter |
+| M4 chatter | the main documents | `production.workorder`, `trade.lc.amendment`, `trade.lc.presentation`, `trade.lc.charge`, `website.submission`, `account.fiscal.year` have a state without a chatter |
 | M5 help | 5 fields of ~1 050 | nearly all |
 | V1 list + form | most | `purchase.order.line` (no list), `pos.payment.method` (list only), lines and ledgers to waive |
 | P1 print template | Sales (quotation), Accounting (2), Event Hub, Counter, `l10n_bd` (4) | **Purchase**, Stockroom (delivery slip, receipt, count sheet), Production (order, work order), Asset Care (work order), Trade Finance (LC), Workforce (leave, contract), Projects (task sheet, timesheet), Pipeline, Hiring, Agenda, Focus, Sites |

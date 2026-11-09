@@ -2131,7 +2131,7 @@ export async function warehouseStock(
  * hand, less what is going out, plus what is coming in and what is on order — is refreshed hourly and on demand;
  * below the minimum it proposes enough to reach the maximum, in steps of `multiple`, with the reckoning spelled out.
  * How it is ordered is its method: **transfer** from another warehouse (here), **buy** from its vendor
- * (`purchase_stock`), **make** with the product's bill of materials (`mrp`).
+ * (`purchase_stock`), **make** with the product's bill of materials (`production`).
  */
 export const StockReorder = defineModel('stock.reorder', {
   label: 'Reorder rule',
@@ -2205,7 +2205,7 @@ export const StockReorder = defineModel('stock.reorder', {
     /**
      * What is on order for these rules beyond the transfers (which the forecast reads itself), in the product's
      * unit (decimal strings), with the documents. Nothing here; a bridge adds its documents (`purchase_stock`: requests for quotation,
-     * `mrp`: production orders).
+     * `production`: production orders).
      */
     pending: method('stock.reorder', async function (): Promise<
       Map<number, { quantity: string; document: string }[]>
@@ -2224,7 +2224,7 @@ export const StockReorder = defineModel('stock.reorder', {
     /**
      * Orders `quantities` (decimal strings, in the product's unit) for these rules; returns the document each one made. Transfers
      * are made here, one per pair of warehouses, confirmed; a bridge orders its method (`purchase_stock`: buy,
-     * `mrp`: make) after `next()`.
+     * `production`: make) after `next()`.
      */
     procure: method(
       'stock.reorder',

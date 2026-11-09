@@ -665,7 +665,7 @@ rule's forecast — on hand, less what is going out, plus what is coming in and 
 below the minimum, Stockroom › Replenishment proposes enough to reach the maximum (in steps of the rule's multiple)
 and says why, in words. The chosen rules are ordered by their method: a transfer from another warehouse, a request
 for quotation to the vendor (with `purchase_stock`; purchase orders say which warehouse they are delivered to), or a
-production order with the valid bill (with `mrp`); a rule may be ordered automatically, or snoozed.
+production order with the valid bill (with `production`); a rule may be ordered automatically, or snoozed.
 
 **Routes**: a warehouse may receive in two steps (Input, then stock) or three (with Quality control) and deliver in
 two (a pick into Output) or three (pick, pack, deliver); each step is a transfer of its own, made or reserved when
@@ -674,12 +674,12 @@ reorder rule may order **for each delivery** (make to order) — on a transfer, 
 production order — or **dropship**: the vendor delivers to the customer on a dropship transfer, with its own request
 for quotation, never through stock.
 
-### Production (`modules/mrp`, RFC 0021)
+### Production (`modules/production`, RFC 0021)
 
 Bills of materials with versions and effective dates, work centres with their cost per hour, and production orders
 that list what is required, available and short, and what they will cost, before they start. Confirm reserves the
 components through Stockroom; Produce consumes them and puts the product in stock. Install it with
-`shutro-erp apps install mrp`. With Accounting, `mrp_account` values what is made at what it consumed plus its
+`shutro-erp apps install production`. With Accounting, `production_account` values what is made at what it consumed plus its
 operations, and Work in progress clears with each order. Bills may make by-products that carry a share of the
 cost; scrap (Stockroom › Scrap) is recorded with its reason, on an order or anywhere. Confirmed orders get their
 work orders scheduled at the work centres (Production › Work orders, a Gantt); `GET /api/v1/production/capacity`

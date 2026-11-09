@@ -26,8 +26,6 @@ import { maintenance } from '@kosh/maintenance';
 import { maintenanceStock } from '@kosh/maintenance_stock';
 import { messaging } from '@kosh/messaging';
 import type { KoshModule } from '@kosh/modules-sdk';
-import { mrp } from '@kosh/mrp';
-import { mrpAccount } from '@kosh/mrp_account';
 import { notify } from '@kosh/notify';
 import { payroll } from '@kosh/payroll';
 import { payrollAccount } from '@kosh/payroll_account';
@@ -35,6 +33,8 @@ import { permissions } from '@kosh/permissions';
 import { pos } from '@kosh/pos';
 import { posStock } from '@kosh/pos_stock';
 import { product } from '@kosh/product';
+import { production } from '@kosh/production';
+import { productionAccount } from '@kosh/production_account';
 import { project } from '@kosh/project';
 import { projectAccount } from '@kosh/project_account';
 import { projectPurchase } from '@kosh/project_purchase';
@@ -82,7 +82,7 @@ export const DEMO_APPS: readonly string[] = [
   'hr',
   'recruitment',
   'stock',
-  'mrp',
+  'production',
   'maintenance',
   'trade_finance',
   'event',
@@ -125,7 +125,7 @@ export function demoCatalogue(): KoshModule[] {
     hr,
     recruitment,
     stock,
-    mrp,
+    production,
     maintenance,
     tradeFinance,
     event,
@@ -152,7 +152,7 @@ export function demoCatalogue(): KoshModule[] {
     purchaseStock,
     stockAccount,
     purchaseStockAccount,
-    mrpAccount,
+    productionAccount,
     maintenanceStock,
     tradeFinanceAccount,
     tradeFinancePurchase,

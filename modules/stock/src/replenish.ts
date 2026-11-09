@@ -149,7 +149,7 @@ export interface Ordered {
 
 const NO_APP: Record<string, string> = {
   buy: 'Buying needs Purchase with receipts (purchase_stock) installed.',
-  make: 'Making needs Production (mrp) installed.',
+  make: 'Making needs Production (production) installed.',
   transfer: 'The warehouses have no stock location.',
 };
 

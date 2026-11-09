@@ -1,5 +1,5 @@
 {
-  "name": "@kosh/mrp",
+  "name": "@kosh/production",
   "version": "0.1.0",
   "private": true,
   "description": "Production: bills of materials with versions, work centres, production orders showing what is short and what it costs (RFC 0021)",
@@ -12,14 +12,14 @@
   ],
   "author": "Isahaq <hmisahaq01@gmail.com>",
   "license": "MIT",
-  "homepage": "https://github.com/isahaq1/kosh/tree/main/modules/mrp#readme",
+  "homepage": "https://github.com/isahaq1/kosh/tree/main/modules/production#readme",
   "bugs": {
     "url": "https://github.com/isahaq1/kosh/issues"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/isahaq1/kosh.git",
-    "directory": "modules/mrp"
+    "directory": "modules/production"
   },
   "type": "module",
   "sideEffects": false,

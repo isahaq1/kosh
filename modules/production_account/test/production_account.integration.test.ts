@@ -10,8 +10,8 @@ import { accounting } from '@kosh/accounting';
 import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
 import { planApps } from '@kosh/modules-sdk';
-import { mrp } from '@kosh/mrp';
 import { product } from '@kosh/product';
+import { production } from '@kosh/production';
 import {
   type AppHost,
   applyApps,
@@ -28,7 +28,7 @@ import { stock } from '@kosh/stock';
 import { stockAccount } from '@kosh/stock_account';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { mrpAccount } from '../src/index.js';
+import { productionAccount } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
 const catalogue = [
@@ -40,10 +40,10 @@ const catalogue = [
   accounting,
   stock,
   stockAccount,
-  mrp,
-  mrpAccount,
+  production,
+  productionAccount,
 ];
-const P = '/api/v1/models/mrp.production';
+const P = '/api/v1/models/production.order';
 const T = '/api/v1/models/stock.picking';
 
 let container: StartedPostgreSqlContainer;
@@ -101,9 +101,9 @@ async function balanceOf(code: string): Promise<string> {
 }
 
 test('the plan proposes the bridge when Production and Accounting come', () => {
-  const plan = planApps(catalogue, [], { install: ['mrp', 'accounting'] });
-  expect(plan.install.find((i) => i.name === 'mrp_account')).toEqual({
-    name: 'mrp_account',
+  const plan = planApps(catalogue, [], { install: ['production', 'accounting'] });
+  expect(plan.install.find((i) => i.name === 'production_account')).toEqual({
+    name: 'production_account',
     reason: 'bridge',
   });
 });
@@ -115,13 +115,13 @@ beforeAll(async () => {
     max: 4,
     parseNumeric: orm.toDecimal,
   });
-  dir = await mkdtemp(join(tmpdir(), 'kosh-mrp-account-'));
+  dir = await mkdtemp(join(tmpdir(), 'kosh-production-account-'));
   await recordInstalledApps(driver, [], [], 'test');
   await applyApps(
     await prepareApps({
       driver,
       catalogue,
-      change: { install: ['settings', 'accounting', 'mrp'] },
+      change: { install: ['settings', 'accounting', 'production'] },
       dir,
     }),
     { driver, dir, actor: 'test' },
@@ -148,7 +148,7 @@ beforeAll(async () => {
     password: PASSWORD,
     company,
     companies: [company],
-    groups: ['account.manager', 'stock.manager', 'product.manager', 'mrp.manager'],
+    groups: ['account.manager', 'stock.manager', 'product.manager', 'production.manager'],
   });
   expect(
     (await call('POST', '/api/v1/accounting/charts/install', { template: 'generic' })).status,
@@ -166,10 +166,13 @@ beforeAll(async () => {
       await call('POST', '/api/v1/models/product.product', { name, uom: ids[uom], standardPrice })
     ).json.id;
   const assembly = (
-    await call('POST', '/api/v1/models/mrp.workcenter', { name: 'Assembly', costPerHour: '600' })
+    await call('POST', '/api/v1/models/production.workcenter', {
+      name: 'Assembly',
+      costPerHour: '600',
+    })
   ).json.id;
   ids['bom'] = (
-    await call('POST', '/api/v1/models/mrp.bom', {
+    await call('POST', '/api/v1/models/production.bom', {
       product: ids['Fixture'],
       lines: {
         create: [
@@ -227,7 +230,7 @@ test('a by-product carries its share of the cost; Work in progress still clears'
   const offcut = (
     await call('POST', '/api/v1/models/product.product', { name: 'Offcut', uom: ids['Units'] })
   ).json.id;
-  const share = await call('POST', '/api/v1/models/mrp.bom.byproduct', {
+  const share = await call('POST', '/api/v1/models/production.bom.byproduct', {
     bom: ids['bom'],
     product: offcut,
     quantity: '2',

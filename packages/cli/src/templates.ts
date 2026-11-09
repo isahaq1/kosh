@@ -21,7 +21,7 @@ export type AppName =
   | 'hr'
   | 'recruitment'
   | 'stock'
-  | 'mrp'
+  | 'production'
   | 'maintenance'
   | 'trade_finance'
   | 'event'
@@ -47,7 +47,7 @@ export type AppName =
   | 'purchase_stock'
   | 'stock_account'
   | 'purchase_stock_account'
-  | 'mrp_account'
+  | 'production_account'
   | 'maintenance_stock'
   | 'trade_finance_account'
   | 'trade_finance_purchase'
@@ -169,11 +169,11 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     server: 'stock',
     web: 'registerStockWeb',
   },
-  mrp: {
+  production: {
     label:
       'Production: bills of materials with versions, orders that show what is short and what they cost',
     icon: '🏭',
-    server: 'mrp',
+    server: 'production',
   },
   maintenance: {
     label:
@@ -326,12 +326,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     server: 'purchaseStockAccount',
     bridge: ['purchase', 'stock', 'accounting'],
   },
-  mrp_account: {
+  production_account: {
     label:
       'Bridge: products made valued at what they consumed plus their operations (Production ↔ Accounting)',
     icon: '🔗',
-    server: 'mrpAccount',
-    bridge: ['mrp', 'accounting'],
+    server: 'productionAccount',
+    bridge: ['production', 'accounting'],
   },
   maintenance_stock: {
     label: 'Bridge: spare parts on maintenance orders (Asset Care ↔ Stockroom)',

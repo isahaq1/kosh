@@ -17,7 +17,7 @@ named as the other apps are:
 | **Payroll** | `payroll`, `payroll_account`, `l10n_bd_payroll` | Payroll (Enterprise; no Bangladesh rules) | Bangladesh Labour Act structure, overtime, festival bonuses, tax deducted at source on salary from yearly slabs, provident fund, bank and mobile-wallet pay files, payslips in Bangla |
 | **Helpdesk** | `helpdesk` | Helpdesk (Enterprise) | SLAs on business hours with pause, escalation by rule, drafted replies, tickets from email, portal, website and chat |
 | **Fixed assets & budgets** | `account_asset`, `account_budget` | Assets, Budgets (Enterprise) | two books (accounting and tax, with the Bangladesh tax rates), commitments from purchase orders, a budget that blocks or warns |
-| **Replenishment & routes** | in `stock`, `purchase_stock`, `mrp` | Inventory routes | one forecast screen with why each line is proposed, routes in one, two or three steps, putaway, dropship, make to order |
+| **Replenishment & routes** | in `stock`, `purchase_stock`, `production` | Inventory routes | one forecast screen with why each line is proposed, routes in one, two or three steps, putaway, dropship, make to order |
 | **Shop** | `website_sale`, `website_sale_stock` | eCommerce | cash on delivery, Bangladesh couriers behind an adapter, Bangla storefront, stock shown live, orders straight into Sales |
 | **Documents & Sign** | `documents`, `sign` | Documents, Sign (Enterprise) | one file store for records and folders, requests for documents, signatures with one-time codes and a sealed certificate, signing from any record |
 
@@ -110,12 +110,12 @@ data, an overview, docs and an E2E.
   or block**: a purchase order that would exceed it asks for a further approval, or is refused, on the server.
   Variance reports with drill-down.
 
-### 2.6 Replenishment and routes (in `stock`, `purchase_stock`, `mrp`)
+### 2.6 Replenishment and routes (in `stock`, `purchase_stock`, `production`)
 
 - **Reorder rules** (`stock.reorder`): product × warehouse (or location), minimum, maximum, multiple, lead time; the
   **forecast** (on hand − reserved + incoming − outgoing, over the lead time) and the **replenishment screen** that
   proposes what to order, **why** (the forecast arithmetic) and how — buy (an RFQ grouped by vendor, `purchase_stock`),
-  make (a production order, `mrp`) or move from another warehouse; snooze, order now, or let a scheduled job do it.
+  make (a production order, `production`) or move from another warehouse; snooze, order now, or let a scheduled job do it.
 - **Routes**: a warehouse receives in **one, two or three steps** (input → quality → stock) and delivers in one, two
   or three (pick → pack → ship); the steps are chained transfers created from the first, each validated on its own.
 - **Putaway rules**: where received goods go by product or category.
@@ -438,7 +438,7 @@ data, an overview, docs and an E2E.
 - **Ordering** goes through the rules' `procure()` method, by method: Stockroom makes one internal transfer per pair
   of warehouses, confirmed (reserved at the source); `purchase_stock` (0.2.0) adds the lines to a draft request for
   quotation from replenishment to the vendor for that warehouse, or makes one (the product's cost and purchase
-  taxes, the arrival after the lead time); `mrp` (0.2.0) makes a production order with the bill valid on its date,
+  taxes, the arrival after the lead time); `production` (0.2.0) makes a production order with the bill valid on its date,
   confirmed — refused, with the reason, when there is none. A method no installed app orders is skipped with the
   reason. Purchase orders now say which warehouse they are **delivered to** (the main one when empty); the receipt
   goes there.
@@ -455,7 +455,7 @@ data, an overview, docs and an E2E.
   transfer ready at the source and counted as coming in, nothing ordered twice, the source warehouse seeing it go
   out, buying skipped without Purchase, snoozing; in `purchase_stock` a request for quotation to the vendor into the
   rule's warehouse after the lead time, a second rule adding to it, counted as on order, received into that
-  warehouse and then counted once as coming in; in `mrp` a confirmed production order with the valid bill and its
+  warehouse and then counted once as coming in; in `production` a confirmed production order with the valid bill and its
   quantity, counted as on order, and a product without a bill refused; the demo's rules; end to end, the reckoning
   on screen, a changed quantity ordered on a request for quotation.
 

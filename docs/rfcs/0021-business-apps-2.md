@@ -18,12 +18,12 @@ data, the portal where customers or candidates take part, English and Bangla, E2
 
 ## 2. The apps
 
-Technical names (`stock`, `mrp`…) stay plain for developers; users see the app names.
+Technical names (`stock`, `production`…) stay plain for developers; users see the app names.
 
 | App | Module | Replaces (Odoo) | Better than Odoo because |
 | --- | --- | --- | --- |
 | **Stockroom** | `stock` | Inventory | Moves and quantities in Shutro `Decimal` with units converted exactly; one *Transfer* document for receipts, deliveries and internal moves with a clear state chip; reservations explained ("2 reserved for SO/2026/00042"); lots and serials optional per product; valuation (FIFO / average) posted to Accounting through a bridge; cycle counts from a phone. |
-| **Production** | `mrp` | Manufacturing | Bills of materials with versions and effective dates; a production order that shows what is short before it starts; work centres with capacity on a Gantt; by-products and scrap recorded with reasons; cost roll-up (materials + labour + overhead) visible before confirming. |
+| **Production** | `production` | Manufacturing | Bills of materials with versions and effective dates; a production order that shows what is short before it starts; work centres with capacity on a Gantt; by-products and scrap recorded with reasons; cost roll-up (materials + labour + overhead) visible before confirming. |
 | **Agenda** | `calendar` | Calendar | One calendar for meetings, activities, leave, events and production slots, from every app; free/busy across people and rooms; time zones shown per attendee; invitations by email with replies routed back (RFC 0006 inbound); recurring events with exceptions. |
 | **Workforce** | `hr` | Employees | Employees separate from users (an employee may never sign in); departments and reporting lines as a hierarchy view; contracts with history; documents with expiry reminders; leave balances and requests with approvals (RFC 0003); attendance from the web or a kiosk. Personal data under field security by default. |
 | **Trade Finance** | `trade_finance` | — (no Odoo app) | Import and export letters of credit: application, issuance, amendments, document presentation and discrepancies, acceptance, settlement; margin and bank charges posted to Accounting; LC limits per bank; expiry and shipment-date alerts; linked to purchase and sales orders. Built with Bangladesh's banking practice in mind (UCP 600 terms). |
@@ -39,7 +39,7 @@ Technical names (`stock`, `mrp`…) stay plain for developers; users see the app
 
 - **Installed alone, joined by bridges**: Stockroom does not need Sales; `sale_stock` adds deliveries to sales
   orders when both are installed (as `sale_account` does today). Same for `purchase_stock`, `stock_account`,
-  `mrp_account`, `hr_calendar`, `crm_sale`, `website_crm`, `recruitment_hr`, `maintenance_stock`, `event_account`.
+  `production_account`, `hr_calendar`, `crm_sale`, `website_crm`, `recruitment_hr`, `maintenance_stock`, `event_account`.
 - **Everything permission-based** (CLAUDE.md): each app declares its access levels (user / manager, and more where
   needed); record rules for own / team / company; personal and salary data under field security.
 - **Settings in Settings › App settings** (RFC 0020): each app's options (default warehouse, reservation policy,
@@ -56,7 +56,7 @@ Order by what others need:
 2. **Pipeline** (+ `crm_sale`).
 3. **Workforce**, then **Hiring** (+ `recruitment_hr`).
 4. **Stockroom** (+ `sale_stock`, `purchase_stock`, `stock_account`).
-5. **Production** (+ `mrp_account`), then **Asset Care** (+ `maintenance_stock`).
+5. **Production** (+ `production_account`), then **Asset Care** (+ `maintenance_stock`).
 6. **Trade Finance** (+ its Accounting and Purchase / Sales links).
 7. **Event Hub** (+ `event_account`), then **Sites** (+ `website_crm`).
 8. **Counter** (+ `pos_account`), after Stockroom: it sells from stock.
@@ -487,15 +487,15 @@ reviewed steps.
   differences at the bill's rate.
 
 
-## Design note: Production (`modules/mrp`, app code `production`)
+## Design note: Production (`modules/production`, app code `production`)
 
-- **Bills of materials** (`mrp.bom`): the product made and how many one bill yields, its components
-  (`mrp.bom.line`: product, quantity, unit) and its operations (`mrp.bom.operation`: work centre, minutes per
+- **Bills of materials** (`production.bom`): the product made and how many one bill yields, its components
+  (`production.bom.line`: product, quantity, unit) and its operations (`production.bom.operation`: work centre, minutes per
   yield). **Versions with effective dates**: a bill has a version and *valid from / until* dates; a production
   order takes the bill valid on its date (the latest that starts on or before it), so a new recipe can start on a
   given day without touching the running orders.
-- **Work centres** (`mrp.workcenter`): hours available per day and a cost per hour (labour and overhead).
-- **Production orders** (`mrp.production`, MO/2026/00001): product, quantity, bill, date, warehouse. Their
+- **Work centres** (`production.workcenter`): hours available per day and a cost per hour (labour and overhead).
+- **Production orders** (`production.order`, MO/2026/00001): product, quantity, bill, date, warehouse. Their
   component lines say what is **required, available and short — before the order starts** — and the order shows
   its **cost roll-up** (materials at cost, operations at their centres' rates, the total and the unit cost) while
   still a draft. One status: Draft, Waiting (short), Ready, Done, Cancelled.
@@ -505,12 +505,12 @@ reviewed steps.
 - **Stockroom gains** a *Production* location usage and transfer type; `stock_account` values them against a new
   *Work in progress* account (1250) instead of Cost of goods sold or Goods received not billed.
 - **Access**: *Production user* (orders) and *Production manager* (bills, work centres, everything).
-- **Step 2**: by-products and scrap with reasons, the work centres' Gantt with capacity, `mrp_account` (the finished
+- **Step 2**: by-products and scrap with reasons, the work centres' Gantt with capacity, `production_account` (the finished
   product's cost from what was consumed and the operations, so Work in progress clears exactly).
 
 ## Implementation notes (2026-10-30): Production, step 1
 
-- **Module** `modules/mrp` (`@kosh/mrp`, export `mrp`), app **Production** (code `production`), depending on
+- **Module** `modules/production` (`@kosh/production`, export `production`), app **Production** (code `production`), depending on
   Stockroom; access levels *User* (orders; Production users are Stockroom users) and *Manager* (bills, work centres).
 - **Bills of materials** with components (in any unit of the component's category) and operations (work centre,
   minutes per yield), versions and *valid from / until* dates; an order takes the bill valid on its date (the latest
@@ -528,12 +528,12 @@ reviewed steps.
   made with the stock following; cancelling releasing; the checks and access by role; the demo. `stock_account`:
   production in and out of Work in progress. E2E (apps): a bill made from the forms, an order with its bill chosen,
   its components checked with the cost, confirmed with its transfer.
-- **Step 2**: by-products and scrap with reasons, the work centres' Gantt with capacity, `mrp_account` (the
+- **Step 2**: by-products and scrap with reasons, the work centres' Gantt with capacity, `production_account` (the
   finished product valued at what it consumed plus its operations, so Work in progress clears exactly).
 
-## Implementation notes (2026-10-30): Production, step 2 part 1 — `mrp_account`
+## Implementation notes (2026-10-30): Production, step 2 part 1 — `production_account`
 
-- **Module** `modules/mrp_account`, the Production ↔ Accounting bridge (proposed when both are installed; it builds
+- **Module** `modules/production_account`, the Production ↔ Accounting bridge (proposed when both are installed; it builds
   on `stock_account`).
 - **The product made** enters stock at what its order consumed (the components' valuation layers) plus its
   operations (minutes at the work centres' rates), per unit: it overrides the lines' `incomingUnitCost` for the
@@ -553,8 +553,8 @@ reviewed steps.
   reserved first — what other transfers hold is not scrapped, and more than is available is refused; with
   `stock_account` it is a loss to Stock adjustments. Reports group scrap by reason and product.
 - **On a production order**: scrap recorded with the order (`production` on the scrap) is listed on it.
-- **By-products** on bills of materials (`mrp.bom.byproduct`): a product, a quantity per yield, a unit and a **share
-  of the cost**; producing puts them in stock with the product made, and `mrp_account` splits the order's cost by
+- **By-products** on bills of materials (`production.bom.byproduct`): a product, a quantity per yield, a unit and a **share
+  of the cost**; producing puts them in stock with the product made, and `production_account` splits the order's cost by
   the shares (the product made carries the rest). A by-product is never the product itself; the shares stay under
   100 %.
 - **Tests**: scrap with its reason to the Scrap location, more than available refused; its loss to 5100; scrap on an
@@ -564,7 +564,7 @@ reviewed steps.
 
 ## Implementation notes (2026-10-30): Production, step 2 part 3 — work orders, the Gantt, capacity (step 2 complete)
 
-- **Work orders** (`mrp.workorder`): made when an order is confirmed, one per operation of its bill, with the minutes
+- **Work orders** (`production.workorder`): made when an order is confirmed, one per operation of its bill, with the minutes
   for the quantity ordered; **scheduled forward** at their work centre, after what the centre already has planned
   and after the order's previous step, from the order's date: a centre works its hours a day from 08:00, and what
   does not fit continues the next day. *Start* and *Finish* record when, and the minutes it took; *Produce* closes

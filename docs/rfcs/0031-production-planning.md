@@ -1,7 +1,7 @@
 # RFC 0031 — Production in depth: planning, schedules, two-stage production, formulas, overheads, and the explain popovers
 
 - Status: Accepted (2026-11-08)
-- Builds on: RFC 0021 (Production: BOMs with versions, work centres, orders, work orders, the Gantt; `mrp_account`),
+- Builds on: RFC 0021 (Production: BOMs with versions, work centres, orders, work orders, the Gantt; `production_account`),
   RFC 0025 / 0027 (the Approvals engine), RFC 0030 (vendor prices for procurement), RFC 0022 (tiles, guidance)
 - Source: Paragon's Odoo "Feed Production" app, shown in `D:\pg-soft\PG\odo\production-ebs.mp4` (14 min, watched
   frame by frame). What Kosh builds is generic: **any product, in any unit** — feed in kg, paint in litres, garments
@@ -49,9 +49,9 @@ Paragon runs production in two stages on top of Odoo Manufacturing, with eight s
   - the page title: the model with **every relation in and out** (which models point here, through which field).
 - Served by `GET /api/v1/meta/explain/:model` (developers only; the plain metadata stays as it is).
 
-### 3.2 BOMs in depth (`mrp`)
+### 3.2 BOMs in depth (`production`)
 
-- `mrp.bom.kind`: **standard**, **formula** (lines are shares of a batch: ratio %, scaled to any quantity; the ratios
+- `production.bom.kind`: **standard**, **formula** (lines are shares of a batch: ratio %, scaled to any quantity; the ratios
   add up to 100) or **packaging** (a pack of the made product: pack size in the product's unit, expected loss %,
   tolerance ±%).
 - Lines get **loss %** and **net quantity**; formula lines a **ratio %**.
@@ -61,20 +61,20 @@ Paragon runs production in two stages on top of Odoo Manufacturing, with eight s
 - **Component eligibility**: per BOM kind and company, the product categories allowed as components; refused lines
   say why.
 - Work centres get **max / min batch size**, OEE target, setup and cleanup minutes, expense account, alternatives;
-  `mrp.shift` (name, start, end).
+  `production.shift` (name, start, end).
 
-### 3.3 Production plans (`mrp`, with `purchase_stock` for procurement)
+### 3.3 Production plans (`production`, with `purchase_stock` for procurement)
 
-- `mrp.plan`: period, warehouse, work centres; lines (product, BOM and version, quantity, work centre, start / end,
+- `production.plan`: period, warehouse, work centres; lines (product, BOM and version, quantity, work centre, start / end,
   the packaging BOM for a second stage); state Draft → Forecast → Waiting approval → Approved → Scheduled → Cancelled.
 - **Generate forecast**: explodes every line through every level (packaging included) into materials — required, on
   hand, on order, shortage —, with **Procure** making requests for quotation (the vendor price's choice, RFC 0030).
 - **Capacity**: a slot beyond the work centre's batch limits or its hours is refused with the reason.
 - Approval through the Approvals engine; **Gantt by work centre** coloured by state.
 
-### 3.4 Schedules and two-stage production (`mrp`, `stock`)
+### 3.4 Schedules and two-stage production (`production`, `stock`)
 
-- `mrp.schedule` from each approved plan line, split into batches by the work centre's maximum size: product, BOM and
+- `production.schedule` from each approved plan line, split into batches by the work centre's maximum size: product, BOM and
   version, batch number (a sequence), costing mode, work centre, shift, target / produced / remaining quantity;
   **pre-flight** (each component's required, available, deficit or surplus); Draft → Stock checked → Closed →
   Confirmed → In progress → Done.
@@ -86,7 +86,7 @@ Paragon runs production in two stages on top of Odoo Manufacturing, with eight s
 - **Batch & labelling** on the produced lot: batch number, manufacturing date, expiry date (from the product's shelf
   life), **MRP value** (maximum retail price); a label print template.
 
-### 3.5 Overheads and costing (`mrp_account`)
+### 3.5 Overheads and costing (`production_account`)
 
 - **Costing master**: on products or categories, valid dates, lines (overhead name, account, fixed amount, percentage
   of material cost, or per unit produced); applied to each production order's cost (an *overhead* part beside
@@ -123,12 +123,12 @@ availability beyond the work centre's hours, OEE measured from the shop floor.
   user menu (remembered per browser); `<Explain>` on form labels, list columns, form buttons, stat tiles and page
   titles, the relation links opening `/open/:model`. Not yet: menus (their actions' popovers), a transition's event
   (events are declared per model, not per transition).
-- **Step 2 (2026-11-09).** `modules/mrp/src/depth.ts` and the bill: kinds (standard / formula / packaging), ratios,
+- **Step 2 (2026-11-09).** `modules/production/src/depth.ts` and the bill: kinds (standard / formula / packaging), ratios,
   losses, net and gross quantities (explode consumes the gross), pack size, expected loss and tolerance, the unit cost
   rolled up, specification parameters with product values and the reached value per bill, component eligibility by
   kind and company, the state (Draft → Under review → Active → Inactive) with the approval policy, revisions and the
   costing history, the company setting that decides whether drafts may be used; work centres' batches, setup /
-  cleanup, OEE target, alternatives and (mrp_account) expense account; shifts. Not yet: specifications weighted by
+  cleanup, OEE target, alternatives and (production_account) expense account; shifts. Not yet: specifications weighted by
   the product's unit when lines mix units (shares are by net quantity as written), alternatives used by the
   scheduler (step 4), the costing history on every cost change (written on activation only).
 

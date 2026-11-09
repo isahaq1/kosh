@@ -62,7 +62,7 @@ test('a bill of materials, an order checked for what is short and what it costs,
 
 test('the Production overview (RFC 0022 step 2)', async ({ page }) => {
   await signIn(page, 'dina');
-  await page.goto('/production/a/mrp.action_overview');
+  await page.goto('/production/a/production.action_overview');
   await expect(page.getByRole('heading', { name: 'Production · Overview' })).toBeVisible();
   for (const title of ['Orders confirmed', 'Work centres', 'Orders by state'])
     await expect(page.getByRole('region', { name: title, exact: true })).toBeVisible();

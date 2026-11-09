@@ -107,7 +107,6 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   event: Ticket,
   trade_finance: Landmark,
   maintenance: Wrench,
-  mrp: Factory,
   stock: Warehouse,
   recruitment: UserPlus,
   hr: Briefcase,

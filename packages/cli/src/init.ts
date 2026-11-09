@@ -676,7 +676,7 @@ async function modulesFor(apps: readonly AppName[]): Promise<KoshModule[]> {
     if (app === 'crm') modules.push((await import('@kosh/crm')).crm);
     if (app === 'hr') modules.push((await import('@kosh/hr')).hr);
     if (app === 'stock') modules.push((await import('@kosh/stock')).stock);
-    if (app === 'mrp') modules.push((await import('@kosh/mrp')).mrp);
+    if (app === 'production') modules.push((await import('@kosh/production')).production);
     if (app === 'maintenance') modules.push((await import('@kosh/maintenance')).maintenance);
     if (app === 'event') modules.push((await import('@kosh/event')).event);
     if (app === 'website') modules.push((await import('@kosh/website')).website);
@@ -710,7 +710,8 @@ async function modulesFor(apps: readonly AppName[]): Promise<KoshModule[]> {
     if (app === 'stock_account') modules.push((await import('@kosh/stock_account')).stockAccount);
     if (app === 'purchase_stock_account')
       modules.push((await import('@kosh/purchase_stock_account')).purchaseStockAccount);
-    if (app === 'mrp_account') modules.push((await import('@kosh/mrp_account')).mrpAccount);
+    if (app === 'production_account')
+      modules.push((await import('@kosh/production_account')).productionAccount);
     if (app === 'maintenance_stock')
       modules.push((await import('@kosh/maintenance_stock')).maintenanceStock);
     if (app === 'trade_finance_account')

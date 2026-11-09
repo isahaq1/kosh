@@ -7,9 +7,9 @@ import type { DemoContext } from '@kosh/modules-sdk';
 import { idByName } from '@kosh/modules-sdk';
 import type { Env } from './.kosh/bindings.js';
 
-const DINA = { login: 'dina', name: 'Dina Rahman', groups: ['mrp.manager'] } as const;
+const DINA = { login: 'dina', name: 'Dina Rahman', groups: ['production.manager'] } as const;
 
-export async function mrpDemo(ctx: DemoContext): Promise<string> {
+export async function productionDemo(ctx: DemoContext): Promise<string> {
   await ctx.as(DINA, async (raw) => {
     const env = raw as Env;
     const id = (model: string, name: string) =>
@@ -22,11 +22,11 @@ export async function mrpDemo(ctx: DemoContext): Promise<string> {
     ).ids[0];
     if (fixture === undefined) return;
     const assembly = (
-      await env.model('mrp.workcenter').create([{ name: 'Assembly', costPerHour: '600' }])
+      await env.model('production.workcenter').create([{ name: 'Assembly', costPerHour: '600' }])
     ).ids[0];
     if (assembly === undefined) return;
     const bom = (
-      await env.model('mrp.bom').create([
+      await env.model('production.bom').create([
         {
           product: fixture,
           quantity: '1',
@@ -48,7 +48,7 @@ export async function mrpDemo(ctx: DemoContext): Promise<string> {
       ])
     ).ids[0];
     const order = await env
-      .model('mrp.production')
+      .model('production.order')
       .create([{ product: fixture, quantity: '5', bom: bom ?? null, date: ctx.date(3) }]);
     await order.check();
   });

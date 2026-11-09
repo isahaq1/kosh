@@ -26,11 +26,11 @@ import { settings } from '@kosh/settings';
 import { stock } from '@kosh/stock';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { mrp, schedule } from '../src/index.js';
+import { production, schedule } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
-const catalogue = [base, settings, contacts, product, messaging, stock, mrp];
-const P = '/api/v1/models/mrp.production';
+const catalogue = [base, settings, contacts, product, messaging, stock, production];
+const P = '/api/v1/models/production.order';
 const T = '/api/v1/models/stock.picking';
 
 let container: StartedPostgreSqlContainer;
@@ -102,10 +102,10 @@ beforeAll(async () => {
     max: 4,
     parseNumeric: orm.toDecimal,
   });
-  dir = await mkdtemp(join(tmpdir(), 'kosh-mrp-'));
+  dir = await mkdtemp(join(tmpdir(), 'kosh-production-'));
   await recordInstalledApps(driver, [], [], 'test');
   await applyApps(
-    await prepareApps({ driver, catalogue, change: { install: ['settings', 'mrp'] }, dir }),
+    await prepareApps({ driver, catalogue, change: { install: ['settings', 'production'] }, dir }),
     { driver, dir, actor: 'test' },
   );
   host = await createAppHost({
@@ -125,9 +125,9 @@ beforeAll(async () => {
   }));
   await installDefaults(host.server.shutro, host.server.registry.loaded.modules, { company });
   for (const [login, groups] of [
-    ['maria', ['mrp.manager', 'stock.manager', 'product.manager']],
-    ['rahim', ['mrp.user']],
-    ['mona', ['mrp.manager']],
+    ['maria', ['production.manager', 'stock.manager', 'product.manager']],
+    ['rahim', ['production.user']],
+    ['mona', ['production.manager']],
     ['bob', ['base.user']],
   ] as const)
     await auth.createUser({
@@ -155,7 +155,7 @@ beforeAll(async () => {
       })
     ).json.id;
   ids['assembly'] = (
-    await call('POST', '/api/v1/models/mrp.workcenter', 'maria', {
+    await call('POST', '/api/v1/models/production.workcenter', 'maria', {
       name: 'Assembly',
       costPerHour: '600',
     })
@@ -164,7 +164,7 @@ beforeAll(async () => {
     ['v1', '3', null],
     ['v2', '2', '2026-12-01'],
   ] as const) {
-    const bom = await call('POST', '/api/v1/models/mrp.bom', 'maria', {
+    const bom = await call('POST', '/api/v1/models/production.bom', 'maria', {
       product: ids['Fixture'],
       version,
       validFrom,
@@ -213,7 +213,7 @@ test('what is short and what it costs, before it starts; then made through Stock
   const id = made.json.id as number;
   expect((await run(id, 'check')).status).toBe(200);
   const needs = await find(
-    'mrp.production.component',
+    'production.order.component',
     { production: id },
     'product,required,available,short,cost',
     'rahim',
@@ -273,7 +273,7 @@ test('cancelling a confirmed order releases its components', async () => {
 });
 
 test('the checks; access by role', async () => {
-  const other = await call('POST', '/api/v1/models/mrp.bom', 'maria', {
+  const other = await call('POST', '/api/v1/models/production.bom', 'maria', {
     product: ids['Panel'],
     lines: { create: [{ product: ids['Cable'], quantity: '1' }] },
   });
@@ -287,14 +287,15 @@ test('the checks; access by role', async () => {
   );
   expect(
     (
-      await call('POST', '/api/v1/models/mrp.bom', 'maria', {
+      await call('POST', '/api/v1/models/production.bom', 'maria', {
         product: ids['Panel'],
         lines: { create: [{ product: ids['Panel'], quantity: '1' }] },
       })
     ).status,
   ).toBe(422);
   expect(
-    (await call('POST', '/api/v1/models/mrp.bom', 'rahim', { product: ids['Panel'] })).status,
+    (await call('POST', '/api/v1/models/production.bom', 'rahim', { product: ids['Panel'] }))
+      .status,
   ).toBe(403);
   expect((await call('GET', P, 'bob')).status).toBe(403);
 });
@@ -322,13 +323,13 @@ test('scrap on an order, with its reason; by-products of a bill must be other pr
   ).toBe(200);
   const listed = await find('stock.scrap', { production: order }, 'reason,state', 'rahim');
   expect(listed.map((x) => [x.reason, x.state])).toEqual([['defect', 'done']]);
-  const itself = await call('POST', '/api/v1/models/mrp.bom.byproduct', 'maria', {
+  const itself = await call('POST', '/api/v1/models/production.bom.byproduct', 'maria', {
     bom: ids['v1'],
     product: ids['Fixture'],
     quantity: '1',
   });
   expect(itself.status).toBe(422);
-  const all = await call('POST', '/api/v1/models/mrp.bom.byproduct', 'maria', {
+  const all = await call('POST', '/api/v1/models/production.bom.byproduct', 'maria', {
     bom: ids['v1'],
     product: ids['Cable'],
     quantity: '1',
@@ -347,7 +348,7 @@ test('the scheduler: what does not fit in a day continues the next day', () => {
 
 test('work orders: scheduled at their centre after what it has, on the Gantt; capacity by day', async () => {
   const paint = (
-    await call('POST', '/api/v1/models/mrp.workcenter', 'maria', {
+    await call('POST', '/api/v1/models/production.workcenter', 'maria', {
       name: 'Paint',
       hoursPerDay: '4',
     })
@@ -355,7 +356,7 @@ test('work orders: scheduled at their centre after what it has, on the Gantt; ca
   const chair = (await call('POST', '/api/v1/models/product.product', 'maria', { name: 'Chair' }))
     .json.id;
   const bill = (
-    await call('POST', '/api/v1/models/mrp.bom', 'maria', {
+    await call('POST', '/api/v1/models/production.bom', 'maria', {
       product: chair,
       operations: { create: [{ name: 'Paint', workcenter: paint, minutes: '300' }] },
     })
@@ -377,9 +378,9 @@ test('work orders: scheduled at their centre after what it has, on the Gantt; ca
   const second = await order();
   const at = (d: number, h: number) => new Date(2026, 10, d, h).getTime();
   const plan = async (production: number) =>
-    (await find('mrp.workorder', { production }, 'plannedStart,plannedStop,state', 'rahim')).map(
-      (w) => [new Date(w.plannedStart).getTime(), new Date(w.plannedStop).getTime(), w.state],
-    );
+    (
+      await find('production.workorder', { production }, 'plannedStart,plannedStop,state', 'rahim')
+    ).map((w) => [new Date(w.plannedStart).getTime(), new Date(w.plannedStop).getTime(), w.state]);
   // 5 hours at 4 a day: 16th 8–12, 17th 8–9; the next order after it: 17th 9–12, 18th 8–10.
   expect(await plan(first)).toEqual([[at(16, 8), at(17, 9), 'ready']]);
   expect(await plan(second)).toEqual([[at(17, 9), at(18, 10), 'ready']]);
@@ -397,8 +398,8 @@ test('work orders: scheduled at their centre after what it has, on the Gantt; ca
   ]);
 
   // Started and finished: the minutes taken; producing closes what is left; cancelling cancels.
-  const [step] = await find('mrp.workorder', { production: first }, 'id', 'rahim');
-  const W = '/api/v1/models/mrp.workorder';
+  const [step] = await find('production.workorder', { production: first }, 'id', 'rahim');
+  const W = '/api/v1/models/production.workorder';
   expect((await call('POST', `${W}/${step.id}/transitions/start`, 'rahim')).status).toBe(200);
   expect((await call('POST', `${W}/${step.id}/transitions/finish`, 'rahim')).status).toBe(200);
   const done = (await call('GET', `${W}/${step.id}`, 'rahim')).json;
@@ -435,7 +436,11 @@ test('reorder rules that make: a confirmed production order with the valid bill,
   expect(ordered.status, JSON.stringify(ordered.json)).toBe(200);
   const [made] = ordered.json.ordered;
   expect(made.document).toMatch(/^MO\//);
-  const [production] = await find('mrp.production', { name: made.document }, 'state,quantity,bom');
+  const [production] = await find(
+    'production.order',
+    { name: made.document },
+    'state,quantity,bom',
+  );
   expect(production.state).toBe('confirmed');
   expect(Number(production.quantity)).toBe(Number(before.proposed));
   expect(production.bom?.id ?? production.bom).toBeTruthy();
@@ -462,9 +467,12 @@ test('reorder rules that make: a confirmed production order with the valid bill,
 });
 
 test('bills in depth (RFC 0031 step 2): a formula with ratios, losses and specifications; eligibility; approval when the company asks; a revision', async () => {
-  const B = '/api/v1/models/mrp.bom';
+  const B = '/api/v1/models/production.bom';
   const protein = (
-    await call('POST', '/api/v1/models/mrp.spec.parameter', 'maria', { name: 'Protein', unit: '%' })
+    await call('POST', '/api/v1/models/production.spec.parameter', 'maria', {
+      name: 'Protein',
+      unit: '%',
+    })
   ).json.id as number;
   for (const [name, value] of [
     ['Panel', '20'],
@@ -472,7 +480,7 @@ test('bills in depth (RFC 0031 step 2): a formula with ratios, losses and specif
   ] as const)
     expect(
       (
-        await call('POST', '/api/v1/models/mrp.product.spec', 'maria', {
+        await call('POST', '/api/v1/models/production.product.spec', 'maria', {
           product: ids[name],
           parameter: protein,
           value,
@@ -498,7 +506,7 @@ test('bills in depth (RFC 0031 step 2): a formula with ratios, losses and specif
   const lines = (
     await call(
       'GET',
-      `/api/v1/models/mrp.bom.line?filter=${encodeURIComponent(JSON.stringify({ bom: fid }))}&fields=ratio,netQuantity,grossQuantity&order=id+asc`,
+      `/api/v1/models/production.bom.line?filter=${encodeURIComponent(JSON.stringify({ bom: fid }))}&fields=ratio,netQuantity,grossQuantity&order=id+asc`,
       'maria',
     )
   ).json.items as Json[];
@@ -509,25 +517,31 @@ test('bills in depth (RFC 0031 step 2): a formula with ratios, losses and specif
   const [spec] = (
     await call(
       'GET',
-      `/api/v1/models/mrp.bom.spec?filter=${encodeURIComponent(JSON.stringify({ bom: fid }))}&fields=value,within`,
+      `/api/v1/models/production.bom.spec?filter=${encodeURIComponent(JSON.stringify({ bom: fid }))}&fields=value,within`,
       'maria',
     )
   ).json.items as Json[];
   expect([Number(spec.value), spec.within]).toEqual([32, true]);
   // Ratios that do not add up are refused at review; 60 + 40 pass, and without a policy decider it is active.
   expect(
-    (await call('PATCH', `/api/v1/models/mrp.bom.line/${lines[1].id}`, 'maria', { ratio: '30' }))
-      .status,
+    (
+      await call('PATCH', `/api/v1/models/production.bom.line/${lines[1].id}`, 'maria', {
+        ratio: '30',
+      })
+    ).status,
   ).toBe(200);
   expect((await call('POST', `${B}/${fid}/transitions/submit`, 'maria')).status).toBe(409);
   expect(
-    (await call('PATCH', `/api/v1/models/mrp.bom.line/${lines[1].id}`, 'maria', { ratio: '40' }))
-      .status,
+    (
+      await call('PATCH', `/api/v1/models/production.bom.line/${lines[1].id}`, 'maria', {
+        ratio: '40',
+      })
+    ).status,
   ).toBe(200);
   expect((await call('POST', `${B}/${fid}/transitions/submit`, 'maria')).status).toBe(200);
   // The shipped policy asks a Production manager other than the one who submitted.
   const inbox = (await call('GET', '/api/v1/approvals/inbox', 'mona')).json.requests as Json[];
-  const mine = inbox.filter((r) => r.targetModel === 'mrp.bom' && r.targetId === fid);
+  const mine = inbox.filter((r) => r.targetModel === 'production.bom' && r.targetId === fid);
   expect(mine.length).toBe(1);
   for (const r of mine)
     expect((await call('POST', `/api/v1/approvals/requests/${r.id}/approve`, 'mona')).status).toBe(
@@ -540,7 +554,7 @@ test('bills in depth (RFC 0031 step 2): a formula with ratios, losses and specif
   const costs = (
     await call(
       'GET',
-      `/api/v1/models/mrp.bom.cost?filter=${encodeURIComponent(JSON.stringify({ bom: fid }))}&fields=unitCost`,
+      `/api/v1/models/production.bom.cost?filter=${encodeURIComponent(JSON.stringify({ bom: fid }))}&fields=unitCost`,
       'maria',
     )
   ).json.items as Json[];
@@ -567,7 +581,7 @@ test('bills in depth (RFC 0031 step 2): a formula with ratios, losses and specif
   ).toBe(200);
   expect(
     (
-      await call('POST', '/api/v1/models/mrp.bom.eligibility', 'maria', {
+      await call('POST', '/api/v1/models/production.bom.eligibility', 'maria', {
         kind: 'formula',
         categories: { set: [category] },
       })
@@ -611,7 +625,7 @@ test('bills in depth (RFC 0031 step 2): a formula with ratios, losses and specif
   // Work centres: batches, effectiveness, alternatives; shifts with checked times.
   expect(
     (
-      await call('PATCH', `/api/v1/models/mrp.workcenter/${ids['assembly']}`, 'maria', {
+      await call('PATCH', `/api/v1/models/production.workcenter/${ids['assembly']}`, 'maria', {
         batchMin: '50',
         batchMax: '500',
         setupMinutes: '15',
@@ -622,7 +636,7 @@ test('bills in depth (RFC 0031 step 2): a formula with ratios, losses and specif
   ).toBe(200);
   expect(
     (
-      await call('POST', '/api/v1/models/mrp.shift', 'maria', {
+      await call('POST', '/api/v1/models/production.shift', 'maria', {
         name: 'Night',
         start: '22:00',
         end: '06:00',
@@ -631,7 +645,7 @@ test('bills in depth (RFC 0031 step 2): a formula with ratios, losses and specif
   ).toBe('8');
   expect(
     (
-      await call('POST', '/api/v1/models/mrp.shift', 'maria', {
+      await call('POST', '/api/v1/models/production.shift', 'maria', {
         name: 'Bad',
         start: '25:00',
         end: '06:00',

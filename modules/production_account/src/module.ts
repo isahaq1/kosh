@@ -5,7 +5,7 @@
  * progress for an order comes out of it with the product, to the cent.
  */
 
-import { mrpShutro } from '@kosh/mrp';
+import { productionShutro } from '@kosh/production';
 import { type Decimal, type Id, orm } from '@kosh/server/orm';
 import { stockShutro } from '@kosh/stock';
 import { stockAccountShutro, stockAccountsOf } from '@kosh/stock_account';
@@ -24,13 +24,13 @@ export const LABOUR_ACCOUNT = {
 /** The production order an output transfer belongs to, with what its components cost. */
 async function madeBy(env: Env, picking: Id<'stock.picking'>) {
   const [order] = await (
-    await env.model('mrp.production').search({ where: { output: picking }, limit: 1 })
+    await env.model('production.order').search({ where: { output: picking }, limit: 1 })
   ).load({});
   if (order === undefined) return null;
   const [bill] =
     order.bom === null
       ? []
-      : await env.model('mrp.bom').browse([order.bom.id]).load({ byproducts: true });
+      : await env.model('production.bom').browse([order.bom.id]).load({ byproducts: true });
   const shares = new Map<number, Decimal>(
     [...(bill?.byproducts ?? [])].map((b) => [b.product.id, b.costShare]),
   );
@@ -126,7 +126,7 @@ export const OperationsPosted = extendModel('stock.picking', {
 });
 
 /** Where a work centre's operation costs are expensed (RFC 0031 §3.2); empty: the company's production account. */
-export const WorkcenterExpense = extendModel('mrp.workcenter', {
+export const WorkcenterExpense = extendModel('production.workcenter', {
   fields: {
     expenseAccount: f.many2one('account.account', {
       ondelete: 'set null',
@@ -136,15 +136,15 @@ export const WorkcenterExpense = extendModel('mrp.workcenter', {
   },
 });
 
-export const mrpAccountShutro = defineModule({
-  name: 'mrp_account',
+export const productionAccountShutro = defineModule({
+  name: 'production_account',
   version: '0.1.0',
-  depends: [mrpShutro, stockShutro, stockAccountShutro],
+  depends: [productionShutro, stockShutro, stockAccountShutro],
   groups: [
     orm.defineGroup({
-      code: 'mrp_account.user',
+      code: 'production_account.user',
       label: 'Production valued',
-      implies: ['mrp.user'],
+      implies: ['production.user'],
     }),
   ],
   models: [],

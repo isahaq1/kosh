@@ -3,11 +3,11 @@
 Scope: purchase, inventory (Stockroom), manufacturing (Production), maintenance (Asset Care), products.
 Odoo addons read: purchase, purchase_stock, purchase_requisition(+_sale/_stock), purchase_mrp, purchase_repair,
 purchase_product_matrix, purchase_edi_ubl_bis3, stock, stock_account, stock_landed_costs, stock_dropshipping,
-stock_picking_batch, stock_delivery, stock_fleet, stock_maintenance, stock_sms, mrp, mrp_account, mrp_subcontracting*,
+stock_picking_batch, stock_delivery, stock_fleet, stock_maintenance, stock_sms, production, production_account, mrp_subcontracting*,
 mrp_repair, mrp_product_expiry, mrp_landed_costs, maintenance, repair, product, product_expiry, product_margin,
 product_matrix, uom, barcodes, barcodes_gs1_nomenclature, delivery.
 Kosh modules read: purchase, purchase_account, purchase_portal, purchase_stock, purchase_stock_account, stock,
-stock_account, sale_stock, mrp, mrp_account, maintenance, maintenance_stock, product, approvals_purchase (plus
+stock_account, sale_stock, production, production_account, maintenance, maintenance_stock, product, approvals_purchase (plus
 website_sale for carriers, account_budget, trade_finance_purchase for context).
 
 ## 1. Kosh already ahead
@@ -24,7 +24,7 @@ website_sale for carriers, account_budget, trade_finance_purchase for context).
 - **Trade finance** linked to purchase (LCs from POs, shipments against LCs) — nothing in Odoo.
 - **Valuation that ties out**: average or FIFO with layers, each transfer posted at once, Inventory account equals
   stock value; receipts at PO price, GRNI clearing and price differences (`purchase_stock_account`).
-- **Production costing before start**: `mrp.production` shows shortages and a cost roll-up before it starts; BOM
+- **Production costing before start**: `production.order` shows shortages and a cost roll-up before it starts; BOM
   versions with effective dates (`validFrom`/`validTo`) — in Odoo that needs Enterprise PLM; by-products with a
   cost share; WIP posting cleared to the cent.
 - **Asset Care deeper than Odoo maintenance**: meters and readings with meter-based plans, checklists per plan and
@@ -47,18 +47,18 @@ website_sale for carriers, account_budget, trade_finance_purchase for context).
 | Bill control policy (bill on ordered vs received qty), "to bill" quantities, bill-to-PO matching | purchase, purchase_stock (`purchase_bill_line_match`, `bill_to_po_wizard`) | **partial** — `purchase_account` has bills and `billState`, GRNI clearing; no per-product control policy or line matching screen | high | S-M |
 | Packages: put in pack, package types (dimensions, max weight), packages moved whole, package history | stock (`stock_package*`, `stock_put_in_pack`) | **missing** — Packing step location exists but no package model | medium | M |
 | Batch and wave picking | stock_picking_batch | **missing** | medium | M |
-| Lot / serial numbers on finished goods, component lots consumed, upstream/downstream traceability report | mrp (`mrp_production_serial_numbers`, stock_traceability) | **partial** — lots in Stockroom with per-lot history; `mrp` has no lot/serial handling for output or consumption, no traceability tree | high | M |
+| Lot / serial numbers on finished goods, component lots consumed, upstream/downstream traceability report | mrp (`mrp_production_serial_numbers`, stock_traceability) | **partial** — lots in Stockroom with per-lot history; `production` has no lot/serial handling for output or consumption, no traceability tree | high | M |
 | Unbuild orders (disassembly back into components) | mrp (`mrp_unbuild`) | **missing** | low | S |
-| Kits / phantom BOMs exploded on sale and purchase | mrp | **missing** — BOM has no type | medium | S-M |
+| Kits / phantom BOMs exploded on sale and purchase | production | **missing** — BOM has no type | medium | S-M |
 | Subcontracting (BOM type subcontract, components sent to the subcontractor, resupply, receipt of the finished good, subcontractor portal) | mrp_subcontracting(+_purchase/_account/_dropshipping) | **missing** | medium | L |
 | Work order execution: start/pause/block, time logs per operator, productivity losses, alternative work centres, OEE, work-centre efficiency / setup / cleanup time, capacity per product | mrp (`mrp_workcenter`, `mrp_workorder`) | **partial** — work orders scheduled forward, Gantt, capacity by day, started/finished times; no pause/block, losses, OEE, alternatives, setup times | medium | M |
-| Operation instructions (PDF/text per operation), BOM attachments | mrp | **missing** (Documents app exists but not linked to operations) | low | S |
-| Partial production with MO backorders, split / merge MOs, change quantity to produce | mrp (`mrp_production_backorder`, `mrp_production_split`, `change_production_qty`) | **missing** in `mrp` (Stockroom backorders exist for transfers) | medium | S-M |
+| Operation instructions (PDF/text per operation), BOM attachments | production | **missing** (Documents app exists but not linked to operations) | low | S |
+| Partial production with MO backorders, split / merge MOs, change quantity to produce | mrp (`mrp_production_backorder`, `mrp_production_split`, `change_production_qty`) | **missing** in `production` (Stockroom backorders exist for transfers) | medium | S-M |
 | Consumption control (strict / warning / flexible) and actual vs expected component usage | mrp (`mrp_consumption_warning`) | **partial** — consumption transfer and scrap; no tolerance policy or variance view | medium | S |
 | Purchase–manufacturing link (MO raw-material needs creating RFQs, PO showing the MO source; MTO chain) | purchase_mrp | **partial** — reorder rules buy/make and make-to-order routes; no cross-document source links shown | low | S |
 | Repair orders (diagnosis, parts added/removed, under warranty, quotation to customer, invoice, return of the repaired product) | repair, mrp_repair, purchase_repair, sale (repair) | **missing** — Asset Care covers own equipment only, not customer repairs | high | M |
 | Maintenance teams with members, kanban stages, technician per request, request from email alias, equipment assigned to employee/department, instructions | maintenance | **partial** — `responsible` and `assignedTo` exist; no teams, no email alias intake, no employee/department assignment | medium | S |
-| Equipment linked to stock locations / lots, maintenance from work centres (machine breakdown blocks the work centre) | stock_maintenance, mrp_maintenance (Ent.) | **missing** — equipment has a free `location`, no link to `stock.lot` or `mrp.workcenter` | medium | S |
+| Equipment linked to stock locations / lots, maintenance from work centres (machine breakdown blocks the work centre) | stock_maintenance, mrp_maintenance (Ent.) | **missing** — equipment has a free `location`, no link to `stock.lot` or `production.workcenter` | medium | S |
 | Lot expiry dates beyond one date: best-before, removal and alert dates, expiry alerts, blocking expired lots on delivery | product_expiry, mrp_product_expiry | **partial** — `stock.lot.expiryDate` and FEFO; no removal/alert dates, no blocking or alert job | medium | S |
 | Removal strategies per location/category (FIFO / LIFO / closest / least packages) and storage categories with capacity | stock (`product_strategy`, `stock_storage_category`) | **partial** — FEFO only; putaway rules without capacity limits | low | S-M |
 | Stock at a past date / inventory valuation at date, forecasted stock report per product (incoming/outgoing timeline) | stock (`stock_quantity_history`, forecast report), stock_account | **partial** — reorder forecast only; no "as of date" stock or per-product forecast timeline | medium | S-M |

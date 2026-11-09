@@ -1,5 +1,5 @@
 {
-  "name": "@kosh/mrp_account",
+  "name": "@kosh/production_account",
   "version": "0.1.0",
   "private": true,
   "description": "Bridge: products made valued at what they consumed plus their operations; Work in progress cleared (RFC 0021)",
@@ -12,14 +12,14 @@
   ],
   "author": "Isahaq <hmisahaq01@gmail.com>",
   "license": "MIT",
-  "homepage": "https://github.com/isahaq1/kosh/tree/main/modules/mrp_account#readme",
+  "homepage": "https://github.com/isahaq1/kosh/tree/main/modules/production_account#readme",
   "bugs": {
     "url": "https://github.com/isahaq1/kosh/issues"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/isahaq1/kosh.git",
-    "directory": "modules/mrp_account"
+    "directory": "modules/production_account"
   },
   "type": "module",
   "sideEffects": false,
@@ -44,7 +44,7 @@
     "@kosh/modules-sdk": "workspace:*",
     "@kosh/server": "workspace:*",
     "@kosh/views": "workspace:*",
-    "@kosh/mrp": "workspace:*",
+    "@kosh/production": "workspace:*",
     "@kosh/stock": "workspace:*",
     "@kosh/stock_account": "workspace:*",
     "@kosh/accounting": "workspace:*",

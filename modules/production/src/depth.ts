@@ -20,12 +20,12 @@ export const BOM_KINDS = {
 } as const;
 
 /** A parameter products are measured by (protein, moisture, energy…), with its unit. */
-export const MrpSpecParameter = defineModel('mrp.spec.parameter', {
+export const ProductionSpecParameter = defineModel('production.spec.parameter', {
   label: 'Specification parameter',
   recName: 'name',
   order: ['name asc'],
   archivable: true,
-  access: { 'mrp.user': READ, 'mrp.manager': [...ALL, 'export', 'import'] },
+  access: { 'production.user': READ, 'production.manager': [...ALL, 'export', 'import'] },
   fields: {
     name: f.char({ required: true, translate: true }),
     unit: f.char({ size: 20, help: '%, kcal/kg, mg/kg…' }),
@@ -34,13 +34,13 @@ export const MrpSpecParameter = defineModel('mrp.spec.parameter', {
 });
 
 /** A product's value for a parameter (a raw material's protein, say). */
-export const MrpProductSpec = defineModel('mrp.product.spec', {
+export const ProductionProductSpec = defineModel('production.product.spec', {
   label: 'Product specification',
   order: ['product asc', 'parameter asc'],
-  access: { 'mrp.user': READ, 'mrp.manager': [...ALL, 'export', 'import'] },
+  access: { 'production.user': READ, 'production.manager': [...ALL, 'export', 'import'] },
   fields: {
     product: f.many2one('product.product', { required: true, ondelete: 'cascade' }),
-    parameter: f.many2one('mrp.spec.parameter', { required: true, ondelete: 'restrict' }),
+    parameter: f.many2one('production.spec.parameter', { required: true, ondelete: 'restrict' }),
     value: f.decimal({ scale: 4, required: true, default: '0' }),
   },
   sqlConstraints: {
@@ -54,7 +54,7 @@ export const MrpProductSpec = defineModel('mrp.product.spec', {
 /** The values a product's specifications reach for a bill's lines, weighted by each line's share of the batch. */
 export async function reachedValues(env: Env, bomId: number): Promise<Map<number, Decimal>> {
   const [bom] = await env
-    .model('mrp.bom')
+    .model('production.bom')
     .browse([bomId as never])
     .load({ lines: { product: true } });
   const out = new Map<number, Decimal>();
@@ -63,7 +63,7 @@ export async function reachedValues(env: Env, bomId: number): Promise<Map<number
   const total = lines.reduce((s, l) => s.plus(l.netQuantity ?? l.quantity), zero);
   if (total.lte(0)) return out;
   const specs = await (
-    await env.model('mrp.product.spec').search({
+    await env.model('production.product.spec').search({
       where: { product: { in: lines.map((l) => l.product.id) } } as never,
     })
   ).load({ product: true, parameter: true });
@@ -78,13 +78,13 @@ export async function reachedValues(env: Env, bomId: number): Promise<Map<number
 }
 
 /** The range a bill asks for on a parameter, and the value its lines reach. */
-export const MrpBomSpec = defineModel('mrp.bom.spec', {
+export const ProductionBomSpec = defineModel('production.bom.spec', {
   label: 'Bill specification',
   order: ['bom asc', 'id asc'],
-  access: { 'mrp.user': READ, 'mrp.manager': ALL },
+  access: { 'production.user': READ, 'production.manager': ALL },
   fields: {
-    bom: f.many2one('mrp.bom', { required: true, ondelete: 'cascade' }),
-    parameter: f.many2one('mrp.spec.parameter', { required: true, ondelete: 'restrict' }),
+    bom: f.many2one('production.bom', { required: true, ondelete: 'cascade' }),
+    parameter: f.many2one('production.spec.parameter', { required: true, ondelete: 'restrict' }),
     minimum: f.decimal({ scale: 4, label: 'Minimum' }),
     maximum: f.decimal({ scale: 4, label: 'Maximum' }),
     value: f.decimal({
@@ -93,7 +93,7 @@ export const MrpBomSpec = defineModel('mrp.bom.spec', {
       label: 'Reached',
       help: 'What the bill’s lines reach, each product’s value weighted by its share of the batch.',
       ...compute(
-        'mrp.bom.spec',
+        'production.bom.spec',
         'value',
         ['parameter', 'bom.lines.product', 'bom.lines.netQuantity', 'bom.lines.quantity'],
         async (specs) => {
@@ -115,7 +115,7 @@ export const MrpBomSpec = defineModel('mrp.bom.spec', {
       store: true,
       label: 'Within range',
       help: 'The reached value is between the minimum and the maximum.',
-      ...compute('mrp.bom.spec', 'within', ['value', 'minimum', 'maximum'], (specs) => {
+      ...compute('production.bom.spec', 'within', ['value', 'minimum', 'maximum'], (specs) => {
         for (const s of specs) {
           const v = s.value ?? zero;
           s.within =
@@ -133,12 +133,12 @@ export const MrpBomSpec = defineModel('mrp.bom.spec', {
 });
 
 /** The unit cost of a bill when it was activated or revised: the costing history. */
-export const MrpBomCost = defineModel('mrp.bom.cost', {
+export const ProductionBomCost = defineModel('production.bom.cost', {
   label: 'Bill cost',
   order: ['bom asc', 'date desc', 'id desc'],
-  access: { 'mrp.user': READ, 'mrp.manager': READ },
+  access: { 'production.user': READ, 'production.manager': READ },
   fields: {
-    bom: f.many2one('mrp.bom', { required: true, ondelete: 'cascade' }),
+    bom: f.many2one('production.bom', { required: true, ondelete: 'cascade' }),
     date: f.date({ required: true }),
     unitCost: f.decimal({ scale: 4, required: true, label: 'Unit cost' }),
     note: f.char({ size: 200 }),
@@ -146,13 +146,13 @@ export const MrpBomCost = defineModel('mrp.bom.cost', {
 });
 
 /** Which product categories may be components of a kind of bill in a company. */
-export const MrpBomEligibility = defineModel('mrp.bom.eligibility', {
+export const ProductionBomEligibility = defineModel('production.bom.eligibility', {
   label: 'Component eligibility',
   recName: 'label',
   order: ['kind asc', 'id asc'],
   archivable: true,
   companyScoped: { required: true },
-  access: { 'mrp.user': READ, 'mrp.manager': [...ALL, 'export', 'import'] },
+  access: { 'production.user': READ, 'production.manager': [...ALL, 'export', 'import'] },
   fields: {
     kind: f.selection(BOM_KINDS, {
       required: true,
@@ -161,7 +161,7 @@ export const MrpBomEligibility = defineModel('mrp.bom.eligibility', {
       help: 'The kind of bill these categories may be components of.',
     }),
     categories: f.many2many('product.category', {
-      relation: 'mrp_bom_eligibility_category',
+      relation: 'production_elig_category',
       label: 'Allowed component categories',
       help: 'Products of these categories (and the categories inside them) may be components; others are refused.',
     }),
@@ -169,7 +169,7 @@ export const MrpBomEligibility = defineModel('mrp.bom.eligibility', {
     label: f.char({
       store: true,
       label: 'Eligibility',
-      ...compute('mrp.bom.eligibility', 'label', ['kind'], (rules) => {
+      ...compute('production.bom.eligibility', 'label', ['kind'], (rules) => {
         for (const r of rules)
           r.label = `${BOM_KINDS[r.kind as keyof typeof BOM_KINDS]} components`;
       }),
@@ -189,7 +189,7 @@ export async function ineligible(
 ): Promise<string | null> {
   const rules = await (
     await env
-      .model('mrp.bom.eligibility')
+      .model('production.bom.eligibility')
       .search({ where: { company: company as never, kind: kind as never } })
   ).load({ categories: true });
   const allowed = new Set<number>();
@@ -220,13 +220,13 @@ export async function ineligible(
 }
 
 /** A shift of the day (schedules run in them, RFC 0031 step 4). */
-export const MrpShift = defineModel('mrp.shift', {
+export const ProductionShift = defineModel('production.shift', {
   label: 'Shift',
   recName: 'name',
   order: ['start asc', 'name asc'],
   archivable: true,
   companyScoped: { required: true },
-  access: { 'mrp.user': READ, 'mrp.manager': [...ALL, 'export', 'import'] },
+  access: { 'production.user': READ, 'production.manager': [...ALL, 'export', 'import'] },
   fields: {
     name: f.char({ required: true, translate: true }),
     start: f.char({ size: 5, required: true, default: '06:00', help: 'HH:MM, 24-hour.' }),
@@ -241,7 +241,7 @@ export const MrpShift = defineModel('mrp.shift', {
       store: true,
       label: 'Hours',
       help: 'The shift’s length (over midnight when it ends before it starts).',
-      ...compute('mrp.shift', 'hours', ['start', 'end'], (shifts) => {
+      ...compute('production.shift', 'hours', ['start', 'end'], (shifts) => {
         for (const s of shifts) {
           const [sh, sm] = s.start.split(':').map(Number) as [number, number];
           const [eh, em] = s.end.split(':').map(Number) as [number, number];
@@ -254,7 +254,7 @@ export const MrpShift = defineModel('mrp.shift', {
   },
   constraints: {
     times: {
-      ...check('mrp.shift', ['start', 'end'], async (shifts) =>
+      ...check('production.shift', ['start', 'end'], async (shifts) =>
         [...shifts].filter((s) => !TIME.test(s.start) || !TIME.test(s.end)).map((s) => s.id),
       ),
       message: 'Times are HH:MM, 24-hour (06:00, 22:30).',
@@ -263,7 +263,7 @@ export const MrpShift = defineModel('mrp.shift', {
 });
 
 /** Whether bills must be approved before they make products (Settings › App settings › Production). */
-export const CompanyMrp = extendModel('res.company', {
+export const CompanyProduction = extendModel('res.company', {
   fields: {
     bomApproval: f.boolean({
       default: false,

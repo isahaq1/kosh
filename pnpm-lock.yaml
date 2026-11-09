@@ -113,12 +113,6 @@ importers:
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
-      '@kosh/mrp':
-        specifier: workspace:*
-        version: link:../../modules/mrp
-      '@kosh/mrp_account':
-        specifier: workspace:*
-        version: link:../../modules/mrp_account
       '@kosh/notify':
         specifier: workspace:*
         version: link:../../packages/notify
@@ -140,6 +134,12 @@ importers:
       '@kosh/product':
         specifier: workspace:*
         version: link:../../modules/product
+      '@kosh/production':
+        specifier: workspace:*
+        version: link:../../modules/production
+      '@kosh/production_account':
+        specifier: workspace:*
+        version: link:../../modules/production_account
       '@kosh/project':
         specifier: workspace:*
         version: link:../../modules/project
@@ -482,15 +482,15 @@ importers:
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
-      '@kosh/mrp':
-        specifier: workspace:*
-        version: link:../../modules/mrp
-      '@kosh/mrp_account':
-        specifier: workspace:*
-        version: link:../../modules/mrp_account
       '@kosh/product':
         specifier: workspace:*
         version: link:../../modules/product
+      '@kosh/production':
+        specifier: workspace:*
+        version: link:../../modules/production
+      '@kosh/production_account':
+        specifier: workspace:*
+        version: link:../../modules/production_account
       '@kosh/project':
         specifier: workspace:*
         version: link:../../modules/project
@@ -1537,83 +1537,6 @@ importers:
         specifier: ^12.2.1
         version: 12.2.1
 
-  modules/mrp:
-    dependencies:
-      '@kosh/contacts':
-        specifier: workspace:*
-        version: link:../contacts
-      '@kosh/messaging':
-        specifier: workspace:*
-        version: link:../../packages/messaging
-      '@kosh/modules-sdk':
-        specifier: workspace:*
-        version: link:../../packages/modules-sdk
-      '@kosh/permissions':
-        specifier: workspace:*
-        version: link:../../packages/permissions
-      '@kosh/product':
-        specifier: workspace:*
-        version: link:../product
-      '@kosh/reporting':
-        specifier: workspace:*
-        version: link:../../packages/reporting
-      '@kosh/server':
-        specifier: workspace:*
-        version: link:../../packages/server
-      '@kosh/stock':
-        specifier: workspace:*
-        version: link:../stock
-      '@kosh/views':
-        specifier: workspace:*
-        version: link:../../packages/views
-    devDependencies:
-      '@kosh/settings':
-        specifier: workspace:*
-        version: link:../../packages/settings
-      '@testcontainers/postgresql':
-        specifier: ^12.2.1
-        version: 12.2.1
-
-  modules/mrp_account:
-    dependencies:
-      '@kosh/accounting':
-        specifier: workspace:*
-        version: link:../accounting
-      '@kosh/contacts':
-        specifier: workspace:*
-        version: link:../contacts
-      '@kosh/modules-sdk':
-        specifier: workspace:*
-        version: link:../../packages/modules-sdk
-      '@kosh/mrp':
-        specifier: workspace:*
-        version: link:../mrp
-      '@kosh/product':
-        specifier: workspace:*
-        version: link:../product
-      '@kosh/server':
-        specifier: workspace:*
-        version: link:../../packages/server
-      '@kosh/stock':
-        specifier: workspace:*
-        version: link:../stock
-      '@kosh/stock_account':
-        specifier: workspace:*
-        version: link:../stock_account
-      '@kosh/views':
-        specifier: workspace:*
-        version: link:../../packages/views
-    devDependencies:
-      '@kosh/messaging':
-        specifier: workspace:*
-        version: link:../../packages/messaging
-      '@kosh/settings':
-        specifier: workspace:*
-        version: link:../../packages/settings
-      '@testcontainers/postgresql':
-        specifier: ^12.2.1
-        version: 12.2.1
-
   modules/payment:
     dependencies:
       '@kosh/account_portal':
@@ -1884,6 +1807,83 @@ importers:
       '@kosh/permissions':
         specifier: workspace:*
         version: link:../../packages/permissions
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/production:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/stock':
+        specifier: workspace:*
+        version: link:../stock
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/production_account:
+    dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../accounting
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/production':
+        specifier: workspace:*
+        version: link:../production
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/stock':
+        specifier: workspace:*
+        version: link:../stock
+      '@kosh/stock_account':
+        specifier: workspace:*
+        version: link:../stock_account
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
       '@kosh/settings':
         specifier: workspace:*
         version: link:../../packages/settings
@@ -3165,12 +3165,6 @@ importers:
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../modules-sdk
-      '@kosh/mrp':
-        specifier: workspace:*
-        version: link:../../modules/mrp
-      '@kosh/mrp_account':
-        specifier: workspace:*
-        version: link:../../modules/mrp_account
       '@kosh/notify':
         specifier: workspace:*
         version: link:../notify
@@ -3192,6 +3186,12 @@ importers:
       '@kosh/product':
         specifier: workspace:*
         version: link:../../modules/product
+      '@kosh/production':
+        specifier: workspace:*
+        version: link:../../modules/production
+      '@kosh/production_account':
+        specifier: workspace:*
+        version: link:../../modules/production_account
       '@kosh/project':
         specifier: workspace:*
         version: link:../../modules/project

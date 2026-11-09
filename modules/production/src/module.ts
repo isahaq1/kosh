@@ -27,14 +27,14 @@ import {
 import {
   BOM_KINDS,
   bomsNeedApproval,
-  CompanyMrp,
+  CompanyProduction,
   ineligible,
-  MrpBomCost,
-  MrpBomEligibility,
-  MrpBomSpec,
-  MrpProductSpec,
-  MrpShift,
-  MrpSpecParameter,
+  ProductionBomCost,
+  ProductionBomEligibility,
+  ProductionBomSpec,
+  ProductionProductSpec,
+  ProductionShift,
+  ProductionSpecParameter,
 } from './depth.js';
 
 const READ = ['read'] as const;
@@ -54,8 +54,8 @@ export async function validBom(
   env: Env,
   product: Id<'product.product'>,
   date: string,
-): Promise<Id<'mrp.bom'> | null> {
-  const bills = await (await env.model('mrp.bom').search({ where: { product } })).load([
+): Promise<Id<'production.bom'> | null> {
+  const bills = await (await env.model('production.bom').search({ where: { product } })).load([
     'validFrom',
     'validTo',
     'state',
@@ -85,13 +85,13 @@ export async function validBom(
   return valid[0]?.id ?? null;
 }
 
-export const MrpWorkcenter = defineModel('mrp.workcenter', {
+export const ProductionWorkcenter = defineModel('production.workcenter', {
   label: 'Work centre',
   recName: 'name',
   order: ['name asc'],
   archivable: true,
   companyScoped: { required: true },
-  access: { 'mrp.user': READ, 'mrp.manager': [...ALL, 'export', 'import'] },
+  access: { 'production.user': READ, 'production.manager': [...ALL, 'export', 'import'] },
   fields: {
     name: f.char({ required: true }),
     code: f.char(),
@@ -123,8 +123,8 @@ export const MrpWorkcenter = defineModel('mrp.workcenter', {
       label: 'Cleanup (minutes)',
       help: 'After each batch.',
     }),
-    alternatives: f.many2many('mrp.workcenter', {
-      relation: 'mrp_workcenter_alternative',
+    alternatives: f.many2many('production.workcenter', {
+      relation: 'production_wc_alternative',
       label: 'Alternative work centres',
       help: 'Where the same operation may run when this centre is full.',
     }),
@@ -138,14 +138,14 @@ export const MrpWorkcenter = defineModel('mrp.workcenter', {
   },
 });
 
-export const MrpBom = defineModel('mrp.bom', {
+export const ProductionBom = defineModel('production.bom', {
   label: 'Bill of materials',
   recName: 'label',
   order: ['product asc', 'validFrom desc', 'id desc'],
   archivable: true,
   companyScoped: { required: true },
   tracking: ['quantity', 'validFrom', 'validTo', 'kind', 'state'],
-  access: { 'mrp.user': READ, 'mrp.manager': [...ALL, 'export', 'import'] },
+  access: { 'production.user': READ, 'production.manager': [...ALL, 'export', 'import'] },
   fields: {
     product: f.many2one('product.product', { required: true, ondelete: 'restrict' }),
     /** How many of the product one bill makes, in the product's unit. */
@@ -176,18 +176,18 @@ export const MrpBom = defineModel('mrp.bom', {
     /** From when this version is used (empty: always). */
     validFrom: f.date({ label: 'Valid from' }),
     validTo: f.date({ label: 'Valid until' }),
-    lines: f.one2many('mrp.bom.line', 'bom', { label: 'Components' }),
-    operations: f.one2many('mrp.bom.operation', 'bom'),
-    byproducts: f.one2many('mrp.bom.byproduct', 'bom', { label: 'By-products' }),
-    specs: f.one2many('mrp.bom.spec', 'bom', { label: 'Specifications' }),
-    costs: f.one2many('mrp.bom.cost', 'bom', { label: 'Costing history' }),
+    lines: f.one2many('production.bom.line', 'bom', { label: 'Components' }),
+    operations: f.one2many('production.bom.operation', 'bom'),
+    byproducts: f.one2many('production.bom.byproduct', 'bom', { label: 'By-products' }),
+    specs: f.one2many('production.bom.spec', 'bom', { label: 'Specifications' }),
+    costs: f.one2many('production.bom.cost', 'bom', { label: 'Costing history' }),
     unitCost: f.decimal({
       scale: 4,
       store: true,
       label: 'Unit cost',
       help: 'The components (gross of their losses) at their cost and the operations at their work centres’ rates, per unit made.',
       ...compute(
-        'mrp.bom',
+        'production.bom',
         'unitCost',
         [
           'quantity',
@@ -225,7 +225,7 @@ export const MrpBom = defineModel('mrp.bom', {
         submit: {
           from: ['draft'],
           to: 'review',
-          guard: records('mrp.bom', async (bills) => {
+          guard: records('production.bom', async (bills) => {
             const out: number[] = [];
             for (const b of await bills.load({ lines: true, specs: true })) {
               const lines = [...b.lines];
@@ -241,22 +241,22 @@ export const MrpBom = defineModel('mrp.bom', {
           }),
           message:
             'A bill under review has components, formula ratios adding up to 100 % and every specification within range.',
-          after: records('mrp.bom', async (bills) => {
+          after: records('production.bom', async (bills) => {
             await requestApprovals(bills);
             for (const b of await bills.load({}))
-              await bills.env.emit('mrp.bom.submitted', { id: b.id });
+              await bills.env.emit('production.bom.submitted', { id: b.id });
           }),
         },
         approve: {
           from: ['review'],
           to: 'active',
-          guard: records('mrp.bom', (bills) => approvalGuard(bills)),
+          guard: records('production.bom', (bills) => approvalGuard(bills)),
           message: 'Waiting for approvals.',
-          after: records('mrp.bom', async (bills) => {
+          after: records('production.bom', async (bills) => {
             const env = bills.env as unknown as Env;
             for (const b of await bills.load({})) {
               await env.asSuperuser({ reason: 'bill costing history' }, (su) =>
-                su.model('mrp.bom.cost').create([
+                su.model('production.bom.cost').create([
                   {
                     bom: b.id,
                     date: env.today(),
@@ -265,7 +265,7 @@ export const MrpBom = defineModel('mrp.bom', {
                   },
                 ] as never),
               );
-              await env.emit('mrp.bom.activated', { id: b.id });
+              await env.emit('production.bom.activated', { id: b.id });
             }
           }),
         },
@@ -276,7 +276,7 @@ export const MrpBom = defineModel('mrp.bom', {
         revise: {
           from: ['active'],
           to: 'active',
-          after: records('mrp.bom', async (bills) => {
+          after: records('production.bom', async (bills) => {
             const env = bills.env as unknown as Env;
             for (const id of bills.ids) await reviseBom(env, id as number);
           }),
@@ -288,7 +288,7 @@ export const MrpBom = defineModel('mrp.bom', {
     label: f.char({
       store: true,
       label: 'Bill of materials',
-      ...compute('mrp.bom', 'label', ['product.name', 'version'], (bills) => {
+      ...compute('production.bom', 'label', ['product.name', 'version'], (bills) => {
         for (const b of bills) b.label = `${b.product.name} ${b.version}`;
       }),
     }),
@@ -319,11 +319,11 @@ function nextVersion(version: string): string {
 /** A copy of a bill as its next version, in draft: lines, operations, by-products and specifications. */
 export async function reviseBom(env: Env, id: number): Promise<number | null> {
   const [b] = await env
-    .model('mrp.bom')
+    .model('production.bom')
     .browse([id as never])
     .load({ lines: true, operations: true, byproducts: true, specs: true, company: true });
   if (b === undefined) return null;
-  const made = await env.model('mrp.bom').create([
+  const made = await env.model('production.bom').create([
     {
       product: b.product.id,
       company: b.company.id,
@@ -367,16 +367,16 @@ export async function reviseBom(env: Env, id: number): Promise<number | null> {
       },
     },
   ] as never);
-  await env.emit('mrp.bom.revised', { id: b.id });
+  await env.emit('production.bom.revised', { id: b.id });
   return (made.ids[0] as number | undefined) ?? null;
 }
 
-export const MrpBomLine = defineModel('mrp.bom.line', {
+export const ProductionBomLine = defineModel('production.bom.line', {
   label: 'Component',
   order: ['id asc'],
-  access: { 'mrp.user': READ, 'mrp.manager': ALL },
+  access: { 'production.user': READ, 'production.manager': ALL },
   fields: {
-    bom: f.many2one('mrp.bom', { required: true, ondelete: 'cascade' }),
+    bom: f.many2one('production.bom', { required: true, ondelete: 'cascade' }),
     product: f.many2one('product.product', { required: true, ondelete: 'restrict' }),
     quantity: f.decimal({ scale: 4, required: true, default: '1' }),
     uom: f.many2one('uom.uom', { label: 'Unit' }),
@@ -397,7 +397,7 @@ export const MrpBomLine = defineModel('mrp.bom.line', {
       label: 'Net quantity',
       help: 'What goes into the product: the quantity, or the ratio of the batch for a formula.',
       ...compute(
-        'mrp.bom.line',
+        'production.bom.line',
         'netQuantity',
         ['quantity', 'ratio', 'bom.kind', 'bom.quantity'],
         (lines) => {
@@ -414,7 +414,7 @@ export const MrpBomLine = defineModel('mrp.bom.line', {
       store: true,
       label: 'Gross quantity',
       help: 'The net quantity plus the loss: what the order consumes.',
-      ...compute('mrp.bom.line', 'grossQuantity', ['netQuantity', 'loss'], (lines) => {
+      ...compute('production.bom.line', 'grossQuantity', ['netQuantity', 'loss'], (lines) => {
         for (const l of lines)
           l.grossQuantity = (l.netQuantity ?? l.quantity)
             .times(orm.toDecimal(100).plus(l.loss ?? zero))
@@ -424,7 +424,7 @@ export const MrpBomLine = defineModel('mrp.bom.line', {
     }),
   },
   onchange: {
-    product: onchange('mrp.bom.line', async (d) => {
+    product: onchange('production.bom.line', async (d) => {
       const p = await d.record('product');
       if (p?.uom) d.set('uom', p.uom.id);
     }),
@@ -442,7 +442,7 @@ export const MrpBomLine = defineModel('mrp.bom.line', {
   constraints: {
     // The company's eligibility rules for the bill's kind (RFC 0031 §3.2): refused lines say why.
     eligible: {
-      ...check('mrp.bom.line', ['product', 'bom'], async (lines) => {
+      ...check('production.bom.line', ['product', 'bom'], async (lines) => {
         const env = lines.env as unknown as Env;
         const failing: number[] = [];
         for (const l of await lines.load({ bom: { company: true }, product: true })) {
@@ -455,7 +455,7 @@ export const MrpBomLine = defineModel('mrp.bom.line', {
           if (why !== null) {
             failing.push(l.id);
             throw new orm.ValidationError(
-              'mrp.bom.line',
+              'production.bom.line',
               ['product'],
               why,
               'Choose an allowed component, or change the eligibility rules (Production › Configuration).',
@@ -467,7 +467,7 @@ export const MrpBomLine = defineModel('mrp.bom.line', {
       message: 'This product is not an allowed component of the bill’s kind.',
     },
     notItself: {
-      ...check('mrp.bom.line', ['product', 'bom'], async (lines) =>
+      ...check('production.bom.line', ['product', 'bom'], async (lines) =>
         (await lines.load({ bom: true }))
           .filter((l) => l.bom.product.id === l.product.id)
           .map((l) => l.id),
@@ -478,12 +478,12 @@ export const MrpBomLine = defineModel('mrp.bom.line', {
 });
 
 /** What else one bill makes (sawdust, offcuts), and the share of the order's cost it carries. */
-export const MrpBomByproduct = defineModel('mrp.bom.byproduct', {
+export const ProductionBomByproduct = defineModel('production.bom.byproduct', {
   label: 'By-product',
   order: ['id asc'],
-  access: { 'mrp.user': READ, 'mrp.manager': ALL },
+  access: { 'production.user': READ, 'production.manager': ALL },
   fields: {
-    bom: f.many2one('mrp.bom', { required: true, ondelete: 'cascade' }),
+    bom: f.many2one('production.bom', { required: true, ondelete: 'cascade' }),
     product: f.many2one('product.product', { required: true, ondelete: 'restrict' }),
     quantity: f.decimal({ scale: 4, required: true, default: '1' }),
     uom: f.many2one('uom.uom', { label: 'Unit' }),
@@ -503,7 +503,7 @@ export const MrpBomByproduct = defineModel('mrp.bom.byproduct', {
   },
   constraints: {
     sharesUnderAll: {
-      ...check('mrp.bom.byproduct', ['costShare', 'bom', 'product'], async (lines) => {
+      ...check('production.bom.byproduct', ['costShare', 'bom', 'product'], async (lines) => {
         const failing: number[] = [];
         for (const l of await lines.load({ bom: { byproducts: true } })) {
           const total = [...l.bom.byproducts].reduce((s, b) => s.plus(b.costShare), zero);
@@ -517,25 +517,25 @@ export const MrpBomByproduct = defineModel('mrp.bom.byproduct', {
   },
 });
 
-export const MrpBomOperation = defineModel('mrp.bom.operation', {
+export const ProductionBomOperation = defineModel('production.bom.operation', {
   label: 'Operation',
   order: ['id asc'],
-  access: { 'mrp.user': READ, 'mrp.manager': ALL },
+  access: { 'production.user': READ, 'production.manager': ALL },
   fields: {
-    bom: f.many2one('mrp.bom', { required: true, ondelete: 'cascade' }),
+    bom: f.many2one('production.bom', { required: true, ondelete: 'cascade' }),
     name: f.char({ required: true }),
-    workcenter: f.many2one('mrp.workcenter', { required: true, ondelete: 'restrict' }),
+    workcenter: f.many2one('production.workcenter', { required: true, ondelete: 'restrict' }),
     /** Minutes for what one bill makes. */
     minutes: f.decimal({ scale: 2, required: true, default: '0' }),
   },
 });
 
-export const MrpProductionComponent = defineModel('mrp.production.component', {
+export const ProductionOrderComponent = defineModel('production.order.component', {
   label: 'Component need',
   order: ['id asc'],
-  access: { 'mrp.user': READ, 'mrp.manager': READ },
+  access: { 'production.user': READ, 'production.manager': READ },
   fields: {
-    production: f.many2one('mrp.production', { required: true, ondelete: 'cascade' }),
+    production: f.many2one('production.order', { required: true, ondelete: 'cascade' }),
     product: f.many2one('product.product', { required: true, ondelete: 'restrict' }),
     /** In the product's unit. */
     required: f.decimal({ scale: 4, required: true, default: '0' }),
@@ -546,7 +546,7 @@ export const MrpProductionComponent = defineModel('mrp.production.component', {
       store: true,
       label: 'Short',
       help: 'How much more is needed than the warehouse had available when the order was last checked.',
-      ...compute('mrp.production.component', 'short', ['required', 'available'], (lines) => {
+      ...compute('production.order.component', 'short', ['required', 'available'], (lines) => {
         for (const l of lines) {
           const missing = l.required.minus(l.available);
           l.short = missing.gt(0) ? missing : zero;
@@ -559,7 +559,7 @@ export const MrpProductionComponent = defineModel('mrp.production.component', {
       label: 'Cost',
       help: 'The quantity needed at the component’s cost.',
       ...compute(
-        'mrp.production.component',
+        'production.order.component',
         'cost',
         ['required', 'product.standardPrice'],
         (lines) => {
@@ -574,10 +574,10 @@ export const MrpProductionComponent = defineModel('mrp.production.component', {
  * Lists the orders' component needs from their bills (in the product's unit, for the quantity ordered) with what is
  * available in their warehouse now; as the system (component lines are not edited by hand).
  */
-async function explode(ids: readonly Id<'mrp.production'>[], env: Env): Promise<void> {
+async function explode(ids: readonly Id<'production.order'>[], env: Env): Promise<void> {
   await env.asSuperuser({ reason: 'production components' }, async (su) => {
     const orders = await su
-      .model('mrp.production')
+      .model('production.order')
       .browse(ids)
       .load({ bom: { lines: { product: { uom: true }, uom: true } }, components: true });
     for (const o of orders) {
@@ -615,7 +615,7 @@ async function explode(ids: readonly Id<'mrp.production'>[], env: Env): Promise<
             zero,
           );
         }
-        await su.model('mrp.production.component').create([
+        await su.model('production.order.component').create([
           {
             production: o.id,
             product: orm.asId(product, 'product.product'),
@@ -658,20 +658,20 @@ export function schedule(
  * A step of a production order at a work centre: planned from the bill's operation (its minutes for the quantity
  * ordered), scheduled after what the centre already has, then started and finished with the minutes it took.
  */
-export const MrpWorkorder = defineModel('mrp.workorder', {
+export const ProductionWorkorder = defineModel('production.workorder', {
   label: 'Work order',
   tracking: ['state', 'plannedStart', 'workcenter'],
   recName: 'name',
   order: ['plannedStart asc', 'id asc'],
   companyScoped: { required: true },
   access: {
-    'mrp.user': ['read', 'write'],
-    'mrp.manager': [...ALL, 'export'],
+    'production.user': ['read', 'write'],
+    'production.manager': [...ALL, 'export'],
   },
   fields: {
-    production: f.many2one('mrp.production', { required: true, ondelete: 'cascade' }),
+    production: f.many2one('production.order', { required: true, ondelete: 'cascade' }),
     name: f.char({ required: true, label: 'Operation' }),
-    workcenter: f.many2one('mrp.workcenter', { required: true, ondelete: 'restrict' }),
+    workcenter: f.many2one('production.workcenter', { required: true, ondelete: 'restrict' }),
     plannedMinutes: f.decimal({ scale: 2, required: true, default: '0', label: 'Planned minutes' }),
     plannedStart: f.datetime({ label: 'Planned start' }),
     plannedStop: f.datetime({ label: 'Planned end' }),
@@ -687,14 +687,14 @@ export const MrpWorkorder = defineModel('mrp.workorder', {
         start: {
           from: ['ready'],
           to: 'progress',
-          after: records('mrp.workorder', async (orders): Promise<void> => {
+          after: records('production.workorder', async (orders): Promise<void> => {
             await orders.write({ startedAt: new Date() } as never);
           }),
         },
         finish: {
           from: ['progress'],
           to: 'done',
-          after: records('mrp.workorder', async (orders): Promise<void> => {
+          after: records('production.workorder', async (orders): Promise<void> => {
             const now = new Date();
             for (const w of await orders.load({})) {
               const began = w.startedAt instanceof Date ? w.startedAt : now;
@@ -721,10 +721,10 @@ export const MrpWorkorder = defineModel('mrp.workorder', {
  * Makes the orders' work orders from their bills' operations and schedules them forward, step after step, each at
  * its work centre after what the centre already has planned (from the order's date).
  */
-async function planWork(ids: readonly Id<'mrp.production'>[], env: Env): Promise<void> {
+async function planWork(ids: readonly Id<'production.order'>[], env: Env): Promise<void> {
   await env.asSuperuser({ reason: 'production schedule' }, async (su) => {
     const orders = await su
-      .model('mrp.production')
+      .model('production.order')
       .browse(ids)
       .load({ bom: { operations: { workcenter: true } } });
     for (const o of orders) {
@@ -737,7 +737,7 @@ async function planWork(ids: readonly Id<'mrp.production'>[], env: Env): Promise
         const minutes = op.minutes.times(factor).toDecimalPlaces(2);
         // The centre is free after the last step it has that is not done or cancelled.
         const busy = await (
-          await su.model('mrp.workorder').search({
+          await su.model('production.workorder').search({
             where: { workcenter: op.workcenter.id, state: { in: ['ready', 'progress'] } },
             order: ['plannedStop desc'],
             limit: 1,
@@ -746,7 +746,7 @@ async function planWork(ids: readonly Id<'mrp.production'>[], env: Env): Promise
         const free = [...busy][0]?.plannedStop;
         const from = free instanceof Date && free > after ? free : after;
         const { start, stop } = schedule(from, Number(minutes), Number(op.workcenter.hoursPerDay));
-        await su.model('mrp.workorder').create([
+        await su.model('production.workorder').create([
           {
             production: o.id,
             company: o.company.id,
@@ -775,7 +775,7 @@ async function placesOf(
   ).ids[0];
   if (stock === null || production === undefined)
     throw new orm.ValidationError(
-      'mrp.production',
+      'production.order',
       ['warehouse'],
       'There is no stock location or Production location to work from.',
       'Check the warehouse in Stockroom › Configuration.',
@@ -783,32 +783,32 @@ async function placesOf(
   return { stock, production };
 }
 
-export const MrpProduction = defineModel('mrp.production', {
+export const ProductionOrder = defineModel('production.order', {
   label: 'Production order',
   recName: 'name',
   order: ['date desc', 'id desc'],
   companyScoped: { required: true },
   tracking: ['state', 'quantity', 'bom'],
   access: {
-    'mrp.user': ['read', 'write', 'create'],
-    'mrp.manager': [...ALL, 'export', 'import'],
+    'production.user': ['read', 'write', 'create'],
+    'production.manager': [...ALL, 'export', 'import'],
   },
   fields: {
     name: f.char({
       required: true,
       readonly: true,
-      sequence: { code: 'mrp.production', dateField: 'date' },
+      sequence: { code: 'production.order', dateField: 'date' },
       label: 'Reference',
     }),
     product: f.many2one('product.product', { required: true, ondelete: 'restrict' }),
     quantity: f.decimal({ scale: 4, required: true, default: '1' }),
-    bom: f.many2one('mrp.bom', { ondelete: 'restrict', label: 'Bill of materials' }),
+    bom: f.many2one('production.bom', { ondelete: 'restrict', label: 'Bill of materials' }),
     date: f.date({ required: true, default: (env: Env) => env.today(), label: 'Planned for' }),
     warehouse: f.many2one('stock.warehouse', { ondelete: 'restrict' }),
-    components: f.one2many('mrp.production.component', 'production'),
+    components: f.one2many('production.order.component', 'production'),
     /** Scrap recorded on the order, with its reasons (Stockroom's scrap). */
     scraps: f.one2many('stock.scrap', 'production'),
-    workorders: f.one2many('mrp.workorder', 'production', { label: 'Work orders' }),
+    workorders: f.one2many('production.workorder', 'production', { label: 'Work orders' }),
     consumption: f.many2one('stock.picking', {
       ondelete: 'set null',
       label: 'Components transfer',
@@ -820,7 +820,7 @@ export const MrpProduction = defineModel('mrp.production', {
       store: true,
       label: 'Materials',
       help: 'The components needed at their cost.',
-      ...compute('mrp.production', 'materialCost', ['components.cost'], (orders) => {
+      ...compute('production.order', 'materialCost', ['components.cost'], (orders) => {
         for (const o of orders)
           o.materialCost = [...o.components].reduce((s, c) => s.plus(c.cost ?? zero), zero);
       }),
@@ -832,7 +832,7 @@ export const MrpProduction = defineModel('mrp.production', {
       label: 'Operations',
       help: 'The operations’ minutes for the quantity ordered at their work centres’ cost per hour.',
       ...compute(
-        'mrp.production',
+        'production.order',
         'operationCost',
         [
           'quantity',
@@ -863,7 +863,7 @@ export const MrpProduction = defineModel('mrp.production', {
       store: true,
       label: 'Total cost',
       help: 'The materials and the operations together.',
-      ...compute('mrp.production', 'totalCost', ['materialCost', 'operationCost'], (orders) => {
+      ...compute('production.order', 'totalCost', ['materialCost', 'operationCost'], (orders) => {
         for (const o of orders)
           o.totalCost = (o.materialCost ?? zero).plus(o.operationCost ?? zero);
       }),
@@ -873,7 +873,7 @@ export const MrpProduction = defineModel('mrp.production', {
       store: true,
       label: 'Unit cost',
       help: 'The total cost divided by the quantity made.',
-      ...compute('mrp.production', 'unitCost', ['totalCost', 'quantity'], (orders) => {
+      ...compute('production.order', 'unitCost', ['totalCost', 'quantity'], (orders) => {
         for (const o of orders)
           o.unitCost = o.quantity.gt(0)
             ? (o.totalCost ?? zero).div(o.quantity).toDecimalPlaces(4)
@@ -887,17 +887,22 @@ export const MrpProduction = defineModel('mrp.production', {
         store: true,
         label: 'Status',
         help: 'A confirmed order is ready once all its components are reserved, otherwise it is waiting.',
-        ...compute('mrp.production', 'status', ['state', 'consumption.availability'], (orders) => {
-          for (const o of orders)
-            o.status =
-              o.state === 'confirmed'
-                ? o.consumption?.availability === 'full'
-                  ? 'ready'
-                  : 'waiting'
-                : o.state === 'cancel'
-                  ? 'cancelled'
-                  : o.state;
-        }),
+        ...compute(
+          'production.order',
+          'status',
+          ['state', 'consumption.availability'],
+          (orders) => {
+            for (const o of orders)
+              o.status =
+                o.state === 'confirmed'
+                  ? o.consumption?.availability === 'full'
+                    ? 'ready'
+                    : 'waiting'
+                  : o.state === 'cancel'
+                    ? 'cancelled'
+                    : o.state;
+          },
+        ),
       },
     ),
     note: f.text(),
@@ -910,18 +915,18 @@ export const MrpProduction = defineModel('mrp.production', {
         check: {
           from: ['draft', 'confirmed'],
           to: 'draft',
-          guard: records('mrp.production', async (orders) =>
+          guard: records('production.order', async (orders) =>
             (await orders.load({})).filter((o) => o.state !== 'draft'),
           ),
           message: 'A confirmed order is checked with Check availability.',
-          after: records('mrp.production', async (orders): Promise<void> => {
+          after: records('production.order', async (orders): Promise<void> => {
             await explode(orders.ids, orders.env);
           }),
         },
-        confirm: emitting('mrp.production.confirmed', {
+        confirm: emitting('production.order.confirmed', {
           from: ['draft'],
           to: 'confirmed',
-          guard: records('mrp.production', async (orders) => {
+          guard: records('production.order', async (orders) => {
             const env = orders.env as unknown as Env;
             const out: number[] = [];
             for (const o of await orders.load({ bom: true, company: true })) {
@@ -937,12 +942,12 @@ export const MrpProduction = defineModel('mrp.production', {
           message:
             'Choose a bill of materials that may be used: an active one (or a draft, when bills need no approval).',
           // The components, their transfer to Production (reserved), and the work orders, scheduled.
-          after: records('mrp.production', async (orders): Promise<void> => {
+          after: records('production.order', async (orders): Promise<void> => {
             await explode(orders.ids, orders.env);
             await planWork(orders.ids, orders.env as unknown as Env);
             const env = orders.env as unknown as Env;
             for (const o of await env
-              .model('mrp.production')
+              .model('production.order')
               .browse(orders.ids)
               .load({ components: true })) {
               // Nothing to consume (labour only): no components transfer.
@@ -971,7 +976,7 @@ export const MrpProduction = defineModel('mrp.production', {
               ]);
               await made.confirm();
               await env
-                .model('mrp.production')
+                .model('production.order')
                 .browse([o.id])
                 .write({ consumption: made.ids[0] ?? null });
             }
@@ -981,30 +986,30 @@ export const MrpProduction = defineModel('mrp.production', {
         reserve: {
           from: ['confirmed'],
           to: 'confirmed',
-          after: records('mrp.production', async (orders): Promise<void> => {
+          after: records('production.order', async (orders): Promise<void> => {
             const env = orders.env as unknown as Env;
-            for (const o of await env.model('mrp.production').browse(orders.ids).load({}))
+            for (const o of await env.model('production.order').browse(orders.ids).load({}))
               if (o.consumption !== null)
                 await env.model('stock.picking').browse([o.consumption.id]).reserve();
           }),
         },
-        produce: emitting('mrp.production.done', {
+        produce: emitting('production.order.done', {
           from: ['confirmed'],
           to: 'done',
-          guard: records('mrp.production', async (orders) =>
+          guard: records('production.order', async (orders) =>
             (await orders.load({ consumption: true })).filter(
               (o) => o.consumption !== null && o.consumption.availability !== 'full',
             ),
           ),
           message: 'Components are short: check availability, or wait for them to come in.',
-          before: records('mrp.production', async (orders): Promise<void> => {
+          before: records('production.order', async (orders): Promise<void> => {
             const env = orders.env as unknown as Env;
             // What is left of the work is done with the order.
-            const open = await env.model('mrp.workorder').search({
+            const open = await env.model('production.workorder').search({
               where: { production: { in: [...orders.ids] }, state: { in: ['ready', 'progress'] } },
             });
             if (open.length > 0) await open.close();
-            for (const o of await env.model('mrp.production').browse(orders.ids).load({})) {
+            for (const o of await env.model('production.order').browse(orders.ids).load({})) {
               if (o.consumption !== null)
                 await env.model('stock.picking').browse([o.consumption.id]).validate();
               const { stock, production } = await placesOf(
@@ -1015,7 +1020,7 @@ export const MrpProduction = defineModel('mrp.production', {
               const [bill] =
                 o.bom === null
                   ? []
-                  : await env.model('mrp.bom').browse([o.bom.id]).load({ byproducts: true });
+                  : await env.model('production.bom').browse([o.bom.id]).load({ byproducts: true });
               const factor = bill === undefined ? zero : o.quantity.div(bill.quantity);
               const made = await env.model('stock.picking').create([
                 {
@@ -1037,9 +1042,9 @@ export const MrpProduction = defineModel('mrp.production', {
                   },
                 },
               ]);
-              // Linked before it is validated: what values it (mrp_account) finds its order.
+              // Linked before it is validated: what values it (production_account) finds its order.
               await env
-                .model('mrp.production')
+                .model('production.order')
                 .browse([o.id])
                 .write({ output: made.ids[0] ?? null });
               await made.confirm();
@@ -1050,14 +1055,14 @@ export const MrpProduction = defineModel('mrp.production', {
         cancel: {
           from: ['draft', 'confirmed'],
           to: 'cancel',
-          after: records('mrp.production', async (orders): Promise<void> => {
+          after: records('production.order', async (orders): Promise<void> => {
             const env = orders.env as unknown as Env;
-            const open = await env.model('mrp.workorder').search({
+            const open = await env.model('production.workorder').search({
               where: { production: { in: [...orders.ids] }, state: { in: ['ready', 'progress'] } },
             });
             for (const w of await open.load({})) await w.cancel();
             for (const o of await env
-              .model('mrp.production')
+              .model('production.order')
               .browse(orders.ids)
               .load({ consumption: true }))
               if (
@@ -1074,14 +1079,14 @@ export const MrpProduction = defineModel('mrp.production', {
   },
   onchange: {
     // The bill valid on the order's date, and the company's first warehouse.
-    product: onchange('mrp.production', async (d, env) => {
+    product: onchange('production.order', async (d, env) => {
       const product = d.get('product') as Id<'product.product'> | null | undefined;
       if (product === null || product === undefined) return;
       d.set('bom', await validBom(env, product, String(d.get('date') ?? env.today())));
       if ((d.get('warehouse') ?? null) === null)
         d.set('warehouse', (await defaultLocations(env as never, 'internal')).warehouse);
     }),
-    date: onchange('mrp.production', async (d, env) => {
+    date: onchange('production.order', async (d, env) => {
       const product = d.get('product') as Id<'product.product'> | null | undefined;
       if (product === null || product === undefined) return;
       d.set('bom', await validBom(env, product, String(d.get('date') ?? env.today())));
@@ -1092,7 +1097,7 @@ export const MrpProduction = defineModel('mrp.production', {
   },
   constraints: {
     billOfTheProduct: {
-      ...check('mrp.production', ['bom', 'product'], async (orders) =>
+      ...check('production.order', ['bom', 'product'], async (orders) =>
         (await orders.load({ bom: true }))
           .filter((o) => o.bom !== null && o.bom.product.id !== o.product.id)
           .map((o) => o.id),
@@ -1105,7 +1110,7 @@ export const MrpProduction = defineModel('mrp.production', {
 /** Scrap recorded on a production order (a broken component, a faulty unit made), with its reason. */
 export const ScrapProduction = extendModel('stock.scrap', {
   fields: {
-    production: f.many2one('mrp.production', { ondelete: 'set null', label: 'Production order' }),
+    production: f.many2one('production.order', { ondelete: 'set null', label: 'Production order' }),
   },
 });
 
@@ -1126,7 +1131,7 @@ export const ReorderMake = extendModel('stock.reorder', {
         const main = (await defaultLocations(env as never, 'internal', null, r.company.id))
           .warehouse;
         const orders = await (
-          await env.model('mrp.production').search({
+          await env.model('production.order').search({
             where: {
               product: r.product.id,
               company: r.company.id,
@@ -1164,7 +1169,7 @@ export const ReorderMake = extendModel('stock.reorder', {
             `${r.product.name} has no bill of materials valid on ${when}.`,
             'Add one in Production › Bills of materials, or replenish it another way.',
           );
-        const made = await env.model('mrp.production').create([
+        const made = await env.model('production.order').create([
           {
             product: r.product.id,
             quantity: qty,
@@ -1184,37 +1189,41 @@ export const ReorderMake = extendModel('stock.reorder', {
   },
 });
 
-export const mrpShutro = defineModule({
-  name: 'mrp',
+export const productionShutro = defineModule({
+  name: 'production',
   version: '0.3.0',
   depends: [productShutro, stockShutro, contactsShutro, messagingShutro, permissionsShutro],
   groups: [
-    orm.defineGroup({ code: 'mrp.user', label: 'Production user', implies: ['stock.user'] }),
-    orm.defineGroup({ code: 'mrp.manager', label: 'Production manager', implies: ['mrp.user'] }),
+    orm.defineGroup({ code: 'production.user', label: 'Production user', implies: ['stock.user'] }),
+    orm.defineGroup({
+      code: 'production.manager',
+      label: 'Production manager',
+      implies: ['production.user'],
+    }),
   ],
   sequences: [
     orm.defineSequence({
-      code: 'mrp.production',
+      code: 'production.order',
       prefix: 'MO/{year}/',
       padding: 5,
       reset: 'yearly',
     }),
   ],
   models: [
-    MrpWorkcenter,
-    MrpBom,
-    MrpBomLine,
-    MrpBomByproduct,
-    MrpBomOperation,
-    MrpProduction,
-    MrpProductionComponent,
-    MrpWorkorder,
-    MrpSpecParameter,
-    MrpProductSpec,
-    MrpBomSpec,
-    MrpBomCost,
-    MrpBomEligibility,
-    MrpShift,
+    ProductionWorkcenter,
+    ProductionBom,
+    ProductionBomLine,
+    ProductionBomByproduct,
+    ProductionBomOperation,
+    ProductionOrder,
+    ProductionOrderComponent,
+    ProductionWorkorder,
+    ProductionSpecParameter,
+    ProductionProductSpec,
+    ProductionBomSpec,
+    ProductionBomCost,
+    ProductionBomEligibility,
+    ProductionShift,
   ],
-  extensions: [ScrapProduction, ReorderMake, CompanyMrp],
+  extensions: [ScrapProduction, ReorderMake, CompanyProduction],
 });
