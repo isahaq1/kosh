@@ -10,6 +10,16 @@ import { type Decimal, type Id, orm } from '@kosh/server/orm';
 import { stockShutro } from '@kosh/stock';
 import { stockAccountShutro, stockAccountsOf } from '@kosh/stock_account';
 import { defineModule, type Env, extendModel, f, type Records } from './.kosh/bindings.js';
+import {
+  applyOverheads,
+  OrderOverhead,
+  ProductionCosting,
+  ProductionCostingLine,
+  ProductionOrderOverhead,
+  ProductionOverheadAllocation,
+  ProductionOverheadAllocationLine,
+  ProductionOverheadAllocationShare,
+} from './overhead.js';
 
 const zero = orm.toDecimal(0);
 const money = (d: Decimal) => d.toDecimalPlaces(2);
@@ -41,7 +51,21 @@ async function madeBy(env: Env, picking: Id<'stock.picking'>) {
     ).load(['value']);
     consumed = [...layers].reduce((s, l) => s.minus(l.value), zero); // out layers are negative
   }
-  return { order, consumed, operations: order.operationCost ?? zero, shares };
+  // The overheads of its costing master, applied once for what it consumed and produced (RFC 0031 §3.5).
+  const overhead = await applyOverheads(
+    env,
+    order.id,
+    consumed,
+    order.producedQty ?? order.quantity,
+  );
+  return {
+    order,
+    consumed,
+    operations: order.operationCost ?? zero,
+    shares,
+    overhead: overhead.total,
+    overheadLines: overhead.lines,
+  };
 }
 
 export const OutputCost = extendModel('stock.move', {
@@ -59,7 +83,7 @@ export const OutputCost = extendModel('stock.move', {
         const made = await madeBy(env, m.picking.id);
         if (made === null || m.productQty === null || m.productQty.lte(0)) continue;
         // A by-product carries its share of the cost; the product made, the rest.
-        const total = made.consumed.plus(made.operations);
+        const total = made.consumed.plus(made.operations).plus(made.overhead);
         const others = [...made.shares.values()].reduce((s, x) => s.plus(x), zero);
         const share =
           m.product.id === made.order.product.id
@@ -83,7 +107,7 @@ export const OperationsPosted = extendModel('stock.picking', {
       for (const p of await pickings.load({ source: true, company: true })) {
         if (p.kind !== 'production' || p.source.usage !== 'production') continue;
         const made = await madeBy(env, p.id);
-        if (made === null || made.operations.lte(0)) continue;
+        if (made === null || (made.operations.lte(0) && made.overhead.lte(0))) continue;
         const accounts = await stockAccountsOf(env as never, p.company.id);
         if (accounts === null) continue;
         const labour =
@@ -100,7 +124,17 @@ export const OperationsPosted = extendModel('stock.picking', {
         if (labour === undefined) continue;
         const [company] = await env.model('res.company').browse([p.company.id]).load({});
         const amount = money(made.operations);
-        const name = `${made.order.name} operations`;
+        const name = `${made.order.name} operations and overhead`;
+        // Work in progress takes the operations and the overheads; each comes out of its own account.
+        const credits = [
+          ...(amount.gt(0) ? [{ account: labour, debit: zero, credit: amount, name }] : []),
+          ...made.overheadLines.map((l) => ({
+            account: l.account,
+            debit: zero,
+            credit: money(l.amount),
+            name: `${made.order.name} ${l.name}`,
+          })),
+        ];
         const entry = await env.model('account.move').create([
           {
             kind: 'entry',
@@ -111,8 +145,13 @@ export const OperationsPosted = extendModel('stock.picking', {
             ref: name,
             lines: {
               create: [
-                { account: accounts.production, debit: amount, credit: zero, name },
-                { account: labour, debit: zero, credit: amount, name },
+                {
+                  account: accounts.production,
+                  debit: money(amount.plus(made.overhead)),
+                  credit: zero,
+                  name,
+                },
+                ...credits,
               ],
             },
           },
@@ -138,7 +177,7 @@ export const WorkcenterExpense = extendModel('production.workcenter', {
 
 export const productionAccountShutro = defineModule({
   name: 'production_account',
-  version: '0.1.0',
+  version: '0.2.0',
   depends: [productionShutro, stockShutro, stockAccountShutro],
   groups: [
     orm.defineGroup({
@@ -147,6 +186,21 @@ export const productionAccountShutro = defineModule({
       implies: ['production.user'],
     }),
   ],
-  models: [],
-  extensions: [OutputCost, OperationsPosted, WorkcenterExpense],
+  sequences: [
+    orm.defineSequence({
+      code: 'production.overhead.allocation',
+      prefix: 'OVH/{year}/',
+      padding: 5,
+      reset: 'yearly',
+    }),
+  ],
+  models: [
+    ProductionCosting,
+    ProductionCostingLine,
+    ProductionOrderOverhead,
+    ProductionOverheadAllocation,
+    ProductionOverheadAllocationLine,
+    ProductionOverheadAllocationShare,
+  ],
+  extensions: [OutputCost, OperationsPosted, WorkcenterExpense, OrderOverhead],
 });

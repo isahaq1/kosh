@@ -267,3 +267,127 @@ test('a by-product carries its share of the cost; Work in progress still clears'
   ]);
   expect(await balanceOf('1250')).toBe('0.00');
 });
+
+test('overheads from the costing master are absorbed into the product and posted; the month-end allocation spreads the difference once (RFC 0031 step 5)', async () => {
+  const today = new Date().toISOString().slice(0, 10);
+  // An overhead account; a costing master for the fixture: 50 an order, 10 % of the materials, 2 a unit.
+  const overhead = (
+    await call('POST', '/api/v1/models/account.account', {
+      code: '5210',
+      name: 'Manufacturing overhead',
+      type: 'expense_direct_cost',
+    })
+  ).json;
+  expect(overhead.id, JSON.stringify(overhead)).toBeDefined();
+  const accrued = (
+    await call('POST', '/api/v1/models/account.account', {
+      code: '2210',
+      name: 'Accrued expenses',
+      type: 'liability_current',
+    })
+  ).json.id;
+  const costing = await call('POST', '/api/v1/models/production.costing', {
+    name: 'Fixtures',
+    product: ids['Fixture'],
+    lines: {
+      create: [
+        { name: 'Set-up', account: overhead.id, method: 'fixed', amount: '50' },
+        { name: 'Factory', account: overhead.id, method: 'percent', amount: '10' },
+        { name: 'Power', account: overhead.id, method: 'unit', amount: '2' },
+      ],
+    },
+  });
+  expect(costing.status, JSON.stringify(costing.json)).toBe(201);
+  for (const [name, quantity] of [
+    ['Panel', '5'],
+    ['Cable', '15'],
+  ] as const) {
+    const made = await call('POST', T, {
+      kind: 'receipt',
+      source: ids['vendors'],
+      destination: ids['stock'],
+      moves: { create: [{ product: ids[name], quantity }] },
+    });
+    await ok(`${T}/${made.json.id}/transitions/confirm`);
+    await ok(`${T}/${made.json.id}/transitions/validate`);
+  }
+  const id = (await call('POST', P, { product: ids['Fixture'], quantity: '5', bom: ids['bom'] }))
+    .json.id as number;
+  await ok(`${P}/${id}/transitions/confirm`);
+  await ok(`${P}/${id}/transitions/produce`);
+  // 650 of materials + 1,000 of operations + 125 of overhead (50 + 10 % of 650 + 5 × 2) = 1,775; 90 % to the
+  // fixtures, 10 % to the offcuts (the by-product above).
+  const order = (await call('GET', `${P}/${id}?fields=overheadCost,fullCost,output`)).json;
+  expect(Number(order.overheadCost)).toBe(125);
+  expect(Number(order.fullCost)).toBe(1775);
+  const [offcut] = await find('product.product', { name: 'Offcut' }, 'id');
+  const layers = await find(
+    'stock.valuation.layer',
+    { picking: order.output?.id ?? order.output },
+    'product,quantity,value',
+  );
+  expect(
+    layers.map((l) => [l.product?.id ?? l.product, Number(l.quantity), Number(l.value)]),
+  ).toEqual([
+    [ids['Fixture'], 5, 1597.5],
+    [offcut.id, 10, 177.5],
+  ]);
+  expect(await balanceOf('1250')).toBe('0.00');
+  expect(await balanceOf('5210')).toBe('-125.00');
+  // Month end: 200 of rent booked on the overhead account; the allocation finds 75 under-absorbed and spreads it over
+  // the month's three done orders (15 fixtures) by quantity, onto the stock on hand; the account nets to nothing.
+  const [journal] = await find('account.journal', {}, 'id');
+  const company = (await call('GET', '/api/v1/models/res.company/1?fields=currency')).json;
+  const rent = await call('POST', '/api/v1/models/account.move', {
+    kind: 'entry',
+    journal: journal.id,
+    date: today,
+    ref: 'Rent',
+    currency: company.currency?.id ?? company.currency,
+    lines: {
+      create: [
+        { account: overhead.id, debit: '200', credit: '0', name: 'Rent' },
+        { account: accrued, debit: '0', credit: '200', name: 'Rent' },
+      ],
+    },
+  });
+  expect(rent.status, JSON.stringify(rent.json)).toBe(201);
+  await ok(`/api/v1/models/account.move/${rent.json.id}/transitions/post`);
+  const A = '/api/v1/models/production.overhead.allocation';
+  const alloc = await call('POST', A, { month: today });
+  expect(alloc.status, JSON.stringify(alloc.json)).toBe(201);
+  expect(String(alloc.json.name)).toMatch(/^OVH\//);
+  expect((await call('POST', `${A}/${alloc.json.id}/transitions/post`)).status).toBe(409); // not worked out
+  await ok(`${A}/${alloc.json.id}/transitions/reckon`);
+  const lines = await find(
+    'production.overhead.allocation.line',
+    { allocation: alloc.json.id },
+    'account,actual,absorbed,difference',
+  );
+  expect(lines.map((l) => [Number(l.actual), Number(l.absorbed), Number(l.difference)])).toEqual([
+    [200, 125, 75],
+  ]);
+  const shares = await find(
+    'production.overhead.allocation.share',
+    { allocation: alloc.json.id },
+    'order,quantity,share,amount',
+  );
+  expect(shares.length).toBe(3);
+  expect(shares.reduce((s, x) => s + Number(x.amount), 0)).toBe(75);
+  const before = Number(
+    (await call('GET', `/api/v1/models/product.product/${ids['Fixture']}`)).json.standardPrice,
+  );
+  await ok(`${A}/${alloc.json.id}/transitions/post`);
+  const posted = (await call('GET', `${A}/${alloc.json.id}?fields=state,move`)).json;
+  expect(posted.state).toBe('posted');
+  expect(posted.move).not.toBeNull();
+  expect(await balanceOf('5210')).toBe('0.00');
+  const after = Number(
+    (await call('GET', `/api/v1/models/product.product/${ids['Fixture']}`)).json.standardPrice,
+  );
+  expect(after).toBeGreaterThan(before);
+  // The month is closed: a second allocation is refused.
+  const again = await call('POST', A, { month: today });
+  await ok(`${A}/${again.json.id}/transitions/reckon`);
+  expect((await call('POST', `${A}/${again.json.id}/transitions/post`)).status).toBe(409);
+});
