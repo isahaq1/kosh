@@ -10,6 +10,7 @@
 import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
+import { permissions } from '@kosh/permissions';
 import { product } from '@kosh/product';
 import { reporting } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
@@ -17,6 +18,7 @@ import { stock } from '@kosh/stock';
 import { action, form, gantt, kanban, list, search } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import { mrpDemo } from './demo.js';
+import { MrpBomEligibility, MrpProductSpec, MrpShift, MrpSpecParameter } from './depth.js';
 import {
   DAY_STARTS_AT,
   MrpBom,
@@ -29,6 +31,19 @@ import {
 } from './module.js';
 
 export {
+  BOM_KINDS,
+  bomsNeedApproval,
+  CompanyMrp,
+  ineligible,
+  MrpBomCost,
+  MrpBomEligibility,
+  MrpBomSpec,
+  MrpProductSpec,
+  MrpShift,
+  MrpSpecParameter,
+  reachedValues,
+} from './depth.js';
+export {
   MrpBom,
   MrpBomByproduct,
   MrpBomLine,
@@ -39,6 +54,7 @@ export {
   MrpWorkorder,
   mrpShutro,
   ReorderMake,
+  reviseBom,
   ScrapProduction,
   schedule,
   validBom,
@@ -115,7 +131,46 @@ export const mrp: ReturnType<typeof defineModule> = defineModule({
   shutro: mrpShutro,
   kosh: '^0.1.0',
   hooks: { demo: mrpDemo },
-  depends: [product, stock, contacts, messaging, reporting],
+  // Exceptions to the module standard (RFC 0023), each with its reason.
+  standard: {
+    waive: [
+      { rule: 'I1', model: 'mrp.bom.spec', reason: 'Imports with its bill (the bills template).' },
+      {
+        rule: 'I1',
+        model: 'mrp.bom.cost',
+        reason: 'Written by the system when a bill is activated.',
+      },
+    ],
+  },
+  // Settings › App settings › Production (RFC 0020): per company.
+  settings: {
+    sections: [
+      {
+        key: 'bills',
+        label: 'Bills of materials',
+        description: 'Whether bills are approved before they make products.',
+        keywords: 'bill of materials bom approval formula',
+        scope: 'company',
+        editors: ['mrp.manager'],
+        fields: [
+          {
+            key: 'bomApproval',
+            help: 'On, a bill is submitted for review and approved before an order may use it; off, a draft bill is used at once.',
+          },
+        ],
+      },
+    ],
+  },
+  approvals: [
+    {
+      name: 'Bill of materials approvals',
+      model: 'mrp.bom',
+      onApproved: 'approve',
+      onRejected: 'reject',
+      levels: [{ name: 'Production manager', condition: {}, approverRole: 'mrp.manager' }],
+    },
+  ],
+  depends: [product, stock, contacts, messaging, reporting, permissions],
   app: {
     code: 'production',
     label: 'Production',
@@ -126,6 +181,56 @@ export const mrp: ReturnType<typeof defineModule> = defineModule({
   },
   routes: (context: ModuleContext) => registerCapacityRoutes(context),
   documents: [
+    {
+      key: 'mrp_bom',
+      name: 'Bill of materials',
+      model: 'mrp.bom',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Bill of materials {{label}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'about',
+            items: [
+              { label: 'Product', bind: 'product.name' },
+              { label: 'Kind', bind: 'kind' },
+              { label: 'Makes', bind: 'quantity' },
+              { label: 'Version', bind: 'version' },
+              { label: 'Unit cost', bind: 'unitCost' },
+              { label: 'Status', bind: 'state' },
+            ],
+          },
+          {
+            kind: 'table',
+            id: 'lines',
+            bind: 'lines',
+            columns: [
+              { label: 'Component', bind: 'product.name' },
+              { label: 'Quantity', bind: 'quantity' },
+              { label: 'Unit', bind: 'uom.name' },
+              { label: 'Ratio (%)', bind: 'ratio' },
+              { label: 'Loss (%)', bind: 'loss' },
+              { label: 'Gross quantity', bind: 'grossQuantity' },
+            ],
+          },
+          {
+            kind: 'table',
+            id: 'operations',
+            bind: 'operations',
+            columns: [
+              { label: 'Operation', bind: 'name' },
+              { label: 'Work centre', bind: 'workcenter.name' },
+              { label: 'Minutes', bind: 'minutes' },
+            ],
+          },
+          { kind: 'text', id: 'note', text: '{{note}}' },
+          { kind: 'qr', id: 'qr', bind: 'label', size: 24, label: 'Bill reference' },
+        ],
+      },
+    },
     {
       key: 'production_order',
       name: 'Production order',
@@ -165,6 +270,44 @@ export const mrp: ReturnType<typeof defineModule> = defineModule({
     },
   ],
   importTemplates: [
+    {
+      key: 'mrp_spec_parameters',
+      model: 'mrp.spec.parameter',
+      label: 'Specification parameters',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'Unit', field: 'unit' },
+      ],
+    },
+    {
+      key: 'mrp_product_specs',
+      model: 'mrp.product.spec',
+      label: 'Product specifications',
+      columns: [
+        { header: 'Product', field: 'product' },
+        { header: 'Parameter', field: 'parameter' },
+        { header: 'Value', field: 'value' },
+      ],
+    },
+    {
+      key: 'mrp_eligibility',
+      model: 'mrp.bom.eligibility',
+      label: 'Component eligibility',
+      columns: [
+        { header: 'Kind of bill', field: 'kind' },
+        { header: 'Allowed component categories', field: 'categories' },
+      ],
+    },
+    {
+      key: 'mrp_shifts',
+      model: 'mrp.shift',
+      label: 'Shifts',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'Start', field: 'start' },
+        { header: 'End', field: 'end' },
+      ],
+    },
     {
       key: 'mrp_workcenter',
       model: 'mrp.workcenter',
@@ -214,6 +357,13 @@ export const mrp: ReturnType<typeof defineModule> = defineModule({
       label: 'Production order confirmed',
     },
     { topic: 'mrp.production.done', model: 'mrp.production', label: 'Production order done' },
+    {
+      topic: 'mrp.bom.submitted',
+      model: 'mrp.bom',
+      label: 'Bill of materials submitted for review',
+    },
+    { topic: 'mrp.bom.activated', model: 'mrp.bom', label: 'Bill of materials activated' },
+    { topic: 'mrp.bom.revised', model: 'mrp.bom', label: 'Bill of materials revised' },
   ],
   // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
   i18n: { bn: () => import('./i18n/bn.js') },
@@ -320,6 +470,22 @@ export const mrp: ReturnType<typeof defineModule> = defineModule({
       label: 'Bills of materials',
       views: ['list', 'form'],
     }),
+    'production.action_spec_parameters': action(MrpSpecParameter, {
+      label: 'Specification parameters',
+      views: ['list', 'form'],
+    }),
+    'production.action_product_specs': action(MrpProductSpec, {
+      label: 'Product specifications',
+      views: ['list', 'form'],
+    }),
+    'production.action_eligibility': action(MrpBomEligibility, {
+      label: 'Component eligibility',
+      views: ['list', 'form'],
+    }),
+    'production.action_shifts': action(MrpShift, {
+      label: 'Shifts',
+      views: ['list', 'form'],
+    }),
     'production.action_workcenters': action(MrpWorkcenter, {
       label: 'Work centres',
       views: ['list', 'form'],
@@ -353,6 +519,34 @@ export const mrp: ReturnType<typeof defineModule> = defineModule({
       parent: 'production.root',
       label: 'Configuration',
       sequence: 9,
+    },
+    {
+      id: 'production.spec_parameters',
+      parent: 'production.configuration',
+      label: 'Specification parameters',
+      action: 'production.action_spec_parameters',
+      sequence: 2,
+    },
+    {
+      id: 'production.product_specs',
+      parent: 'production.configuration',
+      label: 'Product specifications',
+      action: 'production.action_product_specs',
+      sequence: 3,
+    },
+    {
+      id: 'production.eligibility',
+      parent: 'production.configuration',
+      label: 'Component eligibility',
+      action: 'production.action_eligibility',
+      sequence: 4,
+    },
+    {
+      id: 'production.shifts',
+      parent: 'production.configuration',
+      label: 'Shifts',
+      action: 'production.action_shifts',
+      sequence: 5,
     },
     {
       id: 'production.workcenters',
@@ -458,16 +652,57 @@ export const mrp: ReturnType<typeof defineModule> = defineModule({
       ],
     })),
     'mrp.bom.list': list(MrpBom, {
-      columns: ['product', 'version', 'quantity', 'validFrom', 'validTo'],
+      columns: [
+        'product',
+        'version',
+        'kind',
+        'quantity',
+        'unitCost',
+        'validFrom',
+        'validTo',
+        'state',
+      ],
     }),
     'mrp.bom.form': form(MrpBom, (k) => ({
-      header: { buttons: [] },
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('submit', { primary: true, label: 'Submit for review' }),
+          k.button('approve', { primary: true, label: 'Approve' }),
+          k.button('reject', { label: 'Send back' }),
+          k.button('revise', { label: 'Create revision' }),
+          k.button('deactivate', { label: 'Set inactive' }),
+          k.button('reactivate', { label: 'Set active' }),
+        ],
+      },
       sheet: [
-        k.group('main', ['product', 'quantity', 'version', 'validFrom', 'validTo']),
+        k.group('main', ['product', 'kind', 'quantity', 'version', 'validFrom', 'validTo']),
+        k.group('batch', ['packSize', 'expectedLoss', 'tolerance', 'unitCost'], {
+          label: 'Batch',
+          description:
+            'A formula’s lines are shares of the batch; a packaging bill packs the product; losses are covered by the gross quantities.',
+        }),
+        k.component('approvals', 'approvals.Panel'),
         k.lines('lines', [
           { field: 'product', id: 'bom_line_product' },
           { field: 'quantity', id: 'bom_line_quantity' },
           { field: 'uom', id: 'bom_line_uom' },
+          { field: 'ratio', id: 'bom_line_ratio' },
+          { field: 'loss', id: 'bom_line_loss' },
+          { field: 'netQuantity', id: 'bom_line_net' },
+          { field: 'grossQuantity', id: 'bom_line_gross' },
+        ]),
+        k.lines('specs', [
+          { field: 'parameter', id: 'bom_spec_parameter' },
+          { field: 'minimum', id: 'bom_spec_min' },
+          { field: 'maximum', id: 'bom_spec_max' },
+          { field: 'value', id: 'bom_spec_value' },
+          { field: 'within', id: 'bom_spec_within' },
+        ]),
+        k.lines('costs', [
+          { field: 'date', id: 'bom_cost_date' },
+          { field: 'unitCost', id: 'bom_cost_unit' },
+          { field: 'note', id: 'bom_cost_note' },
         ]),
         k.lines('operations', [
           { field: 'name', id: 'bom_operation_name' },
@@ -485,14 +720,61 @@ export const mrp: ReturnType<typeof defineModule> = defineModule({
       chatter: true,
     })),
     'mrp.workcenter.list': list(MrpWorkcenter, {
-      columns: ['name', 'code', 'hoursPerDay', 'costPerHour'],
+      columns: ['name', 'code', 'hoursPerDay', 'costPerHour', 'batchMin', 'batchMax', 'oeeTarget'],
     }),
     'mrp.workcenter.form': form(MrpWorkcenter, (k) => ({
       header: { buttons: [] },
       sheet: [
         k.group('main', ['name', 'code', 'hoursPerDay', 'costPerHour']),
+        k.group(
+          'batches',
+          ['batchMin', 'batchMax', 'setupMinutes', 'cleanupMinutes', 'oeeTarget'],
+          {
+            label: 'Batches and effectiveness',
+          },
+        ),
+        k.group('alternative_centres', [{ field: 'alternatives', widget: 'tags' }], {
+          label: 'Alternatives',
+        }),
         k.group('about', ['note'], { columns: 1 }),
       ],
+    })),
+    'mrp.spec.parameter.list': list(MrpSpecParameter, {
+      columns: ['name', 'unit'],
+      inlineEdit: ['name', 'unit'],
+    }),
+    'mrp.spec.parameter.form': form(MrpSpecParameter, (k) => ({
+      header: { buttons: [] },
+      sheet: [k.group('main', ['name', 'unit']), k.group('about', ['note'], { columns: 1 })],
+    })),
+    'mrp.product.spec.list': list(MrpProductSpec, {
+      columns: ['product', 'parameter', 'value'],
+      inlineEdit: ['value'],
+    }),
+    'mrp.product.spec.form': form(MrpProductSpec, (k) => ({
+      header: { buttons: [] },
+      sheet: [k.group('main', ['product', 'parameter', 'value'])],
+    })),
+    'mrp.bom.eligibility.list': list(MrpBomEligibility, {
+      columns: ['kind', { field: 'categories', widget: 'tags' }],
+    }),
+    'mrp.bom.eligibility.form': form(MrpBomEligibility, (k) => ({
+      header: { buttons: [] },
+      sheet: [
+        k.group('main', ['kind', { field: 'categories', widget: 'tags' }], {
+          description:
+            'Lines of this kind of bill may only use products of these categories; others are refused with the reason.',
+        }),
+        k.group('about', ['note'], { columns: 1 }),
+      ],
+    })),
+    'mrp.shift.list': list(MrpShift, {
+      columns: ['name', 'start', 'end', 'hours'],
+      inlineEdit: ['name', 'start', 'end'],
+    }),
+    'mrp.shift.form': form(MrpShift, (k) => ({
+      header: { buttons: [] },
+      sheet: [k.group('main', ['name', 'start', 'end', 'hours'])],
     })),
     'mrp.bom.line.list': list(MrpBomLine, { columns: ['bom', 'product', 'quantity', 'uom'] }),
     'mrp.production.component.list': list(MrpProductionComponent, {
@@ -510,7 +792,23 @@ export const mrp: ReturnType<typeof defineModule> = defineModule({
       },
       groupBy: ['product', 'status', 'date'],
     }),
-    'mrp.bom': search(MrpBom, { fields: ['product.name', 'version'], groupBy: ['product'] }),
+    'mrp.bom': search(MrpBom, {
+      fields: ['product.name', 'version'],
+      filters: {
+        active: { label: 'Active', domain: { state: 'active' }, group: 'state' },
+        review: { label: 'Under review', domain: { state: 'review' }, group: 'state' },
+        formula: { label: 'Formulas', domain: { kind: 'formula' }, group: 'kind' },
+        packaging: { label: 'Packaging', domain: { kind: 'packaging' }, group: 'kind' },
+      },
+      groupBy: ['product', 'kind', 'state'],
+    }),
+    'mrp.spec.parameter': search(MrpSpecParameter, { fields: ['name'] }),
+    'mrp.product.spec': search(MrpProductSpec, {
+      fields: ['product.name', 'parameter.name'],
+      groupBy: ['product', 'parameter'],
+    }),
+    'mrp.bom.eligibility': search(MrpBomEligibility, { fields: ['kind'], groupBy: ['kind'] }),
+    'mrp.shift': search(MrpShift, { fields: ['name'] }),
     'mrp.workcenter': search(MrpWorkcenter, { fields: ['name', 'code'] }),
     'mrp.workorder': search(MrpWorkorder, {
       fields: ['name', 'production.name', 'workcenter.name'],

@@ -7,6 +7,7 @@
 
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
+import { approvalGuard, permissionsShutro, requestApprovals } from '@kosh/permissions';
 import { productShutro } from '@kosh/product';
 import { emitting } from '@kosh/server';
 import { type Decimal, type Id, orm } from '@kosh/server/orm';
@@ -23,6 +24,18 @@ import {
   type Records,
   records,
 } from './.kosh/bindings.js';
+import {
+  BOM_KINDS,
+  bomsNeedApproval,
+  CompanyMrp,
+  ineligible,
+  MrpBomCost,
+  MrpBomEligibility,
+  MrpBomSpec,
+  MrpProductSpec,
+  MrpShift,
+  MrpSpecParameter,
+} from './depth.js';
 
 const READ = ['read'] as const;
 const ALL = ['read', 'write', 'create', 'unlink'] as const;
@@ -45,8 +58,24 @@ export async function validBom(
   const bills = await (await env.model('mrp.bom').search({ where: { product } })).load([
     'validFrom',
     'validTo',
+    'state',
+    'company',
   ]);
-  const valid = [...bills]
+  // Active bills; drafts too when the company needs no approval (RFC 0031 §3.2).
+  const needs = new Map<number, boolean>();
+  const usable = async (b: { state: string; company: { id: number } }) => {
+    if (b.state === 'active') return true;
+    if (b.state !== 'draft') return false;
+    let need = needs.get(b.company.id);
+    if (need === undefined) {
+      need = await bomsNeedApproval(env, b.company.id);
+      needs.set(b.company.id, need);
+    }
+    return !need;
+  };
+  const candidates: typeof bills extends Iterable<infer T> ? T[] : never = [];
+  for (const b of bills) if (await usable(b as never)) candidates.push(b);
+  const valid = candidates
     .filter(
       (b) =>
         (b.validFrom === null || iso(b.validFrom) <= date) &&
@@ -70,6 +99,35 @@ export const MrpWorkcenter = defineModel('mrp.workcenter', {
     hoursPerDay: f.decimal({ scale: 2, required: true, default: '8', label: 'Hours a day' }),
     /** Labour and overhead per hour of work. */
     costPerHour: f.decimal({ scale: 2, required: true, default: '0', label: 'Cost per hour' }),
+    batchMin: f.decimal({ scale: 4, label: 'Minimum batch', help: 'The smallest batch it runs.' }),
+    batchMax: f.decimal({
+      scale: 4,
+      label: 'Maximum batch',
+      help: 'The largest batch it runs at once.',
+    }),
+    oeeTarget: f.decimal({
+      scale: 2,
+      default: '85',
+      label: 'OEE target (%)',
+      help: 'The overall equipment effectiveness aimed at: availability × performance × quality.',
+    }),
+    setupMinutes: f.decimal({
+      scale: 2,
+      default: '0',
+      label: 'Setup (minutes)',
+      help: 'Before each batch.',
+    }),
+    cleanupMinutes: f.decimal({
+      scale: 2,
+      default: '0',
+      label: 'Cleanup (minutes)',
+      help: 'After each batch.',
+    }),
+    alternatives: f.many2many('mrp.workcenter', {
+      relation: 'mrp_workcenter_alternative',
+      label: 'Alternative work centres',
+      help: 'Where the same operation may run when this centre is full.',
+    }),
     note: f.text(),
   },
   sqlConstraints: {
@@ -86,12 +144,34 @@ export const MrpBom = defineModel('mrp.bom', {
   order: ['product asc', 'validFrom desc', 'id desc'],
   archivable: true,
   companyScoped: { required: true },
-  tracking: ['quantity', 'validFrom', 'validTo'],
+  tracking: ['quantity', 'validFrom', 'validTo', 'kind', 'state'],
   access: { 'mrp.user': READ, 'mrp.manager': [...ALL, 'export', 'import'] },
   fields: {
     product: f.many2one('product.product', { required: true, ondelete: 'restrict' }),
     /** How many of the product one bill makes, in the product's unit. */
     quantity: f.decimal({ scale: 4, required: true, default: '1', label: 'Makes' }),
+    kind: f.selection(BOM_KINDS, {
+      required: true,
+      default: 'standard',
+      help: 'Standard: components in quantities. Formula: components as shares of the batch (ratios adding up to 100 %), scaled to any quantity. Packaging: a pack of the product made.',
+    }),
+    packSize: f.decimal({
+      scale: 4,
+      label: 'Pack size',
+      help: 'For a packaging bill: how much of the product one pack holds, in the product’s unit.',
+    }),
+    expectedLoss: f.decimal({
+      scale: 2,
+      default: '0',
+      label: 'Expected loss (%)',
+      help: 'What is lost making or packing a batch, as a share of it.',
+    }),
+    tolerance: f.decimal({
+      scale: 2,
+      default: '0',
+      label: 'Tolerance (±%)',
+      help: 'How far the quantity made may stray from the batch before it is questioned.',
+    }),
     version: f.char({ required: true, default: 'v1' }),
     /** From when this version is used (empty: always). */
     validFrom: f.date({ label: 'Valid from' }),
@@ -99,6 +179,111 @@ export const MrpBom = defineModel('mrp.bom', {
     lines: f.one2many('mrp.bom.line', 'bom', { label: 'Components' }),
     operations: f.one2many('mrp.bom.operation', 'bom'),
     byproducts: f.one2many('mrp.bom.byproduct', 'bom', { label: 'By-products' }),
+    specs: f.one2many('mrp.bom.spec', 'bom', { label: 'Specifications' }),
+    costs: f.one2many('mrp.bom.cost', 'bom', { label: 'Costing history' }),
+    unitCost: f.decimal({
+      scale: 4,
+      store: true,
+      label: 'Unit cost',
+      help: 'The components (gross of their losses) at their cost and the operations at their work centres’ rates, per unit made.',
+      ...compute(
+        'mrp.bom',
+        'unitCost',
+        [
+          'quantity',
+          'lines.grossQuantity',
+          'lines.quantity',
+          'lines.uom',
+          'lines.product.standardPrice',
+          'lines.product.uom',
+          'operations.minutes',
+          'operations.workcenter.costPerHour',
+        ],
+        (bills) => {
+          for (const b of bills) {
+            let total = zero;
+            for (const l of b.lines) {
+              const qty = inProductUnit(
+                l.grossQuantity ?? l.quantity,
+                (l.uom ?? null) as never,
+                (l.product.uom ?? null) as never,
+              );
+              total = total.plus(qty.times(l.product.standardPrice ?? zero));
+            }
+            for (const op of b.operations)
+              total = total.plus(op.minutes.div(60).times(op.workcenter.costPerHour));
+            b.unitCost = b.quantity.gt(0) ? total.div(b.quantity).toDecimalPlaces(4) : zero;
+          }
+        },
+      ),
+    }),
+    state: f.state({
+      states: { draft: 'Draft', review: 'Under review', active: 'Active', inactive: 'Inactive' },
+      initial: 'draft',
+      help: 'Drafted, submitted for review, approved into active (the version used), set inactive when superseded; a revision copies it to the next version. A company that needs no approval uses drafts as well.',
+      transitions: {
+        submit: {
+          from: ['draft'],
+          to: 'review',
+          guard: records('mrp.bom', async (bills) => {
+            const out: number[] = [];
+            for (const b of await bills.load({ lines: true, specs: true })) {
+              const lines = [...b.lines];
+              const ratios = lines.reduce((s, l) => s.plus(l.ratio ?? zero), zero);
+              if (
+                lines.length === 0 ||
+                (b.kind === 'formula' && !ratios.eq(100)) ||
+                [...b.specs].some((s) => s.within === false)
+              )
+                out.push(b.id);
+            }
+            return out;
+          }),
+          message:
+            'A bill under review has components, formula ratios adding up to 100 % and every specification within range.',
+          after: records('mrp.bom', async (bills) => {
+            await requestApprovals(bills);
+            for (const b of await bills.load({}))
+              await bills.env.emit('mrp.bom.submitted', { id: b.id });
+          }),
+        },
+        approve: {
+          from: ['review'],
+          to: 'active',
+          guard: records('mrp.bom', (bills) => approvalGuard(bills)),
+          message: 'Waiting for approvals.',
+          after: records('mrp.bom', async (bills) => {
+            const env = bills.env as unknown as Env;
+            for (const b of await bills.load({})) {
+              await env.asSuperuser({ reason: 'bill costing history' }, (su) =>
+                su.model('mrp.bom.cost').create([
+                  {
+                    bom: b.id,
+                    date: env.today(),
+                    unitCost: b.unitCost ?? zero,
+                    note: 'Activated',
+                  },
+                ] as never),
+              );
+              await env.emit('mrp.bom.activated', { id: b.id });
+            }
+          }),
+        },
+        reject: { from: ['review'], to: 'draft' },
+        deactivate: { from: ['active'], to: 'inactive' },
+        reactivate: { from: ['inactive'], to: 'active' },
+        /** A copy as the next version, in draft, to change and submit; the cost of this version kept. */
+        revise: {
+          from: ['active'],
+          to: 'active',
+          after: records('mrp.bom', async (bills) => {
+            const env = bills.env as unknown as Env;
+            for (const id of bills.ids) await reviseBom(env, id as number);
+          }),
+        },
+      },
+      extensible: true,
+    }),
     note: f.text(),
     label: f.char({
       store: true,
@@ -110,12 +295,81 @@ export const MrpBom = defineModel('mrp.bom', {
   },
   sqlConstraints: {
     positive: { check: orm.sql`quantity > 0`, message: 'A bill makes a positive quantity.' },
+    packaging: {
+      check: orm.sql`kind <> 'packaging' OR (pack_size IS NOT NULL AND pack_size > 0)`,
+      message: 'A packaging bill has a pack size.',
+    },
+    shares: {
+      check: orm.sql`expected_loss >= 0 AND expected_loss < 100 AND tolerance >= 0 AND tolerance <= 100`,
+      message: 'Loss and tolerance are percentages.',
+    },
     period: {
       check: orm.sql`valid_from IS NULL OR valid_to IS NULL OR valid_to >= valid_from`,
       message: 'A bill ends on or after it starts.',
     },
   },
 });
+
+/** The next version's name: v1 → v2, 2026-A → 2026-A-2. */
+function nextVersion(version: string): string {
+  const m = /^(.*?)(\d+)$/.exec(version);
+  return m === null ? `${version}-2` : `${m[1]}${Number(m[2]) + 1}`;
+}
+
+/** A copy of a bill as its next version, in draft: lines, operations, by-products and specifications. */
+export async function reviseBom(env: Env, id: number): Promise<number | null> {
+  const [b] = await env
+    .model('mrp.bom')
+    .browse([id as never])
+    .load({ lines: true, operations: true, byproducts: true, specs: true, company: true });
+  if (b === undefined) return null;
+  const made = await env.model('mrp.bom').create([
+    {
+      product: b.product.id,
+      company: b.company.id,
+      quantity: b.quantity,
+      kind: b.kind,
+      packSize: b.packSize,
+      expectedLoss: b.expectedLoss,
+      tolerance: b.tolerance,
+      version: nextVersion(b.version),
+      note: b.note,
+      lines: {
+        create: [...b.lines].map((l) => ({
+          product: l.product.id,
+          quantity: l.quantity,
+          uom: l.uom?.id ?? null,
+          ratio: l.ratio,
+          loss: l.loss,
+        })),
+      },
+      operations: {
+        create: [...b.operations].map((o) => ({
+          name: o.name,
+          workcenter: o.workcenter.id,
+          minutes: o.minutes,
+        })),
+      },
+      byproducts: {
+        create: [...b.byproducts].map((x) => ({
+          product: x.product.id,
+          quantity: x.quantity,
+          uom: x.uom?.id ?? null,
+          costShare: x.costShare,
+        })),
+      },
+      specs: {
+        create: [...b.specs].map((x) => ({
+          parameter: x.parameter.id,
+          minimum: x.minimum,
+          maximum: x.maximum,
+        })),
+      },
+    },
+  ] as never);
+  await env.emit('mrp.bom.revised', { id: b.id });
+  return (made.ids[0] as number | undefined) ?? null;
+}
 
 export const MrpBomLine = defineModel('mrp.bom.line', {
   label: 'Component',
@@ -126,6 +380,48 @@ export const MrpBomLine = defineModel('mrp.bom.line', {
     product: f.many2one('product.product', { required: true, ondelete: 'restrict' }),
     quantity: f.decimal({ scale: 4, required: true, default: '1' }),
     uom: f.many2one('uom.uom', { label: 'Unit' }),
+    ratio: f.decimal({
+      scale: 2,
+      label: 'Ratio (%)',
+      help: 'For a formula: the component’s share of the batch; the ratios add up to 100 %.',
+    }),
+    loss: f.decimal({
+      scale: 2,
+      default: '0',
+      label: 'Loss (%)',
+      help: 'What is lost of this component in making (spillage, moisture): the gross quantity covers it.',
+    }),
+    netQuantity: f.decimal({
+      scale: 4,
+      store: true,
+      label: 'Net quantity',
+      help: 'What goes into the product: the quantity, or the ratio of the batch for a formula.',
+      ...compute(
+        'mrp.bom.line',
+        'netQuantity',
+        ['quantity', 'ratio', 'bom.kind', 'bom.quantity'],
+        (lines) => {
+          for (const l of lines)
+            l.netQuantity =
+              l.bom.kind === 'formula' && l.ratio !== null
+                ? l.bom.quantity.times(l.ratio).div(100).toDecimalPlaces(4)
+                : l.quantity;
+        },
+      ),
+    }),
+    grossQuantity: f.decimal({
+      scale: 4,
+      store: true,
+      label: 'Gross quantity',
+      help: 'The net quantity plus the loss: what the order consumes.',
+      ...compute('mrp.bom.line', 'grossQuantity', ['netQuantity', 'loss'], (lines) => {
+        for (const l of lines)
+          l.grossQuantity = (l.netQuantity ?? l.quantity)
+            .times(orm.toDecimal(100).plus(l.loss ?? zero))
+            .div(100)
+            .toDecimalPlaces(4);
+      }),
+    }),
   },
   onchange: {
     product: onchange('mrp.bom.line', async (d) => {
@@ -138,8 +434,38 @@ export const MrpBomLine = defineModel('mrp.bom.line', {
       check: orm.sql`quantity > 0`,
       message: 'A component is needed in a positive quantity.',
     },
+    shares: {
+      check: orm.sql`(ratio IS NULL OR (ratio >= 0 AND ratio <= 100)) AND loss >= 0 AND loss < 100`,
+      message: 'Ratios and losses are percentages.',
+    },
   },
   constraints: {
+    // The company's eligibility rules for the bill's kind (RFC 0031 §3.2): refused lines say why.
+    eligible: {
+      ...check('mrp.bom.line', ['product', 'bom'], async (lines) => {
+        const env = lines.env as unknown as Env;
+        const failing: number[] = [];
+        for (const l of await lines.load({ bom: { company: true }, product: true })) {
+          const why = await ineligible(
+            env,
+            l.bom.company.id as number,
+            l.bom.kind,
+            l.product.id as number,
+          );
+          if (why !== null) {
+            failing.push(l.id);
+            throw new orm.ValidationError(
+              'mrp.bom.line',
+              ['product'],
+              why,
+              'Choose an allowed component, or change the eligibility rules (Production › Configuration).',
+            );
+          }
+        }
+        return failing;
+      }),
+      message: 'This product is not an allowed component of the bill’s kind.',
+    },
     notItself: {
       ...check('mrp.bom.line', ['product', 'bom'], async (lines) =>
         (await lines.load({ bom: true }))
@@ -261,7 +587,7 @@ async function explode(ids: readonly Id<'mrp.production'>[], env: Env): Promise<
       const needs = new Map<number, Decimal>();
       for (const l of o.bom.lines) {
         const inUnit = inProductUnit(
-          l.quantity.times(factor),
+          (l.grossQuantity ?? l.quantity).times(factor),
           l.uom ?? null,
           l.product.uom ?? null,
         );
@@ -595,10 +921,21 @@ export const MrpProduction = defineModel('mrp.production', {
         confirm: emitting('mrp.production.confirmed', {
           from: ['draft'],
           to: 'confirmed',
-          guard: records('mrp.production', async (orders) =>
-            (await orders.load({})).filter((o) => o.bom === null),
-          ),
-          message: 'Choose the bill of materials first.',
+          guard: records('mrp.production', async (orders) => {
+            const env = orders.env as unknown as Env;
+            const out: number[] = [];
+            for (const o of await orders.load({ bom: true, company: true })) {
+              if (o.bom === null || o.bom.state === 'inactive' || o.bom.state === 'review') {
+                out.push(o.id);
+                continue;
+              }
+              if (o.bom.state === 'draft' && (await bomsNeedApproval(env, o.company.id as number)))
+                out.push(o.id);
+            }
+            return out;
+          }),
+          message:
+            'Choose a bill of materials that may be used: an active one (or a draft, when bills need no approval).',
           // The components, their transfer to Production (reserved), and the work orders, scheduled.
           after: records('mrp.production', async (orders): Promise<void> => {
             await explode(orders.ids, orders.env);
@@ -849,8 +1186,8 @@ export const ReorderMake = extendModel('stock.reorder', {
 
 export const mrpShutro = defineModule({
   name: 'mrp',
-  version: '0.2.0',
-  depends: [productShutro, stockShutro, contactsShutro, messagingShutro],
+  version: '0.3.0',
+  depends: [productShutro, stockShutro, contactsShutro, messagingShutro, permissionsShutro],
   groups: [
     orm.defineGroup({ code: 'mrp.user', label: 'Production user', implies: ['stock.user'] }),
     orm.defineGroup({ code: 'mrp.manager', label: 'Production manager', implies: ['mrp.user'] }),
@@ -872,6 +1209,12 @@ export const mrpShutro = defineModule({
     MrpProduction,
     MrpProductionComponent,
     MrpWorkorder,
+    MrpSpecParameter,
+    MrpProductSpec,
+    MrpBomSpec,
+    MrpBomCost,
+    MrpBomEligibility,
+    MrpShift,
   ],
-  extensions: [ScrapProduction, ReorderMake],
+  extensions: [ScrapProduction, ReorderMake, CompanyMrp],
 });

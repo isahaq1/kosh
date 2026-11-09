@@ -127,6 +127,7 @@ beforeAll(async () => {
   for (const [login, groups] of [
     ['maria', ['mrp.manager', 'stock.manager', 'product.manager']],
     ['rahim', ['mrp.user']],
+    ['mona', ['mrp.manager']],
     ['bob', ['base.user']],
   ] as const)
     await auth.createUser({
@@ -458,6 +459,185 @@ test('reorder rules that make: a confirmed production order with the valid bill,
   });
   expect(refused.status).toBe(422);
   expect(JSON.stringify(refused.json)).toContain('no bill of materials');
+});
+
+test('bills in depth (RFC 0031 step 2): a formula with ratios, losses and specifications; eligibility; approval when the company asks; a revision', async () => {
+  const B = '/api/v1/models/mrp.bom';
+  const protein = (
+    await call('POST', '/api/v1/models/mrp.spec.parameter', 'maria', { name: 'Protein', unit: '%' })
+  ).json.id as number;
+  for (const [name, value] of [
+    ['Panel', '20'],
+    ['Cable', '50'],
+  ] as const)
+    expect(
+      (
+        await call('POST', '/api/v1/models/mrp.product.spec', 'maria', {
+          product: ids[name],
+          parameter: protein,
+          value,
+        })
+      ).status,
+    ).toBe(201);
+  // A formula for 100 of the fixture: 60 % panels with 5 % loss, 40 % cable; protein 20–40 wanted, 32 reached.
+  const formula = await call('POST', B, 'maria', {
+    product: ids['Fixture'],
+    kind: 'formula',
+    quantity: '100',
+    version: 'f1',
+    lines: {
+      create: [
+        { product: ids['Panel'], quantity: '1', ratio: '60', loss: '5' },
+        { product: ids['Cable'], quantity: '1', ratio: '40' },
+      ],
+    },
+    specs: { create: [{ parameter: protein, minimum: '20', maximum: '40' }] },
+  });
+  expect(formula.status, JSON.stringify(formula.json)).toBe(201);
+  const fid = formula.json.id as number;
+  const lines = (
+    await call(
+      'GET',
+      `/api/v1/models/mrp.bom.line?filter=${encodeURIComponent(JSON.stringify({ bom: fid }))}&fields=ratio,netQuantity,grossQuantity&order=id+asc`,
+      'maria',
+    )
+  ).json.items as Json[];
+  expect(lines.map((l) => [Number(l.netQuantity), Number(l.grossQuantity)])).toEqual([
+    [60, 63],
+    [40, 40],
+  ]);
+  const [spec] = (
+    await call(
+      'GET',
+      `/api/v1/models/mrp.bom.spec?filter=${encodeURIComponent(JSON.stringify({ bom: fid }))}&fields=value,within`,
+      'maria',
+    )
+  ).json.items as Json[];
+  expect([Number(spec.value), spec.within]).toEqual([32, true]);
+  // Ratios that do not add up are refused at review; 60 + 40 pass, and without a policy decider it is active.
+  expect(
+    (await call('PATCH', `/api/v1/models/mrp.bom.line/${lines[1].id}`, 'maria', { ratio: '30' }))
+      .status,
+  ).toBe(200);
+  expect((await call('POST', `${B}/${fid}/transitions/submit`, 'maria')).status).toBe(409);
+  expect(
+    (await call('PATCH', `/api/v1/models/mrp.bom.line/${lines[1].id}`, 'maria', { ratio: '40' }))
+      .status,
+  ).toBe(200);
+  expect((await call('POST', `${B}/${fid}/transitions/submit`, 'maria')).status).toBe(200);
+  // The shipped policy asks a Production manager other than the one who submitted.
+  const inbox = (await call('GET', '/api/v1/approvals/inbox', 'mona')).json.requests as Json[];
+  const mine = inbox.filter((r) => r.targetModel === 'mrp.bom' && r.targetId === fid);
+  expect(mine.length).toBe(1);
+  for (const r of mine)
+    expect((await call('POST', `/api/v1/approvals/requests/${r.id}/approve`, 'mona')).status).toBe(
+      200,
+    );
+  const active = (await call('GET', `${B}/${fid}?fields=state,unitCost`, 'maria')).json;
+  expect(active.state).toBe('active');
+  // 63 panels at 100 and 40 m of cable at 10, per 100 made.
+  expect(Number(active.unitCost)).toBe(67);
+  const costs = (
+    await call(
+      'GET',
+      `/api/v1/models/mrp.bom.cost?filter=${encodeURIComponent(JSON.stringify({ bom: fid }))}&fields=unitCost`,
+      'maria',
+    )
+  ).json.items as Json[];
+  expect(costs.length).toBe(1);
+  // A revision: f2 in draft with the same lines and specifications.
+  expect((await call('POST', `${B}/${fid}/transitions/revise`, 'maria')).status).toBe(200);
+  const [revision] = (
+    await call(
+      'GET',
+      `${B}?filter=${encodeURIComponent(JSON.stringify({ product: ids['Fixture'], version: 'f2' }))}&fields=state,kind,lines,specs`,
+      'maria',
+    )
+  ).json.items as Json[];
+  expect(revision).toMatchObject({ state: 'draft', kind: 'formula' });
+  expect(revision.lines.length).toBe(2);
+  expect(revision.specs.length).toBe(1);
+  // Eligibility: formula components limited to a category the cable is not in.
+  const category = (
+    await call('POST', '/api/v1/models/product.category', 'maria', { name: 'Feed raw materials' })
+  ).json.id as number;
+  expect(
+    (await call('PATCH', `/api/v1/models/product.product/${ids['Panel']}`, 'maria', { category }))
+      .status,
+  ).toBe(200);
+  expect(
+    (
+      await call('POST', '/api/v1/models/mrp.bom.eligibility', 'maria', {
+        kind: 'formula',
+        categories: { set: [category] },
+      })
+    ).status,
+  ).toBe(201);
+  const refused = await call('POST', B, 'maria', {
+    product: ids['Fixture'],
+    kind: 'formula',
+    version: 'f3',
+    lines: { create: [{ product: ids['Cable'], quantity: '1', ratio: '100' }] },
+  });
+  expect(refused.status).toBe(422);
+  expect(JSON.stringify(refused.json)).toContain('not an allowed component');
+  // Approval required: a draft bill no longer makes products; an active one does.
+  const setApproval = (on: boolean) =>
+    host.server.shutro.bootstrap({ reason: 'test: bills need approval', company }, async (env) => {
+      await (
+        env as unknown as {
+          model(n: string): { browse(ids: number[]): { write(v: unknown): Promise<void> } };
+        }
+      )
+        .model('res.company')
+        .browse([company])
+        .write({ bomApproval: on });
+    });
+  await setApproval(true);
+  const draftOrder = await call('POST', P, 'rahim', {
+    product: ids['Fixture'],
+    quantity: '10',
+    bom: revision.id,
+  });
+  expect(draftOrder.status, JSON.stringify(draftOrder.json)).toBe(201);
+  expect((await run(draftOrder.json.id, 'confirm')).status).toBe(409);
+  const activeOrder = await call('POST', P, 'rahim', {
+    product: ids['Fixture'],
+    quantity: '10',
+    bom: fid,
+  });
+  expect((await run(activeOrder.json.id, 'confirm')).status).toBe(200);
+  await setApproval(false);
+  // Work centres: batches, effectiveness, alternatives; shifts with checked times.
+  expect(
+    (
+      await call('PATCH', `/api/v1/models/mrp.workcenter/${ids['assembly']}`, 'maria', {
+        batchMin: '50',
+        batchMax: '500',
+        setupMinutes: '15',
+        cleanupMinutes: '10',
+        oeeTarget: '80',
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await call('POST', '/api/v1/models/mrp.shift', 'maria', {
+        name: 'Night',
+        start: '22:00',
+        end: '06:00',
+      })
+    ).json.hours as string,
+  ).toBe('8');
+  expect(
+    (
+      await call('POST', '/api/v1/models/mrp.shift', 'maria', {
+        name: 'Bad',
+        start: '25:00',
+        end: '06:00',
+      })
+    ).status,
+  ).toBe(422);
 });
 
 test('the demo data loads', async () => {
