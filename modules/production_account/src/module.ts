@@ -6,7 +6,7 @@
  */
 
 import { productionShutro } from '@kosh/production';
-import { type Decimal, type Id, orm } from '@kosh/server/orm';
+import { type Decimal, type Id, type Module, type ModuleBase, orm } from '@kosh/server/orm';
 import { stockShutro } from '@kosh/stock';
 import { stockAccountShutro, stockAccountsOf } from '@kosh/stock_account';
 import { defineModule, type Env, extendModel, f, type Records } from './.kosh/bindings.js';
@@ -175,10 +175,26 @@ export const WorkcenterExpense = extendModel('production.workcenter', {
   },
 });
 
-export const productionAccountShutro = defineModule({
+// Named so the module's type stays short enough to emit (TS7056) with every model Products and Production carry.
+const DEPENDS: readonly ModuleBase[] = [productionShutro, stockShutro, stockAccountShutro];
+const MODELS = [
+  ProductionCosting,
+  ProductionCostingLine,
+  ProductionOrderOverhead,
+  ProductionOverheadAllocation,
+  ProductionOverheadAllocationLine,
+  ProductionOverheadAllocationShare,
+] as const;
+const EXTENSIONS = [OutputCost, OperationsPosted, WorkcenterExpense, OrderOverhead] as const;
+
+export const productionAccountShutro: Module<
+  typeof MODELS,
+  readonly ModuleBase[],
+  typeof EXTENSIONS
+> = defineModule({
   name: 'production_account',
   version: '0.2.0',
-  depends: [productionShutro, stockShutro, stockAccountShutro],
+  depends: DEPENDS,
   groups: [
     orm.defineGroup({
       code: 'production_account.user',
@@ -194,13 +210,6 @@ export const productionAccountShutro = defineModule({
       reset: 'yearly',
     }),
   ],
-  models: [
-    ProductionCosting,
-    ProductionCostingLine,
-    ProductionOrderOverhead,
-    ProductionOverheadAllocation,
-    ProductionOverheadAllocationLine,
-    ProductionOverheadAllocationShare,
-  ],
-  extensions: [OutputCost, OperationsPosted, WorkcenterExpense, OrderOverhead],
+  models: MODELS,
+  extensions: EXTENSIONS,
 });

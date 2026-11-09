@@ -3,7 +3,7 @@
  * product — on hand in the company's stock locations less what is reserved — so a storefront shows in stock, few
  * left or out of stock, and a site that does not sell beyond stock refuses more than is available.
  */
-import { orm } from '@kosh/server/orm';
+import { type Module, type ModuleBase, orm } from '@kosh/server/orm';
 import { stockShutro } from '@kosh/stock';
 import { websiteSaleShutro } from '@kosh/website_sale';
 import { defineModule, extendModel, type Records } from './.kosh/bindings.js';
@@ -23,10 +23,19 @@ export const ProductShopStock = extendModel('product.product', {
   },
 });
 
-export const websiteSaleStockShutro = defineModule({
+// Named so the module's type stays short enough to emit (TS7056) with every model its dependencies carry.
+const DEPENDS: readonly ModuleBase[] = [websiteSaleShutro, stockShutro];
+const MODELS = [] as const;
+const EXTENSIONS = [ProductShopStock] as const;
+
+export const websiteSaleStockShutro: Module<
+  typeof MODELS,
+  readonly ModuleBase[],
+  typeof EXTENSIONS
+> = defineModule({
   name: 'website_sale_stock',
   version: '0.1.0',
-  depends: [websiteSaleShutro, stockShutro],
-  models: [],
-  extensions: [ProductShopStock],
+  depends: DEPENDS,
+  models: MODELS,
+  extensions: EXTENSIONS,
 });
