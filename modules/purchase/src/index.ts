@@ -14,6 +14,7 @@ import type { ModuleContext } from '@kosh/server';
 import { action, calendar, form, kanban, list, pivot, search, stat } from '@kosh/views';
 import { PurchaseComparison, PurchaseTechnicalComparison } from './comparison.js';
 import { purchaseDemo } from './demo.js';
+import { PurchaseAgreement, PurchaseVendorRequest, PurchaseWorkAcceptance } from './extras.js';
 import { PurchaseOrder, purchaseShutro } from './module.js';
 import { PurchaseRequest, PurchaseRequestLine } from './request.js';
 import { PurchaseTender, PurchaseTenderResponse, registerTenderRoutes } from './tender.js';
@@ -26,6 +27,15 @@ export {
   PurchaseTechnicalComparison,
   PurchaseTechnicalComparisonLine,
 } from './comparison.js';
+export {
+  agreementPriceFor,
+  checkAgreement,
+  PurchaseAgreement,
+  PurchaseAgreementLine,
+  PurchaseVendorRequest,
+  PurchaseWorkAcceptance,
+  PurchaseWorkAcceptanceLine,
+} from './extras.js';
 export { PurchaseOrder, PurchaseOrderLine, purchaseShutro } from './module.js';
 export { createRfqs, createTender, PurchaseRequest, PurchaseRequestLine } from './request.js';
 export {
@@ -52,6 +62,21 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
         rule: 'I1',
         model: 'purchase.request.line',
         reason: 'Lines import with their request (the purchase requests template).',
+      },
+      {
+        rule: 'I1',
+        model: 'purchase.agreement.line',
+        reason: 'Lines import with their agreement (the agreements template).',
+      },
+      {
+        rule: 'I1',
+        model: 'purchase.work.acceptance',
+        reason: 'Drawn up from an order’s service lines on screen; nothing to import.',
+      },
+      {
+        rule: 'I1',
+        model: 'purchase.work.acceptance.line',
+        reason: 'Made with its acceptance from the order’s lines.',
       },
       {
         rule: 'I1',
@@ -91,6 +116,26 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
     ],
   },
   events: [
+    {
+      topic: 'purchase.agreement.confirmed',
+      model: 'purchase.agreement',
+      label: 'Purchase agreement confirmed',
+    },
+    {
+      topic: 'purchase.work_acceptance.accepted',
+      model: 'purchase.work.acceptance',
+      label: 'Work accepted',
+    },
+    {
+      topic: 'purchase.vendor_request.submitted',
+      model: 'purchase.vendor.request',
+      label: 'Vendor request submitted',
+    },
+    {
+      topic: 'purchase.vendor_request.approved',
+      model: 'purchase.vendor.request',
+      label: 'Vendor request approved: the vendor made',
+    },
     {
       topic: 'purchase.request.submitted',
       model: 'purchase.request',
@@ -274,6 +319,118 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
       },
     },
     {
+      key: 'purchase_agreement',
+      name: 'Purchase agreement',
+      model: 'purchase.agreement',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Purchase agreement {{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'about',
+            items: [
+              { label: 'Vendor', bind: 'vendor.name' },
+              { label: 'Agreement type', bind: 'kind' },
+              { label: 'Valid from', bind: 'dateStart' },
+              { label: 'Valid to', bind: 'dateEnd' },
+              { label: 'Vendor reference', bind: 'reference' },
+              { label: 'Status', bind: 'state' },
+            ],
+          },
+          {
+            kind: 'table',
+            id: 'lines',
+            bind: 'lines',
+            columns: [
+              { label: 'Product', bind: 'product.name' },
+              { label: 'Description', bind: 'name' },
+              { label: 'Unit', bind: 'uom.name' },
+              { label: 'Quantity', bind: 'quantity' },
+              { label: 'Ordered', bind: 'qtyOrdered' },
+              { label: 'Unit price', bind: 'priceUnit' },
+            ],
+          },
+          { kind: 'text', id: 'note', text: '{{note}}' },
+          { kind: 'qr', id: 'qr', bind: 'name', size: 24, label: 'Agreement reference' },
+        ],
+      },
+    },
+    {
+      key: 'purchase_work_acceptance',
+      name: 'Work acceptance',
+      model: 'purchase.work.acceptance',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Work acceptance {{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'about',
+            items: [
+              { label: 'Vendor', bind: 'vendor.name' },
+              { label: 'Purchase order', bind: 'order.name' },
+              { label: 'Responsible person', bind: 'responsible.name' },
+              { label: 'Vendor invoice reference', bind: 'invoiceReference' },
+              { label: 'Accepted on', bind: 'acceptedOn' },
+              { label: 'Total', bind: 'amountTotal' },
+            ],
+          },
+          {
+            kind: 'table',
+            id: 'lines',
+            bind: 'lines',
+            columns: [
+              { label: 'Product', bind: 'product.name' },
+              { label: 'Description', bind: 'name' },
+              { label: 'Accepted', bind: 'quantity' },
+              { label: 'Unit', bind: 'uom.name' },
+              { label: 'Unit price', bind: 'priceUnit' },
+              { label: 'Subtotal', bind: 'subtotal' },
+            ],
+          },
+          {
+            kind: 'text',
+            id: 'signatures',
+            text: 'Accepted by: ____________________   Vendor: ____________________',
+          },
+          { kind: 'qr', id: 'qr', bind: 'name', size: 24, label: 'Acceptance reference' },
+        ],
+      },
+    },
+    {
+      key: 'purchase_vendor_request',
+      name: 'Vendor request',
+      model: 'purchase.vendor.request',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Vendor request: {{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'about',
+            items: [
+              { label: 'Request type', bind: 'kind' },
+              { label: 'Street', bind: 'street' },
+              { label: 'City', bind: 'city' },
+              { label: 'Country', bind: 'country' },
+              { label: 'NID / birth certificate', bind: 'nid' },
+              { label: 'Trade licence number', bind: 'tradeLicense' },
+              { label: 'Proprietor name', bind: 'proprietorName' },
+              { label: 'Proprietor mobile', bind: 'proprietorMobile' },
+              { label: 'Requested by', bind: 'requester.name' },
+              { label: 'Status', bind: 'state' },
+            ],
+          },
+          { kind: 'text', id: 'note', text: '{{note}}' },
+        ],
+      },
+    },
+    {
       key: 'purchase_request',
       name: 'Purchase request',
       model: 'purchase.request',
@@ -381,6 +538,39 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
       ],
     },
     {
+      key: 'purchase_agreements',
+      model: 'purchase.agreement',
+      label: 'Purchase agreements',
+      columns: [
+        { header: 'Vendor', field: 'vendor' },
+        { header: 'Agreement type', field: 'kind' },
+        { header: 'Valid from', field: 'dateStart' },
+        { header: 'Valid to', field: 'dateEnd' },
+        { header: 'Vendor reference', field: 'reference' },
+        { header: 'Lines › Product', field: 'lines.product' },
+        { header: 'Lines › Quantity', field: 'lines.quantity' },
+        { header: 'Lines › Unit price', field: 'lines.priceUnit' },
+      ],
+    },
+    {
+      key: 'purchase_vendor_requests',
+      model: 'purchase.vendor.request',
+      label: 'Vendor requests',
+      columns: [
+        { header: 'Vendor name', field: 'name' },
+        { header: 'Request type', field: 'kind' },
+        { header: 'Street', field: 'street' },
+        { header: 'City', field: 'city' },
+        { header: 'Country', field: 'country' },
+        { header: 'NID / birth certificate', field: 'nid' },
+        { header: 'Trade licence number', field: 'tradeLicense' },
+        { header: 'Proprietor name', field: 'proprietorName' },
+        { header: 'Proprietor mobile', field: 'proprietorMobile' },
+        { header: 'Email', field: 'email' },
+        { header: 'Phone', field: 'phone' },
+      ],
+    },
+    {
       key: 'purchase_requests',
       model: 'purchase.request',
       label: 'Purchase requests',
@@ -463,6 +653,13 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
     ],
   },
   approvals: [
+    {
+      name: 'Vendor request approvals',
+      model: 'purchase.vendor.request',
+      onApproved: 'approve',
+      onRejected: 'reject',
+      levels: [{ name: 'Purchase manager', condition: {}, approverRole: 'purchase.manager' }],
+    },
     {
       name: 'Comparative statement approvals',
       model: 'purchase.comparison',
@@ -686,6 +883,18 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
     },
   ],
   actions: {
+    'purchase.action_agreements': action(PurchaseAgreement, {
+      label: 'Agreements',
+      views: ['list', 'form'],
+    }),
+    'purchase.action_work_acceptances': action(PurchaseWorkAcceptance, {
+      label: 'Work acceptance',
+      views: ['list', 'form'],
+    }),
+    'purchase.action_vendor_requests': action(PurchaseVendorRequest, {
+      label: 'Vendor requests',
+      views: ['list', 'form'],
+    }),
     'purchase.action_requests': action(PurchaseRequest, {
       label: 'Purchase requests',
       views: ['list', 'kanban', 'form'],
@@ -740,6 +949,29 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
   },
   menus: [
     { id: 'purchase.root', label: 'Purchase', app: 'purchase' },
+    {
+      id: 'purchase.agreements',
+      parent: 'purchase.root',
+      label: 'Agreements',
+      action: 'purchase.action_agreements',
+      sequence: 11,
+      visibleTo: ['purchase.user'],
+    },
+    {
+      id: 'purchase.work_acceptances',
+      parent: 'purchase.root',
+      label: 'Work acceptance',
+      action: 'purchase.action_work_acceptances',
+      sequence: 12,
+      visibleTo: ['purchase.user'],
+    },
+    {
+      id: 'purchase.vendor_requests',
+      parent: 'purchase.root',
+      label: 'Vendor requests',
+      action: 'purchase.action_vendor_requests',
+      sequence: 13,
+    },
     {
       id: 'purchase.requests',
       parent: 'purchase.root',
@@ -825,6 +1057,120 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
     },
   ],
   views: {
+    'purchase.agreement.list': list(PurchaseAgreement, {
+      columns: ['name', 'vendor', 'kind', 'dateStart', 'dateEnd', 'reference', 'state'],
+    }),
+    'purchase.agreement.form': form(PurchaseAgreement, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('confirm', { primary: true, label: 'Confirm' }),
+          k.button('close', { label: 'Close' }),
+          k.button('redraft', { label: 'Set to draft' }),
+          k.button('cancel', { label: 'Cancel', confirm: 'Cancel this agreement?' }),
+        ],
+      },
+      sheet: [
+        k.stats('related', [
+          {
+            id: 'agreement_orders',
+            label: 'Orders',
+            model: PurchaseOrder,
+            where: { agreement: { $record: 'id' } },
+            action: 'purchase.action_orders',
+          },
+        ]),
+        k.group('main', ['name', 'vendor', 'buyer', 'kind', 'reference', 'currency']),
+        k.group('validity', ['dateStart', 'dateEnd'], {
+          label: 'Validity',
+          description:
+            'Orders that name the agreement take its prices and may not go beyond its quantities or dates.',
+        }),
+        k.lines('lines', [
+          { field: 'product', id: 'agreement_product' },
+          { field: 'name', id: 'agreement_name' },
+          { field: 'quantity', id: 'agreement_quantity' },
+          { field: 'qtyOrdered', id: 'agreement_ordered' },
+          { field: 'uom', id: 'agreement_uom' },
+          { field: 'priceUnit', id: 'agreement_price' },
+        ]),
+        k.group('terms', ['note'], { columns: 1 }),
+      ],
+      chatter: true,
+    })),
+    'purchase.work.acceptance.list': list(PurchaseWorkAcceptance, {
+      columns: [
+        'name',
+        'order',
+        'vendor',
+        'responsible',
+        'dueDate',
+        'acceptedOn',
+        'amountTotal',
+        'state',
+      ],
+    }),
+    'purchase.work.acceptance.form': form(PurchaseWorkAcceptance, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('fill', { label: 'Fill from the order' }),
+          k.button('accept', { primary: true, label: 'Accept' }),
+          k.button('redraft', { label: 'Set to draft' }),
+          k.button('cancel', { label: 'Cancel', confirm: 'Cancel this acceptance?' }),
+        ],
+      },
+      sheet: [
+        k.group('main', ['name', 'order', 'vendor', 'responsible', 'invoiceReference'], {
+          description: 'Fill from the order: its service lines with what is left to accept.',
+        }),
+        k.group('when', ['dueDate', 'acceptedOn', 'currency']),
+        k.lines('lines', [
+          { field: 'product', id: 'wa_product' },
+          { field: 'name', id: 'wa_name' },
+          { field: 'quantity', id: 'wa_quantity' },
+          { field: 'uom', id: 'wa_uom' },
+          { field: 'priceUnit', id: 'wa_price' },
+          { field: 'subtotal', id: 'wa_subtotal' },
+        ]),
+        k.group('totals', ['amountTotal'], { label: 'Total' }),
+        k.group('terms', ['note'], { columns: 1 }),
+      ],
+      chatter: true,
+    })),
+    'purchase.vendor.request.list': list(PurchaseVendorRequest, {
+      columns: ['name', 'kind', 'city', 'proprietorName', 'requester', 'date', 'partner', 'state'],
+    }),
+    'purchase.vendor.request.form': form(PurchaseVendorRequest, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('submit', { primary: true, label: 'Submit for approval' }),
+          k.button('redraft', { label: 'Set to draft' }),
+        ],
+      },
+      sheet: [
+        k.group('main', ['name', 'kind', 'requester', 'date', 'partner']),
+        k.group('details', ['street', 'street2', 'city', 'zip', 'country', 'nid', 'tradeLicense'], {
+          label: 'Details',
+        }),
+        k.group(
+          'proprietor',
+          [
+            'proprietorName',
+            { field: 'proprietorMobile', widget: 'phone' },
+            { field: 'email', widget: 'email' },
+            { field: 'phone', widget: 'phone' },
+          ],
+          {
+            label: 'Proprietor information',
+          },
+        ),
+        k.component('approvals', 'approvals.Panel'),
+        k.group('after', ['rejectReason', 'note'], { label: 'Decision', columns: 1 }),
+      ],
+      chatter: true,
+    })),
     'purchase.request.list': list(PurchaseRequest, {
       columns: [
         'name',
@@ -1092,8 +1438,24 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
       },
       sheet: [
         // Bills and receipts: the bridges append their tiles (RFC 0022 §3.1).
-        k.stats('related', []),
-        k.group('vendor', ['partner', 'partnerReference', 'currency']),
+        k.stats('related', [
+          {
+            id: 'order_acceptances',
+            label: 'Work acceptances',
+            model: PurchaseWorkAcceptance,
+            where: { order: { $record: 'id' } },
+            action: 'purchase.action_work_acceptances',
+          },
+        ]),
+        k.group('vendor', [
+          'partner',
+          'partnerReference',
+          'currency',
+          'agreement',
+          'poType',
+          'sourcing',
+          'advancePercent',
+        ]),
         k.group('dates', ['name', 'dateOrder', 'datePlanned', 'user', 'origin']),
         k.lines(
           'lines',
@@ -1154,6 +1516,30 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
     }),
   },
   search: {
+    'purchase.agreement': search(PurchaseAgreement, {
+      fields: ['name', 'reference', 'vendor.name', 'lines.product.name'],
+      filters: {
+        open: { label: 'Confirmed', domain: { state: 'confirmed' }, group: 'state' },
+      },
+      groupBy: ['vendor', 'kind', 'state'],
+    }),
+    'purchase.work.acceptance': search(PurchaseWorkAcceptance, {
+      fields: ['name', 'order.name', 'vendor.name', 'invoiceReference'],
+      filters: {
+        mine: { label: 'My requests', domain: { responsible: { $env: 'uid' } }, group: 'who' },
+        draft: { label: 'To accept', domain: { state: 'draft' }, group: 'state' },
+      },
+      groupBy: ['vendor', 'order', 'state'],
+    }),
+    'purchase.vendor.request': search(PurchaseVendorRequest, {
+      fields: ['name', 'city', 'proprietorName', 'tradeLicense'],
+      filters: {
+        mine: { label: 'My requests', domain: { requester: { $env: 'uid' } }, group: 'who' },
+        waiting: { label: 'To approve', domain: { state: 'to_approve' }, group: 'state' },
+        approved: { label: 'Approved', domain: { state: 'approved' }, group: 'state' },
+      },
+      groupBy: ['kind', 'state'],
+    }),
     'purchase.request': search(PurchaseRequest, {
       fields: ['name', 'purpose', 'requester.name', 'lines.product.name'],
       filters: {

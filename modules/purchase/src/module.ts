@@ -27,6 +27,15 @@ import {
   PurchaseTechnicalComparison,
   PurchaseTechnicalComparisonLine,
 } from './comparison.js';
+import {
+  agreementPriceFor,
+  checkAgreement,
+  PurchaseAgreement,
+  PurchaseAgreementLine,
+  PurchaseVendorRequest,
+  PurchaseWorkAcceptance,
+  PurchaseWorkAcceptanceLine,
+} from './extras.js';
 import { PurchaseRequest, PurchaseRequestLine } from './request.js';
 import {
   PurchaseTender,
@@ -105,6 +114,44 @@ export const PurchaseOrder = defineModel('purchase.order', {
     datePlanned: f.date({ label: 'Expected arrival' }),
     origin: f.char({ label: 'Source document' }),
     note: f.text({ label: 'Terms and conditions' }),
+    // The group's order header (RFC 0032 §3.4).
+    poType: f.selection(
+      { general: 'General', service: 'Service', capital: 'Capital (asset)' },
+      {
+        required: true,
+        default: 'general',
+        label: 'PO type',
+        help: 'Goods in general, a service (accepted by work acceptance), or a capital purchase (an asset).',
+      },
+    ),
+    sourcing: f.selection(
+      { local: 'Local', import: 'Import' },
+      {
+        required: true,
+        default: 'local',
+        help: 'Bought in the country, or imported (a letter of credit may follow with Trade Finance).',
+      },
+    ),
+    advancePercent: f.decimal({
+      scale: 2,
+      default: '0',
+      label: 'Advance (%)',
+      help: 'The share of the order paid before delivery, as agreed with the vendor.',
+    }),
+    agreement: f.many2one('purchase.agreement', {
+      ondelete: 'restrict',
+      help: 'The blanket order or contract this order draws on: its prices, within its quantities and dates.',
+    }),
+    acceptances: f.one2many('purchase.work.acceptance', 'order', { label: 'Work acceptances' }),
+    acceptanceCount: f.integer({
+      store: true,
+      label: 'Work acceptances',
+      help: 'Once an order has one, its service lines are billed up to what was accepted.',
+      ...compute('purchase.order', 'acceptanceCount', ['acceptances.state'], (orders) => {
+        for (const o of orders)
+          o.acceptanceCount = [...o.acceptances].filter((a) => a.state === 'accepted').length;
+      }),
+    }),
     lines: f.one2many('purchase.order.line', 'order'),
     amountUntaxed: f.monetary({
       currency: 'currency',
@@ -176,8 +223,11 @@ export const PurchaseOrder = defineModel('purchase.order', {
     }),
   },
   methods: {
-    /** Before the approvals of a submission: nothing here; account_budget checks the budgets. */
-    submitting: method('purchase.order', async () => undefined),
+    /** Before the approvals of a submission: the agreement's limits (RFC 0032 §3.4); account_budget adds its budgets. */
+    submitting: method('purchase.order', async function (this: unknown): Promise<void> {
+      const orders = this as { env: Env; ids: readonly number[] };
+      await checkAgreement(orders.env, orders.ids as number[]);
+    }),
     /**
      * The approvers each order names for an approval level where "the record decides" (RFC 0027 §2.1): the approvers
      * of its lines' product categories (the nearest category up the tree that names some).
@@ -253,12 +303,20 @@ async function purchaseLinePrice(l: {
     readonly partner: { readonly id: unknown } | null;
     readonly dateOrder: unknown;
     readonly currency: { readonly id: unknown } | null;
+    readonly agreement?: { readonly id: unknown } | null;
   } | null;
 }): Promise<{ price: Decimal; reason: string | null; code: string | null }> {
   if (l.manualPrice !== null) return { price: l.manualPrice, reason: 'Typed in.', code: null };
   if (l.product === null) return { price: orm.toDecimal('0'), reason: null, code: null };
   const env = l.env as Env;
   const date = String(l.order?.dateOrder ?? env.today()).slice(0, 10);
+  // An agreement the order draws on fixes the price (RFC 0032 §3.4).
+  const agreement = (l.order?.agreement?.id as number | undefined) ?? null;
+  if (agreement !== null) {
+    const fixed = await agreementPriceFor(env, agreement, l.product.id as number, date);
+    if (fixed !== null)
+      return { price: fixed.price, reason: `Agreement ${fixed.name}.`, code: null };
+  }
   const vendor = (l.order?.partner?.id as number | undefined) ?? null;
   const choice =
     vendor === null
@@ -290,6 +348,7 @@ const PRICE_DEPENDS = [
   'order.partner',
   'order.dateOrder',
   'order.currency',
+  'order.agreement',
 ] as const;
 
 export const PurchaseOrderLine = defineModel('purchase.order.line', {
@@ -349,6 +408,24 @@ export const PurchaseOrderLine = defineModel('purchase.order.line', {
     /** Before 0.2.0, one tax per line: copied into `taxes` by the migration; dropped later. */
     tax: f.many2one('account.tax', { label: 'Tax (before 0.2.0)', readonly: true }),
     datePlanned: f.date({ label: 'Expected arrival' }),
+    acceptanceLines: f.one2many('purchase.work.acceptance.line', 'orderLine'),
+    qtyAccepted: f.decimal({
+      scale: 3,
+      store: true,
+      label: 'Accepted',
+      help: 'What accepted work acceptances cover of this service line.',
+      ...compute(
+        'purchase.order.line',
+        'qtyAccepted',
+        ['acceptanceLines.quantity', 'acceptanceLines.acceptance.state'],
+        (lines) => {
+          for (const l of lines)
+            l.qtyAccepted = [...l.acceptanceLines]
+              .filter((a) => a.acceptance.state === 'accepted')
+              .reduce((s, a) => s.plus(a.quantity), orm.toDecimal(0));
+        },
+      ),
+    }),
     /** The purchase request line this one buys for (RFC 0032 §3.4). */
     requestLine: f.many2one('purchase.request.line', {
       ondelete: 'set null',
@@ -526,6 +603,18 @@ export const purchaseShutro = defineModule({
       padding: 5,
       reset: 'yearly',
     }),
+    orm.defineSequence({
+      code: 'purchase.agreement',
+      prefix: 'PA/{year}/',
+      padding: 5,
+      reset: 'yearly',
+    }),
+    orm.defineSequence({
+      code: 'purchase.work.acceptance',
+      prefix: 'WA/{year}/',
+      padding: 5,
+      reset: 'yearly',
+    }),
   ],
   models: [
     PurchaseOrder,
@@ -541,6 +630,11 @@ export const purchaseShutro = defineModule({
     PurchaseTechnicalComparisonLine,
     PurchaseComparison,
     PurchaseComparisonLine,
+    PurchaseAgreement,
+    PurchaseAgreementLine,
+    PurchaseWorkAcceptance,
+    PurchaseWorkAcceptanceLine,
+    PurchaseVendorRequest,
   ],
   extensions: [CompanyPurchase],
 });

@@ -163,6 +163,7 @@ test('installing Purchase brings its dependencies and its approval policy', asyn
     'Purchase manager',
     'Purchase manager',
     'Purchase manager',
+    'Purchase manager',
   ]);
 });
 
@@ -244,10 +245,10 @@ test('a purchase request (RFC 0032 §3.4): approved, made into a request for quo
   const inbox = (await call('GET', '/api/v1/approvals/inbox', 'dina')).json.requests as Json[];
   const mine = inbox.filter((r) => r.targetModel === 'purchase.request' && r.targetId === id);
   expect(mine.length).toBeGreaterThanOrEqual(1);
-  for (const r of mine)
-    expect((await call('POST', `/api/v1/approvals/requests/${r.id}/approve`, 'dina')).status).toBe(
-      200,
-    );
+  for (const r of mine) {
+    const decided = await call('POST', `/api/v1/approvals/requests/${r.id}/approve`, 'dina');
+    expect(decided.status, JSON.stringify(decided.json)).toBe(200);
+  }
   expect((await call('GET', `${R}/${id}?fields=state`, 'nadia')).json.state).toBe('approved');
   const lines = async () =>
     (
@@ -308,16 +309,16 @@ test('an RFQ to several vendors (RFC 0032 §3.4): responses with quote links, a 
   const made = await call('POST', R, 'nadia', {
     dateRequired: '2026-12-20',
     purpose: 'Rollers for the conveyor',
-    lines: { create: [{ product, quantity: '30' }] },
+    lines: { create: [{ product, name: 'Rollers', quantity: '30' }] },
   });
   expect(made.status, JSON.stringify(made.json)).toBe(201);
   const id = made.json.id as number;
   expect((await call('POST', `${R}/${id}/transitions/submit`, 'nadia')).status).toBe(200);
   const inbox = (await call('GET', '/api/v1/approvals/inbox', 'dina')).json.requests as Json[];
-  for (const r of inbox.filter((x) => x.targetModel === 'purchase.request' && x.targetId === id))
-    expect((await call('POST', `/api/v1/approvals/requests/${r.id}/approve`, 'dina')).status).toBe(
-      200,
-    );
+  for (const r of inbox.filter((x) => x.targetModel === 'purchase.request' && x.targetId === id)) {
+    const decided = await call('POST', `/api/v1/approvals/requests/${r.id}/approve`, 'dina');
+    expect(decided.status, JSON.stringify(decided.json)).toBe(200);
+  }
   // The buyer asks several vendors: an RFQ with the request's lines, to send once the vendors are chosen.
   const asked = await call('POST', `${R}/${id}/transitions/tender`, 'farid');
   expect(asked.status, JSON.stringify(asked.json)).toBe(200);
@@ -515,10 +516,10 @@ test('a comparative statement (RFC 0032 §3.4): the workspace from the responses
   const inbox = (await call('GET', '/api/v1/approvals/inbox', 'dina')).json.requests as Json[];
   for (const r of inbox.filter(
     (x) => x.targetModel === 'purchase.comparison' && x.targetId === cid,
-  ))
-    expect((await call('POST', `/api/v1/approvals/requests/${r.id}/approve`, 'dina')).status).toBe(
-      200,
-    );
+  )) {
+    const decided = await call('POST', `/api/v1/approvals/requests/${r.id}/approve`, 'dina');
+    expect(decided.status, JSON.stringify(decided.json)).toBe(200);
+  }
   expect((await call('GET', `${C}/${cid}?fields=state`, 'farid')).json.state).toBe('approved');
   const confirmed = await call('POST', `${C}/${cid}/transitions/confirm`, 'farid');
   expect(confirmed.status, JSON.stringify(confirmed.json)).toBe(200);
@@ -535,6 +536,173 @@ test('a comparative statement (RFC 0032 §3.4): the workspace from the responses
   expect(orders[0].partner?.id ?? orders[0].partner).toBe(chosen.vendor?.id ?? chosen.vendor);
   expect(Number(orders[0].amountUntaxed?.amount ?? orders[0].amountUntaxed)).toBe(50000);
   expect((await call('GET', `${T}/${tid}?fields=state`, 'farid')).json.state).toBe('ordered');
+});
+
+test('an agreement (RFC 0032 §3.4) prices the orders that name it and refuses one beyond its quantity', async () => {
+  const A = '/api/v1/models/purchase.agreement';
+  const made = await call('POST', A, 'farid', {
+    vendor,
+    kind: 'blanket',
+    dateStart: '2026-01-01',
+    dateEnd: '2027-12-31',
+    lines: { create: [{ product, quantity: '50', priceUnit: '90' }] },
+  });
+  expect(made.status, JSON.stringify(made.json)).toBe(201);
+  const aid = made.json.id as number;
+  expect((await call('POST', `${A}/${aid}/transitions/confirm`, 'farid')).status).toBe(200);
+  const first = await call('POST', '/api/v1/models/purchase.order', 'farid', {
+    partner: vendor,
+    currency,
+    agreement: aid,
+    lines: { create: [{ product, name: 'Rollers', quantity: '30' }] },
+  });
+  expect(first.status, JSON.stringify(first.json)).toBe(201);
+  const [line] = (
+    await call(
+      'GET',
+      `/api/v1/models/purchase.order.line?filter=${encodeURIComponent(JSON.stringify({ order: first.json.id }))}&fields=priceUnit,priceReason`,
+      'farid',
+    )
+  ).json.items as Json[];
+  expect(Number(line.priceUnit)).toBe(90);
+  expect(line.priceReason).toContain('Agreement');
+  expect((await run(first.json.id, 'submit')).status).toBe(200);
+  expect((await run(first.json.id, 'confirm')).status).toBe(200);
+  const [al] = (
+    await call(
+      'GET',
+      `/api/v1/models/purchase.agreement.line?filter=${encodeURIComponent(JSON.stringify({ agreement: aid }))}&fields=qtyOrdered`,
+      'farid',
+    )
+  ).json.items as Json[];
+  expect(Number(al.qtyOrdered)).toBe(30);
+  // 30 more would pass the agreement's 50.
+  const second = await call('POST', '/api/v1/models/purchase.order', 'farid', {
+    partner: vendor,
+    currency,
+    agreement: aid,
+    lines: { create: [{ product, name: 'Rollers', quantity: '30' }] },
+  });
+  const refused = await run(second.json.id, 'submit');
+  expect(refused.status).toBe(422);
+  expect(JSON.stringify(refused.json)).toContain('beyond agreement');
+});
+
+test('work acceptance (RFC 0032 §3.4): a service line accepted; a vendor request approved makes the vendor', async () => {
+  const companyRow = (
+    await driver.query<{ id: number }>({ text: 'SELECT id FROM res_company LIMIT 1', params: [] })
+  )[0];
+  const companyId = companyRow?.id as number;
+  type Model = { create(rows: unknown[]): Promise<{ ids: number[] }> };
+  const service = await host.server.shutro.bootstrap(
+    { reason: 'test: service', company: companyId },
+    async (env) =>
+      (
+        await (env as unknown as { model(n: string): Model })
+          .model('product.product')
+          .create([{ name: 'Conveyor servicing', kind: 'service', standardPrice: '1000' }])
+      ).ids[0] as number,
+  );
+  const order = await call('POST', '/api/v1/models/purchase.order', 'farid', {
+    partner: vendor,
+    currency,
+    poType: 'service',
+    lines: { create: [{ product: service, name: 'Conveyor servicing', quantity: '4' }] },
+  });
+  expect(order.status, JSON.stringify(order.json)).toBe(201);
+  expect((await run(order.json.id, 'submit')).status).toBe(200);
+  expect((await run(order.json.id, 'confirm')).status).toBe(200);
+  const filled = await call('POST', '/api/v1/models/purchase.work.acceptance/onchange', 'farid', {
+    values: { order: order.json.id },
+    changed: ['order'],
+  });
+  expect(filled.status, JSON.stringify(filled.json)).toBe(200);
+  expect(filled.json.values.vendor).toBe(vendor);
+  const wa = await call('POST', '/api/v1/models/purchase.work.acceptance', 'farid', {
+    order: order.json.id,
+    vendor,
+  });
+  expect(wa.status, JSON.stringify(wa.json)).toBe(201);
+  const fill = await call(
+    'POST',
+    `/api/v1/models/purchase.work.acceptance/${wa.json.id}/transitions/fill`,
+    'farid',
+  );
+  expect(fill.status, JSON.stringify(fill.json)).toBe(200);
+  const [waLine] = (
+    await call(
+      'GET',
+      `/api/v1/models/purchase.work.acceptance.line?filter=${encodeURIComponent(JSON.stringify({ acceptance: wa.json.id }))}&fields=quantity`,
+      'farid',
+    )
+  ).json.items as Json[];
+  expect(
+    (
+      await call('PATCH', `/api/v1/models/purchase.work.acceptance.line/${waLine.id}`, 'farid', {
+        quantity: '3',
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await call(
+        'POST',
+        `/api/v1/models/purchase.work.acceptance/${wa.json.id}/transitions/accept`,
+        'farid',
+      )
+    ).status,
+  ).toBe(200);
+  const [ol] = (
+    await call(
+      'GET',
+      `/api/v1/models/purchase.order.line?filter=${encodeURIComponent(JSON.stringify({ order: order.json.id }))}&fields=qtyAccepted`,
+      'farid',
+    )
+  ).json.items as Json[];
+  expect(Number(ol.qtyAccepted)).toBe(3);
+  expect(
+    (
+      await call(
+        'GET',
+        `/api/v1/models/purchase.order/${order.json.id}?fields=acceptanceCount`,
+        'farid',
+      )
+    ).json.acceptanceCount,
+  ).toBe(1);
+
+  // A vendor request: approved by a Purchase manager, the contact is made and marked a vendor.
+  const V = '/api/v1/models/purchase.vendor.request';
+  const asked = await call('POST', V, 'nadia', {
+    name: 'Meghna Engineering',
+    kind: 'contractor',
+    city: 'Narayanganj',
+    tradeLicense: 'TL-2026-0042',
+    proprietorName: 'Hasan',
+    proprietorMobile: '01700000000',
+  });
+  expect(asked.status, JSON.stringify(asked.json)).toBe(201);
+  expect((await call('POST', `${V}/${asked.json.id}/transitions/submit`, 'nadia')).status).toBe(
+    200,
+  );
+  const inbox = (await call('GET', '/api/v1/approvals/inbox', 'dina')).json.requests as Json[];
+  for (const r of inbox.filter(
+    (x) => x.targetModel === 'purchase.vendor.request' && x.targetId === asked.json.id,
+  )) {
+    const decided = await call('POST', `/api/v1/approvals/requests/${r.id}/approve`, 'dina');
+    expect(decided.status, JSON.stringify(decided.json)).toBe(200);
+  }
+  const approved = (await call('GET', `${V}/${asked.json.id}?fields=state,partner`, 'nadia')).json;
+  expect(approved.state).toBe('approved');
+  const partnerId = approved.partner?.id ?? approved.partner;
+  expect(partnerId).toBeTruthy();
+  const partner = (
+    await call('GET', `/api/v1/models/res.partner/${partnerId}?fields=name,isVendor,city`, 'dina')
+  ).json;
+  expect(partner).toMatchObject({
+    name: 'Meghna Engineering',
+    isVendor: true,
+    city: 'Narayanganj',
+  });
 });
 
 test('the line onchange fills the product; the price comes from the vendor, else the cost, when saved', async () => {
