@@ -115,6 +115,11 @@ export const OrderReceipts = extendModel('purchase.order', {
       ...compute('purchase.order', 'vendorOnTime', ['partner'], async (orders) => {
         const env = (orders as unknown as { env: Env }).env;
         for (const o of orders) {
+          // A new order has no vendor yet.
+          if (o.partner === null) {
+            o.vendorOnTime = '';
+            continue;
+          }
           const card = await vendorScorecard(env, o.partner.id as number);
           o.vendorOnTime =
             card.onTimeRate === null ? '' : `${card.onTimeRate}% on time (${card.onTime} receipts)`;

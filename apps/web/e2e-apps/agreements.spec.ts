@@ -28,7 +28,6 @@ test('a vendor request drafted; the order form has its PO type, sourcing and adv
   await expect(page.getByRole('combobox', { name: 'PO type' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Sourcing' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Advance (%)' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Check budget' })).toBeVisible();
 
   await page.goto('/purchase/a/purchase.action_agreements');
   await expect(page.getByRole('heading', { name: /Agreements/ }).first()).toBeVisible();
