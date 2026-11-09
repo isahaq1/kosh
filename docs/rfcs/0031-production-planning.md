@@ -149,4 +149,12 @@ availability beyond the work centre's hours, OEE measured from the shop floor.
   produced; the batch following its orders (`followOrders`); the `production_schedule` and `production_label`
   documents, the product's shelf life and retail price. Not yet: the operator filled from the signed-in user, labels
   on a small paper size (the layout engine prints A4), the Gantt coloured by state.
+- **Step 5 (2026-11-09).** `modules/production_account/src/overhead.ts`: costing masters (product or category,
+  dates, lines with fixed / percent / unit rates and their account); `applyOverheads` once per order from `madeBy`
+  (the valuation and the Work-in-progress entry take the overhead: WIP debited for operations and overhead, each
+  overhead account credited); `overheadCost` / `fullCost` on orders; allocations with `reckon` (actual debits of each
+  account in the month against the orders' absorbed, shares by quantity or full cost) and `post` (valuation and cost
+  of sales against the accounts, the layers and average costs updated, the month closed by the guard). Not yet: the
+  rate changes shown on the costing master's chatter (they are in Shutro's audit log), allocations by cost centre,
+  overheads previewed on a confirmed order before it produces. RFC 0031 complete.
 

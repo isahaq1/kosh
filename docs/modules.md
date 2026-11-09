@@ -729,6 +729,19 @@ product's own unit otherwise), the **process loss** and its percentage, and the 
 loss and tolerance; the batch is in progress when an order starts and done when all are. The **Batch label** prints
 the batch number, manufacturing and expiry dates and the product's **maximum retail price** with a QR of the batch.
 
+#### Overheads and costing (RFC 0031 step 5, `production_account`)
+
+A **costing master** (Production › Costing masters) on a product or a category, valid between dates, lists
+overheads: a fixed amount per order, a percentage of the materials consumed or an amount per unit produced, each
+with the **overhead account** it is absorbed into (rate changes are in the audit log). When an order produces, its
+overheads are applied once for what it consumed and produced (the lines on the order, **Overhead** and **Full
+cost** beside materials and operations), the product is valued at the full cost and the overheads are posted into
+Work in progress against their accounts. At month end an **overhead allocation** (Production › Overhead
+allocations) works the month out — each account's **actual** (its debits in the month) against what the month's
+done orders **absorbed** — and spreads the difference over those orders by produced quantity or by full cost, onto
+the stock still on hand (the layers and the average cost) and the cost of what was sold; **Post** books it once and
+closes the month: a second allocation for the month is refused.
+
 ### Asset Care (`modules/maintenance`, RFC 0021)
 
 Equipment with asset tags, warranty and meters that only count up; preventive plans by time or by meter whose
