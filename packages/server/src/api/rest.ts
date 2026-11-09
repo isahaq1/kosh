@@ -223,14 +223,60 @@ async function send(reply: FastifyReply, outcome: Outcome): Promise<void> {
 
 /**
  * JSON has no dates: datetime fields arrive as ISO strings and become `Date`s (Shutro stores them in UTC); other
- * kinds are left to Shutro's own validation. Applied to create, update and import values.
+ * kinds are left to Shutro's own validation. Applied to create, update and import values, and through the lines
+ * of one2many and many2many commands (`create` rows and `update` values) to the lines' own datetimes.
  */
-function coerceValues(model: ApiModel, values: Record<string, unknown>): Record<string, unknown> {
+function coerceValues(
+  models: ReadonlyMap<string, ApiModel>,
+  model: ApiModel,
+  values: Record<string, unknown>,
+  depth = 0,
+): Record<string, unknown> {
   const out: Record<string, unknown> = { ...values };
   for (const [key, value] of Object.entries(values)) {
-    if (model.byKey.get(key)?.kind !== 'datetime' || typeof value !== 'string') continue;
-    const date = new Date(value);
-    if (!Number.isNaN(date.getTime())) out[key] = date;
+    const field = model.byKey.get(key);
+    if (field === undefined) continue;
+    if (field.kind === 'datetime' && typeof value === 'string') {
+      const date = new Date(value);
+      if (!Number.isNaN(date.getTime())) out[key] = date;
+      continue;
+    }
+    if (
+      (field.kind === 'one2many' || field.kind === 'many2many') &&
+      field.target !== null &&
+      depth < 4 &&
+      typeof value === 'object' &&
+      value !== null &&
+      !Array.isArray(value)
+    ) {
+      const target = models.get(field.target);
+      if (target === undefined) continue;
+      const commands = value as { create?: unknown; update?: unknown };
+      const next: Record<string, unknown> = { ...commands };
+      if (Array.isArray(commands.create))
+        next['create'] = commands.create.map((row) =>
+          typeof row === 'object' && row !== null
+            ? coerceValues(models, target, row as Record<string, unknown>, depth + 1)
+            : row,
+        );
+      if (Array.isArray(commands.update))
+        next['update'] = commands.update.map((u) =>
+          typeof u === 'object' &&
+          u !== null &&
+          typeof (u as { values?: unknown }).values === 'object'
+            ? {
+                ...(u as object),
+                values: coerceValues(
+                  models,
+                  target,
+                  (u as { values: Record<string, unknown> }).values,
+                  depth + 1,
+                ),
+              }
+            : u,
+        );
+      out[key] = next;
+    }
   }
   return out;
 }
@@ -307,7 +353,7 @@ export function registerRestApi(
     const values = body(request);
     const outcome = await request.env((env) =>
       idempotent(request, env, driver, async () => {
-        const created = await ref(env, model.name).create([coerceValues(model, values)]);
+        const created = await ref(env, model.name).create([coerceValues(models, model, values)]);
         await env.flush(); // computes and constraints run now: the response shows the stored record
         announceChange(env, driver, {
           model: model.name,
@@ -354,7 +400,7 @@ export function registerRestApi(
         await ref(env, model.name)
           .browse([id])
           .write(
-            coerceValues(model, values),
+            coerceValues(models, model, values),
             expected === undefined ? {} : { expect: { updatedAt: expected } },
           );
         await env.flush();
@@ -403,7 +449,11 @@ export function registerRestApi(
         'The body is { values: { ...the record }, changed: ["field", ...] }.',
       );
     // Datetimes arrive as ISO strings, as for create and update.
-    const values = coerceValues(model, (input as { values: Record<string, unknown> }).values);
+    const values = coerceValues(
+      models,
+      model,
+      (input as { values: Record<string, unknown> }).values,
+    );
     return request.env((env) => ref(env, model.name).onchange({ ...input, values }));
   });
 
@@ -491,7 +541,7 @@ export function registerRestApi(
       idempotent(request, env, driver, async () => {
         await ref(env, model.name).browse([id]).load(['id']); // the original, as the user may read it
         const values = await duplicateValues(env, models, model, id);
-        const created = await ref(env, model.name).create([coerceValues(model, values)]);
+        const created = await ref(env, model.name).create([coerceValues(models, model, values)]);
         await env.flush();
         announceChange(env, driver, {
           model: model.name,
@@ -663,7 +713,7 @@ export function registerRestApi(
       idempotent(request, env, driver, async () => {
         env.access.check(model.name as never, 'import'); // and `create`, checked by Shutro
         const created = await ref(env, model.name).create(
-          input.map((row) => coerceValues(model, row as Record<string, unknown>)),
+          input.map((row) => coerceValues(models, model, row as Record<string, unknown>)),
         );
         await env.flush(); // all-or-nothing: constraints run before the response
         announceChange(env, driver, { model: model.name, ids: [...created.ids], op: 'create' });
