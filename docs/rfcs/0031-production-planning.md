@@ -140,4 +140,13 @@ availability beyond the work centre's hours, OEE measured from the shop floor.
   the Gantt by work centre; the REST layer now turns ISO datetimes inside line commands (`create` rows, `update`
   values) into dates too, as it did for a record's own fields. Not yet: the Gantt coloured by state (the view has no colour option), the forecast's
   on-order figure counting confirmed production orders of made components, slots moved by drag on the Gantt.
+- **Step 4 (2026-11-09).** `modules/production/src/schedule.ts`: batches from approved plan lines (split evenly by
+  the centre's `batchMax`, the slot divided) or by hand; the pre-flight through `componentNeeds` (shared with the
+  orders' explode); confirm into the make order and the pack order (`stage`, `sourceOrder`); the order's `start`
+  (actual start), `producedQty`, the output into the batch's lot (`lotLines` with the batch number, the expiry from
+  the product's `shelfLifeDays`), `consumedQty` / `lossQty` / `lossPercent` / `yieldStatus` against the bill's
+  expected loss and tolerance, the pack order confirmed with `restrictLot` on its bulk move once the make order has
+  produced; the batch following its orders (`followOrders`); the `production_schedule` and `production_label`
+  documents, the product's shelf life and retail price. Not yet: the operator filled from the signed-in user, labels
+  on a small paper size (the layout engine prints A4), the Gantt coloured by state.
 

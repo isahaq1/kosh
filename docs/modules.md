@@ -714,6 +714,21 @@ work centre's batch limits, or needing more minutes (setup and cleanup included)
 slot, is refused and says why on the line. Approved through the engine, **Schedule the orders** makes one confirmed
 production order per line, linked both ways; the **Plan schedule** is a Gantt of the lines by work centre.
 
+#### Schedules and two-stage production (RFC 0031 step 4)
+
+A **batch** (Production › Batches, `production.schedule`) is one run of a product at a work centre in a slot, with a
+batch number (`BATCH/2026/00001`), a target, a shift and, for a packed product, the **packaging bill** of its second
+stage. **Schedule the orders** on an approved plan splits each line into batches by the work centre's maximum batch
+(the slot divided among them). **Check stock** runs the pre-flight — each component's required, available, deficit
+and surplus —; **Confirm** makes the *make* order and, with a packaging bill, the *pack* order with the make order as
+its **source**. The pack order waits: when the make order produces, its output goes into the lot named after the
+batch (a product tracked by lot; the lot expires after the product's **shelf life**), the pack order is confirmed
+and its bulk is reserved from that **source lot**. Orders record the stage, **Start** (the actual start), the
+produced quantity set before producing, the **consumed** quantity (the bulk for a pack order, the components in the
+product's own unit otherwise), the **process loss** and its percentage, and the **yield** against the bill's expected
+loss and tolerance; the batch is in progress when an order starts and done when all are. The **Batch label** prints
+the batch number, manufacturing and expiry dates and the product's **maximum retail price** with a QR of the batch.
+
 ### Asset Care (`modules/maintenance`, RFC 0021)
 
 Equipment with asset tags, warranty and meters that only count up; preventive plans by time or by meter whose
