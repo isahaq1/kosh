@@ -140,7 +140,7 @@ record rules, field groups, company scope and constraints apply as in the ORM.
 
 | Request | Does |
 | ------- | ---- |
-| `GET /api/v1/models/{model}?filter=&order=&fields=&limit=&offset=&count=` | search; `filter` is a Shutro domain as JSON |
+| `GET /api/v1/models/{model}?filter=&order=&fields=&limit=&offset=&count=&archived=` | search; `filter` is a Shutro domain as JSON; archived records are hidden unless `archived=include` (with the rest) or `archived=only` |
 | `POST /api/v1/models/{model}` | create → `201`, `Location`, `ETag` |
 | `GET /api/v1/models/{model}/{id}?fields=` | read, `ETag` |
 | `PATCH /api/v1/models/{model}/{id}` + `If-Match` | update; `412` when someone saved since the ETag was read |

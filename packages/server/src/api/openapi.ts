@@ -206,6 +206,12 @@ function modelPaths(model: ApiModel): Record<string, Schema> {
             schema: { type: 'boolean' },
             description: 'Also return the total count.',
           },
+          {
+            name: 'archived',
+            in: 'query',
+            schema: { type: 'string', enum: ['include', 'only'] },
+            description: 'Archived records too (include), or alone (only); hidden otherwise.',
+          },
         ],
         responses: responses({
           type: 'object',

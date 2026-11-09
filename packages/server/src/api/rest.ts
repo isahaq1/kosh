@@ -328,9 +328,21 @@ export function registerRestApi(
       throw problem(400, 'invalid-limit', 'Invalid limit', 'limit must be 1–1000.');
     if (!Number.isInteger(offset) || offset < 0)
       throw problem(400, 'invalid-offset', 'Invalid offset', 'offset must be 0 or more.');
-    const where = parseFilter(q['filter']);
+    const filter = parseFilter(q['filter']);
     const order = parseOrder(model, q['order']);
-    return request.env(async (env) => {
+    // Archived records are hidden unless asked for: `archived=include` lists them with the rest, `archived=only`
+    // lists them alone (RFC 0023: archive, never delete).
+    const archived = q['archived'];
+    if (archived !== undefined && archived !== 'include' && archived !== 'only')
+      throw problem(
+        400,
+        'invalid-archived',
+        'Invalid archived',
+        "archived is 'include' or 'only'.",
+      );
+    const where = archived === 'only' ? { ...(filter ?? {}), active: false } : filter;
+    return request.env(async (requestEnv) => {
+      const env = archived === undefined ? requestEnv : requestEnv.withFlags({ activeTest: false });
       const fields = fieldsOf(model, env, q['fields']);
       const found = await ref(env, model.name).search({
         ...(where === undefined ? {} : { where }),
