@@ -8,6 +8,13 @@ import { orm } from '@kosh/server/orm';
 import { storageShutro } from '@kosh/storage';
 import { check, defineModel, defineModule, f, record } from './.kosh/bindings.js';
 import { ProductPricelist, ProductPricelistRule } from './pricelist.js';
+import {
+  ProductAttribute,
+  ProductAttributeValue,
+  ProductTemplate,
+  ProductTemplateExclusion,
+  ProductTemplateLine,
+} from './variants.js';
 
 const ALL = ['read', 'write', 'create', 'unlink', 'export', 'import'] as const;
 const READ = ['read'] as const;
@@ -172,6 +179,19 @@ export const ProductProduct = defineModel('product.product', {
       readonly: true,
     }),
     description: f.text({ translate: true }),
+    // Variants (RFC 0030 §3.4): the family and the values that tell this one apart; products without a template
+    // work as before.
+    template: f.many2one('product.template', { ondelete: 'set null' }),
+    attributeValues: f.many2many('product.attribute.value', {
+      relation: 'product_variant_value',
+      label: 'Attribute values',
+    }),
+    followsTemplatePrice: f.boolean({
+      required: true,
+      default: true,
+      label: 'Price from the template',
+      help: 'The template’s sales price plus the values’ extras, whenever variants are generated; off: this variant’s own price.',
+    }),
   },
   constraints: {
     prices: {
@@ -193,7 +213,7 @@ const uom = (id: string, name: string, category: string, ratio: string, rounding
 
 export const productShutro = defineModule({
   name: 'product',
-  version: '0.6.0',
+  version: '0.7.0',
   migrations: [
     {
       version: '0.2.0',
@@ -234,6 +254,11 @@ export const productShutro = defineModule({
     ProductProduct,
     ProductPricelist,
     ProductPricelistRule,
+    ProductAttribute,
+    ProductAttributeValue,
+    ProductTemplate,
+    ProductTemplateLine,
+    ProductTemplateExclusion,
   ],
   // Created once, then the users' to change (noupdate).
   data: [

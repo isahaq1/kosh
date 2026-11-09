@@ -11,6 +11,7 @@ import { action, form, kanban, list, search } from '@kosh/views';
 import { productDemo } from './demo.js';
 import { AccountTax, ProductCategory, ProductProduct, productShutro, UomUom } from './module.js';
 import { ProductPricelist } from './pricelist.js';
+import { ProductAttribute, ProductTemplate } from './variants.js';
 
 export { AccountTax, ProductCategory, ProductProduct, productShutro, UomUom } from './module.js';
 export { type PriceFound, ProductPricelist, ProductPricelistRule, priceFor } from './pricelist.js';
@@ -28,6 +29,53 @@ export const product: ReturnType<typeof defineModule> = defineModule({
   kosh: '^0.1.0',
   hooks: { demo: productDemo },
   depends: [base, storage, reporting],
+  events: [
+    { topic: 'product.template.generated', model: 'product.template', label: 'Variants generated' },
+  ],
+  documents: [
+    {
+      key: 'product_template',
+      name: 'Product template',
+      model: 'product.template',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: '{{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'about',
+            items: [
+              { label: 'Kind', bind: 'kind' },
+              { label: 'Category', bind: 'category.name' },
+              { label: 'Sales price', bind: 'listPrice' },
+              { label: 'Variants', bind: 'variantCount' },
+              { label: 'Status', bind: 'state' },
+            ],
+          },
+          {
+            kind: 'table',
+            id: 'lines',
+            bind: 'lines',
+            columns: [{ label: 'Attribute', bind: 'attribute.name' }],
+          },
+          {
+            kind: 'table',
+            id: 'variants',
+            bind: 'variants',
+            columns: [
+              { label: 'Variant', bind: 'name' },
+              { label: 'Code', bind: 'code' },
+              { label: 'Barcode', bind: 'barcode' },
+              { label: 'Sales price', bind: 'listPrice' },
+            ],
+          },
+          { kind: 'text', id: 'description', text: '{{description}}' },
+        ],
+      },
+    },
+  ],
   app: {
     code: 'product',
     label: 'Products',
@@ -37,6 +85,32 @@ export const product: ReturnType<typeof defineModule> = defineModule({
     summary: 'Products and services, prices, units of measure and taxes',
   },
   importTemplates: [
+    {
+      key: 'product_attribute',
+      model: 'product.attribute',
+      label: 'Attributes',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'Display', field: 'display' },
+        { header: 'Values › Name', field: 'values.name' },
+        { header: 'Values › Colour', field: 'values.color' },
+        { header: 'Values › Extra price', field: 'values.extraPrice' },
+      ],
+    },
+    {
+      key: 'product_template',
+      model: 'product.template',
+      label: 'Product templates',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'Kind', field: 'kind' },
+        { header: 'Category', field: 'category' },
+        { header: 'Unit of measure', field: 'uom' },
+        { header: 'Sales price', field: 'listPrice' },
+        { header: 'Cost', field: 'standardPrice' },
+        { header: 'Attributes › Attribute', field: 'lines.attribute' },
+      ],
+    },
     {
       key: 'product_pricelist',
       model: 'product.pricelist',
@@ -170,6 +244,14 @@ export const product: ReturnType<typeof defineModule> = defineModule({
       label: 'Products',
       views: ['kanban', 'list', 'form'],
     }),
+    'product.action_templates': action(ProductTemplate, {
+      label: 'Product templates',
+      views: ['list', 'kanban', 'form'],
+    }),
+    'product.action_attributes': action(ProductAttribute, {
+      label: 'Attributes',
+      views: ['list', 'form'],
+    }),
     'product.action_categories': action(ProductCategory, {
       label: 'Categories',
       views: ['list', 'form'],
@@ -190,7 +272,20 @@ export const product: ReturnType<typeof defineModule> = defineModule({
       action: 'product.action_products',
       sequence: 1,
     },
+    {
+      id: 'product.templates',
+      parent: 'product.root',
+      label: 'Product templates',
+      action: 'product.action_templates',
+      sequence: 2,
+    },
     { id: 'product.config', parent: 'product.root', label: 'Configuration', sequence: 90 },
+    {
+      id: 'product.attributes',
+      parent: 'product.config',
+      label: 'Attributes',
+      action: 'product.action_attributes',
+    },
     {
       id: 'product.pricelists',
       parent: 'product.root',
@@ -248,6 +343,11 @@ export const product: ReturnType<typeof defineModule> = defineModule({
           'barcode',
         ]),
         k.group('prices', ['listPrice', 'standardPrice', 'uom'], { label: 'Prices' }),
+        k.group(
+          'variant',
+          ['template', { field: 'attributeValues', widget: 'tags' }, 'followsTemplatePrice'],
+          { label: 'Variant' },
+        ),
         k.group('size', ['weight', 'volume'], { label: 'Size' }),
         k.notebook('more', [
           k.page('sales', 'Sales & purchase', [
@@ -255,6 +355,74 @@ export const product: ReturnType<typeof defineModule> = defineModule({
             k.group('buy', ['purchaseOk', 'purchaseTaxes']),
           ]),
           k.page('description_page', 'Description', ['description']),
+        ]),
+      ],
+    })),
+    'product.template.list': list(ProductTemplate, {
+      columns: ['name', 'kind', 'category', 'listPrice', 'variantCount', 'state'],
+    }),
+    'product.template.kanban': kanban(ProductTemplate, {
+      groupBy: 'category',
+      card: { title: 'name', subtitle: 'kind', footer: ['listPrice', 'variantCount'] },
+    }),
+    'product.template.form': form(ProductTemplate, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('generate', {
+            primary: true,
+            label: 'Generate variants',
+            confirm:
+              'Generate? A product per combination offered; combinations no longer offered are archived.',
+          }),
+        ],
+      },
+      sheet: [
+        k.stats('related', [
+          {
+            id: 'template_variants',
+            label: 'Variants',
+            model: ProductProduct,
+            where: { template: { $record: 'id' } },
+            action: 'product.action_products',
+          },
+        ]),
+        k.group('identity', [
+          { field: 'image', widget: 'image' },
+          'name',
+          'kind',
+          'category',
+          'uom',
+        ]),
+        k.group('prices', ['listPrice', 'standardPrice', 'variantCount'], { label: 'Prices' }),
+        k.lines('lines', [
+          { field: 'sequence', id: 'template_line_sequence' },
+          { field: 'attribute', id: 'template_line_attribute' },
+          { field: 'values', id: 'template_line_values', widget: 'tags' },
+        ]),
+        k.lines('exclusions', [
+          { field: 'values', id: 'template_exclusion_values', widget: 'tags' },
+          { field: 'note', id: 'template_exclusion_note' },
+        ]),
+        k.notebook('more', [
+          k.page('sales', 'Sales & purchase', [
+            k.group('sell', ['saleOk', 'taxes']),
+            k.group('buy', ['purchaseOk', 'purchaseTaxes']),
+          ]),
+          k.page('description_page', 'Description', ['description']),
+        ]),
+      ],
+      chatter: true,
+    })),
+    'product.attribute.list': list(ProductAttribute, { columns: ['sequence', 'name', 'display'] }),
+    'product.attribute.form': form(ProductAttribute, (k) => ({
+      sheet: [
+        k.group('main', ['name', 'display', 'sequence']),
+        k.lines('values', [
+          { field: 'sequence', id: 'attribute_value_sequence' },
+          { field: 'name', id: 'attribute_value_name' },
+          { field: 'color', id: 'attribute_value_color', widget: 'color' },
+          { field: 'extraPrice', id: 'attribute_value_extra' },
         ]),
       ],
     })),
@@ -314,6 +482,15 @@ export const product: ReturnType<typeof defineModule> = defineModule({
     })),
   },
   search: {
+    'product.template': search(ProductTemplate, {
+      fields: ['name'],
+      filters: {
+        draft: { label: 'Not generated yet', domain: { state: 'draft' }, group: 'state' },
+        ready: { label: 'Generated', domain: { state: 'ready' }, group: 'state' },
+      },
+      groupBy: ['category', 'kind', 'state'],
+    }),
+    'product.attribute': search(ProductAttribute, { fields: ['name', 'values.name'] }),
     'product.pricelist': search(ProductPricelist, {
       fields: ['name'],
       groupBy: ['currency', 'company'],
@@ -339,7 +516,7 @@ export const product: ReturnType<typeof defineModule> = defineModule({
         sold: { label: 'Can be sold', domain: { saleOk: true }, group: 'use' },
         bought: { label: 'Can be purchased', domain: { purchaseOk: true }, group: 'use' },
       },
-      groupBy: ['kind', 'category', 'uom'],
+      groupBy: ['kind', 'category', 'uom', 'template'],
     }),
   },
 });
