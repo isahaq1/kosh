@@ -131,4 +131,13 @@ availability beyond the work centre's hours, OEE measured from the shop floor.
   cleanup, OEE target, alternatives and (production_account) expense account; shifts. Not yet: specifications weighted by
   the product's unit when lines mix units (shares are by net quantity as written), alternatives used by the
   scheduler (step 4), the costing history on every cost change (written on activation only).
+- **Step 3 (2026-11-09).** `modules/production/src/plan.ts`: plans with lines (product, bill, packaging bill, quantity, work
+  centre, slot) and materials; the forecast exploded through every level (`validBom` per component, ten levels) with
+  on hand and on order; Procure through `stock.reorder` rules (made on the fly: make with a usable bill, buy from the preferred vendor
+  price, else the material says why not) and `orderRules`, the
+  document or the reason noted; the capacity check (batch limits, minutes against hours over the slot) noted on the
+  lines and guarding submission; the approval policy; scheduling into confirmed production orders linked by `plan`;
+  the Gantt by work centre; the REST layer now turns ISO datetimes inside line commands (`create` rows, `update`
+  values) into dates too, as it did for a record's own fields. Not yet: the Gantt coloured by state (the view has no colour option), the forecast's
+  on-order figure counting confirmed production orders of made components, slots moved by drag on the Gantt.
 

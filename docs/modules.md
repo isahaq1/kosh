@@ -700,6 +700,20 @@ bills must be approved before use is a company setting (Settings › App setting
 products too. Work centres get minimum and maximum batches, setup and cleanup minutes, an OEE target, alternatives
 and, with Accounting, an expense account; **shifts** (name, start, end) await the schedules of step 4.
 
+#### Production plans (RFC 0031 step 3)
+
+A **production plan** (Production › Production plans) says what to make in a period: per line a product, its bill,
+the quantity, a work centre and a slot (start, end), and the packaging bill of a second stage. **Generate forecast**
+explodes every line through every level of its bills — a component with a usable bill of its own is made, not bought
+— into **materials** with what is required, on hand in the warehouse, on order (confirmed receipts) and short.
+**Procure the shortages** orders each through the warehouse's reorder rule for the product (made when there is none:
+make for a product with a usable bill, buy from its preferred vendor price; without either the material says so):
+a request for quotation chosen by the vendor prices with Purchase, a production order for a made component; the
+material says which document, or why nothing was ordered. Submitting checks **capacity**: a line below or above its
+work centre's batch limits, or needing more minutes (setup and cleanup included) than the centre's hours over the
+slot, is refused and says why on the line. Approved through the engine, **Schedule the orders** makes one confirmed
+production order per line, linked both ways; the **Plan schedule** is a Gantt of the lines by work centre.
+
 ### Asset Care (`modules/maintenance`, RFC 0021)
 
 Equipment with asset tags, warranty and meters that only count up; preventive plans by time or by meter whose
