@@ -36,6 +36,7 @@ import {
   ProductionShift,
   ProductionSpecParameter,
 } from './depth.js';
+import { ProductionPlan, ProductionPlanLine, ProductionPlanMaterial } from './plan.js';
 
 const READ = ['read'] as const;
 const ALL = ['read', 'write', 'create', 'unlink'] as const;
@@ -803,6 +804,7 @@ export const ProductionOrder = defineModel('production.order', {
     product: f.many2one('product.product', { required: true, ondelete: 'restrict' }),
     quantity: f.decimal({ scale: 4, required: true, default: '1' }),
     bom: f.many2one('production.bom', { ondelete: 'restrict', label: 'Bill of materials' }),
+    plan: f.many2one('production.plan', { ondelete: 'set null', label: 'Production plan' }),
     date: f.date({ required: true, default: (env: Env) => env.today(), label: 'Planned for' }),
     warehouse: f.many2one('stock.warehouse', { ondelete: 'restrict' }),
     components: f.one2many('production.order.component', 'production'),
@@ -1208,6 +1210,12 @@ export const productionShutro = defineModule({
       padding: 5,
       reset: 'yearly',
     }),
+    orm.defineSequence({
+      code: 'production.plan',
+      prefix: 'PLAN/{year}/',
+      padding: 5,
+      reset: 'yearly',
+    }),
   ],
   models: [
     ProductionWorkcenter,
@@ -1224,6 +1232,9 @@ export const productionShutro = defineModule({
     ProductionBomCost,
     ProductionBomEligibility,
     ProductionShift,
+    ProductionPlan,
+    ProductionPlanLine,
+    ProductionPlanMaterial,
   ],
   extensions: [ScrapProduction, ReorderMake, CompanyProduction],
 });

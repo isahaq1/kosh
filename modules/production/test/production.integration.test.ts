@@ -654,6 +654,130 @@ test('bills in depth (RFC 0031 step 2): a formula with ratios, losses and specif
   ).toBe(422);
 });
 
+test('a production plan (RFC 0031 step 3): the multi-level forecast, capacity refused with the reason, approval, scheduling into orders', async () => {
+  const PL = '/api/v1/models/production.plan';
+  // 60 fixtures (Assembly's minimum batch is 50, set above) in one day at 8 h a day: 60 × 20 min = 1200 min do
+  // not fit 480.
+  const made = await call('POST', PL, 'maria', {
+    title: 'Week 48',
+    dateFrom: '2026-11-23',
+    dateTo: '2026-11-27',
+    workcenters: { set: [ids['assembly']] },
+    lines: {
+      create: [
+        {
+          product: ids['Fixture'],
+          bom: ids['v1'],
+          quantity: '60',
+          workcenter: ids['assembly'],
+          start: '2026-11-23T08:00:00Z',
+          end: '2026-11-23T18:00:00Z',
+        },
+      ],
+    },
+  });
+  expect(made.status, JSON.stringify(made.json)).toBe(201);
+  const id = made.json.id as number;
+  expect((await call('POST', `${PL}/${id}/transitions/submit`, 'maria')).status).toBe(409); // not forecast yet
+  const forecast = await call('POST', `${PL}/${id}/transitions/forecast`, 'maria');
+  expect(forecast.status, JSON.stringify(forecast.json)).toBe(200);
+  const materials = (
+    await call(
+      'GET',
+      `/api/v1/models/production.plan.material?filter=${encodeURIComponent(JSON.stringify({ plan: id }))}&fields=product,required,onHand,onOrder,shortage`,
+      'maria',
+    )
+  ).json.items as Json[];
+  const of = (name: string) => materials.find((m) => (m.product?.id ?? m.product) === ids[name]);
+  // v1: 1 panel and 3 m of cable per fixture; the panel has a bill of its own (1 m of cable, made above), so the
+  // forecast explodes it too: no panels to buy, 180 + 60 m of cable.
+  expect(of('Panel')).toBeUndefined();
+  expect(Number(of('Cable').required)).toBe(240);
+  expect(Number(of('Cable').shortage)).toBe(
+    Math.max(0, 240 - Number(of('Cable').onHand) - Number(of('Cable').onOrder)),
+  );
+  // Capacity: refused with the reason on the line; a wider slot fits.
+  const refused = await call('POST', `${PL}/${id}/transitions/submit`, 'maria');
+  expect(refused.status).toBe(409);
+  const [line] = (
+    await call(
+      'GET',
+      `/api/v1/models/production.plan.line?filter=${encodeURIComponent(JSON.stringify({ plan: id }))}&fields=minutes,capacityNote`,
+      'maria',
+    )
+  ).json.items as Json[];
+  expect(Number(line.minutes)).toBe(1200);
+  expect(line.capacityNote).toContain('minutes needed');
+  expect(line.capacityNote).toContain('Assembly');
+  expect(
+    (
+      await call('PATCH', `/api/v1/models/production.plan.line/${line.id}`, 'maria', {
+        end: '2026-11-25T18:00:00Z',
+      })
+    ).status,
+  ).toBe(200);
+  expect((await call('POST', `${PL}/${id}/transitions/submit`, 'maria')).status).toBe(200);
+  const inbox = (await call('GET', '/api/v1/approvals/inbox', 'mona')).json.requests as Json[];
+  for (const r of inbox.filter((x) => x.targetModel === 'production.plan' && x.targetId === id))
+    expect((await call('POST', `/api/v1/approvals/requests/${r.id}/approve`, 'mona')).status).toBe(
+      200,
+    );
+  expect((await call('GET', `${PL}/${id}?fields=state`, 'maria')).json.state).toBe('approved');
+  // Scheduled: one confirmed production order, linked both ways.
+  const scheduled = await call('POST', `${PL}/${id}/transitions/schedule`, 'maria');
+  expect(scheduled.status, JSON.stringify(scheduled.json)).toBe(200);
+  const orders = (
+    await call(
+      'GET',
+      `${P}?filter=${encodeURIComponent(JSON.stringify({ plan: id }))}&fields=state,quantity,date`,
+      'maria',
+    )
+  ).json.items as Json[];
+  expect(orders.length).toBe(1);
+  expect(orders[0].state).toBe('confirmed');
+  expect(Number(orders[0].quantity)).toBe(60);
+  const [after] = (
+    await call(
+      'GET',
+      `/api/v1/models/production.plan.line?filter=${encodeURIComponent(JSON.stringify({ plan: id }))}&fields=order`,
+      'maria',
+    )
+  ).json.items as Json[];
+  expect(after.order).not.toBeNull();
+  // Procure on a forecast plan with a shortage: no Purchase here, so the material says why nothing was ordered.
+  const other = await call('POST', PL, 'maria', {
+    title: 'Week 49',
+    dateFrom: '2026-11-30',
+    dateTo: '2026-12-04',
+    lines: {
+      create: [
+        {
+          product: ids['Fixture'],
+          bom: ids['v1'],
+          quantity: '500',
+          workcenter: ids['assembly'],
+          start: '2026-11-30T08:00:00Z',
+          end: '2026-12-04T18:00:00Z',
+        },
+      ],
+    },
+  });
+  expect((await call('POST', `${PL}/${other.json.id}/transitions/forecast`, 'maria')).status).toBe(
+    200,
+  );
+  const procured = await call('POST', `${PL}/${other.json.id}/transitions/procure`, 'maria');
+  expect(procured.status, JSON.stringify(procured.json)).toBe(200);
+  const short = (
+    await call(
+      'GET',
+      `/api/v1/models/production.plan.material?filter=${encodeURIComponent(JSON.stringify({ plan: other.json.id, shortage: { gt: 0 } }))}&fields=document,note`,
+      'maria',
+    )
+  ).json.items as Json[];
+  expect(short.length).toBeGreaterThan(0);
+  expect(short.every((m) => m.document === null && m.note !== null)).toBe(true);
+});
+
 test('the demo data loads', async () => {
   const auth = host.server.auth;
   if (auth === undefined) throw new Error('base is installed');
