@@ -82,6 +82,12 @@ export const purchaseStock: ReturnType<typeof defineModule> = defineModule({
     {
       view: 'purchase.order.form',
       operations: [
+        { append: 'dates', nodes: [field({ field: 'vendorOnTime', id: 'vendor_on_time' })] },
+      ],
+    },
+    {
+      view: 'purchase.order.form',
+      operations: [
         {
           append: 'related',
           nodes: [

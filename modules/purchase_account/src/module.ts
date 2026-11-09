@@ -49,12 +49,24 @@ export async function toBill(env: Env, orderIds: readonly number[]): Promise<Map
     lines.map((l) => l.id as number),
   );
   const out = new Map<number, Decimal>();
+  const accepted = await (
+    await env
+      .model('purchase.order')
+      .search({ where: { id: { in: [...orderIds] }, acceptanceCount: { gt: 0 } } as never })
+  ).load({});
+  const withAcceptance = new Set(accepted.map((o) => o.id as number));
   for (const l of lines) {
     const byReceipt =
       received !== null &&
       l.product?.invoicePolicy === 'delivered' &&
       l.product?.kind !== 'service';
-    const basis = byReceipt ? (received.get(l.id as number) ?? zero) : l.quantity;
+    // A service on an order with work acceptances is billed up to what was accepted (RFC 0032 §3.4).
+    const byAcceptance = l.product?.kind === 'service' && withAcceptance.has(l.order.id as number);
+    const basis = byAcceptance
+      ? (l.qtyAccepted ?? zero)
+      : byReceipt
+        ? (received.get(l.id as number) ?? zero)
+        : l.quantity;
     out.set(l.id as number, basis.minus(l.qtyBilled ?? zero));
   }
   return out;

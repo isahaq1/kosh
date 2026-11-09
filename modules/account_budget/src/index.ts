@@ -214,6 +214,18 @@ export const accountBudget: ReturnType<typeof defineModule> = defineModule({
       view: 'purchase.order.form',
       operations: [
         {
+          insertAfter: 'submit',
+          nodes: [
+            {
+              kind: 'button',
+              id: 'budget',
+              transition: 'budget',
+              label: 'Check budget',
+              visibleWhen: { state: { in: ['draft', 'sent'] } },
+            },
+          ],
+        },
+        {
           append: 'dates',
           nodes: [
             field({ field: 'overBudget', id: 'order_over_budget' }),

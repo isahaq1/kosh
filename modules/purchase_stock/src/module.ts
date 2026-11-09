@@ -14,6 +14,7 @@ import { purchaseShutro, type VendorChoice, vendorPriceFor } from '@kosh/purchas
 import { type Decimal, type Id, orm } from '@kosh/server/orm';
 import { defaultLocations, inProductUnit, stockShutro } from '@kosh/stock';
 import { compute, defineModule, type Env, extendModel, f, type Records } from './.kosh/bindings.js';
+import { vendorScorecard } from './scorecard.js';
 
 const zero = orm.toDecimal(0);
 
@@ -107,6 +108,19 @@ export const LineReceived = extendModel('purchase.order.line', {
 export const OrderReceipts = extendModel('purchase.order', {
   fields: {
     receipts: f.one2many('stock.picking', 'purchaseOrder'),
+    /** The vendor's on-time delivery rate (RFC 0030 §3.1), shown beside the expected arrival (RFC 0032 §3.4). */
+    vendorOnTime: f.char({
+      label: 'On-time delivery',
+      help: 'The share of the vendor’s receipts that arrived by their expected date.',
+      ...compute('purchase.order', 'vendorOnTime', ['partner'], async (orders) => {
+        const env = (orders as unknown as { env: Env }).env;
+        for (const o of orders) {
+          const card = await vendorScorecard(env, o.partner.id as number);
+          o.vendorOnTime =
+            card.onTimeRate === null ? '' : `${card.onTimeRate}% on time (${card.onTime} receipts)`;
+        }
+      }),
+    }),
     /** The vendor delivers to the customer: the order's transfer is a dropship, never received in stock. */
     dropship: f.boolean({ default: false, label: 'Dropship' }),
     /** Where the goods are received (the company's main warehouse when empty). */

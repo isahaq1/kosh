@@ -12,7 +12,7 @@ import { purchaseStockShutro } from '@kosh/purchase_stock';
 import { type Decimal, type Id, orm } from '@kosh/server/orm';
 import { stockShutro } from '@kosh/stock';
 import { stockAccountShutro, stockAccountsOf } from '@kosh/stock_account';
-import { defineModule, type Env, extendModel, type Records } from './.kosh/bindings.js';
+import { compute, defineModule, type Env, extendModel, f, type Records } from './.kosh/bindings.js';
 
 const zero = orm.toDecimal(0);
 const money = (d: Decimal) => d.toDecimalPlaces(2);
@@ -158,6 +158,35 @@ async function postPriceDifferences(bills: Records<'account.move'>): Promise<voi
   }
 }
 
+/** What the buyer expects freight, duty and handling to add (RFC 0032 §3.4); the landed cost itself is posted later. */
+export const OrderLanded = extendModel('purchase.order', {
+  fields: {
+    estimatedLandedCost: f.decimal({
+      scale: 2,
+      default: '0',
+      label: 'Estimated landed cost',
+      help: 'Freight, duty, insurance and handling the buyer expects on top of the order; the landed cost posted from the bills (RFC 0030 §3.3) replaces the estimate.',
+    }),
+    estimatedTotalCost: f.decimal({
+      scale: 2,
+      store: true,
+      label: 'Estimated total cost',
+      help: 'The order before tax plus the estimated landed cost.',
+      ...compute(
+        'purchase.order',
+        'estimatedTotalCost',
+        ['amountUntaxed', 'estimatedLandedCost'],
+        (orders) => {
+          for (const o of orders)
+            o.estimatedTotalCost = (o.amountUntaxed === null ? zero : o.amountUntaxed.amount).plus(
+              o.estimatedLandedCost ?? zero,
+            );
+        },
+      ),
+    }),
+  },
+});
+
 export const purchaseStockAccountShutro: ReturnType<typeof defineModule> = defineModule({
   name: 'purchase_stock_account',
   version: '0.1.0',
@@ -177,5 +206,5 @@ export const purchaseStockAccountShutro: ReturnType<typeof defineModule> = defin
     }),
   ],
   models: [],
-  extensions: [MoveOrderCost, BillGoods],
+  extensions: [MoveOrderCost, BillGoods, OrderLanded],
 });

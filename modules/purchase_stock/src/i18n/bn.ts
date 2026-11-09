@@ -4,6 +4,7 @@ export const bn: Readonly<Record<string, string>> = {
   Dropship: 'ড্রপশিপ',
   Moves: 'স্থানান্তর',
   'Nothing to receive': 'গ্রহণের কিছু নেই',
+  'On-time delivery': 'সময়মতো সরবরাহ',
   'Order line': 'অর্ডার লাইন',
   'Partly received': 'আংশিক গৃহীত',
   'Purchase order': 'ক্রয় আদেশ',
@@ -12,6 +13,8 @@ export const bn: Readonly<Record<string, string>> = {
   Receipts: 'প্রাপ্তি',
   Received: 'গৃহীত',
   Returned: 'ফেরত',
+  'The share of the vendor’s receipts that arrived by their expected date.':
+    'সরবরাহকারীর রিসিপ্টের যে অংশ প্রত্যাশিত তারিখের মধ্যে এসেছে।',
   'To receive': 'গ্রহণ বাকি',
   'What was sent back to the vendor by validated returns of its receipts.':
     'রিসিটের যাচাই করা ফেরতে সরবরাহকারীকে যা ফেরত পাঠানো হয়েছে।',

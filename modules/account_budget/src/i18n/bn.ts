@@ -24,6 +24,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Budget lines': 'বাজেটের লাইন',
   Budgets: 'বাজেট',
   'Budgets (with their lines)': 'বাজেট (লাইনসহ)',
+  'Check budget': 'বাজেট যাচাই করুন',
   Close: 'বন্ধ করুন',
   Closed: 'বন্ধ',
   Committed: 'প্রতিশ্রুত',

@@ -18,6 +18,7 @@ import {
   type Records,
   records,
 } from './.kosh/bindings.js';
+import { checkOrders } from './budget.js';
 
 const READ = ['read'] as const;
 const ALL = ['read', 'write', 'create', 'unlink', 'export', 'import'] as const;
@@ -156,6 +157,20 @@ export const PurchaseBudget = extendModel('purchase.order', {
       help: 'Set when the order is submitted: an Accounting manager approves it as well.',
     }),
     budgetNote: f.text({ label: 'Budget check' }),
+  },
+  fieldOverrides: {
+    state: {
+      transitionsAdd: {
+        /** The budgets checked now, before submitting (RFC 0032 §3.4): the order says where it stands. */
+        budget: {
+          from: ['draft', 'sent'],
+          to: 'draft',
+          after: records('purchase.order', async (orders) => {
+            await checkOrders(orders.env as unknown as Env, [...orders.ids] as number[]);
+          }),
+        },
+      },
+    },
   },
   overrides: {
     // Before the approvals: the order checked against the approved budgets of its date.

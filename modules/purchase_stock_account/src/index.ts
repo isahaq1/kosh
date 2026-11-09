@@ -11,6 +11,7 @@ import { purchaseAccount } from '@kosh/purchase_account';
 import { purchaseStock } from '@kosh/purchase_stock';
 import { stock } from '@kosh/stock';
 import { stockAccount } from '@kosh/stock_account';
+import { field } from '@kosh/views';
 import { purchaseStockAccountShutro } from './module.js';
 
 export { BillGoods, MoveOrderCost, purchaseStockAccountShutro } from './module.js';
@@ -20,6 +21,21 @@ export const purchaseStockAccount: ReturnType<typeof defineModule> = defineModul
   kosh: '^0.1.0',
   depends: [purchase, stock, accounting, purchaseStock, stockAccount, purchaseAccount],
   bridge: [purchase, stock, accounting],
+  // The estimated landed cost beside the totals (RFC 0032 §3.4).
+  viewExtensions: [
+    {
+      view: 'purchase.order.form',
+      operations: [
+        {
+          append: 'totals',
+          nodes: [
+            field({ field: 'estimatedLandedCost', id: 'order_estimated_landed' }),
+            field({ field: 'estimatedTotalCost', id: 'order_estimated_total' }),
+          ],
+        },
+      ],
+    },
+  ],
   // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
   i18n: { bn: () => import('./i18n/bn.js') },
   accessLevels: {
