@@ -120,4 +120,11 @@ and units per vendor, product configurator rules beyond exclusions, Shop attribu
   cost); posting the entry as the user and the layers and average costs as the system; a draft from a vendor bill's
   landed-cost lines; the print template; `stock_account` now has a web entry. Not yet: from a Trade Finance
   shipment's charges, `l10n_bd`'s customs duties as data, and reversing a posted landed cost (cancel only drafts).
+- **Step 4 (2026-11-09).** `modules/product/src/variants.ts`: `product.attribute` / `.value` (display, colour, extra
+  price), `product.template` with its lines (values offered, checked to be the attribute's own) and exclusions, the
+  `generate` transition (`generateVariants`: combinations less the exclusions, existing variants kept and repriced
+  unless `followsTemplatePrice` is off, dropped ones archived), `template` / `attributeValues` /
+  `followsTemplatePrice` on `product.product`, the template's print and import templates. Not yet (part 2): the
+  grid on sales and purchase lines, the Shop's choosers, Counter, variant stock in reports, a matrix view of the
+  variants on the template.
 

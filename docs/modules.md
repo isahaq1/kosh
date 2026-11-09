@@ -674,6 +674,17 @@ reorder rule may order **for each delivery** (make to order) — on a transfer, 
 production order — or **dropship**: the vendor delivers to the customer on a dropship transfer, with its own request
 for quotation, never through stock.
 
+#### Variants (RFC 0030 step 4)
+
+**Attributes** (Products › Configuration › Attributes: size, colour…, shown as a list, radio buttons, colour
+swatches or sizes) have **values** with a colour and an **extra price**. A **product template** (Products › Product
+templates) is the family — name, kind, category, unit, sales price and cost, taxes, picture — with the attributes
+and the values it offers and the **exclusions** (values that do not go together). **Generate variants** makes one
+product per combination, so every app keeps working on products as before: each variant has the template's values,
+its own code, barcode, cost and picture, and a sales price of the template's plus its values' extras — unless
+**Price from the template** is switched off and it keeps its own. Generating again keeps existing variants (reactivated
+and repriced), makes the new combinations and archives the ones no longer offered; nothing is deleted.
+
 ### Production (`modules/production`, RFC 0021)
 
 Bills of materials with versions and effective dates, work centres with their cost per hour, and production orders
