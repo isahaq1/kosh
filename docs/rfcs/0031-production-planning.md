@@ -123,4 +123,12 @@ availability beyond the work centre's hours, OEE measured from the shop floor.
   user menu (remembered per browser); `<Explain>` on form labels, list columns, form buttons, stat tiles and page
   titles, the relation links opening `/open/:model`. Not yet: menus (their actions' popovers), a transition's event
   (events are declared per model, not per transition).
+- **Step 2 (2026-11-09).** `modules/mrp/src/depth.ts` and the bill: kinds (standard / formula / packaging), ratios,
+  losses, net and gross quantities (explode consumes the gross), pack size, expected loss and tolerance, the unit cost
+  rolled up, specification parameters with product values and the reached value per bill, component eligibility by
+  kind and company, the state (Draft → Under review → Active → Inactive) with the approval policy, revisions and the
+  costing history, the company setting that decides whether drafts may be used; work centres' batches, setup /
+  cleanup, OEE target, alternatives and (mrp_account) expense account; shifts. Not yet: specifications weighted by
+  the product's unit when lines mix units (shares are by net quantity as written), alternatives used by the
+  scheduler (step 4), the costing history on every cost change (written on activation only).
 

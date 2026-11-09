@@ -685,6 +685,21 @@ cost; scrap (Stockroom › Scrap) is recorded with its reason, on an order or an
 work orders scheduled at the work centres (Production › Work orders, a Gantt); `GET /api/v1/production/capacity`
 gives each centre's load by day.
 
+#### Bills in depth (RFC 0031 step 2)
+
+A bill has a **kind**: *standard* (components in quantities), *formula* (components as **ratios** of the batch adding
+up to 100 %, scaled to any quantity) or *packaging* (a pack of the product, with its pack size). Lines carry a
+**loss %**, the **net** quantity (what goes in) and the **gross** one (what the order consumes); the bill's **unit
+cost** rolls the components (gross) and the operations up. **Specifications** (Production › Configuration ›
+Specification parameters, with each product's value) give a formula a range per parameter and show the value its lines
+reach, weighted by their shares. **Component eligibility** limits which product categories may be components of each
+kind of bill in a company; a refused line says why. Bills have a state — Draft, Under review, Active, Inactive —
+with **Submit for review** (components, ratios adding up, specifications within range), approval through the engine,
+**Create revision** (a copy as the next version, in draft) and a **costing history** written on activation. Whether
+bills must be approved before use is a company setting (Settings › App settings › Production); off, drafts make
+products too. Work centres get minimum and maximum batches, setup and cleanup minutes, an OEE target, alternatives
+and, with Accounting, an expense account; **shifts** (name, start, end) await the schedules of step 4.
+
 ### Asset Care (`modules/maintenance`, RFC 0021)
 
 Equipment with asset tags, warranty and meters that only count up; preventive plans by time or by meter whose
