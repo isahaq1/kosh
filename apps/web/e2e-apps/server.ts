@@ -311,6 +311,7 @@ for (const [login, name, groups] of [
       'stock_account.user',
       'base.developer',
       'production.manager',
+      'production_account.user',
       'maintenance.manager',
       'trade_finance.manager',
       'event.manager',
