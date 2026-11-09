@@ -390,6 +390,17 @@ final prices, linked to the request lines, and the RFQ is *ordered*. When the RF
 first**, an engineer scores every vendor who quoted (out of 100, whether they meet the specifications), a Purchase
 manager approves it and its confirmation ranks the responses — only then may the financial statement be submitted.
 
+**Orders, agreements, work acceptance, vendor requests.** A purchase order carries its **PO type** (general, service,
+capital), **sourcing** (local or import), the **advance** agreed and the **agreement** it draws on; with Stockroom,
+the vendor's on-time delivery rate stands beside the expected arrival; with budgets, **Check budget** says where the
+order stands before it is submitted; with stock valuation, an **estimated landed cost** and the estimated total cost.
+An **agreement** (Purchase › Agreements: a blanket order or framework contract) fixes a vendor's prices and
+quantities for a period: orders that name it take its prices (the line says so), and submitting one beyond its dates,
+products or quantities is refused. A **work acceptance** (Purchase › Work acceptance) is drawn from an order's service
+lines; once accepted, the service is billed up to what was accepted. A **vendor request** (Purchase › Vendor requests)
+asks for a new vendor — name, address, NID, trade licence, proprietor — and, approved by a Purchase manager, makes the
+contact marked as a vendor; until then nobody can order from them.
+
 ### Vendor prices (`modules/purchase`, `modules/purchase_stock`, RFC 0030)
 
 **Purchase › Vendor prices** (buyers) records what each vendor charges: for a product or for every product of a

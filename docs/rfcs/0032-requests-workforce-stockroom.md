@@ -226,4 +226,12 @@ Each step ends with the full gate (typecheck, lint, tests, both E2E projects), d
   `purchase.compare_approve`, confirmed into technical ranks, required before the financial statement when the RFQ
   asks. Not yet: a matrix component for the workspace (the generic lines table stands in), evaluation criteria with
   weights, comparing across several RFQs, the CS report's vendor columns side by side (the print lists the lines).
+- **Step 9 (2026-11-08).** `modules/purchase/src/extras.ts`: agreements (`purchase.agreement` and lines, prices
+  joined into `purchaseLinePrice` ahead of the vendor prices, `checkAgreement` in `submitting`), work acceptance
+  (`purchase.work.acceptance` and lines from the order's service lines by onchange, `qtyAccepted` on order lines,
+  `purchase_account` billing a service up to it once the order has an accepted acceptance), vendor requests approved
+  through the engine into a contact marked vendor; the order's PO type, sourcing, advance %, agreement; `account_budget`'s
+  **Check budget** transition and button; `purchase_stock`'s on-time rate on the order; `purchase_stock_account`'s
+  estimated landed cost. Not yet: a letter-of-credit yes / no on the order (Trade Finance links LCs to orders
+  already), a project on the order, call-offs released from an agreement by the agreement itself.
 
