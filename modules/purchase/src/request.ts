@@ -475,9 +475,7 @@ export const PurchaseRequestLine = defineModel('purchase.request.line', {
   constraints: {
     notAbove: {
       ...check('purchase.request.line', ['quantity', 'qtyApproved'], async (lines) =>
-        [...lines]
-          .filter((l) => l.qtyApproved !== null && l.qtyApproved.gt(l.quantity))
-          .map((l) => l.id),
+        [...lines].filter((l) => l.qtyApproved?.gt(l.quantity)).map((l) => l.id),
       ),
       message: 'An approved quantity is never above the requested one.',
     },

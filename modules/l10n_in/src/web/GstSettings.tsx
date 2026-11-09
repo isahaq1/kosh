@@ -39,7 +39,7 @@ export function GstSettings({ api }: { readonly api: KoshApi }): ReactElement {
     },
   });
   const current = settings.data;
-  if (current === undefined) return <></>;
+  if (current === undefined) return <div />;
   const value = (key: (typeof FIELDS)[number]) => String(edits[key] ?? current[key] ?? '');
   const einvoice = Boolean(edits.einvoiceEnabled ?? current.einvoiceEnabled);
   return (

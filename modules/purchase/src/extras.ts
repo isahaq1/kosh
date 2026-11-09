@@ -302,7 +302,7 @@ export const PurchaseWorkAcceptance = defineModel('purchase.work.acceptance', {
   },
   onchange: {
     // The order's vendor and currency; Fill brings its service lines.
-    order: onchange('purchase.work.acceptance', async (d, env): Promise<void> => {
+    order: onchange('purchase.work.acceptance', async (d, _env): Promise<void> => {
       const order = (await d.record('order')) as {
         id: number;
         partner: { id: number };

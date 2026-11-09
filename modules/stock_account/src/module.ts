@@ -481,7 +481,7 @@ async function transportBills(pickings: Records<'stock.picking'>): Promise<void>
           },
         },
       ] as never);
-    if (p.transporter !== null && p.freightAmount !== null && p.freightAmount.gt(0)) {
+    if (p.transporter && p.freightAmount?.gt(0)) {
       const lines = [{ name: `Freight ${p.name}`, amount: p.freightAmount }];
       for (const c of p.charges)
         if (c.amount.gt(0))
@@ -495,8 +495,7 @@ async function transportBills(pickings: Records<'stock.picking'>): Promise<void>
       p.kind === 'receipt' &&
       p.deductFromSupplier &&
       p.partner !== null &&
-      p.supplierDeduction !== null &&
-      p.supplierDeduction.gt(0)
+      p.supplierDeduction?.gt(0)
     )
       await draft('in_refund', p.partner.id, [
         { name: `Deduction on receipt ${p.name}`, amount: p.supplierDeduction },

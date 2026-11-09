@@ -131,7 +131,7 @@ export function SendButton({
           <div className="space-y-1">
             <Label htmlFor={`${id}-to`}>{t('send.to')}</Label>
             <Input id={`${id}-to`} type="text" value={to} onChange={(e) => setTo(e.target.value)} />
-            {c !== undefined && c.to.some((r) => r.email === null || r.email === '') ? (
+            {c?.to.some((r) => r.email === null || r.email === '') ? (
               <p className="text-xs text-muted-foreground">
                 {t('send.noEmail', { name: c.to[0]?.name ?? '' })}
               </p>

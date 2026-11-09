@@ -241,7 +241,6 @@ export function Explain({
           children
         ) : (
           <span
-            // biome-ignore lint/a11y/noNoninteractiveTabindex: the popover opens on focus for keyboard users
             tabIndex={focusable ? 0 : undefined}
             data-kosh-explain=""
             className="inline-flex cursor-help items-center gap-0.5 underline decoration-dotted decoration-sky-500 underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-sky-500"

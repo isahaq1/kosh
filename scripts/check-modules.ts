@@ -206,7 +206,7 @@ const importProblems = (model: string, columns: readonly M[]): string[] => {
       out.push(`'${path}': not a field of a one2many's lines`);
       continue;
     }
-    const why = notImportable(sub, (definitions.get(line['target']) ?? {})[sub]);
+    const why = notImportable(sub, definitions.get(line['target'])?.[sub]);
     if (why !== null) out.push(`'${path}': ${why}`);
   }
   return out;
