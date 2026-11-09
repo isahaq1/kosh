@@ -15,7 +15,7 @@ import { product } from '@kosh/product';
 import { reporting } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import { stock } from '@kosh/stock';
-import { action, form, gantt, kanban, list, search } from '@kosh/views';
+import { action, field, form, gantt, kanban, list, search } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import { productionDemo } from './demo.js';
 import {
@@ -35,6 +35,7 @@ import {
   productionShutro,
 } from './module.js';
 import { ProductionPlan, ProductionPlanLine } from './plan.js';
+import { ProductionSchedule } from './schedule.js';
 
 export {
   BOM_KINDS,
@@ -67,12 +68,19 @@ export {
 } from './module.js';
 export {
   generateForecast,
+  generateSchedules,
   ProductionPlan,
   ProductionPlanLine,
   ProductionPlanMaterial,
   procureShortages,
-  scheduleOrders,
 } from './plan.js';
+export {
+  followOrders,
+  makeOrders,
+  ProductionSchedule,
+  ProductionScheduleComponent,
+  preflight,
+} from './schedule.js';
 
 /** Each work centre's planned hours by day (the overlap of its work orders with the day) against its hours. */
 function registerCapacityRoutes({ app }: ModuleContext): void {
@@ -166,6 +174,7 @@ export const production: ReturnType<typeof defineModule> = defineModule({
         reason: 'Lines import with their plan (the plans template).',
       },
       { rule: 'I1', model: 'production.plan.material', reason: 'Written by the forecast.' },
+      { rule: 'I1', model: 'production.schedule.component', reason: 'Written by the pre-flight.' },
     ],
   },
   // Settings › App settings › Production (RFC 0020): per company.
@@ -212,8 +221,110 @@ export const production: ReturnType<typeof defineModule> = defineModule({
     category: 'Operations',
     summary: 'Bills of materials with versions, orders that show what is short and what they cost',
   },
+  // The product's shelf life and retail price, with Stockroom's stock group.
+  viewExtensions: [
+    {
+      view: 'product.product.form',
+      operations: [
+        {
+          insertAfter: 'stock_quantities',
+          nodes: [
+            {
+              kind: 'group',
+              id: 'production_label',
+              label: 'Batches and labels',
+              children: [
+                field({ field: 'shelfLifeDays', id: 'production_shelf_life' }),
+                field({ field: 'retailPrice', id: 'production_retail_price' }),
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  ],
   routes: (context: ModuleContext) => registerCapacityRoutes(context),
   documents: [
+    {
+      key: 'production_schedule',
+      name: 'Production schedule',
+      model: 'production.schedule',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Batch {{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'about',
+            items: [
+              { label: 'Product', bind: 'product.name' },
+              { label: 'Bill of materials', bind: 'bom.label' },
+              { label: 'Packaging bill', bind: 'packagingBom.label' },
+              { label: 'Target', bind: 'quantity' },
+              { label: 'Produced', bind: 'produced' },
+              { label: 'Work centre', bind: 'workcenter.name' },
+              { label: 'Shift', bind: 'shift.name' },
+              { label: 'Start', bind: 'start' },
+              { label: 'End', bind: 'end' },
+              { label: 'Status', bind: 'state' },
+            ],
+          },
+          {
+            kind: 'table',
+            id: 'components',
+            bind: 'components',
+            columns: [
+              { label: 'Component', bind: 'product.name' },
+              { label: 'Required', bind: 'required' },
+              { label: 'Available', bind: 'available' },
+              { label: 'Deficit', bind: 'deficit' },
+              { label: 'Surplus', bind: 'surplus' },
+            ],
+          },
+          {
+            kind: 'table',
+            id: 'orders',
+            bind: 'orders',
+            columns: [
+              { label: 'Order', bind: 'name' },
+              { label: 'Stage', bind: 'stage' },
+              { label: 'Status', bind: 'state' },
+              { label: 'Produced', bind: 'producedQty' },
+              { label: 'Yield', bind: 'yieldStatus' },
+            ],
+          },
+          { kind: 'text', id: 'note', text: '{{note}}' },
+          { kind: 'qr', id: 'qr', bind: 'name', size: 24, label: 'Batch number' },
+        ],
+      },
+    },
+    {
+      key: 'production_label',
+      name: 'Batch label',
+      model: 'production.order',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: '',
+        blocks: [
+          { kind: 'heading', id: 'title', text: '{{product.name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'label',
+            items: [
+              { label: 'Batch number', bind: 'batch' },
+              { label: 'Quantity', bind: 'producedQty' },
+              { label: 'Manufactured on', bind: 'manufacturingDate' },
+              { label: 'Expires on', bind: 'expiryDate' },
+              { label: 'Maximum retail price', bind: 'product.retailPrice' },
+            ],
+          },
+          { kind: 'qr', id: 'qr', bind: 'batch', size: 32, label: 'Batch number' },
+        ],
+      },
+    },
     {
       key: 'production_plan',
       name: 'Production plan',
@@ -358,6 +469,22 @@ export const production: ReturnType<typeof defineModule> = defineModule({
   ],
   importTemplates: [
     {
+      key: 'production_schedules',
+      model: 'production.schedule',
+      label: 'Production schedules',
+      columns: [
+        { header: 'Product', field: 'product' },
+        { header: 'Bill of materials', field: 'bom' },
+        { header: 'Packaging bill', field: 'packagingBom' },
+        { header: 'Target', field: 'quantity' },
+        { header: 'Work centre', field: 'workcenter' },
+        { header: 'Shift', field: 'shift' },
+        { header: 'Start', field: 'start' },
+        { header: 'End', field: 'end' },
+        { header: 'Warehouse', field: 'warehouse' },
+      ],
+    },
+    {
       key: 'production_plans',
       model: 'production.plan',
       label: 'Production plans',
@@ -488,8 +615,14 @@ export const production: ReturnType<typeof defineModule> = defineModule({
     {
       topic: 'production.plan.scheduled',
       model: 'production.plan',
-      label: 'Production plan scheduled into orders',
+      label: 'Production plan scheduled into batches',
     },
+    {
+      topic: 'production.schedule.confirmed',
+      model: 'production.schedule',
+      label: 'Batch confirmed',
+    },
+    { topic: 'production.schedule.done', model: 'production.schedule', label: 'Batch done' },
   ],
   // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
   i18n: { bn: () => import('./i18n/bn.js') },
@@ -591,6 +724,10 @@ export const production: ReturnType<typeof defineModule> = defineModule({
       label: 'Production plans',
       views: ['list', 'kanban', 'form'],
     }),
+    'production.action_schedules': action(ProductionSchedule, {
+      label: 'Batches',
+      views: ['list', 'kanban', 'gantt', 'form'],
+    }),
     'production.action_plan_lines': action(ProductionPlanLine, {
       label: 'Plan schedule',
       views: ['gantt', 'list'],
@@ -640,6 +777,13 @@ export const production: ReturnType<typeof defineModule> = defineModule({
       label: 'Production plans',
       action: 'production.action_plans',
       sequence: 2,
+    },
+    {
+      id: 'production.schedules',
+      parent: 'production.root',
+      label: 'Batches',
+      action: 'production.action_schedules',
+      sequence: 4,
     },
     {
       id: 'production.plan_lines',
@@ -726,6 +870,7 @@ export const production: ReturnType<typeof defineModule> = defineModule({
           k.button('check', { label: 'Check components' }),
           k.button('confirm', { primary: true, label: 'Confirm' }),
           k.button('reserve', { label: 'Check availability' }),
+          k.button('start', { label: 'Start' }),
           k.button('produce', {
             primary: true,
             label: 'Produce',
@@ -761,6 +906,120 @@ export const production: ReturnType<typeof defineModule> = defineModule({
           { field: 'state', id: 'workorder_state' },
         ]),
         k.group('transfers', ['consumption', 'output']),
+        k.group(
+          'batch_yield',
+          [
+            'schedule',
+            'stage',
+            'batch',
+            'sourceOrder',
+            'sourceLot',
+            'lot',
+            'producedQty',
+            'consumedQty',
+            'lossQty',
+            'lossPercent',
+            'yieldStatus',
+          ],
+          { label: 'Batch and yield' },
+        ),
+        k.group(
+          'execution',
+          ['actualStart', 'actualEnd', 'operator', 'shift', 'manufacturingDate', 'expiryDate'],
+          { label: 'Execution' },
+        ),
+        k.group('about', ['note'], { columns: 1 }),
+      ],
+      chatter: true,
+    })),
+    'production.schedule.list': list(ProductionSchedule, {
+      columns: [
+        'name',
+        'product',
+        'quantity',
+        'produced',
+        'workcenter',
+        'start',
+        'end',
+        'deficitCount',
+        'state',
+      ],
+    }),
+    'production.schedule.kanban': kanban(ProductionSchedule, {
+      groupBy: 'state',
+      card: { title: 'name', subtitle: 'product', footer: ['quantity', 'workcenter'] },
+    }),
+    'production.schedule.gantt': gantt(ProductionSchedule, {
+      dateStart: 'start',
+      dateStop: 'end',
+      title: 'name',
+      groupBy: 'workcenter',
+      scale: 'day',
+    }),
+    'production.schedule.form': form(ProductionSchedule, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('check', { primary: true, label: 'Check stock' }),
+          k.button('confirm', {
+            primary: true,
+            label: 'Confirm',
+            confirm: 'Confirm? The production orders are made.',
+          }),
+          k.button('finish', { label: 'Mark done' }),
+          k.button('redraft', { label: 'Set to draft' }),
+          k.button('cancel', { label: 'Cancel', confirm: 'Cancel this batch?' }),
+        ],
+      },
+      sheet: [
+        k.stats('related', [
+          {
+            id: 'schedule_orders',
+            label: 'Production orders',
+            model: ProductionOrder,
+            where: { schedule: { $record: 'id' } },
+            action: 'production.action_orders',
+          },
+        ]),
+        k.group('main', [
+          'name',
+          'product',
+          'bom',
+          'packagingBom',
+          'quantity',
+          'produced',
+          'remaining',
+        ]),
+        k.group(
+          'where',
+          ['workcenter', 'shift', 'start', 'end', 'warehouse', 'plan', 'deficitCount'],
+          {
+            label: 'Where and when',
+          },
+        ),
+        k.lines(
+          'components',
+          [
+            { field: 'product', id: 'preflight_product' },
+            { field: 'required', id: 'preflight_required' },
+            { field: 'available', id: 'preflight_available' },
+            { field: 'deficit', id: 'preflight_deficit' },
+            { field: 'surplus', id: 'preflight_surplus' },
+          ],
+          { readonlyWhen: {} },
+        ),
+        k.lines(
+          'orders',
+          [
+            { field: 'name', id: 'batch_order_name' },
+            { field: 'stage', id: 'batch_order_stage' },
+            { field: 'state', id: 'batch_order_state' },
+            { field: 'producedQty', id: 'batch_order_produced' },
+            { field: 'yieldStatus', id: 'batch_order_yield' },
+            { field: 'lot', id: 'batch_order_lot' },
+          ],
+          { readonlyWhen: {} },
+        ),
         k.group('about', ['note'], { columns: 1 }),
       ],
       chatter: true,
@@ -793,6 +1052,13 @@ export const production: ReturnType<typeof defineModule> = defineModule({
             where: { plan: { $record: 'id' } },
             action: 'production.action_orders',
           },
+          {
+            id: 'plan_schedules',
+            label: 'Batches',
+            model: ProductionSchedule,
+            where: { plan: { $record: 'id' } },
+            action: 'production.action_schedules',
+          },
         ]),
         k.group('main', ['name', 'title', 'dateFrom', 'dateTo', 'warehouse']),
         k.group('where', [{ field: 'workcenters', widget: 'tags' }, 'shortageCount'], {
@@ -809,7 +1075,7 @@ export const production: ReturnType<typeof defineModule> = defineModule({
           { field: 'end', id: 'plan_line_end' },
           { field: 'minutes', id: 'plan_line_minutes' },
           { field: 'capacityNote', id: 'plan_line_capacity' },
-          { field: 'order', id: 'plan_line_order' },
+          { field: 'scheduleCount', id: 'plan_line_schedules' },
         ]),
         k.lines(
           'materials',
@@ -846,7 +1112,7 @@ export const production: ReturnType<typeof defineModule> = defineModule({
         'end',
         'minutes',
         'capacityNote',
-        'order',
+        'scheduleCount',
       ],
     }),
     'production.workorder.gantt': gantt(ProductionWorkorder, {
@@ -1047,6 +1313,18 @@ export const production: ReturnType<typeof defineModule> = defineModule({
         short: { label: 'With shortages', domain: { shortageCount: { gt: 0 } }, group: 'state' },
       },
       groupBy: ['warehouse', 'state', 'dateFrom:month'],
+    }),
+    'production.schedule': search(ProductionSchedule, {
+      fields: ['name', 'product.name'],
+      filters: {
+        open: {
+          label: 'Open',
+          domain: { state: { in: ['draft', 'checked', 'confirmed', 'progress'] } },
+          group: 'state',
+        },
+        short: { label: 'Components short', domain: { deficitCount: { gt: 0 } }, group: 'state' },
+      },
+      groupBy: ['workcenter', 'state', 'product'],
     }),
     'production.plan.line': search(ProductionPlanLine, {
       fields: ['product.name', 'plan.name'],

@@ -723,27 +723,30 @@ test('a production plan (RFC 0031 step 3): the multi-level forecast, capacity re
       200,
     );
   expect((await call('GET', `${PL}/${id}?fields=state`, 'maria')).json.state).toBe('approved');
-  // Scheduled: one confirmed production order, linked both ways.
+  // Scheduled: one batch per line (Assembly's maximum batch is 500), its stock checked and confirmed into a
+  // production order linked both ways.
   const scheduled = await call('POST', `${PL}/${id}/transitions/schedule`, 'maria');
   expect(scheduled.status, JSON.stringify(scheduled.json)).toBe(200);
-  const orders = (
-    await call(
-      'GET',
-      `${P}?filter=${encodeURIComponent(JSON.stringify({ plan: id }))}&fields=state,quantity,date`,
-      'maria',
-    )
-  ).json.items as Json[];
+  const batches = await find('production.schedule', { plan: id }, 'name,state,quantity,planLine');
+  expect(batches.length).toBe(1);
+  expect(Number(batches[0].quantity)).toBe(60);
+  expect(batches[0].state).toBe('draft');
+  expect(String(batches[0].name)).toMatch(/^BATCH\//);
+  const [afterLine] = await find('production.plan.line', { plan: id }, 'scheduleCount');
+  expect(afterLine.scheduleCount).toBe(1);
+  const SC = '/api/v1/models/production.schedule';
+  expect((await call('POST', `${SC}/${batches[0].id}/transitions/check`, 'maria')).status).toBe(
+    200,
+  );
+  expect((await call('POST', `${SC}/${batches[0].id}/transitions/confirm`, 'maria')).status).toBe(
+    200,
+  );
+  const orders = await find('production.order', { plan: id }, 'state,quantity,schedule,stage');
   expect(orders.length).toBe(1);
   expect(orders[0].state).toBe('confirmed');
   expect(Number(orders[0].quantity)).toBe(60);
-  const [after] = (
-    await call(
-      'GET',
-      `/api/v1/models/production.plan.line?filter=${encodeURIComponent(JSON.stringify({ plan: id }))}&fields=order`,
-      'maria',
-    )
-  ).json.items as Json[];
-  expect(after.order).not.toBeNull();
+  expect(orders[0].stage).toBe('make');
+  expect(orders[0].schedule?.id ?? orders[0].schedule).toBe(batches[0].id);
   // Procure on a forecast plan with a shortage: no Purchase here, so the material says why nothing was ordered.
   const other = await call('POST', PL, 'maria', {
     title: 'Week 49',
@@ -776,6 +779,140 @@ test('a production plan (RFC 0031 step 3): the multi-level forecast, capacity re
   ).json.items as Json[];
   expect(short.length).toBeGreaterThan(0);
   expect(short.every((m) => m.document === null && m.note !== null)).toBe(true);
+});
+
+test('a batch in two stages (RFC 0031 step 4): the pre-flight, the make order with its lot, loss and yield, the pack order from the lot, the batch done', async () => {
+  const S = '/api/v1/models/production.schedule';
+  // The fixture is tracked by lot with a 30-day shelf life; its v1 bill expects a 1 % loss, ± 2 %.
+  expect(
+    (
+      await call('PATCH', `/api/v1/models/product.product/${ids['Fixture']}`, 'maria', {
+        tracking: 'lot',
+        shelfLifeDays: 30,
+        retailPrice: '990',
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await call('PATCH', `/api/v1/models/production.bom/${ids['v1']}`, 'maria', {
+        expectedLoss: '1',
+        tolerance: '2',
+      })
+    ).status,
+  ).toBe(200);
+  ids['Carton'] = (
+    await call('POST', '/api/v1/models/product.product', 'maria', { name: 'Carton' })
+  ).json.id;
+  const box = (
+    await call('POST', '/api/v1/models/product.product', 'maria', { name: 'Box of 10 fixtures' })
+  ).json.id as number;
+  const packBom = await call('POST', '/api/v1/models/production.bom', 'maria', {
+    product: box,
+    kind: 'packaging',
+    packSize: '10',
+    version: 'box',
+    lines: {
+      create: [
+        { product: ids['Fixture'], quantity: '10' },
+        { product: ids['Carton'], quantity: '1' },
+      ],
+    },
+  });
+  expect(packBom.status, JSON.stringify(packBom.json)).toBe(201);
+  await receive('Panel', '100');
+  await receive('Cable', '400');
+  await receive('Carton', '5');
+  const made = await call('POST', S, 'maria', {
+    product: ids['Fixture'],
+    bom: ids['v1'],
+    packagingBom: packBom.json.id,
+    quantity: '20',
+    workcenter: ids['assembly'],
+    start: '2026-12-07T08:00:00Z',
+    end: '2026-12-08T18:00:00Z',
+  });
+  expect(made.status, JSON.stringify(made.json)).toBe(201);
+  const sid = made.json.id as number;
+  expect(String(made.json.name)).toMatch(/^BATCH\//);
+  // Pre-flight: 20 panels, 60 m of cable, 2 cartons — all available.
+  expect((await call('POST', `${S}/${sid}/transitions/check`, 'maria')).status).toBe(200);
+  const pre = await find(
+    'production.schedule.component',
+    { schedule: sid },
+    'product,required,available,deficit',
+  );
+  const need = (p: number | undefined) => pre.find((c) => (c.product?.id ?? c.product) === p);
+  expect(Number(need(ids['Panel']).required)).toBe(20);
+  expect(Number(need(ids['Cable']).required)).toBe(60);
+  expect(Number(need(ids['Carton']).required)).toBe(2);
+  expect(pre.every((c) => Number(c.deficit) === 0)).toBe(true);
+  // Confirmed: the make order confirmed, the pack order drafted with its source.
+  expect((await call('POST', `${S}/${sid}/transitions/confirm`, 'maria')).status).toBe(200);
+  const orders = await find(
+    'production.order',
+    { schedule: sid },
+    'stage,state,quantity,sourceOrder,batch',
+  );
+  expect(orders.map((o) => [o.stage, o.state, Number(o.quantity)])).toEqual([
+    ['make', 'confirmed', 20],
+    ['pack', 'draft', 2],
+  ]);
+  const makeId = orders[0].id as number;
+  const packId = orders[1].id as number;
+  expect(orders[1].sourceOrder?.id ?? orders[1].sourceOrder).toBe(makeId);
+  expect(orders[0].batch).toBe(made.json.name);
+  // Started, then produced without loss: the lot named after the batch, expiring in 30 days, the yield within.
+  expect((await run(makeId, 'start', 'maria')).status).toBe(200);
+  expect((await call('GET', `${S}/${sid}?fields=state`, 'maria')).json.state).toBe('progress');
+  expect((await call('PATCH', `${P}/${makeId}`, 'maria', { producedQty: '20' })).status).toBe(200);
+  const produced = await run(makeId, 'produce', 'maria');
+  expect(produced.status, JSON.stringify(produced.json)).toBe(200);
+  const makeOrder = (
+    await call(
+      'GET',
+      `${P}/${makeId}?fields=lot,lossQty,lossPercent,yieldStatus,consumedQty,manufacturingDate,expiryDate,actualStart,actualEnd`,
+      'maria',
+    )
+  ).json;
+  expect(makeOrder.lot).not.toBeNull();
+  expect(Number(makeOrder.consumedQty)).toBe(20); // the panels: the component in the fixture's own unit
+  expect(Number(makeOrder.lossQty)).toBe(0);
+  expect(makeOrder.yieldStatus).toBe('within');
+  expect(makeOrder.actualStart).not.toBeNull();
+  expect(makeOrder.actualEnd).not.toBeNull();
+  const lotId = makeOrder.lot?.id ?? makeOrder.lot;
+  const lot = (
+    await call('GET', `/api/v1/models/stock.lot/${lotId}?fields=name,expiryDate`, 'maria')
+  ).json;
+  expect(lot.name).toBe(made.json.name);
+  const plus30 = new Date(`${makeOrder.manufacturingDate}T00:00:00Z`);
+  plus30.setUTCDate(plus30.getUTCDate() + 30);
+  expect(lot.expiryDate).toBe(plus30.toISOString().slice(0, 10));
+  expect(makeOrder.expiryDate).toBe(lot.expiryDate);
+  // The pack order: confirmed from the lot, its bulk restricted to it; produced into 2 boxes; the batch done.
+  const pack = (await call('GET', `${P}/${packId}?fields=state,sourceLot,consumption`, 'maria'))
+    .json;
+  expect(pack.state).toBe('confirmed');
+  expect(pack.sourceLot?.id ?? pack.sourceLot).toBe(lotId);
+  const moves = await find(
+    'stock.move',
+    { picking: pack.consumption?.id ?? pack.consumption, product: ids['Fixture'] },
+    'restrictLot',
+  );
+  expect(moves.length).toBe(1);
+  expect(moves[0].restrictLot?.id ?? moves[0].restrictLot).toBe(lotId);
+  const packed = await run(packId, 'produce', 'maria');
+  expect(packed.status, JSON.stringify(packed.json)).toBe(200);
+  const after = (await call('GET', `${S}/${sid}?fields=state,produced,remaining`, 'maria')).json;
+  expect(after.state).toBe('done');
+  expect(Number(after.produced)).toBe(20);
+  expect(Number(after.remaining)).toBe(0);
+  const packOrder = (
+    await call('GET', `${P}/${packId}?fields=consumedQty,lossQty,yieldStatus`, 'maria')
+  ).json;
+  expect(Number(packOrder.consumedQty)).toBe(20);
+  expect(Number(packOrder.lossQty)).toBe(0);
 });
 
 test('the demo data loads', async () => {

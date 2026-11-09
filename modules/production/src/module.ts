@@ -37,6 +37,7 @@ import {
   ProductionSpecParameter,
 } from './depth.js';
 import { ProductionPlan, ProductionPlanLine, ProductionPlanMaterial } from './plan.js';
+import { followOrders, ProductionSchedule, ProductionScheduleComponent } from './schedule.js';
 
 const READ = ['read'] as const;
 const ALL = ['read', 'write', 'create', 'unlink'] as const;
@@ -571,60 +572,88 @@ export const ProductionOrderComponent = defineModel('production.order.component'
   },
 });
 
+/** One component need of a bill for a quantity: required, in the product's unit, and what is available now. */
+export interface ComponentNeed {
+  readonly product: number;
+  readonly required: Decimal;
+  readonly available: Decimal;
+}
+
+/**
+ * A bill's component needs for `quantity` of its product (in the components' own units, gross of losses) with what
+ * is available — on hand and not reserved — in the warehouse now.
+ */
+export async function componentNeeds(
+  env: Env,
+  bom: Id<'production.bom'>,
+  quantity: Decimal,
+  warehouse: Id<'stock.warehouse'> | null,
+  company: Id<'res.company'>,
+): Promise<ComponentNeed[]> {
+  const [bill] = await env
+    .model('production.bom')
+    .browse([bom])
+    .load({ lines: { product: { uom: true }, uom: true } });
+  if (bill === undefined || bill.quantity.lte(0)) return [];
+  const factor = quantity.div(bill.quantity);
+  const needs = new Map<number, Decimal>();
+  for (const l of bill.lines) {
+    const inUnit = inProductUnit(
+      (l.grossQuantity ?? l.quantity).times(factor),
+      l.uom ?? null,
+      l.product.uom ?? null,
+    );
+    needs.set(l.product.id, (needs.get(l.product.id) ?? zero).plus(inUnit));
+  }
+  const places = await defaultLocations(env as never, 'internal', warehouse, company);
+  const out: ComponentNeed[] = [];
+  for (const [product, required] of needs) {
+    let available = zero;
+    if (places.source !== null) {
+      const quants = await (
+        await env.model('stock.quant').search({
+          where: {
+            product: orm.asId(product, 'product.product'),
+            location: { childOf: places.source },
+          },
+        })
+      ).load(['quantity', 'reserved']);
+      available = [...quants].reduce((s, q) => s.plus(q.quantity).minus(q.reserved ?? zero), zero);
+    }
+    out.push({
+      product,
+      required: required.toDecimalPlaces(4),
+      available: available.gt(0) ? available.toDecimalPlaces(4) : zero,
+    });
+  }
+  return out;
+}
+
 /**
  * Lists the orders' component needs from their bills (in the product's unit, for the quantity ordered) with what is
  * available in their warehouse now; as the system (component lines are not edited by hand).
  */
 async function explode(ids: readonly Id<'production.order'>[], env: Env): Promise<void> {
   await env.asSuperuser({ reason: 'production components' }, async (su) => {
-    const orders = await su
-      .model('production.order')
-      .browse(ids)
-      .load({ bom: { lines: { product: { uom: true }, uom: true } }, components: true });
+    const orders = await su.model('production.order').browse(ids).load({ components: true });
     for (const o of orders) {
       if (o.components.length > 0) await o.components.unlink();
       if (o.bom === null) continue;
-      const factor = o.quantity.div(o.bom.quantity);
-      const needs = new Map<number, Decimal>();
-      for (const l of o.bom.lines) {
-        const inUnit = inProductUnit(
-          (l.grossQuantity ?? l.quantity).times(factor),
-          l.uom ?? null,
-          l.product.uom ?? null,
-        );
-        needs.set(l.product.id, (needs.get(l.product.id) ?? zero).plus(inUnit));
-      }
-      const places = await defaultLocations(
+      for (const n of await componentNeeds(
         su as never,
-        'internal',
+        o.bom.id,
+        o.quantity,
         o.warehouse?.id ?? null,
         o.company.id,
-      );
-      for (const [product, required] of needs) {
-        let available = zero;
-        if (places.source !== null) {
-          const quants = await (
-            await su.model('stock.quant').search({
-              where: {
-                product: orm.asId(product, 'product.product'),
-                location: { childOf: places.source },
-              },
-            })
-          ).load(['quantity', 'reserved']);
-          available = [...quants].reduce(
-            (s, q) => s.plus(q.quantity).minus(q.reserved ?? zero),
-            zero,
-          );
-        }
+      ))
         await su.model('production.order.component').create([
           {
             production: o.id,
-            product: orm.asId(product, 'product.product'),
-            required: required.toDecimalPlaces(4),
-            available: available.gt(0) ? available : zero,
+            product: orm.asId(n.product, 'product.product'),
+            required: n.required,
+            available: n.available,
           },
         ]);
-      }
     }
   });
 }
@@ -765,6 +794,13 @@ async function planWork(ids: readonly Id<'production.order'>[], env: Env): Promi
 }
 
 /** The places of an order: its warehouse's stock, and the Production location. */
+/** A date-only value as `YYYY-MM-DD`. */
+function dayOf(v: unknown): string {
+  if (!(v instanceof Date)) return String(v ?? '').slice(0, 10);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${v.getFullYear()}-${pad(v.getMonth() + 1)}-${pad(v.getDate())}`;
+}
+
 async function placesOf(
   env: Env,
   warehouse: Id<'stock.warehouse'> | null,
@@ -805,6 +841,133 @@ export const ProductionOrder = defineModel('production.order', {
     quantity: f.decimal({ scale: 4, required: true, default: '1' }),
     bom: f.many2one('production.bom', { ondelete: 'restrict', label: 'Bill of materials' }),
     plan: f.many2one('production.plan', { ondelete: 'set null', label: 'Production plan' }),
+    schedule: f.many2one('production.schedule', { ondelete: 'set null', label: 'Batch' }),
+    stage: f.selection(
+      { make: 'Make', pack: 'Pack' },
+      {
+        required: true,
+        default: 'make',
+        help: 'Make: the product from its components. Pack: packs of a made product, taken from its lot.',
+      },
+    ),
+    batch: f.char({
+      label: 'Batch number',
+      help: 'The lot the batch is produced into, for a tracked product.',
+    }),
+    sourceOrder: f.many2one('production.order', {
+      ondelete: 'set null',
+      label: 'Source order',
+      help: 'The make order a pack order packs.',
+    }),
+    sourceLot: f.many2one('stock.lot', {
+      ondelete: 'set null',
+      label: 'Source lot',
+      help: 'The lot a pack order takes its bulk from: the make order’s, once produced.',
+    }),
+    lot: f.many2one('stock.lot', { ondelete: 'set null', label: 'Produced lot' }),
+    producedQty: f.decimal({
+      scale: 4,
+      label: 'Produced',
+      help: 'What came out, set before producing; the quantity ordered when empty.',
+    }),
+    consumedQty: f.decimal({
+      scale: 4,
+      store: true,
+      label: 'Consumed',
+      help: 'For a pack order the bulk it packs; else the components in the product’s own unit (a formula’s shares).',
+      ...compute(
+        'production.order',
+        'consumedQty',
+        [
+          'stage',
+          'components.required',
+          'components.product.uom',
+          'product.uom',
+          'sourceOrder.product',
+        ],
+        (orders) => {
+          for (const o of orders) {
+            const lines = [...o.components];
+            if (o.stage === 'pack') {
+              const bulk = lines.find((c) => c.product.id === (o.sourceOrder?.product.id ?? -1));
+              o.consumedQty = bulk?.required ?? zero;
+              continue;
+            }
+            const unit = o.product.uom?.id ?? null;
+            o.consumedQty = lines
+              .filter((c) => (c.product.uom?.id ?? null) === unit)
+              .reduce((s, c) => s.plus(c.required), zero);
+          }
+        },
+      ),
+    }),
+    lossQty: f.decimal({
+      scale: 4,
+      store: true,
+      label: 'Process loss',
+      help: 'Consumed less produced (packs × the pack size for a pack order), once done; negative: a gain.',
+      ...compute(
+        'production.order',
+        'lossQty',
+        ['state', 'stage', 'consumedQty', 'producedQty', 'quantity', 'bom.packSize'],
+        (orders) => {
+          for (const o of orders) {
+            if (o.state !== 'done') {
+              o.lossQty = zero;
+              continue;
+            }
+            const out = o.producedQty ?? o.quantity;
+            const bulk = o.stage === 'pack' ? out.times(o.bom?.packSize ?? orm.toDecimal(1)) : out;
+            o.lossQty = (o.consumedQty ?? zero).minus(bulk);
+          }
+        },
+      ),
+    }),
+    lossPercent: f.decimal({
+      scale: 2,
+      store: true,
+      label: 'Loss %',
+      help: 'The process loss as a share of what was consumed.',
+      ...compute('production.order', 'lossPercent', ['lossQty', 'consumedQty'], (orders) => {
+        for (const o of orders) {
+          const c = o.consumedQty ?? zero;
+          o.lossPercent = c.gt(0) ? (o.lossQty ?? zero).div(c).times(100).toDecimalPlaces(2) : zero;
+        }
+      }),
+    }),
+    yieldStatus: f.selection(
+      { pending: 'Pending', within: 'Within tolerance', beyond: 'Beyond tolerance' },
+      {
+        store: true,
+        label: 'Yield',
+        help: 'Once done: the loss against the bill’s expected loss, within its tolerance or beyond it.',
+        ...compute(
+          'production.order',
+          'yieldStatus',
+          ['state', 'lossPercent', 'consumedQty', 'bom.expectedLoss', 'bom.tolerance'],
+          (orders) => {
+            for (const o of orders) {
+              if (o.state !== 'done' || (o.consumedQty ?? zero).lte(0)) {
+                o.yieldStatus = 'pending';
+                continue;
+              }
+              const diff = (o.lossPercent ?? zero).minus(o.bom?.expectedLoss ?? zero);
+              const gap = diff.lt(0) ? zero.minus(diff) : diff;
+              o.yieldStatus = gap.lte(o.bom?.tolerance ?? zero) ? 'within' : 'beyond';
+            }
+          },
+        ),
+      },
+    ),
+    actualStart: f.datetime({ label: 'Started' }),
+    actualEnd: f.datetime({ label: 'Finished' }),
+    operator: f.many2one('res.users', { ondelete: 'set null' }),
+    shift: f.many2one('production.shift', { ondelete: 'set null' }),
+    manufacturingDate: f.date({ label: 'Manufactured on' }),
+    expiryDate: f.date({
+      label: 'Expires on',
+      help: 'From the product’s shelf life, on the batch’s lot.',
+    }),
     date: f.date({ required: true, default: (env: Env) => env.today(), label: 'Planned for' }),
     warehouse: f.many2one('stock.warehouse', { ondelete: 'restrict' }),
     components: f.one2many('production.order.component', 'production'),
@@ -884,7 +1047,14 @@ export const ProductionOrder = defineModel('production.order', {
     }),
     /** The one chip: Draft, Waiting (components short), Ready, Done, Cancelled. */
     status: f.selection(
-      { draft: 'Draft', waiting: 'Waiting', ready: 'Ready', done: 'Done', cancelled: 'Cancelled' },
+      {
+        draft: 'Draft',
+        waiting: 'Waiting',
+        ready: 'Ready',
+        progress: 'In progress',
+        done: 'Done',
+        cancelled: 'Cancelled',
+      },
       {
         store: true,
         label: 'Status',
@@ -909,7 +1079,13 @@ export const ProductionOrder = defineModel('production.order', {
     ),
     note: f.text(),
     state: f.state({
-      states: { draft: 'Draft', confirmed: 'Confirmed', done: 'Done', cancel: 'Cancelled' },
+      states: {
+        draft: 'Draft',
+        confirmed: 'Confirmed',
+        progress: 'In progress',
+        done: 'Done',
+        cancel: 'Cancelled',
+      },
       initial: 'draft',
       help: 'Confirmed, the components are reserved and the work orders scheduled; done, the product is made.',
       transitions: {
@@ -951,9 +1127,11 @@ export const ProductionOrder = defineModel('production.order', {
             for (const o of await env
               .model('production.order')
               .browse(orders.ids)
-              .load({ components: true })) {
+              .load({ components: true, sourceOrder: true })) {
               // Nothing to consume (labour only): no components transfer.
               if (o.components.length === 0) continue;
+              // A pack order takes its bulk from the make order's lot.
+              const bulkProduct = o.sourceOrder?.product.id ?? null;
               const { stock, production } = await placesOf(
                 env,
                 o.warehouse?.id ?? null,
@@ -972,6 +1150,10 @@ export const ProductionOrder = defineModel('production.order', {
                     create: [...o.components].map((c) => ({
                       product: c.product.id,
                       quantity: c.required,
+                      restrictLot:
+                        o.sourceLot !== null && c.product.id === bulkProduct
+                          ? o.sourceLot.id
+                          : null,
                     })),
                   },
                 },
@@ -995,8 +1177,23 @@ export const ProductionOrder = defineModel('production.order', {
                 await env.model('stock.picking').browse([o.consumption.id]).reserve();
           }),
         },
-        produce: emitting('production.order.done', {
+        /** Work begins: the actual start; the batch in progress. */
+        start: {
           from: ['confirmed'],
+          to: 'progress',
+          after: records('production.order', async (orders): Promise<void> => {
+            const env = orders.env as unknown as Env;
+            await env
+              .model('production.order')
+              .browse(orders.ids)
+              .write({ actualStart: env.now() });
+            await env.flush();
+            for (const o of await orders.load({}))
+              if (o.schedule !== null) await followOrders(env, o.schedule.id);
+          }),
+        },
+        produce: emitting('production.order.done', {
+          from: ['confirmed', 'progress'],
           to: 'done',
           guard: records('production.order', async (orders) =>
             (await orders.load({ consumption: true })).filter(
@@ -1011,7 +1208,10 @@ export const ProductionOrder = defineModel('production.order', {
               where: { production: { in: [...orders.ids] }, state: { in: ['ready', 'progress'] } },
             });
             if (open.length > 0) await open.close();
-            for (const o of await env.model('production.order').browse(orders.ids).load({})) {
+            for (const o of await env
+              .model('production.order')
+              .browse(orders.ids)
+              .load({ product: true })) {
               if (o.consumption !== null)
                 await env.model('stock.picking').browse([o.consumption.id]).validate();
               const { stock, production } = await placesOf(
@@ -1023,7 +1223,12 @@ export const ProductionOrder = defineModel('production.order', {
                 o.bom === null
                   ? []
                   : await env.model('production.bom').browse([o.bom.id]).load({ byproducts: true });
-              const factor = bill === undefined ? zero : o.quantity.div(bill.quantity);
+              const produced = o.producedQty ?? o.quantity;
+              const factor = bill === undefined ? zero : produced.div(bill.quantity);
+              // A tracked product is produced into the batch's lot (the order's reference without a batch).
+              const tracking = o.product.tracking ?? 'none';
+              const tracked = tracking !== 'none';
+              const lotName = o.batch ?? o.name;
               const made = await env.model('stock.picking').create([
                 {
                   kind: 'production',
@@ -1034,7 +1239,7 @@ export const ProductionOrder = defineModel('production.order', {
                   origin: o.name,
                   moves: {
                     create: [
-                      { product: o.product.id, quantity: o.quantity },
+                      { product: o.product.id, quantity: produced },
                       ...[...(bill?.byproducts ?? [])].map((b) => ({
                         product: b.product.id,
                         quantity: b.quantity.times(factor).toDecimalPlaces(4),
@@ -1042,6 +1247,13 @@ export const ProductionOrder = defineModel('production.order', {
                       })),
                     ],
                   },
+                  ...(tracked
+                    ? {
+                        lotLines: {
+                          create: [{ product: o.product.id, lotName, quantity: produced }],
+                        },
+                      }
+                    : {}),
                 },
               ]);
               // Linked before it is validated: what values it (production_account) finds its order.
@@ -1051,11 +1263,53 @@ export const ProductionOrder = defineModel('production.order', {
                 .write({ output: made.ids[0] ?? null });
               await made.confirm();
               await made.validate();
+              // The batch's lot with its expiry from the product's shelf life; the dates; the end of the work.
+              const today = dayOf(env.today());
+              let lot: Id<'stock.lot'> | null = null;
+              let expiryDate: string | null = null;
+              if (tracked) {
+                lot =
+                  (
+                    await env
+                      .model('stock.lot')
+                      .search({ where: { product: o.product.id, name: lotName }, limit: 1 })
+                  ).ids[0] ?? null;
+                const days = o.product.shelfLifeDays ?? 0;
+                if (lot !== null && days > 0) {
+                  const expiry = new Date(`${today}T00:00:00Z`);
+                  expiry.setUTCDate(expiry.getUTCDate() + days);
+                  expiryDate = expiry.toISOString().slice(0, 10);
+                  await env.model('stock.lot').browse([lot]).write({ expiryDate });
+                }
+              }
+              await env.model('production.order').browse([o.id]).write({
+                lot,
+                producedQty: produced,
+                manufacturingDate: today,
+                expiryDate,
+                actualEnd: env.now(),
+              });
+              await env.flush();
+              // The pack orders waiting for this batch: confirmed now, their bulk taken from its lot.
+              const packs = await env
+                .model('production.order')
+                .search({ where: { sourceOrder: o.id, state: 'draft' } });
+              if (packs.length > 0) {
+                await env.model('production.order').browse(packs.ids).write({ sourceLot: lot });
+                await env.flush();
+                await packs.confirm();
+                await env.flush();
+              }
             }
+          }),
+          after: records('production.order', async (orders): Promise<void> => {
+            const env = orders.env as unknown as Env;
+            for (const o of await orders.load({}))
+              if (o.schedule !== null) await followOrders(env, o.schedule.id);
           }),
         }),
         cancel: {
-          from: ['draft', 'confirmed'],
+          from: ['draft', 'confirmed', 'progress'],
           to: 'cancel',
           after: records('production.order', async (orders): Promise<void> => {
             const env = orders.env as unknown as Env;
@@ -1110,6 +1364,21 @@ export const ProductionOrder = defineModel('production.order', {
 });
 
 /** Scrap recorded on a production order (a broken component, a faulty unit made), with its reason. */
+/** Production's product fields: the shelf life of what is made, the retail price printed on its label. */
+export const ProductProduction = extendModel('product.product', {
+  fields: {
+    shelfLifeDays: f.integer({
+      label: 'Shelf life (days)',
+      help: 'A produced lot expires this many days after its manufacturing date; empty: no expiry.',
+    }),
+    retailPrice: f.decimal({
+      scale: 2,
+      label: 'Maximum retail price',
+      help: 'Printed on the batch label (MRP).',
+    }),
+  },
+});
+
 export const ScrapProduction = extendModel('stock.scrap', {
   fields: {
     production: f.many2one('production.order', { ondelete: 'set null', label: 'Production order' }),
@@ -1216,6 +1485,12 @@ export const productionShutro = defineModule({
       padding: 5,
       reset: 'yearly',
     }),
+    orm.defineSequence({
+      code: 'production.schedule',
+      prefix: 'BATCH/{year}/',
+      padding: 5,
+      reset: 'yearly',
+    }),
   ],
   models: [
     ProductionWorkcenter,
@@ -1235,6 +1510,8 @@ export const productionShutro = defineModule({
     ProductionPlan,
     ProductionPlanLine,
     ProductionPlanMaterial,
+    ProductionSchedule,
+    ProductionScheduleComponent,
   ],
-  extensions: [ScrapProduction, ReorderMake, CompanyProduction],
+  extensions: [ScrapProduction, ReorderMake, CompanyProduction, ProductProduction],
 });

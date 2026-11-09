@@ -1,6 +1,7 @@
 /** Bangla for the module's labels, keyed by their English text (RFC 0023 §3.1; `pnpm i18n:extract`). */
 export const bn: Readonly<Record<string, string>> = {
   '%, kcal/kg, mg/kg…': '%, কিলোক্যালরি/কেজি, মিগ্রা/কেজি…',
+  'A batch makes a positive quantity.': 'ব্যাচে ধনাত্মক পরিমাণ উৎপাদন হতে হবে।',
   'A bill ends on or after it starts.': 'উপকরণ তালিকার শেষ তারিখ শুরুর তারিখে বা তার পরে হতে হবে।',
   'A bill makes a positive quantity.': 'উপকরণ তালিকায় ধনাত্মক পরিমাণ উৎপাদন হতে হবে।',
   'A bill under review has components, formula ratios adding up to 100 % and every specification within range.':
@@ -19,6 +20,8 @@ export const bn: Readonly<Record<string, string>> = {
   'A line makes a positive quantity.': 'লাইনে ধনাত্মক পরিমাণ উৎপাদন হতে হবে।',
   'A packaging bill has a pack size.': 'প্যাকেজিং বিলের প্যাকের আকার থাকে।',
   'A plan ends on or after it starts.': 'পরিকল্পনার শেষ তারিখ শুরুর তারিখে বা তার পরে হতে হবে।',
+  'A produced lot expires this many days after its manufacturing date; empty: no expiry.':
+    'উৎপাদিত লট উৎপাদন তারিখের এত দিন পরে মেয়াদোত্তীর্ণ হয়; খালি থাকলে মেয়াদ নেই।',
   'A product has one value per parameter.': 'প্রতি প্যারামিটারে পণ্যের একটি মান থাকে।',
   'A product is not a component of itself.': 'কোনো পণ্য নিজের উপাদান হতে পারে না।',
   'A slot ends after it starts.': 'স্লটের শেষ সময় শুরুর পরে হতে হবে।',
@@ -34,11 +37,21 @@ export const bn: Readonly<Record<string, string>> = {
   Approve: 'অনুমোদন করুন',
   Approved: 'অনুমোদিত',
   Available: 'প্রাপ্য',
+  'Available beyond what is required.': 'প্রয়োজনের বাইরে যা প্রাপ্য।',
   'Back to draft': 'খসড়ায় ফেরত নিন',
   Batch: 'ব্যাচ',
+  'Batch {{name}}': 'ব্যাচ {{name}}',
+  'Batch and yield': 'ব্যাচ ও ফলন',
+  'Batch confirmed': 'ব্যাচ নিশ্চিত',
+  'Batch done': 'ব্যাচ সম্পন্ন',
+  'Batch label': 'ব্যাচ লেবেল',
+  'Batch number': 'ব্যাচ নম্বর',
+  Batches: 'ব্যাচসমূহ',
   'Batches and effectiveness': 'ব্যাচ ও কার্যকারিতা',
+  'Batches and labels': 'ব্যাচ ও লেবেল',
   'Before each batch.': 'প্রতিটি ব্যাচের আগে।',
   'Beyond capacity': 'সক্ষমতার বাইরে',
+  'Beyond tolerance': 'সহনসীমার বাইরে',
   'Biggest open orders': 'সবচেয়ে বড় খোলা আদেশ',
   'Bill cost': 'বিলের খরচ',
   'Bill of materials': 'উপকরণ তালিকা',
@@ -59,11 +72,13 @@ export const bn: Readonly<Record<string, string>> = {
   'By-products are other products than the one made, and their shares of the cost stay under 100 %.':
     'উপজাত পণ্য উৎপাদিত পণ্য থেকে ভিন্ন হতে হবে, এবং খরচে এদের মোট অংশ ১০০ %-এর কম থাকবে।',
   Cancel: 'বাতিল করুন',
+  'Cancel this batch?': 'এই ব্যাচ বাতিল করবেন?',
   'Cancel this plan?': 'এই পরিকল্পনা বাতিল করবেন?',
   Cancelled: 'বাতিল',
   Capacity: 'সক্ষমতা',
   'Check availability': 'প্রাপ্যতা যাচাই করুন',
   'Check components': 'উপাদান যাচাই করুন',
+  'Check stock': 'মজুত যাচাই করুন',
   'Choose a bill of materials that may be used: an active one (or a draft, when bills need no approval).':
     'ব্যবহারযোগ্য উপকরণ তালিকা বাছুন: সক্রিয় একটি (বা খসড়া, যখন বিলের অনুমোদন লাগে না)।',
   'Cleanup (minutes)': 'পরিষ্কার (মিনিট)',
@@ -78,12 +93,18 @@ export const bn: Readonly<Record<string, string>> = {
   'Components › Unit': 'উপাদান › একক',
   'Components are short: check availability, or wait for them to come in.':
     'উপাদানে ঘাটতি আছে: প্রাপ্যতা যাচাই করুন, অথবা সেগুলো আসার অপেক্ষা করুন।',
+  'Components short': 'উপাদান ঘাটতি',
+  'Components the pre-flight finds short.': 'প্রাক-যাচাইয়ে যে উপাদান ঘাটতি পাওয়া গেছে।',
   'Components transfer': 'উপাদান স্থানান্তর',
   Configuration: 'কনফিগারেশন',
   Confirm: 'নিশ্চিত করুন',
+  'Confirm? The production orders are made.': 'নিশ্চিত করবেন? উৎপাদন আদেশ তৈরি হবে।',
   Confirmed: 'নিশ্চিত',
   'Confirmed, the components are reserved and the work orders scheduled; done, the product is made.':
     'নিশ্চিত হলে উপকরণ সংরক্ষিত হয় ও কার্যাদেশের সময়সূচি হয়; সম্পন্ন হলে পণ্যটি তৈরি হয়ে গেছে।',
+  Consumed: 'ব্যবহৃত',
+  'Consumed less produced (packs × the pack size for a pack order), once done; negative: a gain.':
+    'সম্পন্ন হলে ব্যবহৃত থেকে উৎপাদিত বাদ (প্যাক আদেশে প্যাক × প্যাকের আকার); ঋণাত্মক হলে লাভ।',
   Cost: 'খরচ',
   'Cost per hour': 'ঘণ্টাপ্রতি খরচ',
   'Costing history': 'খরচের ইতিহাস',
@@ -91,26 +112,34 @@ export const bn: Readonly<Record<string, string>> = {
   'Created At': 'তৈরির সময়',
   'Created By': 'তৈরি করেছেন',
   Date: 'তারিখ',
+  Deficit: 'ঘাটতি',
   'Display Name': 'প্রদর্শিত নাম',
   Done: 'সম্পন্ন',
   Draft: 'খসড়া',
-  'Drafted, forecast (its materials known), approved, scheduled into production orders.':
-    'খসড়া, পূর্বাভাস (উপকরণ জানা), অনুমোদিত, উৎপাদন আদেশে সূচিবদ্ধ।',
+  'Drafted, forecast (its materials known), approved, scheduled into batches.':
+    'খসড়া, পূর্বাভাস (উপকরণ জানা), অনুমোদিত, ব্যাচে সূচিবদ্ধ।',
+  'Drafted, its stock checked (the pre-flight), confirmed into orders, in progress once one starts, done when all are.':
+    'খসড়া, মজুত যাচাই (প্রাক-যাচাই), আদেশে নিশ্চিত, একটি শুরু হলে চলমান, সব শেষ হলে সম্পন্ন।',
   'Drafted, submitted for review, approved into active (the version used), set inactive when superseded; a revision copies it to the next version. A company that needs no approval uses drafts as well.':
     'খসড়া, পর্যালোচনার জন্য জমা, অনুমোদিত হয়ে সক্রিয় (ব্যবহৃত সংস্করণ), প্রতিস্থাপিত হলে নিষ্ক্রিয়; সংশোধনী পরের সংস্করণে কপি করে। অনুমোদন না লাগা প্রতিষ্ঠান খসড়াও ব্যবহার করে।',
   Eligibility: 'যোগ্যতা',
   End: 'শেষ',
+  Execution: 'সম্পাদন',
   'Expected loss (%)': 'প্রত্যাশিত ক্ষতি (%)',
+  'Expires on': 'মেয়াদ শেষ',
   Finish: 'শেষ করুন',
   Finished: 'শেষ হয়েছে',
   'For a formula: the component’s share of the batch; the ratios add up to 100 %.':
     'ফর্মুলার জন্য: ব্যাচে উপাদানের অংশ; অনুপাতগুলো মিলে ১০০ %।',
+  'For a pack order the bulk it packs; else the components in the product’s own unit (a formula’s shares).':
+    'প্যাক আদেশে যে বাল্ক প্যাক হয়; নইলে পণ্যের নিজস্ব এককে উপাদান (ফর্মুলার অংশ)।',
   'For a packaging bill: how much of the product one pack holds, in the product’s unit.':
     'প্যাকেজিং বিলের জন্য: এক প্যাকে পণ্যের কতটা থাকে, পণ্যের এককে।',
   Forecast: 'পূর্বাভাস',
   'Formula (shares of a batch)': 'ফর্মুলা (ব্যাচের অংশ)',
   Formulas: 'ফর্মুলাসমূহ',
   From: 'শুরু',
+  'From the product’s shelf life, on the batch’s lot.': 'পণ্যের সংরক্ষণকাল থেকে, ব্যাচের লটে।',
   'Generate forecast': 'পূর্বাভাস তৈরি করুন',
   'Gross quantity': 'মোট পরিমাণ',
   'HH:MM, 24-hour.': 'HH:MM, ২৪ ঘণ্টা।',
@@ -135,11 +164,17 @@ export const bn: Readonly<Record<string, string>> = {
   'Lines of this kind of bill may only use products of these categories; others are refused with the reason.':
     'এই ধরনের বিলের লাইনে শুধু এই ক্যাটাগরির পণ্য চলে; অন্যগুলো কারণসহ প্রত্যাখ্যাত হয়।',
   'Loss (%)': 'ক্ষতি (%)',
+  'Loss %': 'ক্ষতি %',
   'Loss and tolerance are percentages.': 'ক্ষতি ও সহনসীমা শতাংশে।',
   'Made this month': 'এ মাসে উৎপাদিত',
   'Made, by product': 'পণ্য অনুযায়ী উৎপাদিত',
+  Make: 'তৈরি',
+  'Make: the product from its components. Pack: packs of a made product, taken from its lot.':
+    'তৈরি: উপাদান থেকে পণ্য। প্যাক: তৈরি পণ্যের প্যাক, তার লট থেকে নেওয়া।',
   Makes: 'যা উৎপাদন করে',
   'Manager (bills of materials, work centres, everything)': 'ব্যবস্থাপক (উপকরণ তালিকা, কর্মকেন্দ্র, সবকিছু)',
+  'Manufactured on': 'উৎপাদন তারিখ',
+  'Mark done': 'সম্পন্ন চিহ্নিত করুন',
   Material: 'উপকরণ',
   Materials: 'উপকরণ',
   'Materials short': 'ঘাটতির উপকরণ',
@@ -147,6 +182,7 @@ export const bn: Readonly<Record<string, string>> = {
     'মজুত ও ক্রয়াদেশের তুলনায় পূর্বাভাসে যে উপকরণ ঘাটতি পাওয়া গেছে।',
   Maximum: 'সর্বোচ্চ',
   'Maximum batch': 'সর্বোচ্চ ব্যাচ',
+  'Maximum retail price': 'সর্বোচ্চ খুচরা মূল্য',
   Minimum: 'সর্বনিম্ন',
   'Minimum batch': 'সর্বনিম্ন ব্যাচ',
   Minutes: 'মিনিট',
@@ -158,26 +194,33 @@ export const bn: Readonly<Record<string, string>> = {
   'Nothing is short.': 'কোনো ঘাটতি নেই।',
   'OEE target (%)': 'OEE লক্ষ্য (%)',
   'On hand': 'মজুত',
+  'On hand and not reserved, in the warehouse.': 'গুদামে মজুত ও সংরক্ষিত নয়।',
   'On order': 'ক্রয়াদেশে',
   'On, a bill is submitted for review and approved before an order may use it; off, a draft bill is used at once.':
     'চালু থাকলে বিল পর্যালোচনায় জমা ও অনুমোদিত হওয়ার পরে অর্ডারে ব্যবহার হয়; বন্ধ থাকলে খসড়া বিল সাথে সাথে ব্যবহার হয়।',
   'On: only active bills — submitted, reviewed and approved — make products; off: a draft bill is used as soon as it is written.':
     'চালু: শুধু সক্রিয় বিল — জমা, পর্যালোচিত ও অনুমোদিত — পণ্য তৈরি করে; বন্ধ: খসড়া বিল লেখামাত্র ব্যবহার হয়।',
+  'Once done: the loss against the bill’s expected loss, within its tolerance or beyond it.':
+    'সম্পন্ন হলে: বিলের প্রত্যাশিত ক্ষতির তুলনায় ক্ষতি, সহনসীমার মধ্যে বা বাইরে।',
   Open: 'খোলা',
   Operation: 'অপারেশন',
   Operations: 'অপারেশন',
+  Operator: 'অপারেটর',
+  Order: 'আদেশ',
   'Ordered by': 'যে নথিতে আদেশ',
   'Ordered by Procure.': 'সংগ্রহ দিয়ে আদেশ করা হয়েছে।',
   'Orders by state': 'অবস্থা অনুযায়ী আদেশ',
   'Orders confirmed': 'নিশ্চিত আদেশ',
   'Output transfer': 'উৎপাদিত পণ্যের স্থানান্তর',
   Overview: 'সারসংক্ষেপ',
+  Pack: 'প্যাক',
   'Pack size': 'প্যাকের আকার',
   Packaging: 'প্যাকেজিং',
   'Packaging (a pack of the product)': 'প্যাকেজিং (পণ্যের একটি প্যাক)',
   'Packaging bill': 'প্যাকেজিং বিল',
   'Page {{page}} of {{pages}}': 'পৃষ্ঠা {{page}} / {{pages}}',
   Parameter: 'প্যারামিটার',
+  Pending: 'অপেক্ষমাণ',
   'Per unit': 'প্রতি একক',
   Plan: 'পরিকল্পনা',
   'Plan line': 'পরিকল্পনার লাইন',
@@ -188,11 +231,17 @@ export const bn: Readonly<Record<string, string>> = {
   'Planned for': 'পরিকল্পিত তারিখ',
   'Planned minutes': 'পরিকল্পিত মিনিট',
   'Planned start': 'পরিকল্পিত শুরু',
+  'Pre-flight': 'প্রাক-যাচাই',
+  'Pre-flight line': 'প্রাক-যাচাই লাইন',
+  'Printed on the batch label (MRP).': 'ব্যাচ লেবেলে ছাপা হয় (এমআরপি)।',
+  'Process loss': 'প্রক্রিয়া ক্ষতি',
   'Procure the shortages': 'ঘাটতি সংগ্রহ করুন',
   Procured: 'সংগৃহীত',
   Produce: 'উৎপাদন করুন',
   'Produce? The components are consumed and the product enters stock.':
     'উৎপাদন করবেন? উপাদানগুলো খরচ হবে এবং পণ্যটি মজুদে যোগ হবে।',
+  Produced: 'উৎপাদিত',
+  'Produced lot': 'উৎপাদিত লট',
   Product: 'পণ্য',
   'Product specification': 'পণ্যের স্পেসিফিকেশন',
   'Product specifications': 'পণ্যের স্পেসিফিকেশনসমূহ',
@@ -207,9 +256,11 @@ export const bn: Readonly<Record<string, string>> = {
   'Production plan {{name}}': 'উৎপাদন পরিকল্পনা {{name}}',
   'Production plan approvals': 'উৎপাদন পরিকল্পনার অনুমোদন',
   'Production plan approved': 'উৎপাদন পরিকল্পনা অনুমোদিত',
-  'Production plan scheduled into orders': 'উৎপাদন পরিকল্পনা আদেশে সূচিবদ্ধ',
+  'Production plan scheduled into batches': 'উৎপাদন পরিকল্পনা ব্যাচে সূচিবদ্ধ',
   'Production plan submitted': 'উৎপাদন পরিকল্পনা জমা দেওয়া হয়েছে',
   'Production plans': 'উৎপাদন পরিকল্পনা',
+  'Production schedule': 'উৎপাদন সূচি',
+  'Production schedules': 'উৎপাদন সূচিসমূহ',
   'Production user': 'উৎপাদন ব্যবহারকারী',
   'Products of these categories (and the categories inside them) may be components; others are refused.':
     'এই ক্যাটাগরির (ও এর ভেতরের ক্যাটাগরির) পণ্য উপাদান হতে পারে; অন্যগুলো প্রত্যাখ্যাত।',
@@ -219,8 +270,11 @@ export const bn: Readonly<Record<string, string>> = {
   Reached: 'অর্জিত',
   Ready: 'প্রস্তুত',
   Reference: 'রেফারেন্স',
+  Remaining: 'অবশিষ্ট',
   Required: 'প্রয়োজনীয়',
+  'Required beyond what is available.': 'প্রাপ্যের বাইরে যা প্রয়োজন।',
   'Required beyond what is on hand and on order.': 'মজুত ও ক্রয়াদেশের বাইরে যতটা প্রয়োজন।',
+  Schedule: 'সূচি',
   'Schedule the orders': 'আদেশ সূচিবদ্ধ করুন',
   Scheduled: 'সূচিবদ্ধ',
   Scraps: 'বাতিল মাল',
@@ -230,13 +284,17 @@ export const bn: Readonly<Record<string, string>> = {
   'Set to draft': 'খসড়ায় ফেরত নিন',
   'Setup (minutes)': 'সেটআপ (মিনিট)',
   'Share of the cost (%)': 'খরচে অংশ (%)',
+  'Shelf life (days)': 'সংরক্ষণকাল (দিন)',
   Shift: 'শিফট',
   Shifts: 'শিফটসমূহ',
   Short: 'ঘাটতি',
   Shortage: 'ঘাটতি',
+  'Source lot': 'উৎস লট',
+  'Source order': 'উৎস আদেশ',
   'Specification parameter': 'স্পেসিফিকেশন প্যারামিটার',
   'Specification parameters': 'স্পেসিফিকেশন প্যারামিটারসমূহ',
   Specifications: 'স্পেসিফিকেশনসমূহ',
+  Stage: 'ধাপ',
   Standard: 'স্ট্যান্ডার্ড',
   'Standard: components in quantities. Formula: components as shares of the batch (ratios adding up to 100 %), scaled to any quantity. Packaging: a pack of the product made.':
     'স্ট্যান্ডার্ড: পরিমাণে উপাদান। ফর্মুলা: ব্যাচের অংশ হিসেবে উপাদান (অনুপাত মিলে ১০০ %), যেকোনো পরিমাণে স্কেল করা। প্যাকেজিং: তৈরি পণ্যের একটি প্যাক।',
@@ -246,8 +304,11 @@ export const bn: Readonly<Record<string, string>> = {
     'কর্মকেন্দ্রে শুরু ও শেষ করা হয়; মাঝের মিনিটগুলো লিপিবদ্ধ হয়।',
   State: 'অবস্থা',
   Status: 'অবস্থা',
+  'Stock checked': 'মজুত যাচাই হয়েছে',
   'Submit for approval': 'অনুমোদনের জন্য জমা দিন',
   'Submit for review': 'পর্যালোচনার জন্য জমা দিন',
+  Surplus: 'উদ্বৃত্ত',
+  Target: 'লক্ষ্য',
   'The bill of materials is for another product.': 'এই উপকরণ তালিকা অন্য একটি পণ্যের জন্য।',
   'The bill’s operations for the quantity.': 'এই পরিমাণের জন্য বিলের কার্যক্রম।',
   'The centres the plan runs on; lines use one of them.':
@@ -258,6 +319,11 @@ export const bn: Readonly<Record<string, string>> = {
   'The kind of bill these categories may be components of.':
     'যে ধরনের বিলে এই ক্যাটাগরি উপাদান হতে পারে।',
   'The largest batch it runs at once.': 'এটি একসাথে যত বড় ব্যাচ চালায়।',
+  'The lot a pack order takes its bulk from: the make order’s, once produced.':
+    'প্যাক আদেশ যে লট থেকে বাল্ক নেয়: তৈরি আদেশের, উৎপাদনের পরে।',
+  'The lot the batch is produced into, for a tracked product.':
+    'ট্র্যাক করা পণ্যের জন্য ব্যাচ যে লটে উৎপাদিত হয়।',
+  'The make order a pack order packs.': 'প্যাক আদেশ যে তৈরি আদেশ প্যাক করে।',
   'The materials and the operations together.': 'উপকরণ ও কার্যক্রমের খরচ একসাথে।',
   'The maximum is at or above the minimum.': 'সর্বোচ্চ সর্বনিম্নের সমান বা বেশি।',
   'The net quantity plus the loss: what the order consumes.': 'নিট পরিমাণ যোগ ক্ষতি: অর্ডার যা খরচ করে।',
@@ -267,13 +333,17 @@ export const bn: Readonly<Record<string, string>> = {
     'লক্ষ্যমাত্রার সামগ্রিক যন্ত্র কার্যকারিতা: প্রাপ্যতা × কর্মক্ষমতা × মান।',
   'The packaging bill of a second stage (step 4): its materials are forecast too.':
     'দ্বিতীয় ধাপের প্যাকেজিং বিল (ধাপ ৪): এর উপকরণও পূর্বাভাসে ধরা হয়।',
+  'The process loss as a share of what was consumed.': 'ব্যবহৃত পরিমাণের অংশ হিসেবে প্রক্রিয়া ক্ষতি।',
   'The quantity needed at the component’s cost.': 'প্রয়োজনীয় পরিমাণ উপকরণের খরচে।',
   'The reached value is between the minimum and the maximum.': 'অর্জিত মান সর্বনিম্ন ও সর্বোচ্চের মধ্যে।',
   'The request for quotation or production order Procure made.':
     'সংগ্রহ যে দরপত্র অনুরোধ বা উৎপাদন আদেশ তৈরি করেছে।',
+  'The schedules made from the line, one per batch of its work centre.':
+    'লাইন থেকে তৈরি সূচি, কর্মকেন্দ্রের প্রতি ব্যাচে একটি।',
   'The shift’s length (over midnight when it ends before it starts).':
     'শিফটের দৈর্ঘ্য (শুরুর আগে শেষ হলে মধ্যরাত পার হয়)।',
   'The smallest batch it runs.': 'এটি যত ছোট ব্যাচ চালায়।',
+  'The target less what was produced.': 'লক্ষ্য থেকে উৎপাদিত বাদ।',
   'The total cost divided by the quantity made.': 'মোট খরচকে তৈরি পরিমাণ দিয়ে ভাগ করে।',
   'This product is not an allowed component of the bill’s kind.':
     'এই পণ্য এই ধরনের বিলের অনুমোদিত উপাদান নয়।',
@@ -297,15 +367,22 @@ export const bn: Readonly<Record<string, string>> = {
   'Waiting approval': 'অনুমোদনের অপেক্ষায়',
   'Waiting for approvals.': 'অনুমোদনের অপেক্ষায়।',
   Warehouse: 'গুদাম',
+  'What came out, set before producing; the quantity ordered when empty.':
+    'যা বেরিয়েছে, উৎপাদনের আগে নির্ধারিত; খালি থাকলে আদেশের পরিমাণ।',
   'What goes into the product: the quantity, or the ratio of the batch for a formula.':
     'পণ্যে যা যায়: পরিমাণ, বা ফর্মুলায় ব্যাচের অনুপাত।',
   'What is lost making or packing a batch, as a share of it.':
     'ব্যাচ তৈরি বা প্যাক করতে যা হারায়, এর অংশ হিসেবে।',
   'What is lost of this component in making (spillage, moisture): the gross quantity covers it.':
     'তৈরিতে এই উপাদানের যা হারায় (ছিটকে পড়া, আর্দ্রতা): মোট পরিমাণ তা ধরে।',
+  'What the batch’s make orders produced, once done.':
+    'ব্যাচের তৈরি আদেশগুলো সম্পন্ন হলে যা উৎপাদন করেছে।',
   'What the bill’s lines reach, each product’s value weighted by its share of the batch.':
     'বিলের লাইন যা অর্জন করে, প্রতিটি পণ্যের মান ব্যাচে তার অংশ অনুযায়ী ওজন করে।',
   'What to make': 'কী তৈরি হবে',
+  'When set, a second order packs what is made, by its lot.':
+    'নির্ধারিত থাকলে দ্বিতীয় আদেশ যা তৈরি হয়েছে তা লট অনুযায়ী প্যাক করে।',
+  'Where and when': 'কোথায় ও কখন',
   'Where the products are made and the materials taken; empty: the company’s first warehouse.':
     'যেখানে পণ্য তৈরি হয় ও উপকরণ নেওয়া হয়; খালি থাকলে কোম্পানির প্রথম গুদাম।',
   'Where the same operation may run when this centre is full.':
@@ -315,6 +392,7 @@ export const bn: Readonly<Record<string, string>> = {
     'স্লট কেন কর্মকেন্দ্রে খাপ খায় না — ব্যাচের সীমা, স্লটজুড়ে ঘণ্টার তুলনায় মিনিট (সেটআপ ও পরিষ্কার সহ) —; খাপ খেলে খালি।',
   'With shortages': 'ঘাটতিসহ',
   'Within range': 'সীমার মধ্যে',
+  'Within tolerance': 'সহনসীমার মধ্যে',
   'Work centre': 'কর্মকেন্দ্র',
   'Work centres': 'কর্মকেন্দ্র',
   'Work order': 'কার্যাদেশ',
@@ -322,4 +400,5 @@ export const bn: Readonly<Record<string, string>> = {
   'Work orders in progress': 'চলমান কার্যাদেশ',
   'Work waiting by work centre': 'কর্মকেন্দ্র অনুযায়ী অপেক্ষমাণ কাজ',
   Workcenter: 'কর্মকেন্দ্র',
+  Yield: 'ফলন',
 };

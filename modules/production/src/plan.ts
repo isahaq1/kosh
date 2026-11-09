@@ -69,7 +69,7 @@ export const ProductionPlan = defineModel('production.plan', {
     state: f.state({
       states: PLAN_STATES,
       initial: 'draft',
-      help: 'Drafted, forecast (its materials known), approved, scheduled into production orders.',
+      help: 'Drafted, forecast (its materials known), approved, scheduled into batches.',
       transitions: {
         /** The materials of every line through every level of its bills, with what is on hand and on order. */
         forecast: {
@@ -129,14 +129,14 @@ export const ProductionPlan = defineModel('production.plan', {
           }),
         },
         reject: { from: ['to_approve'], to: 'forecast' },
-        /** One confirmed production order per line, at its start. */
+        /** The lines' batches: schedules split by the work centres' maximum batch. */
         schedule: {
           from: ['approved'],
           to: 'scheduled',
           after: records('production.plan', async (plans) => {
             const env = plans.env as unknown as Env;
             await env.flush();
-            for (const id of plans.ids) await scheduleOrders(env, id as number);
+            for (const id of plans.ids) await generateSchedules(env, id as number);
             for (const p of await plans.load({}))
               await env.emit('production.plan.scheduled', { id: p.id });
           }),
@@ -247,7 +247,15 @@ export const ProductionPlanLine = defineModel('production.plan.line', {
         },
       ),
     }),
-    order: f.many2one('production.order', { ondelete: 'set null', label: 'Production order' }),
+    schedules: f.one2many('production.schedule', 'planLine', { label: 'Batches' }),
+    scheduleCount: f.integer({
+      store: true,
+      label: 'Batches',
+      help: 'The schedules made from the line, one per batch of its work centre.',
+      ...compute('production.plan.line', 'scheduleCount', ['schedules.quantity'], (lines) => {
+        for (const l of lines) l.scheduleCount = l.schedules.length;
+      }),
+    }),
     label: f.char({
       store: true,
       label: 'Line',
@@ -522,32 +530,44 @@ export async function procureShortages(env: Env, id: number): Promise<void> {
   await env.flush();
 }
 
-/** One confirmed production order per line of an approved plan, dated at the line's start, linked to it. */
-export async function scheduleOrders(env: Env, id: number): Promise<void> {
+/**
+ * The plan's batches: each line split evenly into as many schedules as its work centre's maximum batch needs, the
+ * slot divided among them, each linked to its line; lines that already have batches are left alone.
+ */
+export async function generateSchedules(env: Env, id: number): Promise<void> {
   const [p] = await env
     .model('production.plan')
     .browse([id as never])
-    .load({ lines: { product: true, bom: true, order: true }, warehouse: true, company: true });
+    .load({ lines: { workcenter: true, schedules: true }, warehouse: true, company: true });
   if (p === undefined) return;
   for (const l of p.lines) {
-    if (l.order !== null) continue;
-    const made = await env.model('production.order').create([
-      {
-        product: l.product.id,
-        quantity: l.quantity,
-        bom: l.bom?.id ?? null,
-        date: isoDay(l.start),
-        warehouse: p.warehouse?.id ?? null,
-        company: p.company.id,
-        plan: p.id,
-      },
-    ] as never);
-    await env.flush();
-    if (l.bom !== null) await made.confirm();
-    await env
-      .model('production.plan.line')
-      .browse([l.id])
-      .write({ order: made.ids[0] } as never);
+    if (l.schedules.length > 0) continue;
+    const max = l.workcenter.batchMax ?? null;
+    const n = max?.gt(0) ? Math.max(1, Math.ceil(Number(l.quantity.div(max).toString()))) : 1;
+    const start = new Date(l.start as Date).getTime();
+    const end = new Date(l.end as Date).getTime();
+    const slice = Math.max(1, Math.floor((end - start) / n));
+    const each = l.quantity.div(n).toDecimalPlaces(4);
+    let left = l.quantity;
+    for (let i = 0; i < n; i++) {
+      const quantity = i === n - 1 ? left : each;
+      left = left.minus(quantity);
+      await env.model('production.schedule').create([
+        {
+          plan: p.id,
+          planLine: l.id,
+          product: l.product.id,
+          bom: l.bom?.id ?? null,
+          packagingBom: l.packagingBom?.id ?? null,
+          quantity,
+          workcenter: l.workcenter.id,
+          start: new Date(start + i * slice),
+          end: new Date(i === n - 1 ? end : start + (i + 1) * slice),
+          warehouse: p.warehouse?.id ?? null,
+          company: p.company.id,
+        },
+      ] as never);
+    }
   }
   await env.flush();
 }
