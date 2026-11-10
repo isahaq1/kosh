@@ -174,6 +174,8 @@ test('a session opened with its cash; the catalogue for the register; one open s
   });
   expect(again.status).toBe(422);
   const catalogue = await call('rahim', 'GET', `/api/v1/counter/catalogue?shop=${ids['shop']}`);
+  // Plain products carry no family (variants do: RFC 0030 §3.4).
+  expect(catalogue.json.products[0]).toMatchObject({ template: null, values: [] });
   expect(catalogue.json.products.map((p: { name: string }) => p.name)).toContain('Tea 500 g');
 });
 

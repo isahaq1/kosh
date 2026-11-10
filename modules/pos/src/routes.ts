@@ -197,7 +197,14 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
         await env
           .model('product.product')
           .search({ where: { saleOk: true }, order: ['name asc'], limit: 2000 })
-      ).load({ taxes: true, category: true, uom: true, image: true });
+      ).load({
+        taxes: true,
+        category: true,
+        uom: true,
+        image: true,
+        template: true,
+        attributeValues: true,
+      });
       const prices = new Map<number, ReturnType<typeof orm.toDecimal>>();
       if (list !== null)
         for (const p of products)
@@ -218,6 +225,9 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
           category: p.category?.name ?? null,
           uom: p.uom?.name ?? null,
           image: p.image?.id ?? null,
+          // A variant: its family and the values that tell it apart (RFC 0030 §3.4), so the register groups them.
+          template: p.template === null ? null : { id: p.template.id, name: p.template.name },
+          values: [...p.attributeValues].map((v) => v.name),
           taxes: [...p.taxes].map((t) => ({
             id: t.id,
             name: t.name,

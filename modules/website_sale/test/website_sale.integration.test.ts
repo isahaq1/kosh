@@ -529,3 +529,78 @@ test('the demo data loads', async () => {
   });
   expect(JSON.stringify(summary)).toContain('Shop');
 });
+
+test('variants on the Shop (RFC 0030 step 5): the cards name the family, the page offers the choosers and the published variants', async () => {
+  const size = (
+    await call('POST', '/api/v1/models/product.attribute', 'dina', {
+      name: 'Size',
+      display: 'size',
+      values: { create: [{ name: 'S' }, { name: 'L', extraPrice: '50' }] },
+    })
+  ).json;
+  const sizes = (
+    await call(
+      'GET',
+      `/api/v1/models/product.attribute.value?filter=${encodeURIComponent(JSON.stringify({ attribute: size.id }))}&fields=name&order=id+asc`,
+      'dina',
+    )
+  ).json.items as Json[];
+  const template = await call('POST', '/api/v1/models/product.template', 'dina', {
+    name: 'Lungi',
+    category: ids['grocery'],
+    listPrice: '400',
+    lines: { create: [{ attribute: size.id, values: { set: sizes.map((v) => v.id) } }] },
+  });
+  expect(template.status, JSON.stringify(template.json)).toBe(201);
+  expect(
+    (
+      await call(
+        'POST',
+        `/api/v1/models/product.template/${template.json.id}/transitions/generate`,
+        'dina',
+      )
+    ).status,
+  ).toBe(200);
+  const variants = (
+    await call(
+      'GET',
+      `/api/v1/models/product.product?filter=${encodeURIComponent(JSON.stringify({ template: template.json.id }))}&fields=name,listPrice&order=id+asc`,
+      'dina',
+    )
+  ).json.items as Json[];
+  expect(variants.map((v) => v.name)).toEqual(['Lungi (S)', 'Lungi (L)']);
+  // Only the small one is on the shop: the page of it offers the choosers with one variant to pick.
+  expect(
+    (
+      await call('PATCH', `/api/v1/models/product.product/${variants[0].id}`, 'dina', {
+        published: true,
+      })
+    ).status,
+  ).toBe(200);
+  const cards = (await visit('GET', `${SHOP}/products?q=lungi`)).json.products as Json[];
+  expect(cards.map((c) => [c.name, c.template?.name, c.values])).toEqual([
+    ['Lungi (S)', 'Lungi', ['S']],
+  ]);
+  const page = (await visit('GET', `${SHOP}/products/${variants[0].id}`)).json;
+  expect(page.choosers.name).toBe('Lungi');
+  expect(
+    page.choosers.attributes.map((a: Json) => [
+      a.name,
+      a.display,
+      a.values.map((v: Json) => [v.name, v.extraPrice]),
+    ]),
+  ).toEqual([
+    [
+      'Size',
+      'size',
+      [
+        ['S', '0.00'],
+        ['L', '50.00'],
+      ],
+    ],
+  ]);
+  expect(page.choosers.variants.map((v: Json) => [v.id, v.price])).toEqual([
+    [variants[0].id, '400.00'],
+  ]);
+  expect((await visit('GET', `${SHOP}/products/${ids['Rice 5 kg']}`)).json.choosers).toBeNull();
+});

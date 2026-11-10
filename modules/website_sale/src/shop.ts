@@ -90,7 +90,9 @@ export async function catalogue(
   const products = await withAvailability(
     env,
     site,
-    [...(await found.load({ category: true, uom: true }))].map(card),
+    [
+      ...(await found.load({ category: true, uom: true, template: true, attributeValues: true })),
+    ].map(card),
   );
   return { products, total: all.length, page, pages: Math.max(Math.ceil(all.length / size), 1) };
 }
@@ -105,6 +107,64 @@ function card(p: any): Record<string, unknown> {
     category: p.category === null ? null : { id: p.category.id, name: p.category.name },
     unit: p.uom?.name ?? null,
     hasImage: p.image !== null,
+    // A variant: its family and the values that tell it apart (RFC 0030 §3.4); a storefront groups the cards.
+    template: p.template == null ? null : { id: p.template.id, name: p.template.name },
+    values:
+      p.attributeValues == null ? [] : [...p.attributeValues].map((v: { name: string }) => v.name),
+  };
+}
+
+/**
+ * A variant's choosers: the template's attributes with the values offered (display, colour, extra price) and every
+ * published variant with its values, price, picture and availability — a storefront swaps the page as the visitor
+ * picks.
+ */
+async function choosers(
+  env: Env,
+  site: Site | undefined,
+  templateId: number,
+): Promise<Record<string, unknown> | null> {
+  const [t] = await env
+    .model('product.template')
+    .browse([templateId as never])
+    .load({ lines: { attribute: true, values: true } });
+  if (t === undefined) return null;
+  const variants = await (
+    await env.model('product.product').search({
+      where: { template: templateId as never, published: true, saleOk: true } as never,
+      order: ['listPrice asc', 'id asc'],
+    })
+  ).load({ attributeValues: true });
+  const cards = await withAvailability(
+    env,
+    site,
+    [...variants].map((v) => ({
+      id: v.id,
+      values: [...v.attributeValues].map((x) => x.id),
+      price: money(v.listPrice),
+      hasImage: v.image !== null,
+    })),
+  );
+  return {
+    id: t.id,
+    name: t.name,
+    attributes: [...t.lines]
+      .sort((a, b) => a.sequence - b.sequence || a.id - b.id)
+      .map((l) => ({
+        id: l.attribute.id,
+        name: l.attribute.name,
+        display: l.attribute.display,
+        values: [...l.values]
+          .filter((v) => v.active)
+          .sort((a, b) => a.sequence - b.sequence || a.id - b.id)
+          .map((v) => ({
+            id: v.id,
+            name: v.name,
+            color: v.color,
+            extraPrice: money(v.extraPrice),
+          })),
+      })),
+    variants: cards,
   };
 }
 
@@ -153,7 +213,7 @@ export async function productPage(
       where: { id: orm.asId(id, 'product.product'), published: true, saleOk: true },
       limit: 1,
     })
-  ).load({ category: true, uom: true, related: true });
+  ).load({ category: true, uom: true, related: true, template: true, attributeValues: true });
   if (p === undefined) return null;
   const related = await (
     await env.model('product.product').search({
@@ -163,7 +223,7 @@ export async function productPage(
         saleOk: true,
       } as never,
     })
-  ).load({ category: true, uom: true });
+  ).load({ category: true, uom: true, template: true, attributeValues: true });
   const [self] = await withAvailability(env, site, [card(p)]);
   return {
     ...self,
@@ -174,6 +234,7 @@ export async function productPage(
     },
     weight: p.weight === null ? null : p.weight.toString(),
     related: await withAvailability(env, site, [...related].map(card)),
+    choosers: p.template === null ? null : await choosers(env, site, p.template.id as number),
   };
 }
 

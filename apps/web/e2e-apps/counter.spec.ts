@@ -38,6 +38,14 @@ test('a shop, a session, a sale paid in cash, the session closed', async ({ page
     .first()
     .click();
   await expect(page.getByRole('complementary', { name: 'Sale' })).toContainText('Steel beam');
+  // A family tile (the T-shirt template's variants) opens the chooser; the variant picked joins the sale.
+  await search.fill('');
+  await page.getByRole('button', { name: /^T-shirt/ }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: /S \/ Red/ })
+    .click();
+  await expect(page.getByRole('complementary', { name: 'Sale' })).toContainText('T-shirt (S, Red)');
   // The quantity typed (weighed goods are sold the same way).
   await page.getByRole('textbox', { name: /Quantity of Steel beam/ }).fill('2');
   await page.getByRole('button', { name: 'Pay', exact: true }).click();

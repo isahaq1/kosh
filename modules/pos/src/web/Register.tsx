@@ -48,12 +48,26 @@ interface Product {
   readonly price: string;
   readonly category: string | null;
   readonly image: number | null;
+  /** The family of a variant and the values that tell it apart (RFC 0030 §3.4). */
+  readonly template: { readonly id: number; readonly name: string } | null;
+  readonly values: readonly string[];
   readonly taxes: readonly {
     readonly amountType: string;
     readonly rate: string;
     readonly fixedAmount: string;
   }[];
 }
+/** A tile: a product, or a family of variants chosen from a dialog. */
+type Tile =
+  | { readonly kind: 'product'; readonly product: Product }
+  | {
+      readonly kind: 'family';
+      readonly id: number;
+      readonly name: string;
+      readonly image: number | null;
+      readonly from: string;
+      readonly variants: readonly Product[];
+    };
 interface CartLine {
   readonly product: Product;
   quantity: number;
@@ -125,17 +139,48 @@ export function Register({ api }: PageProps): ReactElement {
   const search = useRef<HTMLInputElement>(null);
 
   const products = catalogue.data ?? [];
-  const shown = useMemo(() => {
+  const [family, setFamily] = useState<Extract<Tile, { kind: 'family' }> | null>(null);
+  // Without a search, variants of one template fold into a family tile; a search finds variants by name.
+  const shown = useMemo((): Tile[] => {
     const q = query.trim().toLowerCase();
-    if (q === '') return products.slice(0, 200);
-    return products
-      .filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          (p.code ?? '').toLowerCase().includes(q) ||
-          (p.barcode ?? '').toLowerCase() === q,
-      )
-      .slice(0, 200);
+    if (q !== '')
+      return products
+        .filter(
+          (p) =>
+            p.name.toLowerCase().includes(q) ||
+            (p.code ?? '').toLowerCase().includes(q) ||
+            (p.barcode ?? '').toLowerCase() === q,
+        )
+        .slice(0, 200)
+        .map((product) => ({ kind: 'product', product }));
+    const tiles: Tile[] = [];
+    const families = new Map<number, Extract<Tile, { kind: 'family' }>>();
+    for (const p of products) {
+      if (p.template === null) {
+        tiles.push({ kind: 'product', product: p });
+        continue;
+      }
+      const have = families.get(p.template.id);
+      if (have === undefined) {
+        const made: Extract<Tile, { kind: 'family' }> = {
+          kind: 'family',
+          id: p.template.id,
+          name: p.template.name,
+          image: p.image,
+          from: p.price,
+          variants: [p],
+        };
+        families.set(p.template.id, made);
+        tiles.push(made);
+      } else
+        families.set(p.template.id, {
+          ...have,
+          image: have.image ?? p.image,
+          from: Number(p.price) < Number(have.from) ? p.price : have.from,
+          variants: [...have.variants, p],
+        });
+    }
+    return tiles.map((t) => (t.kind === 'family' ? (families.get(t.id) ?? t) : t)).slice(0, 200);
   }, [products, query]);
   const total = cart.reduce((sum, l) => sum + lineAmount(l, shop?.pricesIncludeTax ?? true), 0);
   const paid = Object.values(payments).reduce((sum, v) => sum + (Number(v) || 0), 0);
@@ -162,13 +207,14 @@ export function Register({ api }: PageProps): ReactElement {
   const onSearchKey = (key: string): void => {
     if (key !== 'Enter') return;
     const q = query.trim().toLowerCase();
+    const only = shown.length === 1 ? shown[0] : undefined;
     const hit =
       products.find((p) => (p.barcode ?? '').toLowerCase() === q) ??
-      (shown.length === 1 ? shown[0] : undefined);
+      (only?.kind === 'product' ? only.product : undefined);
     if (hit !== undefined) {
       add(hit);
       setQuery('');
-    }
+    } else if (only?.kind === 'family') setFamily(only);
   };
   useEffect(() => {
     search.current?.focus();
@@ -363,30 +409,71 @@ export function Register({ api }: PageProps): ReactElement {
         </div>
         {catalogue.isPending ? <Spinner label={t('loading')} /> : null}
         <ul className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-2">
-          {shown.map((p) => (
-            <li key={p.id}>
-              <button
-                type="button"
-                className="grid w-full gap-1 rounded-lg border bg-surface p-2 text-start hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
-                onClick={() => add(p)}
-              >
-                {p.image === null ? (
-                  <span className="aspect-square w-full rounded bg-muted" aria-hidden />
-                ) : (
-                  <img
-                    src={`/api/v1/attachments/${p.image}/download?inline=true&w=256`}
-                    alt=""
-                    className="aspect-square w-full rounded object-cover"
-                  />
-                )}
-                <span className="line-clamp-2 text-sm font-medium">{p.name}</span>
-                <span className="tabular-nums text-xs text-muted-foreground">
-                  {format.decimal(p.price)}
-                </span>
-              </button>
-            </li>
-          ))}
+          {shown.map((tile) => {
+            const p = tile.kind === 'product' ? tile.product : null;
+            const fam = tile.kind === 'family' ? tile : null;
+            const name = fam !== null ? fam.name : (p?.name ?? '');
+            const image = fam !== null ? fam.image : (p?.image ?? null);
+            const price =
+              fam !== null
+                ? t('variantsFrom', { price: format.decimal(fam.from) })
+                : format.decimal(p?.price ?? '0');
+            return (
+              <li key={tile.kind === 'product' ? tile.product.id : `family-${tile.id}`}>
+                <button
+                  type="button"
+                  className="grid w-full gap-1 rounded-lg border bg-surface p-2 text-start hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => (fam !== null ? setFamily(fam) : p === null ? undefined : add(p))}
+                >
+                  {image === null ? (
+                    <span className="aspect-square w-full rounded bg-muted" aria-hidden />
+                  ) : (
+                    <img
+                      src={`/api/v1/attachments/${image}/download?inline=true&w=256`}
+                      alt=""
+                      className="aspect-square w-full rounded object-cover"
+                    />
+                  )}
+                  <span className="line-clamp-2 text-sm font-medium">{name}</span>
+                  <span className="tabular-nums text-xs text-muted-foreground">{price}</span>
+                  {fam !== null ? (
+                    <span className="text-xs text-muted-foreground">
+                      {t('variantCount', { count: fam.variants.length })}
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
         </ul>
+        <Dialog
+          open={family !== null}
+          onOpenChange={(o) => {
+            if (!o) setFamily(null);
+          }}
+          title={t('chooseVariant', { name: family?.name ?? '' })}
+        >
+          <ul className="grid gap-1">
+            {(family?.variants ?? []).map((v) => (
+              <li key={v.id}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full justify-between"
+                  onClick={() => {
+                    add(v);
+                    setFamily(null);
+                  }}
+                >
+                  <span>{v.values.join(' / ') || v.name}</span>
+                  <span className="tabular-nums text-muted-foreground">
+                    {format.decimal(v.price)}
+                  </span>
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </Dialog>
       </section>
 
       <aside
