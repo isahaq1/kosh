@@ -155,6 +155,8 @@ const LOGO = [
 ];
 /** Cyan to violet, one 256-colour step per logo line. */
 const GRADIENT = [51, 45, 39, 33, 63, 99];
+/** The signature beside the logo. */
+const BY = 'by Isahaq';
 
 const SPINNER_UNICODE = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const SPINNER_ASCII = ['|', '/', '-', '\\'];
@@ -251,13 +253,15 @@ export function createUi(
     icon,
     async banner(subtitle) {
       if (!terminal.unicode) {
-        write(`\n  ${s('bold', 'S H U T R O   E R P')}  ${subtitle}\n`);
+        write(`\n  ${s('bold', 'S H U T R O   E R P')}  ${s('gray', BY)}  ${subtitle}\n`);
         return;
       }
       write('\n');
       for (const [i, row] of LOGO.entries()) {
         const colored = terminal.color ? `${ESC}38;5;${GRADIENT[i]}m${row}${ESC}39m` : row;
-        write(`  ${colored}\n`);
+        // The author's name sits to the right of the logo's last row.
+        const signature = i === LOGO.length - 1 ? `  ${s('gray', BY)}` : '';
+        write(`  ${colored}${signature}\n`);
         if (terminal.animate) await new Promise((r) => setTimeout(r, 35));
       }
       write(`  ${s('bold', subtitle)}\n`);
