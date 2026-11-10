@@ -685,6 +685,11 @@ its own code, barcode, cost and picture, and a sales price of the template's plu
 **Price from the template** is switched off and it keeps its own. Generating again keeps existing variants (reactivated
 and repriced), makes the new combinations and archives the ones no longer offered; nothing is deleted.
 
+On a quotation or a purchase order, **Add variants from a template…** opens the grid (RFC 0030 step 5 part 1):
+pick the template, the server lays its variants out as a matrix — the first attributes down, the last across; a
+combination that does not exist is an empty cell — type the quantities, and one line is added per variant, priced
+by the server as any line (`GET /api/v1/product/templates/{id}/grid`).
+
 ### Production (`modules/production`, RFC 0021)
 
 Bills of materials with versions and effective dates, work centres with their cost per hour, and production orders

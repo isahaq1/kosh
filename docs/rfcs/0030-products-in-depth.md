@@ -127,4 +127,10 @@ and units per vendor, product configurator rules beyond exclusions, Shop attribu
   `followsTemplatePrice` on `product.product`, the template's print and import templates. Not yet (part 2): the
   grid on sales and purchase lines, the Shop's choosers, Counter, variant stock in reports, a matrix view of the
   variants on the template.
+- **Step 5 part 1 (2026-11-10).** `modules/product/src/grid.ts`: `templateGrid` (rows of the first attributes'
+  values, the last attribute across, a variant per cell or `null`) at `GET /api/v1/product/templates/:id/grid`;
+  `modules/product/src/web/VariantGrid.tsx` (`product.VariantGrid`, the module's first web contribution:
+  `registerProductWeb`): the dialog on sales and purchase order forms adding one line per typed quantity through
+  the record's lines field. Next: the Shop's choosers and the variant's picture, price and stock; Counter picking
+  the variant; variant stock by template in the reports.
 
