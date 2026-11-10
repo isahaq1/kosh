@@ -57,3 +57,20 @@ describe('calendar and gantt windows', () => {
     );
   });
 });
+
+describe('card values (a top-records card shows any field of its rows)', () => {
+  const format = {
+    number: (n: number) => String(n),
+    decimal: (s: string, scale?: number) => (scale === undefined ? s : Number(s).toFixed(scale)),
+  } as never;
+  test('amounts per currency, one Money amount, a relation, a decimal, nothing', async () => {
+    const { formatValue, numeric } = await import('../src/web/shared.js');
+    expect(formatValue([{ amount: '10', currency: 'BDT' }], format)).toBe('10.00 BDT');
+    expect(formatValue({ amount: '1234.5', currency: 'BDT' }, format)).toBe('1234.50 BDT');
+    expect(formatValue({ id: 7, displayName: 'Bengal Steel' }, format)).toBe('Bengal Steel');
+    expect(formatValue('99.9', format)).toBe('99.9');
+    expect(formatValue(null, format)).toBe('');
+    expect(numeric({ amount: '12.5', currency: 'BDT' })).toBe(12.5);
+    expect(numeric({ id: 7, displayName: 'x' })).toBe(0);
+  });
+});

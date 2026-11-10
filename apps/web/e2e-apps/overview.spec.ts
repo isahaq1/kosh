@@ -37,6 +37,9 @@ test('the Sales overview: KPIs, a chart, the top customers and the open quotatio
   await expect(page.getByRole('region', { name: 'Top customers' })).toContainText(
     /Bengal Steel|Padma/,
   );
+  // The top-records card shows each quotation's amount (a Money value), not a crashed card.
+  await expect(page.getByRole('region', { name: 'Biggest open quotations' })).toContainText(/BDT/);
+  await expect(page.getByText('Something went wrong')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0);
 });
 

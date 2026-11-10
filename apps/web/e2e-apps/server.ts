@@ -539,6 +539,12 @@ const order = (await as('rahim', 'POST', '/api/v1/models/sale.order', {
   },
 })) as { id: number };
 await as('rahim', 'POST', `/api/v1/models/sale.order/${order.id}/transitions/confirm`);
+// An open quotation too: the Sales overview's "Biggest open quotations" card lists it with its amount.
+await as('rahim', 'POST', '/api/v1/models/sale.order', {
+  partner: partners.id,
+  currency: bdt?.id,
+  lines: { create: [{ product: beam.id, name: 'Steel beam', quantity: '5', priceUnit: '1000' }] },
+});
 // A posted invoice, unpaid, due in 30 days: Register payment, aging and reconciliation have something to show.
 const journals = (await as('dina', 'GET', '/api/v1/models/account.journal?fields=id,code'))[
   'items'

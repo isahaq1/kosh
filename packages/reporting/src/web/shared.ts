@@ -53,19 +53,39 @@ export function headerLabel(header: Header, locale: string, empty: string): stri
 }
 
 /** A number for charts and heat maps (the first currency of amounts). */
-export function numeric(value: Value | undefined): number {
+/** A record's field as a card shows it: a Money value is one amount, a relation its display name. */
+export type CardValue =
+  | Value
+  | Amount
+  | { readonly id?: unknown; readonly displayName?: string | null }
+  | boolean
+  | undefined;
+
+const isAmount = (v: unknown): v is Amount =>
+  typeof v === 'object' && v !== null && 'amount' in v && 'currency' in v;
+
+export function numeric(value: CardValue): number {
   if (value === undefined || value === null) return 0;
   if (typeof value === 'number') return value;
   if (typeof value === 'string') return Number(value);
-  return Number(value[0]?.amount ?? 0);
+  if (typeof value === 'boolean') return value ? 1 : 0;
+  if (Array.isArray(value)) return Number((value as readonly Amount[])[0]?.amount ?? 0);
+  return isAmount(value) ? Number(value.amount) : 0;
 }
 
-/** A value as text in the user's locale. */
-export function formatValue(value: Value | undefined, format: Formatter): string {
+/** A value as text in the user's locale (amounts per currency, one amount, a relation's name, a decimal). */
+export function formatValue(value: CardValue, format: Formatter): string {
   if (value === undefined || value === null) return '';
   if (typeof value === 'number') return format.number(value);
   if (typeof value === 'string') return format.decimal(value);
-  return value.map((a: Amount) => `${format.decimal(a.amount, 2)} ${a.currency}`).join(' · ');
+  if (typeof value === 'boolean') return value ? '✓' : '';
+  if (Array.isArray(value))
+    return (value as readonly Amount[])
+      .map((a: Amount) => `${format.decimal(a.amount, 2)} ${a.currency}`)
+      .join(' · ');
+  if (isAmount(value)) return `${format.decimal(value.amount, 2)} ${value.currency}`;
+  const related = value as { readonly id?: unknown; readonly displayName?: string | null };
+  return String(related.displayName ?? related.id ?? '');
 }
 
 /** Relative change (`+12.5%`), or `''` when there is nothing to compare. */
