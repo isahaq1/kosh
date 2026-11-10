@@ -270,6 +270,18 @@ test('variants (RFC 0030 step 4): attributes with values, a template generating 
   const archived = await variantsOf('&archived=only');
   expect(archived.map((v) => v.name).sort()).toEqual(['T-shirt (M, Blue)', 'T-shirt (M, Red)']);
   expect((await callAs('pat', 'GET', `${T}?fields=variantCount`)).json.variantCount).toBe(3);
+  // The grid (part 2): sizes down, colours across, the excluded cell empty.
+  const grid = (await callAs('pat', 'GET', `/api/v1/product/templates/${template.json.id}/grid`))
+    .json;
+  expect(grid.attributes).toEqual(['Size', 'Colour']);
+  expect(grid.rows.map((r: Json) => r.label)).toEqual(['S', 'L']);
+  expect(grid.columns.map((c: Json) => c.name)).toEqual(['Red', 'Blue']);
+  const cell = (row: string, colour: string) =>
+    grid.cells[`${by(sizes, row)}|${by(colours, colour)}`];
+  expect(cell('S', 'Red')).toMatchObject({ name: 'T-shirt (S, Red)', listPrice: '480' });
+  expect(cell('L', 'Red')).toMatchObject({ listPrice: '570' });
+  expect(cell('L', 'Blue')).toBeNull();
+  expect((await callAs('pat', 'GET', '/api/v1/product/templates/999999/grid')).status).toBe(404);
   // A template without attributes cannot generate.
   const bare = (await callAs('pat', 'POST', '/api/v1/models/product.template', { name: 'Plain' }))
     .json;

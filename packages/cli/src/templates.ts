@@ -106,6 +106,7 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     label: 'Products: prices, units of measure and taxes (VAT)',
     icon: '📦',
     server: 'product',
+    web: 'registerProductWeb',
   },
   sales: { label: 'Sales: quotations and sales orders', icon: '🛒', server: 'sales' },
   purchase: {

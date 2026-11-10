@@ -539,6 +539,42 @@ const order = (await as('rahim', 'POST', '/api/v1/models/sale.order', {
   },
 })) as { id: number };
 await as('rahim', 'POST', `/api/v1/models/sale.order/${order.id}/transitions/confirm`);
+// A product template with variants (RFC 0030): the variant grid on the order forms has something to offer.
+const size = (await as('dina', 'POST', '/api/v1/models/product.attribute', {
+  name: 'Size',
+  display: 'size',
+  values: { create: [{ name: 'S' }, { name: 'M' }, { name: 'L', extraPrice: '50' }] },
+})) as { id: number };
+const colour = (await as('dina', 'POST', '/api/v1/models/product.attribute', {
+  name: 'Colour',
+  display: 'swatch',
+  values: {
+    create: [
+      { name: 'Red', color: '#ff0000' },
+      { name: 'Blue', color: '#0000ff' },
+    ],
+  },
+})) as { id: number };
+const valuesOf = async (attribute: number) =>
+  (
+    (await as(
+      'dina',
+      'GET',
+      `/api/v1/models/product.attribute.value?filter=${encodeURIComponent(JSON.stringify({ attribute }))}&fields=id`,
+    )) as { items: { id: number }[] }
+  ).items.map((v) => v.id);
+const tshirt = (await as('dina', 'POST', '/api/v1/models/product.template', {
+  name: 'T-shirt',
+  listPrice: '500',
+  standardPrice: '200',
+  lines: {
+    create: [
+      { attribute: size.id, values: { set: await valuesOf(size.id) } },
+      { attribute: colour.id, values: { set: await valuesOf(colour.id) } },
+    ],
+  },
+})) as { id: number };
+await as('dina', 'POST', `/api/v1/models/product.template/${tshirt.id}/transitions/generate`);
 // An open quotation too: the Sales overview's "Biggest open quotations" card lists it with its amount.
 await as('rahim', 'POST', '/api/v1/models/sale.order', {
   partner: partners.id,

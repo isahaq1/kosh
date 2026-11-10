@@ -5,14 +5,16 @@
  */
 import { defineModule } from '@kosh/modules-sdk';
 import { reporting } from '@kosh/reporting';
-import { base } from '@kosh/server';
+import { base, type ModuleContext } from '@kosh/server';
 import { storage } from '@kosh/storage';
 import { action, form, kanban, list, search } from '@kosh/views';
 import { productDemo } from './demo.js';
+import { registerGridRoutes } from './grid.js';
 import { AccountTax, ProductCategory, ProductProduct, productShutro, UomUom } from './module.js';
 import { ProductPricelist } from './pricelist.js';
 import { ProductAttribute, ProductTemplate } from './variants.js';
 
+export { type Grid, type GridVariant, registerGridRoutes, templateGrid } from './grid.js';
 export { AccountTax, ProductCategory, ProductProduct, productShutro, UomUom } from './module.js';
 export { type PriceFound, ProductPricelist, ProductPricelistRule, priceFor } from './pricelist.js';
 export {
@@ -23,12 +25,13 @@ export {
   type TaxRule,
   taxRule,
 } from './taxes.js';
-
 export const product: ReturnType<typeof defineModule> = defineModule({
   shutro: productShutro,
   kosh: '^0.1.0',
   hooks: { demo: productDemo },
   depends: [base, storage, reporting],
+  // The variant grid of a template (RFC 0030 §3.4), read by the order forms.
+  routes: (context: ModuleContext) => registerGridRoutes(context),
   events: [
     { topic: 'product.template.generated', model: 'product.template', label: 'Variants generated' },
   ],

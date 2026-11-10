@@ -438,6 +438,7 @@ export const sales: ReturnType<typeof defineModule> = defineModule({
           'currency',
         ]),
         k.group('dates', ['name', 'dateOrder', 'validityDate', 'user']),
+        k.component('variant_grid', 'product.VariantGrid', { field: 'lines' }),
         k.lines(
           'lines',
           [

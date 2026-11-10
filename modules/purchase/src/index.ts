@@ -1457,6 +1457,7 @@ export const purchase: ReturnType<typeof defineModule> = defineModule({
           'advancePercent',
         ]),
         k.group('dates', ['name', 'dateOrder', 'datePlanned', 'user', 'origin']),
+        k.component('variant_grid', 'product.VariantGrid', { field: 'lines' }),
         k.lines(
           'lines',
           [
