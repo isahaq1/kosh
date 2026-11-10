@@ -690,6 +690,12 @@ pick the template, the server lays its variants out as a matrix — the first at
 combination that does not exist is an empty cell — type the quantities, and one line is added per variant, priced
 by the server as any line (`GET /api/v1/product/templates/{id}/grid`).
 
+On the **Shop**, a variant's card names its family and values, and its page carries the **choosers**: the
+template's attributes with the values offered (display, colour, extra price) and every published variant with its
+values, price, picture and availability, for the storefront to swap as the visitor picks. At the **Counter**, the
+variants of a template fold into one family tile ("from" the lowest price); tapping it opens the chooser and the
+variant picked joins the sale (part 2).
+
 ### Production (`modules/production`, RFC 0021)
 
 Bills of materials with versions and effective dates, work centres with their cost per hour, and production orders

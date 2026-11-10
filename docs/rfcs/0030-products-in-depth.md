@@ -133,4 +133,9 @@ and units per vendor, product configurator rules beyond exclusions, Shop attribu
   `registerProductWeb`): the dialog on sales and purchase order forms adding one line per typed quantity through
   the record's lines field. Next: the Shop's choosers and the variant's picture, price and stock; Counter picking
   the variant; variant stock by template in the reports.
+- **Step 5 part 2 (2026-11-10).** The Shop's cards carry `template` and `values`; a variant's page carries
+  `choosers` (the template's attributes and values, the published variants with price, picture and availability).
+  The Counter's catalogue carries `template` and `values`; the register folds a template's variants into a family
+  tile and picks the variant from a dialog. Not done: variant stock by template in the Stockroom reports (the
+  product list and search group by template already); a matrix view on the template.
 
