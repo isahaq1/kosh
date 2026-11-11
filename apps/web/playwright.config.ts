@@ -9,6 +9,15 @@ const API_PORT = 3100;
 const APPS_API_PORT = 3101;
 const APPS_WEB_PORT = 4174;
 
+/**
+ * The specs written before the peek panel (RFC 0033) open records on their full page: the browser's preference
+ * switches peeking off for them; `peek.spec.ts` switches it back on.
+ */
+const noPeek = (origin: string) => ({
+  cookies: [],
+  origins: [{ origin, localStorage: [{ name: 'kosh.peek', value: 'off' }] }],
+});
+
 export default defineConfig({
   testDir: './e2e',
   timeout: 45_000,
@@ -18,11 +27,19 @@ export default defineConfig({
   reporter: process.env['CI'] === undefined ? 'list' : [['list'], ['html', { open: 'never' }]],
   use: { baseURL: 'http://localhost:4173', trace: 'retain-on-failure', locale: 'en-US' },
   projects: [
-    { name: 'chromium', testDir: './e2e', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'chromium',
+      testDir: './e2e',
+      use: { ...devices['Desktop Chrome'], storageState: noPeek('http://localhost:4173') },
+    },
     {
       name: 'apps',
       testDir: './e2e-apps',
-      use: { ...devices['Desktop Chrome'], baseURL: `http://localhost:${APPS_WEB_PORT}` },
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: `http://localhost:${APPS_WEB_PORT}`,
+        storageState: noPeek(`http://localhost:${APPS_WEB_PORT}`),
+      },
     },
   ],
   webServer: [

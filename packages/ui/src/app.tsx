@@ -66,6 +66,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { I18nextProvider, useTranslation } from 'react-i18next';
@@ -89,6 +90,7 @@ import { DesignProvider } from './design.js';
 import { addMessages, createI18n, directionOf } from './i18n/index.js';
 import { LANGUAGES } from './i18n/messages.js';
 import { cn } from './lib/cn.js';
+import { FormSkeleton } from './motion.js';
 import {
   claimOfflineCache,
   createOfflinePersister,
@@ -114,7 +116,7 @@ import { Sidebar, SidebarDrawer, useSidebarCollapsed } from './shell/Sidebar.js'
 import { ShortcutsHelp, useShortcuts } from './shell/shortcuts.js';
 import { TwoFactorSetup } from './shell/TwoFactorSetup.js';
 import { ToastProvider, useToast } from './shell/toast.js';
-import { neighbours } from './views/listMemory.js';
+import { neighbours, onListRemembered } from './views/listMemory.js';
 
 interface Services {
   readonly api: KoshApi;
@@ -852,6 +854,8 @@ function useServedView(action: WindowAction | undefined, type: ViewType) {
 interface ActionSearch {
   readonly view?: string;
   readonly q?: string;
+  /** The record open in the peek panel beside the view (RFC 0033 §3.2). */
+  readonly peek?: number;
 }
 
 /** A client action: the page a module registered (RFC 0008). */
@@ -932,8 +936,20 @@ function WindowActionPage(): ReactElement {
       params: { app, action: actionId },
       search: { ...search, q: encodeSearch(next) || undefined } as never,
     });
-  const open = (id: number | 'new') =>
+  const openFull = (id: number | 'new') =>
     void navigate({ to: '/$app/a/$action/$id', params: { app, action: actionId, id: String(id) } });
+  // A row of a list or a board opens beside it (the peek panel): the view keeps its place, its scroll and its
+  // selection. New records, phones and views other than lists and boards open the full page.
+  const peeks =
+    (type === 'list' || type === 'kanban') && action.data.views.includes('form') && peekEnabled();
+  const setPeek = (id: number | undefined) =>
+    void navigate({
+      to: '/$app/a/$action',
+      params: { app, action: actionId },
+      search: { ...search, peek: id } as never,
+      replace: search.peek !== undefined && id !== undefined,
+    });
+  const open = (id: number | 'new') => (id === 'new' || !peeks ? openFull(id) : setPeek(id));
   const Renderer = registry.view(served.data.view.component ?? type);
   const icons = {
     list: List,
@@ -1041,7 +1057,138 @@ function WindowActionPage(): ReactElement {
           onDrill={drill}
         />
       )}
+      {search.peek === undefined || !action.data.views.includes('form') ? null : (
+        <PeekPanel
+          key={search.peek}
+          action={action.data}
+          recordId={search.peek}
+          onClose={() => setPeek(undefined)}
+          onPeek={setPeek}
+          onFull={() => openFull(search.peek as number)}
+        />
+      )}
     </section>
+  );
+}
+
+/** Peeking is for wide screens, unless this browser turned it off (`localStorage['kosh.peek'] = 'off'`). */
+function peekEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    if (window.localStorage.getItem('kosh.peek') === 'off') return false;
+  } catch {
+    // No storage (private mode): the default applies.
+  }
+  return window.matchMedia?.('(min-width: 1024px)').matches ?? false;
+}
+
+/**
+ * The peek panel (RFC 0033 §3.2): the record's own form beside the view it was opened from. `Esc` closes it,
+ * `Alt+↓` / `Alt+↑` peek at the next and previous record of the list, `Ctrl+Enter` opens the full page.
+ */
+function PeekPanel({
+  action,
+  recordId,
+  onClose,
+  onPeek,
+  onFull,
+}: {
+  readonly action: WindowAction;
+  readonly recordId: number;
+  readonly onClose: () => void;
+  readonly onPeek: (id: number) => void;
+  readonly onFull: () => void;
+}): ReactElement {
+  const { registry } = useServices();
+  const { t } = useTranslation();
+  const served = useServedView(action, 'form');
+  // The list beside the panel may load (or reorder) after the panel: its neighbours are read again then.
+  const [, setListVersion] = useState(0);
+  useEffect(() => onListRemembered(() => setListVersion((n) => n + 1)), []);
+  const near = neighbours(action.model, recordId);
+  const panel = useRef<HTMLElement>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the handlers read the latest neighbours each time
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape' && !e.defaultPrevented) {
+        // A dialog or a menu inside the panel closes first: only a bare Escape closes the panel.
+        if (document.querySelector('[role="dialog"]:not([data-kosh-peek]), [role="menu"]') !== null)
+          return;
+        e.preventDefault();
+        onClose();
+      } else if (e.altKey && e.key === 'ArrowDown' && near?.next !== undefined) {
+        e.preventDefault();
+        onPeek(near.next);
+      } else if (e.altKey && e.key === 'ArrowUp' && near?.prev !== undefined) {
+        e.preventDefault();
+        onPeek(near.prev);
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        onFull();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [recordId, near?.next, near?.prev]);
+  const Form =
+    served.data === undefined ? undefined : registry.form(served.data.view.component ?? 'form');
+  return (
+    <aside
+      ref={panel}
+      data-kosh-peek
+      aria-label={t('views.peek')}
+      className="kosh-peek fixed inset-y-0 end-0 z-30 flex w-[min(48rem,60vw)] flex-col border-s bg-background shadow-2xl"
+    >
+      <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+        <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={near?.prev === undefined}
+            title="Alt+↑"
+            onClick={() => near?.prev !== undefined && onPeek(near.prev)}
+          >
+            {t('views.previous')}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={near?.next === undefined}
+            title="Alt+↓"
+            onClick={() => near?.next !== undefined && onPeek(near.next)}
+          >
+            {t('views.next')}
+          </Button>
+          {near === undefined ? null : (
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {near.position} / {near.total}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          <Button size="sm" variant="secondary" title="Ctrl+Enter" onClick={onFull}>
+            {t('views.openFull')}
+          </Button>
+          <Button size="sm" variant="ghost" title="Esc" onClick={onClose}>
+            {t('views.close')}
+          </Button>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
+        {served.isError ? (
+          <Alert>{served.error.message}</Alert>
+        ) : Form === undefined || served.data === undefined ? (
+          <FormSkeleton label={t('app.loading')} />
+        ) : (
+          <Form
+            served={served.data}
+            recordId={recordId}
+            onSaved={() => undefined}
+            onBack={onClose}
+          />
+        )}
+      </div>
+    </aside>
   );
 }
 
@@ -1235,6 +1382,9 @@ const actionRoute = createRoute({
   validateSearch: (raw: Record<string, unknown>): ActionSearch => ({
     ...(typeof raw['view'] === 'string' ? { view: raw['view'] } : {}),
     ...(typeof raw['q'] === 'string' ? { q: raw['q'] } : {}),
+    ...(Number.isSafeInteger(Number(raw['peek'])) && Number(raw['peek']) > 0
+      ? { peek: Number(raw['peek']) }
+      : {}),
   }),
 });
 const recordRoute = createRoute({

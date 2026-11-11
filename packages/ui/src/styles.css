@@ -172,3 +172,34 @@
     box-shadow: 0 0 0 4px transparent;
   }
 }
+
+/* The peek panel (RFC 0033 §3.2): slides in from the edge; the form's own bar sticks to the panel's top. */
+.kosh-peek {
+  animation: kosh-peek-in var(--motion) var(--motion-ease) 1;
+}
+.kosh-peek [data-kosh-form] > .sticky {
+  top: 0;
+}
+@keyframes kosh-peek-in {
+  from {
+    transform: translateX(2rem);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+[dir="rtl"] .kosh-peek {
+  animation-name: kosh-peek-in-rtl;
+}
+@keyframes kosh-peek-in-rtl {
+  from {
+    transform: translateX(-2rem);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}

@@ -15,6 +15,14 @@ export function rememberList(
   total: number,
 ): void {
   lists.set(model, { ids, offset, total });
+  for (const listener of listeners) listener();
+}
+
+const listeners = new Set<() => void>();
+/** Calls `listener` whenever a list is remembered (the peek panel follows the list beside it). */
+export function onListRemembered(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }
 
 /** Where `id` is in the model's last list, and its neighbours there. */
