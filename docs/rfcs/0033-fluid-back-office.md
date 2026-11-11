@@ -126,4 +126,11 @@ performance budget unchanged (a 10k-row list still under 300 ms API time; no lay
   Wired into list cells, list totals, form fields (the saved value changing) and the form's loading state. Not
   yet: kanban cards sliding between columns, count-up on stat tiles and overview KPIs, skeletons for boards and
   dashboards.
+- **Step 2 (2026-11-12).** The peek panel in `packages/ui/src/app.tsx` (`PeekPanel`): a row of a list or a board
+  opens the record's own form in a panel beside the view (`?peek=<id>` in the URL, so a link, Back and a reload
+  land there); Previous / Next and `Alt+↑` / `Alt+↓` follow the list's order (`onListRemembered` keeps the panel
+  in step with the list beside it), `Ctrl+Enter` and a button open the full page, `Esc` closes. On by default on
+  screens 1024 px and wider; new records, narrower screens and the other view types open the full page; a browser
+  switches it off with `localStorage['kosh.peek'] = 'off'` (the specs written before it run that way). Not yet: a
+  switch for it in the user's preferences, the bottom sheet on phones, `peek: false` per view, calendar and Gantt.
 

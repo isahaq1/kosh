@@ -440,3 +440,15 @@ Developer mode off, nothing changes on screen.
 
 Code splitting per app (ECharts and MapLibre load on demand; the rest is one bundle), `kosh inspect view` on the
 CLI. The chatter is `@kosh/messaging/web` (docs/messaging.md). Performance budgets: docs/benchmarks.md.
+
+## The peek panel and motion (RFC 0033)
+
+A click on a row of a list or a card of a board opens the record **beside** the view, in a panel: the list keeps
+its scroll, selection and search. **Previous** / **Next** (`Alt+↑` / `Alt+↓`) move through the list's order,
+**Open the full page** (`Ctrl+Enter`) goes to the record page, `Esc` closes the panel; the URL carries
+`?peek=<id>`. Screens narrower than 1024 px, new records and the other view types open the full page.
+
+Values that change under the reader (another user's edit, a transition) **flash once** on lists and forms, list
+totals **count up** to their new value, and a record page loads as a skeleton of itself. With the system's
+"reduce motion" setting nothing animates.
+
