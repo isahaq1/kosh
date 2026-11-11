@@ -1,6 +1,6 @@
 # RFC 0033 — A fluid back-office: faster to read, faster to act, alive
 
-- Status: **Proposed** (2026-11-12) — waiting for approval
+- Status: **Accepted** (2026-11-12, with the proposed defaults: autosave on for masters and drafts, peek by default on desktop)
 - Builds on: RFC 0007 (design system), RFC 0010 (palette, shortcuts, live updates, offline), RFC 0018 (sidebar,
   record pages, saved views as tabs, Today), RFC 0022 (tiles, overviews, widgets, guidance)
 - Asked for: "the UI should be the most modern and more dynamic than Odoo"
@@ -117,3 +117,13 @@ performance budget unchanged (a 10k-row list still under 300 ms API time; no lay
 2. **The peek panel as the default click** on a list row — or the full page by default with peek on `Space`?
    (Proposed: peek by default on desktop, full page on phones.)
 3. Is the order of steps right for you, or should a later step (for instance autosave) come first?
+
+## Implementation notes
+
+- **Step 1 (2026-11-12).** `packages/ui/src/motion.tsx`: `useChanged` / `Flash` (a value that changes for the same
+  record flashes once; a recycled list row does not), `CountUp` (exact decimals, the last frame is the exact
+  value, a jump under reduced motion), `FormSkeleton`; the `--motion-*` tokens and `kosh-flash` in the styles.
+  Wired into list cells, list totals, form fields (the saved value changing) and the form's loading state. Not
+  yet: kanban cards sliding between columns, count-up on stat tiles and overview KPIs, skeletons for boards and
+  dashboards.
+
