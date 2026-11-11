@@ -17,6 +17,8 @@ import type { ReactElement } from 'react';
 import { Explain } from '../components/Explain.js';
 import { useKosh } from '../context.js';
 import { cn } from '../lib/cn.js';
+import { useLiveFigures } from '../live.js';
+import { Flash } from '../motion.js';
 
 // The badge's tones (primitives), on the figure only.
 const TONES = {
@@ -72,6 +74,8 @@ export function StatsRow({
     (tile) => tile.visibleWhen === undefined || holds(tile.visibleWhen, values, env),
   );
   const wheres = tiles.map((tile) => resolveRecord(tile.where, values));
+  // The tiles follow the records they count (RFC 0033 §3.5): a new invoice moves the customer's tile by itself.
+  useLiveFigures(tiles.map((tile) => tile.model));
   const results = useQueries({
     queries: tiles.map((tile, i) => ({
       queryKey: ['stat', tile.model, wheres[i], tile.measure ?? 'count', version],
@@ -123,7 +127,13 @@ export function StatsRow({
                 TONES[tile.tone ?? 'neutral'],
               )}
             >
-              {result?.isPending === true ? '…' : value.text}
+              {result?.isPending === true ? (
+                '…'
+              ) : (
+                <Flash watch={value.text} identity={`${tile.id}:${JSON.stringify(wheres[i])}`}>
+                  {value.text}
+                </Flash>
+              )}
               {value.currency === undefined ? null : (
                 <span className="ms-1 text-xs font-normal text-muted-foreground">
                   {value.currency}

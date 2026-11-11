@@ -25,6 +25,40 @@ export function useLiveModel(model: string): void {
   );
 }
 
+/** Query keys of figures computed from a model: stat tiles, report cards and charts, top-record lists. */
+const FIGURE_KEYS = ['stat', 'report', 'list'] as const;
+
+/**
+ * Keeps figures current (RFC 0033 §3.5): the tiles of a record page and the cards of a dashboard refetch when a
+ * record of a model they read changes — at most once a second per model, however many records change.
+ */
+export function useLiveFigures(models: readonly string[]): void {
+  const { realtime } = useKosh();
+  const queryClient = useQueryClient();
+  const key = [...new Set(models)].sort().join(',');
+  useEffect(() => {
+    if (realtime === undefined || realtime === null || key === '') return;
+    const timers = new Map<string, ReturnType<typeof setTimeout>>();
+    const stops = key.split(',').map((model) =>
+      realtime.subscribe(`model:${model}`, () => {
+        if (timers.has(model)) return;
+        timers.set(
+          model,
+          setTimeout(() => {
+            timers.delete(model);
+            for (const k of FIGURE_KEYS)
+              void queryClient.invalidateQueries({ queryKey: [k, model] });
+          }, 1000),
+        );
+      }),
+    );
+    return () => {
+      for (const stop of stops) stop();
+      for (const timer of timers.values()) clearTimeout(timer);
+    };
+  }, [realtime, key, queryClient]);
+}
+
 /** What a live record knows. */
 export interface LiveRecord {
   /** Someone else changed the record while this screen had unsaved changes (cleared by `dismiss`). */

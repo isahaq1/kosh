@@ -14,7 +14,18 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { Alert, Button, Dialog, Input, Label, Spinner, useKosh, type ViewProps } from '@kosh/ui';
+import {
+  Alert,
+  Button,
+  Dialog,
+  Flash,
+  Input,
+  Label,
+  Spinner,
+  useKosh,
+  useLiveFigures,
+  type ViewProps,
+} from '@kosh/ui';
 import type { Condition, MeasureNode, MeasureSpec } from '@kosh/views';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GripVertical, Plus, Trash2 } from 'lucide-react';
@@ -95,6 +106,8 @@ function CardBody({
 }): ReactElement {
   const { api, format } = useKosh();
   const { t } = useTranslation('reporting');
+  // The card follows the records it reads (RFC 0033 §3.5), at most once a second.
+  useLiveFigures([card.model]);
   const measure: MeasureNode = { id: 'v', measure: measureOf(card.measure), label: card.title };
   const kpiQuery: ReportQuery | null =
     card.kind === 'kpi' || card.kind === 'pivot'
@@ -163,7 +176,11 @@ function CardBody({
         : change(value, data.comparison.cells['[]']?.['[]']?.['v']);
     return (
       <div>
-        <p className="text-3xl font-semibold tabular-nums">{formatValue(value ?? 0, format)}</p>
+        <p className="text-3xl font-semibold tabular-nums">
+          <Flash watch={formatValue(value ?? 0, format)} identity={card.title}>
+            {formatValue(value ?? 0, format)}
+          </Flash>
+        </p>
         {delta === null ? null : (
           <p className={`text-sm ${delta.up ? 'text-success' : 'text-danger'}`}>{delta.text}</p>
         )}

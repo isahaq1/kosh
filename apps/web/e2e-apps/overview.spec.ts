@@ -62,3 +62,36 @@ test('a card hidden by the user stays hidden after a reload; Show brings it back
   await page.getByRole('button', { name: /Show the 1 hidden card/ }).click();
   await expect(page.getByRole('region', { name: 'Open quotations', exact: true })).toBeVisible();
 });
+
+test('a KPI moves by itself when a record it counts is created (RFC 0033 step 5)', async ({
+  page,
+}) => {
+  await signIn(page, 'rahim');
+  await page.goto('/sales/a/sales.action_overview');
+  const kpi = page.getByRole('region', { name: 'Open quotations', exact: true });
+  await expect(kpi).toBeVisible();
+  const figure = kpi.locator('p.text-3xl');
+  await expect(figure).toHaveText(/\d/);
+  const before = (await figure.innerText()).trim();
+  // Another quotation, made through the API: no reload, no click on this page.
+  const made = await page.evaluate(async () => {
+    const csrf = sessionStorage.getItem('kosh.csrf') ?? '';
+    const idOf = (v: unknown) =>
+      typeof v === 'object' && v !== null ? (v as { id: number }).id : (v as number);
+    const [order] = (
+      (await (await fetch('/api/v1/models/sale.order?limit=1&fields=partner,currency')).json()) as {
+        items: { partner: unknown; currency: unknown }[];
+      }
+    ).items;
+    const res = await fetch('/api/v1/models/sale.order', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-csrf-token': csrf },
+      body: JSON.stringify({ partner: idOf(order?.partner), currency: idOf(order?.currency) }),
+    });
+    return res.status;
+  });
+  expect(made).toBe(201);
+  await expect(figure).not.toHaveText(before);
+  // The figure that changed is marked as changed (it flashes once).
+  await expect(kpi.locator('[data-changed="true"]')).toHaveCount(1);
+});
