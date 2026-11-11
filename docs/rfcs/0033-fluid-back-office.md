@@ -142,4 +142,11 @@ performance budget unchanged (a 10k-row list still under 300 ms API time; no lay
   (a half-typed line or a record without its required fields must not be sent), and there is no save on blur. Not
   yet: `autosave: false` per form, a switch in the user's preferences (a browser turns it off with
   `localStorage['kosh.autosave'] = 'off'`, as the earlier specs do).
+- **Step 4 (2026-11-12).** `packages/ui/src/views/listActs.tsx`: **click to filter** (a cell of a relation,
+  selection, status or yes/no column shows "Only this …" on hover; the list's search gains the condition through
+  the same path as a drill-down); **Set a field…** in the selection bar (a column, its own editor, how many
+  records change, one update per record, Undo when every selected row is on the page); **quick add** (`quickAdd`
+  on list views: a row of the named fields at the foot of the list, Enter creates and clears, the server's refusal
+  shown in the row — declared on Product groups first). Not yet: "not this" on a cell, the filter as a named chip
+  (it joins the search's custom condition), quick add on more lists, footer totals already count up (step 1).
 

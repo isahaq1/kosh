@@ -458,3 +458,9 @@ seconds. A required field left empty holds the save back and says so. New record
 past draft keep the **Save** button. When someone else saved the same record first, fields only you changed are
 saved on top of theirs; a field you both changed shows both values and waits for **Keep mine** or **Take theirs**.
 
+**Lists that act.** Hovering a cell of a relation, selection, status or yes/no column shows **Only this …**: a
+click narrows the list to the rows sharing the value. With rows selected, **Set a field…** in the selection bar
+sets one column for all of them (each record checked and logged by the server; **Undo** in the toast). A list
+that declares `quickAdd: ['name', 'code']` gets a row at its foot: type, Enter, the record is there and the row is
+ready for the next.
+
