@@ -49,7 +49,6 @@ import {
   MenuContent,
   MenuItem,
   MenuTrigger,
-  Spinner,
   Tabs,
   TabsContent,
   TabsList,
@@ -59,6 +58,7 @@ import { useKosh } from '../context.js';
 import { useDesign } from '../design.js';
 import { cn } from '../lib/cn.js';
 import { useLiveRecord } from '../live.js';
+import { Flash, FormSkeleton } from '../motion.js';
 import { setPrefill } from '../prefill.js';
 import type { FormProps } from '../registry.js';
 import { useToast } from '../shell/toast.js';
@@ -443,6 +443,8 @@ export function FormView({
   const [changes, setChanges] = useState<Values>(proposedChanges);
   /** The latest onchange request: older answers are ignored. */
   const onchangeSequence = useRef(0);
+  /** The onchange still on its way: saving waits for it, so what it proposes (a receipt's locations) is saved too. */
+  const onchangePending = useRef<Promise<void>>(Promise.resolve());
   const [lines, setLines] = useState<ReadonlyMap<string, LineState>>(proposedLines);
   const [problem, setProblem] = useState<ApiError | null>(null);
   const [warnings, setWarnings] = useState<readonly string[]>([]);
@@ -552,6 +554,14 @@ export function FormView({
     },
     onError: fail,
   });
+  // Save asked for: sent from the render that holds the pending onchange's answer (state set after it resolved).
+  const [saveAsked, setSaveAsked] = useState(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs once per request to save
+  useEffect(() => {
+    if (!saveAsked) return;
+    setSaveAsked(false);
+    if (!save.isPending) save.mutate();
+  }, [saveAsked]);
   const transition = useMutation({
     mutationFn: async (name: string) => {
       if (dirty) await save.mutateAsync();
@@ -600,7 +610,7 @@ export function FormView({
     const sequence = ++onchangeSequence.current;
     // The record's id travels on its own: it is not a field of the draft.
     const { id: _id, ...plain } = draft;
-    void api
+    onchangePending.current = api
       .onchange(model, {
         ...(isNew ? {} : { id: recordId }),
         values: plain,
@@ -638,7 +648,7 @@ export function FormView({
   }, [record]);
 
   const names = useRowNames(record === undefined ? [] : [values], Object.values(fields));
-  if (loaded.isPending) return <Spinner label={t('app.loading')} />;
+  if (loaded.isPending) return <FormSkeleton label={t('app.loading')} />;
   if (loaded.isError)
     return (
       <Alert
@@ -685,17 +695,20 @@ export function FormView({
           ) : null}
         </Label>
         <div className="min-h-9 py-1.5 text-sm">
-          <Widget
-            id={id}
-            node={node}
-            field={field}
-            value={values[node.field]}
-            record={values}
-            model={model}
-            readonly={readonly}
-            onChange={(v) => change(node.field, v)}
-            invalid={invalid}
-          />
+          {/* The saved value changing (someone else's edit, a transition) flashes once. */}
+          <Flash watch={record?.[node.field]} identity={recordId}>
+            <Widget
+              id={id}
+              node={node}
+              field={field}
+              value={values[node.field]}
+              record={values}
+              model={model}
+              readonly={readonly}
+              onChange={(v) => change(node.field, v)}
+              invalid={invalid}
+            />
+          </Flash>
         </div>
         {(node.help ?? field.help) === undefined ? null : (
           <p className="text-xs text-muted-foreground">{node.help ?? field.help}</p>
@@ -1042,7 +1055,8 @@ export function FormView({
         className={cn('grid gap-4', !isNew && 'kosh-quiet')}
         onSubmit={(e) => {
           e.preventDefault();
-          if (dirty && !locked) save.mutate();
+          // After the pending onchange, on the render that holds its answer.
+          if (dirty && !locked) void onchangePending.current.then(() => setSaveAsked(true));
         }}
       >
         <div className="sticky top-12 z-20 -mx-4 flex flex-wrap items-center justify-between gap-2 border-b bg-background/95 px-4 py-2 backdrop-blur">

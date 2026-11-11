@@ -25,8 +25,13 @@ test('a list updates by itself when a record changes', async ({ page }) => {
       headers: { 'x-csrf-token': csrf ?? '' },
       data: { city },
     });
+  // Nothing has changed yet: no cell is marked as changed.
+  await expect(row.locator('[data-changed="true"]')).toHaveCount(0);
   expect((await patch('Rangpur')).ok()).toBe(true);
   await expect(row).toContainText('Rangpur'); // no reload, no click
+  // The cell that changed flashes once (RFC 0033 §3.1), and only that one.
+  await expect(row.locator('[data-changed="true"]')).toHaveCount(1);
+  await expect(row.locator('[data-changed="true"]')).toContainText('Rangpur');
   expect((await patch('Sylhet')).ok()).toBe(true);
   await expect(row).toContainText('Sylhet');
 });

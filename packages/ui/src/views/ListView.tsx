@@ -55,6 +55,7 @@ import { useKosh } from '../context.js';
 import { useDesign } from '../design.js';
 import { cn } from '../lib/cn.js';
 import { useLiveModel } from '../live.js';
+import { CountUp, Flash } from '../motion.js';
 import type { ViewProps } from '../registry.js';
 import { useToast } from '../shell/toast.js';
 import {
@@ -357,14 +358,17 @@ function Cell({
           }
         : {})}
     >
-      <Widget
-        id={`${row.id}-${node.id}`}
-        node={node}
-        field={field}
-        value={row[node.field]}
-        record={row}
-        readonly
-      />
+      {/* A value another user (or a transition) changed flashes once; a recycled row does not. */}
+      <Flash watch={row[node.field]} identity={row.id}>
+        <Widget
+          id={`${row.id}-${node.id}`}
+          node={node}
+          field={field}
+          value={row[node.field]}
+          record={row}
+          readonly
+        />
+      </Flash>
     </div>
   );
 }
@@ -1094,7 +1098,9 @@ function Totals({
             <dt className="text-muted-foreground">
               {totalLabel(t('views.total'), c.label ?? fields[c.field]?.label ?? c.field)}
             </dt>
-            <dd className="font-medium tabular-nums">{format.decimal(amount)}</dd>
+            <dd className="font-medium tabular-nums">
+              <CountUp value={amount} format={(v) => format.decimal(v)} />
+            </dd>
           </div>
         );
       })}

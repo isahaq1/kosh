@@ -58,6 +58,7 @@ export { accentVariables, hexToOklch } from './lib/accent.js';
 export { cn } from './lib/cn.js';
 export { bcp47, createFormatter, type Formatter } from './lib/format.js';
 export { type LiveRecord, useLiveModel, useLiveRecord } from './live.js';
+export { CountUp, Flash, FormSkeleton, useChanged } from './motion.js';
 export { useOnline } from './offline/persist.js';
 export {
   type ChangeStatus,

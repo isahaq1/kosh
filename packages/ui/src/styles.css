@@ -123,6 +123,13 @@
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }
+  :root {
+    /* Motion (RFC 0033 §3.1): three durations, one easing; only what changed moves. */
+    --motion-fast: 120ms;
+    --motion: 180ms;
+    --motion-slow: 260ms;
+    --motion-ease: cubic-bezier(0.2, 0, 0, 1);
+  }
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -144,4 +151,24 @@
   border-color: transparent;
   background-color: transparent;
   box-shadow: none;
+}
+
+/* A value that changed under the reader flashes once (RFC 0033 §3.1): the accent washes out behind it. */
+.kosh-flash-host {
+  display: contents;
+}
+.kosh-flash {
+  display: inline-block;
+  border-radius: 0.25rem;
+  animation: kosh-flash calc(var(--motion-slow) * 4) var(--motion-ease) 1;
+}
+@keyframes kosh-flash {
+  from {
+    background-color: color-mix(in oklch, var(--primary) 28%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in oklch, var(--primary) 28%, transparent);
+  }
+  to {
+    background-color: transparent;
+    box-shadow: 0 0 0 4px transparent;
+  }
 }
