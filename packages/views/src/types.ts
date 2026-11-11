@@ -140,6 +140,8 @@ export interface ListView extends ViewBase {
   readonly defaultOrder?: readonly string[];
   /** Columns editable in the list. */
   readonly inlineEdit?: readonly string[];
+  /** RFC 0033 §3.4: the fields of the quick-add row at the foot of the list (a record made without the form). */
+  readonly quickAdd?: readonly string[];
   readonly pageSize?: number;
   /** RFC 0022 §3.3: rows in a tone when a condition holds on them (overdue in danger, done muted). */
   readonly decorations?: Readonly<Partial<Record<Tone, Condition>>>;

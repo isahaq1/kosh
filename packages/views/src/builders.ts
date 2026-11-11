@@ -89,9 +89,10 @@ type ViewInput<V> = Omit<V, 'id' | 'model' | 'type'>;
 /** A list view. */
 export function list<M extends ModelRef>(
   model: M,
-  spec: Omit<ViewInput<ListView>, 'columns' | 'inlineEdit' | 'defaultOrder'> & {
+  spec: Omit<ViewInput<ListView>, 'columns' | 'inlineEdit' | 'defaultOrder' | 'quickAdd'> & {
     readonly columns: readonly FieldInput<FieldKey<M>>[];
     readonly inlineEdit?: readonly FieldKey<M>[];
+    readonly quickAdd?: readonly FieldKey<M>[];
     readonly defaultOrder?: readonly (FieldKey<M> | `${FieldKey<M>} asc` | `${FieldKey<M>} desc`)[];
   },
 ): ListView {

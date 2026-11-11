@@ -492,6 +492,7 @@ export const product: ReturnType<typeof defineModule> = defineModule({
     })),
     'product.group.list': list(ProductGroup, {
       columns: ['name', 'code', 'parent', 'responsible', 'productCount'],
+      quickAdd: ['name', 'code', 'parent'],
     }),
     'product.group.form': form(ProductGroup, (k) => ({
       sheet: [

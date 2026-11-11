@@ -68,6 +68,7 @@ import {
   rangeOf,
   toClipboard,
 } from './grid.js';
+import { FilterByCell, QuickAdd, SetFieldDialog, settable } from './listActs.js';
 import { rememberList } from './listMemory.js';
 import { PrefetchedNames, useRowNames } from './widgets.js';
 
@@ -328,6 +329,7 @@ function Cell({
   seed,
   onStart,
   onDone,
+  onFilter,
 }: {
   readonly node: FieldNode;
   readonly field: ViewField;
@@ -339,6 +341,8 @@ function Cell({
   readonly seed: string | undefined;
   readonly onStart: () => void;
   readonly onDone: (next: Next) => void;
+  /** Narrows the list to the rows sharing this cell's value (RFC 0033 §3.4). */
+  readonly onFilter?: ((domain: Condition, label?: string) => void) | undefined;
 }): ReactElement {
   const { registry } = useKosh();
   const Widget = registry.widget(node, field);
@@ -348,7 +352,10 @@ function Cell({
     );
   return (
     <div
-      className={cn(editable && 'cursor-text rounded px-1 hover:bg-muted')}
+      className={cn(
+        'group/cell flex items-center',
+        editable && 'cursor-text rounded px-1 hover:bg-muted',
+      )}
       {...(editable
         ? {
             onClick: (e: { stopPropagation(): void }) => {
@@ -369,6 +376,9 @@ function Cell({
           readonly
         />
       </Flash>
+      {onFilter === undefined ? null : (
+        <FilterByCell field={field} value={row[node.field]} onFilter={onFilter} />
+      )}
     </div>
   );
 }
@@ -1020,6 +1030,7 @@ function Rows({
                             editable={editableAt(row.original, node)}
                             model={model}
                             editing={isEditing}
+                            onFilter={props.onDrill}
                             seed={isEditing ? editing?.seed : undefined}
                             onStart={() => {
                               setAnchor(null);
@@ -1271,6 +1282,7 @@ export function ListView(props: ViewProps): ReactElement {
   const lastToggled = useRef<number | null>(null);
   const [pendingDelete, setPendingDelete] = useState<ReadonlySet<number>>(new Set());
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [settingField, setSettingField] = useState(false);
   const deleteTimer = useRef<{ ids: number[]; timer: ReturnType<typeof setTimeout> } | null>(null);
   const meta = useQuery({ queryKey: ['meta', model], queryFn: () => api.meta(model) });
   const archivable =
@@ -1326,6 +1338,30 @@ export function ListView(props: ViewProps): ReactElement {
         tone: 'danger',
       });
   };
+  // "Set a field" for the selection: one update per record; Undo puts back what the rows on this page had.
+  const setField = useMutation({
+    mutationFn: ({ key, value }: { key: string; value: unknown; what: readonly number[] }) =>
+      each(ids, (id) => api.update(model, id, { [key]: value })),
+    onSuccess: async (result, { key, what }) => {
+      const before = new Map(selectedRows.map((r) => [r.id, r[key]]));
+      setSettingField(false);
+      setSelected(new Set());
+      await refresh();
+      const scalarOf = (v: unknown) =>
+        typeof v === 'object' && v !== null && 'id' in v ? (v as { id: unknown }).id : (v ?? null);
+      report(
+        fields[key]?.label ?? key,
+        result,
+        before.size === what.length
+          ? () =>
+              void each(what, (id) =>
+                api.update(model, id, { [key]: scalarOf(before.get(id)) }),
+              ).then(refresh)
+          : undefined,
+      );
+    },
+    onError: (e) => toast({ title: e instanceof Error ? e.message : String(e), tone: 'danger' }),
+  });
   const archive = useMutation({
     mutationFn: (what: readonly number[]) =>
       each(what, (id) => api.update(model, id, { active: false })),
@@ -1457,6 +1493,11 @@ export function ListView(props: ViewProps): ReactElement {
             }}
           />
         ))}
+        {served.operations.write && settable(columns, fields).length > 0 ? (
+          <Button size="sm" onClick={() => setSettingField(true)}>
+            {t('views.setField.button')}
+          </Button>
+        ) : null}
         {archivable ? (
           <Button size="sm" busy={archive.isPending} onClick={() => archive.mutate(ids)}>
             <Archive aria-hidden />
@@ -1618,6 +1659,25 @@ export function ListView(props: ViewProps): ReactElement {
             onCount={setCount}
             onRows={setPageRows}
             filtered={filtered}
+          />
+          {view.quickAdd !== undefined && view.quickAdd.length > 0 && served.operations.create ? (
+            <QuickAdd
+              api={api}
+              model={model}
+              keys={view.quickAdd}
+              fields={fields}
+              onCreated={() => void refresh()}
+            />
+          ) : null}
+          <SetFieldDialog
+            open={settingField}
+            onOpenChange={setSettingField}
+            count={ids.length}
+            columns={columns}
+            fields={fields}
+            model={model}
+            busy={setField.isPending}
+            onApply={(key, value) => setField.mutate({ key, value, what: ids })}
           />
           {count !== null && count > pageSize ? (
             <nav
