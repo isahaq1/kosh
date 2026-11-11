@@ -15,7 +15,16 @@ const APPS_WEB_PORT = 4174;
  */
 const noPeek = (origin: string) => ({
   cookies: [],
-  origins: [{ origin, localStorage: [{ name: 'kosh.peek', value: 'off' }] }],
+  origins: [
+    {
+      origin,
+      localStorage: [
+        { name: 'kosh.peek', value: 'off' },
+        // Autosave too (RFC 0033 §3.3): the earlier specs press Save; `autosave.spec.ts` switches it on.
+        { name: 'kosh.autosave', value: 'off' },
+      ],
+    },
+  ],
 });
 
 export default defineConfig({

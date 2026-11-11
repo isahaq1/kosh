@@ -349,6 +349,28 @@ function flatFieldNodes(nodes: readonly FormNode[]): FieldNode[] {
 }
 
 /** The default form renderer. */
+/** Autosave is on unless this browser turned it off (`localStorage['kosh.autosave'] = 'off'`). */
+function autosaveEnabled(): boolean {
+  try {
+    return window.localStorage.getItem('kosh.autosave') !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+/** A field's value as a few words, for the conflict line. */
+function shown(value: unknown): string {
+  if (value === null || value === undefined || value === '') return '—';
+  if (typeof value === 'object') {
+    const named = value as { displayName?: unknown; amount?: unknown; currency?: unknown };
+    if (typeof named.displayName === 'string') return named.displayName;
+    if (named.amount !== undefined)
+      return `${String(named.amount)} ${String(named.currency ?? '')}`.trim();
+    return JSON.stringify(value);
+  }
+  return String(value);
+}
+
 export function FormView({
   served,
   recordId,
@@ -447,6 +469,12 @@ export function FormView({
   const onchangePending = useRef<Promise<void>>(Promise.resolve());
   const [lines, setLines] = useState<ReadonlyMap<string, LineState>>(proposedLines);
   const [problem, setProblem] = useState<ApiError | null>(null);
+  /** Fields changed here and by someone else since (RFC 0033 §3.3): each waits for "keep mine" or "take theirs". */
+  const [conflicts, setConflicts] = useState<Readonly<Record<string, unknown>>>({});
+  /** What the last autosave replaced, undoable for ten seconds. */
+  const [undoable, setUndoable] = useState<Values | null>(null);
+  /** Set while the save in flight was started by autosave (its success offers Undo instead of a clean slate). */
+  const autosaving = useRef<Values | null>(null);
   const [warnings, setWarnings] = useState<readonly string[]>([]);
   const [confirming, setConfirming] = useState<ButtonNode | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -484,8 +512,37 @@ export function FormView({
 
   // A failure: the server's refusal in the form; no server at all as a toast (the save was kept, or must wait).
   const fail = (e: unknown) => {
+    autosaving.current = null;
+    if (e instanceof ApiError && e.kind === 'stale-record' && !isNew && lines.size === 0) {
+      void resolveStale();
+      return;
+    }
     setProblem(e instanceof ApiError ? e : null);
     if (e instanceof NetworkError) toast({ title: t('offline.needsConnection'), tone: 'danger' });
+  };
+  /**
+   * Someone else saved first. Their record is taken; a field changed only here is kept and saved again with the
+   * new version; a field both changed waits, showing both values, for "keep mine" or "take theirs".
+   */
+  const resolveStale = async (): Promise<void> => {
+    try {
+      const latest = await api.get(model, recordId as number);
+      const same = (a: unknown, b: unknown) =>
+        JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+      const clashing: Record<string, unknown> = {};
+      for (const key of Object.keys(changes))
+        if (!same(latest.record[key], record?.[key]) && !same(latest.record[key], changes[key]))
+          clashing[key] = latest.record[key];
+      // What they changed to the same value as here is no longer a change.
+      setChanges((c) =>
+        Object.fromEntries(Object.entries(c).filter(([k, v]) => !same(latest.record[k], v))),
+      );
+      queryClient.setQueryData(['record', model, recordId], latest);
+      setConflicts(clashing);
+      setProblem(null);
+    } catch (e) {
+      setProblem(e instanceof ApiError ? e : null);
+    }
   };
   const save = useMutation({
     mutationFn: async (): Promise<Versioned & { readonly queued?: true }> => {
@@ -551,6 +608,62 @@ export function FormView({
       unsaved.current = false;
       if (isNew) onSaved(result.record.id);
       else queryClient.setQueryData(['record', model, recordId], result);
+      setUndoable(autosaving.current);
+      autosaving.current = null;
+    },
+    onError: fail,
+  });
+  // Autosave (RFC 0033 §3.3): a saved master or draft saves its valid field changes by itself after a pause.
+  // New records, lines, documents past their first status and locked records keep the Save button.
+  const stateField = fields['state'];
+  const pastDraft =
+    stateField?.kind === 'state' &&
+    stateField.options !== undefined &&
+    stateField.options.length > 0 &&
+    record?.['state'] !== stateField.options[0]?.value;
+  const incomplete = Object.keys(changes).filter((key) => {
+    const meta = fields[key];
+    const v = changes[key];
+    return meta?.required === true && (v === null || v === undefined || v === '');
+  });
+  const autosaves =
+    !isNew && !locked && !pastDraft && lines.size === 0 && autosaveEnabled() && canEdit;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: restarts on every change; reads the latest state when it fires
+  useEffect(() => {
+    if (!autosaves || Object.keys(changes).length === 0) return;
+    if (incomplete.length > 0 || Object.keys(conflicts).length > 0 || problem !== null) return;
+    const timer = setTimeout(() => {
+      if (save.isPending) return;
+      autosaving.current = Object.fromEntries(
+        Object.keys(changes).map((key) => [key, record?.[key] ?? null]),
+      );
+      void onchangePending.current.then(() => setSaveAsked(true));
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [changes, autosaves, conflicts, problem]);
+  // Undo is offered for ten seconds after an autosave.
+  useEffect(() => {
+    if (undoable === null) return;
+    const timer = setTimeout(() => setUndoable(null), 10_000);
+    return () => clearTimeout(timer);
+  }, [undoable]);
+  const undo = useMutation({
+    mutationFn: async (before: Values) =>
+      api.update(
+        model,
+        recordId as number,
+        payloadOf(
+          before,
+          fields,
+          new Map(),
+          (key) => served.fields[fields[key]?.target ?? ''] ?? {},
+        ),
+        loaded.data?.etag ?? null,
+      ),
+    onSuccess: async (result) => {
+      setUndoable(null);
+      queryClient.setQueryData(['record', model, recordId], result);
+      await queryClient.invalidateQueries({ queryKey: ['list', model] });
     },
     onError: fail,
   });
@@ -1147,12 +1260,24 @@ export function FormView({
               ) : dirty ? (
                 <>
                   <CircleDot className="size-3 text-warning-text" aria-hidden />
-                  {t('views.unsaved')}
+                  {autosaves && incomplete.length > 0
+                    ? t('views.notSaved', { count: incomplete.length })
+                    : t('views.unsaved')}
                 </>
               ) : save.isSuccess ? (
                 <>
                   <Check className="size-3 text-success" aria-hidden />
                   {t('views.allSaved')}
+                  {undoable === null ? null : (
+                    <button
+                      type="button"
+                      className="ms-1 underline underline-offset-2 hover:text-foreground"
+                      disabled={undo.isPending}
+                      onClick={() => undo.mutate(undoable)}
+                    >
+                      {t('views.undo')}
+                    </button>
+                  )}
                 </>
               ) : null}
             </span>
@@ -1268,6 +1393,41 @@ export function FormView({
                 {t('views.changedByOther')}
               </Alert>
             ) : null}
+            {Object.keys(conflicts).length === 0 ? null : (
+              <Alert tone="warning">
+                <p className="mb-2 font-medium">{t('views.conflict.title')}</p>
+                <ul className="grid gap-2">
+                  {Object.entries(conflicts).map(([key, theirs]) => (
+                    <li key={key} className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{fields[key]?.label ?? key}</span>
+                      <span>
+                        {t('views.conflict.mine', { value: shown(changes[key]) })} ·{' '}
+                        {t('views.conflict.theirs', { value: shown(theirs) })}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setConflicts(({ [key]: _kept, ...rest }) => rest)}
+                      >
+                        {t('views.conflict.keepMine')}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          setChanges(({ [key]: _dropped, ...rest }) => rest);
+                          setConflicts(({ [key]: _taken, ...rest }) => rest);
+                        }}
+                      >
+                        {t('views.conflict.takeTheirs')}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </Alert>
+            )}
             {problem === null ? null : (
               <Alert
                 tone={problem.kind === 'stale-record' ? 'warning' : 'danger'}
