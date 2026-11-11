@@ -674,6 +674,14 @@ reorder rule may order **for each delivery** (make to order) — on a transfer, 
 production order — or **dropship**: the vendor delivers to the customer on a dropship transfer, with its own request
 for quotation, never through stock.
 
+#### Product groups
+
+A **product group** (Products › Configuration › Product groups) is the company's own way of putting products
+together across categories — a brand, a line, a season, what one buyer looks after —, in a tree, with a short
+code, a colour and a responsible person. A product (and a template, whose variants inherit it) is in one group;
+the product list shows it, searches find products by their group's name, and lists group by it. The group's page
+counts its products and opens them. (Requests has its own *product groups* that name approvers by category.)
+
 #### Variants (RFC 0030 step 4)
 
 **Attributes** (Products › Configuration › Attributes: size, colour…, shown as a list, radio buttons, colour

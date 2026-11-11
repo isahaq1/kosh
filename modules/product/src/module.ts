@@ -6,7 +6,7 @@
 import { baseShutro } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
 import { storageShutro } from '@kosh/storage';
-import { check, defineModel, defineModule, f, record } from './.kosh/bindings.js';
+import { check, compute, defineModel, defineModule, f, record } from './.kosh/bindings.js';
 import { ProductPricelist, ProductPricelistRule } from './pricelist.js';
 import {
   ProductAttribute,
@@ -51,6 +51,69 @@ export const UomUom = defineModel('uom.uom', {
         uoms.filter((u) => u.ratio.lte(0) || u.rounding.lte(0)),
       ),
       message: 'A unit’s ratio and rounding must be positive.',
+    },
+  },
+});
+
+/**
+ * Product groups: a company's own way of putting products together across categories — a brand, a line, a
+ * season, what a buyer looks after — in a tree. A product is in one group; reports, lists and searches group by it.
+ */
+export const ProductGroup = defineModel('product.group', {
+  label: 'Product group',
+  recName: 'name',
+  archivable: true,
+  order: ['name asc'],
+  access: { 'product.user': READ, 'product.manager': ALL },
+  fields: {
+    name: f.char({ required: true, translate: true }),
+    code: f.char({
+      size: 16,
+      index: 'unique',
+      help: 'A short code for lists, reports and imports.',
+    }),
+    parent: f.many2one('product.group', { ondelete: 'restrict', label: 'Parent group' }),
+    color: f.char({
+      size: 7,
+      label: 'Colour',
+      help: 'A hex colour (#RRGGBB) for tags and boards.',
+    }),
+    responsible: f.many2one('res.users', {
+      ondelete: 'set null',
+      help: 'Who looks after the group’s products.',
+    }),
+    note: f.text({ translate: true }),
+    products: f.one2many('product.product', 'group'),
+    productCount: f.integer({
+      store: true,
+      label: 'Products',
+      help: 'The active products in the group.',
+      ...compute('product.group', 'productCount', ['products.active'], (groups) => {
+        for (const g of groups) g.productCount = [...g.products].filter((p) => p.active).length;
+      }),
+    }),
+  },
+  constraints: {
+    notItsOwnParent: {
+      ...check('product.group', ['parent'], async (groups) => {
+        const out = [];
+        for (const g of await groups.load({ parent: true })) {
+          let up = g.parent;
+          for (let depth = 0; up !== null && depth < 20; depth += 1) {
+            if (up.id === g.id) {
+              out.push(g.id);
+              break;
+            }
+            const [next] = await groups.env
+              .model('product.group')
+              .browse([up.id])
+              .load({ parent: true });
+            up = next?.parent ?? null;
+          }
+        }
+        return out;
+      }),
+      message: 'A group cannot be inside itself.',
     },
   },
 });
@@ -142,6 +205,7 @@ export const ProductProduct = defineModel('product.product', {
       },
     ),
     category: f.many2one('product.category'),
+    group: f.many2one('product.group', { ondelete: 'set null', label: 'Product group' }),
     /** Invoiced as ordered or as delivered (RFC 0028 §3.3). */
     invoicePolicy: f.selection(
       { ordered: 'Ordered quantities', delivered: 'Delivered quantities' },
@@ -213,7 +277,7 @@ const uom = (id: string, name: string, category: string, ratio: string, rounding
 
 export const productShutro = defineModule({
   name: 'product',
-  version: '0.7.0',
+  version: '0.8.0',
   migrations: [
     {
       version: '0.2.0',
@@ -250,6 +314,7 @@ export const productShutro = defineModule({
   models: [
     UomUom,
     ProductCategory,
+    ProductGroup,
     AccountTax,
     ProductProduct,
     ProductPricelist,

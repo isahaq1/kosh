@@ -290,3 +290,52 @@ test('variants (RFC 0030 step 4): attributes with values, a template generating 
       .status,
   ).toBe(409);
 });
+
+test('product groups: a tree with a code, products put in a group and counted, a group never inside itself, read-only for users', async () => {
+  const brand = await callAs('pat', 'POST', '/api/v1/models/product.group', {
+    name: 'House brand',
+    code: 'HB',
+  });
+  expect(brand.status, JSON.stringify(brand.json)).toBe(201);
+  const line = await callAs('pat', 'POST', '/api/v1/models/product.group', {
+    name: 'Summer line',
+    code: 'HB-S',
+    parent: brand.json.id,
+  });
+  expect(line.status).toBe(201);
+  const made = await callAs('pat', 'POST', '/api/v1/models/product.product', {
+    name: 'Sun hat',
+    group: line.json.id,
+  });
+  expect(made.status, JSON.stringify(made.json)).toBe(201);
+  expect(
+    (await callAs('pat', 'GET', `/api/v1/models/product.group/${line.json.id}?fields=productCount`))
+      .json.productCount,
+  ).toBe(1);
+  const found = (
+    await callAs(
+      'pat',
+      'GET',
+      `/api/v1/models/product.product?filter=${enc({ group: line.json.id })}&fields=name`,
+    )
+  ).json.items as Json[];
+  expect(found.map((p) => p.name)).toEqual(['Sun hat']);
+  // The brand cannot go inside its own child; a code is unique; a user only reads.
+  expect(
+    (
+      await callAs('pat', 'PATCH', `/api/v1/models/product.group/${brand.json.id}`, {
+        parent: line.json.id,
+      })
+    ).status,
+  ).toBe(422);
+  expect(
+    (await callAs('pat', 'POST', '/api/v1/models/product.group', { name: 'Other', code: 'HB' }))
+      .status,
+  ).toBeGreaterThanOrEqual(400);
+  expect(
+    (await callAs('sam', 'POST', '/api/v1/models/product.group', { name: 'Mine' })).status,
+  ).toBe(403);
+  expect((await callAs('sam', 'GET', `/api/v1/models/product.group/${brand.json.id}`)).status).toBe(
+    200,
+  );
+});

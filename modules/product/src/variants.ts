@@ -68,6 +68,7 @@ export const ProductTemplate = defineModel('product.template', {
       },
     ),
     category: f.many2one('product.category'),
+    group: f.many2one('product.group', { ondelete: 'set null', label: 'Product group' }),
     uom: f.many2one('uom.uom', { label: 'Unit of measure' }),
     listPrice: f.decimal({
       scale: 2,
@@ -265,6 +266,7 @@ export async function generateVariants(
         attributeValues: { set: combo.map((v) => v.id) },
         kind: t.kind,
         category: t.category?.id ?? null,
+        group: t.group?.id ?? null,
         uom: t.uom?.id ?? null,
         listPrice: price,
         standardPrice: t.standardPrice,

@@ -10,7 +10,14 @@ import { storage } from '@kosh/storage';
 import { action, form, kanban, list, search } from '@kosh/views';
 import { productDemo } from './demo.js';
 import { registerGridRoutes } from './grid.js';
-import { AccountTax, ProductCategory, ProductProduct, productShutro, UomUom } from './module.js';
+import {
+  AccountTax,
+  ProductCategory,
+  ProductGroup,
+  ProductProduct,
+  productShutro,
+  UomUom,
+} from './module.js';
 import { ProductPricelist } from './pricelist.js';
 import { ProductAttribute, ProductTemplate } from './variants.js';
 
@@ -88,6 +95,17 @@ export const product: ReturnType<typeof defineModule> = defineModule({
     summary: 'Products and services, prices, units of measure and taxes',
   },
   importTemplates: [
+    {
+      key: 'product_group',
+      model: 'product.group',
+      label: 'Product groups',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'Code', field: 'code' },
+        { header: 'Parent group', field: 'parent' },
+        { header: 'Note', field: 'note' },
+      ],
+    },
     {
       key: 'product_attribute',
       model: 'product.attribute',
@@ -255,6 +273,10 @@ export const product: ReturnType<typeof defineModule> = defineModule({
       label: 'Attributes',
       views: ['list', 'form'],
     }),
+    'product.action_groups': action(ProductGroup, {
+      label: 'Product groups',
+      views: ['list', 'form'],
+    }),
     'product.action_categories': action(ProductCategory, {
       label: 'Categories',
       views: ['list', 'form'],
@@ -297,6 +319,12 @@ export const product: ReturnType<typeof defineModule> = defineModule({
       sequence: 2,
     },
     {
+      id: 'product.groups',
+      parent: 'product.config',
+      label: 'Product groups',
+      action: 'product.action_groups',
+    },
+    {
       id: 'product.categories',
       parent: 'product.config',
       label: 'Categories',
@@ -327,6 +355,7 @@ export const product: ReturnType<typeof defineModule> = defineModule({
         'name',
         'kind',
         'category',
+        'group',
         'listPrice',
         'standardPrice',
         'uom',
@@ -343,6 +372,7 @@ export const product: ReturnType<typeof defineModule> = defineModule({
           'code',
           'kind',
           'category',
+          'group',
           'barcode',
         ]),
         k.group('prices', ['listPrice', 'standardPrice', 'uom'], { label: 'Prices' }),
@@ -395,6 +425,7 @@ export const product: ReturnType<typeof defineModule> = defineModule({
           'name',
           'kind',
           'category',
+          'group',
           'uom',
         ]),
         k.group('prices', ['listPrice', 'standardPrice', 'variantCount'], { label: 'Prices' }),
@@ -459,6 +490,30 @@ export const product: ReturnType<typeof defineModule> = defineModule({
         k.group('notes', ['note'], { label: 'Note' }),
       ],
     })),
+    'product.group.list': list(ProductGroup, {
+      columns: ['name', 'code', 'parent', 'responsible', 'productCount'],
+    }),
+    'product.group.form': form(ProductGroup, (k) => ({
+      sheet: [
+        k.stats('related', [
+          {
+            id: 'group_products',
+            label: 'Products',
+            model: ProductProduct,
+            where: { group: { $record: 'id' } },
+            action: 'product.action_products',
+          },
+        ]),
+        k.group('main', [
+          'name',
+          'code',
+          'parent',
+          'responsible',
+          { field: 'color', widget: 'color' },
+        ]),
+        k.group('about', ['note'], { columns: 1 }),
+      ],
+    })),
     'product.category.list': list(ProductCategory, { columns: ['name', 'parent'] }),
     'product.category.form': form(ProductCategory, (k) => ({
       sheet: [k.group('main', ['name', 'parent'])],
@@ -499,6 +554,11 @@ export const product: ReturnType<typeof defineModule> = defineModule({
       groupBy: ['currency', 'company'],
     }),
     'uom.uom': search(UomUom, { fields: ['name'], groupBy: ['category'] }),
+    'product.group': search(ProductGroup, {
+      fields: ['name', 'code'],
+      filters: { top: { label: 'Top level', domain: { parent: { isNull: true } } } },
+      groupBy: ['parent', 'responsible'],
+    }),
     'product.category': search(ProductCategory, {
       fields: ['name', 'parent.name'],
       groupBy: ['parent'],
@@ -512,14 +572,14 @@ export const product: ReturnType<typeof defineModule> = defineModule({
       groupBy: ['use', 'amountType'],
     }),
     'product.product': search(ProductProduct, {
-      fields: ['name', 'code', 'barcode'],
+      fields: ['name', 'code', 'barcode', 'group.name'],
       filters: {
         goods: { label: 'Goods', domain: { kind: 'goods' }, group: 'kind' },
         services: { label: 'Services', domain: { kind: 'service' }, group: 'kind' },
         sold: { label: 'Can be sold', domain: { saleOk: true }, group: 'use' },
         bought: { label: 'Can be purchased', domain: { purchaseOk: true }, group: 'use' },
       },
-      groupBy: ['kind', 'category', 'uom', 'template'],
+      groupBy: ['kind', 'category', 'group', 'uom', 'template'],
     }),
   },
 });

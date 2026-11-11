@@ -5,13 +5,16 @@ export const bn: Readonly<Record<string, string>> = {
   'A fixed price; a percent off the base; or a formula: the percent off, plus an amount, rounded, kept within a margin over the cost.':
     'নির্দিষ্ট মূল্য; ভিত্তি থেকে শতাংশ ছাড়; অথবা সূত্র: শতাংশ ছাড়, সঙ্গে একটি অঙ্ক, রাউন্ড করে, খরচের ওপর একটি মার্জিনের মধ্যে।',
   'A formula': 'একটি সূত্র',
+  'A group cannot be inside itself.': 'কোনো গ্রুপ নিজের ভেতরে থাকতে পারে না।',
   'A hex colour (#RRGGBB) for swatches.': 'সোয়াচের জন্য হেক্স রং (#RRGGBB)।',
+  'A hex colour (#RRGGBB) for tags and boards.': 'ট্যাগ ও বোর্ডের জন্য হেক্স রং (#RRGGBB)।',
   'A percent off': 'শতাংশ ছাড়',
   'A price list cannot be based on itself, even through other lists.':
     'কোনো মূল্যতালিকা নিজের ওপর ভিত্তি করতে পারে না, অন্য তালিকার মাধ্যমেও নয়।',
   'A product': 'একটি পণ্য',
   'A rule names its product or category, a fixed price its price, and a price based on another list that list.':
     'নিয়মে তার পণ্য বা শ্রেণি, নির্দিষ্ট মূল্যে তার মূল্য, আর অন্য তালিকাভিত্তিক মূল্যে সেই তালিকা উল্লেখ থাকে।',
+  'A short code for lists, reports and imports.': 'তালিকা, রিপোর্ট ও ইমপোর্টের জন্য ছোট কোড।',
   'A tax rate is between 0 and 1 (0.15 for 15 %).':
     'করের হার ০ থেকে ১-এর মধ্যে হতে হবে (১৫ %-এর জন্য 0.15)।',
   'A unit’s ratio and rounding must be positive.': 'এককের অনুপাত ও রাউন্ডিং শূন্যের বেশি হতে হবে।',
@@ -102,6 +105,7 @@ export const bn: Readonly<Record<string, string>> = {
   Overview: 'সারসংক্ষেপ',
   'Page {{page}} of {{pages}}': 'পৃষ্ঠা {{page}} / {{pages}}',
   Parent: 'মূল শ্রেণি',
+  'Parent group': 'মূল গ্রুপ',
   'People who approve purchases of this category’s products when an approval level lets the record decide.':
     'অনুমোদনের কোনো ধাপ নথিকে সিদ্ধান্ত নিতে দিলে যাঁরা এই শ্রেণির পণ্যের ক্রয় অনুমোদন করেন।',
   'Percent off': 'শতাংশ ছাড়',
@@ -118,6 +122,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Prices cannot be negative.': 'মূল্য ঋণাত্মক হতে পারে না।',
   Product: 'পণ্য',
   'Product category': 'পণ্যের শ্রেণি',
+  'Product group': 'পণ্য গ্রুপ',
+  'Product groups': 'পণ্য গ্রুপসমূহ',
   'Product template': 'পণ্য টেমপ্লেট',
   'Product templates': 'পণ্য টেমপ্লেটসমূহ',
   Products: 'পণ্য',
@@ -130,6 +136,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Radio buttons': 'রেডিও বোতাম',
   Rate: 'হার',
   Ratio: 'অনুপাত',
+  Responsible: 'দায়িত্বপ্রাপ্ত',
   'Reverse charge': 'রিভার্স চার্জ',
   'Round to': 'নিকটতম',
   Rounding: 'রাউন্ডিং',
@@ -150,6 +157,7 @@ export const bn: Readonly<Record<string, string>> = {
   Taxes: 'কর',
   Template: 'টেমপ্লেট',
   'Template attribute': 'টেমপ্লেটের অ্যাট্রিবিউট',
+  'The active products in the group.': 'গ্রুপের সক্রিয় পণ্য।',
   'The active variants generated from the template.': 'টেমপ্লেট থেকে তৈরি সক্রিয় ভ্যারিয়েন্ট।',
   'The base: each variant adds its values’ extra prices, unless it keeps its own price.':
     'ভিত্তি: প্রতিটি ভ্যারিয়েন্ট তার মানের অতিরিক্ত মূল্য যোগ করে, নিজের মূল্য রাখলে ছাড়া।',
@@ -165,6 +173,7 @@ export const bn: Readonly<Record<string, string>> = {
   'The rule applies from this quantity on the line.': 'লাইনে এই পরিমাণ থেকে নিয়মটি প্রযোজ্য।',
   'The template’s sales price plus the values’ extras, whenever variants are generated; off: this variant’s own price.':
     'ভ্যারিয়েন্ট তৈরির সময় টেমপ্লেটের বিক্রয়মূল্য ও মানের অতিরিক্ত; বন্ধ থাকলে এই ভ্যারিয়েন্টের নিজের মূল্য।',
+  'Top level': 'শীর্ষ স্তর',
   Unit: 'একক',
   'Unit of measure': 'পরিমাপের একক',
   'Units of measure': 'পরিমাপের একক',
@@ -194,5 +203,6 @@ export const bn: Readonly<Record<string, string>> = {
     'করটি বিক্রয়ের নথিতে প্রযোজ্য, নাকি ক্রয়ের নথিতে।',
   'Which products the rule prices: one product, a category and those under it, or every product.':
     'নিয়মটি কোন পণ্যের মূল্য ঠিক করে: একটি পণ্য, একটি শ্রেণি ও তার অধীনগুলো, বা সব পণ্য।',
+  'Who looks after the group’s products.': 'গ্রুপের পণ্য যিনি দেখাশোনা করেন।',
   'Working time': 'কর্মসময়',
 };
