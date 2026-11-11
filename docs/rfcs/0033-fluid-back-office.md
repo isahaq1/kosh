@@ -133,4 +133,13 @@ performance budget unchanged (a 10k-row list still under 300 ms API time; no lay
   screens 1024 px and wider; new records, narrower screens and the other view types open the full page; a browser
   switches it off with `localStorage['kosh.peek'] = 'off'` (the specs written before it run that way). Not yet: a
   switch for it in the user's preferences, the bottom sheet on phones, `peek: false` per view, calendar and Gantt.
+- **Step 3 (2026-11-12).** Autosave in `FormView`: a saved record that is not past its first status and is not
+  locked saves its changed fields 800 ms after the last change (after any pending onchange), with *Saving… / All
+  changes saved / Not saved: N fields need a value* beside the title and **Undo** for ten seconds (the replaced
+  values written back). A stale save (someone saved first) no longer blocks the form: their record is taken,
+  fields changed only here are saved again, and a field both changed shows *Yours / Theirs* with **Keep mine** /
+  **Take theirs**. Narrower than the RFC's design, on purpose: **new records and line edits keep the Save button**
+  (a half-typed line or a record without its required fields must not be sent), and there is no save on blur. Not
+  yet: `autosave: false` per form, a switch in the user's preferences (a browser turns it off with
+  `localStorage['kosh.autosave'] = 'off'`, as the earlier specs do).
 

@@ -452,3 +452,9 @@ Values that change under the reader (another user's edit, a transition) **flash 
 totals **count up** to their new value, and a record page loads as a skeleton of itself. With the system's
 "reduce motion" setting nothing animates.
 
+**Autosave.** On a saved record that is still in its first status (a contact, a product, a draft), a changed field
+saves by itself after a short pause: the title line says *Saving…*, then *All changes saved* with **Undo** for ten
+seconds. A required field left empty holds the save back and says so. New records, edits to lines and documents
+past draft keep the **Save** button. When someone else saved the same record first, fields only you changed are
+saved on top of theirs; a field you both changed shows both values and waits for **Keep mine** or **Take theirs**.
+
