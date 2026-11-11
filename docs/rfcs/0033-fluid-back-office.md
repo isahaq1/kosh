@@ -149,4 +149,9 @@ performance budget unchanged (a 10k-row list still under 300 ms API time; no lay
   on list views: a row of the named fields at the foot of the list, Enter creates and clears, the server's refusal
   shown in the row — declared on Product groups first). Not yet: "not this" on a cell, the filter as a named chip
   (it joins the search's custom condition), quick add on more lists, footer totals already count up (step 1).
+- **Step 5 (2026-11-12).** `useLiveFigures` in `packages/ui/src/live.ts`: the stat tiles of a record page and the
+  cards of a dashboard or an app overview (KPIs, pivots, charts, top-record lists) refetch when a record of a
+  model they read changes, at most once a second per model; a tile's or a KPI's figure flashes when it moves.
+  Not done: presence (who else has it open) on list rows and board cards — it needs the gateway to publish
+  presence per list, not per record; count-up on the figures (they carry a currency and a format per kind).
 

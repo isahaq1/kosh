@@ -464,3 +464,6 @@ sets one column for all of them (each record checked and logged by the server; *
 that declares `quickAdd: ['name', 'code']` gets a row at its foot: type, Enter, the record is there and the row is
 ready for the next.
 
+**Live figures.** The tiles of a record page and the cards of a dashboard or an app's Overview follow the records
+they read: a new quotation moves "Open quotations" by itself, within about a second, and the figure flashes.
+
