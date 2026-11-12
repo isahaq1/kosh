@@ -154,4 +154,12 @@ performance budget unchanged (a 10k-row list still under 300 ms API time; no lay
   model they read changes, at most once a second per model; a tile's or a KPI's figure flashes when it moves.
   Not done: presence (who else has it open) on list rows and board cards — it needs the gateway to publish
   presence per list, not per record; count-up on the figures (they carry a currency and a format per kind).
+- **Step 6 (2026-11-12).** The palette on the open record: the form's header buttons, Save and the related-record
+  tiles name themselves (`data-kosh-record-action`, `data-kosh-record-link`), and the palette lists them first
+  under **This record** — the transitions the form offers for the record's status, Save when there are changes,
+  "Go to its …" for each tile — running them by clicking the button (the form's own path, confirmations
+  included). It works for the peeked record too. The phone action bar: below 640 px a bar at the bottom of a
+  saved record holds the primary next step, and Save when there are changes. Not done: Print, Send, Duplicate and
+  Archive in the palette (they live in menus that are not on screen until opened), swipe actions and pull to
+  refresh on lists. **RFC 0033's six steps are done**; what each left out is listed in its note above.
 

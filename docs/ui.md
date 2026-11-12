@@ -467,3 +467,8 @@ ready for the next.
 **Live figures.** The tiles of a record page and the cards of a dashboard or an app's Overview follow the records
 they read: a new quotation moves "Open quotations" by itself, within about a second, and the figure flashes.
 
+**The palette on the open record.** With a record open (or peeked), `Ctrl+K` lists **This record** first: the
+next steps its status allows, Save when there are changes, and "Go to its …" for each related tile. Type a few
+letters, Enter, and the step runs as if its button were clicked. On a phone, the next step (and Save) sit in a
+bar at the bottom of the record.
+
