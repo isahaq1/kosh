@@ -366,7 +366,14 @@ export const en = {
     themeDark: 'Theme: dark',
     themeSystem: 'Theme: system',
     shortcuts: 'Keyboard shortcuts',
-    group: { recent: 'Recent', records: 'Records', goto: 'Go to', commands: 'Commands' },
+    group: {
+      record: 'This record',
+      recent: 'Recent',
+      records: 'Records',
+      goto: 'Go to',
+      commands: 'Commands',
+    },
+    goToRelated: 'Go to its {{name}}',
   },
   shortcuts: {
     title: 'Keyboard shortcuts',
@@ -767,7 +774,14 @@ export const bn: DeepPartial<Messages> = {
     themeDark: 'থিম: গাঢ়',
     themeSystem: 'থিম: সিস্টেম',
     shortcuts: 'কীবোর্ড শর্টকাট',
-    group: { recent: 'সাম্প্রতিক', records: 'রেকর্ড', goto: 'যান', commands: 'কমান্ড' },
+    group: {
+      record: 'এই রেকর্ড',
+      recent: 'সাম্প্রতিক',
+      records: 'রেকর্ড',
+      goto: 'যান',
+      commands: 'কমান্ড',
+    },
+    goToRelated: 'এর {{name}}-এ যান',
   },
   shortcuts: {
     title: 'কীবোর্ড শর্টকাট',

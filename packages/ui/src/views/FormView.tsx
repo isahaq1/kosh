@@ -1165,7 +1165,7 @@ export function FormView({
       <form
         aria-label={title}
         data-kosh-form
-        className={cn('grid gap-4', !isNew && 'kosh-quiet')}
+        className={cn('grid gap-4 pb-16 sm:pb-0', !isNew && 'kosh-quiet')}
         onSubmit={(e) => {
           e.preventDefault();
           // After the pending onchange, on the render that holds its answer.
@@ -1322,7 +1322,13 @@ export function FormView({
                 >
                   {t('views.discard')}
                 </Button>
-                <Button type="submit" variant="primary" busy={save.isPending} data-kosh-save>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  busy={save.isPending}
+                  data-kosh-save
+                  data-kosh-record-action={t('views.save')}
+                >
                   {t('views.save')}
                 </Button>
               </>
@@ -1512,6 +1518,7 @@ export function FormView({
                             : 'secondary'
                         }
                         busy={transition.isPending && transition.variables === b.transition}
+                        data-kosh-record-action={b.label ?? b.transition ?? b.id}
                         onClick={() =>
                           b.open !== undefined
                             ? openNew(b.open)
@@ -1525,6 +1532,40 @@ export function FormView({
                     </Explain>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Phones (RFC 0033 §3.7): the next step — and Save, with changes — stay under the thumb. */}
+            {isNew || (buttons.length === 0 && !dirty) || locked ? null : (
+              <div
+                data-kosh-action-bar
+                className="fixed inset-x-0 bottom-0 z-20 flex items-center gap-2 border-t bg-background/95 px-3 py-2 backdrop-blur sm:hidden"
+              >
+                {dirty ? (
+                  <Button type="submit" variant="primary" className="flex-1" busy={save.isPending}>
+                    {t('views.save')}
+                  </Button>
+                ) : null}
+                {(() => {
+                  const main = buttons.find((x) => x.primary === true) ?? buttons[0];
+                  return main === undefined ? null : (
+                    <Button
+                      type="button"
+                      variant={dirty ? 'secondary' : 'primary'}
+                      className="flex-1"
+                      busy={transition.isPending && transition.variables === main.transition}
+                      onClick={() =>
+                        main.open !== undefined
+                          ? openNew(main.open)
+                          : main.confirm === undefined
+                            ? transition.mutate(main.transition ?? '')
+                            : setConfirming(main)
+                      }
+                    >
+                      {main.label ?? main.transition ?? main.id}
+                    </Button>
+                  );
+                })()}
               </div>
             )}
 

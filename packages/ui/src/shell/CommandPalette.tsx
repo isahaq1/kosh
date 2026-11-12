@@ -19,6 +19,7 @@ import {
   Search,
   Sun,
   UserRound,
+  Zap,
 } from 'lucide-react';
 import { Dialog as RDialog } from 'radix-ui';
 import {
@@ -47,7 +48,7 @@ export function usePalette(): () => void {
 
 interface Item {
   readonly id: string;
-  readonly group: 'recent' | 'goto' | 'records' | 'commands';
+  readonly group: 'record' | 'recent' | 'goto' | 'records' | 'commands';
   readonly label: string;
   readonly hint?: string;
   readonly icon: ReactElement;
@@ -151,6 +152,51 @@ export function CommandPalette({
     const q = query.trim();
     const appList = apps.data ?? [];
     const out: { item: Item; rank: number }[] = [];
+    // The record that is open (RFC 0033 §3.6): its next steps, Save, and its related records, taken from the
+    // form on screen — what the user may do there, they may do from here.
+    if (open && typeof document !== 'undefined') {
+      const form = document.querySelector('[data-kosh-peek] [data-kosh-form], [data-kosh-form]');
+      const title = form?.getAttribute('aria-label') ?? undefined;
+      const seen = new Set<string>();
+      for (const el of form?.querySelectorAll<HTMLButtonElement>('[data-kosh-record-action]') ??
+        []) {
+        const label = el.getAttribute('data-kosh-record-action') ?? '';
+        if (label === '' || el.disabled || seen.has(label)) continue;
+        seen.add(label);
+        const rank = score(label, q);
+        if (rank > 0)
+          out.push({
+            rank: rank + 1,
+            item: {
+              id: `record:${label}`,
+              group: 'record',
+              label,
+              ...(title === undefined ? {} : { hint: title }),
+              icon: <Zap className="size-4" aria-hidden />,
+              run: () => el.click(),
+            },
+          });
+      }
+      for (const el of form?.querySelectorAll<HTMLButtonElement>('[data-kosh-record-link]') ?? []) {
+        const name = el.getAttribute('data-kosh-record-link') ?? '';
+        const label = t('palette.goToRelated', { name });
+        if (name === '' || seen.has(label)) continue;
+        seen.add(label);
+        const rank = score(label, q);
+        if (rank > 0)
+          out.push({
+            rank: rank + 1,
+            item: {
+              id: `record-link:${name}`,
+              group: 'record',
+              label,
+              ...(title === undefined ? {} : { hint: title }),
+              icon: <ArrowRight className="size-4 rtl:-scale-x-100" aria-hidden />,
+              run: () => el.click(),
+            },
+          });
+      }
+    }
     for (const r of recentRecords(uid)) {
       const rank = score(r.title, q);
       if (rank > 0 && (q !== '' || out.length < 5))
@@ -288,7 +334,7 @@ export function CommandPalette({
       const rank = score(c.label, q);
       if (rank > 0) out.push({ rank: q === '' ? 0 : rank, item: { ...c, group: 'commands' } });
     }
-    const order = { recent: 0, records: 1, goto: 2, commands: 3 } as const;
+    const order = { record: -1, recent: 0, records: 1, goto: 2, commands: 3 } as const;
     return out
       .sort(
         (a, b) =>
@@ -299,6 +345,7 @@ export function CommandPalette({
       .slice(0, 30)
       .map((o) => o.item);
   }, [
+    open,
     query,
     debounced,
     apps.data,
@@ -322,7 +369,7 @@ export function CommandPalette({
     close();
     item.run();
   };
-  const groups = ['recent', 'records', 'goto', 'commands'] as const;
+  const groups = ['record', 'recent', 'records', 'goto', 'commands'] as const;
   const optionId = (i: number) => `${listId}-${i}`;
 
   return (

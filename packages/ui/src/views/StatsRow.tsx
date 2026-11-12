@@ -148,6 +148,7 @@ export function StatsRow({
           <button
             key={tile.id}
             type="button"
+            data-kosh-record-link={tile.label}
             className={cn(className, 'hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring')}
             onClick={() => open(i)}
           >
