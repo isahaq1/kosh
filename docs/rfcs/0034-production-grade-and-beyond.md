@@ -166,4 +166,17 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   next one with a clear error instead of sharing its database. Not done in this part: E2E with a database per
   worker (the two E2E projects run one worker each against their own server), state-only waits enforced by a lint
   rule, `shutro-erp check` for a company's own modules.
+- **Step 1, part 2 (2026-11-16).** **`shutro-erp check`**: the module standard extracted into a function
+  (`packages/cli/src/standard.ts`, the repository's lint giving a line-for-line identical report before and after)
+  and run on a company's own modules (`src/modules/*/index.ts`, from `module create` or Studio), with the installed
+  set only to resolve dependencies; T1 (Bangla) and A1 (overview, demo data) reported, failing with `--strict`;
+  fixtures and tests for a passing and a failing project. The RFC's wording "runs the same suite" is narrowed on
+  purpose: Kosh's own tests do not ship in the package, so a company runs the standard with `check` and its own
+  tests with `shutro-erp/testing` (published from `@kosh/server/testing`). **No fixed waits in E2E specs**,
+  enforced by `pnpm lint` (none existed; a probe spec is refused). **Not done, on purpose: E2E with a database per
+  worker.** The flakes it was meant to cure came from leftover servers (now refused) and the spec of a form saved
+  before its defaults (fixed in RFC 0033 step 1); running E2E in parallel needs a seeded server per worker, minutes
+  of start-up each, for a run of 11–20 minutes today. It is worth doing when the suite's length hurts, not before.
+  Not checked yet: whether a module freshly scaffolded by `module create` passes `check` (its index imports
+  `shutro-erp/…`, which resolves only in a real project).
 

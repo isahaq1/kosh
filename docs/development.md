@@ -38,6 +38,10 @@ pnpm bench               # performance budgets on seeded data (minutes; CI runs 
 - **E2E never reuses a server.** An interrupted Playwright run can leave its servers on ports 3100 / 3101 / 4173 /
   4174; the next run then stops with "already used" instead of silently sharing a stale database. Stop those
   processes (`netstat -ano | findstr ":3100 :3101 :4173 :4174"`) and run again.
+- **The module standard** (RFC 0023) is a function in `packages/cli/src/standard.ts`, run on the repository's
+  modules by `pnpm lint` (`scripts/check-modules.ts`, every rule enforced) and on a company's own modules by
+  `shutro-erp check` (Bangla and demo data reported, failing only with `--strict`).
+- **End-to-end specs wait on state, never on time**: `pnpm lint` refuses `waitForTimeout` in a spec.
 - Under heavy machine load the first connection of a test file can time out (the worker is too busy loading
   modules to finish the handshake in 30 s); the shared server makes this rare, and the ledger names it when it
   happens.

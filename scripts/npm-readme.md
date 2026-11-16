@@ -170,6 +170,12 @@ npx shutro-erp migrate             # creates its tables, records it, loads its s
 It writes `src/modules/library/` and adds `library` to `src/modules.ts`. After `npm start` and a reload of the
 back-office, the **Library** app appears for the administrator.
 
+`npx shutro-erp check` measures your modules against the standard every shipped app meets — a label and a search
+on every model, a list and a form, print and import templates for documents and master data, named events, help
+on statuses — and names each gap, or the waiver you gave for it (`standard: { waive: [{ rule, model, reason }] }`
+in the manifest). Run it in CI beside your tests. For integration tests, `shutro-erp/testing` gives each test file
+a database of its own (`testDatabase()`) on the PostgreSQL server named by `KOSH_TEST_POSTGRES`.
+
 **`models.ts`**: models and their fields, with access per group (nobody has access by default):
 
 ```ts
@@ -376,6 +382,7 @@ Run them in the project folder (`npx shutro-erp …`, or `npm run migrate` / `np
 | `shutro-erp migrate status` | applied and pending migration files |
 | `shutro-erp seed [module …]` | seed data of all modules, or of those named |
 | `shutro-erp module create <name>` | a new module in `src/modules/<name>/`, listed in `src/modules.ts` |
+| `shutro-erp check` · `--all` · `--strict` | your modules against the standard the shipped apps meet (labels, search, views, print and import templates, events, help) · every result · Bangla and demo data fail too |
 | `shutro-erp user create <login>` | a user: `--name`, `--email`, `--roles`, `--password` (asked when missing) |
 | `shutro-erp user password <login>` | a new password |
 | `shutro-erp generate client` | a typed API client for your front-end (`--out src/api/shutro-erp.gen.ts`) |
