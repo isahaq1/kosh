@@ -197,6 +197,12 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   `backups` check now reads (fails on a mismatch, warns when none or older than a week). Client tools older than the
   server are replaced by the `postgres:<major>` image through Docker. Tested on a real installation (backup, verify,
   doctor green; a manifest tampered with fails verify and doctor). Point-in-time recovery is documented (WAL archiving),
-  not run by the CLI. Next in step 2: the request id in user-facing errors, the adapter certification kit, the pilot
-  playbook.
+  not run by the CLI.
+- **Step 2, part 3 (2026-11-16).** **Errors a user can quote**: every problem document carries `requestId` (one
+  `preSerialization` hook, so module routes' problems too); `ApiError` adds `#` and the id's first eight characters to
+  the message of a server failure (5xx) — refusals stay as they are —, taking the echoed `X-Request-Id` when a proxy
+  answers instead of the server; the router's default error component is a translated page (English and Bangla) with
+  the reference, Try again and Reload. Tested by the server's integration test, unit tests of `ApiError` and an E2E
+  of a failing list. The portal keeps its own error handling for now. Next in step 2: the adapter certification kit
+  (needs sandbox credentials) and the pilot playbook.
 

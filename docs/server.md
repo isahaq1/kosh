@@ -132,6 +132,9 @@ Every refusal is an RFC 9457 problem document (`application/problem+json`) with 
 `unauthenticated` 401, `access` 403, `company-not-allowed` 403, `missing-record` 404, `stale-record` 412,
 `validation` / `constraint-violation` 422, `invalid-identity` 400, `rate-limited` 429; unexpected errors are 500
 without internals, logged with the request id.
+Every problem carries `requestId`, the id the request is logged and traced under (`X-Request-Id`). The back-office
+shows a server failure with its reference (`#` and the id's first eight characters) for the user to quote, and a page
+that fails to render shows a translated error page with Try again and Reload instead of the router's own box.
 
 ## Generated REST API
 
