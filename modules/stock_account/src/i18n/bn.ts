@@ -1,5 +1,10 @@
 /** Bangla for the module's labels, keyed by their English text (RFC 0023 §3.1; `pnpm i18n:extract`). */
 export const bn: Readonly<Record<string, string>> = {
+  'What each unit of this line comes into stock at; empty, the product’s cost or its order’s price.':
+    'এই লাইনের প্রতিটি একক যে মূল্যে স্টকে আসে; খালি থাকলে, পণ্যের খরচ বা এর অর্ডারের দাম।',
+  'The date of its stock entry and valuation; empty, the day it is validated.':
+    'এর স্টক এন্ট্রি ও মূল্যায়নের তারিখ; খালি থাকলে, যেদিন এটি যাচাই করা হয়।',
+  'Accounting date': 'হিসাবের তারিখ',
   'A cost of bringing goods in (freight, customs duty, insurance): added to the goods’ value with a landed cost.':
     'পণ্য আনার খরচ (ভাড়া, কাস্টমস শুল্ক, বিমা): ল্যান্ডেড কস্টের মাধ্যমে পণ্যের মূল্যে যোগ হয়।',
   'A draft can be changed and previewed; posted, its costs are in the goods’ value and the books.':

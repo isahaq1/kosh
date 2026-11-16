@@ -40,3 +40,11 @@ export {
   reportText,
   type StepReport,
 } from './run.js';
+export {
+  type OdooQuant,
+  type OdooStock,
+  readStock,
+  reconcileStock,
+  type StockResult,
+  writeStock,
+} from './stock.js';

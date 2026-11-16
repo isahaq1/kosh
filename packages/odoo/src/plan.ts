@@ -1,7 +1,7 @@
 /**
- * What is taken from Odoo, and how each record becomes a Kosh record (RFC 0034 §2.3, step 3 part 1): units, product
- * categories, taxes, the chart of accounts, contacts and products — in that order, each relation pointing at a record
- * imported before it.
+ * What is taken from Odoo, and how each record becomes a Kosh record (RFC 0034 §2.3, step 3): units, the chart of
+ * accounts, taxes, product categories, contacts, products, then Stockroom's warehouses, internal locations and lots
+ * — in that order, each relation pointing at a record imported before it.
  *
  * Each step reads only the Odoo fields that exist in the connected version (16 to 18), so one plan serves them all.
  * Where Kosh already has the record — a seeded unit, the "All" category, an account of the installed chart with the
@@ -24,6 +24,11 @@ export interface StepContext {
   readonly states: ReadonlyMap<number, string>;
   /** Partners that are Odoo's users or companies themselves: not contacts to import. */
   readonly internalPartners: ReadonlySet<number>;
+  /** The Odoo company whose books and stock are read (the signed-in user's), and the Kosh company they go to. */
+  readonly odooCompany: number;
+  readonly company: number;
+  /** The Odoo records an earlier step read. */
+  records(model: string): readonly OdooRecord[];
 }
 
 /** Finding a Kosh record by field values (the step's `link`). */
@@ -148,13 +153,32 @@ const units: Step = {
 
 // ---- product categories
 
+/** Odoo's cost methods to Kosh's; its standard price is kept as the product's cost, valued at the average. */
+const COST_METHODS: Readonly<Record<string, string>> = { average: 'average', fifo: 'fifo' };
+
 const categories: Step = {
   key: 'categories',
   odoo: 'product.category',
   kosh: 'product.category',
   needs: ['product.category'],
-  read: ['name', 'parent_id'],
-  values: (r) => ({ name: textOf(r['name']) }),
+  read: [
+    'name',
+    'parent_id',
+    'property_cost_method',
+    'property_valuation',
+    'property_stock_valuation_account_id',
+    'property_account_expense_categ_id',
+  ],
+  // The costing fields exist in Kosh with stock valuation (`stock_account`); left out otherwise.
+  values: (r, ctx) =>
+    defined({
+      name: textOf(r['name']),
+      costMethod: COST_METHODS[textOf(r['property_cost_method'])],
+      stockValuationAccount:
+        ctx.ref('account.account', idOf(r['property_stock_valuation_account_id'])) ?? undefined,
+      stockCogsAccount:
+        ctx.ref('account.account', idOf(r['property_account_expense_categ_id'])) ?? undefined,
+    }),
   async link(r, values, ctx, find, refId) {
     if (ctx.odooXmlId('product.category', r.id) === 'product.product_category_all')
       return refId('product.category', 'product.category_all');
@@ -336,6 +360,7 @@ const products: Step = {
     'description_sale',
     'active',
     'product_template_variant_value_ids',
+    'tracking',
   ],
   createOnly: ['code'],
   skip: (r) =>
@@ -365,12 +390,157 @@ const products: Step = {
       purchaseTaxes: { set: ctx.refs('account.tax', idsOf(r['supplier_taxes_id'])) },
       description: orNull(plain(r['description_sale'])),
       active: r['active'] !== false,
+      // Stockroom's: by lot, by serial number or not tracked.
+      tracking: TRACKING[textOf(r['tracking'])],
     });
   },
 };
 
+const TRACKING: Readonly<Record<string, string>> = { none: 'none', lot: 'lot', serial: 'serial' };
+
+// ---- Stockroom: warehouses, internal locations, lots
+
+const ofCompany = (r: OdooRecord, ctx: StepContext): string | null => {
+  const company = idOf(r['company_id']);
+  return company !== null && company !== ctx.odooCompany ? 'of another Odoo company' : null;
+};
+
+const RECEPTION: Readonly<Record<string, string>> = {
+  one_step: 'one',
+  two_steps: 'two',
+  three_steps: 'three',
+};
+const DELIVERY: Readonly<Record<string, string>> = {
+  ship_only: 'one',
+  pick_ship: 'two',
+  pick_pack_ship: 'three',
+};
+
+const warehouses: Step = {
+  key: 'warehouses',
+  odoo: 'stock.warehouse',
+  kosh: 'stock.warehouse',
+  needs: ['stock.warehouse', 'stock.location'],
+  read: [
+    'name',
+    'code',
+    'company_id',
+    'reception_steps',
+    'delivery_steps',
+    'lot_stock_id',
+    'wh_input_stock_loc_id',
+    'wh_qc_stock_loc_id',
+    'wh_pack_stock_loc_id',
+    'wh_output_stock_loc_id',
+    'active',
+  ],
+  skip: ofCompany,
+  values: (r, ctx) =>
+    defined({
+      name: textOf(r['name']),
+      code: textOf(r['code']),
+      company: ctx.company,
+      receptionSteps: RECEPTION[textOf(r['reception_steps'])],
+      deliverySteps: DELIVERY[textOf(r['delivery_steps'])],
+      active: r['active'] !== false,
+    }),
+  link: (_r, values, _ctx, find) => find('stock.warehouse', { code: values['code'] }),
+};
+
+/** What a location is to its Odoo warehouse: its stock location, or the location of a step of its routes. */
+const roleOf = (location: number, ctx: StepContext): string | null => {
+  for (const w of ctx.records('stock.warehouse')) {
+    if (idOf(w['lot_stock_id']) === location) return 'stock';
+    for (const [field, step] of [
+      ['wh_input_stock_loc_id', 'input'],
+      ['wh_qc_stock_loc_id', 'quality'],
+      ['wh_pack_stock_loc_id', 'packing'],
+      ['wh_output_stock_loc_id', 'output'],
+    ] as const)
+      if (idOf(w[field]) === location) return step;
+  }
+  return null;
+};
+
+const locations: Step = {
+  key: 'locations',
+  odoo: 'stock.location',
+  kosh: 'stock.location',
+  needs: ['stock.location'],
+  read: ['name', 'usage', 'location_id', 'warehouse_id', 'company_id', 'active'],
+  skip(r, ctx) {
+    if (r['usage'] !== 'internal')
+      return `${article(textOf(r['usage']) || 'virtual')} location: Kosh has its own vendors, customers, adjustment, production and transit locations`;
+    if (idOf(r['warehouse_id']) === null) return 'an internal location outside any warehouse';
+    if (ctx.ref('stock.warehouse', idOf(r['warehouse_id'])) === null)
+      return 'in a warehouse that was not imported';
+    return ofCompany(r, ctx);
+  },
+  values(r, ctx) {
+    const role = roleOf(r.id, ctx);
+    return defined({
+      name: textOf(r['name']),
+      usage: 'internal',
+      warehouse: ctx.ref('stock.warehouse', idOf(r['warehouse_id'])),
+      company: ctx.company,
+      step: role === null || role === 'stock' ? undefined : role,
+      active: r['active'] !== false,
+    });
+  },
+  // The warehouse's stock location and its steps' are Kosh's own when it has them.
+  link(r, values, ctx, find) {
+    const role = roleOf(r.id, ctx);
+    if (role === 'stock')
+      return find('stock.location', {
+        warehouse: values['warehouse'],
+        usage: 'internal',
+        parent: null,
+        step: null,
+        transit: { ne: true },
+      });
+    if (role !== null)
+      return find('stock.location', { warehouse: values['warehouse'], step: role });
+    return Promise.resolve(null);
+  },
+  // Inside the location it is in, when that one is imported (Odoo's warehouse view location is not).
+  later: (r, ctx) =>
+    defined({ parent: ctx.ref('stock.location', idOf(r['location_id'])) ?? undefined }),
+};
+
+const lots: Step = {
+  key: 'lots',
+  odoo: 'stock.lot',
+  kosh: 'stock.lot',
+  needs: ['stock.lot'],
+  read: ['name', 'product_id', 'expiration_date', 'note', 'company_id'],
+  skip: (r, ctx) =>
+    ctx.ref('product.product', idOf(r['product_id'])) === null
+      ? 'its product was not imported'
+      : ofCompany(r, ctx),
+  values: (r, ctx) =>
+    defined({
+      name: textOf(r['name']),
+      product: ctx.ref('product.product', idOf(r['product_id'])),
+      company: ctx.company,
+      expiryDate: orNull(textOf(r['expiration_date']).slice(0, 10)),
+      note: orNull(plain(r['note'])),
+    }),
+  link: (_r, values, _ctx, find) =>
+    find('stock.lot', { product: values['product'], name: values['name'] }),
+};
+
 /** The steps, in the order they run: every relation points at a step before it. */
-export const STEPS: readonly Step[] = [units, categories, taxes, accounts, partners, products];
+export const STEPS: readonly Step[] = [
+  units,
+  accounts,
+  taxes,
+  categories,
+  partners,
+  products,
+  warehouses,
+  locations,
+  lots,
+];
 
 /** The fields of `step` that the connected Odoo has. */
 export const readableFields = (step: Step, fields: Readonly<Record<string, OdooField>>): string[] =>
@@ -379,3 +549,6 @@ export const readableFields = (step: Step, fields: Readonly<Record<string, OdooF
 /** The external id Kosh gives an imported Odoo record: `odoo.res_partner_42`. */
 export const externalIdFor = (odooModel: string, id: number): string =>
   `odoo.${odooModel.replaceAll('.', '_')}_${id}`;
+
+/** "a view", "an inventory". */
+const article = (word: string): string => `${/^[aeiou]/i.test(word) ? 'an' : 'a'} ${word}`;

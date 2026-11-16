@@ -112,6 +112,12 @@ export const StockValuationLayer = defineModel('stock.valuation.layer', {
 export const PickingLayers = extendModel('stock.picking', {
   fields: {
     valuationLayers: f.one2many('stock.valuation.layer', 'picking'),
+    /** Set by the system only (opening stock imported at a cut-off); empty: the day it is validated. */
+    accountingDate: f.date({
+      label: 'Accounting date',
+      help: 'The date of its stock entry and valuation; empty, the day it is validated.',
+      groups: { write: [] },
+    }),
   },
 });
 
@@ -353,7 +359,7 @@ async function valueTransfers(pickings: Records<'stock.picking'>): Promise<void>
           journal: accounts.journal,
           company: p.company.id,
           currency: company?.currency.id,
-          date: env.today(),
+          date: p.accountingDate ?? env.today(),
           ref: p.origin ? `${p.name} (${p.origin})` : p.name,
           partner: p.partner?.id ?? null,
           lines: { create: lines },
@@ -365,13 +371,26 @@ async function valueTransfers(pickings: Records<'stock.picking'>): Promise<void>
       entry = made.ids[0] ?? null;
     }
     if (layers.length > 0)
-      await env
-        .model('stock.valuation.layer')
-        .create(layers.map((l) => ({ ...l, accountMove: entry })) as never);
+      await env.model('stock.valuation.layer').create(
+        layers.map((l) => ({
+          ...l,
+          accountMove: entry,
+          ...(p.accountingDate === null ? {} : { date: p.accountingDate }),
+        })) as never,
+      );
   }
 }
 
 export const MoveCost = extendModel('stock.move', {
+  fields: {
+    /** Set by the system only (opening stock imported at its old system's value); empty: as the transfer says. */
+    unitCost: f.decimal({
+      scale: 6,
+      label: 'Unit cost',
+      help: 'What each unit of this line comes into stock at; empty, the product’s cost or its order’s price.',
+      groups: { write: [] },
+    }),
+  },
   overrides: {
     // The ledger's values: each line's valuation layers, when this person may read the valuation.
     moveValues: async function (
@@ -415,7 +434,7 @@ export const MoveCost = extendModel('stock.move', {
       );
       for (const m of moves) {
         const cost = m.returnOf === null ? undefined : original.get(m.returnOf.id as number);
-        out.set(m.id, (cost ?? m.product.standardPrice).toString());
+        out.set(m.id, (m.unitCost ?? cost ?? m.product.standardPrice).toString());
       }
       return out;
     }),

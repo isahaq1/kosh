@@ -4,7 +4,9 @@
  *
  * - **The opening entry** (dated the cut-off, posted): every balance-sheet account at its Odoo balance, the profit
  *   and loss accounts at this fiscal year's balance (so the year's reports carry on), the earlier years' result on
- *   the retained earnings account — but receivables and payables, which come as open items.
+ *   the retained earnings account — but receivables and payables, which come as open items. What Kosh already
+ *   posted by the cut-off (the opening stock's adjustments, dated the cut-off) is taken into account: each line is
+ *   Odoo's balance less Kosh's, so every account ends at Odoo's.
  * - **Open items**: each Odoo line still open on a receivable or payable account. An invoice, a credit note or a bill
  *   becomes a Kosh document of the same kind for what is left to pay — its number as the reference, its dates kept,
  *   posted to the partner's account — so it can be paid, followed up and reconciled; another open item (an advance,
@@ -265,8 +267,9 @@ export async function writeOpening(
     return made.ids[0] as number;
   })();
 
-  // ---- the opening entry's lines
+  // ---- the opening entry's lines: each account's balance at the cut-off, less what Kosh already has there
   const lines: { account: number; partner?: number; name: string; balance: Decimal }[] = [];
+  const target = new Map<number, Decimal>();
   let earlierResult = ZERO;
   for (const [odooAccount, balance] of data.balances) {
     const type = data.types.get(odooAccount) ?? '';
@@ -281,7 +284,7 @@ export async function writeOpening(
     }
     const opened = PL_TYPES.includes(type) ? (data.yearBalances.get(odooAccount) ?? ZERO) : balance;
     if (PL_TYPES.includes(type)) earlierResult = earlierResult.plus(balance.minus(opened));
-    if (!opened.isZero()) lines.push({ account, name: 'Opening balance', balance: opened });
+    target.set(account, (target.get(account) ?? ZERO).plus(opened));
   }
   if (!earlierResult.isZero()) {
     if (retained === null)
@@ -289,12 +292,28 @@ export async function writeOpening(
         what: 'earlier years’ result',
         error: 'the company has no retained earnings account',
       });
-    else
-      lines.push({
-        account: retained,
-        name: 'Result of earlier years (from Odoo)',
-        balance: earlierResult,
-      });
+    else target.set(retained, (target.get(retained) ?? ZERO).plus(earlierResult));
+  }
+  const already = await env.sql<{ account_id: number; account_type: string; balance: string }>`
+    SELECT l.account_id, l.account_type, SUM(l.balance)::text AS balance
+    FROM account_move_line l JOIN account_move m ON m.id = l.move_id JOIN account_account a ON a.id = l.account_id
+    WHERE l.posted AND m.company_id = ${companyId} AND l.date <= ${cutoff}::date AND a.code <> 'OPENING'
+    GROUP BY l.account_id, l.account_type`;
+  const posted = new Map<number, Decimal>();
+  for (const r of already)
+    if (!RECEIVABLE_PAYABLE.includes(r.account_type))
+      posted.set(r.account_id, orm.toDecimal(r.balance));
+  for (const account of new Set([...target.keys(), ...posted.keys()])) {
+    const balance = (target.get(account) ?? ZERO).minus(posted.get(account) ?? ZERO);
+    if (balance.isZero()) continue;
+    lines.push({
+      account,
+      name:
+        account === retained && !earlierResult.isZero()
+          ? 'Opening balance, with the result of earlier years (from Odoo)'
+          : 'Opening balance',
+      balance,
+    });
   }
   // Open items that are not documents: on the opening entry, with their partner.
   const documents = new Map<number, OpenItem[]>();

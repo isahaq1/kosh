@@ -32,6 +32,13 @@ import {
   type StepContext,
 } from './plan.js';
 import { idOf, type OdooClient, type OdooRecord, textOf } from './rpc.js';
+import {
+  type OdooStock,
+  readStock,
+  reconcileStock,
+  type StockResult,
+  writeStock,
+} from './stock.js';
 
 export interface FailedRecord {
   readonly odooId: number;
@@ -63,6 +70,8 @@ export interface OdooReport {
   readonly steps: readonly StepReport[];
   /** The opening entry and open documents, when a cut-off was given. */
   readonly opening?: OpeningResult;
+  /** The stock on hand, when a cut-off was given and Stockroom is installed in both. */
+  readonly stock?: StockResult;
   /** Kosh's books against Odoo's at the cut-off. */
   readonly checks?: readonly Check[];
   /** Every record read is accounted for, and none failed. */
@@ -78,7 +87,10 @@ export interface OdooImportOptions {
   readonly source: { readonly url: string; readonly db: string };
   /** Progress: a step started, with the records read. */
   readonly onStep?: (step: string, records: number) => void;
-  /** Also the books: the opening entry and the open documents at this cut-off, and the reconciliation. */
+  /**
+   * Also the books and the stock: the opening entry, the open documents and the stock on hand at this cut-off, and
+   * the reconciliation.
+   */
   readonly opening?: OpeningOptions;
 }
 
@@ -122,11 +134,17 @@ export async function importFromOdoo(
   const countries = await client.readAll('res.country', ['code']);
   const states = await client.readAll('res.country.state', ['code']);
   const users = await client.readAll('res.users', ['partner_id']);
+  const [me] = await client.read('res.users', [client.uid], ['company_id']);
+  const odooCompany = idOf(me?.['company_id']) ?? 1;
   const companies = await client.readAll('res.company', ['partner_id']);
   const xmlIds = new Map<string, ReadonlyMap<number, string>>();
   for (const m of ['uom.uom', 'product.category']) xmlIds.set(m, await client.externalIds(m));
   const refs = new Map<string, Map<number, number>>();
+  const read = new Map<string, readonly OdooRecord[]>();
   const ctx: StepContext = {
+    odooCompany,
+    company: options.company,
+    records: (m) => read.get(m) ?? [],
     ref: (m, id) => (id === null ? null : (refs.get(m)?.get(id) ?? null)),
     refs: (m, ids) =>
       ids.map((id) => refs.get(m)?.get(id)).filter((v): v is number => v !== undefined),
@@ -142,6 +160,7 @@ export async function importFromOdoo(
 
   const planned: { step: Step; records: OdooRecord[] | null; reason?: string }[] = [];
   let openingResult: OpeningResult | undefined;
+  let stockResult: StockResult | undefined;
   let checks: Check[] | undefined;
   for (const step of STEPS) {
     const missing = step.needs.filter((m) => koshFields(m) === null);
@@ -160,11 +179,18 @@ export async function importFromOdoo(
     }
     const records = await client.readAll(step.odoo, readableFields(step, fields));
     options.onStep?.(step.key, records.length);
+    read.set(step.odoo, records);
     planned.push({ step, records });
   }
 
   const opening: OdooOpening | null =
     options.opening === undefined ? null : await readOpening(client, options.opening);
+  const stockSteps = ['products', 'locations', 'lots'];
+  const stockPlanned = planned.some((p) => stockSteps.includes(p.step.key) && p.records !== null);
+  const stock: OdooStock | null =
+    options.opening === undefined || !stockPlanned
+      ? null
+      : await readStock(client, odooCompany, options.opening.cutoff);
 
   // ---- write Kosh: one transaction, a savepoint per record
   const reports: StepReport[] = [];
@@ -229,12 +255,14 @@ export async function importFromOdoo(
             const same = (await step.link?.(r, values, ctx, findIn(tx), refIdOf(tx))) ?? null;
             if (same !== null) {
               await model(tx, step.kosh).browse([same]).write(updates);
-              await tx.setExternalId(step.kosh as never, same, xmlId);
+              await tx
+                .withFlags({ activeTest: false })
+                .setExternalId(step.kosh as never, same, xmlId);
               return { id: same, how: 'linked' as const };
             }
             const made = await model(tx, step.kosh).create([values]);
             const id = made.ids[0] as number;
-            await tx.setExternalId(step.kosh as never, id, xmlId);
+            await tx.withFlags({ activeTest: false }).setExternalId(step.kosh as never, id, xmlId);
             return { id, how: 'created' as const };
           });
           mine.set(r.id, outcome.id);
@@ -279,6 +307,29 @@ export async function importFromOdoo(
         failed,
       });
     }
+    // The stock first: its adjustments post at the cut-off, and the opening entry takes them into account.
+    const stockChecks: Check[] = [];
+    if (stock !== null) {
+      const missing = stockSteps.filter((k) => reports.find((r) => r.key === k)?.status !== 'done');
+      if (missing.length > 0)
+        stockResult = {
+          status: 'done',
+          adjustments: 0,
+          lines: 0,
+          failed: [{ what: 'the stock', error: `the ${missing.join(' and ')} step did not run` }],
+        };
+      else {
+        stockResult = await writeStock(env, stock, ctx.ref, errorText, koshFields);
+        stockChecks.push(
+          ...(await reconcileStock(
+            env,
+            stock,
+            ctx.ref,
+            koshFields('stock.valuation.layer') !== null,
+          )),
+        );
+      }
+    }
     if (opening !== null) {
       const needed = ['accounts', 'partners'].filter(
         (k) => reports.find((r) => r.key === k)?.status !== 'done',
@@ -296,6 +347,7 @@ export async function importFromOdoo(
         checks = await reconcile(env, opening, ctx.ref);
       }
     }
+    if (stockChecks.length > 0) checks = [...(checks ?? []), ...stockChecks];
     if (dryRun) throw new DryRun();
   };
   try {
@@ -310,6 +362,7 @@ export async function importFromOdoo(
   const ok =
     reports.every((s) => s.failed.length === 0) &&
     (openingResult?.failed.length ?? 0) === 0 &&
+    (stockResult?.failed.length ?? 0) === 0 &&
     (checks ?? []).every((c) => c.ok);
   return {
     odoo: { url: options.source.url, db: options.source.db, version: client.version },
@@ -318,6 +371,7 @@ export async function importFromOdoo(
     finishedAt: new Date().toISOString(),
     steps: reports,
     ...(openingResult === undefined ? {} : { opening: openingResult }),
+    ...(stockResult === undefined ? {} : { stock: stockResult }),
     ...(checks === undefined ? {} : { checks }),
     ok,
   };
@@ -325,7 +379,8 @@ export async function importFromOdoo(
 
 async function refIdIn(env: Env, name: string, externalId: string): Promise<number | null> {
   try {
-    return Number(await env.refId(name as never, externalId));
+    // Archived records too: an archived Odoo record is imported archived, and found again.
+    return Number(await env.withFlags({ activeTest: false }).refId(name as never, externalId));
   } catch {
     return null;
   }
@@ -362,6 +417,17 @@ export function reportText(report: OdooReport): string {
         : `${o.failed.length === 0 ? '✔' : '✖'} the books: an opening entry of ${o.entryLines} lines, ${o.documents} open invoices, credit notes and bills`,
     );
     for (const f of o.failed.slice(0, 20)) lines.push(`    failed ${f.what}: ${f.error}`);
+  }
+  if (report.stock !== undefined) {
+    const s = report.stock;
+    lines.push(
+      s.status === 'skipped'
+        ? '– the stock: imported at this cut-off before'
+        : `${s.failed.length === 0 ? '✔' : '✖'} the stock: ${s.adjustments} inventory adjustments, one per location, of ${s.lines} lines`,
+    );
+    for (const f of s.failed.slice(0, 20)) lines.push(`    failed ${f.what}: ${f.error}`);
+    if (s.failed.length > 20)
+      lines.push(`    … and ${s.failed.length - 20} more in the JSON report`);
   }
   if (report.checks !== undefined) {
     lines.push('', 'Reconciliation with Odoo:');

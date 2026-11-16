@@ -1,11 +1,14 @@
 /**
- * The Odoo importer (RFC 0034 §2.3, step 3 part 1) against a real Odoo 18 with its demo data, recorded with
- * `KOSH_CERTIFY=live` and replayed otherwise, into Kosh with Contacts, Products and Accounting on real PostgreSQL:
- * a dry run keeps nothing; the import accounts for every Odoo record read; contacts keep their companies, products
- * their codes, taxes and units, Odoo's accounts link to the installed chart by code; a second run creates nothing.
+ * The Odoo importer (RFC 0034 §2.3, step 3) against a real Odoo 18 with its demo data, recorded with
+ * `KOSH_CERTIFY=live` and replayed otherwise, into Kosh with Contacts, Products, Accounting and Stockroom with its
+ * valuation on real PostgreSQL: a dry run keeps nothing; the import accounts for every Odoo record read; contacts
+ * keep their companies, products their codes, taxes and units; a second run creates nothing; the books and the stock
+ * at the cut-off reconcile with Odoo's.
  *
  * Live: an Odoo 18 at `KOSH_ODOO_URL` (default http://localhost:18069) with a `demo` database of its demo data
  * (Accounting, Sales, Purchase, Inventory), signed in as `admin` (`KOSH_ODOO_PASSWORD`, default the demo's `admin`).
+ * The recording's Odoo values its Office Furniture category in real time at the average cost, with costs on its
+ * products (so its books hold the stock's value).
  */
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -31,6 +34,8 @@ import {
 import { type Driver, type Env, orm, pg } from '@kosh/server/orm';
 import { cassette, type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { settings } from '@kosh/settings';
+import { stock } from '@kosh/stock';
+import { stockAccount } from '@kosh/stock_account';
 import { afterAll, afterEach, beforeAll, expect, test } from 'vitest';
 
 const url = process.env['KOSH_ODOO_URL'] || 'http://localhost:18069';
@@ -39,7 +44,7 @@ const tape = cassette(join(import.meta.dirname, 'recordings', 'odoo-18-demo.json
   adapter: 'odoo-18',
   secrets: [password],
 });
-const catalogue = [base, settings, accounting];
+const catalogue = [base, settings, accounting, stock, stockAccount];
 
 let container: TestDatabase;
 let driver: Driver;
@@ -73,7 +78,12 @@ beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), 'kosh-odoo-'));
   await recordInstalledApps(driver, [], [], 'test');
   await applyApps(
-    await prepareApps({ driver, catalogue, change: { install: ['settings', 'accounting'] }, dir }),
+    await prepareApps({
+      driver,
+      catalogue,
+      change: { install: ['settings', 'accounting', 'stock', 'stock_account'] },
+      dir,
+    }),
     { driver, dir, actor: 'test' },
   );
   host = await createAppHost({
@@ -167,6 +177,14 @@ contract(
     expect(accounts.created + accounts.linked, text).toBe(accounts.read);
     expect(step(report, 'taxes').created + step(report, 'taxes').linked, text).toBe(2);
     expect(step(report, 'units').linked, text).toBeGreaterThan(0);
+    // Stockroom: Odoo's warehouse linked to Kosh's main one, its other company's left out, lots with their products.
+    expect(step(report, 'warehouses').linked, text).toBe(1);
+    expect(step(report, 'warehouses').skipped['of another Odoo company'], text).toBe(1);
+    expect(
+      step(report, 'locations').created + step(report, 'locations').linked,
+      text,
+    ).toBeGreaterThan(5);
+    expect(step(report, 'lots').created, text).toBeGreaterThan(2);
     // Odoo's own users and company are not contacts.
     expect(step(report, 'partners').skipped['a user or a company of Odoo itself']).toBeGreaterThan(
       0,
@@ -222,8 +240,25 @@ contract(
       'receivables and payables',
       'opening balances account',
       'open documents',
+      'stock on hand',
+      'stock value',
     ]);
+    // The stock: one validated adjustment per Odoo location, each lot on its line, valued at Odoo's cost.
+    expect(report.stock?.failed, text).toEqual([]);
+    expect(report.stock?.adjustments, text).toBeGreaterThan(1);
+    expect(report.checks?.find((c) => c.name === 'stock value')?.summary, text).toContain(
+      'worth 3067.50',
+    );
     expect(report.ok, text).toBe(true);
+    await read(async (env) => {
+      const [box] = (await search(env, 'stock.lot', { name: 'CM-BOX-00001' })).ids;
+      const quants = await (await search(env, 'stock.quant', { lot: box })).load(['quantity']);
+      expect(quants.read(['quantity']).map((q) => String(q['quantity']))).toEqual(['50']);
+      // Valued at the cut-off in the books.
+      const [late] = await env.sql<{ n: number }>`
+        SELECT count(*)::int AS n FROM stock_valuation_layer WHERE date <> ${cutoff}::date`;
+      expect(late?.n).toBe(0);
+    });
   },
 );
 
@@ -234,6 +269,7 @@ contract(
     const text = reportText(report);
     expect(report.opening?.status, text).toBe('skipped');
     expect(text).toContain('an opening at this cut-off was imported before');
+    expect(report.stock?.status, text).toBe('skipped');
     for (const c of report.checks ?? []) expect(c.ok, `${c.name}\n${text}`).toBe(true);
   },
 );

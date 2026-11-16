@@ -23,10 +23,11 @@ const USAGE = `Usage: shutro-erp odoo import --url <https://odoo.example.com> --
   --commit             keep the import
   --company <id>       the company the records belong to (default: the first)
   --report <file>      where the JSON report goes (default: odoo-import-<time>.json)
-  --cutoff <date>      also the books at the end of that day (YYYY-MM-DD): an opening entry, the open invoices,
-                       credit notes and bills, and the reconciliation of the trial balance, each partner's
-                       receivable and payable and the open documents with Odoo's. Run it with no posting in
-                       Odoo after the cut-off.
+  --cutoff <date>      also the books and the stock at the end of that day (YYYY-MM-DD): an opening entry, the
+                       open invoices, credit notes and bills, the stock on hand as an adjustment per location,
+                       and the reconciliation of the trial balance, each partner's receivable and payable, the
+                       open documents and the stock's quantities and value with Odoo's. Run it with no posting
+                       and no stock moved in Odoo after the cut-off.
   --year-start <date>  the first day of the fiscal year of the cut-off (default: from the company's fiscal year)
 `;
 
