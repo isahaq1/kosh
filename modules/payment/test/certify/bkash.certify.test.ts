@@ -28,14 +28,18 @@ const adapter = bkashAdapter({ ...credentials, sandbox: true, fetch: tape.fetch 
 const reference = tape.vars('reference', () => `KOSH-CERT-${Date.now()}`);
 let paymentId = '';
 
-let failed = false;
+// The recording is kept only when every step of the contract ran and passed (not a filtered or failed run).
+let total = 0;
+let passed = 0;
 afterEach((ctx) => {
-  if (ctx.task.result?.state === 'fail') failed = true;
+  if (ctx.task.result?.state === 'pass') passed += 1;
 });
-afterAll(() => tape.save({ failed }));
+afterAll(() => tape.save({ failed: passed !== total }));
 /** A step of the contract: in order, never retried (a retry would send the requests again). */
-const contract = (name: string, fn: () => Promise<void>) =>
-  test(name, { retry: 0, timeout: 60_000 }, fn);
+const contract = (name: string, fn: () => Promise<void>) => {
+  total += 1;
+  return test(name, { retry: 0, timeout: 60_000 }, fn);
+};
 
 const request: PaymentRequest = {
   reference,
