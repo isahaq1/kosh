@@ -215,6 +215,31 @@ interface PaymentAdapter {
 which forwards them to the invoice in the portal (`SHUTRO_ERP_PORTAL_URL` + `/d/invoices/<id>?payment=<reference>`),
 and call back at `SHUTRO_ERP_API_URL` + `/api/v1/hooks/<token>`; both must be the public addresses in production.
 
+### Certified against the sandboxes
+
+Each adapter has a **contract suite** run against the provider's real sandbox (RFC 0034 §2.2): what it must do
+(open a payment and get the provider's page, report an unpaid payment as pending) and what it must refuse (a callback
+the provider does not confirm, a failure claimed for a payment the customer is still making, wrong credentials).
+
+- `pnpm certify [adapter …]` runs the suites live and rewrites `modules/payment/test/certify/recordings/<adapter>.json`;
+  the recording's `recordedAt` is the adapter's certification date.
+- `pnpm test` replays the recordings without the network: a change in what an adapter sends fails until it is
+  certified again against the sandbox.
+- Recordings never hold secrets: the credentials, raw or URL-encoded, and every JSON field named like a token, secret
+  or password are `<redacted>` both ways. A failed live run is written as `<adapter>.failed.json` (not committed).
+- Credentials come from the adapter's environment variables; without them, the suites use the provider's public demo
+  account where it publishes one.
+
+| Adapter | Certified | Against |
+| --- | --- | --- |
+| SSLCommerz | 2026-11-16 | the sandbox, with its public demo store `testbox` |
+| bKash | 2026-11-16 | the Tokenized Checkout v2 sandbox, with its public demo merchant |
+| Razorpay, Stripe | not yet | need test keys of an account (`KOSH_RAZORPAY_*`, `KOSH_STRIPE_*`) |
+
+The first live run found that SSLCommerz answers a transaction it never saw with an `INVALID` placeholder and a
+session the customer is still on as `PROCESSING`; the adapter had taken the first as an attempt and the second as a
+failure, so a forged failure IPN could have failed a payment being made. Both are fixed and covered by the contract.
+
 ## OAuth 2.0 apps
 
 Shutro ERP is an OAuth 2.0 provider: another company's app asks one of your users for access, the user allows it

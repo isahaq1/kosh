@@ -20,6 +20,9 @@ pnpm bench               # performance budgets on seeded data (minutes; CI runs 
 
 ## Tests
 
+- **Adapters are certified against providers' sandboxes**: `pnpm certify [adapter …]` runs their contract suites
+  live and records the exchanges (`cassette()` from `@kosh/server/testing`, secrets redacted); `pnpm test` replays
+  them. See [integrations.md](integrations.md), Certified against the sandboxes.
 - **Integration tests share one PostgreSQL server**, started once per run by Vitest's global setup
   (`packages/server/test/support/postgres.global.ts`); each test file creates a database of its own on it with
   `testDatabase()` from `@kosh/server/testing`, and drops it in `afterAll` with `stop()`. To use a server you

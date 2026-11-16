@@ -209,6 +209,13 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   the installation with `doctor` all ticks and nightly verified backups, the data in order with external ids, the
   weekly reconciliation checks of the parallel run (trial balance, aged balances, stock, documents, VAT), the problem
   log with error references, the weekly review, cut-over after two equal weeks and a month end, the report after.
-  Left in step 2: the adapter certification kit (needs sandbox credentials), point-in-time recovery set up by `init`
-  and the backup result on the administrator's home page.
+  Left in step 2: point-in-time recovery set up by `init` and the backup result on the administrator's home page.
+- **Step 2, part 5 (2026-11-16).** **The adapter certification kit**: `cassette()` in `@kosh/server/testing` records a
+  live run's exchanges with secrets redacted (credentials raw and URL-encoded, token-named JSON fields) and replays
+  them strictly (method, URL, body, in order; a change fails with how to re-record); `pnpm certify [adapter …]` runs
+  the contracts live. SSLCommerz (6 steps) and bKash (4 steps) certified on 2026-11-16 against their sandboxes with
+  the providers' public demo accounts. The first run found an SSLCommerz defect — an unknown transaction's `INVALID`
+  placeholder taken as an attempt and a `PROCESSING` session as failed, so a forged failure IPN was believed —, fixed.
+  Not yet: Razorpay and Stripe (no public demo keys), couriers and SMS (only test adapters so far), the certification
+  date shown in Settings.
 
