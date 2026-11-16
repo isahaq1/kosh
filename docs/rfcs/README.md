@@ -35,3 +35,4 @@ Design documents written before implementation. An RFC is implemented only after
 | 0029 | [Accounting in depth](0029-accounting-depth.md) | Complete: bank statements and reconciliation rules, sending documents, payment follow-ups, fiscal positions and account determination |
 | 0030 | [Products in depth](0030-products-in-depth.md) | Accepted: vendor prices, returns, landed costs, variants |
 | 0031 | [Production in depth](0031-production-planning.md) | Accepted: explain popovers, formulas and packaging BOMs, plans, schedules and two-stage production, overheads |
+| 0036 | [Tools on Shutro](0036-tools-on-shutro.md) | Proposed: the opening-balance kit with its proof and undo, generators that pass the module standard, data health with merging and repairs |
