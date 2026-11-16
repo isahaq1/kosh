@@ -46,3 +46,5 @@ export async function testDatabase(): Promise<TestDatabase> {
     },
   };
 }
+
+export { type Cassette, cassette, type Exchange, type Recording, redact } from './cassette.js';

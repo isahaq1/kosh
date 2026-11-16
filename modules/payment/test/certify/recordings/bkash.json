@@ -1,0 +1,57 @@
+{
+  "adapter": "bkash",
+  "recordedAt": "2026-11-16T07:10:28.946Z",
+  "vars": {
+    "reference": "KOSH-CERT-1794813028949"
+  },
+  "exchanges": [
+    {
+      "method": "POST",
+      "url": "https://tokenized.sandbox.bka.sh/v2/tokenized-checkout/auth/grant-token",
+      "requestBody": "{\"app_key\":\"<redacted>\",\"app_secret\":\"<redacted>\"}",
+      "status": 200,
+      "contentType": "application/json",
+      "responseBody": "{\"statusCode\":\"0000\",\"statusMessage\":\"Successful\",\"token_type\":\"<redacted>\",\"id_token\":\"<redacted>\",\"refresh_token\":\"<redacted>\",\"expires_in\":3600}"
+    },
+    {
+      "method": "POST",
+      "url": "https://tokenized.sandbox.bka.sh/v2/tokenized-checkout/payment/create",
+      "requestBody": "{\"payerReference\":\"01770618575\",\"callbackURL\":\"https://erp.example.com/api/v1/payment/return/1\",\"amount\":\"1250.00\",\"currency\":\"BDT\",\"intent\":\"sale\",\"merchantInvoiceNumber\":\"KOSH-CERT-1794813028949\"}",
+      "status": 200,
+      "contentType": "application/json",
+      "responseBody": "{\"paymentId\":\"TR0011eFQIkV81794813072186\",\"bkashURL\":\"https://sandbox.payment.bkash.com/?paymentId=TR0011eFQIkV81794813072186&hash=f5OvSI(j)oRee!dprRuVisNItRnPiERy-fK838TQv!Q89vadBpIPXRxyYgxxvm5XkBVg2_7DC!of3VvxUuIhPYTCzO8YCZx.*ihR1794813072186&mode=0011&apiVersion=v2/\",\"callbackURL\":\"https://erp.example.com/api/v1/payment/return/1\",\"successCallbackURL\":\"https://erp.example.com/api/v1/payment/return/1?paymentID=TR0011eFQIkV81794813072186&status=success&signature=tpJgfDWiAf\",\"failureCallbackURL\":\"https://erp.example.com/api/v1/payment/return/1?paymentID=TR0011eFQIkV81794813072186&status=failure&signature=tpJgfDWiAf\",\"cancelledCallbackURL\":\"https://erp.example.com/api/v1/payment/return/1?paymentID=TR0011eFQIkV81794813072186&status=cancel&signature=tpJgfDWiAf\",\"amount\":\"1250.00\",\"intent\":\"sale\",\"currency\":\"BDT\",\"paymentCreateTime\":\"2026-11-16T13:11:12:186 GMT+0600\",\"transactionStatus\":\"Initiated\",\"merchantInvoiceNumber\":\"KOSH-CERT-1794813028949\",\"signature\":\"tpJgfDWiAf\"}"
+    },
+    {
+      "method": "POST",
+      "url": "https://tokenized.sandbox.bka.sh/v2/tokenized-checkout/query/payment",
+      "requestBody": "{\"paymentId\":\"TR0011eFQIkV81794813072186\"}",
+      "status": 200,
+      "contentType": "application/json",
+      "responseBody": "{\"paymentId\":\"TR0011eFQIkV81794813072186\",\"verificationStatus\":\"Incomplete\",\"payerReference\":\"01770618575\",\"paymentCreateTime\":\"2026-11-16T13:11:12:186 GMT+0600\",\"amount\":\"1250.00\",\"currency\":\"BDT\",\"intent\":\"sale\",\"merchantInvoice\":\"KOSH-CERT-1794813028949\",\"transactionStatus\":\"Initiated\",\"maxRefundableAmount\":\"1250.00\"}"
+    },
+    {
+      "method": "POST",
+      "url": "https://tokenized.sandbox.bka.sh/v2/tokenized-checkout/payment/execute",
+      "requestBody": "{\"paymentId\":\"TR0011eFQIkV81794813072186\"}",
+      "status": 400,
+      "contentType": "application/json",
+      "responseBody": "{\"internalCode\":\"invalid_payment_state\",\"externalCode\":\"2056\",\"errorMessageEn\":\"Invalid Payment State\",\"errorMessageBn\":null}"
+    },
+    {
+      "method": "POST",
+      "url": "https://tokenized.sandbox.bka.sh/v2/tokenized-checkout/query/payment",
+      "requestBody": "{\"paymentId\":\"TR0011eFQIkV81794813072186\"}",
+      "status": 200,
+      "contentType": "application/json",
+      "responseBody": "{\"paymentId\":\"TR0011eFQIkV81794813072186\",\"verificationStatus\":\"Incomplete\",\"payerReference\":\"01770618575\",\"paymentCreateTime\":\"2026-11-16T13:11:12:186 GMT+0600\",\"paymentExecuteTime\":\"2026-11-16T13:11:12:728 GMT+0600\",\"amount\":\"1250.00\",\"currency\":\"BDT\",\"intent\":\"sale\",\"merchantInvoice\":\"KOSH-CERT-1794813028949\",\"transactionStatus\":\"Initiated\",\"maxRefundableAmount\":\"1250.00\"}"
+    },
+    {
+      "method": "POST",
+      "url": "https://tokenized.sandbox.bka.sh/v2/tokenized-checkout/auth/grant-token",
+      "requestBody": "{\"app_key\":\"<redacted>\",\"app_secret\":\"<redacted>\"}",
+      "status": 200,
+      "contentType": "application/json",
+      "responseBody": "{\"statusCode\":\"9999\",\"statusMessage\":\"System error\"}"
+    }
+  ]
+}
