@@ -168,3 +168,21 @@ record rules, field groups, company scope and constraints apply as in the ORM.
 - OpenTelemetry: a span per request (method, route, status, request id) and a child span per Shutro transaction.
 - Graceful shutdown on SIGTERM / SIGINT: new connections are refused, in-flight requests finish (responses ask
   clients to close their connections), then the database pool and Valkey close.
+
+### Doctor and backups
+
+- `shutro-erp doctor` checks a running installation and says what to fix (database, migrations, apps,
+  administrators and their second factor, jobs, webhooks, Valkey, mail, storage, HTTPS, backups, telemetry);
+  `--json` for monitoring, exit code 1 on a failure.
+- `shutro-erp backup [--dir backups]` writes `<database>-<time>.dump` (pg_dump's custom format) and beside it a
+  `.dump.json` manifest: the rows of every table, the ledger's debits and credits and the stock on hand, measured in
+  the snapshot pg_dump exports, so the manifest describes exactly what the dump holds while people keep working.
+- `shutro-erp backup verify [file]` restores the latest backup (or the one named) into a scratch database on the
+  same server, compares it with its manifest, checks that the ledger balances, drops the scratch database and records
+  the result in `kosh_backup_check`. Doctor's `backups` check fails when the last verification did not match and warns
+  when none was recorded or it is older than a week.
+- pg_dump and pg_restore must be at least the server's version: the local tools when they are, otherwise the
+  `postgres:<major>` image through Docker (localhost becomes `host.docker.internal`).
+- A schedule, e.g. nightly: `shutro-erp backup && shutro-erp backup verify`, then copy `backups/` off the server.
+  Dumps are the floor; for point-in-time recovery, archive the WAL as well (`archive_mode = on` with
+  `archive_command`, or a tool such as pgBackRest or WAL-G) and rehearse a restore to a time the same way.

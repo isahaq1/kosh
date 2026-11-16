@@ -189,4 +189,14 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   a real installation (healthy checks, no administrator, an administrator without a second factor, an app missing
   from the modules file). Administrators are found through the `base.admin` group; runtime roles that make
   administrators (RFC 0019) are not counted yet.
+- **Step 2, part 2 (2026-11-16).** **Rehearsed backups** (`packages/cli/src/backup.ts`): `shutro-erp backup` runs
+  pg_dump (custom format) inside a repeatable-read transaction whose exported snapshot it hands to pg_dump, and measures
+  in that same snapshot the rows of every table, the ledger's debits and credits and the stock on hand, written as the
+  dump's manifest; `shutro-erp backup verify` restores into a scratch database, compares every table and total, checks
+  that the ledger balances, drops the scratch database and records the result in `kosh_backup_check`, which doctor's
+  `backups` check now reads (fails on a mismatch, warns when none or older than a week). Client tools older than the
+  server are replaced by the `postgres:<major>` image through Docker. Tested on a real installation (backup, verify,
+  doctor green; a manifest tampered with fails verify and doctor). Point-in-time recovery is documented (WAL archiving),
+  not run by the CLI. Next in step 2: the request id in user-facing errors, the adapter certification kit, the pilot
+  playbook.
 
