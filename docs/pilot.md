@@ -76,8 +76,9 @@ import. An import can be undone for seven days.
 Use **external ids** (the old system's references) on every row: re-importing then updates instead of duplicating,
 and every record can be traced back to where it came from.
 
-From Odoo, export each model to XLSX and import it the same way until the Odoo importer (RFC 0034 step 3) connects
-to Odoo directly.
+From Odoo, `shutro-erp odoo import` loads units, product categories, taxes, the chart, contacts and products
+directly, each with its Odoo id ([odoo.md](odoo.md)); a dry run first. Open invoices, balances and stock still go
+through the import screen until the importer's next part.
 
 ## 4. The parallel run (weeks 2–4)
 

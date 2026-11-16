@@ -218,4 +218,15 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   placeholder taken as an attempt and a `PROCESSING` session as failed, so a forged failure IPN was believed —, fixed.
   Not yet: Razorpay and Stripe (no public demo keys), couriers and SMS (only test adapters so far), the certification
   date shown in Settings.
+- **Step 3, part 1 (2026-11-16).** **The Odoo importer** (`@kosh/odoo`, `shutro-erp odoo import`): a read-only
+  JSON-RPC client (sign-in with a password or an API key, `fields_get`, `search_read` in pages by id with archived
+  records, external ids); a plan of six steps — units, product categories, taxes, the chart, contacts, products —
+  reading only the fields the connected version has (16–18); one system transaction audited as `odoo import`, a
+  savepoint per record, parents in a second pass; each record kept as `odoo.<model>_<id>`, so a second run updates
+  instead of creating; records Kosh already had (seeded units, "All", accounts by code, taxes by name, use and rate)
+  linked; a dry run by default; the report accounting for every record (created, updated, linked, skipped with the
+  reason, failed with Kosh's answer). Tested against a real Odoo 18 with its demo data through the certification
+  kit's recording (dry run keeps nothing; 34 contacts with their companies, 42 products with codes and taxes, 51
+  accounts, 25 units; a second run creates nothing); the kit now keeps a recording only when every step of a contract
+  ran and passed. Next (part 2): open invoices and bills, the opening balance, stock, and the reconciliation report.
 
