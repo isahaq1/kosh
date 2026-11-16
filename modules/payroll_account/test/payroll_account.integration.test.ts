@@ -21,8 +21,8 @@ import {
   recordInstalledApps,
 } from '@kosh/server';
 import { type Driver, orm, pg } from '@kosh/server/orm';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { settings } from '@kosh/settings';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { payrollAccount } from '../src/index.js';
 
@@ -30,7 +30,7 @@ const PASSWORD = 'correct horse battery';
 const catalogue = [base, settings, accounting, payroll, payrollAccount];
 const R = '/api/v1/models/payroll.run';
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let driver: Driver;
 let dir: string;
 let host: AppHost;
@@ -94,7 +94,7 @@ test('the plan proposes the bridge when Payroll and Accounting come', () => {
 
 beforeAll(async () => {
   process.env['KOSH_SCHEDULES'] = 'off';
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   driver = pg.createDriver({
     url: container.getConnectionUri(),
     max: 4,

@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type Authenticator, createServer, type KoshServer } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import type { Chatter, MessageItem } from '../src/index.js';
 import { installActivityTypes } from '../src/index.js';
@@ -27,7 +27,7 @@ const authenticate: Authenticator = async (request) => {
     : { user: u.user, company: 1, companies: [1], groups: u.groups, lang: 'en_US', tz: 'UTC' };
 };
 
-let pg: StartedPostgreSqlContainer;
+let pg: TestDatabase;
 let server: KoshServer;
 let files: string;
 type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
@@ -77,7 +77,7 @@ beforeAll(async () => {
   files = await mkdtemp(join(tmpdir(), 'kosh-chatter-'));
   process.env['KOSH_STORAGE_DIR'] = files;
   process.env['KOSH_ATTACHMENT_MAX_BYTES'] = String(64 * 1024);
-  pg = await new PostgreSqlContainer('postgres:18').start();
+  pg = await testDatabase();
   server = await createServer({
     databaseUrl: pg.getConnectionUri(),
     modules: [crm],

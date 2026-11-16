@@ -7,7 +7,7 @@
 import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
 import { base, baseShutro, createServer, installBase, type KoshServer, totp } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { createImport, importWorker, readXlsx } from '../src/index.js';
 
@@ -64,7 +64,7 @@ const shop = defineKoshModule({
   ],
 });
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let server: KoshServer;
 const tokens = new Map<string, string>();
 
@@ -144,7 +144,7 @@ async function count(where = 'true'): Promise<number> {
 
 beforeAll(async () => {
   process.env['KOSH_SCHEDULES'] = 'off';
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   server = await createServer({
     databaseUrl: container.getConnectionUri(),
     modules: [shop, createImport({ inlineRows: 5, worker: false })],

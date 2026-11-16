@@ -7,13 +7,13 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { defineModule as defineKoshModule, type KoshModule } from '@kosh/modules-sdk';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { applyApps, prepareApps, recordInstalledApps } from '../src/apps.js';
 import { base, baseShutro } from '../src/auth/base.js';
 import { type AppHost, createAppHost } from '../src/host.js';
 import { type Driver, orm, pg } from '../src/orm.js';
 import type { AppsContext, ModuleContext } from '../src/server.js';
+import { type TestDatabase, testDatabase } from '../src/testing.js';
 
 const { defineGroup, defineModel, defineModule, f } = orm;
 
@@ -58,7 +58,7 @@ const library = app('library', [base], [baseShutro as never]);
 const shelf = app('shelf', [library], [library.shutro as never]);
 const catalogue = [base, library, shelf];
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let driver: Driver;
 let dir: string;
 let host: AppHost;
@@ -80,7 +80,7 @@ const until = async (check: () => boolean) => {
 };
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   driver = pg.createDriver({
     url: container.getConnectionUri(),
     max: 4,

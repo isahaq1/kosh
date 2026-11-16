@@ -12,7 +12,7 @@ import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
 import { inboxWorkers, notifyModule } from '@kosh/notify';
 import { base, baseShutro, createServer, installBase, type KoshServer } from '@kosh/server';
 import { type Env, orm } from '@kosh/server/orm';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import {
   automationContext,
@@ -116,7 +116,7 @@ const crm = defineKoshModule({
   ],
 });
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let server: KoshServer;
 let company: number;
 const users: Record<string, number> = {};
@@ -198,7 +198,7 @@ const poll = async () => {
 
 beforeAll(async () => {
   process.env['KOSH_SCHEDULES'] = 'off';
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   server = await createServer({
     databaseUrl: container.getConnectionUri(),
     modules: [

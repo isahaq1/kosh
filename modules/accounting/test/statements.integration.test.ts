@@ -16,14 +16,14 @@ import {
   recordInstalledApps,
 } from '@kosh/server';
 import { type Driver, orm, pg } from '@kosh/server/orm';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { accounting, parseCamt, parseOfx, registerBankFeed, testBankFeed } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
 const catalogue = [base, accounting];
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let driver: Driver;
 let dir: string;
 let host: AppHost;
@@ -91,7 +91,7 @@ async function invoice(amount: string, dueDays = 0, currency = bdt): Promise<num
 }
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   driver = pg.createDriver({
     url: container.getConnectionUri(),
     max: 4,

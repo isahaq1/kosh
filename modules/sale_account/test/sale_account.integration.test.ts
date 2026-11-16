@@ -21,14 +21,14 @@ import {
   recordInstalledApps,
 } from '@kosh/server';
 import { type Driver, orm, pg } from '@kosh/server/orm';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { saleAccount } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
 const catalogue = [base, sales, accounting, saleAccount];
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let driver: Driver;
 let dir: string;
 let host: AppHost;
@@ -86,7 +86,7 @@ test('the plan proposes the bridge when both apps come, unless it is left out', 
 });
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   driver = pg.createDriver({
     url: container.getConnectionUri(),
     max: 4,

@@ -20,8 +20,8 @@ import {
   recordInstalledApps,
 } from '@kosh/server';
 import { type Driver, orm, pg } from '@kosh/server/orm';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { settings } from '@kosh/settings';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { PDFDocument } from 'pdf-lib';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { signModule } from '../src/index.js';
@@ -34,7 +34,7 @@ const catalogue = [base, settings, signModule({ mailer, apiUrl: API })];
 const DRAWN =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let driver: Driver;
 let dir: string;
 let files: string;
@@ -95,7 +95,7 @@ beforeAll(async () => {
   process.env['KOSH_SCHEDULES'] = 'off';
   files = await mkdtemp(join(tmpdir(), 'kosh-sign-files-'));
   process.env['KOSH_STORAGE_DIR'] = files;
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   driver = pg.createDriver({
     url: container.getConnectionUri(),
     max: 4,

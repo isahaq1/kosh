@@ -6,7 +6,7 @@
 import { inflateRawSync } from 'node:zlib';
 import { type Authenticator, createServer, type KoshServer } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import type { Header, ReportResult } from '../src/index.js';
 import { sale } from './fixtures/sales.js';
@@ -20,7 +20,7 @@ const authenticate: Authenticator = async (request) => {
   return u === undefined ? null : { user: u.user, company: 1, companies: [1], groups: u.groups };
 };
 
-let pg: StartedPostgreSqlContainer;
+let pg: TestDatabase;
 let server: KoshServer;
 const call = (url: string, as: string, body?: unknown) =>
   server.app.inject({
@@ -33,7 +33,7 @@ const call = (url: string, as: string, body?: unknown) =>
 const REPORT = '/api/v1/models/sale.order/report';
 
 beforeAll(async () => {
-  pg = await new PostgreSqlContainer('postgres:18').start();
+  pg = await testDatabase();
   server = await createServer({
     databaseUrl: pg.getConnectionUri(),
     modules: [sale],

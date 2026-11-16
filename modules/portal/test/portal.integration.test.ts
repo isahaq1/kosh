@@ -17,13 +17,13 @@ import {
   ServerConfigError,
 } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { createPortal } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
 const mailer = createMemoryMailer();
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let server: KoshServer;
 let acme: number;
 let rina: number;
@@ -57,7 +57,7 @@ const tokenOf = (url: string) => new URL(url).searchParams.get('token') ?? '';
 
 beforeAll(async () => {
   process.env['KOSH_SCHEDULES'] = 'off';
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   server = await createServer({
     databaseUrl: container.getConnectionUri(),
     modules: [contacts, createPortal({ portalUrl: 'https://portal.test', mailer })],

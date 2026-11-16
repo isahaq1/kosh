@@ -28,7 +28,7 @@ import {
   recordInstalledApps,
 } from '@kosh/server';
 import { type Driver, orm, pg } from '@kosh/server/orm';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import {
   ADAPTERS,
@@ -301,7 +301,7 @@ const catalogue = [
   }),
 ];
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let driver: Driver;
 let dir: string;
 let host: AppHost;
@@ -419,7 +419,7 @@ async function portalUser(partner: number): Promise<string> {
 
 beforeAll(async () => {
   process.env['KOSH_SCHEDULES'] = 'off';
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   driver = pg.createDriver({
     url: container.getConnectionUri(),
     max: 4,

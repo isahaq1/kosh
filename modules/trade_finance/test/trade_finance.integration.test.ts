@@ -20,8 +20,8 @@ import {
   recordInstalledApps,
 } from '@kosh/server';
 import { type Driver, orm, pg } from '@kosh/server/orm';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { settings } from '@kosh/settings';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { tradeFinance } from '../src/index.js';
 
@@ -31,7 +31,7 @@ const L = '/api/v1/models/trade.lc';
 const PR = '/api/v1/models/trade.lc.presentation';
 const AM = '/api/v1/models/trade.lc.amendment';
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let driver: Driver;
 let dir: string;
 let host: AppHost;
@@ -85,7 +85,7 @@ const go = (url: string, as = 'maria') => call('POST', url, as);
 const money = (v: Json) => String(Number(v?.amount ?? v));
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   driver = pg.createDriver({
     url: container.getConnectionUri(),
     max: 4,

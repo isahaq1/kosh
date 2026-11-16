@@ -6,13 +6,13 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { orm, pg } from '@kosh/server';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { runApps } from '../src/apps.js';
 import { runCli } from '../src/index.js';
 import type { Prompter } from '../src/prompt.js';
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 // Inside the package, so the project's files resolve the workspace packages (@kosh/server, ...).
 const dir = join(import.meta.dirname, `.work-apps-${process.pid}`);
 
@@ -69,7 +69,7 @@ const query = async (text: string) => {
 };
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   await mkdir(join(dir, 'src'), { recursive: true });
   await writeFile(join(dir, '.env'), `DATABASE_URL=${container.getConnectionUri()}\n`);
   // Before the App manager: the module list was the installed set. (Its own file: a process imports a file once.)

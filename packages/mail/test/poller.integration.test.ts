@@ -10,7 +10,7 @@ import { chatterContext, messaging } from '@kosh/messaging';
 import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
 import { base, baseShutro, createServer, installBase, type KoshServer } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import nodemailer from 'nodemailer';
 import { GenericContainer, type StartedTestContainer, Wait } from 'testcontainers';
 import { afterAll, beforeAll, expect, test } from 'vitest';
@@ -38,7 +38,7 @@ const crm = defineKoshModule({
   accessLevels: { user: { label: 'User', groups: ['crm.user'] } },
 });
 
-let postgres: StartedPostgreSqlContainer;
+let postgres: TestDatabase;
 let greenmail: StartedTestContainer;
 let server: KoshServer;
 let files: string;
@@ -60,7 +60,7 @@ beforeAll(async () => {
   files = await mkdtemp(join(tmpdir(), 'kosh-poller-'));
   process.env['KOSH_STORAGE_DIR'] = files;
   [postgres, greenmail] = await Promise.all([
-    new PostgreSqlContainer('postgres:18').start(),
+    testDatabase(),
     new GenericContainer('greenmail/standalone:2.1.2')
       .withEnvironment({
         GREENMAIL_OPTS:
@@ -156,7 +156,12 @@ test('unseen messages in the mailbox are received once and marked seen; the next
     messageId: '<poll-1@padma.test>',
     envelope: { from: 'rahim@padma.test', to: 'reply@mail.padma.test' },
   });
-  const first = await pollOnce(inbound, imap);
+  // SMTP accepting the mail is not the mailbox having it: poll until it arrives (a few seconds at most).
+  let first = await pollOnce(inbound, imap);
+  for (let i = 0; i < 40 && (first === null || first.length === 0); i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    first = await pollOnce(inbound, imap);
+  }
   expect(first).not.toBeNull();
   expect(first).toHaveLength(1);
   expect(first?.[0]).toMatchObject({

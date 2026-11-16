@@ -20,8 +20,8 @@ import {
   recordInstalledApps,
 } from '@kosh/server';
 import { type Driver, orm, pg } from '@kosh/server/orm';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { settings } from '@kosh/settings';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { expense } from '../src/index.js';
 
@@ -31,7 +31,7 @@ const E = '/api/v1/models/expense.expense';
 const S = '/api/v1/models/expense.sheet';
 const A = '/api/v1/models/expense.advance';
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let driver: Driver;
 let dir: string;
 let files: string;
@@ -110,7 +110,7 @@ beforeAll(async () => {
   files = await mkdtemp(join(tmpdir(), 'kosh-expense-files-'));
   process.env['KOSH_STORAGE_DIR'] = files;
   process.env['KOSH_SCHEDULES'] = 'off';
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   driver = pg.createDriver({
     url: container.getConnectionUri(),
     max: 4,

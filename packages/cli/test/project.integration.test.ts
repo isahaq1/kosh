@@ -7,11 +7,11 @@
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { runCli } from '../src/index.js';
 
-let pg: StartedPostgreSqlContainer;
+let pg: TestDatabase;
 // Inside the package, so the project's files resolve the workspace packages (@kosh/server, ...).
 const dir = join(import.meta.dirname, `.work-${process.pid}`);
 
@@ -56,7 +56,7 @@ const run = async (...args: string[]) => {
 };
 
 beforeAll(async () => {
-  pg = await new PostgreSqlContainer('postgres:18').start();
+  pg = await testDatabase();
   await mkdir(join(dir, 'src'), { recursive: true });
   await writeFile(join(dir, '.env'), `DATABASE_URL=${pg.getConnectionUri()}\n`);
   await writeFile(

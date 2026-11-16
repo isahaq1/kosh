@@ -8,18 +8,18 @@ import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { base, createServer, totp } from '@kosh/server';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import type { Prompter, Question } from '../src/index.js';
 import { runInit } from '../src/index.js';
 
-let pg: StartedPostgreSqlContainer;
+let pg: TestDatabase;
 let dir: string;
 let url: string;
 const PASSWORD = 'a long enough password';
 
 beforeAll(async () => {
-  pg = await new PostgreSqlContainer('postgres:18').start();
+  pg = await testDatabase();
   dir = await mkdtemp(join(tmpdir(), 'kosh-init-'));
   const admin = new URL(pg.getConnectionUri());
   admin.pathname = '/kosh_fresh'; // does not exist yet: init creates it

@@ -1,7 +1,7 @@
 /** Real PostgreSQL for integration tests (Testcontainers). */
-import { PostgreSqlContainer } from '@testcontainers/postgresql';
+import { testDatabase } from '@kosh/server/testing';
 
 export async function startPostgres(): Promise<{ url: string; stop(): Promise<void> }> {
-  const container = await new PostgreSqlContainer('postgres:18').start();
+  const container = await testDatabase();
   return { url: container.getConnectionUri(), stop: async () => void (await container.stop()) };
 }

@@ -11,9 +11,13 @@ export default defineConfig({
       'apps/*/test/**/*.test.ts',
     ],
     passWithNoTests: false,
-    // Integration tests start PostgreSQL containers (Testcontainers): keep Docker responsive. With 6 workers, fresh
-    // containers on Docker Desktop timed out on connect now and then (a different file each run).
+    // One PostgreSQL server for the run; each integration test file creates a database of its own on it
+    // (RFC 0034 step 1, `testDatabase()`). `KOSH_TEST_DATABASE_URL` points the run at an existing server instead.
+    globalSetup: ['packages/server/test/support/postgres.global.ts'],
     maxWorkers: 4,
     testTimeout: 30_000,
+    // A failed test runs once more; one that passes then is reported as flaky and counted (RFC 0034 step 1).
+    retry: 1,
+    reporters: ['default', './scripts/flaky-reporter.ts'],
   },
 });

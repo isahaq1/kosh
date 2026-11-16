@@ -21,7 +21,7 @@ import {
   recordInstalledApps,
 } from '@kosh/server';
 import { type Driver, orm, pg } from '@kosh/server/orm';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { createStudio, type StudioSpec } from '../src/index.js';
 import { crm } from './fixtures/crm.js';
@@ -75,7 +75,7 @@ const spec: StudioSpec = {
   ],
 };
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let driver: Driver;
 let dir: string;
 let host: AppHost;
@@ -126,7 +126,7 @@ beforeAll(async () => {
     await mkdir(join(root, 'src'), { recursive: true });
     await writeFile(join(root, 'src', 'modules.ts'), MODULES_TS);
   }
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   driver = pg.createDriver({
     url: container.getConnectionUri(),
     max: 4,
@@ -526,7 +526,7 @@ test('a second apply upgrades the module to its next patch version', async () =>
     params: ['acme'],
   });
   expect(row?.version).toBe('0.1.1');
-});
+}, 120_000); // installs and upgrades a module, its migrations included: slow under load
 
 test('a rule made in the Automation app moves into the module; an approval policy; the original is archived', async () => {
   const made = await http('POST', '/api/v1/models/automation.rule', {

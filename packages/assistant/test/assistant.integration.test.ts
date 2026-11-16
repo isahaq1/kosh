@@ -9,8 +9,8 @@ import { messaging } from '@kosh/messaging';
 import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
 import { base, baseShutro, createServer, installBase, type KoshServer, totp } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { settings } from '@kosh/settings';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { createAssistant, fakeClient } from '../src/index.js';
 
@@ -115,7 +115,7 @@ const client = fakeClient((request) => {
   };
 }, 'claude-test');
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let server: KoshServer;
 const tokens = new Map<string, string>();
 
@@ -165,7 +165,7 @@ const search = (as: string, text: string) =>
 
 beforeAll(async () => {
   process.env['KOSH_SCHEDULES'] = 'off';
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   server = await createServer({
     databaseUrl: container.getConnectionUri(),
     modules: [shop, settings, messaging, createAssistant({ client, monthlyTokens: 2500 })],

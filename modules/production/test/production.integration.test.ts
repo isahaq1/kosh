@@ -22,9 +22,9 @@ import {
   recordInstalledApps,
 } from '@kosh/server';
 import { type Driver, orm, pg } from '@kosh/server/orm';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { settings } from '@kosh/settings';
 import { stock } from '@kosh/stock';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { production, schedule } from '../src/index.js';
 
@@ -33,7 +33,7 @@ const catalogue = [base, settings, contacts, product, messaging, stock, producti
 const P = '/api/v1/models/production.order';
 const T = '/api/v1/models/stock.picking';
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let driver: Driver;
 let dir: string;
 let host: AppHost;
@@ -96,7 +96,7 @@ const onHand = async (name: string) =>
   );
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   driver = pg.createDriver({
     url: container.getConnectionUri(),
     max: 4,

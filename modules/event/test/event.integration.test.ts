@@ -24,8 +24,8 @@ import {
   recordInstalledApps,
 } from '@kosh/server';
 import { type Driver, orm, pg } from '@kosh/server/orm';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { settings } from '@kosh/settings';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { eventMailers, eventModule } from '../src/index.js';
 
@@ -38,7 +38,7 @@ const catalogue = [base, settings, contacts, messaging, permissions, reporting, 
 const E = '/api/v1/models/event.event';
 const R = '/api/v1/models/event.registration';
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let driver: Driver;
 let dir: string;
 let host: AppHost;
@@ -88,7 +88,7 @@ const run = (id: number, transition: string) =>
 const state = async (id: number) => (await call('GET', `${R}/${id}`, 'rahim')).json.state;
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   driver = pg.createDriver({
     url: container.getConnectionUri(),
     max: 4,

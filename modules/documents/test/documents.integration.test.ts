@@ -20,8 +20,8 @@ import {
   recordInstalledApps,
 } from '@kosh/server';
 import { type Driver, orm, pg } from '@kosh/server/orm';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { settings } from '@kosh/settings';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { documentsModule, remindRequests } from '../src/index.js';
 
@@ -31,7 +31,7 @@ const mailer = createMemoryMailer();
 const catalogue = [base, settings, documentsModule({ mailer, apiUrl: API })];
 const D = '/api/v1/models/documents.document';
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let driver: Driver;
 let dir: string;
 let files: string;
@@ -82,7 +82,7 @@ beforeAll(async () => {
   process.env['KOSH_SCHEDULES'] = 'off';
   files = await mkdtemp(join(tmpdir(), 'kosh-documents-files-'));
   process.env['KOSH_STORAGE_DIR'] = files;
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   driver = pg.createDriver({
     url: container.getConnectionUri(),
     max: 4,

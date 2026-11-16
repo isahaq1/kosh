@@ -21,14 +21,14 @@ import {
   recordInstalledApps,
 } from '@kosh/server';
 import { type Driver, orm, pg } from '@kosh/server/orm';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { saleProject, saleProjectWorker } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
 const catalogue = [base, sales, project, saleProject];
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let driver: Driver;
 let dir: string;
 let host: AppHost;
@@ -80,7 +80,7 @@ test('the plan proposes the bridge when Sales and Projects come', () => {
 
 beforeAll(async () => {
   process.env['KOSH_SCHEDULES'] = 'off'; // the test drains the subscriber itself
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   driver = pg.createDriver({
     url: container.getConnectionUri(),
     max: 4,

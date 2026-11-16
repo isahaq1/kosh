@@ -22,8 +22,8 @@ import {
   recordInstalledApps,
 } from '@kosh/server';
 import { type Driver, orm, pg } from '@kosh/server/orm';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { settings } from '@kosh/settings';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { stock } from '../src/index.js';
 
@@ -31,7 +31,7 @@ const PASSWORD = 'correct horse battery';
 const catalogue = [base, settings, contacts, product, messaging, stock];
 const T = '/api/v1/models/stock.picking';
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let driver: Driver;
 let dir: string;
 let host: AppHost;
@@ -95,7 +95,7 @@ const onHand = async (name: string) =>
   (await call('GET', `/api/v1/models/product.product/${ids[name]}`, 'dina')).json;
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   driver = pg.createDriver({
     url: container.getConnectionUri(),
     max: 4,

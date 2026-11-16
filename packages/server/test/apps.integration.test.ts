@@ -8,7 +8,6 @@ import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { defineModule as defineKoshModule, type KoshModule } from '@kosh/modules-sdk';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import {
   APPS_CHANNEL,
@@ -24,6 +23,7 @@ import {
 } from '../src/apps.js';
 import { base, baseShutro } from '../src/auth/base.js';
 import { type Driver, orm, pg } from '../src/orm.js';
+import { type TestDatabase, testDatabase } from '../src/testing.js';
 
 const { defineGroup, defineModel, defineModule, extendModel, f, record } = orm;
 
@@ -131,7 +131,7 @@ const broken = app(sBroken, [base], {
 });
 const catalogue = [base, library, shelf, tags, catalog, catalogExtra, broken];
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let driver: Driver;
 let dir: string;
 
@@ -150,7 +150,7 @@ const change = async (c: Parameters<typeof prepareApps>[0]['change']) => {
 };
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   driver = pg.createDriver({
     url: container.getConnectionUri(),
     max: 4,

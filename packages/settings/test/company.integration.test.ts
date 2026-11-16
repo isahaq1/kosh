@@ -6,12 +6,12 @@
  */
 import { base, createServer, installBase, type KoshServer, totp } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { settings } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let server: KoshServer;
 const tokens = new Map<string, string>();
 
@@ -59,7 +59,7 @@ async function call(
 }
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   server = await createServer({
     databaseUrl: container.getConnectionUri(),
     modules: [base, settings],

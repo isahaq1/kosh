@@ -12,7 +12,7 @@ import { messaging } from '@kosh/messaging';
 import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
 import { base, baseShutro, createServer, installBase, type KoshServer } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { mailModule, replyAddress } from '../src/index.js';
 
@@ -53,7 +53,7 @@ const crm = defineKoshModule({
   inboundAliases: [{ alias: 'sales', model: 'crm.deal', subjectField: 'name' }],
 });
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let server: KoshServer;
 let files: string;
 let company: number;
@@ -136,7 +136,7 @@ beforeAll(async () => {
   process.env['KOSH_SCHEDULES'] = 'off';
   files = await mkdtemp(join(tmpdir(), 'kosh-inbound-'));
   process.env['KOSH_STORAGE_DIR'] = files;
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   server = await createServer({
     databaseUrl: container.getConnectionUri(),
     modules: [crm, messaging, mailModule({ inbound: config, webhookSecret: WEBHOOK })],

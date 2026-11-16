@@ -6,7 +6,7 @@
  */
 import { type Authenticator, createServer, type KoshServer } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { engineOf, installTemplates, layoutProblems, nextRun } from '../src/index.js';
 import { sale } from './fixtures/sales.js';
@@ -29,7 +29,7 @@ const authenticate: Authenticator = async (request) => {
       };
 };
 
-let pg: StartedPostgreSqlContainer;
+let pg: TestDatabase;
 let server: KoshServer;
 const call = (method: 'GET' | 'POST' | 'PATCH', url: string, as: string, body?: unknown) =>
   server.app.inject({
@@ -44,7 +44,7 @@ const templatesOf = async (as: string): Promise<Template[]> =>
 
 beforeAll(async () => {
   process.env['KOSH_SCHEDULES'] = 'off'; // the tests drive the engine by hand
-  pg = await new PostgreSqlContainer('postgres:18').start();
+  pg = await testDatabase();
   server = await createServer({
     databaseUrl: pg.getConnectionUri(),
     modules: [sale],

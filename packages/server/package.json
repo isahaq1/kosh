@@ -33,6 +33,11 @@
       "@kosh/source": "./src/orm.ts",
       "types": "./dist/orm.d.ts",
       "default": "./dist/orm.js"
+    },
+    "./testing": {
+      "@kosh/source": "./src/testing.ts",
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
     }
   },
   "files": [

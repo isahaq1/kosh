@@ -8,7 +8,7 @@
 import type { Mailer } from '@kosh/mail';
 import { base, createServer, installBase, type KoshServer } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { settingsModule } from '../src/index.js';
 
@@ -20,7 +20,7 @@ const mailer = {
   },
 } as unknown as Mailer;
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let server: KoshServer;
 let company: number;
 let admin = 0;
@@ -59,7 +59,7 @@ async function call(
 const P = '/api/v1/settings/people';
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   server = await createServer({
     databaseUrl: container.getConnectionUri(),
     modules: [base, settingsModule({ baseUrl: 'https://erp.example.test', mailer })],

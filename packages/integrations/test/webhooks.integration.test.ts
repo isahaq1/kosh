@@ -11,7 +11,7 @@ import type { AddressInfo } from 'node:net';
 import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
 import { base, baseShutro, createServer, installBase, type KoshServer } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { integrationsModule, webhookWorkers } from '../src/index.js';
 
@@ -38,7 +38,7 @@ const crm = defineKoshModule({
   events: [{ topic: 'crm.lead.won', model: 'crm.lead', label: 'Lead won' }],
 });
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let server: KoshServer;
 let receiver: Server;
 let hookUrl: string;
@@ -107,7 +107,7 @@ beforeAll(async () => {
   hookUrl = `http://127.0.0.1:${(receiver.address() as AddressInfo).port}/hook`;
   process.env['KOSH_WEBHOOK_HOSTS'] = '127.0.0.1';
 
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   server = await createServer({
     databaseUrl: container.getConnectionUri(),
     modules: [crm, integrationsModule({ workers: false })],

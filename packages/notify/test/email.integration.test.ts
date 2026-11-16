@@ -8,7 +8,7 @@ import { createMemoryMailer, createSmtpMailer, type Mailer, replyAddress } from 
 import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
 import { base, baseShutro, createServer, installBase, type KoshServer } from '@kosh/server';
 import { type Env, orm } from '@kosh/server/orm';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { GenericContainer, type StartedTestContainer, Wait } from 'testcontainers';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { deliveryWorker, inboxWorkers, notify, renderEmail } from '../src/index.js';
@@ -34,7 +34,7 @@ const library = defineKoshModule({
   accessLevels: { user: { label: 'User', groups: ['library.user'] } },
 });
 
-let postgres: StartedPostgreSqlContainer;
+let postgres: TestDatabase;
 let mailpit: StartedTestContainer;
 let server: KoshServer;
 let mailer: Mailer;
@@ -88,7 +88,7 @@ async function mailpitMessages(): Promise<{ Subject: string; To: { Address: stri
 beforeAll(async () => {
   process.env['KOSH_SCHEDULES'] = 'off';
   [postgres, mailpit] = await Promise.all([
-    new PostgreSqlContainer('postgres:18').start(),
+    testDatabase(),
     new GenericContainer('axllent/mailpit:latest')
       .withExposedPorts(1025, 8025)
       .withWaitStrategy(Wait.forListeningPorts())

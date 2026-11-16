@@ -6,7 +6,7 @@
 import { defineModule as defineKoshModule } from '@kosh/modules-sdk';
 import { base, baseShutro, createServer, installBase, type KoshServer } from '@kosh/server';
 import { type Env, orm } from '@kosh/server/orm';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import {
   createMemoryPusher,
@@ -38,7 +38,7 @@ const library = defineKoshModule({
   accessLevels: { user: { label: 'User', groups: ['library.user'] } },
 });
 
-let postgres: StartedPostgreSqlContainer;
+let postgres: TestDatabase;
 let server: KoshServer;
 const users: Record<string, number> = {};
 let company: number;
@@ -79,7 +79,7 @@ const subscription = (tail: string) => ({
 
 beforeAll(async () => {
   process.env['KOSH_SCHEDULES'] = 'off';
-  postgres = await new PostgreSqlContainer('postgres:18').start();
+  postgres = await testDatabase();
   server = await createServer({
     databaseUrl: postgres.getConnectionUri(),
     modules: [library, notifyModule({ pusher, workers: false })],

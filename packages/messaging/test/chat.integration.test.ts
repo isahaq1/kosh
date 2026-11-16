@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type Authenticator, createServer, type KoshServer } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import type { ChannelItem, ChatMessageItem } from '../src/index.js';
 import { crm } from './fixtures/crm.js';
@@ -28,7 +28,7 @@ const authenticate: Authenticator = async (request) => {
     : { user: u.user, company: 1, companies: [1], groups: u.groups, lang: 'en_US', tz: 'UTC' };
 };
 
-let pg: StartedPostgreSqlContainer;
+let pg: TestDatabase;
 let server: KoshServer;
 let files: string;
 type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
@@ -68,7 +68,7 @@ let direct: number;
 beforeAll(async () => {
   files = await mkdtemp(join(tmpdir(), 'kosh-chat-'));
   process.env['KOSH_STORAGE_DIR'] = files;
-  pg = await new PostgreSqlContainer('postgres:18').start();
+  pg = await testDatabase();
   server = await createServer({
     databaseUrl: pg.getConnectionUri(),
     modules: [crm],

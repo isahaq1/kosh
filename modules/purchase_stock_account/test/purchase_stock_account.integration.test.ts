@@ -27,10 +27,10 @@ import {
   recordInstalledApps,
 } from '@kosh/server';
 import { type Driver, orm, pg } from '@kosh/server/orm';
+import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { settings } from '@kosh/settings';
 import { stock } from '@kosh/stock';
 import { stockAccount } from '@kosh/stock_account';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { purchaseStockAccount } from '../src/index.js';
 
@@ -52,7 +52,7 @@ const catalogue = [
 ];
 const O = '/api/v1/models/purchase.order';
 
-let container: StartedPostgreSqlContainer;
+let container: TestDatabase;
 let driver: Driver;
 let dir: string;
 let host: AppHost;
@@ -118,7 +118,7 @@ test('the plan proposes the bridge when Purchase, Stockroom and Accounting come'
 
 beforeAll(async () => {
   process.env['KOSH_SCHEDULES'] = 'off';
-  container = await new PostgreSqlContainer('postgres:18').start();
+  container = await testDatabase();
   driver = pg.createDriver({
     url: container.getConnectionUri(),
     max: 4,
