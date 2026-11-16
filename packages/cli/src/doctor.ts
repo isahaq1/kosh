@@ -11,6 +11,7 @@ import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { migrate, readInstalledApps } from '@kosh/server';
 import { type Driver, pg } from '@kosh/server/orm';
+import { lastVerification } from './backup.js';
 import { modulesOf } from './project.js';
 
 export type Status = 'ok' | 'warn' | 'fail';
@@ -119,6 +120,11 @@ export async function diagnose(
     );
     return out;
   }
+  let backupCheck: CheckResult = warn(
+    'backups',
+    'no verified backup recorded',
+    'Back up and verify on a schedule: shutro-erp backup && shutro-erp backup verify.',
+  );
   const db = pg.createDriver({
     url: databaseUrl,
     max: 1,
@@ -311,6 +317,31 @@ export async function diagnose(
             ),
       );
     }
+    const last = await lastVerification(db);
+    const days = last === null ? null : (Date.now() - new Date(last.at).getTime()) / 86_400_000;
+    backupCheck =
+      last === null
+        ? warn(
+            'backups',
+            'no verified backup recorded',
+            'Back up and verify on a schedule: shutro-erp backup && shutro-erp backup verify (docs: operations).',
+          )
+        : !last.ok
+          ? fail(
+              'backups',
+              `the last backup verified (${last.file}) did not match: ${last.problems.slice(0, 2).join('; ')}`,
+              'Find why the restore differs; back up again and verify.',
+            )
+          : (days ?? 0) > 7
+            ? warn(
+                'backups',
+                `last verified ${Math.floor(days ?? 0)} days ago (${last.file})`,
+                'Back up and verify at least weekly.',
+              )
+            : ok(
+                'backups',
+                `verified ${days !== null && days < 1 ? 'today' : `${Math.floor(days ?? 0)} day(s) ago`} (${last.file})`,
+              );
   } finally {
     await db.end();
   }
@@ -385,14 +416,8 @@ export async function diagnose(
     );
   else out.push(ok('exposure', production ? 'HTTPS and secure cookies' : 'development settings'));
 
-  // ---- backups and telemetry
-  out.push(
-    warn(
-      'backups',
-      'no verified backup recorded',
-      'Set up backups and verify them (RFC 0034 step 2: shutro-erp backup verify).',
-    ),
-  );
+  // ---- backups (the last verification recorded by `shutro-erp backup verify`) and telemetry
+  out.push(backupCheck);
   out.push(
     env['OTEL_EXPORTER_OTLP_ENDPOINT'] === undefined || env['OTEL_EXPORTER_OTLP_ENDPOINT'] === ''
       ? warn(

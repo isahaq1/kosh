@@ -9,6 +9,7 @@ import { parseArgs } from 'node:util';
 import { generateClient, openApiOf } from '@kosh/server';
 import { runStudio } from '@kosh/studio';
 import { runApps } from './apps.js';
+import { runBackup } from './backup.js';
 import { runCheck } from './check.js';
 import { runDoctor } from './doctor.js';
 import { runInit } from './init.js';
@@ -70,6 +71,8 @@ Commands (run in the installation's folder; they read .env and src/modules.ts):
   migrate status         Applied and pending migration files
   seed [module ...]      Load the modules' seed data and the apps' defaults (all modules, or those named)
   module create <name>   Scaffold src/modules/<name>/ (models, views, menus, access, seed data, data migrations)
+  backup                 A backup in backups/ (pg_dump) with a manifest of every table's rows, the ledger and the stock
+  backup verify [file]   Restore the latest backup into a scratch database and check it against its manifest
   doctor                 Check the installation and say what to fix: database, migrations, apps, administrators,
                          jobs and webhooks, the clock, Valkey, mail, storage, HTTPS, backups, telemetry (--json)
   check                  Check your own modules (src/modules/*) against the module standard the shipped apps meet
@@ -191,6 +194,7 @@ export async function runCli(
     user: (args, out, dir) => runUser(args, out, dir),
     check: runCheck,
     doctor: runDoctor,
+    backup: runBackup,
   };
   const command = commands[argv[0] ?? ''];
   if (command !== undefined)
