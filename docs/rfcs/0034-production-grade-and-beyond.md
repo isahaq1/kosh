@@ -239,4 +239,15 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   balance per account, each partner's receivable and payable, the opening account at zero, every open document
   present — each difference a line with both figures. A second run finds the opening by its cut-off. Recorded
   against Odoo 18's demo: 13 open documents, a bill of the year before, every check equal. Next (part 2b): stock.
+- **Step 3, part 2b (2026-11-16).** **Stock on hand and its proof**: warehouses (the Odoo company's, with their
+  steps, linked by short code), internal locations (nested as in Odoo, the stock location and the steps' linked to
+  Stockroom's) and lots as steps; products bring their tracking, categories their cost method and stock accounts
+  (accounts now run before categories). With `--cutoff`, Odoo's quants become one validated inventory adjustment per
+  location, lots on their lines, before the opening entry. Two fields of `stock_account`, written only by the system:
+  a transfer's **accounting date** (its entry and valuation layers dated the cut-off) and a line's **unit cost**
+  (Odoo's value to six places). The opening entry now posts each account at Odoo's balance less what Kosh already
+  posted by the cut-off, so the stock entries are not counted twice. Two more checks: stock on hand per product,
+  location and lot, and stock value per product to the cent. Archived records keep their Odoo id (external ids
+  read and written with archived records visible). Recorded against Odoo 18's demo with a category valued in real
+  time: 19 quants, two lots, 3,067.50, every check equal. Next (part 2c): open sales and purchase orders.
 

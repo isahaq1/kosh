@@ -78,8 +78,8 @@ and every record can be traced back to where it came from.
 
 From Odoo, `shutro-erp odoo import` loads units, product categories, taxes, the chart, contacts and products
 directly, each with its Odoo id, and with `--cutoff` the opening balances and the open invoices and bills, proved
-by its reconciliation ([odoo.md](odoo.md)); a dry run first. Stock still goes through the import screen until the
-importer's next part.
+by its reconciliation, and the stock on hand by location and lot with its value ([odoo.md](odoo.md)); a dry run
+first.
 
 ## 4. The parallel run (weeks 2–4)
 

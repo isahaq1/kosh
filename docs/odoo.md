@@ -40,13 +40,17 @@ In this order, each relation pointing at a record imported before it:
 | Step | Odoo | Shutro ERP | Notes |
 | --- | --- | --- | --- |
 | units | `uom.uom` | `uom.uom` | Odoo's own units link to the seeded ones (Units, Dozens, Hours, Days, kg, g, m, L); `factor` becomes `ratio` (its inverse). Units of surface, energy and other kinds Shutro ERP does not measure are skipped. |
-| categories | `product.category` | `product.category` | "All" links to the seeded one; parents set once all exist. |
-| taxes | `account.tax` | `account.tax` | Percent and fixed taxes of sales and purchases (15 becomes 0.15); groups and division taxes are skipped, as Shutro ERP applies several taxes per line. A tax with the same name, use and rate links. |
 | accounts | `account.account` | `account.account` | Account types are the same; an account with the same code links to the installed chart. |
+| taxes | `account.tax` | `account.tax` | Percent and fixed taxes of sales and purchases (15 becomes 0.15); groups and division taxes are skipped, as Shutro ERP applies several taxes per line. A tax with the same name, use and rate links. |
+| categories | `product.category` | `product.category` | "All" links to the seeded one; parents set once all exist. With stock valuation: the cost method (average or FIFO; Odoo's standard price is kept as the product's cost and valued at the average), the stock valuation account and the expense account as the cost of goods sold. |
 | partners | `res.partner` | `res.partner` | Companies and their people (parents set once all exist), addresses with country and state codes, tax ids, customer and vendor from Odoo's ranks, notes as text. Odoo's own users and companies are skipped. |
 | products | `product.product` | `product.product` | Each variant as a product named as Odoo shows it, with its internal reference as the code, category, unit, prices, weight and volume, sales and purchase taxes. Combos are skipped. |
+| warehouses | `stock.warehouse` | `stock.warehouse` | The Odoo company's (another company's are skipped), with their receipt and delivery steps; one with the same short code links to Stockroom's main warehouse. |
+| locations | `stock.location` | `stock.location` | The internal locations of the warehouses imported, inside one another as in Odoo; the warehouse's stock location and its Input, Quality control, Packing and Output link to Stockroom's own. Vendors, customers, adjustment, production and transit are Stockroom's and skipped. |
+| lots | `stock.lot` | `stock.lot` | Lots and serial numbers with their product and expiry date. Products also bring their tracking (by lot, by serial number). |
 
-Archived records come too, archived. Only the fields the connected Odoo version has are read.
+Archived records come too, archived. Only the fields the connected Odoo version has are read, and the Stockroom
+steps run when Stockroom is installed in both.
 
 ## Ids and second runs
 
@@ -83,6 +87,12 @@ shutro-erp odoo import --url … --db … --login … --cutoff 2026-06-30 --comm
   becomes a Kosh document of the same kind for what is left to pay — Odoo's number as its reference, its dates
   kept, posted to the partner's receivable or payable account as in Odoo — so it is paid, followed up and reconciled
   in Kosh. Another open item (an advance, a payment not matched yet) is a line of the opening entry with its partner.
+- **The stock on hand**, when Stockroom is installed in both: Odoo's quants in its internal locations, as one
+  validated **inventory adjustment per location** (from Stockroom's adjustment location, each lot on its line), so
+  the stock arrives as all stock does — with its transfer, its lot history and its line in the stock ledger. With
+  stock valuation (`stock_account`), each line comes in at Odoo's value (its unit cost to six places) and the
+  adjustment is dated the cut-off in the books; the opening entry takes what it posted into account, so every account
+  still ends at Odoo's balance. A quantity below zero in Odoo is refused and listed: count it in Odoo first.
 - Both meet on an **Opening balances (from Odoo)** account (code `OPENING`), which nets to zero.
 
 Then the **reconciliation**, read from Kosh's posted books in the same transaction (so a dry run proves it too):
@@ -93,17 +103,23 @@ Then the **reconciliation**, read from Kosh's posted books in the same transacti
 | receivables and payables | each partner's balance on each receivable and payable account is Odoo's |
 | opening balances account | it nets to zero |
 | open documents | every open invoice, credit note and bill of Odoo is in Kosh |
+| stock on hand | each product's quantity in each location and lot is Odoo's |
+| stock value | with stock valuation, each product's value at the cut-off is Odoo's, to the cent |
 
 Each difference is a line of the report with the account, partner or document, Odoo's figure and Kosh's. A second run
-finds the opening by its cut-off and does not make it again; the checks run every time.
+finds the opening and each location's adjustment by its cut-off and does not make them again; the checks run every
+time.
 
-Run it with no posting in Odoo after the cut-off (the open items are read as they are now): at the end of a month,
-before anyone enters the next one, or on a copy of the database.
+Odoo valuing stock periodically (the default) keeps no stock value in its books: the stock still comes in at Odoo's
+value, and the opening entry brings the stock account back to Odoo's balance; from the cut-off on, Kosh values stock
+as it moves. Post the stock's value at the cut-off when your accountant decides how.
+
+Run it with no posting and no stock moved in Odoo after the cut-off (the open items and the stock are read as they
+are now): at the end of a month, before anyone enters the next one, or on a copy of the database.
 
 ## Not yet
 
-Stock on hand by location and lot with its value, open sales and purchase orders, employees and projects come next
-(RFC 0034 step 3); the incremental sync for a parallel run and the cut-over after that (step 4). Until then, see
+Open sales and purchase orders, employees and projects come next (RFC 0034 step 3); the incremental sync for a parallel run and the cut-over after that (step 4). Until then, see
 [the pilot playbook](pilot.md) for loading those through the import screen.
 
 ## Tested against a real Odoo
@@ -111,5 +127,6 @@ Stock on hand by location and lot with its value, open sales and purchase orders
 `packages/cli/test/odoo.integration.test.ts` runs the importer against Odoo 18 with its demo data, recorded with
 `KOSH_CERTIFY=live` and replayed in every test run (see [integrations.md](integrations.md), Certified against the
 sandboxes): the dry run keeps nothing, every record is accounted for, a second run creates nothing, and the books
-at the cut-off — 13 open invoices, credit notes and bills among them, a bill of the year before — reconcile with
-Odoo in every check.
+at the cut-off — 13 open invoices, credit notes and bills among them, a bill of the year before — and the stock — 19
+quants in two locations, two lots of one product, worth 3,067.50 in an Office Furniture category valued in real time
+at the average cost, one cost of 33.333 — reconcile with Odoo in every check.
