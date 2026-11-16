@@ -179,4 +179,14 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   of start-up each, for a run of 11–20 minutes today. It is worth doing when the suite's length hurts, not before.
   Not checked yet: whether a module freshly scaffolded by `module create` passes `check` (its index imports
   `shutro-erp/…`, which resolves only in a real project).
+- **Step 2, part 1 (2026-11-16).** **`shutro-erp doctor`** (`packages/cli/src/doctor.ts`), read-only: the runtime;
+  the database (reachable, version 16+, size), the clock against it, connections against `max_connections`;
+  migrations pending; installed apps missing from `src/modules.ts`; administrators (none, none with a second factor,
+  some without); jobs late more than 15 minutes (the workers are down) or given up in the last day, subscribers
+  retrying and events given up, failed webhook deliveries; Valkey answering PING, the SMTP server and the S3 endpoint
+  reachable; HTTPS and secure cookies in production; backups (a warning until part 2 records verified backups) and
+  telemetry. Each warning and failure says what to do; `--json` for monitoring; exit code 1 on a failure. Tested on
+  a real installation (healthy checks, no administrator, an administrator without a second factor, an app missing
+  from the modules file). Administrators are found through the `base.admin` group; runtime roles that make
+  administrators (RFC 0019) are not counted yet.
 

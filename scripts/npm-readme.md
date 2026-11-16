@@ -382,6 +382,7 @@ Run them in the project folder (`npx shutro-erp …`, or `npm run migrate` / `np
 | `shutro-erp migrate status` | applied and pending migration files |
 | `shutro-erp seed [module …]` | seed data of all modules, or of those named |
 | `shutro-erp module create <name>` | a new module in `src/modules/<name>/`, listed in `src/modules.ts` |
+| `shutro-erp doctor` · `--json` | what to fix in this installation: the database and its connections, migrations, apps, administrators without a second factor, late jobs and failing webhooks, the clock, Valkey, mail, storage, HTTPS, backups, telemetry |
 | `shutro-erp check` · `--all` · `--strict` | your modules against the standard the shipped apps meet (labels, search, views, print and import templates, events, help) · every result · Bangla and demo data fail too |
 | `shutro-erp user create <login>` | a user: `--name`, `--email`, `--roles`, `--password` (asked when missing) |
 | `shutro-erp user password <login>` | a new password |
