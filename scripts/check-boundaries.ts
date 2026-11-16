@@ -5,6 +5,8 @@
  *   imports what it needs from there, so the dependency can be renamed or swapped in one file.
  * - The framework (packages/) never imports a business app (modules/): apps depend on the framework, not the
  *   other way round (RFC 0008). The CLI is exempt: it assembles installations (`kosh init` installs the apps).
+ * - End-to-end specs wait on state, never on time (RFC 0034 step 1): `waitForTimeout` makes a spec pass on a fast
+ *   machine and fail on a busy one. Wait for the element, the URL or the response instead.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -41,6 +43,11 @@ const all = ['packages', 'modules', 'apps']
 const offenders = all.filter((f) => f !== ORM && SHUTRO.test(readFileSync(join(root, f), 'utf8')));
 const apps = new Set(isDir('modules') ? readdirSync(join(root, 'modules')) : []);
 const APP_IMPORT = /(?:from\s+|import\s*\(\s*)['"]@kosh\/([a-z0-9-]+)/g;
+const SLEEP = /\.waitForTimeout\(/;
+const sleeping = all
+  .filter((f) => /\/e2e(-apps)?\/.*\.spec\.ts$/.test(f))
+  .filter((f) => SLEEP.test(readFileSync(join(root, f), 'utf8')))
+  .map((f) => `  ${f}`);
 const upward = all
   .filter((f) => f.startsWith('packages/') && !f.startsWith('packages/cli/'))
   .flatMap((f) =>
@@ -57,6 +64,11 @@ if (offenders.length > 0) {
 } else if (upward.length > 0) {
   process.stderr.write(
     `The framework (packages/) must not import business apps (modules/):\n${upward.join('\n')}\n`,
+  );
+  process.exitCode = 1;
+} else if (sleeping.length > 0) {
+  process.stderr.write(
+    `End-to-end specs wait on state, not on time — replace waitForTimeout with an expect on the element, the URL or the response:\n${sleeping.join('\n')}\n`,
   );
   process.exitCode = 1;
 } else {
