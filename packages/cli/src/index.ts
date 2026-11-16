@@ -9,6 +9,7 @@ import { parseArgs } from 'node:util';
 import { generateClient, openApiOf } from '@kosh/server';
 import { runStudio } from '@kosh/studio';
 import { runApps } from './apps.js';
+import { runCheck } from './check.js';
 import { runInit } from './init.js';
 import { modulesOf, runMigrate, runModule, runSeed, runUser } from './project.js';
 import type { Terminal } from './ui.js';
@@ -68,6 +69,9 @@ Commands (run in the installation's folder; they read .env and src/modules.ts):
   migrate status         Applied and pending migration files
   seed [module ...]      Load the modules' seed data and the apps' defaults (all modules, or those named)
   module create <name>   Scaffold src/modules/<name>/ (models, views, menus, access, seed data, data migrations)
+  check                  Check your own modules (src/modules/*) against the module standard the shipped apps meet
+      --all                  every rule's result, met or not, and the waivers
+      --strict               Bangla labels and an overview with demo data fail too (reported otherwise)
   studio build [dir …]   Regenerate the Studio modules from their studio.json (default: every src/modules/*/studio.json)
   user create <login>    Create a user: --name, --email, --roles reporting.user,messaging.user, --password
   user password <login>  Set a new password
@@ -182,6 +186,7 @@ export async function runCli(
     module: runModule,
     studio: runStudio,
     user: (args, out, dir) => runUser(args, out, dir),
+    check: runCheck,
   };
   const command = commands[argv[0] ?? ''];
   if (command !== undefined)
