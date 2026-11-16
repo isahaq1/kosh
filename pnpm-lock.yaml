@@ -3183,6 +3183,9 @@ importers:
       '@kosh/notify':
         specifier: workspace:*
         version: link:../notify
+      '@kosh/odoo':
+        specifier: workspace:*
+        version: link:../odoo
       '@kosh/payroll':
         specifier: workspace:*
         version: link:../../modules/payroll
@@ -3569,6 +3572,12 @@ importers:
       testcontainers:
         specifier: ^12.2.1
         version: 12.2.1
+
+  packages/odoo:
+    dependencies:
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../server
 
   packages/permissions:
     dependencies:

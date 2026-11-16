@@ -13,6 +13,7 @@ import { runBackup } from './backup.js';
 import { runCheck } from './check.js';
 import { runDoctor } from './doctor.js';
 import { runInit } from './init.js';
+import { runOdoo } from './odoo.js';
 import { modulesOf, runMigrate, runModule, runSeed, runUser } from './project.js';
 import type { Terminal } from './ui.js';
 
@@ -73,6 +74,8 @@ Commands (run in the installation's folder; they read .env and src/modules.ts):
   module create <name>   Scaffold src/modules/<name>/ (models, views, menus, access, seed data, data migrations)
   backup                 A backup in backups/ (pg_dump) with a manifest of every table's rows, the ledger and the stock
   backup verify [file]   Restore the latest backup into a scratch database and check it against its manifest
+  odoo import            Import from a live Odoo (units, categories, taxes, accounts, contacts, products) with
+                         their Odoo ids and a report of every record: --url --db --login, ODOO_PASSWORD; --commit
   doctor                 Check the installation and say what to fix: database, migrations, apps, administrators,
                          jobs and webhooks, the clock, Valkey, mail, storage, HTTPS, backups, telemetry (--json)
   check                  Check your own modules (src/modules/*) against the module standard the shipped apps meet
@@ -195,6 +198,7 @@ export async function runCli(
     check: runCheck,
     doctor: runDoctor,
     backup: runBackup,
+    odoo: runOdoo,
   };
   const command = commands[argv[0] ?? ''];
   if (command !== undefined)
