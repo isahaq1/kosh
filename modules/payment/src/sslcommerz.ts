@@ -47,6 +47,11 @@ const IPN_STATUS: Readonly<Record<string, PaymentStatus>> = {
   CANCELLED: 'cancelled',
   EXPIRED: 'cancelled',
 };
+/** Attempts still open: the customer may yet pay (PROCESSING: on the payment page; UNATTEMPTED: not started). */
+const OPEN = new Set(['PENDING', 'PROCESSING', 'UNATTEMPTED']);
+const CANCELLED = new Set(['CANCELLED', 'EXPIRED']);
+/** Attempts that ended without a payment. */
+const ENDED = new Set(['FAILED', ...CANCELLED]);
 const countryName = (code: string | null) => {
   if (code === null || code === '') return 'Bangladesh';
   try {
@@ -82,12 +87,15 @@ export function sslcommerzAdapter(options: SslcommerzOptions = {}): PaymentAdapt
       tran_id: reference,
     });
     if (answer['APIConnect'] !== 'DONE') return null;
+    // A transaction it never saw is answered `no_of_trans_found: 0` with an `INVALID` placeholder element (seen on
+    // the sandbox by the certification run): no attempts.
+    if (Number(answer['no_of_trans_found'] ?? 0) === 0) return [];
     const element = Array.isArray(answer['element'])
       ? (answer['element'] as Record<string, unknown>[])
       : [];
-    return element.map((e) =>
-      Object.fromEntries(Object.entries(e).map(([k, v]) => [k, String(v ?? '')])),
-    );
+    return element
+      .map((e) => Object.fromEntries(Object.entries(e).map(([k, v]) => [k, String(v ?? '')])))
+      .filter((a) => a['status'] !== 'INVALID');
   };
 
   return {
@@ -149,10 +157,12 @@ export function sslcommerzAdapter(options: SslcommerzOptions = {}): PaymentAdapt
           paidCurrency(fv) === paidCurrency(f);
         return confirmed ? valId : null;
       }
-      // Failed or cancelled: SSLCommerz knows the transaction and no attempt of it succeeded.
+      // Failed or cancelled: SSLCommerz itself shows an attempt that ended so, and none that succeeded — a session
+      // the customer is still on (PROCESSING) is not failed by a callback saying so.
       const known = await attempts(reference);
       if (known === null || known.length === 0) return null;
       if (known.some((a) => a['status'] === 'VALID' || a['status'] === 'VALIDATED')) return null;
+      if (!known.some((a) => ENDED.has(a['status'] ?? ''))) return null;
       return `${reference}:${f['status']}:${f['val_id'] || f['tran_date'] || ''}`;
     },
     readCallback(call) {
@@ -180,12 +190,12 @@ export function sslcommerzAdapter(options: SslcommerzOptions = {}): PaymentAdapt
           amount: paidAmount(paid),
           currency: paidCurrency(paid),
         } satisfies PaymentResult;
-      if (known.some((a) => a['status'] === 'PENDING'))
+      if (known.some((a) => OPEN.has(a['status'] ?? '')))
         return { reference, status: 'pending', providerReference: null };
       const last = known.at(-1);
       return {
         reference,
-        status: 'failed',
+        status: CANCELLED.has(last?.['status'] ?? '') ? 'cancelled' : 'failed',
         providerReference: last?.['val_id'] || null,
         ...(last?.['error'] ? { error: last['error'] } : {}),
       };
