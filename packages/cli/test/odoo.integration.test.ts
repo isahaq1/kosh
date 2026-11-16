@@ -10,7 +10,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { accounting } from '@kosh/accounting';
+import { accounting, installChart } from '@kosh/accounting';
 import {
   connectOdoo,
   importFromOdoo,
@@ -92,6 +92,10 @@ beforeAll(async () => {
     admin: { login: 'admin', name: 'Administrator', password: 'correct horse battery' },
   }));
   await installDefaults(host.server.shutro, host.server.registry.loaded.modules, { company });
+  // Journals and a retained earnings account for the books.
+  await host.server.shutro.bootstrap({ reason: 'chart', company }, (env) =>
+    installChart(env as never, 'generic'),
+  );
   odoo = await connectOdoo({ url, db: 'demo', login: 'admin', password, fetch: tape.fetch });
   const [azure] = await odoo.readAll('res.partner', ['name'], {
     domain: [['name', '=', 'Azure Interior']],
@@ -107,8 +111,15 @@ afterAll(async () => {
   await container?.stop();
 });
 
-const run = (dryRun: boolean): Promise<OdooReport> =>
-  importFromOdoo(host.server.shutro, odoo, { dryRun, company, source: { url, db: 'demo' } });
+/** The cut-off of the books: the day of the recording, replayed as it was. */
+const cutoff = tape.vars('cutoff', () => new Date().toISOString().slice(0, 10));
+const run = (dryRun: boolean, books = false): Promise<OdooReport> =>
+  importFromOdoo(host.server.shutro, odoo, {
+    dryRun,
+    company,
+    source: { url, db: 'demo' },
+    ...(books ? { opening: { cutoff, yearStart: `${cutoff.slice(0, 4)}-01-01` } } : {}),
+  });
 const step = (report: OdooReport, key: string) => {
   const s = report.steps.find((x) => x.key === key);
   if (s === undefined) throw new Error(`no step ${key}`);
@@ -196,3 +207,33 @@ contract('a second run finds every record by its Odoo id: nothing is created aga
   for (const s of report.steps) expect(s.created, `${s.key}\n${reportText(report)}`).toBe(0);
   expect(step(report, 'partners').updated).toBeGreaterThan(10);
 });
+
+contract(
+  'the books at the cut-off: an opening entry, the open documents, every check equal to Odoo',
+  async () => {
+    const report = await run(false, true);
+    const text = reportText(report);
+    expect(report.opening?.status, text).toBe('done');
+    expect(report.opening?.failed, text).toEqual([]);
+    expect(report.opening?.documents, text).toBeGreaterThan(0);
+    for (const c of report.checks ?? []) expect(c.ok, `${c.name}\n${text}`).toBe(true);
+    expect(report.checks?.map((c) => c.name)).toEqual([
+      'trial balance',
+      'receivables and payables',
+      'opening balances account',
+      'open documents',
+    ]);
+    expect(report.ok, text).toBe(true);
+  },
+);
+
+contract(
+  'the books again: the opening is found and not made twice; the checks stay equal',
+  async () => {
+    const report = await run(false, true);
+    const text = reportText(report);
+    expect(report.opening?.status, text).toBe('skipped');
+    expect(text).toContain('an opening at this cut-off was imported before');
+    for (const c of report.checks ?? []) expect(c.ok, `${c.name}\n${text}`).toBe(true);
+  },
+);

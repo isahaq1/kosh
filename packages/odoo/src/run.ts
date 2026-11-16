@@ -14,6 +14,15 @@
 import { problemOf } from '@kosh/server';
 import type { Env, Shutro } from '@kosh/server/orm';
 import {
+  type Check,
+  type OdooOpening,
+  type OpeningOptions,
+  type OpeningResult,
+  readOpening,
+  reconcile,
+  writeOpening,
+} from './opening.js';
+import {
   externalIdFor,
   type Find,
   type RefId,
@@ -52,6 +61,10 @@ export interface OdooReport {
   readonly startedAt: string;
   readonly finishedAt: string;
   readonly steps: readonly StepReport[];
+  /** The opening entry and open documents, when a cut-off was given. */
+  readonly opening?: OpeningResult;
+  /** Kosh's books against Odoo's at the cut-off. */
+  readonly checks?: readonly Check[];
   /** Every record read is accounted for, and none failed. */
   readonly ok: boolean;
 }
@@ -65,6 +78,8 @@ export interface OdooImportOptions {
   readonly source: { readonly url: string; readonly db: string };
   /** Progress: a step started, with the records read. */
   readonly onStep?: (step: string, records: number) => void;
+  /** Also the books: the opening entry and the open documents at this cut-off, and the reconciliation. */
+  readonly opening?: OpeningOptions;
 }
 
 /** Thrown to roll the dry run back; never escapes. */
@@ -126,6 +141,8 @@ export async function importFromOdoo(
   };
 
   const planned: { step: Step; records: OdooRecord[] | null; reason?: string }[] = [];
+  let openingResult: OpeningResult | undefined;
+  let checks: Check[] | undefined;
   for (const step of STEPS) {
     const missing = step.needs.filter((m) => koshFields(m) === null);
     if (missing.length > 0) {
@@ -145,6 +162,9 @@ export async function importFromOdoo(
     options.onStep?.(step.key, records.length);
     planned.push({ step, records });
   }
+
+  const opening: OdooOpening | null =
+    options.opening === undefined ? null : await readOpening(client, options.opening);
 
   // ---- write Kosh: one transaction, a savepoint per record
   const reports: StepReport[] = [];
@@ -259,6 +279,23 @@ export async function importFromOdoo(
         failed,
       });
     }
+    if (opening !== null) {
+      const needed = ['accounts', 'partners'].filter(
+        (k) => reports.find((r) => r.key === k)?.status !== 'done',
+      );
+      if (needed.length > 0)
+        openingResult = {
+          status: 'skipped',
+          entry: null,
+          entryLines: 0,
+          documents: 0,
+          failed: [{ what: 'the books', error: `the ${needed.join(' and ')} step did not run` }],
+        };
+      else {
+        openingResult = await writeOpening(env, opening, ctx.ref, errorText);
+        checks = await reconcile(env, opening, ctx.ref);
+      }
+    }
     if (dryRun) throw new DryRun();
   };
   try {
@@ -270,13 +307,18 @@ export async function importFromOdoo(
     if (!(error instanceof DryRun)) throw error;
   }
 
-  const ok = reports.every((s) => s.failed.length === 0);
+  const ok =
+    reports.every((s) => s.failed.length === 0) &&
+    (openingResult?.failed.length ?? 0) === 0 &&
+    (checks ?? []).every((c) => c.ok);
   return {
     odoo: { url: options.source.url, db: options.source.db, version: client.version },
     dryRun,
     startedAt,
     finishedAt: new Date().toISOString(),
     steps: reports,
+    ...(openingResult === undefined ? {} : { opening: openingResult }),
+    ...(checks === undefined ? {} : { checks }),
     ok,
   };
 }
@@ -310,6 +352,26 @@ export function reportText(report: OdooReport): string {
       lines.push(`    failed #${f.odooId} ${f.name}: ${f.error}`);
     if (s.failed.length > 20)
       lines.push(`    … and ${s.failed.length - 20} more in the JSON report`);
+  }
+  if (report.opening !== undefined) {
+    const o = report.opening;
+    lines.push(
+      '',
+      o.status === 'skipped' && o.failed.length === 0
+        ? '– the books: an opening at this cut-off was imported before'
+        : `${o.failed.length === 0 ? '✔' : '✖'} the books: an opening entry of ${o.entryLines} lines, ${o.documents} open invoices, credit notes and bills`,
+    );
+    for (const f of o.failed.slice(0, 20)) lines.push(`    failed ${f.what}: ${f.error}`);
+  }
+  if (report.checks !== undefined) {
+    lines.push('', 'Reconciliation with Odoo:');
+    for (const c of report.checks) {
+      lines.push(`${c.ok ? '✔' : '✖'} ${c.name}: ${c.summary}`);
+      for (const d of c.differences.slice(0, 20))
+        lines.push(`    ${d.what}: Odoo ${d.odoo}, Kosh ${d.kosh}`);
+      if (c.differences.length > 20)
+        lines.push(`    … and ${c.differences.length - 20} more in the JSON report`);
+    }
   }
   return `${lines.join('\n')}\n`;
 }

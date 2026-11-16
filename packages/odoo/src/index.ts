@@ -4,6 +4,15 @@
  * import its records with their Odoo ids kept, and account for every record in a report. A dry run first, always.
  */
 export {
+  type Check,
+  type OdooOpening,
+  type OpeningOptions,
+  type OpeningResult,
+  readOpening,
+  reconcile,
+  writeOpening,
+} from './opening.js';
+export {
   externalIdFor,
   readableFields,
   STEPS,
@@ -19,6 +28,7 @@ export {
   OdooError,
   type OdooField,
   type OdooRecord,
+  type OdooRecordGroup,
   type OdooValue,
   textOf,
 } from './rpc.js';

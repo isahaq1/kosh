@@ -53,7 +53,19 @@ export interface OdooClient {
   ): Promise<OdooRecord[]>;
   /** The external ids (`module.name`) Odoo gives records of `model`, by id. */
   externalIds(model: string): Promise<ReadonlyMap<number, string>>;
+  /** Sums of `fields` (`balance:sum`) per group of `groupBy`, over the records matching `domain` (`read_group`). */
+  group(
+    model: string,
+    domain: readonly unknown[],
+    fields: readonly string[],
+    groupBy: readonly string[],
+  ): Promise<OdooRecordGroup[]>;
+  /** The records `ids` of `model`, `fields` only. */
+  read(model: string, ids: readonly number[], fields: readonly string[]): Promise<OdooRecord[]>;
 }
+
+/** A group of `read_group`: the grouped values (many2ones as `[id, name]`) and the sums. */
+export type OdooRecordGroup = Readonly<Record<string, OdooValue>>;
 
 /** Signs in to Odoo and returns a client; refuses wrong credentials or an unknown database. */
 export async function connectOdoo(connection: OdooConnection): Promise<OdooClient> {
@@ -158,6 +170,23 @@ export async function connectOdoo(connection: OdooConnection): Promise<OdooClien
         if (rows.length < page) return out;
         last = (rows.at(-1) as OdooRecord).id;
       }
+    },
+    async group(model, domain, fields, groupBy) {
+      return (await execute(model, 'read_group', [[...domain], [...fields], [...groupBy]], {
+        lazy: false,
+        context,
+      })) as OdooRecordGroup[];
+    },
+    async read(model, ids, fields) {
+      if (ids.length === 0) return [];
+      const out: OdooRecord[] = [];
+      for (let i = 0; i < ids.length; i += 500)
+        out.push(
+          ...((await execute(model, 'read', [ids.slice(i, i + 500), [...fields]], {
+            context,
+          })) as OdooRecord[]),
+        );
+      return out;
     },
     async externalIds(model) {
       const rows = (await execute('ir.model.data', 'search_read', [[['model', '=', model]]], {

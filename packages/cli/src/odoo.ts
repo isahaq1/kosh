@@ -11,6 +11,7 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { connectOdoo, importFromOdoo, reportText } from '@kosh/odoo';
+import type { Driver } from '@kosh/server/orm';
 import { openProject } from './project.js';
 
 const USAGE = `Usage: shutro-erp odoo import --url <https://odoo.example.com> --db <database> --login <user> [--commit]
@@ -22,6 +23,11 @@ const USAGE = `Usage: shutro-erp odoo import --url <https://odoo.example.com> --
   --commit             keep the import
   --company <id>       the company the records belong to (default: the first)
   --report <file>      where the JSON report goes (default: odoo-import-<time>.json)
+  --cutoff <date>      also the books at the end of that day (YYYY-MM-DD): an opening entry, the open invoices,
+                       credit notes and bills, and the reconciliation of the trial balance, each partner's
+                       receivable and payable and the open documents with Odoo's. Run it with no posting in
+                       Odoo after the cut-off.
+  --year-start <date>  the first day of the fiscal year of the cut-off (default: from the company's fiscal year)
 `;
 
 export async function runOdoo(
@@ -38,6 +44,8 @@ export async function runOdoo(
       commit: { type: 'boolean', default: false },
       company: { type: 'string' },
       report: { type: 'string' },
+      cutoff: { type: 'string' },
+      'year-start': { type: 'string' },
       modules: { type: 'string', default: 'src/modules.ts' },
       help: { type: 'boolean', default: false },
     },
@@ -84,6 +92,17 @@ export async function runOdoo(
       company,
       source: { url: values.url, db: values.db },
       onStep: (step, n) => write(`  ${step}: ${n} records\n`),
+      ...(values.cutoff === undefined
+        ? {}
+        : {
+            opening: {
+              cutoff: checkedDate(values.cutoff, '--cutoff'),
+              yearStart:
+                values['year-start'] === undefined
+                  ? await yearStartOf(server.driver, company, values.cutoff)
+                  : checkedDate(values['year-start'], '--year-start'),
+            },
+          }),
     });
     write(`\n${reportText(report)}`);
     const file = resolve(
@@ -102,4 +121,24 @@ export async function runOdoo(
   } finally {
     await server.close();
   }
+}
+
+const checkedDate = (value: string, option: string): string => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(value)))
+    throw new Error(`${option}: a date as YYYY-MM-DD, not ${value}.`);
+  return value;
+};
+
+/** The first day of the company's fiscal year that `cutoff` falls in (its first month from Accounting, else January). */
+async function yearStartOf(driver: Driver, company: number, cutoff: string): Promise<string> {
+  const rows = await driver
+    .query<{ m: number | null }>({
+      text: 'SELECT fiscal_year_start AS m FROM res_company WHERE id = $1',
+      params: [company],
+    })
+    .catch(() => [] as { m: number | null }[]);
+  const month = Number(rows[0]?.m ?? 1) || 1;
+  const year = Number(cutoff.slice(0, 4));
+  const start = Number(cutoff.slice(5, 7)) >= month ? year : year - 1;
+  return `${start}-${String(month).padStart(2, '0')}-01`;
 }

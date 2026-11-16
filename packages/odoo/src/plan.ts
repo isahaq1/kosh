@@ -266,6 +266,8 @@ const partners: Step = {
     'comment',
     'customer_rank',
     'supplier_rank',
+    'property_account_receivable_id',
+    'property_account_payable_id',
     'active',
     'type',
   ],
@@ -297,6 +299,11 @@ const partners: Step = {
       isCustomer: typeof r['customer_rank'] === 'number' ? r['customer_rank'] > 0 : undefined,
       isVendor: typeof r['supplier_rank'] === 'number' ? r['supplier_rank'] > 0 : undefined,
       active: r['active'] !== false,
+      // Its documents post to the same receivable and payable accounts as in Odoo (Accounting's fields).
+      receivableAccount:
+        ctx.ref('account.account', idOf(r['property_account_receivable_id'])) ?? undefined,
+      payableAccount:
+        ctx.ref('account.account', idOf(r['property_account_payable_id'])) ?? undefined,
     });
   },
   later: (r, ctx) => defined({ parent: ctx.ref('res.partner', idOf(r['parent_id'])) ?? undefined }),
