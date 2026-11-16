@@ -383,7 +383,6 @@ Run them in the project folder (`npx shutro-erp …`, or `npm run migrate` / `np
 | `shutro-erp seed [module …]` | seed data of all modules, or of those named |
 | `shutro-erp module create <name>` | a new module in `src/modules/<name>/`, listed in `src/modules.ts` |
 | `shutro-erp doctor` · `--json` | what to fix in this installation: the database and its connections, migrations, apps, administrators without a second factor, late jobs and failing webhooks, the clock, Valkey, mail, storage, HTTPS, backups, telemetry |
-| `shutro-erp odoo import` · `--cutoff` · `--commit` | a live Odoo's units, categories, taxes, chart, contacts and products, each with its Odoo id; with `--cutoff`, the opening balances, open invoices and bills and the stock on hand, reconciled with Odoo; a dry run unless `--commit` |
 | `shutro-erp backup` · `backup verify [file]` | a backup in `backups/` with a manifest of every table's rows, the ledger and the stock · restored into a scratch database and checked against it, recorded for `doctor` |
 | `shutro-erp check` · `--all` · `--strict` | your modules against the standard the shipped apps meet (labels, search, views, print and import templates, events, help) · every result · Bangla and demo data fail too |
 | `shutro-erp user create <login>` | a user: `--name`, `--email`, `--roles`, `--password` (asked when missing) |

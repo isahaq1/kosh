@@ -15,7 +15,6 @@
       "!**/playwright-report",
       "!**/test-results",
       "!pnpm-lock.yaml",
-      "!**/test/recordings",
       "!**/test/certify/recordings",
       "!**/*.gen.ts",
       "!**/.kosh",

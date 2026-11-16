@@ -53,6 +53,10 @@ certification of its connectors.
 
 ### 2.3 Leave Odoo safely: migrate, run in parallel, prove, cut over
 
+> **Withdrawn (2026-11-16).** Kosh ships no Odoo tools: the importer built for steps 3 and 4 was removed (its history
+> is in git, commits `5686bf3` to `b4b0c53`). Starting a company from any earlier system is served by tools on
+> Shutro alone — an opening-balance kit from templates with the same reconciliation proof — in a later RFC.
+
 1. **Connect** to a live Odoo (its JSON-RPC API with a read-only user) or to a database dump. No module needs to be
    installed in Odoo.
 2. **Map** automatically: Odoo's models and fields are matched to Kosh's from both sides' metadata (partners,
@@ -250,4 +254,6 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   location and lot, and stock value per product to the cent. Archived records keep their Odoo id (external ids
   read and written with archived records visible). Recorded against Odoo 18's demo with a category valued in real
   time: 19 quants, two lots, 3,067.50, every check equal. Next (part 2c): open sales and purchase orders.
-
+- **Step 3 withdrawn (2026-11-16).** The Odoo importer (`@kosh/odoo`, `shutro-erp odoo import`, its recording and
+  docs/odoo.md) removed: Kosh ships no Odoo tools. Kept: stock valuation's system-only accounting date on transfers
+  and unit cost on transfer lines, for the opening-balance kit that replaces it.

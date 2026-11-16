@@ -76,11 +76,6 @@ import. An import can be undone for seven days.
 Use **external ids** (the old system's references) on every row: re-importing then updates instead of duplicating,
 and every record can be traced back to where it came from.
 
-From Odoo, `shutro-erp odoo import` loads units, product categories, taxes, the chart, contacts and products
-directly, each with its Odoo id, and with `--cutoff` the opening balances and the open invoices and bills, proved
-by its reconciliation, and the stock on hand by location and lot with its value ([odoo.md](odoo.md)); a dry run
-first.
-
 ## 4. The parallel run (weeks 2–4)
 
 Every document is entered in both systems, by the same person, the same day. At the end of each week, compare:

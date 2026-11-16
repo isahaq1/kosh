@@ -63,7 +63,6 @@
     "@kosh/helpdesk": "workspace:*",
     "@kosh/hr": "workspace:*",
     "@kosh/import": "workspace:*",
-    "@kosh/odoo": "workspace:*",
     "@kosh/integrations": "workspace:*",
     "@kosh/l10n_bd": "workspace:*",
     "@kosh/l10n_bd_payroll": "workspace:*",
