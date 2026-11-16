@@ -68,6 +68,29 @@ export function problemOf(error: unknown): Problem {
       detail: typeof raised === 'string' ? raised : error.message,
     };
   }
+  // A constraint the database enforces (a duplicate code, a missing reference): the driver's message says which and
+  // how to fix it — the user's answer, not a server failure.
+  if (error instanceof pg.DriverError && error.code === 'CONSTRAINT_VIOLATION') {
+    const detail = error.message.endsWith(error.hint)
+      ? error.message.slice(0, -error.hint.length).trim()
+      : error.message;
+    return {
+      type: 'https://kosh.dev/problems/constraint-violation',
+      title: 'Refused by a constraint',
+      status: 422,
+      detail,
+      ...(error.hint === '' ? {} : { hint: error.hint }),
+    };
+  }
+  // A conflict with another transaction (serialization failure, deadlock): nothing was saved; doing it again works.
+  if (error instanceof pg.DriverError && error.retryable)
+    return {
+      type: 'https://kosh.dev/problems/concurrent-update',
+      title: 'Conflict',
+      status: 409,
+      detail: 'Someone else changed the same records at the same moment; nothing was saved.',
+      hint: 'Try again.',
+    };
   if (error instanceof orm.ShutroError) {
     const status = SHUTRO_STATUS[error.code] ?? 500;
     if (status !== 500)

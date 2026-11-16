@@ -130,7 +130,8 @@ with `pnpm --filter @kosh/web api:generate`; CI runs `api:check`. Generated file
 
 Every refusal is an RFC 9457 problem document (`application/problem+json`) with a stable `type`:
 `unauthenticated` 401, `access` 403, `company-not-allowed` 403, `missing-record` 404, `stale-record` 412,
-`validation` / `constraint-violation` 422, `invalid-identity` 400, `rate-limited` 429; unexpected errors are 500
+`validation` / `constraint-violation` 422 (a database constraint too: a duplicate code says which value),
+`concurrent-update` 409 (also a deadlock: try again), `invalid-identity` 400, `rate-limited` 429; unexpected errors are 500
 without internals, logged with the request id.
 Every problem carries `requestId`, the id the request is logged and traced under (`X-Request-Id`). The back-office
 shows a server failure with its reference (`#` and the id's first eight characters) for the user to quote, and a page
