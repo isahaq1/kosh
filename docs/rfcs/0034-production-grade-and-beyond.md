@@ -229,4 +229,14 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   kit's recording (dry run keeps nothing; 34 contacts with their companies, 42 products with codes and taxes, 51
   accounts, 25 units; a second run creates nothing); the kit now keeps a recording only when every step of a contract
   ran and passed. Next (part 2): open invoices and bills, the opening balance, stock, and the reconciliation report.
+- **Step 3, part 2a (2026-11-16).** **The books and their proof** (`--cutoff`): Odoo's balances at the cut-off read
+  with `read_group` (all time, and this fiscal year for profit and loss), each partner's receivable and payable, and
+  every line still open on those accounts; one posted opening entry (balance-sheet accounts at their balance, profit
+  and loss at this year's, the earlier years' result on retained earnings); each open invoice, credit note and bill
+  a posted Kosh document of its kind for what is left, Odoo's number as the reference, on the partner's receivable or
+  payable account (now imported with the contact); other open items lines of the entry with their partner; both
+  sides on an `OPENING` account. The reconciliation, in the same transaction so a dry run proves it too: the trial
+  balance per account, each partner's receivable and payable, the opening account at zero, every open document
+  present — each difference a line with both figures. A second run finds the opening by its cut-off. Recorded
+  against Odoo 18's demo: 13 open documents, a bill of the year before, every check equal. Next (part 2b): stock.
 

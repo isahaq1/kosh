@@ -66,15 +66,50 @@ linked + skipped + failed equals read. The exit code is 1 when anything failed.
 The import runs as the system with the reason `odoo import` in the audit log, in one transaction; each record is in
 a savepoint of its own, so one refused record is a line in the report, not the end of the import.
 
+## The books at the cut-off
+
+With `--cutoff <date>`, the import also brings the books as they stood at the end of that day, and proves it:
+
+```sh
+shutro-erp odoo import --url … --db … --login … --cutoff 2026-06-30           # a dry run, with the proof
+shutro-erp odoo import --url … --db … --login … --cutoff 2026-06-30 --commit
+```
+
+- **The opening entry**, dated the cut-off and posted: every balance-sheet account at its Odoo balance; the profit
+  and loss accounts at this fiscal year's balance, so the year's reports carry on; the earlier years' result on the
+  company's retained earnings account. The fiscal year starts in the company's first month (Settings › App settings
+  › Accounting), or at `--year-start <date>`.
+- **Open items**: every line still open on a receivable or payable account in Odoo. An invoice, credit note or bill
+  becomes a Kosh document of the same kind for what is left to pay — Odoo's number as its reference, its dates
+  kept, posted to the partner's receivable or payable account as in Odoo — so it is paid, followed up and reconciled
+  in Kosh. Another open item (an advance, a payment not matched yet) is a line of the opening entry with its partner.
+- Both meet on an **Opening balances (from Odoo)** account (code `OPENING`), which nets to zero.
+
+Then the **reconciliation**, read from Kosh's posted books in the same transaction (so a dry run proves it too):
+
+| Check | Equal when |
+| --- | --- |
+| trial balance | each account's balance at the cut-off is Odoo's (this year's for profit and loss, the earlier years' result added to retained earnings) |
+| receivables and payables | each partner's balance on each receivable and payable account is Odoo's |
+| opening balances account | it nets to zero |
+| open documents | every open invoice, credit note and bill of Odoo is in Kosh |
+
+Each difference is a line of the report with the account, partner or document, Odoo's figure and Kosh's. A second run
+finds the opening by its cut-off and does not make it again; the checks run every time.
+
+Run it with no posting in Odoo after the cut-off (the open items are read as they are now): at the end of a month,
+before anyone enters the next one, or on a copy of the database.
+
 ## Not yet
 
-Open invoices and bills with their payments, the opening balance, stock by location and lot, open orders,
-employees and projects, and the reconciliation report proving the trial balance, receivables, payables and stock
-equal Odoo's come next (RFC 0034 step 3 part 2); the incremental sync for a parallel run and the cut-over after that
-(step 4). Until then, see [the pilot playbook](pilot.md) for loading the rest through the import screen.
+Stock on hand by location and lot with its value, open sales and purchase orders, employees and projects come next
+(RFC 0034 step 3); the incremental sync for a parallel run and the cut-over after that (step 4). Until then, see
+[the pilot playbook](pilot.md) for loading those through the import screen.
 
 ## Tested against a real Odoo
 
 `packages/cli/test/odoo.integration.test.ts` runs the importer against Odoo 18 with its demo data, recorded with
 `KOSH_CERTIFY=live` and replayed in every test run (see [integrations.md](integrations.md), Certified against the
-sandboxes): the dry run keeps nothing, every record is accounted for, a second run creates nothing.
+sandboxes): the dry run keeps nothing, every record is accounted for, a second run creates nothing, and the books
+at the cut-off — 13 open invoices, credit notes and bills among them, a bill of the year before — reconcile with
+Odoo in every check.
