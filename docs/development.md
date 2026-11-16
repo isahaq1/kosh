@@ -17,3 +17,28 @@ pnpm bench               # performance budgets on seeded data (minutes; CI runs 
 - Shutro is linked from `../shutro/dist-npm/shutro` until it is published: after changing Shutro, run
   `pnpm pack:npm` there (and `npm install --omit=dev` inside `dist-npm/shutro` once).
 - Only `packages/server/src/orm.ts` imports `shutro`; everything else imports `@kosh/server/orm`.
+
+## Tests
+
+- **Integration tests share one PostgreSQL server**, started once per run by Vitest's global setup
+  (`packages/server/test/support/postgres.global.ts`); each test file creates a database of its own on it with
+  `testDatabase()` from `@kosh/server/testing`, and drops it in `afterAll` with `stop()`. To use a server you
+  already run instead of a container: `KOSH_TEST_DATABASE_URL=postgres://user:pass@host:port/postgres pnpm test`.
+
+  ```ts
+  import { type TestDatabase, testDatabase } from '@kosh/server/testing';
+  let db: TestDatabase;
+  beforeAll(async () => { db = await testDatabase(); /* … db.getConnectionUri() … */ });
+  afterAll(async () => { await db?.stop(); });
+  ```
+
+- **Flaky tests are counted, not hidden.** A failed test runs once more; one that passes only then is listed at
+  the end of the run as flaky, with its strikes in `.flaky-ledger.json` (CI keeps the ledger between runs). A test
+  reaching three strikes fails the run until it is fixed; a clean pass clears its strikes.
+- **E2E never reuses a server.** An interrupted Playwright run can leave its servers on ports 3100 / 3101 / 4173 /
+  4174; the next run then stops with "already used" instead of silently sharing a stale database. Stop those
+  processes (`netstat -ano | findstr ":3100 :3101 :4173 :4174"`) and run again.
+- Under heavy machine load the first connection of a test file can time out (the worker is too busy loading
+  modules to finish the handshake in 30 s); the shared server makes this rare, and the ledger names it when it
+  happens.
+

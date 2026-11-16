@@ -1,6 +1,6 @@
 # RFC 0034 — Production-grade, and past Odoo where it counts
 
-- Status: **Proposed** (2026-11-16) — waiting for approval
+- Status: **Accepted** (2026-11-16)
 - Builds on: every RFC so far; replaces the "proposed order" of `docs/odoo-gaps/README.md`
 - Why now: Kosh is deeper than Odoo in places (see the comparison of 2026-11-16) but unproven. Adding modules will
   not close the gap that matters most, which is trust. This RFC makes Kosh **provably reliable first**, then makes
@@ -148,3 +148,22 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
    step 3 or the spreadsheet path comes first.
 3. Two-way calendar sync needs Google and Microsoft app registrations under your organisation. Proceed with ICS
    only until then?
+
+## Implementation notes
+
+- **Step 1, part 1 (2026-11-16).** Integration tests: **one PostgreSQL server per run** (Vitest global setup
+  `packages/server/test/support/postgres.global.ts`, fsync off, 400 connections; or `KOSH_TEST_DATABASE_URL`) and
+  **a database per test file** (`testDatabase()` in the new `@kosh/server/testing` entry point, dropped with
+  `WITH (FORCE)`), replacing 111 containers. Measured on the development machine: before, 11 and then 10 files
+  failed per full run with `CONNECT_TIMEOUT`; an instrumented run showed the cause is **CPU starvation of the test
+  workers**, not the database (at most 26 connections open, CPU at 90–100 %). After: 174 / 174 files and 857 / 857
+  tests passed with none retried. **The flaky ledger** (`scripts/flaky-reporter.ts`, `retry: 1`): tests passing
+  only on retry are named and counted in `.flaky-ledger.json`, kept between CI runs by the cache; three strikes fail
+  the run (checked with a probe test: strikes 1, 2, then a failed run). Two test races fixed (the IMAP poller
+  polling before the mailbox had the mail; the Studio upgrade test's timeout). CI runs the full `pnpm lint`
+  (model views and the module standard too); the benchmarks' budgets already fail the main branch's build. E2E
+  servers are never reused (`reuseExistingServer: false`), so a leftover server from an interrupted run stops the
+  next one with a clear error instead of sharing its database. Not done in this part: E2E with a database per
+  worker (the two E2E projects run one worker each against their own server), state-only waits enforced by a lint
+  rule, `shutro-erp check` for a company's own modules.
+
