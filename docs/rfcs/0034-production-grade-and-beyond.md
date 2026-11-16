@@ -203,6 +203,12 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   the message of a server failure (5xx) — refusals stay as they are —, taking the echoed `X-Request-Id` when a proxy
   answers instead of the server; the router's default error component is a translated page (English and Bangla) with
   the reference, Try again and Reload. Tested by the server's integration test, unit tests of `ApiError` and an E2E
-  of a failing list. The portal keeps its own error handling for now. Next in step 2: the adapter certification kit
-  (needs sandbox credentials) and the pilot playbook.
+  of a failing list. The portal keeps its own error handling for now.
+- **Step 2, part 4 (2026-11-16).** **The pilot playbook** ([docs/pilot.md](../pilot.md)): the two leads, the
+  agreement before installing (scope, cut-off, parallel window, success measures with today's figures, an exit rule),
+  the installation with `doctor` all ticks and nightly verified backups, the data in order with external ids, the
+  weekly reconciliation checks of the parallel run (trial balance, aged balances, stock, documents, VAT), the problem
+  log with error references, the weekly review, cut-over after two equal weeks and a month end, the report after.
+  Left in step 2: the adapter certification kit (needs sandbox credentials), point-in-time recovery set up by `init`
+  and the backup result on the administrator's home page.
 
