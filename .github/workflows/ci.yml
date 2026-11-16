@@ -28,11 +28,23 @@ jobs:
       - run: cd ../shutro && pnpm install --frozen-lockfile && pnpm pack:npm && cd dist-npm/shutro && npm install --omit=dev
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
-      - run: pnpm exec biome ci .
-      - run: node scripts/check-boundaries.ts
+      # Biome, the Shutro boundary, model views up to date, and the module standard (RFC 0023).
+      - run: pnpm lint
       - run: pnpm build
       - run: pnpm --filter @kosh/web api:check # the committed typed client matches the modules
-      - run: pnpm test # integration tests use Testcontainers (Docker is available on ubuntu-latest)
+      # The flaky-test ledger (RFC 0034 step 1): strikes carry over between runs; three fail the build.
+      - uses: actions/cache/restore@v4
+        with:
+          path: .flaky-ledger.json
+          key: flaky-ledger-${{ github.run_id }}
+          restore-keys: flaky-ledger-
+      # One PostgreSQL container for the run, a database per test file on it (Docker is on ubuntu-latest).
+      - run: pnpm test
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: .flaky-ledger.json
+          key: flaky-ledger-${{ github.run_id }}
 
   e2e:
     runs-on: ubuntu-latest

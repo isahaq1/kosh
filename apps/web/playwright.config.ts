@@ -56,7 +56,8 @@ export default defineConfig({
       command: 'node e2e/server.ts',
       url: `http://127.0.0.1:${API_PORT}/health/ready`,
       timeout: 180_000,
-      reuseExistingServer: process.env['CI'] === undefined,
+      // Never a leftover server from an interrupted run: it would share (or lack) its database (RFC 0034 step 1).
+      reuseExistingServer: false,
       env: { KOSH_E2E_PORT: String(API_PORT) },
       stdout: 'pipe',
     },
@@ -64,14 +65,16 @@ export default defineConfig({
       command: 'pnpm exec vite build && pnpm preview',
       url: 'http://localhost:4173',
       timeout: 180_000,
-      reuseExistingServer: process.env['CI'] === undefined,
+      // Never a leftover server from an interrupted run: it would share (or lack) its database (RFC 0034 step 1).
+      reuseExistingServer: false,
       env: { KOSH_API: `http://127.0.0.1:${API_PORT}` },
     },
     {
       command: 'node e2e-apps/server.ts',
       url: `http://127.0.0.1:${APPS_API_PORT}/health/ready`,
       timeout: 240_000,
-      reuseExistingServer: process.env['CI'] === undefined,
+      // Never a leftover server from an interrupted run: it would share (or lack) its database (RFC 0034 step 1).
+      reuseExistingServer: false,
       env: { KOSH_E2E_APPS_PORT: String(APPS_API_PORT) },
       stdout: 'pipe',
     },
@@ -79,7 +82,8 @@ export default defineConfig({
       command: `pnpm exec vite preview --port ${APPS_WEB_PORT} --strictPort`,
       url: `http://localhost:${APPS_WEB_PORT}`,
       timeout: 180_000,
-      reuseExistingServer: process.env['CI'] === undefined,
+      // Never a leftover server from an interrupted run: it would share (or lack) its database (RFC 0034 step 1).
+      reuseExistingServer: false,
       env: { KOSH_API: `http://127.0.0.1:${APPS_API_PORT}` },
     },
   ],

@@ -26,7 +26,8 @@ export default defineConfig({
       command: 'node e2e/server.ts',
       url: `http://127.0.0.1:${API_PORT}/health/ready`,
       timeout: 240_000,
-      reuseExistingServer: process.env['CI'] === undefined,
+      // Never a leftover server from an interrupted run (RFC 0034 step 1).
+      reuseExistingServer: false,
       env: {
         KOSH_E2E_PORTAL_PORT: String(API_PORT),
         KOSH_PORTAL_URL: `http://localhost:${WEB_PORT}`,
@@ -39,7 +40,8 @@ export default defineConfig({
       command: `pnpm exec vite build && pnpm exec vite preview --port ${WEB_PORT} --strictPort`,
       url: `http://localhost:${WEB_PORT}`,
       timeout: 180_000,
-      reuseExistingServer: process.env['CI'] === undefined,
+      // Never a leftover server from an interrupted run (RFC 0034 step 1).
+      reuseExistingServer: false,
       env: { KOSH_API: `http://127.0.0.1:${API_PORT}` },
     },
   ],
