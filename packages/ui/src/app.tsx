@@ -111,6 +111,7 @@ import { Consent } from './shell/Consent.js';
 import { Home } from './shell/Home.js';
 import { Login } from './shell/Login.js';
 import { OfflineMenu } from './shell/OfflineMenu.js';
+import { RouteError } from './shell/RouteError.js';
 import { rememberRecord } from './shell/recent.js';
 import { Sidebar, SidebarDrawer, useSidebarCollapsed } from './shell/Sidebar.js';
 import { ShortcutsHelp, useShortcuts } from './shell/shortcuts.js';
@@ -1498,7 +1499,10 @@ export function KoshApp({ api, registry, messages, fallback = null }: KoshAppPro
       alive = false;
     };
   }, [startLang, messages]);
-  const router = useMemo(() => createRouter({ routeTree, defaultPreload: 'intent' }), []);
+  const router = useMemo(
+    () => createRouter({ routeTree, defaultPreload: 'intent', defaultErrorComponent: RouteError }),
+    [],
+  );
   // Live updates and presence: one connection per tab, for as long as the app lives.
   const realtime = useMemo(
     () => (typeof WebSocket === 'undefined' ? undefined : createRealtimeClient()),

@@ -147,6 +147,11 @@ describe('per-request environment', () => {
       headers: { 'x-test-user': 'alice' },
     });
     expect(sneaky.statusCode).toBe(500); // the read-only transaction refuses the INSERT
+    // Without internals, but with the request id the log line carries (RFC 0034 §2.2).
+    expect(sneaky.json()).toMatchObject({
+      type: 'https://kosh.dev/problems/internal',
+      requestId: sneaky.headers['x-request-id'],
+    });
   });
 });
 
@@ -179,8 +184,8 @@ describe('refusals are problem details', () => {
       status: 400,
       type: 'https://kosh.dev/problems/invalid-identity',
     });
-    const missing = await server.app.inject({ url: '/nope' });
-    expect(missing.json()).toMatchObject({ status: 404 });
+    const missing = await server.app.inject({ url: '/nope', headers: { 'x-request-id': 'req-7' } });
+    expect(missing.json()).toMatchObject({ status: 404, requestId: 'req-7' });
   });
 });
 

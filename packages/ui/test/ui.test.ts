@@ -74,6 +74,39 @@ describe('formatting', () => {
 });
 
 describe('api client', () => {
+  test('a server failure shows its reference; a refusal does not; a proxy answer keeps the echoed id', () => {
+    const failed = new ApiError({
+      type: 'https://kosh.dev/problems/internal',
+      title: 'Internal error',
+      status: 500,
+      detail: 'The server failed.',
+      requestId: '3f2a9c1e-77b0-4c1d-9a4e-0b1c2d3e4f50',
+    });
+    expect(failed.message).toBe('The server failed. (#3f2a9c1e)');
+    expect(failed.reference).toBe('3f2a9c1e');
+    const refused = new ApiError({
+      type: 'https://kosh.dev/problems/validation',
+      title: 'Invalid',
+      status: 422,
+      detail: 'Name is required.',
+      requestId: 'abcdef0123',
+    });
+    expect(refused.message).toBe('Name is required.');
+  });
+
+  test('a 502 from a proxy carries the request id the response echoed', async () => {
+    const api = createKoshApi({
+      storage: { getItem: () => null, setItem: () => undefined, removeItem: () => undefined },
+      fetch: (async () =>
+        new Response('Bad gateway', {
+          status: 502,
+          headers: { 'x-request-id': 'deadbeef-0000' },
+        })) as unknown as typeof fetch,
+    });
+    const error = await api.list('res.partner', { fields: ['name'] }).catch((e: unknown) => e);
+    expect((error as ApiError).message).toBe('Bad gateway (#deadbeef)');
+  });
+
   test('sends the CSRF token after sign-in, the company and language; problems become ApiError', async () => {
     const calls: { url: string; init: RequestInit }[] = [];
     const store = new Map<string, string>();

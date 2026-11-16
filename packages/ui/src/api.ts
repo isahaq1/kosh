@@ -14,6 +14,8 @@ export interface Problem {
   readonly status: number;
   readonly detail: string;
   readonly hint?: string;
+  /** The request's id (RFC 0034 §2.2): quoted to support, it finds the server's log line. */
+  readonly requestId?: string;
 }
 
 /** A refused request. */
@@ -21,7 +23,13 @@ export class ApiError extends Error {
   readonly status: number;
   readonly problem: Problem;
   constructor(problem: Problem) {
-    super(problem.hint === undefined ? problem.detail : `${problem.detail} ${problem.hint}`);
+    const text = problem.hint === undefined ? problem.detail : `${problem.detail} ${problem.hint}`;
+    // A server failure says nothing the user can act on; its reference lets support find what happened.
+    super(
+      problem.status >= 500 && problem.requestId !== undefined
+        ? `${text} (#${problem.requestId.slice(0, 8)})`
+        : text,
+    );
     this.name = 'ApiError';
     this.status = problem.status;
     this.problem = problem;
@@ -29,6 +37,10 @@ export class ApiError extends Error {
   /** The short problem type (`stale-record`, `access`, `two-factor-required`). */
   get kind(): string {
     return this.problem.type.replace(/^https:\/\/kosh\.dev\/problems\//, '');
+  }
+  /** The short reference shown to the user (the request id's first characters), when the server sent one. */
+  get reference(): string | undefined {
+    return this.problem.requestId?.slice(0, 8);
   }
 }
 
@@ -41,6 +53,12 @@ export class NetworkError extends Error {
     super('The server could not be reached.', { cause });
     this.name = 'NetworkError';
   }
+}
+
+/** The request id a response echoed, for answers that are not problems (a proxy's 502). */
+function requestIdOf(response: Response): { requestId?: string } {
+  const id = response.headers.get('x-request-id');
+  return id === null ? {} : { requestId: id };
 }
 
 /** `fetch` that throws {@link NetworkError} instead of a bare `TypeError` when the network fails. */
@@ -294,6 +312,7 @@ export function createKoshApi(options: ApiOptions = {}): KoshApi {
               title: response.statusText,
               status: response.status,
               detail: text.slice(0, 300),
+              ...requestIdOf(response),
             };
       throw new ApiError(problem);
     }

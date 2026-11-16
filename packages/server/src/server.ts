@@ -208,6 +208,16 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
     ...(options.serverFactory === undefined ? {} : { serverFactory: options.serverFactory }),
   });
   app.decorateRequest('identity', null);
+  // Every problem carries the request id, so a user can quote it and support can find the log line (RFC 0034 §2.2).
+  app.addHook('preSerialization', async (request, reply, payload) => {
+    if (reply.statusCode < 400 || payload === null || typeof payload !== 'object') return payload;
+    const p = payload as Record<string, unknown>;
+    return typeof p['type'] === 'string' &&
+      typeof p['status'] === 'number' &&
+      p['requestId'] === undefined
+      ? { ...p, requestId: request.id }
+      : payload;
+  });
   app.decorateRequest('span', undefined);
   // A generic method: Fastify's decorator typing cannot express it; the augmentation above types callers.
   app.decorateRequest('env', function env<T>(
