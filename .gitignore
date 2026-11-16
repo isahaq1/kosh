@@ -15,3 +15,6 @@ packages/cli/test/.work-*/
 **/.generated-api/
 **/.kosh-studio/
 **/.studio-project/
+
+# The flaky-test ledger (RFC 0034 step 1): local; CI keeps its own in the cache.
+.flaky-ledger.json
