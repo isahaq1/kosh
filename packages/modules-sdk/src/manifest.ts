@@ -820,3 +820,32 @@ export function defineModule(input: ModuleInput): KoshModule {
     menus: Object.freeze([...(input.menus ?? []), ...overviewMenus]),
   });
 }
+
+/**
+ * What a part of a module adds to its manifest: a model with its action, menu, views, search and import template in
+ * a file of its own (`shutro-erp make model`), merged by {@link withParts}. The models themselves join the Shutro
+ * module (`models: [...parts.models]`).
+ */
+export interface ModuleParts {
+  readonly actions?: ModuleInput['actions'];
+  readonly menus?: ModuleInput['menus'];
+  readonly views?: ModuleInput['views'];
+  readonly searches?: ModuleInput['search'];
+  readonly importTemplates?: ModuleInput['importTemplates'];
+  readonly documents?: ModuleInput['documents'];
+  readonly events?: ModuleInput['events'];
+}
+
+/** A manifest with its parts merged in: what the manifest says itself comes first and wins on the same key. */
+export function withParts<T extends ModuleInput>(parts: ModuleParts, manifest: T): T {
+  return {
+    ...manifest,
+    actions: { ...(parts.actions ?? {}), ...(manifest.actions ?? {}) },
+    menus: [...(manifest.menus ?? []), ...(parts.menus ?? [])],
+    views: { ...(parts.views ?? {}), ...(manifest.views ?? {}) },
+    search: { ...(parts.searches ?? {}), ...(manifest.search ?? {}) },
+    importTemplates: [...(manifest.importTemplates ?? []), ...(parts.importTemplates ?? [])],
+    documents: [...(manifest.documents ?? []), ...(parts.documents ?? [])],
+    events: [...(manifest.events ?? []), ...(parts.events ?? [])],
+  };
+}

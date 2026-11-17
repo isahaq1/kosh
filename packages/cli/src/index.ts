@@ -13,6 +13,7 @@ import { runBackup } from './backup.js';
 import { runCheck } from './check.js';
 import { runDoctor } from './doctor.js';
 import { runInit } from './init.js';
+import { runMake } from './make.js';
 import { runOpening } from './opening.js';
 import { modulesOf, runMigrate, runModule, runSeed, runUser } from './project.js';
 import type { Terminal } from './ui.js';
@@ -72,6 +73,11 @@ Commands (run in the installation's folder; they read .env and src/modules.ts):
   migrate status         Applied and pending migration files
   seed [module ...]      Load the modules' seed data and the apps' defaults (all modules, or those named)
   module create <name>   Scaffold src/modules/<name>/ (models, views, menus, access, seed data, data migrations)
+  make model <module> <name> --fields "title:char! price:decimal …"
+                         A model as a part of your module: label, access, action, menu, list, form, search and
+                         import template, meeting the module standard (shutro-erp make --help)
+  make field <module>.<model> <name:type>
+                         A field added to it: on the model, its list, its form and its import template
   backup                 A backup in backups/ (pg_dump) with a manifest of every table's rows, the ledger and the stock
   backup verify [file]   Restore the latest backup into a scratch database and check it against its manifest
   opening template       The workbook to start a company from its own figures: trial balance, unpaid documents,
@@ -202,6 +208,7 @@ export async function runCli(
     doctor: runDoctor,
     backup: runBackup,
     opening: runOpening,
+    make: runMake,
   };
   const command = commands[argv[0] ?? ''];
   if (command !== undefined)

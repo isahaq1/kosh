@@ -326,6 +326,8 @@ import { orm } from 'shutro-erp/orm';
 const { defineModel, f } = orm;
 
 export const Item = defineModel('${model}', {
+  label: 'Item',
+  recName: 'name',
   archivable: true,
   access: {
     '${name}.user': ['read', 'write', 'create'],
@@ -373,7 +375,7 @@ export const migrations: DataMigration[] = [
 import { base, baseShutro } from 'shutro-erp';
 import { defineModule } from 'shutro-erp/modules-sdk';
 import { orm } from 'shutro-erp/orm';
-import { form, list } from 'shutro-erp/views';
+import { form, list, search } from 'shutro-erp/views';
 import { data } from './data.ts';
 import { migrations } from './migrations.ts';
 import { Item } from './models.ts';
@@ -410,6 +412,9 @@ export const ${id} = defineModule({
   views: {
     '${model}.list': list(Item, { columns: ['name', 'code'] }),
     '${model}.form': form(Item, (f) => ({ sheet: [f.group('main', ['name', 'code', 'notes'])] })),
+  },
+  search: {
+    '${model}': search(Item, { fields: ['name', 'code'] }),
   },
 });
 `,
