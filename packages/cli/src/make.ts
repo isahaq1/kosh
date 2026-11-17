@@ -17,6 +17,12 @@
  * - `make action <module>.<model> <name> --from <state> --to <state> [--group manager]` is a step only some may
  *   take: the transition requires a permission of its own, granted to the module's managers (or `--group`).
  * - `make report <module>.<model> [--by <field>] [--measure <field>]` adds a pivot and a chart of the model.
+ * - `make page <module> <name>` writes a page of the module's own (React), with its menu, registered in the
+ *   back-office.
+ * - `make bridge <a> <b>` writes the module that connects two others, installed when both are.
+ *
+ * `make model` also writes the model's test (`test/<name>.test.ts`): a user of the module creates one, someone
+ * without its role is refused — on a served installation (`testInstallation` of `shutro-erp/testing`).
  *
  * Nothing is overwritten: a part that exists is not replaced — `make model` shows how it differs from what it would
  * write. `--dry-run` shows what would be written.
@@ -25,8 +31,9 @@ import { existsSync, readdirSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
+import { APPS, type AppName } from './templates.js';
 
-const USAGE = `Usage: shutro-erp make <model | field | transition | action | report> …
+const USAGE = `Usage: shutro-erp make <model | field | transition | action | report | page | bridge> …
 
   make model <module> <name> --fields "<field> <field> …" [--label <Label>] [--plural <Labels>] [--dry-run]
       A model of src/modules/<module>/ as a part of its own: the model with its label and access, its action and
@@ -46,6 +53,14 @@ const USAGE = `Usage: shutro-erp make <model | field | transition | action | rep
   make report <module>.<model> [--by <field>] [--measure <field>] [--dry-run]
       A pivot and a chart of the model, grouped by a field (default: its state, a selection, a relation or a date
       by month) and counting records (or summing --measure).
+
+  make page <module> <name> [--label <Title>] [--dry-run]
+      A page of your own in the module (React): src/modules/<module>/web/<Name>Page.tsx with its menu, in English
+      and Bangla, registered in src/main.tsx.
+
+  make bridge <a> <b> [--dry-run]
+      The module that connects two others (yours, or apps of Shutro ERP): src/modules/<a>_<b>/, installed when
+      both are. Put there what one adds to the other.
 
   A field is name:type, with ! when it is required:
       title:char!   notes:text   pages:integer   price:decimal   lent:boolean   due:date   seen:datetime
@@ -256,6 +271,65 @@ export const permissions = [
 export const data = [
 ${sample(n, fields)}];
 `;
+}
+
+/** The model's test: who may do what, on a served installation. Null when a required relation cannot be guessed. */
+export function testFile(n: ModelNames, fields: readonly FieldSpec[]): string | null {
+  const values = sampleValues(fields);
+  if (values === null) return null;
+  return `/**
+ * ${n.label}: who may do what. A user of the module creates one; someone without its role is refused by the
+ * server. Made by \`shutro-erp make model\`; yours to extend. Run with \`npm test\` (it makes a scratch database on
+ * the server of DATABASE_URL, or of KOSH_TEST_POSTGRES).
+ */
+import { type TestInstallation, testInstallation } from 'shutro-erp/testing';
+import { afterAll, beforeAll, expect, test } from 'vitest';
+import { modules } from '../../../modules.ts';
+
+let erp: TestInstallation;
+
+beforeAll(async () => {
+  erp = await testInstallation({
+    modules,
+    users: { user: ['${n.module}.user'], outsider: ['base.user'] },
+  });
+}, 300_000);
+
+afterAll(async () => {
+  await erp?.close();
+});
+
+test('a user of the module creates a ${n.label.toLowerCase()} and finds it', async () => {
+  const made = await erp.call('POST', '/api/v1/models/${n.model}', 'user', { ${values.join(', ')} });
+  expect(made.status).toBe(201);
+  const found = await erp.call('GET', '/api/v1/models/${n.model}', 'user');
+  expect(found.status).toBe(200);
+});
+
+test('someone without the role is refused by the server', async () => {
+  expect((await erp.call('GET', '/api/v1/models/${n.model}', 'outsider')).status).toBe(403);
+  const refused = await erp.call('POST', '/api/v1/models/${n.model}', 'outsider', { ${values.join(', ')} });
+  expect(refused.status).toBe(403);
+});
+`;
+}
+
+/** Sample values of the fields, as code; null when a required relation cannot be guessed. */
+function sampleValues(fields: readonly FieldSpec[]): string[] | null {
+  if (fields.some((f) => f.type === 'm2o' && f.required)) return null;
+  const values: string[] = [];
+  for (const f of fields) {
+    if (f.type === 'char')
+      values.push(`${f.name}: ${quote(`Sample ${title(f.name).toLowerCase()}`)}`);
+    else if (f.type === 'integer') values.push(`${f.name}: 1`);
+    else if (f.type === 'decimal') values.push(`${f.name}: '1.00'`);
+    else if (f.type === 'selection')
+      values.push(`${f.name}: ${quote((f.arg ?? '').split('|')[0] ?? '')}`);
+    else if (f.type === 'date' && f.required) values.push(`${f.name}: '2026-01-01'`);
+    else if (f.type === 'datetime' && f.required) values.push(`${f.name}: '2026-01-01T00:00:00Z'`);
+    else if (f.type === 'text' && f.required) values.push(`${f.name}: 'Sample'`);
+  }
+  return values;
 }
 
 /** A sample record of the model as seed data, or nothing when a required relation cannot be guessed. */
@@ -557,6 +631,17 @@ async function makeModel(
     await writeFile(partPath, partFile(names, fields));
   }
   const all = await syncParts(dir, dry, [name]);
+  const test = testFile(names, fields);
+  const testPath = join(dir, 'test', `${name}.test.ts`);
+  if (test !== null && !existsSync(testPath)) {
+    if (!dry) {
+      await mkdir(join(dir, 'test'), { recursive: true });
+      await writeFile(testPath, test);
+    }
+    write(
+      `  ${said} src/modules/${module}/test/${name}.test.ts (a user creates one; someone without the role is refused)\n`,
+    );
+  }
   write(
     `  ${said} src/modules/${module}/parts/${name}.ts (${names.model}: ${fields.length} fields, list, form, search, import template)\n`,
   );
@@ -973,6 +1058,296 @@ async function makeReport(
   return 0;
 }
 
+/** A page of the module's own. */
+function pageFile(module: string, name: string, label: string): string {
+  const component = `${pascal(name)}Page`;
+  return `/**
+ * ${label}: a page of the ${module} module, made by \`shutro-erp make page\`. It is yours: the page asks the
+ * server through \`api\` and shows what it answers (no business rules here — the server decides).
+ */
+import type { PageProps } from 'shutro-erp/ui';
+import type { ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
+
+/** The page's words, in English and Bangla (namespace \`${module}\`, under \`pages.${name}\`). */
+export const messages = {
+  en: { title: ${quote(label)}, intro: 'This page is yours: show here what the lists and forms do not.' },
+  bn: { title: ${quote(label)}, intro: 'এই পাতাটি আপনার: তালিকা ও ফর্মে যা নেই তা এখানে দেখান।' },
+};
+
+export function ${component}(_props: PageProps): ReactElement {
+  const { t } = useTranslation(${quote(module)});
+  return (
+    <div className="mx-auto grid max-w-4xl gap-2 p-4">
+      <h1 className="text-xl font-semibold">{t(${quote(`pages.${name}.title`)})}</h1>
+      <p className="text-sm text-muted-foreground">{t(${quote(`pages.${name}.intro`)})}</p>
+    </div>
+  );
+}
+`;
+}
+
+/** `web/index.ts`: the module's pages registered, and their words. Generated; rewritten by each `make page`. */
+function webIndex(module: string, pages: readonly string[]): string {
+  const id = camel(module);
+  return `// Made by \`shutro-erp make\`: the pages in this folder, registered. Do not edit: run make page instead.
+import type { Registry } from 'shutro-erp/ui';
+${pages.map((p) => `import { ${pascal(p)}Page, messages as ${camel(p)}Messages } from './${pascal(p)}Page.tsx';`).join('\n')}
+
+/** Registers the module's pages in the back-office (src/main.tsx). */
+export function register${pascal(module)}Web(registry: Registry): Registry {
+${pages.map((p) => `  registry.registerPage(${quote(`${module}.${pascal(p)}`)}, ${pascal(p)}Page);`).join('\n')}
+  return registry;
+}
+
+/** The pages' words, by language. */
+export const ${id}Messages = {
+  en: { pages: { ${pages.map((p) => `${camel(p)}: ${camel(p)}Messages.en`).join(', ')} } },
+  bn: { pages: { ${pages.map((p) => `${camel(p)}: ${camel(p)}Messages.bn`).join(', ')} } },
+};
+`;
+}
+
+/** The part of a page: its action and its menu. */
+function pagePart(module: string, name: string, label: string): string {
+  return `/** ${label}: the action and menu of a page of the ${module} module (web/${pascal(name)}Page.tsx). */
+export const models = [];
+
+export const actions = {
+  '${module}.action_page_${name}': { type: 'client' as const, page: ${quote(`${module}.${pascal(name)}`)}, label: ${quote(label)} },
+};
+
+export const menus = [
+  {
+    id: '${module}.page_${name}',
+    parent: '${module}.root',
+    label: ${quote(label)},
+    action: '${module}.action_page_${name}',
+  },
+];
+
+export const views = {};
+
+export const searches = {};
+
+export const importTemplates = [];
+`;
+}
+
+/** src/main.tsx with the module's web contribution registered, or null when its shape is not the starter's. */
+export function wireWeb(main: string, module: string): string | null {
+  const fn = `register${pascal(module)}Web`;
+  if (main.includes(fn)) return main;
+  const imports = [...main.matchAll(/^import .*;$/gm)];
+  const last = imports.at(-1);
+  const calls = [...main.matchAll(/^register[A-Za-z0-9]+Web\(registry\);$/gm)];
+  const lastCall = calls.at(-1);
+  const anchor = lastCall?.[0] ?? /^const registry = .*;$/m.exec(main)?.[0];
+  if (last === undefined || anchor === undefined || !main.includes('messages={{ ')) return null;
+  return main
+    .replace('messages={{ ', `messages={{ ${camel(module)}: ${camel(module)}Messages, `)
+    .replace(anchor, `${anchor}\n${fn}(registry);`)
+    .replace(
+      last[0],
+      `${last[0]}\nimport { ${camel(module)}Messages, ${fn} } from './modules/${module}/web/index.ts';`,
+    );
+}
+
+async function makePage(
+  argv: readonly string[],
+  write: (t: string) => void,
+  cwd: string,
+): Promise<number> {
+  const { values, positionals } = parseArgs({
+    args: [...argv],
+    options: { label: { type: 'string' }, 'dry-run': { type: 'boolean', default: false } },
+    allowPositionals: true,
+    strict: true,
+  });
+  const [module, name] = positionals;
+  if (module === undefined || name === undefined) {
+    write(USAGE);
+    return 2;
+  }
+  if (!/^[a-z][a-z0-9_]*$/.test(name)) {
+    write(`"${name}" cannot be a page's name: lower-case letters, digits and _, like shelf_map.\n`);
+    return 2;
+  }
+  const dir = join(cwd, 'src', 'modules', module);
+  if (!existsSync(join(dir, 'index.ts'))) {
+    write(
+      `There is no src/modules/${module}/index.ts: make the module first (shutro-erp module create ${module}).\n`,
+    );
+    return 1;
+  }
+  const pagePath = join(dir, 'web', `${pascal(name)}Page.tsx`);
+  if (existsSync(pagePath)) {
+    write(
+      `src/modules/${module}/web/${pascal(name)}Page.tsx exists already and was left as it is.\n`,
+    );
+    return 1;
+  }
+  const label = values.label ?? title(name);
+  const dry = values['dry-run'] === true;
+  const said = dry ? 'would write' : 'wrote  ';
+  const pages = [
+    ...new Set([
+      ...(existsSync(join(dir, 'web'))
+        ? readdirSync(join(dir, 'web'))
+            .filter((f) => f.endsWith('Page.tsx'))
+            .map((f) => f.slice(0, -'Page.tsx'.length))
+        : []),
+      pascal(name),
+    ]),
+  ].sort();
+  if (!dry) {
+    await mkdir(join(dir, 'web'), { recursive: true });
+    await mkdir(join(dir, 'parts'), { recursive: true });
+    await writeFile(pagePath, pageFile(module, name, label));
+    await writeFile(join(dir, 'web', 'index.ts'), webIndex(module, pages));
+    await writeFile(join(dir, 'parts', `page_${name}.ts`), pagePart(module, name, label));
+  }
+  write(`  ${said} src/modules/${module}/web/${pascal(name)}Page.tsx\n`);
+  write(
+    `  ${said} src/modules/${module}/web/index.ts (${pages.length} page${pages.length === 1 ? '' : 's'})\n`,
+  );
+  write(`  ${said} src/modules/${module}/parts/page_${name}.ts (its action and menu)\n`);
+  await syncParts(dir, dry, [`page_${name}`]);
+  await rewire(dir, module, dry, write);
+  const mainPath = join(cwd, 'src', 'main.tsx');
+  const main = existsSync(mainPath) ? await readFile(mainPath, 'utf8') : null;
+  const wired = main === null ? null : wireWeb(main, module);
+  if (wired === null)
+    write(
+      `  in src/main.tsx, by hand:\n      import { ${camel(module)}Messages, register${pascal(module)}Web } from './modules/${module}/web/index.ts';\n      register${pascal(module)}Web(registry);\n      … messages={{ ${camel(module)}: ${camel(module)}Messages, … }}\n`,
+    );
+  else if (wired !== main) {
+    if (!dry) await writeFile(mainPath, wired);
+    write(`  ${dry ? 'would update' : 'updated'} src/main.tsx (the module's pages registered)\n`);
+  }
+  if (!dry) write("\nNext: npm run web, and open the page from the module's menu.\n");
+  return 0;
+}
+
+/** How a module is imported by a bridge: one of yours, or an app of Shutro ERP. Null when it is neither. */
+function moduleImport(
+  cwd: string,
+  name: string,
+): { line: string; module: string; shutro: string } | null {
+  if (existsSync(join(cwd, 'src', 'modules', name, 'index.ts')))
+    return {
+      line: `import { ${camel(name)}, ${camel(name)}Shutro } from '../${name}/index.ts';`,
+      module: camel(name),
+      shutro: `${camel(name)}Shutro`,
+    };
+  const app = (APPS as Readonly<Record<string, (typeof APPS)[AppName]>>)[name];
+  if (app === undefined) return null;
+  return {
+    line: `import { ${app.server}, ${app.server}Shutro } from 'shutro-erp/${name}';`,
+    module: app.server,
+    shutro: `${app.server}Shutro`,
+  };
+}
+
+async function makeBridge(
+  argv: readonly string[],
+  write: (t: string) => void,
+  cwd: string,
+): Promise<number> {
+  const { values, positionals } = parseArgs({
+    args: [...argv],
+    options: { 'dry-run': { type: 'boolean', default: false } },
+    allowPositionals: true,
+    strict: true,
+  });
+  const [a, b] = positionals;
+  if (a === undefined || b === undefined || a === b) {
+    write(USAGE);
+    return 2;
+  }
+  const first = moduleImport(cwd, a);
+  const second = moduleImport(cwd, b);
+  for (const [name, found] of [
+    [a, first],
+    [b, second],
+  ] as const)
+    if (found === null) {
+      write(
+        `"${name}" is neither a module of yours (src/modules/${name}/) nor an app of Shutro ERP.\n`,
+      );
+      return 1;
+    }
+  if (first === null || second === null) return 1;
+  const name = `${a}_${b}`.replaceAll('-', '_');
+  const dir = join(cwd, 'src', 'modules', name);
+  if (existsSync(dir)) {
+    write(`src/modules/${name} exists already.\n`);
+    return 1;
+  }
+  const id = camel(name);
+  const label = `${title(a)} with ${title(b)}`;
+  const index = `/**
+ * ${label}: the bridge between ${a} and ${b}, made by \`shutro-erp make bridge\`. Put here what one adds to the
+ * other — an extension of a model (orm.extendModel), a field, a button, a stat tile. It is proposed when both are
+ * installed, and neither depends on the other.
+ */
+import { defineModule } from 'shutro-erp/modules-sdk';
+import { orm } from 'shutro-erp/orm';
+${[first.line, second.line].sort().join('\n')}
+
+export const ${id}Shutro = orm.defineModule({
+  name: '${name}',
+  version: '0.1.0',
+  depends: [${first.shutro}, ${second.shutro}],
+  groups: [
+    orm.defineGroup({ code: '${name}.user', label: '${label}', implies: ['base.user'] }),
+  ],
+  models: [],
+  extensions: [],
+});
+
+export const ${id} = defineModule({
+  shutro: ${id}Shutro,
+  kosh: '^0.1.0',
+  depends: [${first.module}, ${second.module}],
+  bridge: [${first.module}, ${second.module}],
+  accessLevels: {
+    user: { label: '${label}', groups: ['${name}.user'] },
+  },
+});
+`;
+  const dry = values['dry-run'] === true;
+  if (!dry) {
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'index.ts'), index);
+  }
+  write(
+    `  ${dry ? 'would write' : 'wrote  '} src/modules/${name}/index.ts (the bridge of ${a} and ${b})\n`,
+  );
+  const listPath = join(cwd, 'src', 'modules.ts');
+  if (existsSync(listPath)) {
+    const text = await readFile(listPath, 'utf8');
+    const listed = /export const modules = \[([^\]]*)\];/.exec(text);
+    const imports = [...text.matchAll(/^import .*;$/gm)];
+    const last = imports.at(-1);
+    if (listed !== null && last !== undefined) {
+      if (!dry)
+        await writeFile(
+          listPath,
+          text
+            .replace(
+              listed[0],
+              `export const modules = [${(listed[1] ?? '').trim().replace(/,$/, '')}, ${id}];`,
+            )
+            .replace(last[0], `${last[0]}\nimport { ${id} } from './modules/${name}/index.ts';`),
+        );
+      write(`  ${dry ? 'would update' : 'updated'} src/modules.ts (${id} added)\n`);
+    } else write(`  add ${id} to the modules list in src/modules.ts\n`);
+  }
+  if (!dry) write(`\nNext: shutro-erp apps install ${name}\n`);
+  return 0;
+}
+
 export async function runMake(
   argv: readonly string[],
   write: (t: string) => void,
@@ -985,6 +1360,8 @@ export async function runMake(
     if (what === 'transition') return await makeTransition(rest, write, cwd);
     if (what === 'action') return await makeTransition(rest, write, cwd, true);
     if (what === 'report') return await makeReport(rest, write, cwd);
+    if (what === 'page') return await makePage(rest, write, cwd);
+    if (what === 'bridge') return await makeBridge(rest, write, cwd);
   } catch (error) {
     // An option the command does not have.
     write(`${error instanceof Error ? error.message : String(error)}\n\n${USAGE}`);

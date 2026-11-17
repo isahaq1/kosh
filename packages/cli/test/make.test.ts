@@ -246,10 +246,104 @@ test('a module, a model and a field made by the commands meet the module standar
     "orm.record('library.loan', 'loan_sample', { reference: 'Sample reference' }, { noupdate: true }),",
   );
 
+  // The model's test: a user creates one, someone without the role is refused, on a served installation.
+  const loanTest = await readFile(
+    join(project, 'src', 'modules', 'library', 'test', 'loan.test.ts'),
+    'utf8',
+  );
+  expect(loanTest).toContain(
+    "import { type TestInstallation, testInstallation } from 'shutro-erp/testing';",
+  );
+  expect(loanTest).toContain("users: { user: ['library.user'], outsider: ['base.user'] },");
+  expect(loanTest).toContain(
+    "erp.call('POST', '/api/v1/models/library.loan', 'user', { reference: 'Sample reference' })",
+  );
+  expect(loanTest).toContain('.status).toBe(403);');
+
+  // A page of the module's own: the component, its words in both languages, its action and menu, and main.tsx.
+  await writeFile(
+    join(project, 'src', 'main.tsx'),
+    [
+      "import { createDefaultRegistry, createKoshApi, KoshApp } from 'shutro-erp/ui';",
+      "import { settingsMessages, registerSettingsWeb } from 'shutro-erp/settings/web';",
+      '',
+      'const registry = createDefaultRegistry();',
+      'registerSettingsWeb(registry);',
+      '',
+      'render(<KoshApp api={createKoshApi()} registry={registry} messages={{ settings: settingsMessages }} />);',
+      '',
+    ].join('\n'),
+  );
+  const page = await run('make', 'page', 'library', 'shelf_map', '--label', 'Shelf map');
+  expect(page.code, page.out).toBe(0);
+  expect(page.out).toContain('updated src/main.tsx');
+  const pageSource = await readFile(
+    join(project, 'src', 'modules', 'library', 'web', 'ShelfMapPage.tsx'),
+    'utf8',
+  );
+  expect(pageSource).toContain('export function ShelfMapPage(');
+  expect(pageSource).toContain("useTranslation('library')");
+  // It runs: loaded with React and the translations stubbed, the component renders its title and intro.
+  const stubbed = join(project, 'ShelfMapPage.stub.tsx');
+  await writeFile(
+    stubbed,
+    [
+      '/** @jsxRuntime classic */',
+      '/** @jsx h */',
+      'const h = (type: unknown, props: unknown, ...children: unknown[]) => ({ type, props, children });',
+      'const useTranslation = (ns: string) => ({ t: (key: string) => `${ns}:${key}` });',
+      'type PageProps = object;',
+      'type ReactElement = unknown;',
+      pageSource.replace(/^import .*;$/gm, ''),
+    ].join('\n'),
+  );
+  const loaded = (await import(pathToFileURL(stubbed).href)) as {
+    ShelfMapPage(props: object): { children: { type: string; children: string[] }[] };
+    messages: { en: { title: string }; bn: { title: string } };
+  };
+  const rendered = loaded.ShelfMapPage({});
+  expect(rendered.children.map((c) => [c.type, c.children[0]])).toEqual([
+    ['h1', 'library:pages.shelf_map.title'],
+    ['p', 'library:pages.shelf_map.intro'],
+  ]);
+  expect(loaded.messages.en.title).toBe('Shelf map');
+  await rm(stubbed);
+  const web = await readFile(join(project, 'src', 'modules', 'library', 'web', 'index.ts'), 'utf8');
+  expect(web).toContain("registry.registerPage('library.ShelfMap', ShelfMapPage);");
+  expect(web).toContain('export const libraryMessages = {');
+  const main = await readFile(join(project, 'src', 'main.tsx'), 'utf8');
+  expect(main).toContain(
+    "import { libraryMessages, registerLibraryWeb } from './modules/library/web/index.ts';",
+  );
+  expect(main).toContain('registerSettingsWeb(registry);\nregisterLibraryWeb(registry);');
+  expect(main).toContain('messages={{ library: libraryMessages, settings: settingsMessages }}');
+  expect((await run('make', 'page', 'library', 'shelf_map')).out).toContain('exists already');
+  expect(await readFile(part('page_shelf_map'), 'utf8')).toContain(
+    "'library.action_page_shelf_map': { type: 'client' as const, page: 'library.ShelfMap', label: 'Shelf map' },",
+  );
+  await rm(join(project, 'src', 'main.tsx'));
+
+  // A bridge: the module between two others, with an app of Shutro ERP or a module of yours.
+  expect((await run('make', 'bridge', 'library', 'nothing_like_it')).out).toContain(
+    'is neither a module of yours',
+  );
+  const withApp = await run('make', 'bridge', 'library', 'accounting', '--dry-run');
+  expect(withApp.out).toContain('would write src/modules/library_accounting/index.ts');
+  expect((await run('module', 'create', 'shelf')).code).toBe(0);
+  const bridge = await run('make', 'bridge', 'library', 'shelf');
+  expect(bridge.code, bridge.out).toBe(0);
+  const bridged = await readFile(
+    join(project, 'src', 'modules', 'library_shelf', 'index.ts'),
+    'utf8',
+  );
+  expect(bridged).toContain("import { library, libraryShutro } from '../library/index.ts';");
+  expect(bridged).toContain('bridge: [library, shelf],');
+  expect((await run('make', 'bridge', 'library', 'shelf')).code).toBe(1);
+
   // The real check, on what was generated.
   await inWorkspace(join(project, 'src'));
   const check = await run('check', '--all');
-  expect(check.out, check.out).toContain('1 module(s), 3 model(s)');
+  expect(check.out, check.out).toContain('3 module(s), 4 model(s)');
   expect(check.out).toContain('your modules meet the module standard');
   expect(check.code).toBe(0);
 });

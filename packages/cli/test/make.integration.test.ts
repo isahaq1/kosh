@@ -4,38 +4,21 @@
  * through the API, takes it through its steps and finds its print template; someone without the module's role is
  * refused by the server.
  */
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { messaging } from '@kosh/messaging';
 import type { KoshModule } from '@kosh/modules-sdk';
 import { reporting } from '@kosh/reporting';
-import {
-  type AppHost,
-  applyApps,
-  base,
-  createAppHost,
-  installBase,
-  installDefaults,
-  prepareApps,
-  recordInstalledApps,
-} from '@kosh/server';
-import { type Driver, orm, pg } from '@kosh/server/orm';
-import { type TestDatabase, testDatabase } from '@kosh/server/testing';
+import { base } from '@kosh/server';
+import { type TestInstallation, testInstallation } from '@kosh/server/testing';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { runCli } from '../src/index.js';
 
-const PASSWORD = 'correct horse battery';
 const project = join(fileURLToPath(import.meta.url), '..', '.tmp-make-live');
 const VIEWS = pathToFileURL(
   join(fileURLToPath(import.meta.url), '..', '..', '..', 'views', 'src', 'index.ts'),
 ).href;
-
-let container: TestDatabase;
-let driver: Driver;
-let dir: string;
-let host: AppHost;
 
 const make = async (...args: string[]) => {
   let out = '';
@@ -68,33 +51,15 @@ async function inWorkspace(folder: string): Promise<void> {
   }
 }
 
-const tokens = new Map<string, string>();
+let erp: TestInstallation;
 // biome-ignore lint/suspicious/noExplicitAny: test assertions read untyped JSON responses
 type Json = any;
-async function call(
-  method: 'GET' | 'POST',
+const call = async (
+  method: 'GET' | 'POST' | 'DELETE',
   url: string,
   as: string,
   payload?: unknown,
-): Promise<{ status: number; json: Json }> {
-  let token = tokens.get(as);
-  if (token === undefined) {
-    const login = await host.server.app.inject({
-      method: 'POST',
-      url: '/api/v1/auth/login',
-      payload: { login: as, password: PASSWORD },
-    });
-    token = (login.json() as { token: string }).token;
-    tokens.set(as, token);
-  }
-  const res = await host.server.app.inject({
-    method,
-    url,
-    headers: { authorization: `Bearer ${token}` },
-    ...(payload === undefined ? {} : { payload: payload as Record<string, unknown> }),
-  });
-  return { status: res.statusCode, json: res.body === '' ? null : res.json() };
-}
+): Promise<{ status: number; json: Json }> => erp.call(method, url, as, payload);
 
 beforeAll(async () => {
   process.env['KOSH_SCHEDULES'] = 'off';
@@ -138,61 +103,17 @@ beforeAll(async () => {
     pathToFileURL(join(project, 'src', 'modules', 'library', 'index.ts')).href
   )) as { library: KoshModule };
 
-  container = await testDatabase();
-  driver = pg.createDriver({
-    url: container.getConnectionUri(),
-    max: 4,
-    parseNumeric: orm.toDecimal,
-  });
-  dir = await mkdtemp(join(tmpdir(), 'kosh-make-'));
-  const catalogue = [base, messaging, reporting, library];
-  await recordInstalledApps(driver, [], [], 'test');
-  await applyApps(
-    await prepareApps({
-      driver,
-      catalogue,
-      change: { install: ['messaging', 'reporting', 'library'] },
-      dir,
-    }),
-    { driver, dir, actor: 'test' },
-  );
-  host = await createAppHost({
-    databaseUrl: container.getConnectionUri(),
-    catalogue,
-    migrationsDir: dir,
-    logger: false,
-    listen: false,
-    auth: { secureCookies: false, cacheMs: 0, loginLimit: 0 },
-    rateLimit: { max: 0, timeWindow: '1 minute' },
-  });
-  const auth = host.server.auth;
-  if (auth === undefined) throw new Error('base is installed');
-  const { company } = await installBase(host.server.shutro, auth, {
+  // As the test `make model` writes does it: the modules served, each user with their groups.
+  erp = await testInstallation({
+    modules: [base, messaging, reporting, library],
+    users: { lina: ['library.user'], mona: ['library.manager'], bob: ['base.user'] },
     company: { name: 'Padma Library', currency: 'BDT' },
-    admin: { login: 'admin', name: 'Administrator', password: PASSWORD },
   });
-  await installDefaults(host.server.shutro, host.server.registry.loaded.modules, { company });
-  for (const [login, groups] of [
-    ['lina', ['library.user']],
-    ['mona', ['library.manager']],
-    ['bob', ['base.user']],
-  ] as const)
-    await auth.createUser({
-      login,
-      name: login,
-      password: PASSWORD,
-      company,
-      companies: [company],
-      groups: [...groups],
-    });
 }, 300_000);
 
 afterAll(async () => {
-  await host?.close();
-  await driver?.end();
-  if (dir !== undefined) await rm(dir, { recursive: true, force: true });
+  await erp?.close();
   await rm(project, { recursive: true, force: true });
-  await container?.stop();
 });
 
 test('a user of the module creates a record, takes it through its steps and finds its print template', async () => {
@@ -237,12 +158,8 @@ test('someone without the module’s role is refused by the server', async () =>
   ).toBe(403);
   // A user reads and writes, and does not delete: that is the manager's.
   const made = await call('POST', '/api/v1/models/library.loan', 'lina', { reference: 'L-0003' });
-  const removed = await host.server.app.inject({
-    method: 'DELETE',
-    url: `/api/v1/models/library.loan/${made.json.id}`,
-    headers: { authorization: `Bearer ${tokens.get('lina')}` },
-  });
-  expect(removed.statusCode).toBe(403);
+  const removed = await call('DELETE', `/api/v1/models/library.loan/${made.json.id}`, 'lina');
+  expect(removed.status).toBe(403);
 });
 
 test('an action is for those who hold its permission: a user is refused, a manager takes it', async () => {

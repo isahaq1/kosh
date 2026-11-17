@@ -476,6 +476,8 @@ export function packageJson(
       'build:web': 'vite build',
       migrate: 'shutro-erp migrate',
       seed: 'shutro-erp seed',
+      check: 'shutro-erp check',
+      test: 'vitest run',
       'docker:up': 'docker compose up -d --build',
     }),
     engines: { node: '>=24', ...((base['engines'] as Record<string, string> | undefined) ?? {}) },
@@ -485,6 +487,8 @@ export function packageJson(
     }),
     devDependencies: merge('devDependencies', {
       vite: '^7.1.0',
+      // The tests `shutro-erp make model` writes for your modules.
+      vitest: '^5.0.0',
       '@vitejs/plugin-react': '^5.0.0',
       tailwindcss: '^4.1.0',
       '@tailwindcss/vite': '^4.1.0',
