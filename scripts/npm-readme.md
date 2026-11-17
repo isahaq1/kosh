@@ -176,6 +176,9 @@ back-office, the **Library** app appears for the administrator.
 npx shutro-erp make model library book \
   --fields "title:char! isbn:char pages:integer price:decimal kind:selection:new|used author:m2o:res.partner notes:text"
 npx shutro-erp make field library.book publishedOn:date!
+npx shutro-erp make model library loan --fields "reference:char! due:date"
+npx shutro-erp make transition library.loan confirm --from draft --to confirmed
+npx shutro-erp make transition library.loan close --from confirmed --to returned --label "Mark returned"
 npx shutro-erp check       # your modules meet the module standard
 npx shutro-erp migrate     # plans the new table and column
 ```
@@ -186,6 +189,12 @@ which the manifest merges (`withParts`). The part is yours to change. `make fiel
 list, its form and its import template, at the lines marked `make:`. A field is `name:type`, with `!` when
 required: `char`, `text`, `integer`, `decimal`, `boolean`, `date`, `datetime`, `selection:a|b|c`, `m2o:<model>`.
 Nothing is overwritten (a part that exists is refused), and `--dry-run` shows what would be written.
+
+`make transition` gives a model its steps. The first makes it a **document**: a tracked state, the status bar and
+the button on its form, a chatter, the state on its list, a print template, and a named event
+(`library.loan.confirmed`) for automations and webhooks; the module then depends on Messaging and Reporting and
+its users hold their roles, so they discuss and print what they make. Each further transition adds its states, its
+button and its event. The server refuses a step taken out of order.
 
 `npx shutro-erp check` measures your modules against the standard every shipped app meets — a label and a search
 on every model, a list and a form, print and import templates for documents and master data, named events, help
@@ -399,7 +408,7 @@ Run them in the project folder (`npx shutro-erp …`, or `npm run migrate` / `np
 | `shutro-erp migrate status` | applied and pending migration files |
 | `shutro-erp seed [module …]` | seed data of all modules, or of those named |
 | `shutro-erp module create <name>` | a new module in `src/modules/<name>/`, listed in `src/modules.ts` |
-| `shutro-erp make model <module> <name> --fields "…"` · `make field <module>.<model> <name:type>` | a model as a part of your module — label, access, action, menu, list, form, search, import template — and fields added to it; meets `shutro-erp check` |
+| `shutro-erp make model <module> <name> --fields "…"` · `make field <module>.<model> <name:type>` · `make transition <module>.<model> <name> --from <state> --to <state>` | a model as a part of your module — label, access, action, menu, list, form, search, import template —, fields added to it, and the steps that make it a document (state, status bar, chatter, print template, event); meets `shutro-erp check` |
 | `shutro-erp doctor` · `--json` | what to fix in this installation: the database and its connections, migrations, apps, administrators without a second factor, late jobs and failing webhooks, the clock, Valkey, mail, storage, HTTPS, backups, telemetry |
 | `shutro-erp backup` · `backup verify [file]` | a backup in `backups/` with a manifest of every table's rows, the ledger and the stock · restored into a scratch database and checked against it, recorded for `doctor` |
 | `shutro-erp opening template` · `check <file>` · `load <file>` · `verify [file]` | start a company from its own figures: one workbook with the trial balance, unpaid documents, stock by location and lot and control totals; every error on its row, the proof, kept only when every check is equal; `verify` checks the opening certificate's seal, signature and workbook |

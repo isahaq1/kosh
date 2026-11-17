@@ -179,3 +179,15 @@ Answered 2026-11-17 with the proposals: XLSX only; Administrators merge; generat
   transitions, chatter, print template and named event (`make transition`) —, `make report / action / page /
   bridge`, a demo seeder and a generated test with its permission test, and the diff instead of a refusal when a
   part exists.
+- **Step 4, part 1 (2026-11-17).** **`make transition`: documents.** The first transition of a part adds the
+  state (`f.state` with its states, initial, help and the transition wrapped in `emitting(<model>.<to>)`),
+  `tracking: ['state']`, the state as a badge on the list, the form's header (status bar, the button) and
+  `chatter: true`, a print template from the model's plain fields, and the event; later ones insert at
+  `make:states / transitions / buttons / events`. Parts now always export `documents` and `events`, and `parts.ts`
+  merges them. A document needs Messaging and Reporting: `index.ts` of the scaffold's shape gets both as
+  dependencies and `<module>.user` implies `messaging.user` and `reporting.user`, as the shipped apps do (found
+  when a user of the generated module could not list its print templates); otherwise the lines are said. Proved
+  running (`make.integration.test.ts`): the generated module installed on PostgreSQL and served — create, steps in
+  order (out of order refused), search, the print template, a required field, and 403 for someone without the role
+  and for a user's delete. Left: `make report / action / page / bridge`, a demo seeder, a generated test, the diff
+  instead of a refusal.
