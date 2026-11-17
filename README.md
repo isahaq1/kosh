@@ -9,6 +9,7 @@ views, reporting and communication.
 - [Modules](docs/modules.md) · [Server and API](docs/server.md) · [Permissions](docs/permissions.md) ·
   [Views and UI](docs/ui.md) · [Reporting](docs/reporting.md) · [Chatter and attachments](docs/messaging.md)
 - [The pilot playbook](docs/pilot.md) — taking a first company live: the measures, the data, the parallel run, cut-over
+- [Starting from your own figures](docs/opening-balances.md) — `shutro-erp opening`: opening balances, unpaid documents and stock from one workbook, with the proof
 - [Design RFCs](docs/rfcs/README.md) · [Benchmarks](docs/benchmarks.md) · [Shutro ERP against Odoo](docs/comparison.md)
 
 **Getting started** (terminal and Docker, modules, migrations, seed data, users, every command):

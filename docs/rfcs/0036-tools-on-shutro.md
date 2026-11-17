@@ -1,6 +1,6 @@
 # RFC 0036 — Tools on Shutro: the opening-balance kit, generators, data health
 
-- Status: **Proposed** (2026-11-16)
+- Status: **Accepted** (2026-11-17)
 - Builds on: RFC 0014 (data import), RFC 0012 (Studio), RFC 0023 (the module standard and `shutro-erp check`),
   RFC 0034 §2.2 (doctor, backups), RFC 0009 / 0021 (Accounting, Stockroom and its valuation)
 - Replaces: RFC 0034 §2.3 (the Odoo importer, withdrawn 2026-11-16). Kosh ships no tools for other systems: every
@@ -127,6 +127,19 @@ opening and the repairs), E2E for the screens, English and Bangla, light and dar
 3. Generators write into `src/modules/<module>/` of an installation (proposed), and into `modules/` when run inside
    this repository?
 
+Answered 2026-11-17 with the proposals: XLSX only; Administrators merge; generators write into `src/modules/`
+(and `modules/` inside this repository).
+
 ## Implementation notes
 
-(None yet.)
+- **Step 1 (2026-11-17).** **The opening-balance kit from the command line**: `shutro-erp opening template | check
+  <file> | load <file>`. The engine is in Accounting (`modules/accounting/src/opening.ts`: the workbook's template and
+  reader on `@kosh/reporting`'s writer and `@kosh/import`'s reader, the load, the proof); Stockroom's models are
+  reached by name, so the Stock sheet is refused with the reason without Stockroom. The trial balance is entered as
+  it is at the cut-off (income and expense for the year so far), so no fiscal-year reckoning is needed; it must
+  balance. Every miss — an account code, a contact, a product, a location, a lot missing on a tracked product — is an
+  error with its sheet and row, all of them listed before anything is written. The stock goes first (an adjustment
+  per location with the system-only accounting date and unit cost of stock valuation), then the opening entry at
+  each account's balance less what Kosh already posted by the cut-off, then the documents. A load is kept only when
+  every check is equal; *stock in the books* names a difference without refusing. One opening per cut-off (external
+  id `opening.entry_<date>`). Docs: docs/opening-balances.md. Left for step 2: the screen, Undo, the certificate.
