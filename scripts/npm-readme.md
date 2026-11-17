@@ -196,6 +196,29 @@ the button on its form, a chatter, the state on its list, a print template, and 
 its users hold their roles, so they discuss and print what they make. Each further transition adds its states, its
 button and its event. The server refuses a step taken out of order.
 
+More generators, each adding to what is there:
+
+```sh
+npx shutro-erp make action library.loan settle --from returned --to settled   # a step for the managers only
+npx shutro-erp make report library.loan --measure pages                       # a pivot and a chart
+npx shutro-erp make page library shelf_map --label "Shelf map"                # a page of your own (React)
+npx shutro-erp make bridge library accounting                                 # the module between two others
+npm test                                                                      # the tests make model wrote
+```
+
+- `make action` is a transition with a permission of its own (`library.loan_settle`), granted to the module's
+  managers or to `--group`: the server refuses anyone else.
+- `make report` groups by the model's state, a selection, a relation or a date by month (`--by`), counting records
+  or summing `--measure`.
+- `make page` writes `web/ShelfMapPage.tsx` with its words in English and Bangla, its menu, and registers the
+  module's pages in `src/main.tsx`.
+- `make bridge` writes `src/modules/library_accounting/`: what one module adds to the other, installed when both
+  are, so neither depends on the other.
+- `make model` also seeds a sample record and writes `test/<name>.test.ts`: on a served installation
+  (`testInstallation` of `shutro-erp/testing`, a scratch database on your PostgreSQL server), a user of the module
+  creates one and someone without its role gets 403. A part that exists is never replaced: `make model` shows the
+  lines that would differ.
+
 `npx shutro-erp check` measures your modules against the standard every shipped app meets — a label and a search
 on every model, a list and a form, print and import templates for documents and master data, named events, help
 on statuses — and names each gap, or the waiver you gave for it (`standard: { waive: [{ rule, model, reason }] }`
@@ -409,6 +432,7 @@ Run them in the project folder (`npx shutro-erp …`, or `npm run migrate` / `np
 | `shutro-erp seed [module …]` | seed data of all modules, or of those named |
 | `shutro-erp module create <name>` | a new module in `src/modules/<name>/`, listed in `src/modules.ts` |
 | `shutro-erp make model <module> <name> --fields "…"` · `make field <module>.<model> <name:type>` · `make transition <module>.<model> <name> --from <state> --to <state>` | a model as a part of your module — label, access, action, menu, list, form, search, import template —, fields added to it, and the steps that make it a document (state, status bar, chatter, print template, event); meets `shutro-erp check` |
+| `shutro-erp make action …` · `make report <module>.<model>` · `make page <module> <name>` · `make bridge <a> <b>` | a step with its own permission · a pivot and a chart · a React page with its menu · the module between two others |
 | `shutro-erp doctor` · `--json` | what to fix in this installation: the database and its connections, migrations, apps, administrators without a second factor, late jobs and failing webhooks, the clock, Valkey, mail, storage, HTTPS, backups, telemetry |
 | `shutro-erp backup` · `backup verify [file]` | a backup in `backups/` with a manifest of every table's rows, the ledger and the stock · restored into a scratch database and checked against it, recorded for `doctor` |
 | `shutro-erp opening template` · `check <file>` · `load <file>` · `verify [file]` | start a company from its own figures: one workbook with the trial balance, unpaid documents, stock by location and lot and control totals; every error on its row, the proof, kept only when every check is equal; `verify` checks the opening certificate's seal, signature and workbook |

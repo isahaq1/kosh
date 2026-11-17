@@ -191,3 +191,21 @@ Answered 2026-11-17 with the proposals: XLSX only; Administrators merge; generat
   order (out of order refused), search, the print template, a required field, and 403 for someone without the role
   and for a user's delete. Left: `make report / action / page / bridge`, a demo seeder, a generated test, the diff
   instead of a refusal.
+- **Step 4, part 2 (2026-11-17).** **The other generators.** `make action`: a transition with `requires` and an
+  `orm.definePermission` for `<module>.manager` (or `--group`) — the RFC's "server action with its permission" is a
+  guarded step, which is what Kosh's action permissions are. `make report`: a pivot and a chart (`graph`) at
+  `make:views`, on the model's action, with Reporting wired. `make page`: `web/<Name>Page.tsx` (its words in both
+  languages beside it), a generated `web/index.ts` registering the module's pages and exporting their messages, a
+  part with the client action and menu, and `src/main.tsx` wired when it has the starter's shape. `make bridge`:
+  `src/modules/<a>_<b>/` depending on both (yours by path, an app by `shutro-erp/<app>`), `bridge: [a, b]`, listed
+  in `src/modules.ts`. Parts now also export `permissions` and `data` (a sample record, when no required relation
+  must be guessed); `wireParts` is incremental and merges them into the Shutro module; parts made earlier are
+  brought up to date by `syncParts`. `make model` writes the model's test, on **`testInstallation`** — new in
+  `@kosh/server/testing` (`shutro-erp/testing`): modules installed and served on a scratch database, a company, the
+  Administrator with their second factor and the users asked for, `call(method, url, as)`; without
+  `KOSH_TEST_POSTGRES` it uses the installation's `DATABASE_URL` server. The starter gets `vitest` and `npm test`.
+  A part that exists is left and the lines `make model` would write are shown (`lineDiff`). Proved: the generated
+  module with its action, report and seed on a served installation (a user is refused the manager's step, the
+  sample is there, the pivot's query answers); the generated page loaded with React stubbed and called; the bridge
+  through `shutro-erp check`. Not proved: the page in a browser, and the generated test file run inside a real
+  installation (its helper is what this repository's own test runs on). Step 4 complete; next step 5 (data health).
