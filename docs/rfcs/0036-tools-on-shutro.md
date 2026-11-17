@@ -155,3 +155,13 @@ Answered 2026-11-17 with the proposals: XLSX only; Administrators merge; generat
   › Start from your figures** rather than a Settings section: Accounting does not depend on the Settings app, and
   the menu is shown to Administrators only (the server does not serve the action to anyone else). Left: the signed
   certificate (part 2).
+- **Step 2, part 2 (2026-11-17).** **The opening certificate.** At the load the opening is sealed: the company, the
+  cut-off, the workbook's hash, the counts, every check with its summary, who and when, kept as text (`sealed`) with
+  its SHA-256 (`seal`) and, when the installation has `KOSH_SIGNING_KEY` (now written by `init`), its HMAC-SHA-256
+  (`signature`). The checks are also lines (`account.opening.check`) so the certificate is an ordinary document
+  template (`accounting.opening_certificate`) printed by the existing renderer — no PDF code of its own; the page's
+  Download the certificate and the form's Print menu use it. `verifyOpening` (the API's `/opening/verify`,
+  `shutro-erp opening verify [file]`): the seal, the record against what was sealed, the signature, the workbook's
+  hash. The certificate is produced on demand from the sealed record rather than stored as a file in Documents
+  (Accounting does not depend on Documents, and the record is what is sealed). The opening, now referred to by its
+  lines, is waived from M3 and I1 with reasons. Step 2 complete; next step 3 (generators).

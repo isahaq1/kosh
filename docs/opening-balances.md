@@ -96,6 +96,34 @@ Every account, every partner's balance, the stock and its value are back where t
 *Undone* with who, when and why, and a corrected workbook can be loaded. Once anything is posted after the opening,
 or its stock has moved, the undo says so and is no longer offered: correct it with entries instead.
 
+## The certificate
+
+Every loaded opening is **sealed**: the cut-off, the workbook's SHA-256, what was made, every check with what it
+found, who loaded it and when are fixed as text, and the seal is that text's SHA-256. With a signing key in the
+installation's `.env` (`KOSH_SIGNING_KEY`, written by `shutro-erp init`), the seal is also **signed** (HMAC-SHA-256).
+
+**Download the certificate** on the page (or Print › Opening certificate on the opening's form) gives the PDF: the
+figures, every check, the workbook's hash, the seal and the signature — what an auditor files.
+
+Verify it later:
+
+```sh
+shutro-erp opening verify                          # the latest opening
+shutro-erp opening verify opening-balances.xlsx    # and that this is the workbook that was loaded
+```
+
+```
+Opening balances at 2026-06-30 (loaded):
+✔ seal: the sealed content has its seal
+✔ record: the opening says what was sealed
+✔ signature: signed with this installation’s key
+✔ workbook: this is the workbook that was loaded
+```
+
+A record changed afterwards no longer says what was sealed; a changed seal loses its signature; another workbook
+is not the one that was loaded — each is said, and the command exits with 1. An opening loaded without a key is
+sealed and says it is not signed. Keep the key: without it, signatures cannot be verified.
+
 ## The API
 
 Administrators only; the workbook travels base64-encoded as `content`.
@@ -107,6 +135,7 @@ Administrators only; the workbook travels base64-encoded as `content`.
 | `POST /api/v1/accounting/opening/check` | the report of a check-only run |
 | `POST /api/v1/accounting/opening/load` | the same, kept when every check is equal |
 | `POST /api/v1/accounting/opening/undo` | `{ reason }`: undoes the loaded opening, or 409 with why not |
+| `GET /api/v1/accounting/opening/verify` | the certificate's verification (`?id=` for an earlier opening) |
 
 ## Example
 
@@ -132,8 +161,3 @@ Opening balances: refused, nothing was kept.
 ✖ Receivables, row 6: No contact named Nobody Ltd.
 ✖ Stock, row 5: No internal location WH/Nowhere.
 ```
-
-## Not yet
-
-The signed opening certificate (a PDF of the figures, the checks, who approved and the workbook's hash, stored in
-Documents) comes next (RFC 0036 step 2, part 2).
