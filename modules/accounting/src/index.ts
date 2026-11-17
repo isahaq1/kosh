@@ -19,7 +19,7 @@ import { messengerFromEnv } from '@kosh/notify';
 import { permissions } from '@kosh/permissions';
 import { product } from '@kosh/product';
 import { reporting } from '@kosh/reporting';
-import { HttpProblem, type ModuleContext } from '@kosh/server';
+import { HttpProblem, isSuperuser, type ModuleContext, problemOf } from '@kosh/server';
 import { action, field, form, hierarchy, list, pivot, search, stat } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import {
@@ -48,9 +48,13 @@ export {
   type OpeningError,
   type OpeningOptions,
   type OpeningReport,
+  OpeningUndoError,
+  type OpeningUndone,
   openingReportText,
   openingTemplate,
   readOpeningWorkbook,
+  type UndoTools,
+  undoOpening,
 } from './opening.js';
 
 import { accountingDemo } from './demo.js';
@@ -72,6 +76,7 @@ import {
   AccountJournal,
   AccountMove,
   AccountMoveLine,
+  AccountOpening,
   AccountPayment,
   AccountPaymentTerm,
   AccountWithholding,
@@ -80,6 +85,15 @@ import {
   ResBankAccount,
   ResCurrencyRate,
 } from './module.js';
+import {
+  loadOpening,
+  OpeningUndoError,
+  openingTemplate,
+  postedAfterOpening,
+  readOpeningWorkbook,
+  type UndoTools,
+  undoOpening,
+} from './opening.js';
 import {
   openLines,
   proposeWithholdings,
@@ -151,6 +165,7 @@ export {
   AccountJournal,
   AccountMove,
   AccountMoveLine,
+  AccountOpening,
   AccountPartialReconcile,
   AccountPayment,
   AccountPaymentTerm,
@@ -693,6 +708,10 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       label: 'Fiscal years',
       views: ['list', 'form'],
     }),
+    'accounting.action_openings': action(AccountOpening, {
+      label: 'Opening balances',
+      views: ['list', 'form'],
+    }),
     'accounting.action_withholdings': action(AccountWithholding, {
       label: 'Withholdings',
       views: ['list', 'form'],
@@ -884,6 +903,13 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       label: 'Fiscal years',
       action: 'accounting.action_fiscal_years',
       sequence: 3,
+    },
+    {
+      id: 'accounting.openings',
+      parent: 'accounting.configuration',
+      label: 'Opening balances',
+      action: 'accounting.action_openings',
+      sequence: 3.2,
     },
     {
       id: 'accounting.withholdings',
@@ -1772,6 +1798,30 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       header: { buttons: [] },
       sheet: [k.group('main', ['code', 'name', 'type', 'defaultAccount'])],
     })),
+    'account.opening.list': list(AccountOpening, {
+      columns: [
+        'name',
+        'cutoff',
+        { field: 'status', widget: 'badge' },
+        'user',
+        'loadedAt',
+        'documents',
+        'adjustments',
+      ],
+    }),
+    'account.opening.form': form(AccountOpening, (k) => ({
+      header: { buttons: [] },
+      sheet: [
+        k.group('main', ['name', 'cutoff', 'status', 'user', 'loadedAt'], {
+          description:
+            'Loaded from a workbook in Settings › Start from your figures, where it can be undone until the first posting after it.',
+        }),
+        k.group('made', ['entry', 'entryLines', 'documents', 'adjustments', 'workbookHash'], {
+          label: 'What it made',
+        }),
+        k.group('undone', ['undoneBy', 'undoneAt', 'undoReason'], { label: 'Undo' }),
+      ],
+    })),
     'account.fiscal.year.list': list(AccountFiscalYear, {
       columns: ['name', 'dateFrom', 'dateTo', { field: 'state', widget: 'badge' }, 'lockDate'],
     }),
@@ -1828,6 +1878,13 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       groupBy: ['outcome', 'direction'],
     }),
     'account.journal': search(AccountJournal, { fields: ['name', 'code'], groupBy: ['type'] }),
+    'account.opening': search(AccountOpening, {
+      fields: ['name'],
+      filters: {
+        loaded: { label: 'Loaded', domain: { status: 'loaded' }, group: 'status' },
+        undone: { label: 'Undone', domain: { status: 'undone' }, group: 'status' },
+      },
+    }),
     'account.fiscal.year': search(AccountFiscalYear, {
       fields: ['name'],
       filters: {
@@ -2426,6 +2483,118 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
           date: query.date === undefined ? undefined : String(query.date),
         }),
       );
+    });
+    // The opening-balance kit (RFC 0036 §2.1): Administrators only; the load and the undo run as the system, audited.
+    const administrator = (env: Env): { company: number; user: number } => {
+      if (!isSuperuser(env))
+        throw new HttpProblem(
+          403,
+          'access',
+          'Forbidden',
+          'Opening balances are loaded by an Administrator.',
+          'Ask an Administrator to load them.',
+        );
+      return { company: env.companyId as number, user: env.userId as number };
+    };
+    const workbookOf = (body: unknown) => {
+      const content = (body as { content?: unknown } | null)?.content;
+      if (typeof content !== 'string' || content === '' || content.length > 30_000_000)
+        throw new HttpProblem(
+          400,
+          'invalid-body',
+          'Invalid request',
+          'content is the workbook, base64-encoded (20 MB at most).',
+        );
+      try {
+        return readOpeningWorkbook(Buffer.from(content, 'base64'));
+      } catch (error) {
+        throw new HttpProblem(
+          400,
+          'invalid-workbook',
+          'Not a workbook',
+          error instanceof Error ? error.message : 'The file is not an XLSX workbook.',
+          'Start from the template.',
+        );
+      }
+    };
+    const answer = (error: unknown): string => {
+      const p = problemOf(error);
+      if (p.status >= 500) return error instanceof Error ? error.message : String(error);
+      return p.hint === undefined ? p.detail : `${p.detail} ${p.hint}`;
+    };
+    const undoTools: UndoTools = {
+      reverse: async (env, move, date) =>
+        (await reverseMove(env as unknown as Env, move, { date, post: true })).id,
+      reconcile: (env, lines) => reconcile(env as unknown as Env, lines),
+    };
+    context.app.get('/api/v1/accounting/opening', async (request) =>
+      request.env(async (raw) => {
+        const env = raw as Env;
+        administrator(env);
+        const openings = await (
+          await env.model('account.opening').search({ order: ['id desc'], limit: 20 })
+        ).load({ user: true, undoneBy: true });
+        const loaded = [...openings].find((o) => o.status === 'loaded');
+        const after =
+          loaded === undefined ? 0 : await postedAfterOpening(env as never, loaded.lastMove ?? 0);
+        return {
+          openings: openings.map((o) => ({
+            id: o.id,
+            cutoff: o.cutoff,
+            status: o.status,
+            loadedBy: o.user?.name ?? null,
+            loadedAt: o.loadedAt,
+            entryLines: o.entryLines ?? 0,
+            documents: o.documents ?? 0,
+            adjustments: o.adjustments ?? 0,
+            workbookHash: o.workbookHash,
+            checks: o.checks ?? [],
+            undoneBy: o.undoneBy?.name ?? null,
+            undoneAt: o.undoneAt,
+            undoReason: o.undoReason,
+          })),
+          // Until the first posting after the loaded opening.
+          canUndo: loaded !== undefined && after === 0,
+          postedAfter: after,
+        };
+      }),
+    );
+    context.app.get('/api/v1/accounting/opening/template', async (request, reply) => {
+      const file = await request.env(async (raw) => {
+        administrator(raw as Env);
+        return openingTemplate(raw as never);
+      });
+      return reply
+        .header('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        .header('content-disposition', 'attachment; filename="opening-balances.xlsx"')
+        .send(file);
+    });
+    for (const commit of [false, true])
+      context.app.post(
+        `/api/v1/accounting/opening/${commit ? 'load' : 'check'}`,
+        async (request) => {
+          const data = workbookOf(request.body);
+          const who = await request.env(async (raw) => administrator(raw as Env));
+          return loadOpening(context.shutro, data, { ...who, commit }, answer);
+        },
+      );
+    context.app.post('/api/v1/accounting/opening/undo', async (request) => {
+      const reason = String((request.body as { reason?: unknown } | null)?.reason ?? '').trim();
+      if (reason === '')
+        throw new HttpProblem(
+          400,
+          'invalid-body',
+          'Reason required',
+          'Say why the opening is undone.',
+        );
+      const who = await request.env(async (raw) => administrator(raw as Env));
+      try {
+        return await undoOpening(context.shutro, { ...who, reason }, undoTools);
+      } catch (error) {
+        if (error instanceof OpeningUndoError)
+          throw new HttpProblem(409, error.code, 'Cannot be undone', error.message);
+        throw error;
+      }
     });
     context.app.post('/api/v1/accounting/moves/:id/reverse', async (request) => {
       const id = Number((request.params as { id: string }).id);

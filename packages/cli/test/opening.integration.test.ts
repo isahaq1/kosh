@@ -2,7 +2,9 @@
  * The opening-balance kit (RFC 0036 §2.1) on real PostgreSQL, with Accounting, Stockroom and its valuation: the
  * template lists the company's accounts; a workbook with a wrong row is refused with every error on its row; a
  * check-only run proves the figures and keeps nothing; a load keeps the opening entry, the open documents and the
- * stock, every check equal; a second load changes nothing; a control total that differs refuses the load.
+ * stock, every check equal; a second load changes nothing; a control total that differs refuses the load. Through
+ * the API: only an Administrator checks, loads and undoes; Undo reverses every posting and takes the stock back out,
+ * the company can load again, and the first posting after an opening ends its undo.
  */
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -28,6 +30,7 @@ import {
   installDefaults,
   prepareApps,
   recordInstalledApps,
+  totp,
 } from '@kosh/server';
 import { type Driver, type Env, orm, pg } from '@kosh/server/orm';
 import { type TestDatabase, testDatabase } from '@kosh/server/testing';
@@ -38,6 +41,7 @@ import { afterAll, beforeAll, expect, test } from 'vitest';
 
 const catalogue = [base, settings, accounting, stock, stockAccount];
 const CUTOFF = '2026-06-30';
+const PASSWORD = 'correct horse battery';
 
 let container: TestDatabase;
 let driver: Driver;
@@ -88,8 +92,17 @@ beforeAll(async () => {
   if (auth === undefined) throw new Error('base is installed');
   ({ company } = await installBase(host.server.shutro, auth, {
     company: { name: 'Padma Traders', currency: 'BDT' },
-    admin: { login: 'admin', name: 'Administrator', password: 'correct horse battery' },
+    admin: { login: 'admin', name: 'Administrator', password: PASSWORD },
   }));
+  // An accounting manager is not an Administrator.
+  await auth.createUser({
+    login: 'maria',
+    name: 'Maria',
+    password: PASSWORD,
+    company,
+    companies: [company],
+    groups: ['account.manager'],
+  });
   await system((env) => installChart(env as never, 'generic'));
   await installDefaults(host.server.shutro, host.server.registry.loaded.modules, { company });
   await system(async (env) => {
@@ -120,6 +133,50 @@ afterAll(async () => {
   if (dir !== undefined) await rm(dir, { recursive: true, force: true });
   await container?.stop();
 });
+
+const tokens = new Map<string, string>();
+// biome-ignore lint/suspicious/noExplicitAny: test assertions read untyped JSON responses
+type Json = any;
+async function call(
+  method: 'GET' | 'POST',
+  url: string,
+  as: string,
+  payload?: unknown,
+): Promise<{ status: number; json: Json }> {
+  let token = tokens.get(as);
+  if (token === undefined) {
+    const login = await host.server.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { login: as, password: PASSWORD },
+    });
+    token = (login.json() as { token: string }).token;
+    if (as === 'admin') {
+      // An Administrator has the rights once their second factor is set up.
+      const headers = { authorization: `Bearer ${token}` };
+      const setup = await host.server.app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/2fa/setup',
+        headers,
+      });
+      await host.server.app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/2fa/enable',
+        headers,
+        payload: { code: totp((setup.json() as { secret: string }).secret) },
+      });
+    }
+    tokens.set(as, token);
+  }
+  const res = await host.server.app.inject({
+    method,
+    url,
+    headers: { authorization: `Bearer ${token}` },
+    ...(payload === undefined ? {} : { payload: payload as Record<string, unknown> }),
+  });
+  const json = res.headers['content-type']?.toString().includes('json') ? res.json() : null;
+  return { status: res.statusCode, json };
+}
 
 /** The stock is worth 100 × 2,400 + 40 × 650.125 + 10 × 700 = 273,005.00. */
 const STOCK_VALUE = '273005';
@@ -325,4 +382,122 @@ test('a second load finds the opening and changes nothing; the checks stay equal
     text,
   ).toBe(true);
   expect(await moves()).toBe(before);
+});
+
+test('through the API, only an Administrator reads, checks, loads and undoes the opening', async () => {
+  const content = filled().toString('base64');
+  for (const [method, url, payload] of [
+    ['GET', '/api/v1/accounting/opening', undefined],
+    ['GET', '/api/v1/accounting/opening/template', undefined],
+    ['POST', '/api/v1/accounting/opening/check', { content }],
+    ['POST', '/api/v1/accounting/opening/load', { content }],
+    ['POST', '/api/v1/accounting/opening/undo', { reason: 'I should not be able to' }],
+  ] as const) {
+    const refused = await call(method, url, 'maria', payload);
+    expect(refused.status, url).toBe(403);
+  }
+  const state = await call('GET', '/api/v1/accounting/opening', 'admin');
+  expect(state.status).toBe(200);
+  expect(state.json.canUndo).toBe(true);
+  expect(state.json.openings).toHaveLength(1);
+  expect(state.json.openings[0]).toMatchObject({
+    cutoff: CUTOFF,
+    status: 'loaded',
+    documents: 4,
+    adjustments: 2,
+  });
+  expect(state.json.openings[0].workbookHash).toMatch(/^[0-9a-f]{64}$/);
+  // Not a workbook: said, not a server failure.
+  const junk = await call('POST', '/api/v1/accounting/opening/check', 'admin', {
+    content: Buffer.from('not a workbook').toString('base64'),
+  });
+  expect(junk.status).toBe(400);
+  const again = await call('POST', '/api/v1/accounting/opening/check', 'admin', { content });
+  expect(again.status).toBe(200);
+  expect(again.json.status).toBe('already');
+});
+
+test('Undo reverses every posting and takes the stock back out; the company can load again', async () => {
+  const noReason = await call('POST', '/api/v1/accounting/opening/undo', 'admin', { reason: ' ' });
+  expect(noReason.status).toBe(400);
+  const undone = await call('POST', '/api/v1/accounting/opening/undo', 'admin', {
+    reason: 'The stock sheet had last month’s count',
+  });
+  expect(undone.status, JSON.stringify(undone.json)).toBe(200);
+  // The entry and four documents reversed, two adjustments taken back.
+  expect(undone.json).toEqual({ cutoff: CUTOFF, reversed: 5, returned: 2 });
+
+  await system(async (env) => {
+    // Every account is back to zero, nothing stays open, no stock is left and it is worth nothing.
+    const balances = await env.sql<{ code: string; balance: string }>`
+      SELECT a.code, SUM(l.balance)::text AS balance
+      FROM account_move_line l JOIN account_account a ON a.id = l.account_id
+      WHERE l.posted GROUP BY a.code HAVING SUM(l.balance) <> 0`;
+    expect(balances).toEqual([]);
+    const [open] = await env.sql<{ n: number }>`
+      SELECT count(*)::int AS n FROM account_move
+      WHERE state = 'posted' AND kind <> 'entry' AND amount_residual <> 0`;
+    expect(open?.n).toBe(0);
+    const [left] = await env.sql<{ quantity: string | null; value: string | null }>`
+      SELECT (SELECT SUM(quantity) FROM stock_quant)::text AS quantity,
+             (SELECT SUM(value) FROM stock_valuation_layer)::text AS value`;
+    expect(Number(left?.quantity ?? 0)).toBe(0);
+    expect(Number(left?.value ?? 0)).toBe(0);
+  });
+  const state = await call('GET', '/api/v1/accounting/opening', 'admin');
+  expect(state.json.canUndo).toBe(false);
+  expect(state.json.openings[0]).toMatchObject({
+    status: 'undone',
+    undoneBy: 'Administrator',
+    undoReason: 'The stock sheet had last month’s count',
+  });
+  const nothing = await call('POST', '/api/v1/accounting/opening/undo', 'admin', {
+    reason: 'again',
+  });
+  expect(nothing.status).toBe(409);
+  expect(nothing.json.type).toContain('no-opening');
+
+  // The corrected workbook loads, every check equal again.
+  const loaded = await call('POST', '/api/v1/accounting/opening/load', 'admin', {
+    content: filled().toString('base64'),
+  });
+  expect(loaded.status).toBe(200);
+  expect(loaded.json.status, JSON.stringify(loaded.json)).toBe('loaded');
+  expect(loaded.json.checks.every((c: { ok: boolean }) => c.ok)).toBe(true);
+});
+
+test('the first posting after the opening ends its undo', async () => {
+  await system(async (env) => {
+    const account = async (code: string) =>
+      (await model(env, 'account.account').search({ where: { code } })).ids[0];
+    const [{ currency_id: currency } = { currency_id: 0 }] = await env.sql<{ currency_id: number }>`
+      SELECT currency_id FROM res_company WHERE id = ${company}`;
+    const [journal] = (await model(env, 'account.journal').search({ where: { type: 'general' } }))
+      .ids;
+    const made = (await model(env, 'account.move').create([
+      {
+        kind: 'entry',
+        journal,
+        date: '2026-07-01',
+        ref: 'The first day in Kosh',
+        currency,
+        lines: {
+          create: [
+            { account: await account('6100'), name: 'Rent', debit: '500', credit: '0' },
+            { account: await account('1000'), name: 'Rent', debit: '0', credit: '500' },
+          ],
+        },
+      },
+    ])) as unknown as { post(): Promise<void> };
+    await made.post();
+    await env.flush();
+  });
+  const state = await call('GET', '/api/v1/accounting/opening', 'admin');
+  expect(state.json).toMatchObject({ canUndo: false, postedAfter: 1 });
+  const refused = await call('POST', '/api/v1/accounting/opening/undo', 'admin', {
+    reason: 'too late',
+  });
+  expect(refused.status).toBe(409);
+  expect(refused.json.type).toContain('posted-after');
+  expect(refused.json.detail).toContain('1 entry was posted after the opening');
 });

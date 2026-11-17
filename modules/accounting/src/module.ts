@@ -289,6 +289,54 @@ export const ResBankAccount = defineModel('res.bank.account', {
   },
 });
 
+/**
+ * An opening loaded from a workbook (RFC 0036 §2.1, opening.ts): what it made, the proof it passed and the hash of
+ * the workbook. Written by the load and the undo only (as the system); read by accounting managers.
+ */
+export const AccountOpening = defineModel('account.opening', {
+  label: 'Opening balances',
+  recName: 'name',
+  order: ['cutoff desc', 'id desc'],
+  companyScoped: { required: true },
+  access: { 'account.manager': READ },
+  fields: {
+    name: f.char({ required: true }),
+    cutoff: f.date({ required: true, label: 'Cut-off date' }),
+    status: f.selection(
+      { loaded: 'Loaded', undone: 'Undone' },
+      {
+        required: true,
+        default: 'loaded',
+        help: 'Loaded: the opening is in the books. Undone: every posting of it was reversed and its stock taken back out.',
+      },
+    ),
+    user: f.many2one('res.users', { ondelete: 'set null', label: 'Loaded by' }),
+    loadedAt: f.datetime({ label: 'Loaded at' }),
+    entry: f.many2one('account.move', { ondelete: 'set null', label: 'Opening entry' }),
+    entryLines: f.integer({ label: 'Lines of the entry' }),
+    documents: f.integer({ label: 'Open documents' }),
+    adjustments: f.integer({ label: 'Stock adjustments' }),
+    /** SHA-256 of the workbook that was loaded. */
+    workbookHash: f.char({ label: 'Workbook (SHA-256)' }),
+    /** The checks it passed, as the report gave them. */
+    checks: f.json({ label: 'Proof' }),
+    /** What it made: the entries and transfers an undo reverses. */
+    made: f.json({ label: 'Made' }),
+    /** The last entry of the company when it was loaded: a posting after it ends the undo. */
+    lastMove: f.integer({ label: 'Last entry at the load' }),
+    undoneBy: f.many2one('res.users', { ondelete: 'set null', label: 'Undone by' }),
+    undoneAt: f.datetime({ label: 'Undone at' }),
+    undoReason: f.char({ label: 'Undone because' }),
+  },
+  sqlConstraints: {
+    onePerCutoff: {
+      unique: ['company', 'cutoff'],
+      where: orm.sql`status = 'loaded'`,
+      message: 'An opening at this cut-off is already loaded.',
+    },
+  },
+});
+
 export const AccountFiscalYear = defineModel('account.fiscal.year', {
   label: 'Fiscal year',
   tracking: ['state', 'lockDate'],
@@ -1749,6 +1797,7 @@ export const accountingShutro = defineModule({
     AccountAccount,
     AccountJournal,
     AccountFiscalYear,
+    AccountOpening,
     AccountPaymentTerm,
     AccountPaymentTermLine,
     AccountMove,

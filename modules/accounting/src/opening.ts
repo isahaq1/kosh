@@ -15,9 +15,13 @@
  * in the same transaction: the trial balance account by account, the control totals, the stock's quantities and
  * value. A check-only run does everything and rolls it back; a load is kept only when every check is equal.
  *
+ * A load is recorded as an `account.opening` with what it made and the proof it passed; {@link undoOpening} reverses
+ * all of it until the first posting after it.
+ *
  * Stockroom's models are reached by name (Accounting does not depend on it): the stock sheet is refused with the
  * reason when Stockroom is not installed.
  */
+import { createHash } from 'node:crypto';
 import { readXlsx, type XlsxCell, xlsxSheetNames } from '@kosh/import';
 import { workbook } from '@kosh/reporting';
 import type { Env as AnyEnv, Shutro } from '@kosh/server/orm';
@@ -114,6 +118,8 @@ export interface OpeningData {
     readonly stock: Decimal | null;
   };
   readonly errors: readonly OpeningError[];
+  /** SHA-256 of the workbook, kept with the opening. */
+  readonly hash: string;
 }
 
 export interface OpeningCheck {
@@ -151,6 +157,8 @@ type Recs = {
   load(keys: unknown): Promise<Recs>;
   read(keys: string[]): Record<string, unknown>[];
   post(): Promise<void>;
+  write(values: unknown): Promise<void>;
+  reserve(): Promise<void>;
   confirm(): Promise<void>;
   validate(): Promise<void>;
 };
@@ -409,6 +417,7 @@ export function readOpeningWorkbook(bytes: Uint8Array): OpeningData {
       stock: total(TOTALS.stock),
     },
     errors,
+    hash: createHash('sha256').update(bytes).digest('hex'),
   };
 }
 
@@ -418,16 +427,13 @@ export interface OpeningOptions {
   readonly company: number;
   /** Keep it (when every check is equal). Default false: a check-only run, rolled back. */
   readonly commit?: boolean;
+  /** Who loads it (kept on the opening). */
+  readonly user?: number;
 }
 
 /** Thrown to roll a run back; never escapes. */
 class RollBack extends Error {}
 
-const slug = (s: string): string =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_|_$/g, '');
 const RECEIVABLE_PAYABLE = ['asset_receivable', 'liability_payable'];
 
 /** Checks a workbook and, with `commit`, loads it: as the system, with its reason in the audit log. */
@@ -473,16 +479,18 @@ export async function loadOpening(
   let adjustments = 0;
   let checks: OpeningCheck[] = [];
   let already = false;
-  const entryXmlId = `opening.entry_${cutoff.replaceAll('-', '')}`;
+  const madeMoves: number[] = [];
+  const madePickings: number[] = [];
 
   const run = async (env: AnyEnv): Promise<void> => {
     const company = env.companyId as number;
-    try {
-      await env.refId('account.move' as never, entryXmlId);
-      already = true;
-    } catch {
-      // not loaded yet
-    }
+    already =
+      (
+        await model(env, 'account.opening').search({
+          where: { cutoff, status: 'loaded' },
+          limit: 1,
+        })
+      ).length > 0;
 
     // ---- look everything up, every miss an error on its row
     const accountRows = (
@@ -697,11 +705,7 @@ export async function loadOpening(
             ]);
             await made.confirm();
             await made.validate();
-            await tx.setExternalId(
-              'stock.picking' as never,
-              made.ids[0] as number,
-              `opening.stock_${cutoff.replaceAll('-', '')}_${location}`,
-            );
+            madePickings.push(made.ids[0] as number);
           });
           adjustments += 1;
         } catch (error) {
@@ -788,7 +792,7 @@ export async function loadOpening(
             },
           ]);
           await made.post();
-          await tx.setExternalId('account.move' as never, made.ids[0] as number, entryXmlId);
+          madeMoves.unshift(made.ids[0] as number);
         });
         entryLines = lines.length;
       } catch (error) {
@@ -829,11 +833,7 @@ export async function loadOpening(
               },
             ]);
             await made.post();
-            await tx.setExternalId(
-              'account.move' as never,
-              made.ids[0] as number,
-              `opening.${d.side}_${slug(d.number)}_${cutoff.replaceAll('-', '')}`,
-            );
+            madeMoves.push(made.ids[0] as number);
           });
           documents += 1;
         } catch (error) {
@@ -850,6 +850,28 @@ export async function loadOpening(
     // ---- the proof, from Kosh's posted books
     checks = await prove(env, data, cutoff, target, stockLines, stockroom, valued);
     if (already || !commit || checks.some((c) => !c.ok)) throw new RollBack();
+
+    // ---- kept: the opening on record, with what it made
+    const [last] = await env.sql<{ id: number | null }>`
+      SELECT max(id) AS id FROM account_move WHERE company_id = ${company}`;
+    await model(env, 'account.opening').create([
+      {
+        name: `Opening balances at ${cutoff}`,
+        cutoff,
+        company,
+        user: options.user ?? null,
+        loadedAt: env.now(),
+        entry: entryLines > 0 ? (madeMoves[0] ?? null) : null,
+        entryLines,
+        documents,
+        adjustments,
+        workbookHash: data.hash,
+        checks,
+        made: { moves: madeMoves, pickings: madePickings },
+        lastMove: last?.id ?? 0,
+      },
+    ]);
+    await env.flush();
   };
 
   try {
@@ -1063,4 +1085,156 @@ export function openingReportText(report: OpeningReport): string {
     if (c.differences.length > 20) lines.push(`    … and ${c.differences.length - 20} more`);
   }
   return `${lines.join('\n')}\n`;
+}
+
+// ---- undo
+
+/** Why an opening cannot be undone. */
+export class OpeningUndoError extends Error {
+  override readonly name = 'OpeningUndoError';
+  readonly code: 'no-opening' | 'posted-after' | 'stock-moved';
+  constructor(code: 'no-opening' | 'posted-after' | 'stock-moved', message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
+export interface OpeningUndone {
+  readonly cutoff: string;
+  /** Entries and documents reversed. */
+  readonly reversed: number;
+  /** Stock adjustments taken back out. */
+  readonly returned: number;
+}
+
+/** What {@link undoOpening} needs from Accounting's own functions (index.ts), given by the caller. */
+export interface UndoTools {
+  /** Reverses a posted entry at a date, posted; returns the reversal's id. */
+  reverse(env: AnyEnv, move: number, date: string): Promise<number>;
+  /** Reconciles lines of one account. */
+  reconcile(env: AnyEnv, lines: readonly number[]): Promise<unknown>;
+}
+
+/** Entries posted in the company after its loaded opening: the undo ends with the first one. */
+export async function postedAfterOpening(env: AnyEnv, lastMove: number): Promise<number> {
+  const [row] = await env.sql<{ n: number }>`
+    SELECT count(*)::int AS n FROM account_move
+    WHERE company_id = ${env.companyId as number} AND state = 'posted' AND id > ${lastMove}`;
+  return row?.n ?? 0;
+}
+
+/**
+ * Undoes the company's loaded opening, until the first posting after it: every entry and document of it is
+ * reversed at the cut-off and reconciled with its reversal (nothing stays open), and each stock adjustment is taken
+ * back out as its return, at the value it came in at. Nothing is deleted; the opening is kept as undone.
+ */
+export async function undoOpening(
+  shutro: Shutro,
+  options: { readonly company: number; readonly user?: number; readonly reason: string },
+  tools: UndoTools,
+): Promise<OpeningUndone> {
+  const dated =
+    'accountingDate' in (shutro.registry?.models.get('stock.picking')?.fieldOrigins ?? {});
+  return shutro.bootstrap(
+    { reason: 'opening balances undone', company: options.company },
+    async (env) => {
+      const found = await model(env, 'account.opening').search({
+        where: { status: 'loaded' },
+        order: ['cutoff desc'],
+        limit: 1,
+      });
+      const [opening] = (await found.load(['cutoff', 'made', 'lastMove'])).read([
+        'id',
+        'cutoff',
+        'made',
+        'lastMove',
+      ]);
+      if (opening === undefined)
+        throw new OpeningUndoError('no-opening', 'There is no loaded opening to undo.');
+      const cutoff = String(opening['cutoff']);
+      const made = (opening['made'] ?? {}) as { moves?: number[]; pickings?: number[] };
+      const after = await postedAfterOpening(env, Number(opening['lastMove'] ?? 0));
+      if (after > 0)
+        throw new OpeningUndoError(
+          'posted-after',
+          `${after} ${after === 1 ? 'entry was' : 'entries were'} posted after the opening: it can no longer be undone. Correct it with entries instead.`,
+        );
+
+      // The stock, back out of each location as the return of its adjustment.
+      let returned = 0;
+      for (const picking of made.pickings ?? []) {
+        const [p] = await env.sql<{ source_id: number; destination_id: number; name: string }>`
+          SELECT source_id, destination_id, name FROM stock_picking WHERE id = ${picking}`;
+        if (p === undefined) continue;
+        const moves = await env.sql<{ id: number; product_id: number; done_qty: string }>`
+          SELECT id, product_id, done_qty::text AS done_qty FROM stock_move WHERE picking_id = ${picking}`;
+        const lots = await env.sql<{ product_id: number; lot_id: number; quantity: string }>`
+          SELECT product_id, lot_id, quantity::text AS quantity FROM stock_lot_line
+          WHERE picking_id = ${picking} AND lot_id IS NOT NULL`;
+        const back = await model(env, 'stock.picking').create([
+          {
+            kind: 'adjustment',
+            company: options.company,
+            source: p.destination_id,
+            destination: p.source_id,
+            origin: `Undo of ${p.name}`,
+            returnOf: picking,
+            ...(dated ? { accountingDate: cutoff } : {}),
+            moves: {
+              create: moves.map((m) => ({
+                product: m.product_id,
+                quantity: m.done_qty,
+                returnOf: m.id,
+              })),
+            },
+            lotLines: {
+              create: lots.map((l) => ({
+                product: l.product_id,
+                lot: l.lot_id,
+                quantity: l.quantity,
+              })),
+            },
+          },
+        ]);
+        await back.confirm();
+        await back.reserve();
+        const [state] = (await back.load(['availability'])).read(['availability']);
+        if (state?.['availability'] !== 'full')
+          throw new OpeningUndoError(
+            'stock-moved',
+            `Some of the opening stock of ${p.name} has moved or is reserved: it can no longer be undone.`,
+          );
+        await back.validate();
+        returned += 1;
+      }
+
+      // The books: each entry and document reversed at the cut-off, and closed against its reversal.
+      let reversed = 0;
+      for (const move of made.moves ?? []) {
+        const reversal = await tools.reverse(env, move, cutoff);
+        const lines = await env.sql<{ id: number; account_id: number; partner_id: number | null }>`
+          SELECT l.id, l.account_id, l.partner_id
+          FROM account_move_line l JOIN account_account a ON a.id = l.account_id
+          WHERE l.move_id IN (${move}, ${reversal}) AND a.type IN ('asset_receivable', 'liability_payable')`;
+        const groups = new Map<string, number[]>();
+        for (const l of lines) {
+          const k = `${l.account_id}:${l.partner_id ?? ''}`;
+          groups.set(k, [...(groups.get(k) ?? []), l.id]);
+        }
+        for (const ids of groups.values()) if (ids.length > 1) await tools.reconcile(env, ids);
+        reversed += 1;
+      }
+
+      await model(env, 'account.opening')
+        .browse([opening['id'] as number])
+        .write({
+          status: 'undone',
+          undoneBy: options.user ?? null,
+          undoneAt: env.now(),
+          undoReason: options.reason,
+        });
+      await env.flush();
+      return { cutoff, reversed, returned };
+    },
+  );
 }

@@ -6,7 +6,7 @@
 import { projectShutro } from '@kosh/project';
 import { projectAccountShutro } from '@kosh/project_account';
 import { purchaseAccountShutro } from '@kosh/purchase_account';
-import { type Decimal, orm } from '@kosh/server/orm';
+import { type Decimal, type Module, type ModuleBase, orm } from '@kosh/server/orm';
 import { defineModule, type Env, extendModel, type Records } from './.kosh/bindings.js';
 
 const ZERO: Decimal = orm.toDecimal(0);
@@ -45,10 +45,19 @@ export const ProjectCommitted = extendModel('project.project', {
   },
 });
 
-export const projectPurchaseShutro = defineModule({
+// Named so the module's type stays short enough to emit (TS7056) with every model its dependencies carry.
+const DEPENDS: readonly ModuleBase[] = [projectShutro, projectAccountShutro, purchaseAccountShutro];
+const MODELS = [] as const;
+const EXTENSIONS = [ProjectCommitted] as const;
+
+export const projectPurchaseShutro: Module<
+  typeof MODELS,
+  readonly ModuleBase[],
+  typeof EXTENSIONS
+> = defineModule({
   name: 'project_purchase',
   version: '0.1.0',
-  depends: [projectShutro, projectAccountShutro, purchaseAccountShutro],
+  depends: DEPENDS,
   groups: [
     orm.defineGroup({
       code: 'project_purchase.user',
@@ -56,6 +65,6 @@ export const projectPurchaseShutro = defineModule({
       implies: ['project_account.user', 'purchase.user'],
     }),
   ],
-  models: [],
-  extensions: [ProjectCommitted],
+  models: MODELS,
+  extensions: EXTENSIONS,
 });
