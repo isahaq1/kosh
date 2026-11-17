@@ -708,6 +708,12 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       label: 'Fiscal years',
       views: ['list', 'form'],
     }),
+    'accounting.action_opening': {
+      type: 'client',
+      page: 'accounting.Opening',
+      label: 'Start from your figures',
+      visibleTo: ['base.admin'],
+    },
     'accounting.action_openings': action(AccountOpening, {
       label: 'Opening balances',
       views: ['list', 'form'],
@@ -905,11 +911,13 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       sequence: 3,
     },
     {
-      id: 'accounting.openings',
+      id: 'accounting.opening',
       parent: 'accounting.configuration',
-      label: 'Opening balances',
-      action: 'accounting.action_openings',
-      sequence: 3.2,
+      label: 'Start from your figures',
+      action: 'accounting.action_opening',
+      sequence: 0.5,
+      // Administrators: the load and the undo are theirs (the server refuses anyone else).
+      visibleTo: ['base.admin'],
     },
     {
       id: 'accounting.withholdings',
@@ -1814,7 +1822,7 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       sheet: [
         k.group('main', ['name', 'cutoff', 'status', 'user', 'loadedAt'], {
           description:
-            'Loaded from a workbook in Settings › Start from your figures, where it can be undone until the first posting after it.',
+            'Loaded from a workbook in Accounting › Configuration › Start from your figures, where it can be undone until the first posting after it.',
         }),
         k.group('made', ['entry', 'entryLines', 'documents', 'adjustments', 'workbookHash'], {
           label: 'What it made',

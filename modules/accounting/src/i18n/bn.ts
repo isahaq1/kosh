@@ -230,8 +230,8 @@ export const bn: Readonly<Record<string, string>> = {
   Loaded: 'লোড করা হয়েছে',
   'Loaded at': 'লোডের সময়',
   'Loaded by': 'লোড করেছেন',
-  'Loaded from a workbook in Settings › Start from your figures, where it can be undone until the first posting after it.':
-    'সেটিংস › আপনার হিসাব থেকে শুরু করুন-এ একটি ওয়ার্কবুক থেকে লোড করা; এর পরের প্রথম পোস্টিং পর্যন্ত সেখানে এটি বাতিল করা যায়।',
+  'Loaded from a workbook in Accounting › Configuration › Start from your figures, where it can be undone until the first posting after it.':
+    'হিসাব › কনফিগারেশন › আপনার হিসাব থেকে শুরু করুন-এ একটি ওয়ার্কবুক থেকে লোড করা; এর পরের প্রথম পোস্টিং পর্যন্ত সেখানে এটি বাতিল করা যায়।',
   'Loaded: the opening is in the books. Undone: every posting of it was reversed and its stock taken back out.':
     'লোড করা হয়েছে: প্রারম্ভিক জের হিসাবের খাতায় আছে। বাতিল: এর প্রতিটি পোস্টিং উল্টে দেওয়া হয়েছে এবং এর স্টক ফিরিয়ে নেওয়া হয়েছে।',
   'Lock date': 'লক তারিখ',
@@ -374,6 +374,7 @@ export const bn: Readonly<Record<string, string>> = {
   SMS: 'SMS',
   Source: 'উৎস',
   'Source document': 'উৎস নথি',
+  'Start from your figures': 'আপনার হিসাব থেকে শুরু করুন',
   State: 'অবস্থা',
   Statement: 'স্টেটমেন্ট',
   'Statement line': 'স্টেটমেন্টের লাইন',

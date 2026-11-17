@@ -1,7 +1,8 @@
 /**
  * @packageDocumentation
  * The web contribution of `@kosh/accounting`: the settings page (chart of accounts, lock dates), the
- * reconciliation screen, the aged balances report and the "Register payment" dialog on documents.
+ * reconciliation screen, the aged balances report, the opening-balance kit and the "Register payment" dialog on
+ * documents.
  */
 import { addMessages, type Registry } from '@kosh/ui';
 import type { i18n } from 'i18next';
@@ -9,6 +10,7 @@ import { AgingPage } from './AgingPage.js';
 import { BankReconcilePage } from './BankReconcilePage.js';
 import { FollowupsPage } from './FollowupsPage.js';
 import { messages } from './messages.js';
+import { OpeningPage } from './OpeningPage.js';
 import { PostingPreview } from './PostingPreview.js';
 import { ReconcilePage } from './ReconcilePage.js';
 import { RegisterPayment } from './RegisterPayment.js';
@@ -17,6 +19,7 @@ import { SettingsPage } from './SettingsPage.js';
 export { AgingPage } from './AgingPage.js';
 export { BankReconcilePage } from './BankReconcilePage.js';
 export { FollowupsPage } from './FollowupsPage.js';
+export { OpeningPage } from './OpeningPage.js';
 export { PostingPreview } from './PostingPreview.js';
 export { ReconcilePage } from './ReconcilePage.js';
 export { RegisterPayment } from './RegisterPayment.js';
@@ -29,6 +32,7 @@ export function registerAccountingWeb(registry: Registry, i18n?: i18n): Registry
   registry.registerPage('accounting.Aging', AgingPage);
   registry.registerPage('accounting.BankReconcile', BankReconcilePage);
   registry.registerPage('accounting.Followups', FollowupsPage);
+  registry.registerPage('accounting.Opening', OpeningPage);
   registry.registerComponent('accounting.RegisterPayment', RegisterPayment);
   registry.registerComponent('accounting.PostingPreview', PostingPreview);
   if (i18n !== undefined) addMessages(i18n, 'accounting', messages);
