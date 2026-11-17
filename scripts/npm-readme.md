@@ -384,6 +384,7 @@ Run them in the project folder (`npx shutro-erp …`, or `npm run migrate` / `np
 | `shutro-erp module create <name>` | a new module in `src/modules/<name>/`, listed in `src/modules.ts` |
 | `shutro-erp doctor` · `--json` | what to fix in this installation: the database and its connections, migrations, apps, administrators without a second factor, late jobs and failing webhooks, the clock, Valkey, mail, storage, HTTPS, backups, telemetry |
 | `shutro-erp backup` · `backup verify [file]` | a backup in `backups/` with a manifest of every table's rows, the ledger and the stock · restored into a scratch database and checked against it, recorded for `doctor` |
+| `shutro-erp opening template` · `check <file>` · `load <file>` | start a company from its own figures: one workbook with the trial balance, unpaid documents, stock by location and lot and control totals; every error on its row, the proof, kept only when every check is equal |
 | `shutro-erp check` · `--all` · `--strict` | your modules against the standard the shipped apps meet (labels, search, views, print and import templates, events, help) · every result · Bangla and demo data fail too |
 | `shutro-erp user create <login>` | a user: `--name`, `--email`, `--roles`, `--password` (asked when missing) |
 | `shutro-erp user password <login>` | a new password |

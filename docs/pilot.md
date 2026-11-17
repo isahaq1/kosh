@@ -73,6 +73,9 @@ import. An import can be undone for seven days.
    (Stockroom › Counts), valued at the old system's cost.
 4. **Open documents**: confirmed sales and purchase orders not yet delivered or received.
 
+Opening balances, unpaid invoices and bills and the stock on hand load from one workbook with its proof:
+`shutro-erp opening` ([opening-balances.md](opening-balances.md)).
+
 Use **external ids** (the old system's references) on every row: re-importing then updates instead of duplicating,
 and every record can be traced back to where it came from.
 
