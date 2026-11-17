@@ -10,6 +10,10 @@
  * - `make field <module>.<model> <name:type>` adds a field to a generated model, its list, its form and its import
  *   template, at the `make:` markers; where a marker was removed, it says what to add by hand.
  *
+ * - `make transition <module>.<model> <name> --from <state> --to <state>` makes the model a **document**: a state
+ *   with its steps, tracked; the status bar and a button on the form, a chatter, the state on the list; a print
+ *   template; and a named event when the step is taken. Later transitions add their states, buttons and events.
+ *
  * Nothing is overwritten: a part that exists is refused. `--dry-run` shows what would be written.
  */
 import { existsSync, readdirSync } from 'node:fs';
@@ -17,7 +21,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
-const USAGE = `Usage: shutro-erp make <model | field> …
+const USAGE = `Usage: shutro-erp make <model | field | transition> …
 
   make model <module> <name> --fields "<field> <field> …" [--label <Label>] [--plural <Labels>] [--dry-run]
       A model of src/modules/<module>/ as a part of its own: the model with its label and access, its action and
@@ -25,6 +29,10 @@ const USAGE = `Usage: shutro-erp make <model | field> …
 
   make field <module>.<model> <field> [--dry-run]
       A field added to a model made by make model: on the model, its list, its form and its import template.
+
+  make transition <module>.<model> <name> --from <state> --to <state> [--label <Button>] [--dry-run]
+      A step of the model's state (confirm: draft to confirmed). The first makes the model a document: its state,
+      the status bar and the button, a chatter, a print template and a named event; the next ones add to them.
 
   A field is name:type, with ! when it is required:
       title:char!   notes:text   pages:integer   price:decimal   lent:boolean   due:date   seen:datetime
@@ -188,6 +196,7 @@ ${lines(onList.map(quote), '      ')}      // make:list
     ],
   }),
   '${n.model}.form': form(${n.constant}, (k) => ({
+    // make:header
     sheet: [
       k.group('main', [
 ${lines(
@@ -216,6 +225,14 @@ ${lines(
     ],
   },
 ];
+
+export const documents = [
+  // make:documents
+];
+
+export const events = [
+  // make:events
+];
 `;
 }
 
@@ -228,7 +245,7 @@ export function partsIndex(names: readonly string[]): string {
 ${names.map((p) => `import * as ${id(p)} from './parts/${p}.ts';`).join('\n')}
 
 export const parts = {
-${spread('models', '[', ']')}${spread('actions', '{ ', ' }')}${spread('menus', '[', ']')}${spread('views', '{ ', ' }')}${spread('searches', '{ ', ' }')}${spread('importTemplates', '[', ']')}};
+${spread('models', '[', ']')}${spread('actions', '{ ', ' }')}${spread('menus', '[', ']')}${spread('views', '{ ', ' }')}${spread('searches', '{ ', ' }')}${spread('importTemplates', '[', ']')}${spread('documents', '[', ']')}${spread('events', '[', ']')}};
 `;
 }
 
@@ -257,6 +274,51 @@ export function wireParts(index: string): string | null {
   });
   return out.replace(last[0], `${last[0]}\nimport { parts } from './parts.ts';`);
 }
+
+/**
+ * The module's index.ts depending on Messaging and Reporting, its user group holding their roles — what a document
+ * needs for its chatter and its print template. Null when its shape is not the scaffold's.
+ */
+export function wireDocument(index: string, module: string): string | null {
+  if (index.includes("'shutro-erp/messaging'") && index.includes("'shutro-erp/reporting'"))
+    return index;
+  const imports = [...index.matchAll(/^import .*;$/gm)];
+  const last = imports.at(-1);
+  const shutroDepends = /\n {2}depends: \[baseShutro\],/.exec(index);
+  const depends = /\n {2}depends: \[base\],/.exec(index);
+  const group = new RegExp(`(code: '${module}\\.user',[^}]*implies: \\[)([^\\]]*)(\\])`).exec(
+    index,
+  );
+  if (last === undefined || shutroDepends === null || depends === null || group === null)
+    return null;
+  const roles = [
+    ...(group[2] ?? '').split(',').map((x) => x.trim()),
+    "'messaging.user'",
+    "'reporting.user'",
+  ];
+  return index
+    .replace(shutroDepends[0], '\n  depends: [baseShutro, messagingShutro, reportingShutro],')
+    .replace(depends[0], '\n  depends: [base, messaging, reporting],')
+    .replace(
+      group[0],
+      `${group[1]}${[...new Set(roles.filter((x) => x !== ''))].join(', ')}${group[3]}`,
+    )
+    .replace(
+      last[0],
+      `${last[0]}\nimport { messaging, messagingShutro } from 'shutro-erp/messaging';\nimport { reporting, reportingShutro } from 'shutro-erp/reporting';`,
+    );
+}
+
+const DOCUMENT_BY_HAND = (
+  module: string,
+) => `  in index.ts, by hand (its shape is not the one module create makes): a document's chatter and print template
+  need Messaging and Reporting, and its users their roles —
+      import { messaging, messagingShutro } from 'shutro-erp/messaging';
+      import { reporting, reportingShutro } from 'shutro-erp/reporting';
+      … orm.defineModule({ …, depends: [<yours>, messagingShutro, reportingShutro] })
+      … the group ${module}.user: implies: [<yours>, 'messaging.user', 'reporting.user']
+      … defineModule({ …, depends: [<yours>, messaging, reporting] })
+`;
 
 const BY_HAND = `  in index.ts, by hand (its shape is not the one module create makes):
       import { withParts } from 'shutro-erp/modules-sdk';
@@ -444,6 +506,193 @@ async function makeField(
   return 0;
 }
 
+/** The fields a part declares, by name with their kind (`char`, `many2one`, …), read from its `fields: {` block. */
+function declaredFields(text: string): { name: string; kind: string }[] {
+  const start = text.indexOf('  fields: {');
+  const end = text.indexOf('// make:fields');
+  if (start < 0 || end < start) return [];
+  return [
+    ...text.slice(start, end).matchAll(/^ {4}([A-Za-z][A-Za-z0-9]*): f\.([A-Za-z0-9]+)\(/gm),
+  ].map((m) => ({ name: m[1] as string, kind: m[2] as string }));
+}
+
+async function makeTransition(
+  argv: readonly string[],
+  write: (t: string) => void,
+  cwd: string,
+): Promise<number> {
+  const { values, positionals } = parseArgs({
+    args: [...argv],
+    options: {
+      from: { type: 'string' },
+      to: { type: 'string' },
+      label: { type: 'string' },
+      'dry-run': { type: 'boolean', default: false },
+    },
+    allowPositionals: true,
+    strict: true,
+  });
+  const [target, name] = positionals;
+  const dot = target?.lastIndexOf('.') ?? -1;
+  if (
+    target === undefined ||
+    name === undefined ||
+    dot <= 0 ||
+    values.from === undefined ||
+    values.to === undefined
+  ) {
+    write(USAGE);
+    return 2;
+  }
+  const state = /^[a-z][a-z0-9_]*$/;
+  if (!/^[a-z]+$/.test(name)) {
+    write(`"${name}" cannot be a transition's name: one lower-case word, like confirm.\n`);
+    return 2;
+  }
+  if (!state.test(values.from) || !state.test(values.to) || values.from === values.to) {
+    write(
+      '--from and --to are two different states: lower-case letters, digits and _, like draft and confirmed.\n',
+    );
+    return 2;
+  }
+  const module = target.slice(0, dot);
+  const model = target.slice(dot + 1);
+  const rel = `src/modules/${module}/parts/${model}.ts`;
+  const path = join(cwd, 'src', 'modules', module, 'parts', `${model}.ts`);
+  if (!existsSync(path)) {
+    write(`There is no ${rel}: make transition adds to models made by shutro-erp make model.\n`);
+    return 1;
+  }
+  let text = await readFile(path, 'utf8');
+  const id = /defineModel\('([^']+)'/.exec(text)?.[1] ?? `${module}.${model}`;
+  const label = /\n {2}label: '([^']+)'/.exec(text)?.[1] ?? title(model);
+  const topic = `${id}.${values.to}`;
+  const button = values.label ?? title(name);
+  const transition = `${name}: emitting(${quote(topic)}, { from: [${quote(values.from)}], to: ${quote(values.to)} }),`;
+  const event = `{ topic: ${quote(topic)}, model: ${quote(id)}, label: ${quote(`${label} ${title(values.to).toLowerCase()}`)} },`;
+  const byHand: string[] = [];
+  const add = (marker: string, line: string, what: string) => {
+    const next = atMarker(text, marker, line);
+    if (next === null)
+      byHand.push(`      ${what}: ${line.split('\n')[0]}${line.includes('\n') ? ' …' : ''}`);
+    else text = next;
+  };
+  const first = !/^ {4}state: f\.state\(/m.test(text);
+  if (first) {
+    const fields = declaredFields(text);
+    const printed = fields.filter(
+      (f) => !['text', 'many2one', 'one2many', 'many2many'].includes(f.kind),
+    );
+    const named = /\n {2}recName: '([^']+)'/.exec(text)?.[1];
+    add(
+      'fields',
+      [
+        'state: f.state({',
+        '      states: {',
+        `        ${values.from}: ${quote(title(values.from))},`,
+        `        ${values.to}: ${quote(title(values.to))},`,
+        '        // make:states',
+        '      },',
+        `      initial: ${quote(values.from)},`,
+        `      help: ${quote(`${title(values.from)} until it is ${title(values.to).toLowerCase()}.`)},`,
+        '      transitions: {',
+        `        ${transition}`,
+        '        // make:transitions',
+        '      },',
+        '    }),',
+      ].join('\n'),
+      'the model’s fields',
+    );
+    // Tracked, as the standard asks of a document's state.
+    if (text.includes('\n  access: {') && !text.includes('\n  tracking: ['))
+      text = text.replace('\n  access: {', "\n  tracking: ['state'],\n  access: {");
+    else if (!text.includes('\n  tracking: ['))
+      byHand.push("      the model: tracking: ['state'],");
+    add('list', "{ field: 'state', widget: 'badge' },", 'the list’s columns');
+    add(
+      'header',
+      [
+        'header: {',
+        "      statusbar: 'state',",
+        '      buttons: [',
+        `        k.button(${quote(name)}, { primary: true, label: ${quote(button)} }),`,
+        '        // make:buttons',
+        '      ],',
+        '    },',
+        '    chatter: true,',
+      ].join('\n'),
+      'the form',
+    );
+    add(
+      'documents',
+      [
+        '{',
+        `    key: ${quote(model)},`,
+        `    name: ${quote(label)},`,
+        `    model: ${quote(id)},`,
+        '    layout: {',
+        "      paper: 'A4',",
+        `      header: ${quote(label)},`,
+        "      footer: 'Page {{page}} of {{pages}}',",
+        '      blocks: [',
+        `        { kind: 'heading', id: 'title', text: ${quote(named === undefined ? label : `${label} {{${named}}}`)}, level: 1 },`,
+        '        {',
+        "          kind: 'fields',",
+        "          id: 'details',",
+        '          items: [',
+        ...printed.map(
+          (f) => `            { label: ${quote(title(f.name))}, bind: ${quote(f.name)} },`,
+        ),
+        "            { label: 'Status', bind: 'state' },",
+        '          ],',
+        '        },',
+        '      ],',
+        '    },',
+        '  },',
+      ].join('\n'),
+      'the print template (documents)',
+    );
+    if (!/import \{[^}]*\bemitting\b[^}]*\} from 'shutro-erp';/.test(text))
+      text = text.replace(
+        "import { orm } from 'shutro-erp/orm';",
+        "import { emitting } from 'shutro-erp';\nimport { orm } from 'shutro-erp/orm';",
+      );
+  } else {
+    if (new RegExp(`^ {8}${name}: `, 'm').test(text)) {
+      write(`${target} has a transition ${name} already.\n`);
+      return 1;
+    }
+    for (const s of [values.from, values.to])
+      if (!new RegExp(`^ {8}${s}: '`, 'm').test(text))
+        add('states', `${s}: ${quote(title(s))},`, 'the state’s states');
+    add('transitions', transition, 'the state’s transitions');
+    add('buttons', `k.button(${quote(name)}, { label: ${quote(button)} }),`, 'the form’s buttons');
+  }
+  if (!text.includes(`topic: ${quote(topic)}`)) add('events', event, 'the events');
+  const dry = values['dry-run'] === true;
+  if (!dry) await writeFile(path, text);
+  write(
+    `  ${dry ? 'would update' : 'updated'} ${rel} (${name}: ${values.from} to ${values.to}${first ? '; now a document: state, status bar, chatter, print template, event' : ''})\n`,
+  );
+  if (byHand.length > 0) write(`  a marker is gone there; add by hand:\n${byHand.join('\n')}\n`);
+  if (first) {
+    // A document's users discuss it and print it: the module depends on Messaging and Reporting, and its users
+    // hold their roles — as the shipped apps do.
+    const indexPath = join(cwd, 'src', 'modules', module, 'index.ts');
+    const index = existsSync(indexPath) ? await readFile(indexPath, 'utf8') : '';
+    const wired = wireDocument(index, module);
+    if (wired === null) write(DOCUMENT_BY_HAND(module));
+    else if (wired !== index) {
+      if (!dry) await writeFile(indexPath, wired);
+      write(
+        `  ${dry ? 'would update' : 'updated'} src/modules/${module}/index.ts (depends on Messaging and Reporting; ${module}.user holds their roles)\n`,
+      );
+    }
+  }
+  if (!dry) write('\nNext: shutro-erp check, then shutro-erp migrate (it plans the new column).\n');
+  return 0;
+}
+
 export async function runMake(
   argv: readonly string[],
   write: (t: string) => void,
@@ -453,6 +702,7 @@ export async function runMake(
   try {
     if (what === 'model') return await makeModel(rest, write, cwd);
     if (what === 'field') return await makeField(rest, write, cwd);
+    if (what === 'transition') return await makeTransition(rest, write, cwd);
   } catch (error) {
     // An option the command does not have.
     write(`${error instanceof Error ? error.message : String(error)}\n\n${USAGE}`);

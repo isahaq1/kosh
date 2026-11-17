@@ -45,6 +45,8 @@ async function inWorkspace(dir: string): Promise<void> {
           .replaceAll("'shutro-erp/orm'", "'@kosh/server/orm'")
           .replaceAll("'shutro-erp/modules-sdk'", "'@kosh/modules-sdk'")
           .replaceAll("'shutro-erp/views'", `'${VIEWS}'`)
+          .replaceAll("'shutro-erp/messaging'", "'@kosh/messaging'")
+          .replaceAll("'shutro-erp/reporting'", "'@kosh/reporting'")
           .replaceAll("'shutro-erp'", "'@kosh/server'"),
       );
   }
@@ -148,6 +150,51 @@ test('a module, a model and a field made by the commands meet the module standar
     'has a field publishedOn already',
   );
   expect((await run('make', 'field', 'library.nothing', 'x:char')).code).toBe(1);
+
+  // A transition makes the loan a document: its state, the status bar, a chatter, a print template, an event.
+  const step = await run(
+    'make',
+    'transition',
+    'library.loan',
+    'confirm',
+    '--from',
+    'draft',
+    '--to',
+    'confirmed',
+  );
+  expect(step.code, step.out).toBe(0);
+  expect(step.out).toContain('now a document');
+  const more = await run(
+    'make',
+    'transition',
+    'library.loan',
+    'close',
+    '--from',
+    'confirmed',
+    '--to',
+    'returned',
+    '--label',
+    'Mark returned',
+  );
+  expect(more.code, more.out).toBe(0);
+  const loan = await readFile(part('loan'), 'utf8');
+  expect(loan).toContain(
+    "confirm: emitting('library.loan.confirmed', { from: ['draft'], to: 'confirmed' }),",
+  );
+  expect(loan).toContain(
+    "close: emitting('library.loan.returned', { from: ['confirmed'], to: 'returned' }),",
+  );
+  expect(loan).toContain("returned: 'Returned',");
+  expect(loan).toContain("k.button('close', { label: 'Mark returned' }),");
+  expect(loan).toContain("tracking: ['state'],");
+  expect(loan).toContain('chatter: true,');
+  expect(loan.match(/topic: 'library\.loan\./g)).toHaveLength(2);
+  expect(
+    (await run('make', 'transition', 'library.loan', 'confirm', '--from', 'a', '--to', 'b')).out,
+  ).toContain('has a transition confirm already');
+  expect(
+    (await run('make', 'transition', 'library.loan', 'Do-It', '--from', 'a', '--to', 'b')).code,
+  ).toBe(2);
 
   // The real check, on what was generated.
   await inWorkspace(join(project, 'src'));
