@@ -209,3 +209,16 @@ Answered 2026-11-17 with the proposals: XLSX only; Administrators merge; generat
   sample is there, the pivot's query answers); the generated page loaded with React stubbed and called; the bridge
   through `shutro-erp check`. Not proved: the page in a browser, and the generated test file run inside a real
   installation (its helper is what this repository's own test runs on). Step 4 complete; next step 5 (data health).
+- **Step 5 (2026-11-17).** **Data health, part 1: `shutro-erp check data`.** Checks are **declared by the modules**
+  (`dataChecks` in the manifest: a key, a label saying what holds, `run(env)` returning findings with their
+  records) rather than kept in one tool: only the installed apps' run, and a company's own module adds its own.
+  `checkData` (`@kosh/server`) runs them per company as the system, each in a savepoint, and rolls the run back, so
+  looking changes nothing; a check that breaks is reported as broken. Shipped: Accounting (entries balance, a
+  document's amount left against its receivable or payable lines, numbering without gaps or duplicates), Stockroom
+  (stock on hand against what the validated transfers moved, per product across the internal locations — putaway
+  inside the warehouse does not disturb it), stock valuation (the layers against the stock accounts, the layers'
+  quantities against the stock on hand). The test loads an opening, sees every check hold, then damages the stock,
+  the valuation and a document's amount left and sees each named with its record; it also found that a posted
+  entry's number cannot be changed by SQL at all (the database's immutability), so the numbering check's failure
+  path is not exercised by a test. The check labels are in Bangla (T1). Docs: docs/data-health.md. Next (step 6):
+  duplicates and merging, broken links, the weekly job with its notification, the doctor and the screen.
