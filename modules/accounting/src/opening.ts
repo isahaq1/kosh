@@ -21,7 +21,7 @@
  * Stockroom's models are reached by name (Accounting does not depend on it): the stock sheet is refused with the
  * reason when Stockroom is not installed.
  */
-import { createHash } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { readXlsx, type XlsxCell, xlsxSheetNames } from '@kosh/import';
 import { workbook } from '@kosh/reporting';
 import type { Env as AnyEnv, Shutro } from '@kosh/server/orm';
@@ -429,6 +429,8 @@ export interface OpeningOptions {
   readonly commit?: boolean;
   /** Who loads it (kept on the opening). */
   readonly user?: number;
+  /** The installation's signing key (`KOSH_SIGNING_KEY`): the opening's seal is signed with it. */
+  readonly signingKey?: string;
 }
 
 /** Thrown to roll a run back; never escapes. */
@@ -854,13 +856,37 @@ export async function loadOpening(
     // ---- kept: the opening on record, with what it made
     const [last] = await env.sql<{ id: number | null }>`
       SELECT max(id) AS id FROM account_move WHERE company_id = ${company}`;
+    // The seal: what was loaded and proved, fixed as text; signed when the installation has a key.
+    const loadedAt = env.now();
+    const sealed = JSON.stringify({
+      company,
+      cutoff,
+      workbook: data.hash,
+      entryLines,
+      documents,
+      adjustments,
+      checks: checks.map((c) => ({ name: c.name, ok: c.ok, summary: c.summary })),
+      loadedAt: loadedAt.toISOString(),
+      loadedBy: options.user ?? null,
+    });
     await model(env, 'account.opening').create([
       {
+        sealed,
+        seal: sealOf(sealed),
+        signature: signatureOf(sealed, options.signingKey),
+        lines: {
+          create: checks.map((c, i) => ({
+            sequence: (i + 1) * 10,
+            name: c.name,
+            result: c.ok ? 'Equal' : 'Differs',
+            summary: c.summary,
+          })),
+        },
         name: `Opening balances at ${cutoff}`,
         cutoff,
         company,
         user: options.user ?? null,
-        loadedAt: env.now(),
+        loadedAt,
         entry: entryLines > 0 ? (madeMoves[0] ?? null) : null,
         entryLines,
         documents,
@@ -1237,4 +1263,127 @@ export async function undoOpening(
       return { cutoff, reversed, returned };
     },
   );
+}
+
+// ---- the certificate's seal
+
+const sealOf = (sealed: string): string => createHash('sha256').update(sealed).digest('hex');
+const signatureOf = (sealed: string, key: string | undefined): string | null =>
+  key === undefined || key === '' ? null : createHmac('sha256', key).update(sealed).digest('hex');
+
+export interface OpeningVerification {
+  readonly cutoff: string;
+  readonly status: string;
+  readonly checks: readonly {
+    readonly name: string;
+    readonly ok: boolean;
+    readonly detail: string;
+  }[];
+  readonly ok: boolean;
+}
+
+/**
+ * Verifies an opening's certificate: the sealed content still has its seal, the record still says what was sealed,
+ * the signature is the installation's (with its key), and — given the workbook — it is the file that was loaded.
+ */
+export async function verifyOpening(
+  env: AnyEnv,
+  options: {
+    /** The opening (default: the company's latest). */
+    readonly id?: number;
+    readonly signingKey?: string;
+    readonly workbook?: Uint8Array;
+  } = {},
+): Promise<OpeningVerification | null> {
+  const found = await model(env, 'account.opening').search({
+    where: options.id === undefined ? {} : { id: options.id },
+    order: ['id desc'],
+    limit: 1,
+  });
+  const keys = [
+    'cutoff',
+    'status',
+    'sealed',
+    'seal',
+    'signature',
+    'workbookHash',
+    'entryLines',
+    'documents',
+    'adjustments',
+  ];
+  const [o] = (await found.load(keys)).read(keys);
+  if (o === undefined) return null;
+  const sealed = typeof o['sealed'] === 'string' ? o['sealed'] : '';
+  const checks: { name: string; ok: boolean; detail: string }[] = [];
+  const sealOk = sealed !== '' && sealOf(sealed) === o['seal'];
+  checks.push({
+    name: 'seal',
+    ok: sealOk,
+    detail: sealOk
+      ? 'the sealed content has its seal'
+      : 'the sealed content or its seal was changed',
+  });
+  let content: Record<string, unknown> = {};
+  try {
+    content = JSON.parse(sealed) as Record<string, unknown>;
+  } catch {
+    // an unreadable seal: the record check below says so
+  }
+  const same =
+    content['cutoff'] === String(o['cutoff']) &&
+    content['workbook'] === o['workbookHash'] &&
+    content['entryLines'] === o['entryLines'] &&
+    content['documents'] === o['documents'] &&
+    content['adjustments'] === o['adjustments'];
+  checks.push({
+    name: 'record',
+    ok: same,
+    detail: same
+      ? 'the opening says what was sealed'
+      : 'the opening no longer says what was sealed (its cut-off, workbook or counts)',
+  });
+  const signature = typeof o['signature'] === 'string' ? o['signature'] : '';
+  if (signature === '')
+    checks.push({
+      name: 'signature',
+      ok: true,
+      detail:
+        'not signed: the installation had no signing key (KOSH_SIGNING_KEY) when it was loaded',
+    });
+  else if (options.signingKey === undefined || options.signingKey === '')
+    checks.push({
+      name: 'signature',
+      ok: false,
+      detail:
+        'signed, but this installation has no signing key (KOSH_SIGNING_KEY) to verify it with',
+    });
+  else {
+    const expected = Buffer.from(signatureOf(sealed, options.signingKey) ?? '', 'hex');
+    const given = Buffer.from(signature, 'hex');
+    const valid = expected.length === given.length && timingSafeEqual(expected, given);
+    checks.push({
+      name: 'signature',
+      ok: valid,
+      detail: valid
+        ? 'signed with this installation’s key'
+        : 'not signed with this installation’s key',
+    });
+  }
+  if (options.workbook !== undefined) {
+    const hash = createHash('sha256').update(options.workbook).digest('hex');
+    checks.push({
+      name: 'workbook',
+      ok: hash === o['workbookHash'],
+      detail:
+        hash === o['workbookHash']
+          ? 'this is the workbook that was loaded'
+          : 'this is not the workbook that was loaded',
+    });
+  }
+  return {
+    cutoff: String(o['cutoff']),
+    status: String(o['status']),
+    checks,
+    ok: checks.every((c) => c.ok),
+  };
 }

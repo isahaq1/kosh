@@ -78,6 +78,7 @@ Commands (run in the installation's folder; they read .env and src/modules.ts):
                          stock by location and lot, control totals (shutro-erp opening --help)
   opening check <file>   Check a filled workbook: every error on its row, and the proof; nothing is kept
   opening load <file>    Load it when every check is equal: the opening entry, open documents, stock adjustments
+  opening verify [file]  Verify the opening's certificate: its seal, its signature and, given it, the workbook
   doctor                 Check the installation and say what to fix: database, migrations, apps, administrators,
                          jobs and webhooks, the clock, Valkey, mail, storage, HTTPS, backups, telemetry (--json)
   check                  Check your own modules (src/modules/*) against the module standard the shipped apps meet

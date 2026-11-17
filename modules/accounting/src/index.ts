@@ -50,11 +50,13 @@ export {
   type OpeningReport,
   OpeningUndoError,
   type OpeningUndone,
+  type OpeningVerification,
   openingReportText,
   openingTemplate,
   readOpeningWorkbook,
   type UndoTools,
   undoOpening,
+  verifyOpening,
 } from './opening.js';
 
 import { accountingDemo } from './demo.js';
@@ -93,6 +95,7 @@ import {
   readOpeningWorkbook,
   type UndoTools,
   undoOpening,
+  verifyOpening,
 } from './opening.js';
 import {
   openLines,
@@ -323,6 +326,18 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
   // Exceptions to the module standard (RFC 0023), each with its reason.
   standard: {
     waive: [
+      {
+        rule: 'I1',
+        model: 'account.opening',
+        reason:
+          'Made by loading an opening workbook (Start from your figures), by the system only; never imported.',
+      },
+      {
+        rule: 'M3',
+        model: 'account.opening',
+        reason:
+          'A record of what was loaded and proved: kept as loaded or undone, never archived out of sight.',
+      },
       {
         rule: 'I1',
         model: 'account.bank.statement',
@@ -1285,6 +1300,64 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       },
     },
     {
+      key: 'opening_certificate',
+      name: 'Opening certificate',
+      model: 'account.opening',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Opening certificate', level: 1 },
+          {
+            kind: 'text',
+            id: 'what',
+            text: 'The figures this company started from in Shutro ERP at {{cutoff}}, loaded from one workbook and proved against the books before they were kept.',
+          },
+          {
+            kind: 'fields',
+            id: 'opening',
+            items: [
+              { label: 'Cut-off date', bind: 'cutoff' },
+              { label: 'Status', bind: 'status' },
+              { label: 'Loaded by', bind: 'user.name' },
+              { label: 'Loaded at', bind: 'loadedAt' },
+              { label: 'Opening entry', bind: 'entry.name' },
+              { label: 'Lines of the entry', bind: 'entryLines' },
+              { label: 'Open documents', bind: 'documents' },
+              { label: 'Stock adjustments', bind: 'adjustments' },
+            ],
+          },
+          { kind: 'heading', id: 'proof', text: 'Proof', level: 2 },
+          {
+            kind: 'table',
+            id: 'checks',
+            bind: 'lines',
+            columns: [
+              { label: 'Check', bind: 'name' },
+              { label: 'Result', bind: 'result' },
+              { label: 'What was found', bind: 'summary' },
+            ],
+          },
+          { kind: 'heading', id: 'seal_title', text: 'Seal', level: 2 },
+          {
+            kind: 'fields',
+            id: 'seal',
+            items: [
+              { label: 'Workbook (SHA-256)', bind: 'workbookHash' },
+              { label: 'Seal (SHA-256)', bind: 'seal' },
+              { label: 'Signature', bind: 'signature' },
+            ],
+          },
+          {
+            kind: 'text',
+            id: 'verify',
+            text: 'Verify it with: shutro-erp opening verify [the workbook]. The seal covers the cut-off, the workbook, what was made and every check; the signature is this installation’s.',
+          },
+        ],
+      },
+    },
+    {
       key: 'fiscal_year',
       name: 'Fiscal year',
       model: 'account.fiscal.year',
@@ -1824,8 +1897,14 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
           description:
             'Loaded from a workbook in Accounting › Configuration › Start from your figures, where it can be undone until the first posting after it.',
         }),
-        k.group('made', ['entry', 'entryLines', 'documents', 'adjustments', 'workbookHash'], {
+        k.group('made', ['entry', 'entryLines', 'documents', 'adjustments'], {
           label: 'What it made',
+        }),
+        k.group('sealing', ['workbookHash', 'seal', 'signature'], {
+          label: 'Seal',
+          description:
+            'Print the opening certificate from the Print menu; verify it with shutro-erp opening verify.',
+          columns: 1,
         }),
         k.group('undone', ['undoneBy', 'undoneAt', 'undoReason'], { label: 'Undo' }),
       ],
@@ -2530,6 +2609,11 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       if (p.status >= 500) return error instanceof Error ? error.message : String(error);
       return p.hint === undefined ? p.detail : `${p.detail} ${p.hint}`;
     };
+    // The installation's signing key, read when it is needed (never at start: tests and the demo have none).
+    const signing = (): { signingKey?: string } => {
+      const key = process.env['KOSH_SIGNING_KEY'];
+      return key === undefined || key === '' ? {} : { signingKey: key };
+    };
     const undoTools: UndoTools = {
       reverse: async (env, move, date) =>
         (await reverseMove(env as unknown as Env, move, { date, post: true })).id,
@@ -2556,6 +2640,8 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
             documents: o.documents ?? 0,
             adjustments: o.adjustments ?? 0,
             workbookHash: o.workbookHash,
+            seal: o.seal,
+            signed: o.signature !== null && o.signature !== '',
             checks: o.checks ?? [],
             undoneBy: o.undoneBy?.name ?? null,
             undoneAt: o.undoneAt,
@@ -2583,9 +2669,22 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
         async (request) => {
           const data = workbookOf(request.body);
           const who = await request.env(async (raw) => administrator(raw as Env));
-          return loadOpening(context.shutro, data, { ...who, commit }, answer);
+          return loadOpening(context.shutro, data, { ...who, commit, ...signing() }, answer);
         },
       );
+    context.app.get('/api/v1/accounting/opening/verify', async (request) => {
+      const id = (request.query as { id?: unknown }).id;
+      return request.env(async (raw) => {
+        administrator(raw as Env);
+        const result = await verifyOpening(raw as never, {
+          ...(id === undefined ? {} : { id: positiveId(id, 'id') }),
+          ...signing(),
+        });
+        if (result === null)
+          throw new HttpProblem(404, 'no-opening', 'No opening', 'No opening was loaded.');
+        return result;
+      });
+    });
     context.app.post('/api/v1/accounting/opening/undo', async (request) => {
       const reason = String((request.body as { reason?: unknown } | null)?.reason ?? '').trim();
       if (reason === '')

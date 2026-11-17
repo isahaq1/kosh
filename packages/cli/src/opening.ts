@@ -13,11 +13,12 @@ import {
   openingReportText,
   openingTemplate,
   readOpeningWorkbook,
+  verifyOpening,
 } from '@kosh/accounting';
 import { problemOf } from '@kosh/server';
 import { openProject } from './project.js';
 
-const USAGE = `Usage: shutro-erp opening <template | check <file> | load <file>> [--company <id>]
+const USAGE = `Usage: shutro-erp opening <template | check <file> | load <file> | verify [file]> [--company <id>]
 
   Start a company from its own figures, whatever it used before:
 
@@ -28,6 +29,8 @@ const USAGE = `Usage: shutro-erp opening <template | check <file> | load <file>>
                            trial balance account by account, the control totals, the stock's quantities and value
   load <file>              the same, kept when every check is equal: one posted opening entry, a posted document
                            for what is left of each open one, one validated inventory adjustment per location
+  verify [file]            verify the latest opening's certificate: its seal, that the record still says what was
+                           sealed, its signature (KOSH_SIGNING_KEY) and, given the workbook, that it is the one loaded
 
   --company <id>           the company (default: the first)
 `;
@@ -57,8 +60,8 @@ export async function runOpening(
   const [command, file] = positionals;
   if (
     values.help === true ||
-    (command !== 'template' && command !== 'check' && command !== 'load') ||
-    (command !== 'template' && file === undefined)
+    (command !== 'template' && command !== 'check' && command !== 'load' && command !== 'verify') ||
+    ((command === 'check' || command === 'load') && file === undefined)
   ) {
     write(USAGE);
     return values.help === true ? 0 : 2;
@@ -86,11 +89,26 @@ export async function runOpening(
       write(`Wrote ${out}: fill it, then run shutro-erp opening check <file>.\n`);
       return 0;
     }
+    const key = process.env['KOSH_SIGNING_KEY'];
+    const signing = key === undefined || key === '' ? {} : { signingKey: key };
+    if (command === 'verify') {
+      const workbook = file === undefined ? undefined : await readFile(resolve(cwd, file));
+      const result = await server.shutro.bootstrap({ reason: 'opening verified', company }, (env) =>
+        verifyOpening(env, { ...signing, ...(workbook === undefined ? {} : { workbook }) }),
+      );
+      if (result === null) {
+        write('No opening was loaded.\n');
+        return 1;
+      }
+      write(`Opening balances at ${result.cutoff} (${result.status}):\n`);
+      for (const c of result.checks) write(`${c.ok ? '✔' : '✖'} ${c.name}: ${c.detail}\n`);
+      return result.ok ? 0 : 1;
+    }
     const data = readOpeningWorkbook(await readFile(resolve(cwd, file as string)));
     const report = await loadOpening(
       server.shutro,
       data,
-      { company, commit: command === 'load' },
+      { company, commit: command === 'load', ...signing },
       errorText,
     );
     write(openingReportText(report));

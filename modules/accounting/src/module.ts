@@ -320,6 +320,14 @@ export const AccountOpening = defineModel('account.opening', {
     workbookHash: f.char({ label: 'Workbook (SHA-256)' }),
     /** The checks it passed, as the report gave them. */
     checks: f.json({ label: 'Proof' }),
+    /** The same, as lines: what the certificate prints. */
+    lines: f.one2many('account.opening.check', 'opening', { label: 'Checks' }),
+    /** What the seal covers, exactly as it was sealed: the cut-off, the workbook's hash, the counts and the checks. */
+    sealed: f.text({ label: 'Sealed content' }),
+    /** SHA-256 of the sealed content. */
+    seal: f.char({ label: 'Seal (SHA-256)' }),
+    /** HMAC-SHA-256 of the sealed content with the installation's signing key; empty without a key. */
+    signature: f.char({ label: 'Signature' }),
     /** What it made: the entries and transfers an undo reverses. */
     made: f.json({ label: 'Made' }),
     /** The last entry of the company when it was loaded: a posting after it ends the undo. */
@@ -334,6 +342,20 @@ export const AccountOpening = defineModel('account.opening', {
       where: orm.sql`status = 'loaded'`,
       message: 'An opening at this cut-off is already loaded.',
     },
+  },
+});
+
+/** A check of an opening's proof, as the certificate prints it. */
+export const AccountOpeningCheck = defineModel('account.opening.check', {
+  label: 'Check of an opening',
+  order: ['sequence asc', 'id asc'],
+  access: { 'account.manager': READ },
+  fields: {
+    opening: f.many2one('account.opening', { required: true, ondelete: 'cascade' }),
+    sequence: f.integer({ required: true, default: 10 }),
+    name: f.char({ required: true, label: 'Check' }),
+    result: f.char({ required: true, label: 'Result' }),
+    summary: f.char({ label: 'What was found' }),
   },
 });
 
@@ -1798,6 +1820,7 @@ export const accountingShutro = defineModule({
     AccountJournal,
     AccountFiscalYear,
     AccountOpening,
+    AccountOpeningCheck,
     AccountPaymentTerm,
     AccountPaymentTermLine,
     AccountMove,

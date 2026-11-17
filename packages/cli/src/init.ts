@@ -143,6 +143,8 @@ interface Answers {
   readonly vapid: { readonly publicKey: string; readonly privateKey: string };
   /** The reply-address secret and the inbound webhook's secret (RFC 0006 part 7). */
   readonly inboundSecret: string;
+  /** Signs what the installation certifies (the opening certificate). */
+  readonly signingKey: string;
   readonly inboundWebhookSecret: string;
 }
 
@@ -639,6 +641,7 @@ async function ask(
     dockerDb,
     vapid: (await import('@kosh/notify')).generateVapidKeys(),
     inboundSecret: randomBytes(24).toString('base64url'),
+    signingKey: randomBytes(32).toString('base64url'),
     inboundWebhookSecret: randomBytes(24).toString('base64url'),
   };
 }
@@ -768,6 +771,9 @@ function envFile(a: Answers): string {
     '# MAIL_INBOUND_ALIAS=reply',
     `MAIL_INBOUND_WEBHOOK_SECRET=${a.inboundWebhookSecret}`,
     '# Without a webhook provider, a mailbox read every 30 s: IMAP_URL=imaps://user:password@host:993/INBOX',
+    '',
+    '# Signs what this installation certifies (the opening certificate). Keep it: without it, they cannot be verified.',
+    `KOSH_SIGNING_KEY=${a.signingKey}`,
     '',
     '# Shutro ERP Studio (RFC 0012): propose (default: changes become patches) or write (development, one server: Studio',
     '# writes src/modules/<name>/ and applies at once). SHUTRO_ERP_STUDIO_DIR: the project folder (default: the working one).',

@@ -18,6 +18,7 @@ import {
   openingReportText,
   openingTemplate,
   readOpeningWorkbook,
+  verifyOpening,
 } from '@kosh/accounting';
 import { readXlsx } from '@kosh/import';
 import { type Cell, workbook } from '@kosh/reporting';
@@ -42,6 +43,7 @@ import { afterAll, beforeAll, expect, test } from 'vitest';
 const catalogue = [base, settings, accounting, stock, stockAccount];
 const CUTOFF = '2026-06-30';
 const PASSWORD = 'correct horse battery';
+const SIGNING_KEY = 'a-signing-key-of-this-test';
 
 let container: TestDatabase;
 let driver: Driver;
@@ -62,6 +64,8 @@ const system = <T>(fn: (env: Env) => Promise<T>) =>
 
 beforeAll(async () => {
   process.env['KOSH_SCHEDULES'] = 'off';
+  // The installation's signing key: what the API loads is signed with it.
+  process.env['KOSH_SIGNING_KEY'] = SIGNING_KEY;
   container = await testDatabase();
   driver = pg.createDriver({
     url: container.getConnectionUri(),
@@ -500,4 +504,93 @@ test('the first posting after the opening ends its undo', async () => {
   expect(refused.status).toBe(409);
   expect(refused.json.type).toContain('posted-after');
   expect(refused.json.detail).toContain('1 entry was posted after the opening');
+});
+
+test('the opening is sealed and signed; the certificate verifies, and says when anything was changed', async () => {
+  // The opening loaded through the API (after the undo) carries the installation's signature.
+  const state = await call('GET', '/api/v1/accounting/opening', 'admin');
+  const loaded = state.json.openings.find((o: { status: string }) => o.status === 'loaded');
+  expect(loaded.seal).toMatch(/^[0-9a-f]{64}$/);
+  expect(loaded.signed).toBe(true);
+
+  const verified = await call('GET', '/api/v1/accounting/opening/verify', 'admin');
+  expect(verified.status).toBe(200);
+  expect(verified.json.ok, JSON.stringify(verified.json)).toBe(true);
+  expect(verified.json.checks.map((c: { name: string }) => c.name)).toEqual([
+    'seal',
+    'record',
+    'signature',
+  ]);
+  expect((await call('GET', '/api/v1/accounting/opening/verify', 'maria')).status).toBe(403);
+
+  const verify = (options: { signingKey?: string; workbook?: Uint8Array } = {}) =>
+    system((env) => verifyOpening(env, { id: loaded.id, signingKey: SIGNING_KEY, ...options }));
+  const detail = (r: Awaited<ReturnType<typeof verify>>, name: string) =>
+    r?.checks.find((c) => c.name === name);
+  // The workbook that was loaded is recognised; another one is not.
+  expect(detail(await verify({ workbook: filled() }), 'workbook')?.ok).toBe(true);
+  const other = await verify({ workbook: filled({ receivable: '32000' }) });
+  expect(detail(other, 'workbook')).toMatchObject({
+    ok: false,
+    detail: 'this is not the workbook that was loaded',
+  });
+  // Another installation's key, or none, does not verify the signature.
+  expect(detail(await verify({ signingKey: 'another-key' }), 'signature')?.ok).toBe(false);
+  expect(detail(await verify({ signingKey: '' }), 'signature')?.detail).toContain('no signing key');
+
+  // A changed record no longer says what was sealed; a changed seal content loses its seal.
+  await system(async (env) => {
+    await env.sql`UPDATE account_opening SET documents = 99 WHERE id = ${loaded.id}`;
+  });
+  const changed = await verify();
+  expect(changed?.ok).toBe(false);
+  expect(detail(changed, 'record')?.ok).toBe(false);
+  expect(detail(changed, 'seal')?.ok).toBe(true);
+  await system(async (env) => {
+    await env.sql`UPDATE account_opening SET documents = 4,
+      sealed = replace(sealed, '"documents":4', '"documents":5') WHERE id = ${loaded.id}`;
+  });
+  const forged = await verify();
+  expect(detail(forged, 'seal')?.ok).toBe(false);
+  expect(detail(forged, 'signature')?.ok).toBe(false);
+  await system(async (env) => {
+    await env.sql`UPDATE account_opening
+      SET sealed = replace(sealed, '"documents":5', '"documents":4') WHERE id = ${loaded.id}`;
+  });
+  expect((await verify())?.ok).toBe(true);
+
+  // What was loaded from the command line, without a key, is sealed and says it is not signed.
+  const first = state.json.openings.find((o: { status: string }) => o.status === 'undone');
+  expect(first.signed).toBe(false);
+  const unsigned = await system((env) =>
+    verifyOpening(env, { id: first.id, signingKey: SIGNING_KEY }),
+  );
+  expect(unsigned?.ok).toBe(true);
+  expect(detail(unsigned, 'signature')?.detail).toContain('not signed');
+});
+
+test('the certificate prints from the opening: the figures, every check, the seal and the signature', async () => {
+  const state = await call('GET', '/api/v1/accounting/opening', 'admin');
+  const loaded = state.json.openings.find((o: { status: string }) => o.status === 'loaded');
+  const templates = await call('GET', '/api/v1/models/account.opening/documents', 'admin');
+  const template = templates.json.templates.find(
+    (t: { key: string | null }) => t.key === 'accounting.opening_certificate',
+  );
+  expect(template, JSON.stringify(templates.json)).toBeDefined();
+  const token = tokens.get('admin');
+  const printed = await host.server.app.inject({
+    method: 'POST',
+    url: `/api/v1/models/account.opening/documents/${template.id}?format=html`,
+    headers: { authorization: `Bearer ${token}` },
+    payload: { ids: [loaded.id] },
+  });
+  expect(printed.statusCode, printed.body.slice(0, 300)).toBe(200);
+  const html = printed.body;
+  expect(html).toContain('Opening certificate');
+  expect(html).toContain('Padma Traders');
+  for (const check of ['trial balance', 'total receivable', 'stock on hand', 'stock value'])
+    expect(html, check).toContain(check);
+  expect(html).toContain('Equal');
+  expect(html).toContain(loaded.seal);
+  expect(html).toContain(loaded.workbookHash);
 });

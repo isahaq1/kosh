@@ -43,6 +43,8 @@ interface Opening {
   readonly documents: number;
   readonly adjustments: number;
   readonly workbookHash: string | null;
+  readonly seal: string | null;
+  readonly signed: boolean;
   readonly checks: readonly Check[];
   readonly undoneBy: string | null;
   readonly undoneAt: string | null;
@@ -135,16 +137,32 @@ export function OpeningPage({ api }: PageProps): ReactElement {
       description: error instanceof Error ? error.message : String(error),
       tone: 'danger',
     });
+  const save = ({ blob, filename }: { readonly blob: Blob; readonly filename: string }) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
   const template = useMutation({
     mutationFn: () => api.download('/api/v1/accounting/opening/template', undefined, 'GET'),
-    onSuccess: ({ blob, filename }) => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
+    onSuccess: save,
+    onError: failed,
+  });
+  // The certificate is the opening printed with its template (the server renders the PDF).
+  const certificate = useMutation({
+    mutationFn: async (opening: number) => {
+      const { templates } = await api.call<{
+        templates: { id: number; key: string | null }[];
+      }>('GET', '/api/v1/models/account.opening/documents');
+      const template = templates.find((x) => x.key === 'accounting.opening_certificate');
+      if (template === undefined) throw new Error(t('opening.noCertificate'));
+      return api.download(`/api/v1/models/account.opening/documents/${template.id}`, {
+        ids: [opening],
+      });
     },
+    onSuccess: save,
     onError: failed,
   });
   const run = useMutation({
@@ -241,11 +259,34 @@ export function OpeningPage({ api }: PageProps): ReactElement {
           </p>
           <Checks checks={loaded.checks} />
           {loaded.workbookHash !== null ? (
-            <p className="break-all text-xs text-muted-foreground">
-              {t('opening.hash')}: <code>{loaded.workbookHash}</code>
-            </p>
+            <dl className="grid gap-1 text-xs text-muted-foreground">
+              <div className="break-all">
+                <dt className="inline">{t('opening.hash')}: </dt>
+                <dd className="inline">
+                  <code>{loaded.workbookHash}</code>
+                </dd>
+              </div>
+              {loaded.seal !== null ? (
+                <div className="break-all">
+                  <dt className="inline">{t('opening.seal')}: </dt>
+                  <dd className="inline">
+                    <code>{loaded.seal}</code>{' '}
+                    <Badge tone={loaded.signed ? 'success' : 'neutral'}>
+                      {loaded.signed ? t('opening.signed') : t('opening.unsigned')}
+                    </Badge>
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
           ) : null}
           <div className="flex flex-wrap items-center gap-3">
+            <Button
+              variant="primary"
+              busy={certificate.isPending}
+              onClick={() => certificate.mutate(loaded.id)}
+            >
+              {t('opening.certificate')}
+            </Button>
             <Button
               variant="secondary"
               disabled={state.data?.canUndo !== true}

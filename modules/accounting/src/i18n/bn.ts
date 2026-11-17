@@ -93,6 +93,9 @@ export const bn: Readonly<Record<string, string>> = {
   Cash: 'নগদ',
   'Certificate of withholding at source': 'উৎসে কর্তনের সনদ',
   'Chart of accounts': 'হিসাবের তালিকা',
+  Check: 'যাচাই',
+  'Check of an opening': 'প্রারম্ভিক জেরের যাচাই',
+  Checks: 'যাচাইসমূহ',
   'Chosen for partners who meet its conditions, unless a document or the partner names another.':
     'যেসব পার্টনার এর শর্ত পূরণ করে তাদের জন্য বেছে নেওয়া হয়, যদি না নথি বা পার্টনার অন্যটি উল্লেখ করে।',
   Close: 'বন্ধ করুন',
@@ -278,8 +281,10 @@ export const bn: Readonly<Record<string, string>> = {
     'নথির সঙ্গে মেলানো (একটি পেমেন্ট) বা কোনো হিসাবে খরচ লেখা না হওয়া পর্যন্ত খোলা।',
   'Open while lines wait to be matched; done once every line is matched and the closing balance agrees.':
     'লাইন মেলানোর অপেক্ষায় থাকলে খোলা; প্রতিটি লাইন মিললে ও শেষের ব্যালান্স মিলে গেলে সম্পন্ন।',
+  Opening: 'প্রারম্ভিক জের',
   'Opening balance': 'শুরুর ব্যালান্স',
   'Opening balances': 'প্রারম্ভিক জের',
+  'Opening certificate': 'প্রারম্ভিক জেরের সনদ',
   'Opening entry': 'প্রারম্ভিক এন্ট্রি',
   'Other income': 'অন্যান্য আয়',
   Overdue: 'বকেয়া',
@@ -319,6 +324,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Posted at': 'পোস্টের সময়',
   'Posted Tx': 'পোস্টকৃত লেনদেন',
   Prepayments: 'অগ্রিম পরিশোধ',
+  'Print the opening certificate from the Print menu; verify it with shutro-erp opening verify.':
+    'প্রিন্ট মেনু থেকে প্রারম্ভিক জেরের সনদ প্রিন্ট করুন; shutro-erp opening verify দিয়ে এটি যাচাই করুন।',
   Product: 'পণ্য',
   'Profit and loss': 'লাভ-ক্ষতি',
   Promise: 'প্রতিশ্রুতি',
@@ -349,6 +356,7 @@ export const bn: Readonly<Record<string, string>> = {
   Reporting: 'প্রতিবেদন',
   Residual: 'অবশিষ্ট',
   'Residual in currency': 'মুদ্রায় অবশিষ্ট',
+  Result: 'ফলাফল',
   'Retained earnings account': 'সংরক্ষিত আয়ের হিসাব',
   'Reversal of': 'যার বিপরীত এন্ট্রি',
   'Reverse charge': 'রিভার্স চার্জ',
@@ -361,6 +369,9 @@ export const bn: Readonly<Record<string, string>> = {
   'Sales orders for the customer cannot be confirmed while they are at this level.':
     'গ্রাহক এই স্তরে থাকা অবস্থায় তার বিক্রয় অর্ডার নিশ্চিত করা যায় না।',
   Scope: 'প্রযোজ্যতা',
+  Seal: 'সিল',
+  'Seal (SHA-256)': 'সিল (SHA-256)',
+  'Sealed content': 'সিল করা বিষয়বস্তু',
   Send: 'প্রেরণ',
   'Send back': 'ফেরত পাঠান',
   'Send invoices by email': 'ইনভয়েস ইমেইলে পাঠান',
@@ -371,6 +382,7 @@ export const bn: Readonly<Record<string, string>> = {
   Settings: 'সেটিংস',
   Share: 'অংশ',
   'Shown on documents': 'নথিতে দেখানো হয়',
+  Signature: 'স্বাক্ষর',
   SMS: 'SMS',
   Source: 'উৎস',
   'Source document': 'উৎস নথি',
@@ -407,6 +419,8 @@ export const bn: Readonly<Record<string, string>> = {
   'The bank and cash journals it watches; empty: all.': 'যে ব্যাংক ও নগদ জার্নাল এটি দেখে; খালি: সব।',
   'The department, project or branch the amount belongs to; reports and budgets read it.':
     'যে বিভাগ, প্রকল্প বা শাখার অঙ্ক; প্রতিবেদন ও বাজেট এটি ব্যবহার করে।',
+  'The figures this company started from in Shutro ERP at {{cutoff}}, loaded from one workbook and proved against the books before they were kept.':
+    '{{cutoff}} তারিখে এই প্রতিষ্ঠান Shutro ERP-তে যে অঙ্কগুলো নিয়ে শুরু করেছে; একটি ওয়ার্কবুক থেকে লোড করা এবং রাখার আগে হিসাবের খাতার সঙ্গে প্রমাণিত।',
   'The lines of a posted entry cannot be changed. Reverse the entry instead.':
     'পোস্টকৃত এন্ট্রির লাইন বদলানো যায় না। এর পরিবর্তে এন্ট্রিটি উল্টে দিন।',
   'The month it starts: 7 for July–June.': 'শুরুর মাস: জুলাই–জুন হলে 7।',
@@ -449,6 +463,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Vendor bills': 'সরবরাহকারীর বিল',
   'Vendor credit note': 'সরবরাহকারীর ক্রেডিট নোট',
   'Vendor debit note': 'সরবরাহকারীর ডেবিট নোট',
+  'Verify it with: shutro-erp opening verify [the workbook]. The seal covers the cut-off, the workbook, what was made and every check; the signature is this installation’s.':
+    'যাচাই করুন: shutro-erp opening verify [ওয়ার্কবুক]। সিলে কাট-অফ তারিখ, ওয়ার্কবুক, যা তৈরি হয়েছে এবং প্রতিটি যাচাই অন্তর্ভুক্ত; স্বাক্ষরটি এই ইনস্টলেশনের।',
   'Waiting approval': 'অনুমোদনের অপেক্ষায়',
   'Waiting for approvals.': 'অনুমোদনের অপেক্ষায়।',
   'We withhold when paying vendors': 'সরবরাহকারীকে পরিশোধের সময় আমরা উৎসে কর্তন করি',
@@ -464,6 +480,7 @@ export const bn: Readonly<Record<string, string>> = {
     'জার্নালে যা লিপিবদ্ধ হয়: বিক্রয়, ক্রয়, নগদ, ব্যাংক বা বিবিধ এন্ট্রি।',
   'What they owe us posts here; empty: the company’s.':
     'তারা আমাদের যা দেয় তা এখানে পোস্ট হয়; খালি: প্রতিষ্ঠানের।',
+  'What was found': 'যা পাওয়া গেছে',
   'What we owe them posts here; empty: the company’s.':
     'আমরা তাদের যা দিই তা এখানে পোস্ট হয়; খালি: প্রতিষ্ঠানের।',
   WhatsApp: 'WhatsApp',
