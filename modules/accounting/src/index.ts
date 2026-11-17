@@ -39,6 +39,20 @@ import {
   reopenFiscalYear,
   updateSettings,
 } from './closing.js';
+
+export {
+  loadOpening,
+  OPENING_SHEETS,
+  type OpeningCheck,
+  type OpeningData,
+  type OpeningError,
+  type OpeningOptions,
+  type OpeningReport,
+  openingReportText,
+  openingTemplate,
+  readOpeningWorkbook,
+} from './opening.js';
+
 import { accountingDemo } from './demo.js';
 import { AccountFiscalPosition, previewMove } from './fiscal.js';
 import {

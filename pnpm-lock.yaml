@@ -689,6 +689,9 @@ importers:
       '@kosh/contacts':
         specifier: workspace:*
         version: link:../contacts
+      '@kosh/import':
+        specifier: workspace:*
+        version: link:../../packages/import
       '@kosh/mail':
         specifier: workspace:*
         version: link:../../packages/mail
