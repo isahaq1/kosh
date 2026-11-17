@@ -1,9 +1,22 @@
 # Starting from your own figures
 
-`shutro-erp opening` starts a company in Shutro ERP from the figures it has today — from another system, a
-spreadsheet or an accountant's ledger — and proves that what was loaded equals what was entered (RFC 0036 §2.1).
+**Accounting › Configuration › Start from your figures** (and `shutro-erp opening`) starts a company in Shutro ERP
+from the figures it has today — from another system, a spreadsheet or an accountant's ledger — and proves that what
+was loaded equals what was entered (RFC 0036 §2.1). It is an Administrator's: the server refuses anyone else.
 
-## Run it
+## On screen
+
+1. **Download the workbook**: your accounts are already listed.
+2. Choose the filled workbook and **Check**: everything is done and rolled back. Every error is a row of a table
+   with its sheet and row; when there is none, each check of the proof shows *Equal* or *Differs*, and what differs
+   with the workbook's figure beside the books'.
+3. **Load** is offered once a check passes, and asks before it posts.
+4. The loaded opening stays on the page with who loaded it, what it made, its proof and the workbook's SHA-256 —
+   and **Undo the opening**.
+
+Every load is also a record (`account.opening`) accounting managers can read.
+
+## From the command line
 
 1. Set the company up first: its chart of accounts, its contacts and products (the import screen on each list,
    [import.md](import.md)), its warehouses and locations.
@@ -70,6 +83,31 @@ accountant to post.
 
 A second load at the same cut-off finds the opening and changes nothing; the checks run again.
 
+## Undo
+
+Until the **first posting after the opening**, an Administrator can undo it with a reason (the screen's *Undo the
+opening*, or `POST /api/v1/accounting/opening/undo`). Nothing is deleted — posted entries never are:
+
+- every entry and document of the opening is **reversed at the cut-off** and reconciled with its reversal, so
+  nothing stays open;
+- each stock adjustment is taken back out as its **return**, lots included, at the value it came in at.
+
+Every account, every partner's balance, the stock and its value are back where they were; the opening is kept as
+*Undone* with who, when and why, and a corrected workbook can be loaded. Once anything is posted after the opening,
+or its stock has moved, the undo says so and is no longer offered: correct it with entries instead.
+
+## The API
+
+Administrators only; the workbook travels base64-encoded as `content`.
+
+| Route | What it does |
+| --- | --- |
+| `GET /api/v1/accounting/opening` | the openings loaded and undone, whether the loaded one can still be undone |
+| `GET /api/v1/accounting/opening/template` | the workbook |
+| `POST /api/v1/accounting/opening/check` | the report of a check-only run |
+| `POST /api/v1/accounting/opening/load` | the same, kept when every check is equal |
+| `POST /api/v1/accounting/opening/undo` | `{ reason }`: undoes the loaded opening, or 409 with why not |
+
 ## Example
 
 ```
@@ -97,5 +135,5 @@ Opening balances: refused, nothing was kept.
 
 ## Not yet
 
-The same flow on screen (Settings › Start from your figures), Undo the opening until the first posting, and the
-signed opening certificate come next (RFC 0036 step 2).
+The signed opening certificate (a PDF of the figures, the checks, who approved and the workbook's hash, stored in
+Documents) comes next (RFC 0036 step 2, part 2).

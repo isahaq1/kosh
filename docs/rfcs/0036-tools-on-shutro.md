@@ -143,3 +143,15 @@ Answered 2026-11-17 with the proposals: XLSX only; Administrators merge; generat
   each account's balance less what Kosh already posted by the cut-off, then the documents. A load is kept only when
   every check is equal; *stock in the books* names a difference without refusing. One opening per cut-off (external
   id `opening.entry_<date>`). Docs: docs/opening-balances.md. Left for step 2: the screen, Undo, the certificate.
+- **Step 2, part 1 (2026-11-17).** **The kit on screen, and Undo.** Each load is an `account.opening` (what it
+  made, the proof it passed, the workbook's SHA-256, who and when; read by accounting managers, written by the
+  system only); one loaded opening per cut-off replaces the external ids of step 1. **Undo** until the first
+  posting after it (`lastMove` kept at the load): each entry and document reversed at the cut-off with
+  `reverseMove` and reconciled with its reversal per account and partner, each stock adjustment returned line by
+  line (`returnOf`, so it leaves at the value it came in at), lots on their lines; refused with the reason once
+  something was posted or the stock moved; a corrected workbook then loads again. The API (`/accounting/opening`,
+  `…/template`, `…/check`, `…/load`, `…/undo`) is for Administrators — `env.administrator`, which needs their second
+  factor — and runs the load and the undo as the system with the user kept. The page is **Accounting › Configuration
+  › Start from your figures** rather than a Settings section: Accounting does not depend on the Settings app, and
+  the menu is shown to Administrators only (the server does not serve the action to anyone else). Left: the signed
+  certificate (part 2).
