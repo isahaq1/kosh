@@ -165,3 +165,17 @@ Answered 2026-11-17 with the proposals: XLSX only; Administrators merge; generat
   hash. The certificate is produced on demand from the sealed record rather than stored as a file in Documents
   (Accounting does not depend on Documents, and the record is what is sealed). The opening, now referred to by its
   lines, is waived from M3 and I1 with reasons. Step 2 complete; next step 3 (generators).
+- **Step 3 (2026-11-17).** **Generators, part 1: `make model` and `make field`.** A generated model is a **part**:
+  `src/modules/<module>/parts/<name>.ts` exports its model, action, menu, views, search and import template;
+  `parts.ts` (generated, rewritten by each `make model`) merges the parts; the manifest takes them through
+  `withParts(parts, {…})` of the modules SDK and the Shutro module through `models: [..., ...parts.models]`. So no
+  generator rewrites hand-written code: `index.ts` is touched once, to merge the parts, when it has the scaffold's
+  shape — otherwise the two lines to add are said. `make field` inserts at `// make:` markers in the part and says
+  what to add by hand where a marker was removed. Field specs `name:type[!]` (char, text, integer, decimal, boolean,
+  date, datetime, selection:a|b, m2o:model), refused with what is wrong; a selection gets a help (M5). `module
+  create`'s own first model now has a label and a search, so a new module passes `shutro-erp check` as made. The
+  test generates a module, two models and a field and runs the real check on them (the generated code loads through
+  Shutro's `defineModel` and Kosh's `defineModule`). Left for part 2 (step 4): documents — a state with its
+  transitions, chatter, print template and named event (`make transition`) —, `make report / action / page /
+  bridge`, a demo seeder and a generated test with its permission test, and the diff instead of a refusal when a
+  part exists.
