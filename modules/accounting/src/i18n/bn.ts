@@ -160,6 +160,7 @@ export const bn: Readonly<Record<string, string>> = {
   Entry: 'এন্ট্রি',
   'Entry, invoice or bill posted': 'এন্ট্রি, চালান বা বিল পোস্টকৃত',
   Equity: 'মালিকানা স্বত্ব',
+  'Every posted entry balances': 'প্রতিটি পোস্টকৃত এন্ট্রির ডেবিট ও ক্রেডিট সমান',
   'Exchange difference entry': 'বিনিময় পার্থক্যের এন্ট্রি',
   'Exchange gain account': 'বিনিময় লাভের হিসাব',
   'Exchange loss account': 'বিনিময় ক্ষতির হিসাব',
@@ -322,6 +323,8 @@ export const bn: Readonly<Record<string, string>> = {
   Post: 'পোস্ট করুন',
   Posted: 'পোস্টকৃত',
   'Posted at': 'পোস্টের সময়',
+  'Posted documents are numbered without gaps or duplicates':
+    'পোস্টকৃত নথির নম্বরে কোনো ফাঁক বা পুনরাবৃত্তি নেই',
   'Posted Tx': 'পোস্টকৃত লেনদেন',
   Prepayments: 'অগ্রিম পরিশোধ',
   'Print the opening certificate from the Print menu; verify it with shutro-erp opening verify.':
@@ -468,6 +471,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Waiting approval': 'অনুমোদনের অপেক্ষায়',
   'Waiting for approvals.': 'অনুমোদনের অপেক্ষায়।',
   'We withhold when paying vendors': 'সরবরাহকারীকে পরিশোধের সময় আমরা উৎসে কর্তন করি',
+  'What is left to pay on each document is what its receivable or payable lines hold':
+    'প্রতিটি নথিতে পরিশোধের বাকি অংশ তার প্রাপ্য বা প্রদেয় লাইনের বাকির সমান',
   'What is still to be paid on the posted document after the payments and credit notes matched with it.':
     'মিলকরণ করা পেমেন্ট ও ক্রেডিট নোটের পরে পোস্টকৃত নথিতে যা এখনো পরিশোধ বাকি।',
   'What is still unmatched on this receivable or payable line, in the company currency.':

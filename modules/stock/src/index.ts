@@ -5,6 +5,7 @@
  * reservations that say what they are for; units converted exactly; stock that never goes below zero. Every company
  * gets its main warehouse (`WH`, `WH/Stock`) when the app is installed or the company is created.
  */
+
 import { contacts } from '@kosh/contacts';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
@@ -14,6 +15,7 @@ import { HttpProblem, type ModuleContext } from '@kosh/server';
 import { type Decimal, type Id, orm } from '@kosh/server/orm';
 import { action, field, form, kanban, list, search, stat } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
+import { stockDataChecks } from './data-checks.js';
 import { stockDemo } from './demo.js';
 import { registerLedgerRoutes } from './ledger.js';
 import {
@@ -470,6 +472,8 @@ function registerReplenishmentRoutes(context: ModuleContext): void {
 
 export const stock: ReturnType<typeof defineModule> = defineModule({
   shutro: stockShutro,
+  // What must always hold in its data (RFC 0036 §2.3; shutro-erp check data).
+  dataChecks: stockDataChecks,
   kosh: '^0.1.0',
   hooks: {
     defaults: async (env) =>

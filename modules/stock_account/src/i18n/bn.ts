@@ -29,6 +29,8 @@ export const bn: Readonly<Record<string, string>> = {
   Description: 'বিবরণ',
   'Display Name': 'প্রদর্শিত নাম',
   Draft: 'খসড়া',
+  'Each product’s valuation adds up to its quantity on hand':
+    'প্রতিটি পণ্যের মূল্যায়নের পরিমাণ তার হাতে থাকা পরিমাণের সমান',
   Entry: 'এন্ট্রি',
   Equally: 'সমানভাবে',
   'First in, first out (FIFO)': 'আগে আসলে আগে যাবে (FIFO)',
@@ -66,6 +68,7 @@ export const bn: Readonly<Record<string, string>> = {
   'The date of its stock entry and valuation; empty, the day it is validated.':
     'এর স্টক এন্ট্রি ও মূল্যায়নের তারিখ; খালি থাকলে, যেদিন এটি যাচাই করা হয়।',
   'The done receipts whose goods carry these costs.': 'যেসব সম্পন্ন রিসিটের পণ্য এই খরচ বহন করে।',
+  'The stock accounts hold what the stock is worth': 'স্টক হিসাবগুলোতে স্টকের মূল্যের সমান অঙ্ক আছে',
   'The sum of its costs, added to the goods’ value when posted.':
     'এর খরচের যোগফল, পোস্ট হলে পণ্যের মূল্যে যোগ হয়।',
   Total: 'মোট',

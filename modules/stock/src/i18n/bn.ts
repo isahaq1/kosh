@@ -294,6 +294,8 @@ export const bn: Readonly<Record<string, string>> = {
   'The quantity on hand less what is reserved.': 'হাতে থাকা পরিমাণ থেকে সংরক্ষিত পরিমাণ বাদে।',
   'The step of the warehouse’s receipts or deliveries this location is used for.':
     'গুদামের প্রাপ্তি বা সরবরাহের যে ধাপে এই অবস্থান ব্যবহৃত হয়।',
+  'The stock on hand is what the validated transfers moved':
+    'হাতে থাকা স্টক যাচাইকৃত স্থানান্তরগুলোর মোট চলাচলের সমান',
   'This lot or serial number belongs to another product.': 'এই লট বা সিরিয়াল নম্বর অন্য একটি পণ্যের।',
   'This product already has a lot or serial number with this name.':
     'এই পণ্যের এই নামে ইতিমধ্যে একটি লট বা সিরিয়াল নম্বর আছে।',

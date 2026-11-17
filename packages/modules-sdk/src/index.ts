@@ -24,6 +24,8 @@ export {
   type AppSpec,
   type AutomationActionSpec,
   type AutomationRuleSpec,
+  type DataCheckSpec,
+  type DataFinding,
   type DemoContext,
   type DemoUser,
   type DocumentSpec,

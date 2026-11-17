@@ -76,6 +76,12 @@ export {
   timeOf,
   type UserInfo,
 } from './auth/service.js';
+export {
+  checkData,
+  type DataCheckResult,
+  type DataHealth,
+  dataHealthText,
+} from './data-checks.js';
 export { DEMO_PASSWORD, type DemoResult, installDemo } from './demo.js';
 export { applyEnvironmentNames } from './env-names.js';
 export { HttpProblem, type Problem, problemOf, ServerConfigError } from './errors.js';

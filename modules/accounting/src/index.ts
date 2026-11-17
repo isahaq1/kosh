@@ -59,6 +59,7 @@ export {
   verifyOpening,
 } from './opening.js';
 
+import { accountingDataChecks } from './data-checks.js';
 import { accountingDemo } from './demo.js';
 import { AccountFiscalPosition, previewMove } from './fiscal.js';
 import {
@@ -323,6 +324,8 @@ export async function reverseMove(
 export const accounting: ReturnType<typeof defineModule> = defineModule({
   shutro: accountingShutro,
   kosh: '^0.1.0',
+  // What must always hold in the books (RFC 0036 §2.3; shutro-erp check data).
+  dataChecks: accountingDataChecks,
   // Exceptions to the module standard (RFC 0023), each with its reason.
   standard: {
     waive: [

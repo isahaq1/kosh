@@ -6,6 +6,7 @@
  *
  * - `GET /api/v1/stockroom/valuation?date=YYYY-MM-DD`   the quantity and value of each product at the end of a date
  */
+
 import { accounting } from '@kosh/accounting';
 import { defineModule } from '@kosh/modules-sdk';
 import { product } from '@kosh/product';
@@ -14,6 +15,7 @@ import { orm } from '@kosh/server/orm';
 import { stock } from '@kosh/stock';
 import { action, field, form, list, pivot, search } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
+import { stockAccountDataChecks } from './data-checks.js';
 import { landedCostFromBill, previewLandedCost, StockLandedCost } from './landed.js';
 import { StockValuationLayer, stockAccountShutro, stockAccountsOf } from './module.js';
 
@@ -93,6 +95,8 @@ function registerValuationRoutes({ app }: ModuleContext): void {
 
 export const stockAccount: ReturnType<typeof defineModule> = defineModule({
   shutro: stockAccountShutro,
+  // What must always hold in its data (RFC 0036 §2.3; shutro-erp check data).
+  dataChecks: stockAccountDataChecks,
   kosh: '^0.1.0',
   // Exceptions to the module standard (RFC 0023), each with its reason.
   standard: {

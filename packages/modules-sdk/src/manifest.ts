@@ -446,6 +446,29 @@ export interface ModuleHooks {
 }
 
 /** The input of {@link defineModule}. */
+/** What a data check found wrong: named, explained, with the records behind it. */
+export interface DataFinding {
+  /** What it is about: a document's number, a product's name. */
+  readonly what: string;
+  /** What is wrong, with the figures. */
+  readonly detail: string;
+  readonly records?: { readonly model: string; readonly ids: readonly number[] };
+}
+
+/**
+ * A check over a module's own data (RFC 0036 §2.3): something that must always hold — the books against the
+ * documents, the stock against its movements. `run` reads the current company's data (`env`, as the system) and
+ * returns what it found wrong; it never writes.
+ */
+export interface DataCheckSpec {
+  /** Unique within the module (`entries_balanced`). */
+  readonly key: string;
+  /** What holds when nothing is found: "Every posted entry balances". */
+  readonly label: string;
+  /** Typed by the server (an `Env` of `@kosh/server/orm`), so modules declare the parameter type they use. */
+  readonly run: (env: never) => Promise<readonly DataFinding[]>;
+}
+
 export interface ModuleInput {
   /** The Shutro module: name, version and data-layer dependencies come from it. */
   readonly shutro: ShutroModuleShape;
@@ -526,6 +549,8 @@ export interface ModuleInput {
   readonly localization?: LocalizationSpec;
   /** Events the module emits that webhooks may subscribe to (RFC 0017 §5.3). */
   readonly events?: readonly EventSpec[];
+  /** What must always hold in the module's data (RFC 0036 §2.3): run by `shutro-erp check data`. */
+  readonly dataChecks?: readonly DataCheckSpec[];
   /** Endpoints the module receives calls on from outside (RFC 0017 §5.4). */
   readonly inboundWebhooks?: readonly InboundWebhookSpec[];
   /** The app's own settings, shown in Settings › App settings (RFC 0020). */

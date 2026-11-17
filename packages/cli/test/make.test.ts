@@ -291,7 +291,7 @@ test('a module, a model and a field made by the commands meet the module standar
       '/** @jsxRuntime classic */',
       '/** @jsx h */',
       'const h = (type: unknown, props: unknown, ...children: unknown[]) => ({ type, props, children });',
-      'const useTranslation = (ns: string) => ({ t: (key: string) => `${ns}:${key}` });',
+      "const useTranslation = (ns: string) => ({ t: (key: string) => ns + ':' + key });",
       'type PageProps = object;',
       'type ReactElement = unknown;',
       pageSource.replace(/^import .*;$/gm, ''),

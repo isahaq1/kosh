@@ -90,6 +90,9 @@ Commands (run in the installation's folder; they read .env and src/modules.ts):
   check                  Check your own modules (src/modules/*) against the module standard the shipped apps meet
       --all                  every rule's result, met or not, and the waivers
       --strict               Bangla labels and an overview with demo data fail too (reported otherwise)
+  check data             Check each company's data: entries balance, documents agree with their lines, numbers
+                         have no gaps, the stock is what its transfers moved and worth what the books say
+      --company <id>         one company (default: every company)   --json
   studio build [dir …]   Regenerate the Studio modules from their studio.json (default: every src/modules/*/studio.json)
   user create <login>    Create a user: --name, --email, --roles reporting.user,messaging.user, --password
   user password <login>  Set a new password

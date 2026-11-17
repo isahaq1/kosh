@@ -9,16 +9,72 @@ import { existsSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
-import { modulesOf } from './project.js';
+import { checkData, dataHealthText } from '@kosh/server';
+import { modulesOf, openProject } from './project.js';
 import { checkStandard, isManifest, RULES, standardReport, withDependencies } from './standard.js';
 
 const RELAXED = new Set(['T1', 'A1']);
+
+/**
+ * `shutro-erp check data` (RFC 0036 §2.3): what must always hold in each company's data — every posted entry
+ * balances, documents agree with their lines, numbers have no gaps, the stock is what its transfers moved and is
+ * worth what the books say. Each finding names the records behind it; nothing is changed.
+ */
+async function runCheckData(
+  argv: readonly string[],
+  write: (text: string) => void,
+  cwd: string,
+): Promise<number> {
+  const { values } = parseArgs({
+    args: [...argv],
+    options: {
+      modules: { type: 'string', default: 'src/modules.ts' },
+      company: { type: 'string' },
+      json: { type: 'boolean', default: false },
+    },
+    strict: true,
+  });
+  const server = await openProject(cwd, values.modules ?? 'src/modules.ts');
+  try {
+    const companies =
+      values.company === undefined
+        ? (
+            await server.driver.query<{ id: number; name: string }>({
+              text: 'SELECT id, name FROM res_company ORDER BY id',
+              params: [],
+            })
+          ).map((c) => ({ id: Number(c.id), name: c.name }))
+        : [{ id: Number(values.company), name: `company ${values.company}` }];
+    const results = [];
+    for (const company of companies) {
+      const health = await checkData(server.shutro, server.registry.loaded.modules, {
+        company: company.id,
+      });
+      results.push({ ...health, name: company.name });
+    }
+    const ok = results.every((r) => r.ok);
+    if (values.json === true) write(`${JSON.stringify({ ok, companies: results }, null, 2)}\n`);
+    else {
+      for (const r of results) write(`${r.name}\n${dataHealthText(r)}`);
+      const found = results.reduce((n, r) => n + r.checks.filter((c) => !c.ok).length, 0);
+      write(
+        ok
+          ? `shutro-erp check data: ${results.length} company(ies), every check holds.\n`
+          : `shutro-erp check data: ${found} check(s) found something. Nothing was changed.\n`,
+      );
+    }
+    return ok ? 0 : 1;
+  } finally {
+    await server.close();
+  }
+}
 
 export async function runCheck(
   argv: readonly string[],
   write: (text: string) => void,
   cwd: string,
 ): Promise<number> {
+  if (argv[0] === 'data') return runCheckData(argv.slice(1), write, cwd);
   const { values } = parseArgs({
     args: [...argv],
     options: {
