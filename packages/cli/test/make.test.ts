@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { runCli } from '../src/index.js';
-import { parseField, wireParts } from '../src/make.js';
+import { lineDiff, parseField, wireParts } from '../src/make.js';
 
 /** `@kosh/views` is not a dependency of the CLI here: its source, by URL. */
 const VIEWS = pathToFileURL(
@@ -132,9 +132,13 @@ test('a module, a model and a field made by the commands meet the module standar
       )
     ).code,
   ).toBe(0);
+  // A part that exists is left as it is, and what would be written is shown beside it.
+  const before = await readFile(part('book'), 'utf8');
   const again = await run('make', 'model', 'library', 'book', '--fields', 'title:char');
   expect(again.code).toBe(1);
-  expect(again.out).toContain('exists already');
+  expect(again.out).toContain('exists already and was left as it is');
+  expect(again.out).toContain('-     isbn: f.char(),');
+  expect(await readFile(part('book'), 'utf8')).toBe(before);
   const parts = await readFile(join(project, 'src', 'modules', 'library', 'parts.ts'), 'utf8');
   expect(parts).toContain("import * as book from './parts/book.ts';");
   expect(parts).toContain('models: [...book.models, ...loan.models],');
@@ -196,12 +200,63 @@ test('a module, a model and a field made by the commands meet the module standar
     (await run('make', 'transition', 'library.loan', 'Do-It', '--from', 'a', '--to', 'b')).code,
   ).toBe(2);
 
+  // An action: a step for the managers, by a permission of its own. A report: a pivot and a chart.
+  const action = await run(
+    'make',
+    'action',
+    'library.loan',
+    'settle',
+    '--from',
+    'returned',
+    '--to',
+    'settled',
+  );
+  expect(action.code, action.out).toBe(0);
+  expect(action.out).toContain('for library.manager by the permission library.loan_settle');
+  const report = await run('make', 'report', 'library.loan');
+  expect(report.code, report.out).toBe(0);
+  expect(report.out).toContain('a pivot and a chart by state, counting records');
+  expect((await run('make', 'report', 'library.loan')).out).toContain('has a pivot already');
+  expect((await run('make', 'report', 'library.book', '--measure', 'title')).out).toContain(
+    'names a number',
+  );
+  expect(
+    (await run('make', 'report', 'library.book', '--by', 'kind', '--measure', 'price')).code,
+  ).toBe(0);
+  const settled = await readFile(part('loan'), 'utf8');
+  expect(settled).toContain("requires: 'library.loan_settle' }),");
+  expect(settled).toContain(
+    "orm.definePermission({ code: 'library.loan_settle', label: 'Settle loan', groups: ['library.manager'] }),",
+  );
+  expect(settled).toContain(
+    "'library.loan.pivot': pivot(Loan, { rows: ['state'], measures: [{ count: true }] }),",
+  );
+  expect(settled).toContain("views: ['list', 'form', 'pivot', 'graph'] })");
+  expect(settled).toContain(
+    "import { action, form, graph, list, pivot, search } from 'shutro-erp/views';",
+  );
+  expect(await readFile(part('book'), 'utf8')).toContain(
+    "'library.book.graph': graph(Book, { groupBy: ['kind'], measure: { sum: 'price' } }),",
+  );
+  // The parts' permissions and sample records join the module's.
+  const wiredIndex = await readFile(join(project, 'src', 'modules', 'library', 'index.ts'), 'utf8');
+  expect(wiredIndex).toContain('permissions: [...parts.permissions],');
+  expect(wiredIndex).toContain('data: [...data, ...parts.data],');
+  expect(settled).toContain(
+    "orm.record('library.loan', 'loan_sample', { reference: 'Sample reference' }, { noupdate: true }),",
+  );
+
   // The real check, on what was generated.
   await inWorkspace(join(project, 'src'));
   const check = await run('check', '--all');
   expect(check.out, check.out).toContain('1 module(s), 3 model(s)');
   expect(check.out).toContain('your modules meet the module standard');
   expect(check.code).toBe(0);
+});
+
+test('the diff names the lines that differ', () => {
+  expect(lineDiff('a\nb\nc', 'a\nB\nc\nd')).toEqual(['- b', '+ B', '+ d']);
+  expect(lineDiff('same', 'same')).toEqual([]);
 });
 
 test('a module whose index.ts is not the scaffold’s is told what to add, and still gets its part', async () => {

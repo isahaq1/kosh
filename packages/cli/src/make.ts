@@ -14,14 +14,19 @@
  *   with its steps, tracked; the status bar and a button on the form, a chatter, the state on the list; a print
  *   template; and a named event when the step is taken. Later transitions add their states, buttons and events.
  *
- * Nothing is overwritten: a part that exists is refused. `--dry-run` shows what would be written.
+ * - `make action <module>.<model> <name> --from <state> --to <state> [--group manager]` is a step only some may
+ *   take: the transition requires a permission of its own, granted to the module's managers (or `--group`).
+ * - `make report <module>.<model> [--by <field>] [--measure <field>]` adds a pivot and a chart of the model.
+ *
+ * Nothing is overwritten: a part that exists is not replaced — `make model` shows how it differs from what it would
+ * write. `--dry-run` shows what would be written.
  */
 import { existsSync, readdirSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
-const USAGE = `Usage: shutro-erp make <model | field | transition> …
+const USAGE = `Usage: shutro-erp make <model | field | transition | action | report> …
 
   make model <module> <name> --fields "<field> <field> …" [--label <Label>] [--plural <Labels>] [--dry-run]
       A model of src/modules/<module>/ as a part of its own: the model with its label and access, its action and
@@ -33,6 +38,14 @@ const USAGE = `Usage: shutro-erp make <model | field | transition> …
   make transition <module>.<model> <name> --from <state> --to <state> [--label <Button>] [--dry-run]
       A step of the model's state (confirm: draft to confirmed). The first makes the model a document: its state,
       the status bar and the button, a chatter, a print template and a named event; the next ones add to them.
+
+  make action <module>.<model> <name> --from <state> --to <state> [--group <manager>] [--label <Button>]
+      A step only some may take: a transition with a permission of its own, granted to the module's managers
+      (or the group named: --group user).
+
+  make report <module>.<model> [--by <field>] [--measure <field>] [--dry-run]
+      A pivot and a chart of the model, grouped by a field (default: its state, a selection, a relation or a date
+      by month) and counting records (or summing --measure).
 
   A field is name:type, with ! when it is required:
       title:char!   notes:text   pages:integer   price:decimal   lent:boolean   due:date   seen:datetime
@@ -206,6 +219,7 @@ ${lines(
       ]),
     ],
   })),
+  // make:views
 };
 
 export const searches = {
@@ -233,7 +247,33 @@ export const documents = [
 export const events = [
   // make:events
 ];
+
+export const permissions = [
+  // make:permissions
+];
+
+/** Seed data: a sample record, made once and then left to the users (\`shutro-erp seed\`). */
+export const data = [
+${sample(n, fields)}];
 `;
+}
+
+/** A sample record of the model as seed data, or nothing when a required relation cannot be guessed. */
+function sample(n: ModelNames, fields: readonly FieldSpec[]): string {
+  if (fields.some((f) => f.type === 'm2o' && f.required)) return '';
+  const values: string[] = [];
+  for (const f of fields) {
+    if (f.type === 'char')
+      values.push(`${f.name}: ${quote(`Sample ${title(f.name).toLowerCase()}`)}`);
+    else if (f.type === 'integer') values.push(`${f.name}: 1`);
+    else if (f.type === 'decimal') values.push(`${f.name}: '1.00'`);
+    else if (f.type === 'selection')
+      values.push(`${f.name}: ${quote((f.arg ?? '').split('|')[0] ?? '')}`);
+    else if (f.type === 'date' && f.required) values.push(`${f.name}: '2026-01-01'`);
+    else if (f.type === 'datetime' && f.required) values.push(`${f.name}: '2026-01-01T00:00:00Z'`);
+    else if (f.type === 'text' && f.required) values.push(`${f.name}: 'Sample'`);
+  }
+  return `  orm.record(${quote(n.model)}, ${quote(`${n.name}_sample`)}, { ${values.join(', ')} }, { noupdate: true }),\n`;
 }
 
 /** `parts.ts`: every part in `parts/`, merged. Generated; rewritten by each `make model`. */
@@ -245,34 +285,145 @@ export function partsIndex(names: readonly string[]): string {
 ${names.map((p) => `import * as ${id(p)} from './parts/${p}.ts';`).join('\n')}
 
 export const parts = {
-${spread('models', '[', ']')}${spread('actions', '{ ', ' }')}${spread('menus', '[', ']')}${spread('views', '{ ', ' }')}${spread('searches', '{ ', ' }')}${spread('importTemplates', '[', ']')}${spread('documents', '[', ']')}${spread('events', '[', ']')}};
+${spread('models', '[', ']')}${spread('actions', '{ ', ' }')}${spread('menus', '[', ']')}${spread('views', '{ ', ' }')}${spread('searches', '{ ', ' }')}${spread('importTemplates', '[', ']')}${spread('documents', '[', ']')}${spread('events', '[', ']')}${spread('permissions', '[', ']')}${spread('data', '[', ']')}};
 `;
 }
 
 /** The module's index.ts with its parts merged in, or null when its shape is not the scaffold's. */
 export function wireParts(index: string): string | null {
-  if (index.includes("from './parts.ts'")) return index;
-  const imports = [...index.matchAll(/^import .*;$/gm)];
-  const last = imports.at(-1);
-  const models = /(\n {2}models: \[)([^\]]*)(\],)/.exec(index);
-  const manifest = /= defineModule\(\{/.exec(index);
-  const end = index.lastIndexOf('});');
-  const sdk = /import \{([^}]*)\} from 'shutro-erp\/modules-sdk';/.exec(index);
-  if (last === undefined || models === null || manifest === null || end < 0 || sdk === null)
-    return null;
-  let out = `${index.slice(0, end)}}));${index.slice(end + 3)}`;
-  out = out.replace('= defineModule({', '= defineModule(withParts(parts, {');
-  out = out.replace(
-    models[0],
-    `${models[1]}${[models[2]?.trim(), '...parts.models'].filter((x) => x !== '' && x !== undefined).join(', ')}${models[3]}`,
-  );
-  out = out.replace(sdk[0], () => {
-    const names = [...(sdk[1] ?? '').split(',').map((x) => x.trim()), 'withParts'].filter(
-      (x) => x !== '',
+  let out = index;
+  if (!out.includes("from './parts.ts'")) {
+    const imports = [...out.matchAll(/^import .*;$/gm)];
+    const last = imports.at(-1);
+    const models = /(\n {2}models: \[)([^\]]*)(\],)/.exec(out);
+    const manifest = /= defineModule\(\{/.exec(out);
+    const end = out.lastIndexOf('});');
+    const sdk = /import \{([^}]*)\} from 'shutro-erp\/modules-sdk';/.exec(out);
+    if (last === undefined || models === null || manifest === null || end < 0 || sdk === null)
+      return null;
+    out = `${out.slice(0, end)}}));${out.slice(end + 3)}`;
+    out = out.replace('= defineModule({', '= defineModule(withParts(parts, {');
+    out = out.replace(
+      models[0],
+      `${models[1]}${[models[2]?.trim(), '...parts.models'].filter((x) => x !== '' && x !== undefined).join(', ')}${models[3]}`,
     );
-    return `import { ${names.sort().join(', ')} } from 'shutro-erp/modules-sdk';`;
-  });
-  return out.replace(last[0], `${last[0]}\nimport { parts } from './parts.ts';`);
+    out = out.replace(sdk[0], () => {
+      const names = [...(sdk[1] ?? '').split(',').map((x) => x.trim()), 'withParts'].filter(
+        (x) => x !== '',
+      );
+      return `import { ${names.sort().join(', ')} } from 'shutro-erp/modules-sdk';`;
+    });
+    out = out.replace(last[0], `${last[0]}\nimport { parts } from './parts.ts';`);
+  }
+  // The parts' permissions and seed data join the Shutro module's, beside its models.
+  const models = /\n {2}models: \[[^\]]*\],/.exec(out);
+  if (!out.includes('...parts.permissions')) {
+    const own = /(\n {2}permissions: \[)([^\]]*)(\],)/.exec(out);
+    if (own !== null)
+      out = out.replace(
+        own[0],
+        `${own[1]}${[own[2]?.trim().replace(/,$/, ''), '...parts.permissions'].filter((x) => x !== '' && x !== undefined).join(', ')}${own[3]}`,
+      );
+    else if (models !== null)
+      out = out.replace(models[0], `${models[0]}\n  permissions: [...parts.permissions],`);
+  }
+  if (!out.includes('...parts.data')) {
+    if (out.includes('\n  data,\n'))
+      out = out.replace('\n  data,\n', '\n  data: [...data, ...parts.data],\n');
+    else if (!/\n {2}data[,:]/.test(out) && models !== null)
+      out = out.replace(models[0], `${models[0]}\n  data: [...parts.data],`);
+  }
+  return out;
+}
+
+/** What every part exports, with the marker `make` adds at: parts made before one existed get it appended. */
+const PART_EXPORTS: readonly [name: string, marker: string][] = [
+  ['documents', 'documents'],
+  ['events', 'events'],
+  ['permissions', 'permissions'],
+  ['data', 'data'],
+];
+
+/** Brings the parts up to date and rewrites `parts.ts`; returns the parts' names. */
+async function syncParts(
+  dir: string,
+  dry: boolean,
+  extra: readonly string[] = [],
+): Promise<string[]> {
+  const folder = join(dir, 'parts');
+  const names = existsSync(folder)
+    ? readdirSync(folder)
+        .filter((f) => f.endsWith('.ts'))
+        .map((f) => f.slice(0, -3))
+    : [];
+  for (const name of names) {
+    const path = join(folder, `${name}.ts`);
+    const text = await readFile(path, 'utf8');
+    let next = text;
+    for (const [exported, marker] of PART_EXPORTS)
+      if (!new RegExp(`^export const ${exported}\\b`, 'm').test(next))
+        next = `${next.replace(/\n*$/, '\n')}\nexport const ${exported} = [\n  // make:${marker}\n];\n`;
+    if (next !== text && !dry) await writeFile(path, next);
+  }
+  const all = [...new Set([...names, ...extra])].sort();
+  if (!dry && all.length > 0) await writeFile(join(dir, 'parts.ts'), partsIndex(all));
+  return all;
+}
+
+/** Re-wires index.ts after a command (its parts, their permissions and seed data); says what happened. */
+async function rewire(
+  dir: string,
+  module: string,
+  dry: boolean,
+  write: (t: string) => void,
+): Promise<void> {
+  const indexPath = join(dir, 'index.ts');
+  if (!existsSync(indexPath)) return;
+  const index = await readFile(indexPath, 'utf8');
+  const wired = wireParts(index);
+  if (wired === null) write(BY_HAND);
+  else if (wired !== index) {
+    if (!dry) await writeFile(indexPath, wired);
+    write(
+      `  ${dry ? 'would update' : 'updated'} src/modules/${module}/index.ts (its parts merged in)\n`,
+    );
+  }
+}
+
+/** The lines that differ between two texts: `-` what is there, `+` what would be written. */
+export function lineDiff(before: string, after: string): string[] {
+  const a = before.split('\n');
+  const b = after.split('\n');
+  // Longest common subsequence, by lines.
+  const lcs: number[][] = Array.from({ length: a.length + 1 }, () =>
+    new Array<number>(b.length + 1).fill(0),
+  );
+  for (let i = a.length - 1; i >= 0; i--)
+    for (let j = b.length - 1; j >= 0; j--)
+      (lcs[i] as number[])[j] =
+        a[i] === b[j]
+          ? ((lcs[i + 1] as number[])[j + 1] as number) + 1
+          : Math.max((lcs[i + 1] as number[])[j] as number, (lcs[i] as number[])[j + 1] as number);
+  const out: string[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && a[i] === b[j]) {
+      i += 1;
+      j += 1;
+    } else if (
+      j < b.length &&
+      (i === a.length ||
+        ((lcs[i] as number[])[j + 1] as number) > ((lcs[i + 1] as number[])[j] as number))
+    ) {
+      out.push(`+ ${b[j]}`);
+      j += 1;
+    } else {
+      out.push(`- ${a[i]}`);
+      i += 1;
+    }
+  }
+  return out;
 }
 
 /**
@@ -376,12 +527,6 @@ async function makeModel(
     return 2;
   }
   const partPath = join(dir, 'parts', `${name}.ts`);
-  if (existsSync(partPath)) {
-    write(
-      `src/modules/${module}/parts/${name}.ts exists already: add to it with shutro-erp make field ${module}.${name} <field>.\n`,
-    );
-    return 1;
-  }
   const label = values.label ?? title(name);
   const names: ModelNames = {
     module,
@@ -391,33 +536,34 @@ async function makeModel(
     label,
     plural: values.plural ?? plural(label),
   };
+  if (existsSync(partPath)) {
+    // Never replaced: what differs is shown, for the person to take what they want.
+    const diff = lineDiff(await readFile(partPath, 'utf8'), partFile(names, fields));
+    write(
+      `src/modules/${module}/parts/${name}.ts exists already and was left as it is. Add to it with shutro-erp make field ${module}.${name} <field>.\n`,
+    );
+    if (diff.length === 0) write('It is what make model would write.\n');
+    else
+      write(
+        `What make model would write differs in ${diff.length} line(s) (- there, + would be written):\n${diff.slice(0, 80).join('\n')}\n${diff.length > 80 ? `… and ${diff.length - 80} more\n` : ''}`,
+      );
+    return 1;
+  }
   const index = await readFile(indexPath, 'utf8');
-  const wired = wireParts(index);
-  const existing = existsSync(join(dir, 'parts'))
-    ? readdirSync(join(dir, 'parts'))
-        .filter((f) => f.endsWith('.ts'))
-        .map((f) => f.slice(0, -3))
-    : [];
-  const all = [...new Set([...existing, name])].sort();
   const dry = values['dry-run'] === true;
   const said = dry ? 'would write' : 'wrote  ';
   if (!dry) {
     await mkdir(join(dir, 'parts'), { recursive: true });
     await writeFile(partPath, partFile(names, fields));
-    await writeFile(join(dir, 'parts.ts'), partsIndex(all));
-    if (wired !== null && wired !== index) await writeFile(indexPath, wired);
   }
+  const all = await syncParts(dir, dry, [name]);
   write(
     `  ${said} src/modules/${module}/parts/${name}.ts (${names.model}: ${fields.length} fields, list, form, search, import template)\n`,
   );
   write(
     `  ${said} src/modules/${module}/parts.ts (${all.length} part${all.length === 1 ? '' : 's'})\n`,
   );
-  if (wired === null) write(BY_HAND);
-  else if (wired !== index)
-    write(
-      `  ${dry ? 'would update' : 'updated'} src/modules/${module}/index.ts (its parts merged in)\n`,
-    );
+  await rewire(dir, module, dry, write);
   if (!index.includes(`'${module}.root'`))
     write(
       `  its menu hangs under '${module}.root', which index.ts does not have: give the menu in the part its parent.\n`,
@@ -520,6 +666,7 @@ async function makeTransition(
   argv: readonly string[],
   write: (t: string) => void,
   cwd: string,
+  restricted = false,
 ): Promise<number> {
   const { values, positionals } = parseArgs({
     args: [...argv],
@@ -527,6 +674,7 @@ async function makeTransition(
       from: { type: 'string' },
       to: { type: 'string' },
       label: { type: 'string' },
+      group: { type: 'string' },
       'dry-run': { type: 'boolean', default: false },
     },
     allowPositionals: true,
@@ -534,12 +682,15 @@ async function makeTransition(
   });
   const [target, name] = positionals;
   const dot = target?.lastIndexOf('.') ?? -1;
+  // An action is a transition with a permission of its own, for a group of the module (its managers by default).
+  const group = restricted ? (values.group ?? 'manager') : values.group;
   if (
     target === undefined ||
     name === undefined ||
     dot <= 0 ||
     values.from === undefined ||
-    values.to === undefined
+    values.to === undefined ||
+    (group !== undefined && !/^[a-z][a-z0-9_]*$/.test(group))
   ) {
     write(USAGE);
     return 2;
@@ -568,7 +719,8 @@ async function makeTransition(
   const label = /\n {2}label: '([^']+)'/.exec(text)?.[1] ?? title(model);
   const topic = `${id}.${values.to}`;
   const button = values.label ?? title(name);
-  const transition = `${name}: emitting(${quote(topic)}, { from: [${quote(values.from)}], to: ${quote(values.to)} }),`;
+  const permission = `${id.replace(/\.[^.]+$/, '')}.${model}_${name}`;
+  const transition = `${name}: emitting(${quote(topic)}, { from: [${quote(values.from)}], to: ${quote(values.to)}${group === undefined ? '' : `, requires: ${quote(permission)}`} }),`;
   const event = `{ topic: ${quote(topic)}, model: ${quote(id)}, label: ${quote(`${label} ${title(values.to).toLowerCase()}`)} },`;
   const byHand: string[] = [];
   const add = (marker: string, line: string, what: string) => {
@@ -669,11 +821,22 @@ async function makeTransition(
     add('buttons', `k.button(${quote(name)}, { label: ${quote(button)} }),`, 'the form’s buttons');
   }
   if (!text.includes(`topic: ${quote(topic)}`)) add('events', event, 'the events');
+  if (group !== undefined) {
+    if (!/^export const permissions\b/m.test(text))
+      text = `${text.replace(/\n*$/, '\n')}\nexport const permissions = [\n  // make:permissions\n];\n`;
+    add(
+      'permissions',
+      `orm.definePermission({ code: ${quote(permission)}, label: ${quote(`${button} ${label.toLowerCase()}`)}, groups: [${quote(`${module}.${group}`)}] }),`,
+      'the permissions',
+    );
+  }
   const dry = values['dry-run'] === true;
   if (!dry) await writeFile(path, text);
   write(
-    `  ${dry ? 'would update' : 'updated'} ${rel} (${name}: ${values.from} to ${values.to}${first ? '; now a document: state, status bar, chatter, print template, event' : ''})\n`,
+    `  ${dry ? 'would update' : 'updated'} ${rel} (${name}: ${values.from} to ${values.to}${group === undefined ? '' : `, for ${module}.${group} by the permission ${permission}`}${first ? '; now a document: state, status bar, chatter, print template, event' : ''})\n`,
   );
+  await syncParts(join(cwd, 'src', 'modules', module), dry);
+  await rewire(join(cwd, 'src', 'modules', module), module, dry, write);
   if (byHand.length > 0) write(`  a marker is gone there; add by hand:\n${byHand.join('\n')}\n`);
   if (first) {
     // A document's users discuss it and print it: the module depends on Messaging and Reporting, and its users
@@ -693,6 +856,123 @@ async function makeTransition(
   return 0;
 }
 
+async function makeReport(
+  argv: readonly string[],
+  write: (t: string) => void,
+  cwd: string,
+): Promise<number> {
+  const { values, positionals } = parseArgs({
+    args: [...argv],
+    options: {
+      by: { type: 'string' },
+      measure: { type: 'string' },
+      'dry-run': { type: 'boolean', default: false },
+    },
+    allowPositionals: true,
+    strict: true,
+  });
+  const [target] = positionals;
+  const dot = target?.lastIndexOf('.') ?? -1;
+  if (target === undefined || dot <= 0) {
+    write(USAGE);
+    return 2;
+  }
+  const module = target.slice(0, dot);
+  const model = target.slice(dot + 1);
+  const dir = join(cwd, 'src', 'modules', module);
+  const rel = `src/modules/${module}/parts/${model}.ts`;
+  const path = join(dir, 'parts', `${model}.ts`);
+  if (!existsSync(path)) {
+    write(`There is no ${rel}: make report adds to models made by shutro-erp make model.\n`);
+    return 1;
+  }
+  let text = await readFile(path, 'utf8');
+  const id = /defineModel\('([^']+)'/.exec(text)?.[1] ?? `${module}.${model}`;
+  const constant = /export const ([A-Za-z0-9_]+) = defineModel/.exec(text)?.[1];
+  if (constant === undefined) {
+    write(`${rel} declares no model with defineModel.\n`);
+    return 1;
+  }
+  if (text.includes(`'${id}.pivot'`)) {
+    write(`${target} has a pivot already.\n`);
+    return 1;
+  }
+  const fields = declaredFields(text);
+  const kindOf = (name: string) => fields.find((f) => f.name === name)?.kind;
+  const grouped = (name: string) =>
+    ['date', 'datetime'].includes(kindOf(name) ?? '') ? `${name}:month` : name;
+  const by =
+    values.by ??
+    fields.find((f) => f.kind === 'state')?.name ??
+    fields.find((f) => f.kind === 'selection')?.name ??
+    fields.find((f) => f.kind === 'many2one')?.name ??
+    fields.find((f) => f.kind === 'date' || f.kind === 'datetime')?.name;
+  if (by === undefined || kindOf(by) === undefined) {
+    write(
+      by === undefined
+        ? `${target} has no state, selection, relation or date to group by: add one, or name a field with --by.\n`
+        : `${target} has no field ${by}.\n`,
+    );
+    return 1;
+  }
+  if (
+    values.measure !== undefined &&
+    !['integer', 'decimal'].includes(kindOf(values.measure) ?? '')
+  ) {
+    write(
+      `--measure names a number of ${target} (an integer or a decimal), which ${values.measure} is not.\n`,
+    );
+    return 1;
+  }
+  const measure =
+    values.measure === undefined ? '{ count: true }' : `{ sum: ${quote(values.measure)} }`;
+  const byHand: string[] = [];
+  const views = [
+    `'${id}.pivot': pivot(${constant}, { rows: [${quote(grouped(by))}], measures: [${measure}] }),`,
+    `'${id}.graph': graph(${constant}, { groupBy: [${quote(grouped(by))}], measure: ${measure} }),`,
+  ].join('\n  ');
+  const withViews = atMarker(text, 'views', views);
+  if (withViews === null) byHand.push(`      the views: ${views.split('\n')[0]} …`);
+  else text = withViews;
+  if (text.includes("views: ['list', 'form'] })"))
+    text = text.replace(
+      "views: ['list', 'form'] })",
+      "views: ['list', 'form', 'pivot', 'graph'] })",
+    );
+  else byHand.push("      the action's views: 'pivot', 'graph'");
+  const imported = /import \{([^}]*)\} from 'shutro-erp\/views';/.exec(text);
+  if (imported !== null)
+    text = text.replace(
+      imported[0],
+      `import { ${[
+        ...new Set([...(imported[1] ?? '').split(',').map((x) => x.trim()), 'graph', 'pivot']),
+      ]
+        .filter((x) => x !== '')
+        .sort()
+        .join(', ')} } from 'shutro-erp/views';`,
+    );
+  else byHand.push("      the import: graph and pivot from 'shutro-erp/views'");
+  const dry = values['dry-run'] === true;
+  if (!dry) await writeFile(path, text);
+  write(
+    `  ${dry ? 'would update' : 'updated'} ${rel} (a pivot and a chart by ${by}, ${values.measure === undefined ? 'counting records' : `summing ${values.measure}`})\n`,
+  );
+  if (byHand.length > 0) write(`  add by hand:\n${byHand.join('\n')}\n`);
+  // Pivots and charts are Reporting's.
+  const indexPath = join(dir, 'index.ts');
+  const index = existsSync(indexPath) ? await readFile(indexPath, 'utf8') : '';
+  const wired = wireDocument(index, module);
+  if (wired === null) write(DOCUMENT_BY_HAND(module));
+  else if (wired !== index) {
+    if (!dry) await writeFile(indexPath, wired);
+    write(
+      `  ${dry ? 'would update' : 'updated'} src/modules/${module}/index.ts (depends on Messaging and Reporting; ${module}.user holds their roles)\n`,
+    );
+  }
+  if (!dry) write('\nNext: shutro-erp check.\n');
+  return 0;
+}
+
 export async function runMake(
   argv: readonly string[],
   write: (t: string) => void,
@@ -703,6 +983,8 @@ export async function runMake(
     if (what === 'model') return await makeModel(rest, write, cwd);
     if (what === 'field') return await makeField(rest, write, cwd);
     if (what === 'transition') return await makeTransition(rest, write, cwd);
+    if (what === 'action') return await makeTransition(rest, write, cwd, true);
+    if (what === 'report') return await makeReport(rest, write, cwd);
   } catch (error) {
     // An option the command does not have.
     write(`${error instanceof Error ? error.message : String(error)}\n\n${USAGE}`);

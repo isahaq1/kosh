@@ -131,6 +131,8 @@ beforeAll(async () => {
     '--to',
     'returned',
   );
+  await make('make', 'action', 'library.loan', 'settle', '--from', 'returned', '--to', 'settled');
+  await make('make', 'report', 'library.loan', '--measure', 'pages');
   await inWorkspace(join(project, 'src'));
   const { library } = (await import(
     pathToFileURL(join(project, 'src', 'modules', 'library', 'index.ts')).href
@@ -172,6 +174,7 @@ beforeAll(async () => {
   await installDefaults(host.server.shutro, host.server.registry.loaded.modules, { company });
   for (const [login, groups] of [
     ['lina', ['library.user']],
+    ['mona', ['library.manager']],
     ['bob', ['base.user']],
   ] as const)
     await auth.createUser({
@@ -240,4 +243,39 @@ test('someone without the module’s role is refused by the server', async () =>
     headers: { authorization: `Bearer ${tokens.get('lina')}` },
   });
   expect(removed.statusCode).toBe(403);
+});
+
+test('an action is for those who hold its permission: a user is refused, a manager takes it', async () => {
+  const made = await call('POST', '/api/v1/models/library.loan', 'lina', { reference: 'L-0004' });
+  const id = made.json.id as number;
+  for (const step of ['confirm', 'close'])
+    expect(
+      (await call('POST', `/api/v1/models/library.loan/${id}/transitions/${step}`, 'lina')).status,
+    ).toBe(200);
+  const refused = await call(
+    'POST',
+    `/api/v1/models/library.loan/${id}/transitions/settle`,
+    'lina',
+  );
+  expect(refused.status, JSON.stringify(refused.json)).toBe(403);
+  const settled = await call(
+    'POST',
+    `/api/v1/models/library.loan/${id}/transitions/settle`,
+    'mona',
+  );
+  expect(settled.status, JSON.stringify(settled.json)).toBe(200);
+  expect(settled.json.state).toBe('settled');
+});
+
+test('the sample record is seeded, and the report’s pivot answers', async () => {
+  const sample = await call('GET', '/api/v1/models/library.loan?search=Sample', 'lina');
+  expect(sample.status).toBe(200);
+  expect(JSON.stringify(sample.json)).toContain('Sample reference');
+  // The pivot's query: loans by state, their pages summed.
+  const pivot = await call('POST', '/api/v1/models/library.loan/aggregate', 'lina', {
+    groupBy: ['state'],
+    measures: { pages: { sum: 'pages' }, count: 'count' },
+  });
+  expect(pivot.status, JSON.stringify(pivot.json)).toBe(200);
+  expect(JSON.stringify(pivot.json)).toContain('settled');
 });
