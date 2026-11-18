@@ -1,0 +1,7 @@
+{
+  "adapter": "sso-keycloak",
+  "certifiedAt": "2026-11-18T15:00:54.658Z",
+  "against": "Keycloak 26.0.8",
+  "contract": "authorization code flow with PKCE, RS256 ID token, verified address, groups to roles",
+  "steps": 3
+}
