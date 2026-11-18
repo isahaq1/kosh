@@ -360,6 +360,39 @@ const AuthScimMember = defineModel('auth.scim_member', {
 });
 
 /**
+ * A passkey (`passkeys.ts`, RFC 0034 §2.4): a WebAuthn credential of a person — its id at the authenticator, the
+ * public key its sign-ins are verified with, its counter. Nothing here is a secret. Private.
+ */
+const AuthPasskey = defineModel('auth.passkey', {
+  fields: {
+    user: f.many2one('res.users', { required: true, ondelete: 'cascade', index: true }),
+    /** What the person calls it ("My laptop"). */
+    name: f.char({ required: true }),
+    /** base64url. */
+    credentialId: f.char({ required: true, index: 'unique' }),
+    /** SPKI, base64. */
+    publicKey: f.text({ required: true }),
+    /** The COSE algorithm (-7 ES256, -8 EdDSA, -257 RS256). */
+    alg: f.integer({ required: true }),
+    signCount: f.integer({ default: 0 }),
+    /** Synced by its provider to the person's other devices. */
+    backedUp: f.boolean({ default: false }),
+    lastUsedAt: f.datetime(),
+  },
+});
+
+/** A WebAuthn challenge of ours: stored hashed, good for five minutes, used once. Private. */
+const AuthPasskeyChallenge = defineModel('auth.passkey_challenge', {
+  fields: {
+    kind: f.char({ required: true }),
+    challengeHash: f.char({ required: true, index: 'unique' }),
+    user: f.many2one('res.users', { ondelete: 'cascade' }),
+    expiresAt: f.datetime({ required: true }),
+    usedAt: f.datetime(),
+  },
+});
+
+/**
  * A merge of duplicates (`merge.ts`, RFC 0036 §2.3): what was kept, what was merged into it, and every link that was
  * moved — what an undo puts back. Private: written by the merge and its undo only.
  */
@@ -475,6 +508,8 @@ export const baseShutro: ReturnType<typeof orm.defineModule> = defineModule({
     AuthScimUser,
     AuthScimGroup,
     AuthScimMember,
+    AuthPasskey,
+    AuthPasskeyChallenge,
     AuditEvent,
     SavedView,
   ],
@@ -509,6 +544,8 @@ export const base: ReturnType<typeof defineKoshModule> = defineKoshModule({
     'auth.scim_user',
     'auth.scim_group',
     'auth.scim_member',
+    'auth.passkey',
+    'auth.passkey_challenge',
     'audit.event',
   ],
 });

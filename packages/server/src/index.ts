@@ -65,6 +65,7 @@ export {
   verifyTotp,
 } from './auth/crypto.js';
 export { type InstallBaseOptions, installBase } from './auth/install.js';
+export { PASSKEYS_PER_PERSON, passkeyParty } from './auth/passkeys.js';
 export { registerAuthRoutes } from './auth/routes.js';
 export { scimTokenHash, syncScimRoles } from './auth/scim.js';
 export {
@@ -84,6 +85,14 @@ export {
   ssoSecretName,
   verifyIdToken,
 } from './auth/sso.js';
+export {
+  PASSKEY_ALGORITHMS,
+  PasskeyError,
+  type PasskeyExpectation,
+  type PasskeyRegistration,
+  verifyPasskeyAssertion,
+  verifyPasskeyRegistration,
+} from './auth/webauthn.js';
 export {
   checkData,
   type DataCheckResult,

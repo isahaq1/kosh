@@ -67,6 +67,14 @@ export {
   type QueuedChange,
   type SyncResult,
 } from './offline/queue.js';
+export {
+  createPasskey,
+  getPasskey,
+  type PasskeyCreationOptions,
+  type PasskeyRequestOptions,
+  passkeyCancelled,
+  passkeysSupported,
+} from './passkeys.js';
 export { type Prefill, setPrefill, takePrefill } from './prefill.js';
 export { registerServiceWorker } from './pwa/register.js';
 export { serviceWorkerSource, type WorkerConfig } from './pwa/worker.js';

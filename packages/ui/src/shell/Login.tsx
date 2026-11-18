@@ -4,6 +4,7 @@ import { type ReactElement, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, type KoshApi } from '../api.js';
 import { Alert, Button, Card, Input, Label } from '../components/primitives.js';
+import { passkeyCancelled, passkeysSupported } from '../passkeys.js';
 
 export function Login({
   api,
@@ -55,8 +56,20 @@ export function Login({
     exchanged.current = true; // once: the code works once
     handOff.mutate(handOffCode);
   }, [handOff]);
+  // A passkey (RFC 0034 §2.4): the whole sign-in on this device. Closing the browser's dialog is not an error.
+  const passkey = useMutation({
+    mutationFn: () => api.signInWithPasskey(),
+    onSuccess: async ({ twoFactorRequired }) => {
+      if (twoFactorRequired) setStep('code');
+      else await done();
+    },
+  });
   const next = params.get('next');
-  const error = signIn.error ?? verify.error ?? handOff.error;
+  const error =
+    signIn.error ??
+    verify.error ??
+    handOff.error ??
+    (passkeyCancelled(passkey.error) ? null : passkey.error);
   return (
     <main className="grid min-h-screen place-items-center bg-background p-4">
       <Card className="w-full max-w-sm p-6">
@@ -67,7 +80,9 @@ export function Login({
             <Alert>
               {error instanceof ApiError && error.kind === 'invalid-credentials'
                 ? t('auth.invalid')
-                : error.message}
+                : error instanceof ApiError && error.kind === 'passkey-invalid'
+                  ? t('auth.passkeyInvalid')
+                  : error.message}
             </Alert>
           </div>
         )}
@@ -124,6 +139,11 @@ export function Login({
             <Button type="submit" variant="primary" busy={signIn.isPending}>
               {t('auth.signIn')}
             </Button>
+            {passkeysSupported() ? (
+              <Button type="button" busy={passkey.isPending} onClick={() => passkey.mutate()}>
+                {t('auth.passkey')}
+              </Button>
+            ) : null}
             <a className="text-sm underline" href="/forgot">
               {t('auth.forgotLink')}
             </a>

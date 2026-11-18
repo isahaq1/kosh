@@ -22,6 +22,7 @@ import { registerRestApi } from './api/rest.js';
 import { ViewRegistry } from './api/views.js';
 import { registerApiKeyRoutes } from './auth/api-keys.js';
 import { registerOAuthRoutes } from './auth/oauth.js';
+import { registerPasskeyRoutes } from './auth/passkeys.js';
 import { registerAuthRoutes } from './auth/routes.js';
 import { registerScimRoutes } from './auth/scim.js';
 import { enforceScopes } from './auth/scopes.js';
@@ -385,6 +386,11 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
     // Single sign-on (RFC 0034 §2.4): the provider answers at this address, and sends people back to it.
     registerSsoRoutes(app, auth, () => shutro as Shutro, {
       baseUrl: options.oauth?.baseUrl ?? process.env['KOSH_BASE_URL'] ?? 'http://localhost:5173',
+    });
+    // Passkeys (RFC 0034 §2.4): the browser answers only for this address.
+    registerPasskeyRoutes(app, auth, () => shutro as Shutro, {
+      baseUrl: options.oauth?.baseUrl ?? process.env['KOSH_BASE_URL'] ?? 'http://localhost:5173',
+      ...(options.auth?.loginLimit === undefined ? {} : { signInLimit: options.auth.loginLimit }),
     });
     // SCIM (RFC 0034 §2.4): the company's directory provisions people and their groups, with a token of its own.
     registerScimRoutes(app, auth, () => shutro as Shutro, {

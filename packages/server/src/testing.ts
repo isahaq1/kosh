@@ -58,6 +58,7 @@ export async function testDatabase(): Promise<TestDatabase> {
 
 export { type Cassette, cassette, type Exchange, type Recording, redact } from './cassette.js';
 export { type FakeOidc, type FakePerson, fakeOidc } from './testing-oidc.js';
+export { type FakePasskey, type FakePasskeyOptions, fakePasskey } from './testing-passkey.js';
 
 // ---- an installation for a test file
 

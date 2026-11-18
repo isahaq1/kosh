@@ -5,6 +5,7 @@
  */
 import type { Action, Condition, SearchSpec, ViewDefinition, ViewType } from '@kosh/views';
 
+import { getPasskey, type PasskeyRequestOptions } from './passkeys.js';
 export type Row = Record<string, unknown> & { readonly id: number };
 
 /** An RFC 9457 problem. */
@@ -179,6 +180,8 @@ export interface KoshApi {
   verifyTwoFactor(code: string): Promise<void>;
   /** Completes a single sign-on (RFC 0034 §2.4): the hand-off code from the address becomes the session. */
   completeSso(code: string): Promise<{ twoFactorRequired: boolean }>;
+  /** Signs in with a passkey of this device (RFC 0034 §2.4): the browser asks, the server checks. */
+  signInWithPasskey(): Promise<{ twoFactorRequired: boolean }>;
   logout(): Promise<void>;
   apps(): Promise<readonly AppEntry[]>;
   menus(app?: string): Promise<readonly MenuNode[]>;
@@ -350,6 +353,22 @@ export function createKoshApi(options: ApiOptions = {}): KoshApi {
         'POST',
         '/api/v1/auth/sso/complete',
         { code },
+      );
+      csrf = result.csrfToken;
+      storage?.setItem(CSRF_KEY, csrf);
+      return { twoFactorRequired: result.twoFactorRequired };
+    },
+    async signInWithPasskey() {
+      const options = await json<PasskeyRequestOptions>(
+        'POST',
+        '/api/v1/auth/passkeys/signin/options',
+        {},
+      );
+      const credential = await getPasskey(options);
+      const result = await json<{ csrfToken: string; twoFactorRequired: boolean }>(
+        'POST',
+        '/api/v1/auth/passkeys/signin',
+        { credential },
       );
       csrf = result.csrfToken;
       storage?.setItem(CSRF_KEY, csrf);

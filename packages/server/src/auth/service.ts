@@ -308,6 +308,8 @@ export class AuthService {
     request: FastifyRequest,
     user: number,
     how: string,
+    /** `verified`: the sign-in itself was two factors (a passkey with user verification); no code is owed. */
+    options: { readonly verified?: boolean } = {},
   ): Promise<{ token: string; csrfToken: string; twoFactorRequired: boolean }> {
     const { sessionDays } = await this.policy();
     const lifetimeMs = sessionDays === null ? this.#options.lifetimeMs : sessionDays * 86_400_000;
@@ -322,13 +324,14 @@ export class AuthService {
       const token = randomToken();
       const csrfToken = randomToken(24);
       const now = Date.now();
-      const twoFactorRequired = credential?.['totpEnabled'] === true;
+      const twoFactorRequired = options.verified !== true && credential?.['totpEnabled'] === true;
       await model(env, 'auth.session').create([
         {
           tokenHash: digest(token),
           csrfHash: digest(csrfToken),
           user,
           twoFactorVerified: !twoFactorRequired,
+          secondFactor: options.verified === true,
           expiresAt: new Date(now + lifetimeMs),
           lastSeenAt: new Date(now),
           ip: request.ip,

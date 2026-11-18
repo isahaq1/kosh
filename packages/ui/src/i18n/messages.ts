@@ -59,6 +59,8 @@ export const en = {
     activate: 'Save and sign in',
     forgotLink: 'Forgot your password?',
     ssoWith: 'Sign in with {{name}}',
+    passkey: 'Use a passkey',
+    passkeyInvalid: 'This passkey could not sign you in. Try again, or sign in with your password.',
     ssoOr: 'or with your password',
     ssoError: {
       unknown:
@@ -499,6 +501,8 @@ export const bn: DeepPartial<Messages> = {
     activate: 'সংরক্ষণ করে সাইন ইন করুন',
     forgotLink: 'পাসওয়ার্ড ভুলে গেছেন?',
     ssoWith: '{{name}} দিয়ে সাইন ইন করুন',
+    passkey: 'পাসকি ব্যবহার করুন',
+    passkeyInvalid: 'এই পাসকি দিয়ে সাইন ইন করা যায়নি। আবার চেষ্টা করুন, অথবা পাসওয়ার্ড দিয়ে সাইন ইন করুন।',
     ssoOr: 'অথবা আপনার পাসওয়ার্ড দিয়ে',
     ssoError: {
       unknown:

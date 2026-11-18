@@ -22,6 +22,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Laptop, Monitor, Smartphone } from 'lucide-react';
 import { type ReactElement, type ReactNode, useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Passkeys } from './Passkeys.js';
 
 interface Profile {
   readonly login: string;
@@ -581,6 +582,9 @@ export function ProfilePage({ api }: PageProps): ReactElement {
       </Section>
 
       <TwoFactor api={api} me={me.data} />
+      <Section title={t('profile.passkeys.title')} hint={t('profile.passkeys.hint')}>
+        <Passkeys api={api} />
+      </Section>
       <Sessions api={api} />
     </div>
   );
