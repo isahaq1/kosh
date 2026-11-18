@@ -243,3 +243,36 @@ What to know:
 Verified against a fake provider in the test suite and **certified against Keycloak 26** (`pnpm certify keycloak`,
 with a Keycloak in Docker: its own sign-in form, token endpoint, keys and signature, and its groups giving roles).
 Google and Microsoft are still to be verified with your own credentials.
+
+## Directory provisioning (SCIM)
+
+Your directory — Microsoft Entra ID, Okta, any SCIM 2.0 client — can add people here when they join, update them and
+deactivate them when they leave, and keep its groups' members in step.
+
+1. In **Settings › Security › Directory provisioning**, an Administrator makes a token and names the directory. The
+   token is shown **once**; only its digest is kept. Copy it into the directory with the address shown on the page
+   (`https://<your address>/api/scim/v2`, the "tenant URL" in Entra ID, the "SCIM connector base URL" in Okta), as
+   a bearer token.
+2. The directory creates people. Each is an internal user of the token's company **without a password**: they sign
+   in through [single sign-on](#single-sign-on), or ask for a reset link on the sign-in page.
+3. When the directory deactivates or deletes someone, they are **deactivated** here and signed out everywhere at
+   once. Nobody is deleted: their records and the audit log keep their author. The last Administrator cannot be
+   deactivated.
+4. The directory's groups appear on the same page with their members. Say which **roles** each gives (their codes,
+   as in Settings › Roles & permissions: `sales.user, account.user`). Members hold them at once and lose them when
+   they leave the group; roles you gave by hand outside the groups' roles are never touched; an Administrator role
+   is never given this way.
+5. Revoke a token on the page to refuse its directory from then on.
+
+What the directory can and cannot do:
+
+| | |
+| --- | --- |
+| `GET /Users`, `/Groups` | `filter=userName eq "…"`, `externalId eq "…"`, `displayName eq "…"` (groups); `startIndex`, `count` (at most 200). Any other filter is refused. |
+| `POST`, `PUT`, `PATCH` | `userName`, `displayName` / `name`, `emails`, `active`, `externalId`; a group's `displayName` and `members`. |
+| `DELETE /Users/:id` | Deactivates. |
+| Not supported | Bulk, sort, ETags, passwords (said in `/ServiceProviderConfig`). Portal users and service accounts are not listed and cannot be changed. |
+
+Everything the directory does is in the audit log (`scim.user_created`, `scim.user_deactivated`, `scim.roles`, …)
+with the token's name. Tested with the requests Entra ID and Okta send; **not yet certified against a real tenant**
+— try it on a test tenant of yours first.

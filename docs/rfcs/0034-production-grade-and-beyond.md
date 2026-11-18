@@ -322,3 +322,28 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   replayed — so `pnpm test` skips the contract; the pass is recorded in `recordings/keycloak.json` (when, and
   against which version). Google and Microsoft remain to verify with the company's own credentials (Microsoft needs
   *trust its addresses*: it does not send `email_verified`). Next in step 5: SCIM, passkeys.
+- **Step 5, part 3 (2026-11-18).** **SCIM 2.0 provisioning.** The design, decided before the code: the company's
+  directory (Entra ID, Okta, any SCIM client) is the source of who works here; this installation is a SCIM *server*
+  under `/api/scim/v2` (under `/api` so every proxy that reaches the API reaches it), on Fastify and Node alone — no
+  new dependency. **A token per directory**, made by an Administrator in Settings › Security, shown once, kept as a
+  SHA-256 digest, provisioning into one company, revocable, with its last use. **People** (`/Users`): `userName` is
+  the login, `emails` the address, `displayName` / `name` the name, `active` whether they may sign in, `externalId`
+  kept beside the person. Someone made by the directory is an internal user **without a password** — they sign in
+  through single sign-on or ask for a reset link. **Nobody is deleted**: `DELETE` and `active: false` deactivate and
+  sign the person out everywhere at once, so records and the audit log keep their author; the last Administrator
+  cannot be deactivated (the model's own rule answers). Portal users and service accounts are not the directory's:
+  not listed, not found. **Groups** (`/Groups`): the directory's groups and their members are kept; **the roles a
+  group gives are set here by an Administrator**, never by the directory, and never an Administrator's (refused in
+  Settings, and left out when roles are applied even if one were stored). A person holds exactly the roles their
+  groups give among the roles any group gives — given and taken the moment a membership or a group's roles change,
+  each change in the audit log (`scim.roles`), roles given by hand outside those never touched. The protocol as
+  directories speak it: `application/scim+json` (with or without a charset), SCIM's error format with `scimType`,
+  `filter=userName eq "…"` / `externalId eq "…"` / `displayName eq "…"` (any other filter is refused rather than
+  ignored: ignoring one would list everyone), `startIndex` / `count`, PATCH with operations in any case, booleans
+  as strings (`"False"`, Entra), values without a path (Okta), `members[value eq "…"]`. Bulk, sort, ETags and
+  password changes are declared unsupported in `ServiceProviderConfig`. Tests: 6 on the server with Entra- and
+  Okta-shaped requests, 3 on the Administrator's routes, one E2E through the Security page. **Not yet verified
+  against a real Entra ID or Okta tenant** — the request shapes are from their published behaviour; a tenant of the
+  company's own is needed to certify it, as Keycloak was for single sign-on. Left out: a role picker instead of
+  role codes as text, filters beyond `eq`, the enterprise-user schema (manager, department). Next in step 5:
+  passkeys.
