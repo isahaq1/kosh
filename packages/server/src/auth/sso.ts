@@ -15,6 +15,9 @@
  * - The **second factor still applies**: an account with two-factor sign-in is asked for its code after the
  *   provider (and Administrators need theirs, as always).
  * - A provider's **client secret** is read from the environment (`KOSH_SSO_<KEY>_SECRET`), never stored.
+ * - **Groups become roles**: a provider may map its groups to roles. At each sign-in the person holds exactly the
+ *   mapped roles their groups give — added and taken away, audited —; roles outside the map are never touched, and
+ *   an Administrator role is never given this way.
  *
  * - `GET  /api/v1/auth/sso/providers`        the providers a person may choose (`{ key, name }`), public
  * - `GET  /api/v1/auth/sso/:key/start`       `?next=/path` → the provider
@@ -211,8 +214,38 @@ interface Provider {
   readonly clientId: string;
   readonly scopes: string;
   readonly trustEmail: boolean;
+  readonly groupsClaim: string;
+  readonly groupMap: Readonly<Record<string, readonly string[]>>;
 }
-const PROVIDER_KEYS = ['key', 'name', 'issuer', 'clientId', 'scopes', 'trustEmail', 'enabled'];
+const PROVIDER_KEYS = [
+  'key',
+  'name',
+  'issuer',
+  'clientId',
+  'scopes',
+  'trustEmail',
+  'enabled',
+  'groupsClaim',
+  'groupMap',
+];
+
+/** The roles a person's groups at the provider give, and every role the map manages. */
+export function mappedRoles(
+  map: Readonly<Record<string, readonly string[]>>,
+  claim: unknown,
+): { readonly target: Set<string>; readonly managed: Set<string> } {
+  const groups = new Set(
+    (Array.isArray(claim) ? claim : typeof claim === 'string' ? [claim] : []).map((g) => String(g)),
+  );
+  const target = new Set<string>();
+  const managed = new Set<string>();
+  for (const [group, roles] of Object.entries(map))
+    for (const role of roles) {
+      managed.add(role);
+      if (groups.has(group)) target.add(role);
+    }
+  return { target, managed };
+}
 const STATE_MS = 10 * 60_000;
 const HANDOFF_MS = 60_000;
 
@@ -239,6 +272,11 @@ export function registerSsoRoutes(
       clientId: String(row['clientId']),
       scopes: String(row['scopes'] ?? 'openid email profile'),
       trustEmail: row['trustEmail'] === true,
+      groupsClaim: String(row['groupsClaim'] ?? 'groups'),
+      groupMap:
+        typeof row['groupMap'] === 'object' && row['groupMap'] !== null
+          ? (row['groupMap'] as Record<string, string[]>)
+          : {},
     };
   };
   const secretOf = (key: string): string | undefined => {
@@ -446,6 +484,53 @@ export function registerSsoRoutes(
         ['login'],
       );
       if (account === undefined) return { refused: 'unknown' as const };
+      // The roles the provider's groups give: exactly those, among the ones the map manages.
+      const { target, managed } = mappedRoles(provider.groupMap, claims[provider.groupsClaim]);
+      // Never an Administrator by a provider's word: those roles are given in Settings only.
+      for (const admin of env.access.administratorGroups()) {
+        managed.delete(admin);
+        target.delete(admin);
+      }
+      if (managed.size > 0) {
+        const held = await rows(
+          model(env, 'auth.user_group').search({
+            where: { user, company: null, group: { in: [...managed] } },
+          }),
+          ['group'],
+        );
+        const has = new Set(held.map((h) => String(h['group'])));
+        const added = [...target].filter((g) => !has.has(g));
+        const removed = held.filter((h) => !target.has(String(h['group'])));
+        if (added.length > 0)
+          await model(env, 'auth.user_group').create(
+            added.map((group) => ({ user, company: null, group })),
+          );
+        if (removed.length > 0) {
+          const gone = await model(env, 'auth.user_group').search({
+            where: { id: { in: removed.map((h) => h['id'] as number) } },
+          });
+          await (gone as unknown as { unlink(): Promise<void> }).unlink();
+        }
+        if (added.length > 0 || removed.length > 0)
+          await audit(env, {
+            kind: 'auth.sso_roles',
+            summary: `Roles of ${String(account['login'])} from ${provider.name}: ${[
+              added.length > 0 ? `given ${added.sort().join(', ')}` : null,
+              removed.length > 0
+                ? `taken ${removed
+                    .map((h) => String(h['group']))
+                    .sort()
+                    .join(', ')}`
+                : null,
+            ]
+              .filter((x) => x !== null)
+              .join('; ')}.`.slice(0, 500),
+            actor: user,
+            targetModel: 'res.users',
+            targetId: user,
+            ip: request.ip,
+          });
+      }
       const code = random();
       await model(env, 'auth.sso_state').create([
         {
@@ -457,7 +542,7 @@ export function registerSsoRoutes(
           expiresAt: new Date(Date.now() + HANDOFF_MS),
         },
       ]);
-      return { code, next: String(pending['next'] ?? '/') };
+      return { code, next: String(pending['next'] ?? '/'), user };
     });
     if ('refused' in outcome)
       return failed(
@@ -467,6 +552,8 @@ export function registerSsoRoutes(
           : `Nobody here has the address ${email.slice(0, 100)} (${provider.name}).`,
         { email: email.slice(0, 100) },
       );
+    // Their roles may just have changed: nothing cached about them is kept.
+    auth.forget(outcome.user);
     return reply.redirect(
       `${base}/login?sso=${outcome.code}${outcome.next === '/' ? '' : `&next=${encodeURIComponent(outcome.next)}`}`,
     );

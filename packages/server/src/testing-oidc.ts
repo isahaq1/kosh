@@ -13,6 +13,8 @@ export interface FakePerson {
   readonly email?: string;
   readonly email_verified?: boolean;
   readonly name?: string;
+  /** Any other claim of the ID token (`groups`). */
+  readonly [claim: string]: unknown;
 }
 
 export interface FakeOidc {

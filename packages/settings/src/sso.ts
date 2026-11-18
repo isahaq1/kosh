@@ -6,7 +6,9 @@
  *
  * - `GET    /api/v1/settings/sso`            the providers, each with its callback address and its secret's state
  * - `POST   /api/v1/settings/sso`            `{ key, name, issuer, clientId, scopes?, trustEmail?, enabled? }`
- * - `PATCH  /api/v1/settings/sso/:id`        the same fields but `key`
+ * - `PATCH  /api/v1/settings/sso/:id`        the same fields but `key`; `groupsClaim` and `groupMap`
+ *                                           (`{ "<group at the provider>": ["<role>", …] }`: roles that exist,
+ *                                           never an Administrator's)
  * - `DELETE /api/v1/settings/sso/:id`        the provider and the links people have to it
  * - `POST   /api/v1/settings/sso/:id/test`   reads the provider's configuration: reachable, and the issuer it says
  */
@@ -32,7 +34,17 @@ const rows = async (set: Records | Promise<Records>, keys: readonly string[]): P
   const s = await set;
   return s.length === 0 ? [] : (await s.load(keys)).read(['id', ...keys]);
 };
-const KEYS = ['key', 'name', 'issuer', 'clientId', 'scopes', 'trustEmail', 'enabled'];
+const KEYS = [
+  'key',
+  'name',
+  'issuer',
+  'clientId',
+  'scopes',
+  'trustEmail',
+  'enabled',
+  'groupsClaim',
+  'groupMap',
+];
 const bad = (detail: string, hint?: string) =>
   new HttpProblem(422, 'invalid', 'Invalid provider', detail, hint);
 
@@ -78,6 +90,8 @@ export function registerSsoAdminRoutes(
       scopes: String(row['scopes']),
       trustEmail: row['trustEmail'] === true,
       enabled: row['enabled'] !== false,
+      groupsClaim: String(row['groupsClaim'] ?? 'groups'),
+      groupMap: (row['groupMap'] as Record<string, string[]> | null) ?? {},
       /** What to register at the provider as the redirect address. */
       callbackUrl: `${base}/api/v1/auth/sso/${key}/callback`,
       /** Where the client secret is read from, and whether it is there: without it nobody is offered the provider. */
@@ -85,6 +99,37 @@ export function registerSsoAdminRoutes(
       secretSet: secret !== undefined && secret !== '',
       people,
     };
+  };
+  /** A map of provider groups to roles: roles that exist, and none an Administrator's. */
+  const groupMapOf = (
+    value: unknown,
+    administrators: ReadonlySet<string>,
+  ): Record<string, string[]> => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value))
+      throw bad('groupMap maps each group at the provider to a list of roles.');
+    const known = context.registry.registry.security.groups;
+    const out: Record<string, string[]> = {};
+    for (const [group, roles] of Object.entries(value as Row)) {
+      const name = group.trim();
+      if (name === '' || name.length > 200) throw bad('A group at the provider has a name.');
+      if (!Array.isArray(roles) || roles.some((r) => typeof r !== 'string'))
+        throw bad(`${name}: its roles are a list of role codes.`);
+      const codes = [...new Set((roles as string[]).map((r) => r.trim()).filter((r) => r !== ''))];
+      for (const code of codes) {
+        if (!known.has(code as never))
+          throw bad(
+            `${name}: there is no role ${code}.`,
+            'Roles are named as in Settings › Roles & permissions (sales.user, account.manager).',
+          );
+        if (administrators.has(code))
+          throw bad(
+            `${name}: ${code} is an Administrator role, which a provider never gives.`,
+            'Make someone an Administrator in Settings › People.',
+          );
+      }
+      if (codes.length > 0) out[name] = codes;
+    }
+    return out;
   };
   /** The fields of a request, checked. */
   const values = (body: Row, creating: boolean): Row => {
@@ -133,6 +178,8 @@ export function registerSsoAdminRoutes(
         if (typeof body[flag] !== 'boolean') throw bad(`${flag} is true or false.`);
         out[flag] = body[flag];
       }
+    const claim = text('groupsClaim', 100);
+    if (claim !== undefined) out['groupsClaim'] = claim;
     if (creating)
       for (const required of ['name', 'issuer', 'clientId'])
         if (out[required] === undefined) throw bad(`${required} is needed.`);
@@ -155,8 +202,11 @@ export function registerSsoAdminRoutes(
   );
 
   app.post('/api/v1/settings/sso', async (request) => {
-    const fields = values((request.body ?? {}) as Row, true);
+    const body = (request.body ?? {}) as Row;
+    const fields = values(body, true);
     return guarded(request, async (env, su) => {
+      if (body['groupMap'] !== undefined)
+        fields['groupMap'] = groupMapOf(body['groupMap'], new Set(su.access.administratorGroups()));
       const taken = await ref(su, 'auth.sso_provider').search({ where: { key: fields['key'] } });
       if (taken.length > 0)
         throw new HttpProblem(
@@ -179,8 +229,11 @@ export function registerSsoAdminRoutes(
 
   app.patch('/api/v1/settings/sso/:id', async (request) => {
     const id = idOf(request);
-    const fields = values((request.body ?? {}) as Row, false);
+    const body = (request.body ?? {}) as Row;
+    const fields = values(body, false);
     return guarded(request, async (env, su) => {
+      if (body['groupMap'] !== undefined)
+        fields['groupMap'] = groupMapOf(body['groupMap'], new Set(su.access.administratorGroups()));
       const found = await ref(su, 'auth.sso_provider').search({ where: { id }, limit: 1 });
       if (found.length === 0)
         throw new HttpProblem(404, 'missing-record', 'Not found', `No provider ${id}.`);

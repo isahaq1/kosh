@@ -46,6 +46,19 @@ test('an Administrator adds a provider; without its secret it is not offered at 
     await expect(provider).toContainText('KOSH_SSO_ACME_E2E_SECRET');
     await expect(provider).toContainText('Secret not set: not offered at sign-in');
 
+    // Its groups give roles: an Administrator's is refused by the server, a real one is saved.
+    await provider.getByText('Roles from the provider’s groups').click();
+    await provider.getByRole('button', { name: 'Add a group' }).click();
+    await provider.getByLabel('Group at the provider').fill('erp-people');
+    await provider.getByLabel('Roles it gives (codes, separated by commas)').fill('base.admin');
+    await provider.getByRole('button', { name: 'Save' }).click();
+    await expect(provider.getByRole('alert')).toContainText('is an Administrator role');
+    await provider
+      .getByLabel('Roles it gives (codes, separated by commas)')
+      .fill('settings.people');
+    await provider.getByRole('button', { name: 'Save' }).click();
+    await expect(provider.getByText('Saved: it applies from the next sign-in.')).toBeVisible();
+
     // Signed out, the sign-in page offers no provider.
     const other = await page.context().browser()?.newContext();
     const guest = await other?.newPage();
@@ -55,7 +68,7 @@ test('an Administrator adds a provider; without its secret it is not offered at 
     await expect(guest.getByRole('link', { name: /Sign in with/ })).toHaveCount(0);
     await other?.close();
   } finally {
-    await provider.getByRole('button', { name: 'Remove' }).click();
+    await provider.getByRole('button', { name: 'Remove', exact: true }).click();
     await expect(section.getByRole('listitem').filter({ hasText: 'Acme ID' })).toHaveCount(0);
   }
 });

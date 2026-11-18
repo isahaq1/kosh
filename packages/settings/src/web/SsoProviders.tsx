@@ -20,9 +20,115 @@ interface Provider {
   readonly secretName: string;
   readonly secretSet: boolean;
   readonly people: number;
+  readonly trustEmail: boolean;
+  readonly groupsClaim: string;
+  readonly groupMap: Readonly<Record<string, readonly string[]>>;
 }
 const message = (error: unknown) => (error instanceof ApiError ? error.message : String(error));
 const EMPTY = { key: '', name: '', issuer: '', clientId: '' };
+
+/**
+ * The roles a provider's groups give: one row per group at the provider, with the roles (their codes, as in
+ * Settings › Roles & permissions) it gives here. The server checks every role and refuses an Administrator's.
+ */
+function GroupRoles({
+  api,
+  provider,
+  onSaved,
+}: {
+  readonly api: KoshApi;
+  readonly provider: Provider;
+  readonly onSaved: () => void;
+}): ReactElement {
+  const { t } = useTranslation('settings');
+  const id = useId();
+  const [claim, setClaim] = useState(provider.groupsClaim);
+  const [trust, setTrust] = useState(provider.trustEmail);
+  const [rows, setRows] = useState(
+    Object.entries(provider.groupMap).map(([group, roles]) => ({ group, roles: roles.join(', ') })),
+  );
+  const save = useMutation({
+    mutationFn: () =>
+      api.call<Provider>('PATCH', `/api/v1/settings/sso/${provider.id}`, {
+        groupsClaim: claim,
+        trustEmail: trust,
+        groupMap: Object.fromEntries(
+          rows
+            .filter((r) => r.group.trim() !== '')
+            .map((r) => [
+              r.group.trim(),
+              r.roles
+                .split(',')
+                .map((x) => x.trim())
+                .filter((x) => x !== ''),
+            ]),
+        ),
+      }),
+    onSuccess: onSaved,
+  });
+  return (
+    <details className="rounded-md border p-3">
+      <summary className="cursor-pointer text-sm font-medium">{t('security.sso.roles')}</summary>
+      <div className="mt-3 grid gap-3">
+        <p className="text-sm text-muted-foreground">{t('security.sso.rolesHint')}</p>
+        {save.error === null ? null : <Alert>{message(save.error)}</Alert>}
+        {save.isSuccess ? <p role="status">{t('security.sso.rolesSaved')}</p> : null}
+        {rows.map((row, index) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: rows are edited in place; their position is their identity
+          <div key={index} className="grid gap-2 sm:grid-cols-[1fr_2fr_auto]">
+            <div className="grid gap-1">
+              <Label htmlFor={`${id}-group-${index}`}>{t('security.sso.group')}</Label>
+              <Input
+                id={`${id}-group-${index}`}
+                value={row.group}
+                onChange={(e) =>
+                  setRows(rows.map((r, i) => (i === index ? { ...r, group: e.target.value } : r)))
+                }
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label htmlFor={`${id}-roles-${index}`}>{t('security.sso.givenRoles')}</Label>
+              <Input
+                id={`${id}-roles-${index}`}
+                value={row.roles}
+                placeholder="sales.user, account.user"
+                onChange={(e) =>
+                  setRows(rows.map((r, i) => (i === index ? { ...r, roles: e.target.value } : r)))
+                }
+              />
+            </div>
+            <div className="flex items-end">
+              <Button
+                variant="secondary"
+                onClick={() => setRows(rows.filter((_, i) => i !== index))}
+              >
+                {t('security.sso.removeGroup')}
+              </Button>
+            </div>
+          </div>
+        ))}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-1">
+            <Label htmlFor={`${id}-claim`}>{t('security.sso.claim')}</Label>
+            <Input id={`${id}-claim`} value={claim} onChange={(e) => setClaim(e.target.value)} />
+          </div>
+          <label className="flex items-center gap-2 self-end text-sm">
+            <input type="checkbox" checked={trust} onChange={(e) => setTrust(e.target.checked)} />
+            {t('security.sso.trustEmail')}
+          </label>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => setRows([...rows, { group: '', roles: '' }])}>
+            {t('security.sso.addGroup')}
+          </Button>
+          <Button variant="primary" busy={save.isPending} onClick={() => save.mutate()}>
+            {t('security.sso.saveRoles')}
+          </Button>
+        </div>
+      </div>
+    </details>
+  );
+}
 
 export function SsoProviders({ api }: { readonly api: KoshApi }): ReactElement {
   const { t } = useTranslation('settings');
@@ -123,6 +229,7 @@ export function SsoProviders({ api }: { readonly api: KoshApi }): ReactElement {
                 </div>
                 <div>{t('security.sso.people', { count: p.people })}</div>
               </dl>
+              <GroupRoles api={api} provider={p} onSaved={refresh} />
               {tested[p.id] === undefined ? null : (
                 <p role="status" className="text-sm">
                   {tested[p.id]}

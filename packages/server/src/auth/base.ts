@@ -267,6 +267,13 @@ const AuthSsoProvider = defineModel('auth.sso_provider', {
     /** Accept the address without `email_verified` (providers that verify but do not say so). */
     trustEmail: f.boolean({ default: false }),
     enabled: f.boolean({ default: true }),
+    /** The claim of the ID token that lists the person's groups at the provider. */
+    groupsClaim: f.char({ required: true, default: 'groups' }),
+    /**
+     * Groups at the provider → roles here (`{ "erp-sales": ["sales.user"] }`). At each sign-in the person holds
+     * exactly the mapped roles their groups give; roles outside the map are never touched.
+     */
+    groupMap: f.json(),
   },
 });
 

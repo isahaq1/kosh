@@ -13,9 +13,8 @@ import {
   totp,
 } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
-import { type TestDatabase, testDatabase } from '@kosh/server/testing';
+import { type FakeOidc, fakeOidc, type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { type FakeOidc, fakeOidc } from '../../server/test/support/fake-oidc.js';
 import { settingsModule } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
@@ -183,4 +182,41 @@ test('a provider is checked, listed with what to register, tested, and offered o
     'security.sso_provider_changed',
     'security.sso_provider_removed',
   ]);
+});
+
+test('the roles a provider’s groups give are checked: roles that exist, never an Administrator’s', async () => {
+  const made = await call('POST', S, 'admin', {
+    key: 'roles',
+    name: 'Roles ID',
+    issuer: 'https://id.roles.example',
+    clientId: 'x',
+  });
+  const id = made.json.id as number;
+  expect(made.json).toMatchObject({ groupsClaim: 'groups', groupMap: {} });
+  for (const groupMap of [
+    { sales: ['no.such_role'] },
+    { admins: ['base.admin'] },
+    { sales: 'settings.people' },
+    ['settings.people'],
+  ])
+    expect(
+      (await call('PATCH', `${S}/${id}`, 'admin', { groupMap })).status,
+      JSON.stringify(groupMap),
+    ).toBe(422);
+  const refused = await call('PATCH', `${S}/${id}`, 'admin', {
+    groupMap: { admins: ['base.admin'] },
+  });
+  expect(refused.json.detail).toContain('is an Administrator role, which a provider never gives');
+
+  const saved = await call('PATCH', `${S}/${id}`, 'admin', {
+    groupsClaim: 'roles',
+    groupMap: { ' hr-team ': ['settings.people', 'settings.people'], nobody: [] },
+  });
+  expect(saved.status, JSON.stringify(saved.json)).toBe(200);
+  // Trimmed, without repeats, and a group that gives nothing is left out.
+  expect(saved.json).toMatchObject({
+    groupsClaim: 'roles',
+    groupMap: { 'hr-team': ['settings.people'] },
+  });
+  await call('DELETE', `${S}/${id}`, 'admin');
 });

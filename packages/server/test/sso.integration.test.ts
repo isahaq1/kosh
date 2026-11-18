@@ -15,8 +15,7 @@ import {
   totp,
 } from '../src/index.js';
 import { orm } from '../src/orm.js';
-import { type TestDatabase, testDatabase } from '../src/testing.js';
-import { type FakeOidc, fakeOidc } from './support/fake-oidc.js';
+import { type FakeOidc, fakeOidc, type TestDatabase, testDatabase } from '../src/testing.js';
 
 const PASSWORD = 'correct horse battery';
 const BASE = 'https://erp.example.test';
@@ -263,4 +262,52 @@ test('an account with two-factor sign-in still owes its code after the provider'
     (await server.app.inject({ method: 'GET', url: '/api/v1/auth/me', headers: pending }))
       .statusCode,
   ).toBe(200);
+});
+
+test('groups at the provider become roles: given and taken at each sign-in, never an Administrator’s', async () => {
+  const roles = async () =>
+    (
+      await server.driver.query<{ group: string }>({
+        text: 'SELECT "group" FROM auth_user_group WHERE user_id = $1 ORDER BY "group"',
+        params: [rumi],
+      })
+    ).map((r) => r.group);
+  const before = await roles();
+  expect(before).toEqual(['base.user']);
+  // The provider's developers are developers here; its administrators are not made Administrators.
+  await server.shutro.bootstrap({ reason: 'test' }, async (env) => {
+    const providers = env.model('auth.sso_provider' as never) as unknown as {
+      search(q: unknown): Promise<{ write(v: unknown): Promise<void> }>;
+    };
+    await (await providers.search({ where: { key: 'fake' } })).write({
+      groupMap: { 'erp-developers': ['base.developer'], 'erp-admins': ['base.admin'] },
+    });
+  });
+  const signIn = async (groups: unknown) => {
+    provider.person = {
+      sub: 'rumi-at-fake',
+      email: 'rumi@padma.test',
+      email_verified: true,
+      groups,
+    };
+    const landed = await journey();
+    expect(landed.searchParams.get('sso'), landed.toString()).not.toBeNull();
+  };
+
+  await signIn(['erp-developers', 'erp-admins', 'something-else']);
+  expect(await roles()).toEqual(['base.developer', 'base.user']);
+  expect((await audited('auth.sso_roles')).at(-1)).toBe(
+    'Roles of rumi@padma.test from Fake ID: given base.developer.',
+  );
+  // Signing in again with the same groups changes nothing, and says nothing.
+  const said = (await audited('auth.sso_roles')).length;
+  await signIn(['erp-developers']);
+  expect((await audited('auth.sso_roles')).length).toBe(said);
+
+  // No longer a developer at the provider: the role goes; what the map does not manage stays.
+  await signIn([]);
+  expect(await roles()).toEqual(['base.user']);
+  expect((await audited('auth.sso_roles')).at(-1)).toBe(
+    'Roles of rumi@padma.test from Fake ID: taken base.developer.',
+  );
 });
