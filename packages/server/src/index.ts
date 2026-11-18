@@ -66,6 +66,7 @@ export {
 } from './auth/crypto.js';
 export { type InstallBaseOptions, installBase } from './auth/install.js';
 export { registerAuthRoutes } from './auth/routes.js';
+export { scimTokenHash, syncScimRoles } from './auth/scim.js';
 export {
   type AuthOptions,
   AuthService,

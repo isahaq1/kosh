@@ -9,6 +9,7 @@ import { Laptop, Monitor, Smartphone } from 'lucide-react';
 import { type ReactElement, type ReactNode, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { deviceOf } from './ProfilePage.js';
+import { ScimProvisioning } from './ScimProvisioning.js';
 import { SsoProviders } from './SsoProviders.js';
 
 type TwoFactor = 'administrators' | 'everyone';
@@ -231,6 +232,9 @@ export function SecurityPage({ api }: PageProps): ReactElement {
           </Section>
           <Section title={t('security.sso.title')} hint={t('security.sso.hint')}>
             <SsoProviders api={api} />
+          </Section>
+          <Section title={t('security.scim.title')} hint={t('security.scim.hint')}>
+            <ScimProvisioning api={api} />
           </Section>
           <Section title={t('security.sessions')} hint={t('security.sessionsHint')}>
             <Sessions api={api} />

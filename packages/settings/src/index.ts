@@ -16,6 +16,7 @@ import { registerCompanyRoutes } from './company.js';
 import { registerDataHealthRoutes } from './data-health.js';
 import { type PeopleOptions, registerPeopleRoutes } from './people.js';
 import { registerAppRoutes } from './routes.js';
+import { registerScimAdminRoutes } from './scim.js';
 import { registerSecurityRoutes } from './security.js';
 import { registerSsoAdminRoutes } from './sso.js';
 
@@ -213,6 +214,9 @@ export function settingsModule(options: Partial<PeopleOptions> = {}): KoshModule
       registerCompanyRoutes(context);
       registerSecurityRoutes(context);
       registerSsoAdminRoutes(context, {
+        baseUrl: options.baseUrl ?? process.env['KOSH_BASE_URL'] ?? 'http://localhost:5173',
+      });
+      registerScimAdminRoutes(context, {
         baseUrl: options.baseUrl ?? process.env['KOSH_BASE_URL'] ?? 'http://localhost:5173',
       });
       registerAppSettingsRoutes(context);

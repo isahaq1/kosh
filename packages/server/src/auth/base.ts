@@ -312,6 +312,54 @@ const AuthSsoState = defineModel('auth.sso_state', {
 });
 
 /**
+ * A directory's SCIM token (`scim.ts`, RFC 0034 §2.4): shown once, stored as a digest; it provisions people into
+ * one company. Private: made and revoked by Administrators in Settings › Security.
+ */
+const AuthScimToken = defineModel('auth.scim_token', {
+  fields: {
+    name: f.char({ required: true }),
+    tokenHash: f.char({ required: true, index: 'unique' }),
+    /** The token's start, to tell tokens apart. */
+    prefix: f.char({ required: true }),
+    company: f.many2one('res.company', { required: true, ondelete: 'cascade' }),
+    lastUsedAt: f.datetime(),
+    revoked: f.boolean({ default: false }),
+  },
+});
+
+/** A person the directory provisioned or adopted, with the directory's id of them. Private. */
+const AuthScimUser = defineModel('auth.scim_user', {
+  fields: {
+    user: f.many2one('res.users', { required: true, ondelete: 'cascade', index: 'unique' }),
+    externalId: f.char({ index: true }),
+  },
+});
+
+/**
+ * A group of the directory. Its roles are set here by an Administrator — never by the directory, never an
+ * Administrator's —; its members hold them. Private.
+ */
+const AuthScimGroup = defineModel('auth.scim_group', {
+  fields: {
+    displayName: f.char({ required: true, index: 'unique' }),
+    externalId: f.char({ index: true }),
+    /** Role codes (`["sales.user"]`). */
+    roles: f.json(),
+  },
+});
+
+/** A person in a directory group. Private. */
+const AuthScimMember = defineModel('auth.scim_member', {
+  fields: {
+    group: f.many2one('auth.scim_group', { required: true, ondelete: 'cascade' }),
+    user: f.many2one('res.users', { required: true, ondelete: 'cascade' }),
+  },
+  sqlConstraints: {
+    once: { unique: ['group', 'user'], message: 'This person is in the group already.' },
+  },
+});
+
+/**
  * A merge of duplicates (`merge.ts`, RFC 0036 §2.3): what was kept, what was merged into it, and every link that was
  * moved — what an undo puts back. Private: written by the merge and its undo only.
  */
@@ -423,6 +471,10 @@ export const baseShutro: ReturnType<typeof orm.defineModule> = defineModule({
     AuthSsoProvider,
     AuthSsoIdentity,
     AuthSsoState,
+    AuthScimToken,
+    AuthScimUser,
+    AuthScimGroup,
+    AuthScimMember,
     AuditEvent,
     SavedView,
   ],
@@ -453,6 +505,10 @@ export const base: ReturnType<typeof defineKoshModule> = defineKoshModule({
     'auth.sso_provider',
     'auth.sso_identity',
     'auth.sso_state',
+    'auth.scim_token',
+    'auth.scim_user',
+    'auth.scim_group',
+    'auth.scim_member',
     'audit.event',
   ],
 });
