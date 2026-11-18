@@ -78,6 +78,9 @@ export function Login({
             <Button type="submit" variant="primary" busy={signIn.isPending}>
               {t('auth.signIn')}
             </Button>
+            <a className="text-sm underline" href="/forgot">
+              {t('auth.forgotLink')}
+            </a>
           </form>
         ) : (
           <form

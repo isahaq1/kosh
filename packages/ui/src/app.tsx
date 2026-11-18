@@ -111,6 +111,7 @@ import { Consent } from './shell/Consent.js';
 import { Home } from './shell/Home.js';
 import { Login } from './shell/Login.js';
 import { OfflineMenu } from './shell/OfflineMenu.js';
+import { Forgot, Reset } from './shell/PasswordReset.js';
 import { RouteError } from './shell/RouteError.js';
 import { rememberRecord } from './shell/recent.js';
 import { Sidebar, SidebarDrawer, useSidebarCollapsed } from './shell/Sidebar.js';
@@ -1316,6 +1317,14 @@ function OpenModelPage(): ReactElement {
   );
 }
 
+function ForgotPage(): ReactElement {
+  return <Forgot api={useServices().api} />;
+}
+
+function ResetPage(): ReactElement {
+  return <Reset api={useServices().api} />;
+}
+
 function ActivatePage(): ReactElement {
   const navigate = useNavigate();
   return <Activate api={useServices().api} onSignedIn={() => void navigate({ to: '/' })} />;
@@ -1358,6 +1367,17 @@ const activateRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/activate',
   component: ActivatePage,
+});
+/** Password reset (RFC 0034 §2.4): asking for the link, and the page the link opens. */
+const forgotRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/forgot',
+  component: ForgotPage,
+});
+const resetRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/reset',
+  component: ResetPage,
 });
 /** The OAuth consent page (RFC 0017 §5.2): outside the shell, like sign-in. */
 const consentRoute = createRoute({
@@ -1421,6 +1441,8 @@ const userPageRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   loginRoute,
   activateRoute,
+  forgotRoute,
+  resetRoute,
   consentRoute,
   shellRoute.addChildren([
     indexRoute,

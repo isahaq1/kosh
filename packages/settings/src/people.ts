@@ -14,6 +14,10 @@
  * - `POST  /api/v1/settings/people/:id/invitation`      a new link (earlier ones stop working)
  * - `POST  /api/v1/settings/people/:id/reset-2fa`       two-factor off, sessions revoked
  * - `POST  /api/v1/auth/activate`                       `{ token, password }`: the invited person's password
+ * - `POST  /api/v1/auth/password/forgot`                `{ login }`: a reset link by email; the answer never says
+ *                                                      whether the account exists
+ * - `POST  /api/v1/auth/password/reset`                 `{ token, password }`: the new password, once, within the
+ *                                                      hour; the person is signed out everywhere
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { layout, type Mailer } from '@kosh/mail';
@@ -30,6 +34,9 @@ import type { FastifyRequest } from 'fastify';
 
 /** How long an invitation works. */
 export const INVITATION_DAYS = 7;
+/** How long a password reset link works, and how many one account may ask for in an hour (RFC 0034 §2.4). */
+export const RESET_MINUTES = 60;
+export const RESETS_PER_HOUR = 3;
 
 type Row = Record<string, unknown>;
 interface Records {
@@ -170,7 +177,9 @@ export function registerPeopleRoutes(context: ModuleContext, options: PeopleOpti
   };
   /** A new invitation for `user` (earlier unused ones expire); its link. */
   const invite = async (su: Env, user: number, by: number) => {
-    const pending = await ref(su, 'settings.invitation').search({ where: { user, usedAt: null } });
+    const pending = await ref(su, 'settings.invitation').search({
+      where: { user, usedAt: null, purpose: 'invite' },
+    });
     if (pending.length > 0) await pending.write({ expiresAt: new Date() });
     const token = randomBytes(32).toString('base64url');
     const expiresAt = new Date(Date.now() + INVITATION_DAYS * 86_400_000);
@@ -620,7 +629,7 @@ export function registerPeopleRoutes(context: ModuleContext, options: PeopleOpti
       throw bad('The password has at least 12 characters.');
     const login = await context.shutro.bootstrap({ reason: 'activation' }, async (su) => {
       const found = await ref(su, 'settings.invitation').search({
-        where: { tokenHash: digest(token) },
+        where: { tokenHash: digest(token), purpose: 'invite' },
         limit: 1,
       });
       const [row] = await rows(found, ['user', 'expiresAt', 'usedAt']);
@@ -651,5 +660,168 @@ export function registerPeopleRoutes(context: ModuleContext, options: PeopleOpti
       return String(account['login']);
     });
     return { login };
+  });
+
+  // ---- password reset (RFC 0034 §2.4): a single-use link by email, good for an hour
+  const base = options.baseUrl.replace(/\/$/, '');
+  app.post(
+    '/api/v1/auth/password/forgot',
+    {
+      config: {
+        auth: false,
+        rateLimit: {
+          hook: 'preHandler' as const,
+          max: 5,
+          timeWindow: '15 minutes',
+          keyGenerator: (request: FastifyRequest) => `forgot:${request.ip}`,
+        },
+      },
+    },
+    async (request) => {
+      const login = String(((request.body ?? {}) as Row)['login'] ?? '')
+        .trim()
+        .toLowerCase();
+      // The same answer whoever asks, whatever they typed: nobody learns who has an account.
+      const answer = { ok: true };
+      const mailer = options.mailer;
+      if (login === '' || login.length > 320 || mailer === undefined) return answer;
+      await context.shutro.bootstrap({ reason: 'password reset requested' }, async (su) => {
+        const [account] = await rows(
+          ref(su, 'res.users').search({ where: { login, active: true }, limit: 1 }),
+          ['name', 'email', 'login', 'company'],
+        );
+        if (account === undefined) return;
+        const user = account['id'] as number;
+        const to = EMAIL.test(String(account['email'] ?? ''))
+          ? String(account['email'])
+          : EMAIL.test(String(account['login']))
+            ? String(account['login'])
+            : null;
+        if (to === null) return;
+        const recent = await ref(su, 'settings.invitation').search({
+          where: {
+            user,
+            purpose: 'reset',
+            createdAt: { gte: new Date(Date.now() - 60 * 60_000) },
+          },
+        });
+        if (recent.length >= RESETS_PER_HOUR) return;
+        // An earlier link stops working: the latest email is the one that counts.
+        const pending = await ref(su, 'settings.invitation').search({
+          where: { user, usedAt: null, purpose: 'reset' },
+        });
+        if (pending.length > 0) await pending.write({ expiresAt: new Date() });
+        const token = randomBytes(32).toString('base64url');
+        await ref(su, 'settings.invitation').create([
+          {
+            user,
+            purpose: 'reset',
+            tokenHash: digest(token),
+            expiresAt: new Date(Date.now() + RESET_MINUTES * 60_000),
+          },
+        ]);
+        await audit(su, {
+          kind: 'auth.reset_requested',
+          summary: 'A password reset link was asked for.',
+          actor: user,
+          company: (account['company'] as number | null) ?? null,
+          targetModel: 'res.users',
+          targetId: user,
+          ip: request.ip,
+        });
+        su.afterCommit(async () => {
+          const body = layout({
+            title: 'Reset your Shutro ERP password',
+            paragraphs: [
+              `Hello ${String(account['name'])},`,
+              'Someone asked to reset the password of your account. If it was you, choose a new one.',
+              `The link works once, for ${RESET_MINUTES} minutes. If it was not you, ignore this email: your password stays as it is.`,
+            ],
+            action: { label: 'Choose a new password', url: `${base}/reset?token=${token}` },
+          });
+          await mailer
+            .send({ to, subject: 'Reset your Shutro ERP password', ...body })
+            .catch((error: unknown) => app.log.error({ err: error }, 'password reset not sent'));
+        });
+      });
+      return answer;
+    },
+  );
+
+  app.post('/api/v1/auth/password/reset', { config: { auth: false } }, async (request) => {
+    const body = (request.body ?? {}) as Row;
+    const token = typeof body['token'] === 'string' ? body['token'] : '';
+    const password = typeof body['password'] === 'string' ? body['password'] : '';
+    const invalid = () =>
+      new HttpProblem(
+        410,
+        'reset-invalid',
+        'This link no longer works',
+        'The link was used, replaced or has expired.',
+        'Ask for a new one from the sign-in page.',
+      );
+    if (token === '') throw invalid();
+    if (password.length < 12 || password.length > 1024)
+      throw bad('The password has at least 12 characters.');
+    const done = await context.shutro.bootstrap({ reason: 'password reset' }, async (su) => {
+      const found = await ref(su, 'settings.invitation').search({
+        where: { tokenHash: digest(token), purpose: 'reset' },
+        limit: 1,
+      });
+      const [row] = await rows(found, ['user', 'expiresAt', 'usedAt']);
+      if (
+        row === undefined ||
+        row['usedAt'] !== null ||
+        new Date(String(row['expiresAt'])).getTime() <= Date.now()
+      )
+        throw invalid();
+      const user = row['user'] as number;
+      const [account] = await rows(ref(su, 'res.users').browse([user]), [
+        'active',
+        'company',
+        'login',
+        'email',
+        'name',
+      ]);
+      if (account?.['active'] !== true) throw invalid();
+      await auth.setPassword(su, user, password);
+      await found.write({ usedAt: new Date() });
+      // Whoever was signed in with the old password is signed out, everywhere.
+      const sessions = await ref(su, 'auth.session').search({ where: { user, revoked: false } });
+      if (sessions.length > 0) await sessions.write({ revoked: true });
+      await audit(su, {
+        kind: 'auth.password_reset',
+        summary: 'A password was reset from an emailed link; signed out everywhere.',
+        actor: user,
+        company: (account['company'] as number | null) ?? null,
+        targetModel: 'res.users',
+        targetId: user,
+        ip: request.ip,
+      });
+      const mailer = options.mailer;
+      const to = EMAIL.test(String(account['email'] ?? ''))
+        ? String(account['email'])
+        : EMAIL.test(String(account['login']))
+          ? String(account['login'])
+          : null;
+      if (mailer !== undefined && to !== null)
+        su.afterCommit(async () => {
+          const message = layout({
+            title: 'Your Shutro ERP password was changed',
+            paragraphs: [
+              `Hello ${String(account['name'])},`,
+              'The password of your account was just changed from a reset link, and every device was signed out.',
+              'If it was not you, tell your administrator now.',
+            ],
+            action: { label: 'Sign in', url: `${base}/login` },
+          });
+          await mailer
+            .send({ to, subject: 'Your Shutro ERP password was changed', ...message })
+            .catch((error: unknown) => app.log.error({ err: error }, 'password notice not sent'));
+        });
+      return { user, login: String(account['login']) };
+    });
+    auth.forget(done.user);
+    return { login: done.login };
   });
 }

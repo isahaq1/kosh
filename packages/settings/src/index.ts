@@ -46,6 +46,8 @@ const Invitation = orm.defineModel('settings.invitation', {
     expiresAt: orm.f.datetime({ required: true }),
     usedAt: orm.f.datetime(),
     invitedBy: orm.f.many2one('res.users', { ondelete: 'set null' }),
+    /** `invite`: the person chooses their first password. `reset`: they asked for a new one (RFC 0034 §2.4). */
+    purpose: orm.f.char({ required: true, default: 'invite' }),
   },
 });
 
