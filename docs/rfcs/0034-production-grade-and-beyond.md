@@ -290,3 +290,14 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   of another sign-in, from another issuer or signed by another key refused, a state and a hand-off code working
   once, the second factor still asked. **Not usable by an administrator yet**: a provider is a record only the system
   can make, and the sign-in page has no button — both come with part 2b (Settings › Security and the sign-in page).
+- **Step 5, part 2b (2026-11-18).** **Single sign-on, usable.** Settings › Security › Single sign-on, for
+  Administrators (`/api/v1/settings/sso`: list, add, change, remove, test): a provider is its key, its name on the
+  button, its issuer (https; `localhost` for development) and the client id; the list gives the **redirect address to
+  register** at the provider, the **variable its secret is read from** and whether it is set, how many people signed
+  in with it, and Test reads the provider's configuration. Every change is audited. The sign-in page offers the
+  providers that are on and have their secret (`Sign in with …`), exchanges the hand-off code for the session, asks
+  for the second factor when it is owed, and says a refusal in words (unknown address, no verified address, a token
+  that cannot be trusted, a sign-in used or too old, the provider failing). English and Bangla. E2E: the refusals on
+  the sign-in page; a provider added, refused without https, shown with what to register, not offered without its
+  secret, removed. Still to do in step 5: groups mapped to roles, the certification against Keycloak, then SCIM and
+  passkeys.

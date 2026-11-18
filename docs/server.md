@@ -203,3 +203,35 @@ A person who forgot their password asks for a link on the sign-in page (**Forgot
 The link works once, for 60 minutes, and a newer one replaces it; an account asks at most three times an hour.
 Resetting signs every device out and emails the person that their password changed. Both steps are in the audit
 log. It needs outgoing mail (`SMTP_URL`); two-factor sign-in is not affected.
+
+## Single sign-on
+
+People can sign in at the company's identity provider — Google, Microsoft, Keycloak, any OpenID Connect provider.
+
+1. At the provider, register an application (a "web" client with the authorization code flow). You get a **client
+   id** and a **client secret**.
+2. In **Settings › Security › Single sign-on**, add the provider: its name on the button, a key (`google`), its
+   issuer (`https://accounts.google.com`) and the client id. The page shows the **redirect address** to register at
+   the provider (`…/api/v1/auth/sso/google/callback`) and the **environment variable** the secret is read from.
+3. Put the secret in the installation's `.env` and restart:
+
+   ```sh
+   KOSH_SSO_GOOGLE_SECRET=<the client secret>
+   ```
+
+   The secret is never stored in the database or typed on a page.
+4. **Test** reads the provider's configuration. The sign-in page now offers **Sign in with Google**.
+
+What to know:
+
+- **Only people who are already in Settings › People sign in this way.** The first time, a person is found by the
+  **verified** email address the provider gives, matched to their login or email, and linked to the provider's
+  account; afterwards the link is what counts. Nobody gets an account by having a company address; an unknown or
+  deactivated person is refused, and the refusal is in the audit log.
+- **Two-factor sign-in still applies**: an account that has it is asked for its code after the provider.
+- A provider that does not say `email_verified` can be trusted for its addresses with `trustEmail` (the API).
+- Accepted tokens are signed with RS256, PS256 or ES256 by a key the provider publishes, for this installation's
+  client id, unexpired, and belonging to this sign-in; anything else is refused.
+- The installation's address must be right (`KOSH_BASE_URL`): the provider sends people back to it.
+
+Verified against a fake provider in the test suite; Keycloak, Google and Microsoft are still to be certified.
