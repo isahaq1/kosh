@@ -77,6 +77,13 @@ export {
   type UserInfo,
 } from './auth/service.js';
 export {
+  discover,
+  type IdClaims,
+  IdTokenError,
+  ssoSecretName,
+  verifyIdToken,
+} from './auth/sso.js';
+export {
   checkData,
   type DataCheckResult,
   type DataHealth,

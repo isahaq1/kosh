@@ -252,6 +252,59 @@ const KoshSetting = defineModel('kosh.setting', {
 });
 
 /**
+ * A single sign-on provider (`sso.ts`, RFC 0034 §2.4): an OpenID Connect issuer and this installation's client id
+ * there. Its client secret is read from the environment (`KOSH_SSO_<KEY>_SECRET`), never stored. Private.
+ */
+const AuthSsoProvider = defineModel('auth.sso_provider', {
+  fields: {
+    /** In addresses and in the secret's name (`google`). */
+    key: f.char({ required: true, index: 'unique' }),
+    /** On the sign-in button ("Google"). */
+    name: f.char({ required: true }),
+    issuer: f.char({ required: true }),
+    clientId: f.char({ required: true }),
+    scopes: f.char({ required: true, default: 'openid email profile' }),
+    /** Accept the address without `email_verified` (providers that verify but do not say so). */
+    trustEmail: f.boolean({ default: false }),
+    enabled: f.boolean({ default: true }),
+  },
+});
+
+/** A person at a provider (its subject), linked to their account at their first sign-in. Private. */
+const AuthSsoIdentity = defineModel('auth.sso_identity', {
+  fields: {
+    provider: f.many2one('auth.sso_provider', { required: true, ondelete: 'cascade' }),
+    subject: f.char({ required: true }),
+    user: f.many2one('res.users', { required: true, ondelete: 'cascade' }),
+    email: f.char(),
+  },
+  sqlConstraints: {
+    onePerSubject: {
+      unique: ['provider', 'subject'],
+      message: 'This person of the provider is linked to an account already.',
+    },
+  },
+});
+
+/**
+ * A sign-on in progress: its `state` with the nonce and the PKCE verifier (ten minutes), then the hand-off code the
+ * sign-in page exchanges for the session (a minute). Each is stored hashed and used once. Private.
+ */
+const AuthSsoState = defineModel('auth.sso_state', {
+  fields: {
+    kind: f.char({ required: true }),
+    codeHash: f.char({ required: true, index: 'unique' }),
+    provider: f.many2one('auth.sso_provider', { required: true, ondelete: 'cascade' }),
+    nonce: f.char(),
+    verifier: f.char(),
+    next: f.char(),
+    user: f.many2one('res.users', { ondelete: 'cascade' }),
+    expiresAt: f.datetime({ required: true }),
+    usedAt: f.datetime(),
+  },
+});
+
+/**
  * A merge of duplicates (`merge.ts`, RFC 0036 §2.3): what was kept, what was merged into it, and every link that was
  * moved — what an undo puts back. Private: written by the merge and its undo only.
  */
@@ -360,6 +413,9 @@ export const baseShutro: ReturnType<typeof orm.defineModule> = defineModule({
     KoshImage,
     KoshSetting,
     KoshMerge,
+    AuthSsoProvider,
+    AuthSsoIdentity,
+    AuthSsoState,
     AuditEvent,
     SavedView,
   ],
@@ -387,6 +443,9 @@ export const base: ReturnType<typeof defineKoshModule> = defineKoshModule({
     'kosh.image',
     'kosh.setting',
     'kosh.merge',
+    'auth.sso_provider',
+    'auth.sso_identity',
+    'auth.sso_state',
     'audit.event',
   ],
 });

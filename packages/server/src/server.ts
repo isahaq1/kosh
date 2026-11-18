@@ -25,6 +25,7 @@ import { registerOAuthRoutes } from './auth/oauth.js';
 import { registerAuthRoutes } from './auth/routes.js';
 import { enforceScopes } from './auth/scopes.js';
 import { type AuthOptions, AuthService } from './auth/service.js';
+import { registerSsoRoutes } from './auth/sso.js';
 import { applyEnvironmentNames } from './env-names.js';
 import { HttpProblem, problemOf, ServerConfigError } from './errors.js';
 import { loadDictionaries, registerTranslation } from './i18n.js';
@@ -378,6 +379,10 @@ export async function createServer(options: ServerOptions): Promise<KoshServer> 
     registerApiKeyRoutes(app, auth, registry);
     registerImageRoutes(app, auth);
     registerOAuthRoutes(app, auth, () => shutro as Shutro, registry, {
+      baseUrl: options.oauth?.baseUrl ?? process.env['KOSH_BASE_URL'] ?? 'http://localhost:5173',
+    });
+    // Single sign-on (RFC 0034 §2.4): the provider answers at this address, and sends people back to it.
+    registerSsoRoutes(app, auth, () => shutro as Shutro, {
       baseUrl: options.oauth?.baseUrl ?? process.env['KOSH_BASE_URL'] ?? 'http://localhost:5173',
     });
   }

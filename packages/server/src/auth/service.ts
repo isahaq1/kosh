@@ -300,6 +300,59 @@ export class AuthService {
     return outcome;
   }
 
+  /**
+   * A session for a person who proved who they are another way (single sign-on, RFC 0034 §2.4): as a password
+   * sign-in gives it — an account with two-factor sign-in still owes its code. Refused for an inactive account.
+   */
+  async signInAs(
+    request: FastifyRequest,
+    user: number,
+    how: string,
+  ): Promise<{ token: string; csrfToken: string; twoFactorRequired: boolean }> {
+    const { sessionDays } = await this.policy();
+    const lifetimeMs = sessionDays === null ? this.#options.lifetimeMs : sessionDays * 86_400_000;
+    const outcome = await this.#system(`sign-in by ${how}`, async (env) => {
+      const account = one(
+        await fetch(model(env, 'res.users').search({ where: { id: user } }), ['login', 'active']),
+      );
+      if (account === undefined || account['active'] === false) return null;
+      const credential = one(
+        await fetch(model(env, 'auth.credential').search({ where: { user } }), ['totpEnabled']),
+      );
+      const token = randomToken();
+      const csrfToken = randomToken(24);
+      const now = Date.now();
+      const twoFactorRequired = credential?.['totpEnabled'] === true;
+      await model(env, 'auth.session').create([
+        {
+          tokenHash: digest(token),
+          csrfHash: digest(csrfToken),
+          user,
+          twoFactorVerified: !twoFactorRequired,
+          expiresAt: new Date(now + lifetimeMs),
+          lastSeenAt: new Date(now),
+          ip: request.ip,
+          userAgent: String(request.headers['user-agent'] ?? '').slice(0, 300),
+        },
+      ]);
+      await audit(env, {
+        kind: 'auth.login',
+        summary: `${String(account['login'])} signed in by ${how}${twoFactorRequired ? ' (second factor pending)' : ''}.`,
+        actor: user,
+        company: null,
+        ip: request.ip,
+      });
+      return { token, csrfToken, twoFactorRequired };
+    });
+    if (outcome === null)
+      throw unauthenticated(
+        'invalid-credentials',
+        'This account cannot sign in.',
+        'Ask your administrator.',
+      );
+    return outcome;
+  }
+
   /** The request's session, or `null`. Cookie sessions need the CSRF header on unsafe methods. */
   async session(request: FastifyRequest): Promise<SessionInfo | null> {
     const header = String(request.headers.authorization ?? '');
