@@ -276,3 +276,24 @@ What the directory can and cannot do:
 Everything the directory does is in the audit log (`scim.user_created`, `scim.user_deactivated`, `scim.roles`, …)
 with the token's name. Tested with the requests Entra ID and Okta send; **not yet certified against a real tenant**
 — try it on a test tenant of yours first.
+
+## Passkeys
+
+A person can sign in with their device — a fingerprint, a face, a PIN, a security key — instead of a password and a
+code. A passkey answers only for your installation's address, so a look-alike site cannot take it.
+
+- **Adding one**: *Your profile › Passkeys › Add a passkey*, with a name ("My laptop"). The browser asks the device;
+  the server keeps the passkey's public key — nothing secret.
+- **Signing in**: *Use a passkey* on the sign-in page. No login, no password, no code: the device and what
+  unlocked it are two factors, so an Administrator's rights apply at once.
+- **The password and the authenticator app stay.** A lost device locks nobody out: sign in with the password, remove
+  the passkey in the profile. Where Settings › Security asks for two-factor sign-in, the authenticator app is still
+  set up.
+- Deactivating a person refuses their passkeys. Adding, removing and every refused sign-in are in the audit log.
+
+**`KOSH_BASE_URL` must be the address people open** (`https://erp.example.com`): the passkey is bound to its host
+name, and the browser refuses a page served from anywhere else. Passkeys need https (or `localhost`). Changing the
+host name later makes existing passkeys unusable — people add them again.
+
+Verified with Chrome's virtual authenticator in the test suite; try a real device and your other browsers before
+relying on it.

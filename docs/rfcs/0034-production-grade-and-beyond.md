@@ -347,3 +347,28 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   company's own is needed to certify it, as Keycloak was for single sign-on. Left out: a role picker instead of
   role codes as text, filters beyond `eq`, the enterprise-user schema (manager, department). Next in step 5:
   passkeys.
+- **Step 5, part 4 (2026-11-18).** **Passkeys.** The design, decided before the code: WebAuthn on Node's crypto
+  alone (as decided for single sign-on: no new dependency) — a CBOR reader for the two structures WebAuthn uses,
+  COSE keys (ES256, EdDSA, RS256 of 2048 bits or more) turned into Node keys, the two ceremonies checked: the
+  type, **our challenge** (random, stored hashed, five minutes, used once), **our origin**, **our relying-party
+  id** (the host name of `KOSH_BASE_URL`; on `localhost` any port, for development), the person present and
+  **verified by the device**, and at sign-in the signature by the key kept at registration. Attestation is not
+  asked for and its statement not read: which make of authenticator a person uses is not ours to decide.
+  **A passkey sign-in is the whole sign-in**: the device and what unlocked it are two factors, so no code is owed
+  and the session has its second factor (an Administrator's rights apply). Passkeys are kept on the device
+  (`residentKey: required`), so no login is typed. **Beside the password and the authenticator app, not instead of
+  them**: a lost device locks nobody out, and where the policy asks for two-factor sign-in the authenticator app is
+  still set up. Adding one needs a full session (a session that still owes its code cannot); twenty per person;
+  each named, listed with when it was added and last used and whether its provider syncs it, removed by its owner
+  only. A counter that does not move forward (a copied key) refuses the sign-in; synced passkeys say 0 and are
+  not held to it. Every refusal is one answer to the browser (nothing to learn about which passkeys exist) with
+  the reason in the audit log (`auth.passkey_refused`); adding and removing are audited; a deactivated person is
+  refused. On screen: *Use a passkey* on the sign-in page (where the browser can), *Passkeys* in Your
+  profile, English and Bangla. Tests: 6 on the server with a software authenticator (`fakePasskey` in
+  `@kosh/server/testing`) — another origin, another site, unverified, another key, a replayed answer, a forged
+  challenge, an old counter, a removed passkey, a deactivated person, someone else's passkey —, and one E2E with
+  **Chrome's own virtual authenticator**, so the browser's real ceremony is what is verified. Not verified: a
+  physical security key or a phone, Safari and Firefox (try yours before relying on it). Left out: passkeys as the
+  second step after a password, an Administrator removing someone's passkeys from Settings › People (deactivating
+  the person refuses them), a policy that requires passkeys. **Step 5 is complete** — password reset, single
+  sign-on with groups to roles (certified against Keycloak), SCIM provisioning, passkeys.
