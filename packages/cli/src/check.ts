@@ -9,7 +9,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
-import { checkData, dataHealthText } from '@kosh/server';
+import { dataHealthText, runDataHealth } from '@kosh/server';
 import { modulesOf, openProject } from './project.js';
 import { checkStandard, isManifest, RULES, standardReport, withDependencies } from './standard.js';
 
@@ -47,7 +47,8 @@ async function runCheckData(
         : [{ id: Number(values.company), name: `company ${values.company}` }];
     const results = [];
     for (const company of companies) {
-      const health = await checkData(server.shutro, server.registry.loaded.modules, {
+      // Recorded: the doctor and Settings › Data health show the last result.
+      const health = await runDataHealth(server.shutro, server.registry.loaded.modules, {
         company: company.id,
       });
       results.push({ ...health, name: company.name });

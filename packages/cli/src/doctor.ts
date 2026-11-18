@@ -9,7 +9,7 @@ import { existsSync } from 'node:fs';
 import { connect } from 'node:net';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { migrate, readInstalledApps } from '@kosh/server';
+import { lastDataHealth, migrate, readInstalledApps } from '@kosh/server';
 import { type Driver, pg } from '@kosh/server/orm';
 import { lastVerification } from './backup.js';
 import { modulesOf } from './project.js';
@@ -317,6 +317,37 @@ export async function diagnose(
             ),
       );
     }
+    // The companies' data, as last checked (`shutro-erp check data`, or the weekly run of a server).
+    const health = await lastDataHealth(db);
+    const failing = health.filter((h) => !h.ok);
+    const oldest = health.reduce(
+      (at, h) => Math.min(at, new Date(h.checkedAt).getTime()),
+      Number.POSITIVE_INFINITY,
+    );
+    out.push(
+      health.length === 0
+        ? warn(
+            'data',
+            'the data was never checked',
+            'Run shutro-erp check data (a running server does it once a week).',
+          )
+        : failing.length > 0
+          ? warn(
+              'data',
+              `${failing.reduce((n, h) => n + h.failing.length, 0)} check(s) found something in ${failing.length} company(ies): ${failing
+                .flatMap((h) => h.failing.map((f) => f.label))
+                .slice(0, 2)
+                .join('; ')}`,
+              'Run shutro-erp check data to see each finding with its records, or open Settings › Data health.',
+            )
+          : Date.now() - oldest > 14 * 86_400_000
+            ? warn(
+                'data',
+                `last checked ${Math.floor((Date.now() - oldest) / 86_400_000)} days ago`,
+                'Run shutro-erp check data, or keep a server running: it checks once a week.',
+              )
+            : ok('data', `every check holds in ${health.length} company(ies)`),
+    );
     const last = await lastVerification(db);
     const days = last === null ? null : (Date.now() - new Date(last.at).getTime()) / 86_400_000;
     backupCheck =

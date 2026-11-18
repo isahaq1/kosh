@@ -2,7 +2,11 @@
  * Settings › Data health (RFC 0036 §2.3), for Administrators: the checks the installed modules declare over the
  * company's data, the duplicates they know how to look for, merging the ones a person chooses, and undoing a merge.
  *
- * - `GET  /api/v1/settings/data-health`               the checks, run now for the current company
+ * - `GET  /api/v1/settings/data-health`               the last recorded result for the current company
+ * - `POST /api/v1/settings/data-health/run`           the checks, run now and recorded
+ *
+ * Unless `KOSH_SCHEDULES=off`, every company is checked once a week by itself; Administrators are notified when a
+ * check that held starts to find something.
  * - `GET  /api/v1/settings/duplicates`                groups of records that look like one another
  * - `POST /api/v1/settings/duplicates/merge`          `{ model, keep, merge: [ids] }`
  * - `GET  /api/v1/settings/merges`                    the latest merges, with whether each can still be undone
@@ -10,13 +14,14 @@
  */
 import type { DuplicateSpec, KoshModule } from '@kosh/modules-sdk';
 import {
-  checkData,
   findDuplicates,
   HttpProblem,
+  lastDataHealth,
   listMerges,
   type ModuleContext,
   mergeRecords,
   publicApiModels,
+  runDataHealth,
   undoMerge,
 } from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
@@ -50,8 +55,48 @@ export function registerDataHealthRoutes(context: ModuleContext): void {
       administrator(env);
       return env.companyId as number;
     });
-    return checkData(context.shutro, modules, { company });
+    const last = (await lastDataHealth(context.driver)).find((h) => h.company === company);
+    return { last: last ?? null };
   });
+
+  app.post('/api/v1/settings/data-health/run', async (request) => {
+    const company = await request.env(async (env) => {
+      administrator(env);
+      return env.companyId as number;
+    });
+    return runDataHealth(context.shutro, modules, { company });
+  });
+
+  // Once a week, each company by itself (looked at every six hours, so a restart does not skip a week).
+  if (process.env['KOSH_SCHEDULES'] !== 'off') {
+    const WEEK = 7 * 24 * 60 * 60 * 1000;
+    const due = async (): Promise<void> => {
+      try {
+        const last = new Map(
+          (await lastDataHealth(context.driver)).map((h) => [h.company, h.checkedAt]),
+        );
+        const companies = await context.driver.query<{ id: number }>({
+          text: 'SELECT id FROM res_company ORDER BY id',
+          params: [],
+        });
+        for (const c of companies) {
+          const at = last.get(Number(c.id));
+          if (at !== undefined && Date.now() - new Date(at).getTime() < WEEK) continue;
+          await runDataHealth(context.shutro, modules, { company: Number(c.id), notify: true });
+        }
+      } catch (error) {
+        app.log.warn({ err: error }, 'the weekly data check did not run');
+      }
+    };
+    const timer = setInterval(() => void due(), 6 * 60 * 60 * 1000);
+    timer.unref();
+    const first = setTimeout(() => void due(), 5 * 60 * 1000);
+    first.unref();
+    app.addHook('onClose', async () => {
+      clearInterval(timer);
+      clearTimeout(first);
+    });
+  }
 
   app.get('/api/v1/settings/duplicates', async (request) =>
     request.env(async (env) => {

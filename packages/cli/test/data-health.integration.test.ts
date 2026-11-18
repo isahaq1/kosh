@@ -12,7 +12,14 @@ import {
   readOpeningWorkbook,
 } from '@kosh/accounting';
 import { type Cell, workbook } from '@kosh/reporting';
-import { base, checkData, type DataHealth, dataHealthText } from '@kosh/server';
+import {
+  base,
+  checkData,
+  type DataHealth,
+  dataHealthText,
+  lastDataHealth,
+  runDataHealth,
+} from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
 import { type TestInstallation, testInstallation } from '@kosh/server/testing';
 import { stock } from '@kosh/stock';
@@ -119,6 +126,7 @@ test('on sound data, every check the modules declare holds', async () => {
   const h = await health();
   expect(h.ok, dataHealthText(h)).toBe(true);
   expect(h.checks.map((c) => `${c.module}:${c.key}`)).toEqual([
+    'base:archived_links',
     'accounting:entries_balanced',
     'accounting:documents_residual',
     'accounting:numbering',
@@ -194,4 +202,63 @@ test('a document that disagrees with its lines is found; a posted number cannot 
   const h = await health();
   expect(h.ok, dataHealthText(h)).toBe(true);
   expect(check(h, 'numbering').ok).toBe(true);
+});
+
+test('a draft that points at an archived contact is found; the result is kept for the doctor and Settings', {
+  retry: 0,
+}, async () => {
+  const modules = erp.host.server.registry.loaded.modules;
+  // Nothing recorded yet; a run records that every check holds.
+  expect(await lastDataHealth(erp.host.server.driver)).toEqual([]);
+  await runDataHealth(erp.host.server.shutro, modules, { company: erp.company });
+  expect(await lastDataHealth(erp.host.server.driver)).toEqual([
+    expect.objectContaining({ company: erp.company, ok: true, failing: [] }),
+  ]);
+
+  // A draft invoice of a customer who is then archived.
+  await system(async (env) => {
+    const made = (await model(env, 'res.partner').create([
+      { name: 'Old Customer', isCompany: true },
+    ])) as { ids: number[] };
+    const [journal] = (await model(env, 'account.journal').search({ where: { type: 'sale' } })).ids;
+    const [income] = (await model(env, 'account.account').search({ where: { code: '4000' } })).ids;
+    const [{ currency_id: currency } = { currency_id: 0 }] = await env.sql<{ currency_id: number }>`
+      SELECT currency_id FROM res_company WHERE id = ${erp.company}`;
+    await model(env, 'account.move').create([
+      {
+        kind: 'out_invoice',
+        journal,
+        partner: made.ids[0],
+        currency,
+        date: '2026-11-01',
+        lines: {
+          create: [
+            { lineKind: 'product', name: 'Rice', quantity: '1', priceUnit: '10', account: income },
+          ],
+        },
+      },
+    ]);
+    await env.flush();
+    await env.sql`UPDATE res_partner SET active = false WHERE id = ${made.ids[0] ?? 0}`;
+  });
+  const h = await runDataHealth(erp.host.server.shutro, modules, {
+    company: erp.company,
+    notify: true,
+  });
+  const archived = check(h, 'archived_links');
+  expect(archived.ok, dataHealthText(h)).toBe(false);
+  expect(archived.findings).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        detail: expect.stringMatching(/^1 in Draft points at an archived Contact \(/),
+        records: { model: 'account.move', ids: [expect.any(Number)] },
+      }),
+    ]),
+  );
+  expect(await lastDataHealth(erp.host.server.driver)).toEqual([
+    expect.objectContaining({
+      ok: false,
+      failing: [expect.objectContaining({ module: 'base', key: 'archived_links' })],
+    }),
+  ]);
 });

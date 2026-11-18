@@ -80,7 +80,10 @@ export {
   checkData,
   type DataCheckResult,
   type DataHealth,
+  type DataHealthSummary,
   dataHealthText,
+  lastDataHealth,
+  runDataHealth,
 } from './data-checks.js';
 export { DEMO_PASSWORD, type DemoResult, installDemo } from './demo.js';
 export { applyEnvironmentNames } from './env-names.js';

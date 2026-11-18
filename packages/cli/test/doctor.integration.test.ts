@@ -71,6 +71,8 @@ test('a fresh installation: the database and migrations are fine, no administrat
   expect(line(text, 'administrators')).toMatch(/^✖ administrators\s+no active administrator/);
   expect(text).toContain('→ Create one: shutro-erp user create');
   expect(line(text, 'mail')).toMatch(/^▲ mail\s+SMTP_URL is not set/);
+  // Nobody looked at the data yet.
+  expect(line(text, 'data')).toMatch(/^▲ data\s+the data was never checked/);
   expect(code).toBe(1);
 });
 
@@ -114,4 +116,15 @@ test('an installed app missing from src/modules.ts fails, naming it', async () =
   expect(line(text, 'apps'), text).toMatch(
     /^✖ apps\s+installed but missing from src\/without\.ts: library/,
   );
+});
+
+test('shutro-erp check data checks each company and records it; the doctor then says the data holds', async () => {
+  const checked = await run('check', 'data');
+  expect(checked.text).toContain('✔ base: No draft points at an archived record');
+  expect(checked.text).toMatch(/shutro-erp check data: \d+ company\(ies\), every check holds\./);
+  expect(checked.code).toBe(0);
+  const json = await run('check', 'data', '--json');
+  expect((JSON.parse(json.text) as { ok: boolean }).ok).toBe(true);
+  const { text } = await run('doctor');
+  expect(line(text, 'data')).toMatch(/^✔ data\s+every check holds in \d+ company\(ies\)/);
 });
