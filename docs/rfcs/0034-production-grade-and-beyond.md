@@ -301,3 +301,13 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   the sign-in page; a provider added, refused without https, shown with what to register, not offered without its
   secret, removed. Still to do in step 5: groups mapped to roles, the certification against Keycloak, then SCIM and
   passkeys.
+- **Step 5, part 2c (2026-11-18).** **Groups become roles.** A provider has the claim that lists a person's groups
+  (`groups` by default) and a map of those groups to roles here. At **each** sign-in the person holds exactly the
+  mapped roles their groups give: missing ones are given, ones they no longer have a group for are taken, in every
+  company; roles outside the map are never touched; nothing is said when nothing changes, and each change is in the
+  audit log (`auth.sso_roles`: given … / taken …). **An Administrator role is never given by a provider**: the
+  settings refuse such a map, and the sign-on leaves those roles out even if one were there. The settings check that
+  every role exists. On the page: the groups with their roles (as codes), the claim, and the switch to trust a
+  provider's addresses without `email_verified`. The fake provider moved to `@kosh/server/testing` (`fakeOidc`), so
+  another package's tests — and a module author's — can use it. Still to do in step 5: the certification against
+  Keycloak, then SCIM and passkeys.

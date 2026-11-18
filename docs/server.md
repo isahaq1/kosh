@@ -229,7 +229,13 @@ What to know:
   account; afterwards the link is what counts. Nobody gets an account by having a company address; an unknown or
   deactivated person is refused, and the refusal is in the audit log.
 - **Two-factor sign-in still applies**: an account that has it is asked for its code after the provider.
-- A provider that does not say `email_verified` can be trusted for its addresses with `trustEmail` (the API).
+- A provider that does not say `email_verified` (Microsoft) can be trusted for its addresses: the switch is under
+  the provider's *Roles from the provider's groups*.
+- **Roles from groups**: under each provider, list the groups at the provider and the roles each gives (their
+  codes, as in Settings › Roles & permissions: `sales.user, account.user`), and the claim that carries the groups
+  (`groups`). At every sign-in the person holds exactly the listed roles their groups give — given and taken, in
+  the audit log —; roles you gave by hand outside the list are never touched. An Administrator role is never
+  given this way: make Administrators in Settings › People.
 - Accepted tokens are signed with RS256, PS256 or ES256 by a key the provider publishes, for this installation's
   client id, unexpired, and belonging to this sign-in; anything else is refused.
 - The installation's address must be right (`KOSH_BASE_URL`): the provider sends people back to it.
