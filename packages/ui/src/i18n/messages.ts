@@ -58,6 +58,17 @@ export const en = {
     mismatch: 'The passwords are not the same.',
     activate: 'Save and sign in',
     forgotLink: 'Forgot your password?',
+    ssoWith: 'Sign in with {{name}}',
+    ssoOr: 'or with your password',
+    ssoError: {
+      unknown:
+        'Nobody here has that address. Ask your administrator to add you, then sign in again.',
+      email: 'The provider gave no verified email address, so we cannot tell who you are here.',
+      token:
+        'The provider’s answer could not be trusted. Try again; if it happens again, tell your administrator.',
+      state: 'That sign-in took too long or was used already. Try again.',
+      provider: 'The provider could not complete the sign-in. Try again, or use your password.',
+    },
     forgotTitle: 'Reset your password',
     forgotIntro:
       'Enter your login. If it has an account, a link to choose a new password is emailed to it.',
@@ -487,6 +498,16 @@ export const bn: DeepPartial<Messages> = {
     mismatch: 'পাসওয়ার্ড দুটি মেলেনি।',
     activate: 'সংরক্ষণ করে সাইন ইন করুন',
     forgotLink: 'পাসওয়ার্ড ভুলে গেছেন?',
+    ssoWith: '{{name}} দিয়ে সাইন ইন করুন',
+    ssoOr: 'অথবা আপনার পাসওয়ার্ড দিয়ে',
+    ssoError: {
+      unknown:
+        'এই ঠিকানার কেউ এখানে নেই। আপনার অ্যাডমিনিস্ট্রেটরকে আপনাকে যোগ করতে বলুন, তারপর আবার সাইন ইন করুন।',
+      email: 'প্রোভাইডার কোনো যাচাইকৃত ইমেইল ঠিকানা দেয়নি, তাই এখানে আপনি কে তা বলা যাচ্ছে না।',
+      token: 'প্রোভাইডারের উত্তর বিশ্বাস করা যায়নি। আবার চেষ্টা করুন; আবার হলে অ্যাডমিনিস্ট্রেটরকে জানান।',
+      state: 'সাইন-ইনে বেশি সময় লেগেছে বা এটি আগেই ব্যবহৃত হয়েছে। আবার চেষ্টা করুন।',
+      provider: 'প্রোভাইডার সাইন-ইন সম্পন্ন করতে পারেনি। আবার চেষ্টা করুন, অথবা পাসওয়ার্ড ব্যবহার করুন।',
+    },
     forgotTitle: 'পাসওয়ার্ড রিসেট করুন',
     forgotIntro: 'আপনার লগইন লিখুন। এর অ্যাকাউন্ট থাকলে নতুন পাসওয়ার্ড বেছে নেওয়ার লিংক ইমেইলে পাঠানো হবে।',
     forgotSend: 'লিংকটি ইমেইল করুন',

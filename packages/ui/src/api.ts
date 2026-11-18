@@ -177,6 +177,8 @@ export interface KoshApi {
   me(): Promise<CurrentUser>;
   login(login: string, password: string): Promise<{ twoFactorRequired: boolean }>;
   verifyTwoFactor(code: string): Promise<void>;
+  /** Completes a single sign-on (RFC 0034 §2.4): the hand-off code from the address becomes the session. */
+  completeSso(code: string): Promise<{ twoFactorRequired: boolean }>;
   logout(): Promise<void>;
   apps(): Promise<readonly AppEntry[]>;
   menus(app?: string): Promise<readonly MenuNode[]>;
@@ -342,6 +344,16 @@ export function createKoshApi(options: ApiOptions = {}): KoshApi {
     },
     async verifyTwoFactor(code) {
       await json('POST', '/api/v1/auth/2fa/verify', { code });
+    },
+    async completeSso(code) {
+      const result = await json<{ csrfToken: string; twoFactorRequired: boolean }>(
+        'POST',
+        '/api/v1/auth/sso/complete',
+        { code },
+      );
+      csrf = result.csrfToken;
+      storage?.setItem(CSRF_KEY, csrf);
+      return { twoFactorRequired: result.twoFactorRequired };
     },
     async logout() {
       await json('POST', '/api/v1/auth/logout').catch(() => undefined);
