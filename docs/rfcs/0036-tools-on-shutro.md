@@ -222,3 +222,15 @@ Answered 2026-11-17 with the proposals: XLSX only; Administrators merge; generat
   entry's number cannot be changed by SQL at all (the database's immutability), so the numbering check's failure
   path is not exercised by a test. The check labels are in Bangla (T1). Docs: docs/data-health.md. Next (step 6):
   duplicates and merging, broken links, the weekly job with its notification, the doctor and the screen.
+- **Step 6, part 1 (2026-11-18).** **Duplicates and merging.** Modules declare `duplicates` (a model and the keys —
+  sets of fields, `digits` for phone numbers — that suggest two records are one): Contacts by tax ID, email, phone
+  and name, Products by name. `findDuplicates` groups the active records by normalized key, through the ORM (the
+  caller's rules apply). `mergeRecords` (`@kosh/server`) moves every stored many-to-one to the model and every
+  record referring by `resModel` / `resId` to the record kept — found from `apiModels`, not a list —, archives the
+  duplicates and logs what moved in `kosh.merge` (private, in base). It writes through the ORM in a system scope:
+  audited, constraints applied; a link that cannot be written (a posted entry's partner) refuses the whole merge.
+  `undoMerge` within 7 days puts back what still points at the record kept and restores the duplicates. Routes in
+  Settings (`/settings/data-health`, `/duplicates`, `/duplicates/merge`, `/merges`, `/merges/:id/undo`),
+  Administrators only — the RFC's answer; reads run as the Administrator, since a read-only request cannot open a
+  system scope. Not done: many-to-many relations to the merged record; merging by app managers. Next (part 2): links
+  to archived records, the weekly run stored with its notification, the doctor; then the page (part 3).

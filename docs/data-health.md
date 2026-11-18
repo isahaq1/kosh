@@ -68,7 +68,51 @@ const loansHaveDates: DataCheckSpec = {
 export const library = defineModule({ …, dataChecks: [loansHaveDates] });
 ```
 
+## Duplicates and merging
+
+Records that look like one another are found by the keys their app declares, compared once normalized (case and
+spaces; the digits only for a phone number):
+
+| Records | Looked for by |
+| --- | --- |
+| Contacts | tax ID, email, phone, name |
+| Products | name (codes and barcodes are unique already) |
+
+An Administrator reviews the groups and merges the ones that are one record (the API today; the Settings page comes
+next):
+
+| Route | What it does |
+| --- | --- |
+| `GET /api/v1/settings/data-health` | the checks above, run now for the current company |
+| `GET /api/v1/settings/duplicates` | the groups: what they share, and the records |
+| `POST /api/v1/settings/duplicates/merge` | `{ model, keep, merge: [ids] }` |
+| `GET /api/v1/settings/merges` | the latest merges, and whether each can still be undone |
+| `POST /api/v1/settings/merges/:id/undo` | puts every link back and restores the duplicate |
+
+A merge:
+
+- **moves every link** to the record kept: each relation of an installed model to it (a child contact, an order's
+  customer, a draft invoice's partner) and each record that refers to it by model and id (the chatter, followers,
+  activities, attachments) — found from the models themselves, so an app installed tomorrow is covered;
+- **archives** the duplicate, never deletes it;
+- goes through the ORM as the system: every move is audited and every constraint still applies. A link that may
+  not be changed — the partner of a **posted** entry — refuses the merge with the reason, and nothing is kept:
+  archive that duplicate instead;
+- is **undone for 7 days**: every link moved goes back (unless a person moved it elsewhere since) and the duplicate
+  is restored.
+
+Many-to-many relations to the merged record are not moved yet.
+
+Your own module declares its duplicates the same way:
+
+```ts
+export const library = defineModule({
+  …,
+  duplicates: [{ model: 'library.book', keys: [{ label: 'ISBN', fields: ['isbn'] }] }],
+});
+```
+
 ## Not yet
 
-Duplicates of contacts and products with merging, broken links, a weekly run with a notification, the result on
-`shutro-erp doctor` and a Settings page come next (RFC 0036 step 6).
+Links to archived records, a weekly run with a notification, the result on `shutro-erp doctor` and the Settings
+page come next (RFC 0036 step 6).
