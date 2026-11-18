@@ -269,3 +269,24 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   on sign-in, English and Bangla. The second factor is untouched: an account with one still needs it to sign in.
   Tested on the server with a captured mailer (the whole flow) and in the browser (the pages; the E2E server has no
   mailer). Next in step 5: single sign-on (OIDC), then SCIM and passkeys — each needs decisions first (see below).
+- **Step 5, part 2 — design of single sign-on (decided 2026-11-18).** Asked and answered: (1) **only people who
+  already exist** sign in through a provider — nobody gets an account by having an address; (2) **no new
+  dependency** — the code flow and the ID token's verification on `node:crypto`, as the OAuth server; (3) tested
+  against a **fake provider** in the suite, then certified against a real **Keycloak** in Docker; Google and
+  Microsoft to verify with the company's own credentials. The design: the authorization code flow with PKCE, a
+  `state` and a `nonce` kept server-side (hashed, single use, ten minutes); the ID token accepted only when signed by
+  a published key of the provider with RS256, PS256 or ES256 (never `none`, never a shared secret), for this issuer
+  and client, unexpired and carrying this sign-in's nonce; a person found by a link made before (provider +
+  subject), else by a **verified** address matching one active person's login or email, linked then; the session
+  made by a single-use hand-off code (a minute) the sign-in page exchanges, so a session token never travels in an
+  address; the **second factor still owed** by accounts that have one; a provider's client secret in the environment
+  (`KOSH_SSO_<KEY>_SECRET`), never stored; refusals audited with the reason. Later parts: groups mapped to roles
+  (applied at each sign-in, audited), the providers in Settings › Security, then SCIM and passkeys.
+- **Step 5, part 2a (2026-11-18).** **The sign-on flow on the server.** `auth.sso_provider`, `auth.sso_identity`,
+  `auth.sso_state` (private, in base); `/api/v1/auth/sso/providers`, `/:key/start`, `/:key/callback`, `/complete`;
+  `AuthService.signInAs` (a session for a person who proved who they are another way). Tested against the fake
+  provider over real HTTP: sign-in by verified address and the link it makes, the link signing in afterwards,
+  unknown / deactivated / unverified people refused with nobody created, a token for another application, expired,
+  of another sign-in, from another issuer or signed by another key refused, a state and a hand-off code working
+  once, the second factor still asked. **Not usable by an administrator yet**: a provider is a record only the system
+  can make, and the sign-in page has no button — both come with part 2b (Settings › Security and the sign-in page).
