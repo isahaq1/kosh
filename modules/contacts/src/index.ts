@@ -18,6 +18,18 @@ export const contacts: ReturnType<typeof defineModule> = defineModule({
   shutro: contactsShutro,
   kosh: '^0.1.0',
   hooks: { demo: contactsDemo },
+  // What suggests two contacts are one (RFC 0036 §2.3): reviewed and merged in Settings › Data health.
+  duplicates: [
+    {
+      model: 'res.partner',
+      keys: [
+        { label: 'Tax ID', fields: ['taxId'] },
+        { label: 'Email', fields: ['email'] },
+        { label: 'Phone', fields: ['phone'], digits: true },
+        { label: 'Name', fields: ['name'] },
+      ],
+    },
+  ],
   // What a new contact needs (RFC 0020), per company.
   settings: {
     sections: [

@@ -13,6 +13,7 @@ import { base, baseShutro, type ModuleContext } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
 import { registerAppSettingsRoutes } from './app-settings.js';
 import { registerCompanyRoutes } from './company.js';
+import { registerDataHealthRoutes } from './data-health.js';
 import { type PeopleOptions, registerPeopleRoutes } from './people.js';
 import { registerAppRoutes } from './routes.js';
 import { registerSecurityRoutes } from './security.js';
@@ -191,6 +192,7 @@ export function settingsModule(options: Partial<PeopleOptions> = {}): KoshModule
     ],
     routes: (context: ModuleContext) => {
       registerAppRoutes(context);
+      registerDataHealthRoutes(context);
       registerCompanyRoutes(context);
       registerSecurityRoutes(context);
       registerAppSettingsRoutes(context);

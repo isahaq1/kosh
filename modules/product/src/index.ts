@@ -36,6 +36,8 @@ export const product: ReturnType<typeof defineModule> = defineModule({
   shutro: productShutro,
   kosh: '^0.1.0',
   hooks: { demo: productDemo },
+  // What suggests two products are one (RFC 0036 §2.3); codes and barcodes are unique already.
+  duplicates: [{ model: 'product.product', keys: [{ label: 'Name', fields: ['name'] }] }],
   depends: [base, storage, reporting],
   // The variant grid of a template (RFC 0030 §3.4), read by the order forms.
   routes: (context: ModuleContext) => registerGridRoutes(context),

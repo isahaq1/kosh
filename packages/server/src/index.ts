@@ -104,6 +104,16 @@ export {
   runOptionsOf,
 } from './identity.js';
 export { imageVersions, registerImageRoutes } from './images.js';
+export {
+  type DuplicateGroup,
+  findDuplicates,
+  listMerges,
+  MERGE_UNDO_DAYS,
+  type MergeLog,
+  type MergeResult,
+  mergeRecords,
+  undoMerge,
+} from './merge.js';
 export { migrate, orm, pg } from './orm.js';
 export { buildKoshRegistry, KOSH_VERSION, type KoshRegistry } from './registry.js';
 export {

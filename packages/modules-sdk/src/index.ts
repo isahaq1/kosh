@@ -29,6 +29,7 @@ export {
   type DemoContext,
   type DemoUser,
   type DocumentSpec,
+  type DuplicateSpec,
   defineModule,
   type EventSpec,
   type ImportTemplateSpec,

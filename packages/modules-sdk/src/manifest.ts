@@ -446,6 +446,21 @@ export interface ModuleHooks {
 }
 
 /** The input of {@link defineModule}. */
+/**
+ * How records of a model may be duplicates (RFC 0036 §2.3): each key is a set of fields that, equal once normalized
+ * (case, spaces; digits only for a phone number), suggests two records are one. A person reviews and merges them.
+ */
+export interface DuplicateSpec {
+  readonly model: string;
+  readonly keys: readonly {
+    /** What they share, as the review shows it: "Email". */
+    readonly label: string;
+    readonly fields: readonly string[];
+    /** Compare the digits only (phone numbers). */
+    readonly digits?: boolean;
+  }[];
+}
+
 /** What a data check found wrong: named, explained, with the records behind it. */
 export interface DataFinding {
   /** What it is about: a document's number, a product's name. */
@@ -551,6 +566,8 @@ export interface ModuleInput {
   readonly events?: readonly EventSpec[];
   /** What must always hold in the module's data (RFC 0036 §2.3): run by `shutro-erp check data`. */
   readonly dataChecks?: readonly DataCheckSpec[];
+  /** How records of its models may be duplicates of one another (RFC 0036 §2.3): reviewed and merged in Settings. */
+  readonly duplicates?: readonly DuplicateSpec[];
   /** Endpoints the module receives calls on from outside (RFC 0017 §5.4). */
   readonly inboundWebhooks?: readonly InboundWebhookSpec[];
   /** The app's own settings, shown in Settings › App settings (RFC 0020). */

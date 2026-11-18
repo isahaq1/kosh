@@ -251,6 +251,22 @@ const KoshSetting = defineModel('kosh.setting', {
   },
 });
 
+/**
+ * A merge of duplicates (`merge.ts`, RFC 0036 §2.3): what was kept, what was merged into it, and every link that was
+ * moved — what an undo puts back. Private: written by the merge and its undo only.
+ */
+const KoshMerge = defineModel('kosh.merge', {
+  fields: {
+    resModel: f.char({ required: true, index: true }),
+    keep: f.integer({ required: true }),
+    merged: f.json({ required: true }),
+    moved: f.json({ required: true }),
+    user: f.many2one('res.users', { ondelete: 'set null' }),
+    undoneAt: f.datetime(),
+    undoneBy: f.many2one('res.users', { ondelete: 'set null' }),
+  },
+});
+
 /** Profile photos and company logos (`images.ts`): small images, their bytes in base64. Private: served by routes. */
 const KoshImage = defineModel('kosh.image', {
   fields: {
@@ -343,6 +359,7 @@ export const baseShutro: ReturnType<typeof orm.defineModule> = defineModule({
     OAuthToken,
     KoshImage,
     KoshSetting,
+    KoshMerge,
     AuditEvent,
     SavedView,
   ],
@@ -369,6 +386,7 @@ export const base: ReturnType<typeof defineKoshModule> = defineKoshModule({
     'oauth.token',
     'kosh.image',
     'kosh.setting',
+    'kosh.merge',
     'audit.event',
   ],
 });
