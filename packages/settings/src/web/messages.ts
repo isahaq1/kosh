@@ -204,6 +204,12 @@ export const messages: Readonly<Record<string, object>> = {
             'Two-factor sign-in for administrators or everyone, how long a sign-in lasts, signed-in devices.',
           keywords: 'security two-factor 2fa mfa policy sessions devices sign out',
         },
+        'settings.action_data_health': {
+          description:
+            'What must always hold in the books and the stock, checked; duplicates of contacts and products merged, with undo.',
+          keywords:
+            'data health check consistency duplicates merge contacts products books stock undo',
+        },
         'settings.action_audit': {
           description:
             'Sign-ins, permission changes, exports and sensitive actions; filtered and exported.',
@@ -346,6 +352,44 @@ export const messages: Readonly<Record<string, object>> = {
       searchSessions: 'Search by person or address',
       signOutOf: 'Sign {{name}} out of {{device}}',
       noSessions: 'No signed-in devices match.',
+    },
+    dataHealth: {
+      title: 'Data health',
+      intro:
+        'Where the company’s data stands: what must always hold in it, checked; and records that look like one another, for you to merge when they are one.',
+      administrators: 'Data health is for Administrators.',
+      checks: 'Checks',
+      run: 'Run now',
+      never:
+        'The data was never checked. Run the checks now; a running server does it once a week.',
+      lastOk: 'Checked {{at}}: every check holds.',
+      lastFound: 'Checked {{at}}: {{what}}. Run now to see each finding.',
+      holds: 'Holds',
+      found_one: '{{count}} finding',
+      found_other: '{{count}} findings',
+      broken: 'The check could not run: {{error}}',
+      duplicates: 'Duplicates',
+      duplicatesHint:
+        'Records that share what should be theirs alone. Choose the one to keep: every link to the others moves to it, and they are archived. A merge is undone for 7 days.',
+      noDuplicates: 'No records look like one another.',
+      same: 'Same {{key}}',
+      keep: 'Keep',
+      merge: 'Merge into the one kept',
+      confirmTitle: 'Merge these records?',
+      confirmText:
+        'Every link to the others — orders, invoices, the chatter, files — moves to the record kept, and the others are archived. Records that may no longer change (posted entries) refuse the merge.',
+      cancel: 'Cancel',
+      merged_one: '{{count}} record merged; {{links}} links moved.',
+      merged_other: '{{count}} records merged; {{links}} links moved.',
+      merges: 'Recent merges',
+      mergeLine_one:
+        '{{model}}: {{count}} record merged into #{{keep}}, {{links}} links moved — {{at}}',
+      mergeLine_other:
+        '{{model}}: {{count}} records merged into #{{keep}}, {{links}} links moved — {{at}}',
+      undo: 'Undo',
+      undone: 'The merge was undone: every link is back and the record restored.',
+      wasUndone: 'Undone',
+      tooLate: 'Older than 7 days',
     },
     audit: {
       title: 'Audit log',
@@ -714,6 +758,11 @@ export const messages: Readonly<Record<string, object>> = {
           description: 'অ্যাডমিনিস্ট্রেটর বা সবার জন্য দুই-ধাপের সাইন-ইন, সাইন-ইনের মেয়াদ, সাইন ইন করা ডিভাইস।',
           keywords: 'নিরাপত্তা security 2fa sessions',
         },
+        'settings.action_data_health': {
+          description:
+            'হিসাবের খাতা ও স্টকে যা সবসময় ঠিক থাকা উচিত তার যাচাই; কন্টাক্ট ও পণ্যের ডুপ্লিকেট একীভূত করা, বাতিলের সুযোগসহ।',
+          keywords: 'ডেটা যাচাই ডুপ্লিকেট একীভূত data health duplicates merge',
+        },
         'settings.action_audit': {
           description: 'সাইন-ইন, অনুমতি পরিবর্তন, রপ্তানি ও সংবেদনশীল কাজ।',
           keywords: 'অডিট লগ audit log events export',
@@ -840,6 +889,43 @@ export const messages: Readonly<Record<string, object>> = {
       searchSessions: 'ব্যক্তি বা ঠিকানা দিয়ে খুঁজুন',
       signOutOf: '{{device}} থেকে {{name}}-কে সাইন আউট করুন',
       noSessions: 'মিলে এমন কোনো ডিভাইস নেই।',
+    },
+    dataHealth: {
+      title: 'ডেটার অবস্থা',
+      intro:
+        'প্রতিষ্ঠানের ডেটা কোন অবস্থায় আছে: যা সবসময় ঠিক থাকা উচিত তার যাচাই; আর যে রেকর্ডগুলো একই রকম দেখায়, একই হলে সেগুলো একীভূত করুন।',
+      administrators: 'ডেটার অবস্থা অ্যাডমিনিস্ট্রেটরদের জন্য।',
+      checks: 'যাচাই',
+      run: 'এখন চালান',
+      never: 'ডেটা কখনো যাচাই করা হয়নি। এখন যাচাই চালান; চালু সার্ভার সপ্তাহে একবার নিজেই করে।',
+      lastOk: '{{at}} যাচাই করা হয়েছে: প্রতিটি যাচাই ঠিক আছে।',
+      lastFound: '{{at}} যাচাই করা হয়েছে: {{what}}। প্রতিটি বিষয় দেখতে এখন চালান।',
+      holds: 'ঠিক আছে',
+      found_one: '{{count}}টি বিষয় পাওয়া গেছে',
+      found_other: '{{count}}টি বিষয় পাওয়া গেছে',
+      broken: 'যাচাইটি চালানো যায়নি: {{error}}',
+      duplicates: 'ডুপ্লিকেট',
+      duplicatesHint:
+        'যে রেকর্ডগুলোর এমন কিছু মিলে যায় যা শুধু একটির থাকার কথা। কোনটি রাখবেন বেছে নিন: অন্যগুলোর প্রতিটি সংযোগ সেটিতে চলে যাবে এবং অন্যগুলো আর্কাইভ হবে। একীভূতকরণ ৭ দিন পর্যন্ত বাতিল করা যায়।',
+      noDuplicates: 'কোনো রেকর্ড একই রকম দেখাচ্ছে না।',
+      same: 'একই {{key}}',
+      keep: 'রাখুন',
+      merge: 'রাখা রেকর্ডে একীভূত করুন',
+      confirmTitle: 'এই রেকর্ডগুলো একীভূত করবেন?',
+      confirmText:
+        'অন্যগুলোর প্রতিটি সংযোগ — অর্ডার, ইনভয়েস, আলাপ, ফাইল — রাখা রেকর্ডে চলে যাবে এবং অন্যগুলো আর্কাইভ হবে। যে রেকর্ড আর বদলানো যায় না (পোস্টকৃত এন্ট্রি) সেগুলো একীভূতকরণ প্রত্যাখ্যান করে।',
+      cancel: 'বাতিল',
+      merged_one: '{{count}}টি রেকর্ড একীভূত হয়েছে; {{links}}টি সংযোগ সরানো হয়েছে।',
+      merged_other: '{{count}}টি রেকর্ড একীভূত হয়েছে; {{links}}টি সংযোগ সরানো হয়েছে।',
+      merges: 'সাম্প্রতিক একীভূতকরণ',
+      mergeLine_one:
+        '{{model}}: {{count}}টি রেকর্ড #{{keep}}-এ একীভূত, {{links}}টি সংযোগ সরানো — {{at}}',
+      mergeLine_other:
+        '{{model}}: {{count}}টি রেকর্ড #{{keep}}-এ একীভূত, {{links}}টি সংযোগ সরানো — {{at}}',
+      undo: 'বাতিল করুন',
+      undone: 'একীভূতকরণ বাতিল হয়েছে: প্রতিটি সংযোগ ফিরে এসেছে এবং রেকর্ডটি পুনরুদ্ধার হয়েছে।',
+      wasUndone: 'বাতিল হয়েছে',
+      tooLate: '৭ দিনের বেশি পুরোনো',
     },
     audit: {
       title: 'অডিট লগ',

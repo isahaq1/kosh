@@ -4,7 +4,8 @@ import { defineConfig, devices } from '@playwright/test';
  * End-to-end tests (RFC 0007 §5): a real Kosh server (PostgreSQL in a container, `e2e/server.ts`) and the built app
  * (`vite preview`, proxying `/api` to it). Run after `pnpm build` (the server uses the built packages).
  */
-const API_PORT = 3100;
+/** 3100 unless another program has it (`KOSH_E2E_API_PORT`): the servers are never shared with it. */
+const API_PORT = Number(process.env['KOSH_E2E_API_PORT'] ?? 3100);
 /** The business apps' server (`e2e-apps/server.ts`) and the preview proxying to it (project `apps`). */
 const APPS_API_PORT = 3101;
 const APPS_WEB_PORT = 4174;

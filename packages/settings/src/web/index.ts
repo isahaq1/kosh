@@ -12,6 +12,7 @@ import { AuditPage } from './AuditPage.js';
 import { CompaniesPage } from './CompaniesPage.js';
 import { CompanyPage } from './CompanyPage.js';
 import { ConnectedAppsPage } from './ConnectedAppsPage.js';
+import { DataHealthPage } from './DataHealthPage.js';
 import { messages } from './messages.js';
 import { OverviewPage } from './OverviewPage.js';
 import { PeoplePage } from './PeoplePage.js';
@@ -44,6 +45,7 @@ export function registerSettingsWeb(registry: Registry, i18n?: i18n): Registry {
   registry.registerPage('settings.Companies', CompaniesPage);
   registry.registerPage('settings.Security', SecurityPage);
   registry.registerPage('settings.Audit', AuditPage);
+  registry.registerPage('settings.DataHealth', DataHealthPage);
   // Every signed-in user's own profile (RFC 0019) and keys (RFC 0017 §5.1): in the user menu, not in Settings.
   registry.registerUserPage('settings.Profile', ProfilePage, { label: 'settings:profile.title' });
   registry.registerUserPage('settings.ApiKeys', ApiKeysPage, { label: 'settings:apiKeys.title' });

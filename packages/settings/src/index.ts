@@ -102,6 +102,12 @@ export function settingsModule(options: Partial<PeopleOptions> = {}): KoshModule
       },
       'settings.action_security': { type: 'client', page: 'settings.Security', label: 'Security' },
       'settings.action_audit': { type: 'client', page: 'settings.Audit', label: 'Audit log' },
+      'settings.action_data_health': {
+        type: 'client',
+        page: 'settings.DataHealth',
+        label: 'Data health',
+        visibleTo: ['base.admin'],
+      },
       'settings.action_people': { type: 'client', page: 'settings.People', label: 'People' },
       'settings.action_roles': {
         type: 'client',
@@ -172,6 +178,14 @@ export function settingsModule(options: Partial<PeopleOptions> = {}): KoshModule
         label: 'Audit log',
         action: 'settings.action_audit',
         sequence: 2,
+        visibleTo: ['base.admin'],
+      },
+      {
+        id: 'settings.data_health',
+        parent: 'settings.group_security',
+        label: 'Data health',
+        action: 'settings.action_data_health',
+        sequence: 3,
         visibleTo: ['base.admin'],
       },
       { id: 'settings.group_apps', parent: 'settings.root', label: 'Apps', sequence: 40 },
