@@ -1,6 +1,6 @@
 # RFC 0036 — Tools on Shutro: the opening-balance kit, generators, data health
 
-- Status: **Accepted** (2026-11-17)
+- Status: **Accepted** (2026-11-17); steps 1–6 done (2026-11-18)
 - Builds on: RFC 0014 (data import), RFC 0012 (Studio), RFC 0023 (the module standard and `shutro-erp check`),
   RFC 0034 §2.2 (doctor, backups), RFC 0009 / 0021 (Accounting, Stockroom and its valuation)
 - Replaces: RFC 0034 §2.3 (the Odoo importer, withdrawn 2026-11-16). Kosh ships no tools for other systems: every
@@ -244,3 +244,12 @@ Answered 2026-11-17 with the proposals: XLSX only; Administrators merge; generat
   than two weeks, or holding. Tested through the real CLI in a project (`check data`, `--json`, then `doctor`), and
   the archived link and the stored result on a served installation; the notification itself is not asserted by a
   test. Next (part 3): the Settings page.
+- **Step 6, part 3 (2026-11-18).** **Settings › Data health.** A page for Administrators (menu under Security,
+  `visibleTo: ['base.admin']`; the server refuses anyone else): the last recorded result and Run now with every check
+  and its findings; the duplicate groups with a choice of the record to keep, a confirmation, the merge and its
+  refusal said as the server says it; the recent merges with Undo. English and Bangla (the checks' own labels and
+  the findings come from the server in English). E2E: the checks run; two contacts sharing an email are merged into
+  the one chosen and the merge undone on the page, then removed; a non-administrator does not get the page; Bangla.
+  The E2E API port can now be moved (`KOSH_E2E_API_PORT`) when another program holds 3100. RFC 0036 complete but for
+  its leftovers: many-to-many links in a merge, merging by app managers, a merge refused by posted entries, the
+  notification's text in English, the generated page not opened in a browser.

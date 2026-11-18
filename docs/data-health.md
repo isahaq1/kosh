@@ -1,7 +1,17 @@
 # Data health
 
-`shutro-erp check data` checks what must always hold in each company's data, and names what does not with the
-records behind it (RFC 0036 §2.3). It reads only: nothing is changed by looking.
+**Settings › Data health** (for Administrators) and `shutro-erp check data` check what must always hold in each
+company's data, and name what does not with the records behind it (RFC 0036 §2.3). Looking changes nothing.
+
+## On screen
+
+- **Checks**: when the data was last checked and what was found; **Run now** runs every check and shows each one
+  as *Holds* or with its findings and their records.
+- **Duplicates**: the records that share what should be theirs alone (the same email, tax ID, phone or name).
+  Choose the one to keep and **Merge into the one kept**; the page asks first.
+- **Recent merges**: each merge with what was moved, and **Undo** for 7 days.
+
+## From the command line
 
 ```sh
 shutro-erp check data                  # every company
@@ -90,8 +100,7 @@ spaces; the digits only for a phone number):
 | Contacts | tax ID, email, phone, name |
 | Products | name (codes and barcodes are unique already) |
 
-An Administrator reviews the groups and merges the ones that are one record (the API today; the Settings page comes
-next):
+An Administrator reviews the groups and merges the ones that are one record, on the page or through the API:
 
 | Route | What it does |
 | --- | --- |
@@ -127,4 +136,5 @@ export const library = defineModule({
 
 ## Not yet
 
-The Settings page — the checks, the duplicates side by side, merge and undo — comes next (RFC 0036 step 6).
+Many-to-many relations to a merged record, merging by an app's own managers, and the check labels in Bangla on the
+page (they are served in English).
