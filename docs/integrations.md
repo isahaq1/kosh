@@ -217,6 +217,9 @@ and call back at `SHUTRO_ERP_API_URL` + `/api/v1/hooks/<token>`; both must be th
 
 ### Certified against the sandboxes
 
+Single sign-on is certified the same way against a real Keycloak (`pnpm certify keycloak`, see
+[server.md](server.md), Single sign-on): live only, as a sign-on cannot be replayed from a recording.
+
 Each adapter has a **contract suite** run against the provider's real sandbox (RFC 0034 §2.2): what it must do
 (open a payment and get the provider's page, report an unpaid payment as pending) and what it must refuse (a callback
 the provider does not confirm, a failure claimed for a payment the customer is still making, wrong credentials).

@@ -311,3 +311,14 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   provider's addresses without `email_verified`. The fake provider moved to `@kosh/server/testing` (`fakeOidc`), so
   another package's tests — and a module author's — can use it. Still to do in step 5: the certification against
   Keycloak, then SCIM and passkeys.
+- **Step 5, part 2d (2026-11-18).** **Single sign-on certified against Keycloak 26.0.8.** `pnpm certify keycloak`
+  (`packages/server/test/certify/keycloak.certify.test.ts`) sets a realm up through Keycloak's admin API — a
+  confidential client with the redirect address and PKCE required, a person with a verified address in a group, the
+  group-membership mapper — and drives the sign-on as a browser would: our start, Keycloak's own sign-in form posted
+  with its cookies, our callback, the hand-off. Verified with the real thing: Keycloak's discovery, its token
+  endpoint with the client secret and the verifier, its published keys and its RS256 signature, the group giving its
+  role, the person linked to Keycloak's id of them, and someone Keycloak knows and we do not refused with nobody
+  created. Passed on the first run. Live only — a sign-on carries a nonce and a signature made for it and cannot be
+  replayed — so `pnpm test` skips the contract; the pass is recorded in `recordings/keycloak.json` (when, and
+  against which version). Google and Microsoft remain to verify with the company's own credentials (Microsoft needs
+  *trust its addresses*: it does not send `email_verified`). Next in step 5: SCIM, passkeys.

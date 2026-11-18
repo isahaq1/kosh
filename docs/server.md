@@ -240,4 +240,6 @@ What to know:
   client id, unexpired, and belonging to this sign-in; anything else is refused.
 - The installation's address must be right (`KOSH_BASE_URL`): the provider sends people back to it.
 
-Verified against a fake provider in the test suite; Keycloak, Google and Microsoft are still to be certified.
+Verified against a fake provider in the test suite and **certified against Keycloak 26** (`pnpm certify keycloak`,
+with a Keycloak in Docker: its own sign-in form, token endpoint, keys and signature, and its groups giving roles).
+Google and Microsoft are still to be verified with your own credentials.
