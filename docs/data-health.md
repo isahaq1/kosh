@@ -28,6 +28,7 @@ Each installed app declares its own; only those of the installed apps run.
 
 | App | Check | Holds when |
 | --- | --- | --- |
+| (every installation) | No draft points at an archived record | no record in its first state (a draft quotation, a draft bill) refers to a contact, product or other record that was archived |
 | Accounting | Every posted entry balances | each posted entry's debits equal its credits |
 | Accounting | What is left to pay on each document is what its lines hold | a posted invoice, bill or credit note's amount left equals the open amount of its receivable or payable lines |
 | Accounting | Posted documents are numbered without gaps or duplicates | within each numbering (`INV/2026/…`), no number is missing between the first and the last, and none is used twice |
@@ -36,6 +37,17 @@ Each installed app declares its own; only those of the installed apps run.
 | Stock valuation | Each product's valuation adds up to its quantity on hand | the layers' quantities equal the stock on hand (stock from before valuation was installed shows here) |
 
 A check that cannot run (a query that breaks) is reported as such, never as "nothing found".
+
+## Every week, by itself
+
+Each run is recorded. A running server checks every company once a week; when a check that held starts to find
+something, the Administrators get a notification. `shutro-erp doctor` says where the data stands:
+
+```
+✔ data            every check holds in 1 company(ies)
+▲ data            1 check(s) found something in 1 company(ies): No draft points at an archived record
+                  → Run shutro-erp check data to see each finding with its records, or open Settings › Data health.
+```
 
 Posted entries are also protected where the data lives: the database refuses a change to a posted entry's number or
 lines, so most of what the Accounting checks guard against cannot be done behind the books at all.
@@ -83,7 +95,8 @@ next):
 
 | Route | What it does |
 | --- | --- |
-| `GET /api/v1/settings/data-health` | the checks above, run now for the current company |
+| `GET /api/v1/settings/data-health` | the last recorded result for the current company |
+| `POST /api/v1/settings/data-health/run` | the checks above, run now and recorded |
 | `GET /api/v1/settings/duplicates` | the groups: what they share, and the records |
 | `POST /api/v1/settings/duplicates/merge` | `{ model, keep, merge: [ids] }` |
 | `GET /api/v1/settings/merges` | the latest merges, and whether each can still be undone |
@@ -114,5 +127,4 @@ export const library = defineModule({
 
 ## Not yet
 
-Links to archived records, a weekly run with a notification, the result on `shutro-erp doctor` and the Settings
-page come next (RFC 0036 step 6).
+The Settings page — the checks, the duplicates side by side, merge and undo — comes next (RFC 0036 step 6).

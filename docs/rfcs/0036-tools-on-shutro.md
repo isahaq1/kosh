@@ -234,3 +234,13 @@ Answered 2026-11-17 with the proposals: XLSX only; Administrators merge; generat
   Administrators only — the RFC's answer; reads run as the Administrator, since a read-only request cannot open a
   system scope. Not done: many-to-many relations to the merged record; merging by app managers. Next (part 2): links
   to archived records, the weekly run stored with its notification, the doctor; then the page (part 3).
+- **Step 6, part 2 (2026-11-18).** **Archived links, the run on record, the weekly run, the doctor.** A built-in
+  check, read from the installed models: no record in its first state refers to an archived record (each model with
+  a state, each of its many-to-ones to an archivable model). `runDataHealth` runs the checks and keeps a summary per
+  company in `kosh.setting` (`data_health.<company>`); `shutro-erp check data` and Settings' Run now record through
+  it. Settings checks every company once a week (a timer looked at every six hours, off with `KOSH_SCHEDULES=off`)
+  and, when a check that held starts to find something, emits `automation.notify` to the Administrators — the text
+  is English, as that notification kind carries its text. The doctor has a `data` line: never checked, findings, older
+  than two weeks, or holding. Tested through the real CLI in a project (`check data`, `--json`, then `doctor`), and
+  the archived link and the stored result on a served installation; the notification itself is not asserted by a
+  test. Next (part 3): the Settings page.
