@@ -190,3 +190,16 @@ record rules, field groups, company scope and constraints apply as in the ORM.
 - A schedule, e.g. nightly: `shutro-erp backup && shutro-erp backup verify`, then copy `backups/` off the server.
   Dumps are the floor; for point-in-time recovery, archive the WAL as well (`archive_mode = on` with
   `archive_command`, or a tool such as pgBackRest or WAL-G) and rehearse a restore to a time the same way.
+
+## Password reset
+
+A person who forgot their password asks for a link on the sign-in page (**Forgot your password?**):
+
+| Route | What it does |
+| --- | --- |
+| `POST /api/v1/auth/password/forgot` `{ login }` | always `{ ok: true }`; an active account with an address is emailed a link |
+| `POST /api/v1/auth/password/reset` `{ token, password }` | sets the password (12 characters at least), once; `410` for a used, replaced or expired link |
+
+The link works once, for 60 minutes, and a newer one replaces it; an account asks at most three times an hour.
+Resetting signs every device out and emails the person that their password changed. Both steps are in the audit
+log. It needs outgoing mail (`SMTP_URL`); two-factor sign-in is not affected.

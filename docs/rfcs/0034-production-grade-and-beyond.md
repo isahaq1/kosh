@@ -257,3 +257,15 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
 - **Step 3 withdrawn (2026-11-16).** The Odoo importer (`@kosh/odoo`, `shutro-erp odoo import`, its recording and
   docs/odoo.md) removed: Kosh ships no Odoo tools. Kept: stock valuation's system-only accounting date on transfers
   and unit cost on transfer lines, for the opening-balance kit that replaces it.
+- **Step 5, part 1 (2026-11-18).** **Password reset by email.** `POST /api/v1/auth/password/forgot { login }`
+  answers `{ ok: true }` whatever was typed — nobody learns who has an account — and, for an active account with an
+  address, emails a link (`/reset?token=…`) good **once, for 60 minutes**; a newer link replaces the earlier one; an
+  account asks at most three times an hour, an address five times in fifteen minutes. `POST
+  /api/v1/auth/password/reset { token, password }` sets the password (12 characters at least), marks the link used,
+  **signs every device out**, and emails the person that their password changed. Both steps are in the audit log
+  (`auth.reset_requested`, `auth.password_reset`). The tokens are stored hashed, beside the invitations
+  (`settings.invitation.purpose`: an invitation and a reset never void one another). Needs a mailer (`SMTP_URL`):
+  without one the request answers the same and sends nothing. Pages `/forgot` and `/reset` outside the shell, a link
+  on sign-in, English and Bangla. The second factor is untouched: an account with one still needs it to sign in.
+  Tested on the server with a captured mailer (the whole flow) and in the browser (the pages; the E2E server has no
+  mailer). Next in step 5: single sign-on (OIDC), then SCIM and passkeys — each needs decisions first (see below).
