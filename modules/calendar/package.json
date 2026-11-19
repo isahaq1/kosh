@@ -46,6 +46,8 @@
     "@kosh/views": "workspace:*",
     "@kosh/messaging": "workspace:*",
     "@kosh/contacts": "workspace:*",
+    "@kosh/mail": "workspace:*",
+    "fastify": "^5.12.7",
     "@kosh/worktime": "workspace:*",
     "@kosh/reporting": "workspace:*"
   },

@@ -130,3 +130,33 @@ test('a repeating event: the rule in words, generated into its occurrences, then
   await expect(page.getByRole('heading', { name: 'Calendar', level: 1 })).toBeVisible();
   await expect(page.getByRole('row', { name: new RegExp(title) })).toHaveCount(0);
 });
+
+test('my calendar address: made on a form, read by another calendar without a sign-in (RFC 0034)', async ({
+  page,
+  request,
+}) => {
+  await signIn(page, 'dina');
+  await page.goto('/agenda/a/agenda.action_feeds/new');
+  await page.getByRole('textbox', { name: 'Name', exact: true }).fill(`Phone ${Date.now()}`);
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/agenda\.action_feeds\/\d+$/);
+  const address = page.getByText(/\/api\/v1\/agenda\/feed\/[A-Za-z0-9_-]{32}\.ics/).first();
+  await expect(address).toBeVisible();
+  const path = /\/api\/v1\/agenda\/feed\/[A-Za-z0-9_-]{32}\.ics/.exec(
+    await address.innerText(),
+  )?.[0];
+  if (path === undefined) throw new Error('no address on the form');
+  // As a calendar reads it: no cookie, no token — the secret in the link is the access.
+  const read = await request.get(new URL(path, page.url()).toString(), {
+    headers: { cookie: '' },
+  });
+  expect(read.status()).toBe(200);
+  expect(read.headers()['content-type']).toContain('text/calendar');
+  const body = await read.text();
+  expect(body).toContain('BEGIN:VCALENDAR');
+  expect(body).toContain('METHOD:PUBLISH');
+  const wrong = await request.get(
+    new URL(path.replace(/.{6}\.ics$/, 'AAAAAA.ics'), page.url()).toString(),
+  );
+  expect(wrong.status()).toBe(404);
+});

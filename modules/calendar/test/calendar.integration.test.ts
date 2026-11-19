@@ -7,6 +7,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createMemoryMailer } from '@kosh/mail';
 import {
   type AppHost,
   applyApps,
@@ -21,9 +22,12 @@ import { type Driver, orm, pg } from '@kosh/server/orm';
 import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { settings } from '@kosh/settings';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { calendarApp } from '../src/index.js';
+import { agendaMailers, calendarModule } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
+// A mailer that keeps what it is given; the email workers are drained by hand.
+const mailer = createMemoryMailer();
+const calendarApp = calendarModule({ mailer, workers: false });
 const catalogue = [base, settings, calendarApp];
 const E = '/api/v1/models/calendar.event';
 
@@ -416,6 +420,179 @@ test('a repeating event on a day off: moved to the working day after, by the wor
     '2030-01-06T05:00:00.000Z',
     '2030-01-13T05:00:00.000Z',
   ]);
+});
+
+test('invitations by email with an .ics: sent, sent again as an update, cancelled; only by the organizer (RFC 0034)', async () => {
+  const [invitations, cancellations] = agendaMailers({ shutro: host.server.shutro }, mailer);
+  if (invitations === undefined || cancellations === undefined) throw new Error('two workers');
+  // What earlier tests cancelled is the workers' to see too: taken first, and it concerns nobody invited.
+  await cancellations.drain();
+  await invitations.drain();
+  for (const who of ['rahim', 'sumi'])
+    await driver.query({
+      text: 'UPDATE res_users SET email = $2 WHERE id = $1',
+      params: [users[who], `${who}@padma.test`],
+    });
+  const buyer = (
+    await call('POST', '/api/v1/models/res.partner', 'dina', {
+      name: 'Meghna Traders, Ltd.',
+      email: 'buyer@meghna.example',
+    })
+  ).json.id;
+  const made = await call('POST', E, 'rahim', {
+    name: 'Budget review',
+    start: '2030-02-04T04:00:00Z',
+    stop: '2030-02-04T05:00:00Z',
+    location: 'Floor 3',
+    videoUrl: 'https://meet.example/budget',
+    attendees: { create: [{ user: users['sumi'] }, { partner: buyer }, { user: users['rahim'] }] },
+  });
+  expect(made.status, JSON.stringify(made.json)).toBe(201);
+  const id = made.json.id as number;
+  const step = (name: string, as: string) => call('POST', `${E}/${id}/transitions/${name}`, as);
+  const ics = (index: number) =>
+    new TextDecoder()
+      .decode(mailer.sent[index]?.attachments?.[0]?.content)
+      .replace(/\r\n /g, '')
+      .split('\r\n');
+
+  // An attendee does not send the invitations of someone else's meeting.
+  expect((await step('invite', 'sumi')).status).toBe(403);
+  mailer.sent.length = 0;
+  expect((await step('invite', 'rahim')).status).toBe(200);
+  expect(mailer.sent).toHaveLength(0); // through the outbox, not in the request
+  expect(await invitations.drain()).toBe(1);
+  // Sumi and the contact; not the organizer, who is among the attendees.
+  expect(mailer.sent.map((m) => [m.to, m.subject]).sort()).toEqual([
+    ['buyer@meghna.example', 'Invitation: Budget review'],
+    ['sumi@padma.test', 'Invitation: Budget review'],
+  ]);
+  const first = mailer.sent[0];
+  expect(first?.replyTo).toBe('rahim@padma.test');
+  expect(first?.text).toContain('rahim invites you to Budget review.');
+  expect(first?.text).toContain('Monday, 4 February 2030 at 10:00 – 11:00 (Asia/Dhaka)'); // Dhaka time
+  expect(first?.text).toContain('Where: Floor 3');
+  expect(first?.attachments?.[0]).toMatchObject({
+    filename: 'invite.ics',
+    contentType: 'text/calendar; method=REQUEST; charset=UTF-8',
+  });
+  const request = ics(0);
+  expect(request).toContain('METHOD:REQUEST');
+  expect(request).toContain('DTSTART:20300204T040000Z');
+  expect(request).toContain('SUMMARY:Budget review');
+  expect(request).toContain('LOCATION:Floor 3');
+  expect(request).toContain('URL:https://meet.example/budget');
+  expect(request).toContain('SEQUENCE:0');
+  expect(request).toContain('ORGANIZER;CN=rahim:mailto:rahim@padma.test');
+  expect(request.filter((l) => l.startsWith('ATTENDEE'))).toEqual(
+    expect.arrayContaining([
+      'ATTENDEE;CN=sumi;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:sumi@padma.test',
+      'ATTENDEE;CN="Meghna Traders, Ltd.";ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:buyer@meghna.example',
+    ]),
+  );
+  const uid = request.find((l) => l.startsWith('UID:'));
+  expect(uid).toMatch(new RegExp(`^UID:event-${id}@`));
+
+  // Sumi accepts in Agenda; the meeting moves an hour; sent again: an update of the same event, a version higher.
+  await call('POST', `/api/v1/agenda/events/${id}/respond`, 'sumi', { response: 'accepted' });
+  await call('PATCH', `${E}/${id}`, 'rahim', {
+    start: '2030-02-04T05:00:00Z',
+    stop: '2030-02-04T06:00:00Z',
+  });
+  mailer.sent.length = 0;
+  expect((await step('invite', 'rahim')).status).toBe(200);
+  expect(await invitations.drain()).toBe(1);
+  expect(mailer.sent.map((m) => m.subject)).toEqual([
+    'Updated invitation: Budget review',
+    'Updated invitation: Budget review',
+  ]);
+  const update = ics(0);
+  expect(update).toContain(uid);
+  expect(update).toContain('SEQUENCE:1');
+  expect(update).toContain('DTSTART:20300204T050000Z');
+  expect(update.some((l) => l.includes('PARTSTAT=ACCEPTED') && l.endsWith('sumi@padma.test'))).toBe(
+    true,
+  );
+
+  // Cancelled: those who were invited are told, with the same event id and a higher version still.
+  mailer.sent.length = 0;
+  expect((await step('cancel', 'rahim')).status).toBe(200);
+  expect(await cancellations.drain()).toBe(1);
+  expect(mailer.sent.map((m) => [m.to, m.subject]).sort()).toEqual([
+    ['buyer@meghna.example', 'Cancelled: Budget review'],
+    ['sumi@padma.test', 'Cancelled: Budget review'],
+  ]);
+  const cancel = ics(0);
+  expect(cancel).toContain('METHOD:CANCEL');
+  expect(cancel).toContain('STATUS:CANCELLED');
+  expect(cancel).toContain('SEQUENCE:2');
+  expect(cancel).toContain(uid);
+
+  // A meeting nobody was invited to by email is cancelled without a word.
+  const quiet = await call('POST', E, 'rahim', {
+    name: 'Quiet',
+    start: '2030-02-05T04:00:00Z',
+    stop: '2030-02-05T05:00:00Z',
+    attendees: { create: [{ user: users['sumi'] }] },
+  });
+  mailer.sent.length = 0;
+  await call('POST', `${E}/${quiet.json.id}/transitions/cancel`, 'rahim');
+  expect(await cancellations.drain()).toBe(1);
+  expect(mailer.sent).toEqual([]);
+  for (const w of [invitations, cancellations]) await w.stop();
+});
+
+test('a calendar address: its owner’s events for another calendar, by a secret link; theirs alone (RFC 0034)', async () => {
+  const F = '/api/v1/models/calendar.feed';
+  const soon = (hours: number) => new Date(Date.now() + hours * 3_600_000).toISOString();
+  // Sumi organizes one meeting, is invited to another, has declined a third; a fourth is not hers at all.
+  const mk = (as: string, name: string, extra: Record<string, unknown> = {}) =>
+    call('POST', E, as, { name, start: soon(30), stop: soon(31), ...extra });
+  await mk('sumi', 'Sumi plans');
+  await mk('rahim', 'Invited in', { attendees: { create: [{ user: users['sumi'] }] } });
+  await mk('rahim', 'Declined by her', {
+    attendees: { create: [{ user: users['sumi'], response: 'declined' }] },
+  });
+  await mk('rahim', 'Not hers', { privacy: 'private' });
+
+  const made = await call('POST', F, 'sumi', { name: 'Phone' });
+  expect(made.status, JSON.stringify(made.json)).toBe(201);
+  const address = String(
+    (await call('GET', `${F}/${made.json.id}?fields=address`, 'sumi')).json.address,
+  );
+  expect(address).toMatch(/\/api\/v1\/agenda\/feed\/[A-Za-z0-9_-]{32}\.ics$/);
+  // The address is its owner's only — not even a manager's.
+  expect((await call('GET', `${F}/${made.json.id}`, 'rahim')).status).toBe(403);
+  expect((await call('GET', `${F}/${made.json.id}`, 'dina')).status).toBe(403);
+  expect((await call('GET', F, 'dina')).json.items).toEqual([]);
+
+  // Read without a sign-in, as a calendar does.
+  const path = new URL(address).pathname;
+  const read = await host.server.app.inject({ method: 'GET', url: path });
+  expect(read.statusCode, read.body).toBe(200);
+  expect(String(read.headers['content-type'])).toContain('text/calendar');
+  const lines = read.body.replace(/\r\n /g, '').split('\r\n');
+  expect(lines).toContain('METHOD:PUBLISH');
+  const titles = lines.filter((l) => l.startsWith('SUMMARY:')).map((l) => l.slice(8));
+  expect(titles).toEqual(expect.arrayContaining(['Sumi plans', 'Invited in']));
+  expect(titles).not.toContain('Declined by her');
+  expect(titles).not.toContain('Not hers');
+  expect(lines.some((l) => l.startsWith('ATTENDEE'))).toBe(false); // a feed names no attendee
+  expect(
+    (await call('GET', `${F}/${made.json.id}?fields=lastReadAt`, 'sumi')).json.lastReadAt,
+  ).not.toBeNull();
+
+  // A wrong secret, a malformed one, and the address once deleted: one answer.
+  for (const wrong of [
+    path.replace(/.{6}\.ics$/, 'AAAAAA.ics'),
+    '/api/v1/agenda/feed/short.ics',
+    path.replace('.ics', ''),
+  ])
+    expect((await host.server.app.inject({ method: 'GET', url: wrong })).statusCode, wrong).toBe(
+      404,
+    );
+  expect((await call('DELETE', `${F}/${made.json.id}`, 'sumi')).status).toBeLessThan(300);
+  expect((await host.server.app.inject({ method: 'GET', url: path })).statusCode).toBe(404);
 });
 
 test('the demo data loads', async () => {

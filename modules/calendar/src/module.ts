@@ -5,6 +5,7 @@
  * an attendee changes their own answer.
  */
 
+import { randomBytes } from 'node:crypto';
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
 import { emitting, installationSetting } from '@kosh/server';
@@ -99,6 +100,8 @@ export const CalendarEvent = defineModel('calendar.event', {
       transitions: {
         cancel: emitting('calendar.event.cancelled', { from: ['confirmed'], to: 'cancelled' }),
         restore: { from: ['cancelled'], to: 'confirmed' },
+        // Emails the attendees an invitation their mail client and calendar read (again after a change).
+        invite: emitting('calendar.event.invited', { from: ['confirmed'], to: 'confirmed' }),
       },
     }),
     description: f.text(),
@@ -112,6 +115,9 @@ export const CalendarEvent = defineModel('calendar.event', {
       groups: { write: [] },
     }),
     recurrenceDate: f.date({ label: 'Date in the series', groups: { write: [] } }),
+    /** Raised at each invitation sent: a mail client keeps the latest version of the event. */
+    inviteSequence: f.integer({ default: 0, label: 'Invitation version', groups: { write: [] } }),
+    invitedAt: f.datetime({ label: 'Invitations sent', groups: { write: [] } }),
     detached: f.boolean({
       default: false,
       label: 'Keep as it is',
@@ -488,6 +494,7 @@ export const CalendarAttendee = defineModel('calendar.attendee', {
     event: f.many2one('calendar.event', { required: true, ondelete: 'cascade' }),
     user: f.many2one('res.users', { label: 'Person' }),
     partner: f.many2one('res.partner', { label: 'Contact' }),
+    invitedAt: f.datetime({ label: 'Invited by email', groups: { write: [] } }),
     response: f.selection(
       {
         needs_action: 'Not answered',
@@ -511,6 +518,51 @@ export const CalendarAttendee = defineModel('calendar.attendee', {
   },
 });
 
+/**
+ * A person's calendar address (RFC 0034 §2.4): a secret link another calendar — Google, Outlook, a phone — reads
+ * their events from. Theirs alone: nobody else, managers included, sees it. Deleting it closes the address; a new
+ * one has a new secret.
+ */
+export const CalendarFeed = defineModel('calendar.feed', {
+  label: 'Calendar address',
+  recName: 'name',
+  order: ['id asc'],
+  access: { 'calendar.user': ALL, 'calendar.manager': ALL },
+  rules: {
+    own: { groups: ['calendar.user'], perms: [...ALL], domain: { user: me } },
+  },
+  fields: {
+    name: f.char({
+      required: true,
+      default: 'My calendar',
+      help: 'What you call it (where you subscribed: Phone, Outlook).',
+    }),
+    user: f.many2one('res.users', {
+      required: true,
+      default: (env: Env) => env.userId,
+      ondelete: 'cascade',
+      groups: { write: [] },
+    }),
+    token: f.char({
+      size: 64,
+      required: true,
+      index: 'unique',
+      default: () => randomBytes(24).toString('base64url'),
+      groups: { write: [] },
+    }),
+    address: f.char({
+      label: 'Address to subscribe to',
+      help: 'Paste it into your calendar as a subscription by URL. Anyone who has it reads your events: do not share it.',
+      ...compute('calendar.feed', 'address', ['token'], (feeds) => {
+        const base = (process.env['KOSH_BASE_URL'] ?? 'http://localhost:5173').replace(/\/$/, '');
+        for (const feed of feeds) feed.address = `${base}/api/v1/agenda/feed/${feed.token}.ics`;
+      }),
+      store: true,
+    }),
+    lastReadAt: f.datetime({ label: 'Last read', groups: { write: [] } }),
+  },
+});
+
 export const calendarShutro = defineModule({
   name: 'calendar',
   version: '0.1.0',
@@ -527,5 +579,5 @@ export const calendarShutro = defineModule({
       implies: ['calendar.user'],
     }),
   ],
-  models: [CalendarRoom, CalendarEvent, CalendarAttendee, CalendarRecurrence],
+  models: [CalendarRoom, CalendarEvent, CalendarAttendee, CalendarRecurrence, CalendarFeed],
 });

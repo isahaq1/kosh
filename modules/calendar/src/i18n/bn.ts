@@ -12,6 +12,7 @@ export const bn: Readonly<Record<string, string>> = {
   'About (model)': 'সম্পর্কিত (মডেল)',
   Accepted: 'গৃহীত',
   Active: 'সক্রিয়',
+  'Address to subscribe to': 'সাবস্ক্রাইব করার ঠিকানা',
   'After a number of times, or on a date (whichever comes first). At most 366 occurrences.':
     'নির্দিষ্ট সংখ্যক বারের পর, অথবা একটি তারিখে (যেটি আগে আসে)। সর্বোচ্চ 366 বার।',
   Agenda: 'এজেন্ডা',
@@ -33,6 +34,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Attendees › Person': 'অংশগ্রহণকারী › ব্যক্তি',
   'By organiser': 'আয়োজক অনুযায়ী',
   Calendar: 'ক্যালেন্ডার',
+  'Calendar address': 'ক্যালেন্ডারের ঠিকানা',
   'Cancel the event': 'ইভেন্ট বাতিল করুন',
   'Cancel this event? Its room is freed.': 'এই ইভেন্ট বাতিল করবেন? এর কক্ষ খালি হয়ে যাবে।',
   Cancelled: 'বাতিল',
@@ -52,6 +54,8 @@ export const bn: Readonly<Record<string, string>> = {
   Draft: 'খসড়া',
   'Drafted until its occurrences are generated; running while it has some to come; stopped once its future occurrences are removed.':
     'সভাগুলো তৈরি না হওয়া পর্যন্ত খসড়া; সামনে সভা থাকলে চলমান; ভবিষ্যতের সভা সরিয়ে দিলে বন্ধ।',
+  'Email the attendees an invitation for their calendar? Sent again after a change, it updates the one they have.':
+    'অংশগ্রহণকারীদের ক্যালেন্ডারের জন্য ইমেইলে আমন্ত্রণ পাঠাবেন? পরিবর্তনের পর আবার পাঠালে তাঁদের কাছে থাকা আমন্ত্রণটি হালনাগাদ হয়।',
   End: 'শেষ',
   Ends: 'শেষ হয়',
   'Ends after this many occurrences.': 'এতবার হওয়ার পর শেষ হয়।',
@@ -76,9 +80,13 @@ export const bn: Readonly<Record<string, string>> = {
   ID: 'আইডি',
   'In the month, on': 'মাসের মধ্যে, যেদিন',
   'In words': 'কথায়',
+  'Invitation version': 'আমন্ত্রণের সংস্করণ',
+  'Invitations sent': 'আমন্ত্রণ পাঠানো হয়েছে',
   Invited: 'আমন্ত্রিত',
+  'Invited by email': 'ইমেইলে আমন্ত্রিত',
   'Keep as it is': 'যেমন আছে তেমন রাখুন',
   'Keep it that day': 'সেদিনই রাখুন',
+  'Last read': 'সর্বশেষ পড়া হয়েছে',
   Location: 'অবস্থান',
   'Manager (every event, rooms)': 'ব্যবস্থাপক (সব ইভেন্ট, কক্ষ)',
   Maybe: 'হয়তো',
@@ -91,6 +99,7 @@ export const bn: Readonly<Record<string, string>> = {
   Month: 'মাস',
   'Move it to the working day after': 'পরের কর্মদিবসে সরান',
   'Move it to the working day before': 'আগের কর্মদিবসে সরান',
+  'My calendar address': 'আমার ক্যালেন্ডারের ঠিকানা',
   Name: 'নাম',
   'Not answered': 'উত্তর দেননি',
   Occurrences: 'সভাগুলো',
@@ -99,6 +108,8 @@ export const bn: Readonly<Record<string, string>> = {
   Organizer: 'আয়োজক',
   Overview: 'সারসংক্ষেপ',
   'Page {{page}} of {{pages}}': 'পৃষ্ঠা {{page}} / {{pages}}',
+  'Paste it into your calendar as a subscription by URL. Anyone who has it reads your events: do not share it.':
+    'URL দিয়ে সাবস্ক্রিপশন হিসেবে আপনার ক্যালেন্ডারে বসান। যার কাছে এটি থাকে সে আপনার ইভেন্ট পড়তে পারে: কাউকে দেবেন না।',
   'People invited': 'আমন্ত্রিত ব্যক্তি',
   Person: 'ব্যক্তি',
   Privacy: 'গোপনীয়তা',
@@ -119,7 +130,10 @@ export const bn: Readonly<Record<string, string>> = {
   Rooms: 'কক্ষ',
   Running: 'চলমান',
   Saturday: 'শনিবার',
+  'Save, then paste the address into Google Calendar, Outlook or your phone as a calendar to subscribe to. It shows the events you organize or attend. To close the address, delete it.':
+    'সংরক্ষণ করুন, তারপর ঠিকানাটি Google Calendar, Outlook বা ফোনে সাবস্ক্রাইব করার ক্যালেন্ডার হিসেবে বসান। এতে আপনার আয়োজিত বা অংশ নেওয়া ইভেন্ট দেখায়। ঠিকানা বন্ধ করতে এটি মুছে ফেলুন।',
   Seats: 'আসন',
+  'Send invitations': 'আমন্ত্রণ পাঠান',
   'Skip it': 'বাদ দিন',
   Start: 'শুরু',
   Starts: 'শুরু হয়',
@@ -140,10 +154,12 @@ export const bn: Readonly<Record<string, string>> = {
   Thursday: 'বৃহস্পতিবার',
   Times: 'বার',
   Title: 'শিরোনাম',
+  Token: 'টোকেন',
   Tuesday: 'মঙ্গলবার',
   Until: 'পর্যন্ত',
   'Updated At': 'হালনাগাদের সময়',
   'Updated By': 'হালনাগাদ করেছেন',
+  User: 'ব্যবহারকারী',
   'User (own and public events)': 'ব্যবহারকারী (নিজের ও সর্বজনীন ইভেন্ট)',
   Video: 'ভিডিও',
   'Video call link': 'ভিডিও কলের লিংক',
@@ -151,6 +167,8 @@ export const bn: Readonly<Record<string, string>> = {
   Week: 'সপ্তাহ',
   'What becomes of an occurrence that falls on a day off of the company’s working calendar.':
     'কোম্পানির কর্ম-ক্যালেন্ডারের ছুটির দিনে পড়া সভার কী হবে।',
+  'What you call it (where you subscribed: Phone, Outlook).':
+    'আপনি একে যা বলেন (যেখানে সাবস্ক্রাইব করেছেন: ফোন, Outlook)।',
   'Whether this person will come: not answered yet, accepted, maybe or declined.':
     'এই ব্যক্তি আসবেন কি না: এখনও উত্তর দেননি, গ্রহণ করেছেন, হয়তো বা প্রত্যাখ্যান করেছেন।',
   Year: 'বছর',
