@@ -1236,6 +1236,9 @@ importers:
       '@kosh/views':
         specifier: workspace:*
         version: link:../../packages/views
+      '@kosh/worktime':
+        specifier: workspace:*
+        version: link:../worktime
     devDependencies:
       '@kosh/settings':
         specifier: workspace:*

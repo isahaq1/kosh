@@ -1,6 +1,6 @@
 /**
  * Workforce on real PostgreSQL through the HTTP API (RFC 0021): the directory for every employee, personal details
- * and wages for HR managers only; a leave counts working days by the company's week (the weekend setting) and the
+ * and wages for HR managers only; a leave counts working days by the person's working calendar, holidays not charged, and the
  * server checks them; no overlaps; the year's balance is enforced; the line manager or HR decides, never the person
  * asking, and only waiting requests; one's own contract only; the demo data loads.
  */
@@ -236,31 +236,64 @@ test('leave: working days checked, decided by the manager only, never by the per
   expect(balance.json.types.find((t: Json) => t.name === 'Unpaid leave').left).toBeNull();
 });
 
-test('the weekend setting changes the count; contracts are one’s own; wages for HR', async () => {
+test('leave follows the working calendar: a person’s own week, holidays not charged; contracts; wages for HR', async () => {
+  // HR sets a calendar with a Monday-to-Friday week and gives it to Sumi; someone who is not HR cannot.
+  const week = (days: string[]) => ({
+    create: days.map((weekday) => ({ weekday, fromTime: '09:00', toTime: '17:00' })),
+  });
+  const refused = await call('POST', '/api/v1/models/work.calendar', 'dina', {
+    name: 'Mine',
+    hours: week(['mon']),
+  });
+  expect(refused.status).toBe(403);
+  const europe = await call('POST', '/api/v1/models/work.calendar', 'hana', {
+    name: 'Europe desk',
+    tz: 'Europe/London',
+    hours: week(['mon', 'tue', 'wed', 'thu', 'fri']),
+  });
+  expect(europe.status, JSON.stringify(europe.json)).toBe(201);
   expect(
     (
-      await call('PATCH', '/api/v1/settings/app-settings/hr/week', 'hana', {
-        values: { weekend: 'sat_sun' },
+      await call('PATCH', `/api/v1/models/hr.employee/${employees['sumi']}`, 'hana', {
+        calendar: europe.json.id,
       })
     ).status,
   ).toBe(200);
-  const onchange = await call('POST', `${L}/onchange`, 'sumi', {
-    values: {
-      employee: employees['sumi'],
-      type: types['Sick leave'],
-      dateFrom: '2026-11-06',
-      dateTo: '2026-11-09',
-    },
-    changed: ['dateTo'],
-  });
-  expect(onchange.json.values.days).toBe(2); // Friday and Monday
+  const days = async (who: string, dateFrom: string, dateTo: string) =>
+    (
+      await call('POST', `${L}/onchange`, who, {
+        values: { employee: employees[who], type: types['Sick leave'], dateFrom, dateTo },
+        changed: ['dateTo'],
+      })
+    ).json.values.days;
+  // Friday 6 to Monday 9 November: two days for her, one (the Monday) on the company's Sunday-to-Thursday week.
+  expect(await days('sumi', '2026-11-06', '2026-11-09')).toBe(2);
+  expect(await days('rahim', '2026-11-06', '2026-11-09')).toBe(2); // Sunday and Monday
+
+  // A holiday of the company is not charged to anyone's leave.
+  expect(await days('rahim', '2026-11-22', '2026-11-26')).toBe(5);
   expect(
     (
-      await call('PATCH', '/api/v1/settings/app-settings/hr/week', 'dina', {
-        values: { weekend: 'fri' },
+      await call('POST', '/api/v1/models/work.holiday', 'hana', {
+        name: 'Election day',
+        dateFrom: '2026-11-24',
+        dateTo: '2026-11-24',
       })
     ).status,
-  ).toBe(403);
+  ).toBe(201);
+  expect(await days('rahim', '2026-11-22', '2026-11-26')).toBe(4);
+  expect(await days('sumi', '2026-11-23', '2026-11-27')).toBe(4);
+  // The server holds the form to it: five days are refused, four accepted.
+  const claim = (n: number) =>
+    call('POST', L, 'sumi', {
+      employee: employees['sumi'],
+      type: types['Sick leave'],
+      dateFrom: '2026-11-23',
+      dateTo: '2026-11-27',
+      days: n,
+    });
+  expect((await claim(5)).status).toBe(422);
+  expect((await claim(4)).status).toBe(201);
 
   const C = '/api/v1/models/hr.contract';
   const contract = await call('POST', C, 'hana', {

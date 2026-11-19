@@ -15,6 +15,7 @@ import { reporting } from '@kosh/reporting';
 import { audit, HttpProblem, type ModuleContext } from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
 import { action, calendar, form, hierarchy, kanban, list, search } from '@kosh/views';
+import { worktime } from '@kosh/worktime';
 import { hrDemo } from './demo.js';
 import {
   HrContract,
@@ -38,6 +39,7 @@ export {
   HrLeave,
   HrLeaveType,
   hrShutro,
+  leaveDays,
   WEEKENDS,
   weekendOf,
   workingDays,
@@ -190,7 +192,7 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
   shutro: hrShutro,
   kosh: '^0.1.0',
   hooks: { demo: hrDemo },
-  depends: [contacts, messaging, reporting],
+  depends: [contacts, messaging, reporting, worktime],
   app: {
     code: 'workforce',
     label: 'Workforce',
@@ -280,32 +282,6 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
       groups: ['hr.manager'],
       implies: ['user'],
     },
-  },
-  settings: {
-    sections: [
-      {
-        key: 'week',
-        label: 'Working week',
-        description: 'Which days are the weekend: leave counts working days only.',
-        keywords: 'weekend friday saturday sunday working days leave',
-        scope: 'installation',
-        editors: ['hr.manager'],
-        fields: [
-          {
-            key: 'weekend',
-            type: 'selection',
-            label: 'Weekend',
-            options: {
-              fri_sat: 'Friday and Saturday',
-              sat_sun: 'Saturday and Sunday',
-              fri: 'Friday only',
-            },
-            default: 'fri_sat',
-            help: 'Leave already requested keeps its days; new requests count by this week.',
-          },
-        ],
-      },
-    ],
   },
   routes: (context: ModuleContext) => registerWorkforceRoutes(context),
   // The Overview (RFC 0022 step 2).
@@ -556,7 +532,7 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
           label: 'Approvers',
           description: 'Who approves this person’s expenses and leave first.',
         }),
-        k.group('schedule', ['timezone'], { label: 'Schedule' }),
+        k.group('schedule', ['calendar', 'timezone'], { label: 'Schedule' }),
         k.group('personal', ['birthday', 'nationalId', 'emergencyContact', 'privateAddress']),
       ],
       chatter: true,

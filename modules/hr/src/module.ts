@@ -1,14 +1,15 @@
 /**
  * The data layer of Workforce (RFC 0021): departments as a tree, positions, employees (separate from users: an
  * employee may never sign in) with their manager, contracts, and leave. Personal details and wages are visible to
- * HR managers only (field security). A leave's working days follow the company's week (the weekend setting) and are
+ * HR managers only (field security). A leave's working days follow the person's working calendar — or the company's —
+ * with its holidays and the person's own exceptions (Working time, RFC 0034 §2.4): a holiday is not charged; they are
  * checked by the server; a request may not overlap another of the same person, nor go beyond the year's days of its
  * type. Approving and refusing need the decision permission (HR managers) or go through the line manager's route.
  */
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
-import { installationSetting } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
+import { workingDays as countWorkingDays, scheduleOf, worktimeShutro } from '@kosh/worktime';
 import {
   check,
   defineModel,
@@ -43,10 +44,48 @@ export function workingDays(from: string, to: string, weekend: readonly number[]
   return days;
 }
 
-/** The installation's weekend (App settings › Workforce). */
+/**
+ * The company's weekend: the days its working calendar has no hours on (Working time › Calendars), as JavaScript
+ * day numbers. For what only needs to know the week (Attendance); leave counts with {@link leaveDays}.
+ */
 export async function weekendOf(env: Env): Promise<readonly number[]> {
-  const choice = await installationSetting(env, 'hr.weekend', 'fri_sat');
-  return WEEKENDS[String(choice)] ?? (WEEKENDS['fri_sat'] as readonly number[]);
+  const today = new Date().toISOString().slice(0, 10);
+  const schedule = await scheduleOf(env as never, { from: today, to: today });
+  return [0, 1, 2, 3, 4, 5, 6].filter((day) => (schedule.week[day] ?? []).length === 0);
+}
+
+/**
+ * The working days a leave of this person takes from `from` to `to` (ISO dates, both included): by their working
+ * calendar — the company's when they have none —, without its holidays and without the days they do not work
+ * anyway (their personal exceptions).
+ */
+export async function leaveDays(
+  env: Env,
+  employee: number | null,
+  from: string,
+  to: string,
+): Promise<number> {
+  if (to < from) return 0;
+  const person =
+    employee === null
+      ? undefined
+      : await env.asSuperuser({ reason: 'the working calendar of a leave' }, async (su) => {
+          const [row] = [
+            ...(await su
+              .model('hr.employee')
+              .search({ where: { id: employee as never }, limit: 1 })),
+          ];
+          return row === undefined
+            ? undefined
+            : { calendar: row.calendar?.id ?? null, user: row.user?.id ?? null };
+        });
+  const schedule = await scheduleOf(env as never, {
+    from,
+    to,
+    calendar: (person?.calendar as number | null | undefined) ?? null,
+    user: (person?.user as number | null | undefined) ?? null,
+  });
+  return countWorkingDays(schedule, from, to);
 }
 
 /**
@@ -165,6 +204,11 @@ export const HrEmployee = defineModel('hr.employee', {
       ondelete: 'set null',
       label: 'Leave approver',
       help: 'Decides this person’s leave beside HR managers.',
+    }),
+    calendar: f.many2one('work.calendar', {
+      ondelete: 'set null',
+      label: 'Working calendar',
+      help: 'The days and hours this person works; empty: the company’s calendar. Leave counts its working days.',
     }),
     timezone: f.char({
       label: 'Time zone',
@@ -327,14 +371,18 @@ export const HrLeave = defineModel('hr.leave', {
   constraints: {
     // The days the form says are the working days the server counts.
     workingDays: {
-      ...check('hr.leave', ['dateFrom', 'dateTo', 'days'], async (leaves) => {
-        const weekend = await weekendOf(leaves.env);
-        return [...leaves]
-          .filter((l) => {
-            const days = workingDays(iso(l.dateFrom), iso(l.dateTo), weekend);
-            return days === 0 || l.days !== days;
-          })
-          .map((l) => l.id);
+      ...check('hr.leave', ['employee', 'dateFrom', 'dateTo', 'days'], async (leaves) => {
+        const failing: number[] = [];
+        for (const l of leaves) {
+          const days = await leaveDays(
+            leaves.env,
+            l.employee.id as number,
+            iso(l.dateFrom),
+            iso(l.dateTo),
+          );
+          if (days === 0 || l.days !== days) failing.push(l.id);
+        }
+        return failing;
       }),
       message: 'The working days do not match the dates (or none falls on a working day).',
     },
@@ -399,6 +447,7 @@ export const HrLeave = defineModel('hr.leave', {
   onchange: {
     dateFrom: onchange('hr.leave', async (d, env): Promise<void> => fillDays(d, env)),
     dateTo: onchange('hr.leave', async (d, env): Promise<void> => fillDays(d, env)),
+    employee: onchange('hr.leave', async (d, env): Promise<void> => fillDays(d, env)),
   },
 });
 
@@ -432,7 +481,7 @@ async function undecidable(records: unknown): Promise<number[]> {
   });
 }
 
-/** The form's working days, from the dates and the company's week. */
+/** The form's working days, from the dates and the person's working calendar. */
 async function fillDays(
   d: { get(key: string): unknown; set(key: string, value: unknown): void },
   env: Env,
@@ -441,19 +490,29 @@ async function fillDays(
   const to = d.get('dateTo');
   if (from === null || from === undefined) return;
   if (to === null || to === undefined || iso(to) < iso(from)) d.set('dateTo', iso(from));
-  d.set('days', workingDays(iso(from), iso(d.get('dateTo') ?? from), await weekendOf(env)));
+  const who = d.get('employee');
+  const employee =
+    who === null || who === undefined
+      ? null
+      : Number(typeof who === 'object' ? (who as { id: unknown }).id : who);
+  d.set('days', await leaveDays(env, employee, iso(from), iso(d.get('dateTo') ?? from)));
 }
 
 export const hrShutro = defineModule({
   name: 'hr',
   version: '0.2.0',
-  depends: [contactsShutro, messagingShutro],
+  depends: [contactsShutro, messagingShutro, worktimeShutro],
   groups: [
-    orm.defineGroup({ code: 'hr.user', label: 'Employee', implies: ['messaging.user'] }),
+    orm.defineGroup({
+      code: 'hr.user',
+      label: 'Employee',
+      implies: ['messaging.user', 'worktime.user'],
+    }),
     orm.defineGroup({
       code: 'hr.manager',
       label: 'HR manager',
-      implies: ['hr.user', 'contacts.user'],
+      // HR sets the calendars, the holidays and people's exceptions.
+      implies: ['hr.user', 'contacts.user', 'worktime.manager'],
     }),
   ],
   permissions: [

@@ -65,8 +65,6 @@ export const bn: Readonly<Record<string, string>> = {
   Joined: 'যোগদান',
   'Joined by month': 'মাস অনুযায়ী যোগদান',
   Leave: 'ছুটি',
-  'Leave already requested keeps its days; new requests count by this week.':
-    'আগে চাওয়া ছুটির দিন যেমন আছে থাকবে; নতুন আবেদন এই সপ্তাহ অনুযায়ী গণনা হবে।',
   'Leave approver': 'ছুটি অনুমোদনকারী',
   'Leave days by person': 'ব্যক্তি অনুযায়ী ছুটির দিন',
   'Leave days taken': 'নেওয়া ছুটির দিন',
@@ -108,6 +106,8 @@ export const bn: Readonly<Record<string, string>> = {
   Team: 'দল',
   'The country whose labour law the type follows, as its two-letter code (BD, IN); empty: any.':
     'যে দেশের শ্রম আইন এই ধরন অনুসরণ করে, দুই অক্ষরের কোডে (BD, IN); খালি: যেকোনো।',
+  'The days and hours this person works; empty: the company’s calendar. Leave counts its working days.':
+    'এই ব্যক্তি যে দিন ও সময়ে কাজ করেন; খালি: কোম্পানির ক্যালেন্ডার। ছুটি এর কর্মদিবস গোনে।',
   'The head of the person’s unit (a plant, a depot, a farm), beside the line manager; approvals may ask them.':
     'ব্যক্তির ইউনিটের প্রধান (কারখানা, ডিপো, খামার), লাইন ম্যানেজারের পাশাপাশি; অনুমোদনে তাঁকে চাওয়া হতে পারে।',
   'The kind of employment the contract is for: permanent, a fixed term, probation or an internship.':
@@ -127,17 +127,14 @@ export const bn: Readonly<Record<string, string>> = {
   'Updated By': 'হালনাগাদ করেছেন',
   User: 'ব্যবহারকারী',
   Waiting: 'অপেক্ষমাণ',
-  Weekend: 'সাপ্তাহিক ছুটি',
-  'Which days are the weekend: leave counts working days only.':
-    'কোন দিনগুলো সাপ্তাহিক ছুটি: ছুটিতে শুধু কর্মদিবস গণনা হয়।',
   'Who approves this person’s expenses and leave first.':
     'এই ব্যক্তির খরচ ও ছুটি প্রথমে কে অনুমোদন করেন।',
   'Work email': 'অফিসের ইমেইল',
   'Work mobile': 'অফিসের মোবাইল',
   'Work phone': 'অফিসের ফোন',
   Workforce: 'ওয়ার্কফোর্স',
+  'Working calendar': 'কর্ম-ক্যালেন্ডার',
   'Working days': 'কর্মদিবস',
-  'Working week': 'কর্মসপ্তাহ',
   'Your own leave is decided by someone else; others’ by an HR manager or their leave approver.':
     'আপনার নিজের ছুটির সিদ্ধান্ত অন্য কেউ নেন; অন্যদেরটা এইচআর ব্যবস্থাপক বা তাঁদের ছুটি অনুমোদনকারী।',
 };
