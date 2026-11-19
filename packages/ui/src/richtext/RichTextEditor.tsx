@@ -6,9 +6,17 @@
  */
 import { Image } from '@tiptap/extension-image';
 import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
-import { type Editor, EditorContent, useEditor, useEditorState } from '@tiptap/react';
+import {
+  type Editor,
+  EditorContent,
+  mergeAttributes,
+  Node,
+  useEditor,
+  useEditorState,
+} from '@tiptap/react';
 import { StarterKit } from '@tiptap/starter-kit';
 import {
+  AtSign,
   Bold,
   Code,
   Heading2,
@@ -25,7 +33,7 @@ import {
   Underline,
   Undo2,
 } from 'lucide-react';
-import { type ReactElement, useEffect, useId, useState } from 'react';
+import { type ReactElement, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Input } from '../components/primitives.js';
 import { cn } from '../lib/cn.js';
@@ -38,7 +46,55 @@ export interface RichTextEditorProps {
   readonly invalid?: boolean;
   /** The field's label: what a screen reader calls the text box. */
   readonly label?: string;
+  /** People to mention: the toolbar gets a *Mention* button that searches them (the chatter). */
+  readonly mentions?: {
+    search(query: string): Promise<readonly { readonly id: number; readonly name: string }[]>;
+  };
+  /** Ctrl+Enter (a composer sends). */
+  readonly onSubmit?: () => void;
+  /** A shorter text box (a composer). */
+  readonly compact?: boolean;
 }
+
+/**
+ * A mention of a person: one unit in the text (`@Dina Rahman`), written as the span the server's allow-list knows
+ * (`data-type="mention"`, the person's id). The server writes the name again from the id when it is saved.
+ */
+const Mention = Node.create({
+  name: 'mention',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: false,
+  addAttributes() {
+    return {
+      id: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-id'),
+        renderHTML: (attributes) => ({ 'data-id': String(attributes['id'] ?? '') }),
+      },
+      label: {
+        default: '',
+        parseHTML: (element) =>
+          element.getAttribute('data-label') ?? (element.textContent ?? '').replace(/^@/, ''),
+        renderHTML: (attributes) => ({ 'data-label': String(attributes['label'] ?? '') }),
+      },
+    };
+  },
+  parseHTML() {
+    return [{ tag: 'span[data-type="mention"]' }];
+  },
+  renderHTML({ node, HTMLAttributes }) {
+    return [
+      'span',
+      mergeAttributes({ 'data-type': 'mention' }, HTMLAttributes),
+      `@${String(node.attrs['label'] ?? '')}`,
+    ];
+  },
+  renderText({ node }) {
+    return `@${String(node.attrs['label'] ?? '')}`;
+  },
+});
 
 function Tool({
   icon: Icon,
@@ -74,10 +130,46 @@ function Tool({
   );
 }
 
-function Toolbar({ editor }: { readonly editor: Editor }) {
+function Toolbar({
+  editor,
+  mentions,
+}: {
+  readonly editor: Editor;
+  readonly mentions?: RichTextEditorProps['mentions'];
+}) {
   const { t } = useTranslation();
   const id = useId();
   const [linking, setLinking] = useState<string | null>(null);
+  // Mentioning: what is typed in the search, and the people it found.
+  const [asking, setAsking] = useState<string | null>(null);
+  const [people, setPeople] = useState<readonly { id: number; name: string }[]>([]);
+  const latest = useRef(0);
+  useEffect(() => {
+    if (asking === null || mentions === undefined) {
+      setPeople([]);
+      return;
+    }
+    const turn = ++latest.current;
+    void mentions
+      .search(asking)
+      .then((found) => {
+        if (turn === latest.current) setPeople(found.slice(0, 6));
+      })
+      .catch(() => {
+        if (turn === latest.current) setPeople([]);
+      });
+  }, [asking, mentions]);
+  const mention = (person: { id: number; name: string }) => {
+    editor
+      .chain()
+      .focus()
+      .insertContent([
+        { type: 'mention', attrs: { id: person.id, label: person.name } },
+        { type: 'text', text: ' ' },
+      ])
+      .run();
+    setAsking(null);
+  };
   // What is on at the cursor: read with the editor's state, so the buttons follow the selection.
   const on = useEditorState({
     editor,
@@ -188,6 +280,13 @@ function Toolbar({ editor }: { readonly editor: Editor }) {
           label={t('richtext.table')}
           onClick={() => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
         />
+        {mentions === undefined ? null : (
+          <Tool
+            icon={AtSign}
+            label={t('richtext.mention')}
+            onClick={() => setAsking(asking === null ? '' : null)}
+          />
+        )}
         <Tool
           icon={Undo2}
           label={t('richtext.undo')}
@@ -201,6 +300,44 @@ function Toolbar({ editor }: { readonly editor: Editor }) {
           onClick={() => chain().redo().run()}
         />
       </div>
+      {asking === null ? null : (
+        <div className="grid gap-1 border-t p-2">
+          <label htmlFor={`${id}-who`} className="text-sm">
+            {t('richtext.mentionWho')}
+          </label>
+          <Input
+            id={`${id}-who`}
+            autoFocus
+            value={asking}
+            onChange={(e) => setAsking(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.stopPropagation();
+                setAsking(null);
+                editor.commands.focus();
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                const first = people[0];
+                if (first !== undefined) mention(first);
+              }
+            }}
+          />
+          <ul aria-label={t('richtext.mentionWho')} className="grid gap-0.5">
+            {people.map((person) => (
+              <li key={person.id}>
+                <button
+                  type="button"
+                  className="w-full rounded px-2 py-1 text-start text-sm hover:bg-muted focus-visible:outline-2"
+                  onClick={() => mention(person)}
+                >
+                  {person.name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {linking === null ? null : (
         <form
           className="flex flex-wrap items-center gap-2 border-t p-2"
@@ -243,7 +380,13 @@ export default function RichTextEditor({
   onChange,
   invalid,
   label,
+  mentions,
+  onSubmit,
+  compact,
 }: RichTextEditorProps): ReactElement {
+  // The latest handler, read by the editor's key handler (made once).
+  const submit = useRef(onSubmit);
+  submit.current = onSubmit;
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -255,6 +398,8 @@ export default function RichTextEditor({
       TableHeader,
       TableCell,
       Image.configure({ inline: false, allowBase64: false }),
+      // Always understood, so a mention already in the text stays one; the button to add one needs `mentions`.
+      Mention,
     ],
     // What is loaded is what may be shown: older plain text becomes paragraphs.
     content: sanitizeForDisplay(value ?? ''),
@@ -264,8 +409,16 @@ export default function RichTextEditor({
         role: 'textbox',
         'aria-multiline': 'true',
         ...(label === undefined ? {} : { 'aria-label': label }),
-        class: 'kosh-richtext min-h-32 px-3 py-2 outline-none',
+        class: `kosh-richtext ${compact === true ? 'min-h-20' : 'min-h-32'} px-3 py-2 outline-none`,
         ...(invalid === true ? { 'aria-invalid': 'true' } : {}),
+      },
+      handleKeyDown: (_view, event) => {
+        if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && submit.current) {
+          event.preventDefault();
+          submit.current();
+          return true;
+        }
+        return false;
       },
     },
     onUpdate: ({ editor: e }) => {
@@ -276,7 +429,8 @@ export default function RichTextEditor({
   });
   // The record changed under the editor (a reload, Discard, someone else's save): show what it has now.
   useEffect(() => {
-    if (editor === null || editor.isFocused) return;
+    // Not before the editor is on the page: until then it has no view to ask (and it starts with this value).
+    if (editor === null || !editor.isInitialized || editor.isDestroyed || editor.isFocused) return;
     const next = sanitizeForDisplay(value ?? '');
     const current = editor.getHTML();
     if ((isEmptyRichText(current) ? '' : current) !== next)
@@ -289,7 +443,9 @@ export default function RichTextEditor({
         invalid === true && 'border-danger',
       )}
     >
-      {editor === null ? null : <Toolbar editor={editor} />}
+      {editor === null ? null : (
+        <Toolbar editor={editor} {...(mentions === undefined ? {} : { mentions })} />
+      )}
       <EditorContent editor={editor} />
     </div>
   );

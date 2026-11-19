@@ -80,3 +80,50 @@ test('a ticket’s description is rich text: typed, made bold and a list from th
     '<p><strong>Steps to see it</strong></p><ul><li><p>Open the cart</p></li><li><p>Press Pay</p></li></ul>',
   );
 });
+
+test('a note in the chatter with formatting and a mention; edited by its author (RFC 0034)', async ({
+  page,
+}) => {
+  await signIn(page, 'dina');
+  await page.goto('/helpdesk/a/helpdesk.action_tickets/new');
+  await page.getByRole('textbox', { name: 'Subject' }).fill(`Chatter ${Date.now()}`);
+  await page.getByRole('textbox', { name: 'Customer email' }).fill('chatter@example.test');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/helpdesk\.action_tickets\/\d+$/);
+
+  await page.getByRole('button', { name: 'Log note' }).click();
+  const formatting = page.getByRole('button', { name: 'Formatting', exact: true });
+  await formatting.click();
+  await expect(formatting).toHaveAttribute('aria-pressed', 'true');
+  const editor = page.getByRole('textbox', { name: 'Log note' });
+  await editor.click();
+  await page.keyboard.type('Called the customer');
+  await page.keyboard.press('ControlOrMeta+a');
+  // The note's own toolbar: the description above it on the page has one too.
+  const toolbar = page.getByRole('toolbar', { name: 'Formatting' }).last();
+  await toolbar.getByRole('button', { name: 'Bold' }).click();
+  await page.keyboard.press('End');
+  await toolbar.getByRole('button', { name: 'Bold' }).click();
+  await page.keyboard.type(' — over to ');
+  // A person is mentioned from the toolbar: searched by name, picked from the list.
+  await toolbar.getByRole('button', { name: 'Mention someone' }).click();
+  await page.getByRole('textbox', { name: 'Who? Type a name' }).fill('Rahim');
+  await page.getByRole('button', { name: 'Rahim Uddin' }).click();
+  await page.getByRole('button', { name: 'Log', exact: true }).click();
+
+  const note = page.getByRole('article').filter({ hasText: 'Called the customer' });
+  await expect(note.locator('strong')).toHaveText('Called the customer');
+  await expect(note.locator('[data-type="mention"]')).toHaveText('@Rahim Uddin');
+
+  // Its author edits it in the editor it was written in.
+  await note.getByRole('button', { name: 'Actions' }).click();
+  await page.getByRole('menuitem', { name: 'Edit' }).click();
+  const editing = note.getByRole('textbox', { name: 'Edit' });
+  await editing.click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type(' today');
+  await note.getByRole('button', { name: 'Save' }).click();
+  await expect(note).toContainText('over to @Rahim Uddin today');
+  await expect(note).toContainText('(edited)');
+  await expect(note.locator('[data-type="mention"]')).toHaveText('@Rahim Uddin'); // still a mention
+});

@@ -102,3 +102,40 @@ export function plainText(text: string, users: ReadonlyMap<number, string>): str
     .replace(/`([^`\n]+)`/g, '$1')
     .trim();
 }
+
+// ---- rich text (RFC 0034 §2.4): messages written in the editor
+
+/** At most this many characters of HTML per rich message. */
+export const MAX_HTML = 100_000;
+/** A mention as the allow-list writes it: its attributes in a fixed order, its text without markup. */
+const RICH_MENTION =
+  /<span data-type="mention"(?: data-model="[^"]*")? data-id="(\d{1,12})"(?: data-label="[^"]*")?>[^<]*<\/span>/g;
+/** A mention that names nobody (no id): only its text is kept. */
+const EMPTY_MENTION =
+  /<span data-type="mention"(?: data-model="[^"]*")?(?: data-label="[^"]*")?>([^<]*)<\/span>/g;
+
+/** The user ids mentioned in sanitized rich text, in order, without duplicates. */
+export function richMentionIds(sanitized: string): number[] {
+  const out: number[] = [];
+  for (const m of sanitized.matchAll(RICH_MENTION)) {
+    const id = Number(m[1]);
+    if (Number.isSafeInteger(id) && id > 0 && !out.includes(id)) out.push(id);
+  }
+  return out;
+}
+
+/**
+ * The body of a rich message from **sanitized** HTML (`sanitizeHtml` of `@kosh/server`): each mention is written
+ * again with the user's current name — never the label that was sent — and a mention of nobody who exists becomes
+ * its plain text.
+ */
+export function richBody(sanitized: string, users: ReadonlyMap<number, string>): string {
+  return sanitized
+    .replace(RICH_MENTION, (whole: string, id: string) => {
+      const name = users.get(Number(id));
+      if (name === undefined) return escapeHtml(whole.replace(/<[^>]+>/g, ''));
+      const label = escapeHtml(name);
+      return `<span data-type="mention" data-id="${Number(id)}" data-label="${label}">@${label}</span>`;
+    })
+    .replace(EMPTY_MENTION, (_whole: string, inner: string) => inner);
+}

@@ -20,6 +20,8 @@ import {
   MenuSeparator,
   MenuTrigger,
   type NodeComponentProps,
+  RichTextInput,
+  RichTextView,
   Select,
   Spinner,
   Textarea,
@@ -43,6 +45,7 @@ import {
   Mail,
   Paperclip,
   Phone,
+  Type,
   Upload,
   UserPlus,
   Users,
@@ -342,6 +345,18 @@ export function MentionArea({
   );
 }
 
+/** Where the composer's choice of formatting is remembered, per browser. */
+const RICH_KEY = 'kosh.chatter.rich';
+/** The words of formatted text, a line per block (switching the composer back to the plain box). */
+function wordsOf(html: string): string {
+  if (html === '' || typeof DOMParser === 'undefined') return '';
+  const doc = new DOMParser().parseFromString(
+    html.replace(/<\/(p|li|h[1-4]|tr|blockquote|pre)>|<br>/g, '$&\n'),
+    'text/html',
+  );
+  return (doc.body.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function Composer({
   api,
   model,
@@ -361,6 +376,38 @@ function Composer({
   const { t } = useTranslation('messaging');
   const [text, setText] = useState(initialText ?? '');
   const [mentions, setMentions] = useState<UserRef[]>([]);
+  // Formatting (RFC 0034 §2.4): the rich-text editor instead of the plain box; the choice is remembered.
+  const editorId = useId();
+  const [rich, setRich] = useState(() => {
+    try {
+      return window.localStorage.getItem(RICH_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [html, setHtml] = useState<string | null>(null);
+  const search = useMemo(
+    () => ({
+      search: async (query: string) =>
+        (await api.names('res.users', { q: query, limit: 6 })).map((u) => ({
+          id: u.id,
+          name: u.displayName,
+        })),
+    }),
+    [api],
+  );
+  const toggle = () => {
+    const next = !rich;
+    // What was typed comes along: plain text as paragraphs, formatted text as its words.
+    if (next) setHtml(text.trim() === '' ? null : text);
+    else setText(wordsOf(html ?? ''));
+    setRich(next);
+    try {
+      window.localStorage.setItem(RICH_KEY, next ? '1' : '0');
+    } catch {
+      // the choice is simply not remembered
+    }
+  };
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [uploading, setUploading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -369,11 +416,12 @@ function Composer({
     mutationFn: () =>
       api.call<MessageItem>('POST', `/api/v1/chatter/${enc(model)}/${id}/messages`, {
         kind,
-        text: withMentions(text, mentions),
+        ...(rich ? { html: html ?? '' } : { text: withMentions(text, mentions) }),
         attachments: files.map((f) => f.id),
       }),
     onSuccess: () => {
       setText('');
+      setHtml(null);
       setMentions([]);
       setFiles([]);
       setError(null);
@@ -403,22 +451,37 @@ function Composer({
     setFiles((current) => current.filter((f) => f.id !== file.id));
     void api.call('DELETE', `/api/v1/attachments/${file.id}`).catch(() => undefined);
   };
+  const empty = rich ? html === null : text.trim() === '';
   const submit = () => {
-    if (text.trim() !== '' && !post.isPending) post.mutate();
+    if (!empty && !post.isPending) post.mutate();
   };
   return (
     <div
       className={`grid gap-2 rounded-md border p-3 ${kind === 'note' ? 'bg-muted/40' : 'bg-surface'}`}
     >
-      <MentionArea
-        api={api}
-        value={text}
-        onChange={setText}
-        onMention={(u) => setMentions((m) => (m.some((x) => x.id === u.id) ? m : [...m, u]))}
-        onSubmit={submit}
-        label={kind === 'comment' ? t('sendMessage') : t('logNote')}
-        placeholder={kind === 'comment' ? t('messagePlaceholder') : t('notePlaceholder')}
-      />
+      {rich ? (
+        <RichTextInput
+          // A new editor after each message sent: it starts empty.
+          key={`${editorId}-${post.submittedAt}`}
+          id={editorId}
+          value={html}
+          onChange={setHtml}
+          mentions={search}
+          onSubmit={submit}
+          compact
+          label={kind === 'comment' ? t('sendMessage') : t('logNote')}
+        />
+      ) : (
+        <MentionArea
+          api={api}
+          value={text}
+          onChange={setText}
+          onMention={(u) => setMentions((m) => (m.some((x) => x.id === u.id) ? m : [...m, u]))}
+          onSubmit={submit}
+          label={kind === 'comment' ? t('sendMessage') : t('logNote')}
+          placeholder={kind === 'comment' ? t('messagePlaceholder') : t('notePlaceholder')}
+        />
+      )}
       <Files api={api} files={files} onRemove={remove} />
       {uploading === null ? null : (
         <p className="text-xs text-muted-foreground" aria-live="polite">
@@ -427,13 +490,7 @@ function Composer({
       )}
       {error === null ? null : <Alert tone="danger">{error}</Alert>}
       <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          variant="primary"
-          busy={post.isPending}
-          disabled={text.trim() === ''}
-          onClick={submit}
-        >
+        <Button size="sm" variant="primary" busy={post.isPending} disabled={empty} onClick={submit}>
           {kind === 'comment' ? t('send') : t('log')}
         </Button>
         <input
@@ -452,6 +509,16 @@ function Composer({
           aria-label={t('attach')}
         >
           <Paperclip aria-hidden />
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={toggle}
+          aria-label={t('formatting')}
+          aria-pressed={rich}
+          title={t('formatting')}
+        >
+          <Type aria-hidden />
         </Button>
       </div>
     </div>
@@ -912,9 +979,24 @@ function Message({
   const { format } = useKosh();
   const [editing, setEditing] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const editorId = useId();
+  const people = useMemo(
+    () => ({
+      search: async (query: string) =>
+        (await api.names('res.users', { q: query, limit: 6 })).map((u) => ({
+          id: u.id,
+          name: u.displayName,
+        })),
+    }),
+    [api],
+  );
   const edit = useMutation({
     mutationFn: (text: string) =>
-      api.call('PATCH', `/api/v1/chatter/messages/${item.id}`, { text }),
+      api.call(
+        'PATCH',
+        `/api/v1/chatter/messages/${item.id}`,
+        item.rich ? { html: text } : { text },
+      ),
     onSuccess: () => {
       setEditing(null);
       onChanged();
@@ -957,13 +1039,18 @@ function Message({
                 </Button>
               </MenuTrigger>
               <MenuContent align="end">
-                <MenuItem onSelect={() => setEditing(item.text ?? '')}>{t('edit')}</MenuItem>
+                <MenuItem onSelect={() => setEditing(item.rich ? item.body : (item.text ?? ''))}>
+                  {t('edit')}
+                </MenuItem>
                 <MenuItem onSelect={() => setConfirming(true)}>{t('delete')}</MenuItem>
               </MenuContent>
             </Menu>
           ) : null}
         </p>
-        {editing === null ? (
+        {editing === null && item.rich ? (
+          // Written in the editor: rebuilt from the allow-list again before it is shown.
+          <RichTextView value={item.body} className="max-w-none text-sm" />
+        ) : editing === null ? (
           <div
             className="prose-sm max-w-none break-words text-sm [&_a]:text-primary [&_a]:underline [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_.mention]:rounded [&_.mention]:bg-primary/10 [&_.mention]:px-1 [&_.mention]:text-primary [&_ul]:list-disc [&_ul]:ps-5"
             // Rendered by the server from escaped text (body.ts): no user markup reaches the page.
@@ -972,12 +1059,23 @@ function Message({
           />
         ) : (
           <div className="grid gap-2">
-            <Textarea
-              rows={3}
-              value={editing}
-              aria-label={t('edit')}
-              onChange={(e) => setEditing(e.target.value)}
-            />
+            {item.rich ? (
+              <RichTextInput
+                id={editorId}
+                value={editing}
+                onChange={(next) => setEditing(next ?? '')}
+                mentions={people}
+                compact
+                label={t('edit')}
+              />
+            ) : (
+              <Textarea
+                rows={3}
+                value={editing}
+                aria-label={t('edit')}
+                onChange={(e) => setEditing(e.target.value)}
+              />
+            )}
             <div className="flex gap-2">
               <Button
                 size="sm"

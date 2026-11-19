@@ -150,6 +150,8 @@ export const en = {
     linkAddress: 'Link address',
     linkApply: 'Apply',
     linkCancel: 'Cancel',
+    mention: 'Mention someone',
+    mentionWho: 'Who? Type a name',
   },
   views: {
     createFirst: 'Create the first one',
@@ -609,6 +611,8 @@ export const bn: DeepPartial<Messages> = {
     linkAddress: 'লিংকের ঠিকানা',
     linkApply: 'প্রয়োগ করুন',
     linkCancel: 'বাতিল',
+    mention: 'কাউকে উল্লেখ করুন',
+    mentionWho: 'কাকে? নাম লিখুন',
   },
   views: {
     createFirst: 'প্রথমটি তৈরি করুন',

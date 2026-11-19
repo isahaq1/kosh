@@ -279,3 +279,9 @@
 .kosh-richtext .selectedCell {
   background: color-mix(in oklab, var(--color-primary) 15%, transparent);
 }
+.kosh-richtext [data-type="mention"] {
+  border-radius: 0.25rem;
+  background: color-mix(in oklab, var(--color-primary) 12%, transparent);
+  padding-inline: 0.25rem;
+  color: var(--color-primary);
+}

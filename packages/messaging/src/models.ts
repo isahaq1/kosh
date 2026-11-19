@@ -40,6 +40,11 @@ const Message = defineModel('mail.message', {
     text: f.text({ required: true }),
     /** HTML rendered from `text` on the server, escaped by construction. */
     body: f.text({ required: true }),
+    /**
+     * Written in the rich-text editor (RFC 0034 §2.4): `body` is the author's formatted text rebuilt from the
+     * allow-list, and `text` its words (for previews, notifications and search).
+     */
+    rich: f.boolean({ default: false }),
     mentions: f.many2many('res.users', { relation: 'mail_message_mention' }),
     attachments: f.many2many('storage.attachment', { relation: 'mail_message_attachment' }),
     editedAt: f.datetime(),

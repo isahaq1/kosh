@@ -7,7 +7,7 @@
  * Events for notifications (RFC 0006 part 3) are Shutro outbox events, emitted in the same transaction:
  * `mail.message.posted` and `mail.activity.assigned`.
  */
-import { HttpProblem } from '@kosh/server';
+import { HttpProblem, htmlToText, sanitizeHtml } from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
 import {
   type AttachmentInfo,
@@ -15,7 +15,15 @@ import {
   checkRecord,
   removeAttachments,
 } from '@kosh/storage';
-import { MAX_TEXT, mentionIds, plainText, renderBody } from './body.js';
+import {
+  MAX_HTML,
+  MAX_TEXT,
+  mentionIds,
+  plainText,
+  renderBody,
+  richBody,
+  richMentionIds,
+} from './body.js';
 import { DEFAULT_ACTIVITY_TYPES } from './models.js';
 
 type Row = Record<string, unknown>;
@@ -117,6 +125,8 @@ export interface MessageItem {
   readonly body: string;
   /** The source text, for its author to edit. */
   readonly text: string | null;
+  /** Written in the rich-text editor: `body` is formatted text to show with the rich-text view and to edit. */
+  readonly rich: boolean;
   readonly mentions: readonly UserRef[];
   readonly attachments: readonly AttachmentInfo[];
   readonly editedAt: string | null;
@@ -210,6 +220,7 @@ const MESSAGE_KEYS = [
   'authorName',
   'text',
   'body',
+  'rich',
   'mentions',
   'attachments',
   'editedAt',
@@ -247,6 +258,7 @@ export async function messageItems(
       authorName: (m['authorName'] as string | null) ?? null,
       body: String(m['body']),
       text: mine ? String(m['text']) : null,
+      rich: m['rich'] === true,
       mentions: ((m['mentions'] as number[] | null) ?? [])
         .map((u) => userRef(names, u))
         .filter((u): u is UserRef => u !== null),
@@ -523,19 +535,49 @@ export async function activeUsers(env: Env, ids: readonly number[]): Promise<Map
   return new Map(found.map((u) => [u['id'] as number, String(u['name'])]));
 }
 
+/**
+ * What a message says, from what was sent: `html` from the rich-text editor — rebuilt from the allow-list, its
+ * mentions written with the users' current names — or `text` in the small markdown of `body.ts`.
+ */
+async function contentOf(
+  env: Env,
+  input: { readonly text?: unknown; readonly html?: unknown },
+): Promise<{ text: string; body: string; rich: boolean; users: Map<number, string> }> {
+  if (input.html === undefined || input.html === null) {
+    const text = checkText(input.text);
+    const users = await activeUsers(env, mentionIds(text));
+    return { text, body: renderBody(text, users), rich: false, users };
+  }
+  if (typeof input.html !== 'string' || input.html.length > MAX_HTML)
+    refuse(400, 'invalid-body', 'Invalid message', `html is at most ${MAX_HTML} characters.`);
+  const sanitized = sanitizeHtml(input.html as string);
+  const users = await activeUsers(env, richMentionIds(sanitized));
+  const body = richBody(sanitized, users);
+  const text = htmlToText(body).slice(0, MAX_TEXT);
+  // A message says something: words, or at least a picture.
+  if (text.trim() === '' && !body.includes('<img '))
+    refuse(400, 'invalid-body', 'Invalid message', 'The message is empty.');
+  return { text: text.trim() === '' ? '🖼' : text, body, rich: true, users };
+}
+
 /** Posts a message or a note on a record; the author follows the record from then on. */
 export async function postMessage(
   env: Env,
   context: ChatterContext,
   model: string,
   id: number,
-  input: { readonly kind?: unknown; readonly text?: unknown; readonly attachments?: unknown },
+  input: {
+    readonly kind?: unknown;
+    readonly text?: unknown;
+    readonly html?: unknown;
+    readonly attachments?: unknown;
+  },
 ): Promise<MessageItem> {
   needMessaging(env);
   const kind = input.kind ?? 'note';
   if (kind !== 'comment' && kind !== 'note')
     refuse(400, 'invalid-body', 'Invalid message', "kind is 'comment' or 'note'.");
-  const text = checkText(input.text);
+  const { text, body, rich, users } = await contentOf(env, input);
   const attachments = input.attachments ?? [];
   if (
     !Array.isArray(attachments) ||
@@ -569,7 +611,6 @@ export async function postMessage(
         'An attachment belongs to another message.',
       );
   }
-  const users = await activeUsers(env, mentionIds(text));
   const created = await ref(env, 'mail.message').create([
     {
       resModel: model,
@@ -577,7 +618,8 @@ export async function postMessage(
       kind,
       author: env.uid,
       text,
-      body: renderBody(text, users),
+      body,
+      rich,
       mentions: { set: [...users.keys()] },
       attachments: { set: files },
     },
@@ -678,15 +720,15 @@ export async function editMessage(
   env: Env,
   context: ChatterContext,
   messageId: number,
-  input: { readonly text?: unknown },
+  input: { readonly text?: unknown; readonly html?: unknown },
 ): Promise<MessageItem> {
   await ownMessage(env, context, messageId);
-  const text = checkText(input.text);
-  const users = await activeUsers(env, mentionIds(text));
+  const { text, body, rich, users } = await contentOf(env, input);
   const message = ref(env, 'mail.message').browse([messageId]);
   await message.write({
     text,
-    body: renderBody(text, users),
+    body,
+    rich,
     mentions: { set: [...users.keys()] },
     editedAt: new Date(),
   });

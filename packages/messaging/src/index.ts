@@ -13,7 +13,15 @@ import { installActivityTypes } from './chatter.js';
 import { messagingShutro } from './models.js';
 import { registerChatterRoutes } from './routes.js';
 
-export { MAX_TEXT, mentionIds, plainText, renderBody } from './body.js';
+export {
+  MAX_HTML,
+  MAX_TEXT,
+  mentionIds,
+  plainText,
+  renderBody,
+  richBody,
+  richMentionIds,
+} from './body.js';
 export {
   CHANNEL_MODEL,
   type ChannelItem,

@@ -250,7 +250,7 @@ export function htmlToText(html: string): string {
       .replace(/<br>/g, '\n')
       .replace(/<li>/g, '• ')
       .replace(/<\/(td|th)>/g, '\t')
-      .replace(/<\/(p|h[1-4]|li|tr|blockquote|pre|ul|ol|table)>|<hr>/g, '\n')
+      .replace(/<\/(p|h[1-4]|li|tr|blockquote|pre)>|<hr>/g, '\n')
       .replace(/<[^>]+>/g, ''),
   )
     .replace(/[ \t]+\n/g, '\n')
