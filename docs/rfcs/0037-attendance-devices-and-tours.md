@@ -132,3 +132,21 @@ Each step: typed end to end, tests on real PostgreSQL, permission tests, English
   stamp, extra tables) may need a change. Left out: an *Approve* button (the status is set on the form), a button
   for *Apply again* (the API has it), the punch's status code (check-in / check-out keys on the machine are not
   read: order decides), pairing a pushed punch with a phone or kiosk check-in of the same day.
+- **Step 2 (2026-11-19). Official tours.** `hr.tour` in Workforce (*Workforce › Tours*): numbered
+  `TOUR/<year>/0001`, the person, the dates, where to, the purpose, how they travel, the advance asked, with the
+  **working days** inside it computed from the person's working calendar (a tour over a weekend only is a tour all
+  the same, with none). Draft → Waiting → Approved / Refused, and Approved → Cancelled. **Decided by the person's
+  leave approver, else their manager, or an HR manager — never by the traveller**, HR managers included (the same
+  guard as leave, on the transitions themselves, so the form, the API and an automation all meet it). Refusing and
+  cancelling need the *note of the decision* first. A tour may not overlap another tour or an approved leave of the
+  person. People see their own tours and their team's; a draft is its owner's to change. Print template (*Tour
+  order*), named events (`hr.tour.submitted`, `.approved`, `.cancelled`), import template, list / calendar / form,
+  chatter, the overview's *Tours waiting approval*, English and Bangla.
+  **Attendance**: a new day status, **On tour** — a working day inside an approved tour without a punch; a
+  weekend, a holiday or leave inside a tour stay what they are, and a day with punches is computed from them. A
+  tour not yet approved, or cancelled, leaves the days absent. **Payroll**: `PRESENT_DAYS` includes days on tour,
+  and `TOUR_DAYS` says how many (for a rule that pays a daily allowance through the payslip). Days are recomputed
+  when a manager computes the period, as for leave — approving a tour does not rewrite days by itself.
+  Tests: the tour's rules through the API (9 Workforce tests pass), *On tour* before approval, after it and after
+  cancelling, the day's status in the engine, one E2E through the form. Left out: *cut short* as an action (HR
+  edits the end date of an approved tour), per-grade allowance tables. Next: the Spend bridge (step 3).

@@ -1063,3 +1063,20 @@ heard; set *Only from addresses* to the site's public address where it has one; 
 supports it, or a VPN from the site. A machine can only add punches of people who exist; it reads nothing.
 
 Tested with a simulated machine; **try your own model on a test server first** — firmware versions differ.
+
+## Official tours
+
+A person sent away on the company's business asks for a **tour** in *Workforce › Tours*: the dates, where to, the
+purpose, how they travel and the advance they need. It is numbered (`TOUR/2026/0001`) and shows its working days by
+the person's working calendar.
+
+- **Who decides**: the person's leave approver; when they have none, their manager; or an HR manager. Never the
+  traveller — HR managers do not decide their own. *Refuse* and *Cancel the tour* need the *note of the decision*
+  first; write it, then press the button.
+- A tour may not overlap another tour or an approved leave of the same person.
+- **In Attendance**, a working day inside an approved tour without a punch is **On tour** — not absent. Weekends and
+  holidays inside the tour stay what they are; a day with punches is computed from them. Compute the period's days
+  after approving tours, as you do after approving leave.
+- **In Payroll**, `PRESENT_DAYS` includes the days on tour; `TOUR_DAYS` is their number, for a rule that pays a daily
+  allowance on the payslip (`TOUR_DAYS * 500`).
+- Print *Tour order* from the form; `hr.tour.approved` is an event automations and webhooks can listen to.
