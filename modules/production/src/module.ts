@@ -13,6 +13,13 @@ import { emitting } from '@kosh/server';
 import { type Decimal, type Id, orm } from '@kosh/server/orm';
 import { defaultLocations, inProductUnit, stockShutro } from '@kosh/stock';
 import {
+  addWorkingMinutes,
+  nextWorkingMoment,
+  type Schedule,
+  scheduleOf,
+  worktimeShutro,
+} from '@kosh/worktime';
+import {
   check,
   compute,
   defineModel,
@@ -97,8 +104,13 @@ export const ProductionWorkcenter = defineModel('production.workcenter', {
   fields: {
     name: f.char({ required: true }),
     code: f.char(),
-    /** Hours it works a day (its capacity). */
+    /** Hours it works a day (its capacity), when it has no working calendar. */
     hoursPerDay: f.decimal({ scale: 2, required: true, default: '8', label: 'Hours a day' }),
+    calendar: f.many2one('work.calendar', {
+      ondelete: 'set null',
+      label: 'Working calendar',
+      help: 'Its working days and hours: work is scheduled inside them, around its breaks, weekends and holidays. Empty: every day from 08:00 for the hours a day.',
+    }),
     /** Labour and overhead per hour of work. */
     costPerHour: f.decimal({ scale: 2, required: true, default: '0', label: 'Cost per hour' }),
     batchMin: f.decimal({ scale: 4, label: 'Minimum batch', help: 'The smallest batch it runs.' }),
@@ -658,6 +670,44 @@ async function explode(ids: readonly Id<'production.order'>[], env: Env): Promis
   });
 }
 
+/**
+ * A work centre's working time from two days before `from` to 400 days after it (RFC 0034 §2.4): its calendar's
+ * week, breaks and holidays. Null for a centre without a calendar: it works every day from {@link DAY_STARTS_AT}
+ * for its hours a day.
+ */
+export async function centreSchedule(
+  env: Env,
+  calendar: number | null | undefined,
+  from: Date,
+): Promise<Schedule | null> {
+  if (calendar == null) return null;
+  const day = (t: number) => new Date(t).toISOString().slice(0, 10);
+  return scheduleOf(env as never, {
+    calendar: Number(calendar),
+    from: day(from.getTime() - 2 * 86_400_000),
+    to: day(from.getTime() + 400 * 86_400_000),
+  });
+}
+
+/**
+ * Forward schedule of `minutes` of work from `from` inside a centre's working time: it starts at the next working
+ * moment and stops when that many working minutes have passed.
+ */
+export function scheduleWithin(
+  working: Schedule,
+  from: Date,
+  minutes: number,
+): { start: Date; stop: Date } | null {
+  const start = nextWorkingMoment(working, from);
+  if (start === null) return null;
+  try {
+    return { start, stop: addWorkingMinutes(working, start, minutes) };
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error;
+    return null;
+  }
+}
+
 /** When a work centre's day starts (local time). */
 export const DAY_STARTS_AT = 8;
 
@@ -775,7 +825,15 @@ async function planWork(ids: readonly Id<'production.order'>[], env: Env): Promi
         ).load(['plannedStop']);
         const free = [...busy][0]?.plannedStop;
         const from = free instanceof Date && free > after ? free : after;
-        const { start, stop } = schedule(from, Number(minutes), Number(op.workcenter.hoursPerDay));
+        // Inside the centre's working calendar when it has one; else every day for its hours.
+        const working = await centreSchedule(
+          su,
+          op.workcenter.calendar?.id as number | undefined,
+          from,
+        );
+        const { start, stop } =
+          (working === null ? null : scheduleWithin(working, from, Number(minutes))) ??
+          schedule(from, Number(minutes), Number(op.workcenter.hoursPerDay));
         await su.model('production.workorder').create([
           {
             production: o.id,
@@ -1463,9 +1521,20 @@ export const ReorderMake = extendModel('stock.reorder', {
 export const productionShutro = defineModule({
   name: 'production',
   version: '0.3.0',
-  depends: [productShutro, stockShutro, contactsShutro, messagingShutro, permissionsShutro],
+  depends: [
+    productShutro,
+    stockShutro,
+    contactsShutro,
+    messagingShutro,
+    permissionsShutro,
+    worktimeShutro,
+  ],
   groups: [
-    orm.defineGroup({ code: 'production.user', label: 'Production user', implies: ['stock.user'] }),
+    orm.defineGroup({
+      code: 'production.user',
+      label: 'Production user',
+      implies: ['stock.user', 'worktime.user'],
+    }),
     orm.defineGroup({
       code: 'production.manager',
       label: 'Production manager',

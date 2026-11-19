@@ -413,6 +413,87 @@ test('work orders: scheduled at their centre after what it has, on the Gantt; ca
   ).toBe(400);
 });
 
+test('a work centre on a working calendar: work is scheduled around its breaks, weekends and holidays; capacity by day', async () => {
+  // Monday to Friday, 08:00–12:00 and 13:00–17:00 (UTC, so the test reads the same anywhere), Wednesday 25 a holiday.
+  const calendar = await host.server.shutro.bootstrap({ reason: 'test', company }, async (env) => {
+    const made = await (
+      env.model('work.calendar' as never) as unknown as {
+        create(rows: unknown[]): Promise<{ ids: readonly number[] }>;
+      }
+    ).create([
+      {
+        name: 'Line shift',
+        company,
+        tz: 'UTC',
+        hours: {
+          create: ['mon', 'tue', 'wed', 'thu', 'fri'].flatMap((weekday) => [
+            { weekday, fromTime: '08:00', toTime: '12:00' },
+            { weekday, fromTime: '13:00', toTime: '17:00' },
+          ]),
+        },
+        holidays: {
+          create: [{ name: 'Shutdown', company, dateFrom: '2026-11-25', dateTo: '2026-11-25' }],
+        },
+      },
+    ]);
+    return made.ids[0] as number;
+  });
+  const lathe = (
+    await call('POST', '/api/v1/models/production.workcenter', 'maria', {
+      name: 'Lathe',
+      hoursPerDay: '24', // not used once it has a calendar
+      calendar,
+    })
+  ).json.id;
+  const shaft = (await call('POST', '/api/v1/models/product.product', 'maria', { name: 'Shaft' }))
+    .json.id;
+  const order = async (minutes: string) => {
+    const bill = (
+      await call('POST', '/api/v1/models/production.bom', 'maria', {
+        product: shaft,
+        operations: { create: [{ name: 'Turn', workcenter: lathe, minutes }] },
+      })
+    ).json.id;
+    const id = (
+      await call('POST', P, 'rahim', {
+        product: shaft,
+        quantity: '1',
+        bom: bill,
+        date: '2026-11-20',
+      })
+    ).json.id as number;
+    const confirmed = await run(id, 'confirm');
+    expect(confirmed.status, JSON.stringify(confirmed.json)).toBe(200);
+    const [step] = await find(
+      'production.workorder',
+      { production: id },
+      'plannedStart,plannedStop',
+      'rahim',
+    );
+    return [new Date(step.plannedStart).toISOString(), new Date(step.plannedStop).toISOString()];
+  };
+  // Ten hours from Friday the 20th: eight on Friday around lunch, the weekend skipped, two on Monday.
+  expect(await order('600')).toEqual(['2026-11-20T08:00:00.000Z', '2026-11-23T10:00:00.000Z']);
+  // Twenty more after it: Monday 10–17 (6 h), Tuesday (8 h), the holiday skipped, Thursday until 15:00.
+  expect(await order('1200')).toEqual(['2026-11-23T10:00:00.000Z', '2026-11-26T15:00:00.000Z']);
+
+  const capacity = await call(
+    'GET',
+    '/api/v1/production/capacity?from=2026-11-21&to=2026-11-26',
+    'rahim',
+  );
+  expect(capacity.status, JSON.stringify(capacity.json)).toBe(200);
+  const row = (capacity.json.workcenters as Json[]).find((w) => w.id === lathe);
+  expect(row.days.map((d: Json) => [d.day, d.capacityHours, d.plannedHours, d.load])).toEqual([
+    ['2026-11-21', '0.00', '0.00', 0], // Saturday
+    ['2026-11-22', '0.00', '0.00', 0], // Sunday
+    ['2026-11-23', '8.00', '8.00', 100],
+    ['2026-11-24', '8.00', '8.00', 100],
+    ['2026-11-25', '0.00', '0.00', 0], // the shutdown
+    ['2026-11-26', '8.00', '6.00', 75],
+  ]);
+});
+
 test('reorder rules that make: a confirmed production order with the valid bill, counted as on order', async () => {
   const R = '/api/v1/models/stock.reorder';
   const [main] = await find('stock.warehouse', {}, 'id');

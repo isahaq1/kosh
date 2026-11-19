@@ -48,6 +48,7 @@
     "@kosh/contacts": "workspace:*",
     "@kosh/product": "workspace:*",
     "@kosh/stock": "workspace:*",
+    "@kosh/worktime": "workspace:*",
     "@kosh/reporting": "workspace:*",
     "@kosh/permissions": "workspace:*"
   },

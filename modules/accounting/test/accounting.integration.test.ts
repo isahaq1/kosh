@@ -169,6 +169,7 @@ test('installing Accounting brings its dependencies; the chart installs once, by
     'product',
     'reporting',
     'storage',
+    'worktime',
   ]);
   const before = await call('GET', '/api/v1/accounting/charts', 'maria');
   expect(before.json).toEqual({

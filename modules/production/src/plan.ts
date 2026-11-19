@@ -10,6 +10,7 @@
 import { approvalGuard, requestApprovals } from '@kosh/permissions';
 import { type Decimal, orm } from '@kosh/server/orm';
 import { defaultLocations, inProductUnit } from '@kosh/stock';
+import { addDays, dateIn, minutesOn, scheduleOf } from '@kosh/worktime';
 import { compute, defineModel, type Env, f, onchange, records } from './.kosh/bindings.js';
 
 const READ = ['read'] as const;
@@ -215,10 +216,11 @@ export const ProductionPlanLine = defineModel('production.plan.line', {
           'workcenter.batchMin',
           'workcenter.batchMax',
           'workcenter.hoursPerDay',
+          'workcenter.calendar',
           'workcenter.setupMinutes',
           'workcenter.cleanupMinutes',
         ],
-        (lines) => {
+        async (lines) => {
           for (const l of lines) {
             const w = l.workcenter;
             const why: string[] = [];
@@ -229,7 +231,22 @@ export const ProductionPlanLine = defineModel('production.plan.line', {
             const start = new Date(l.start as Date);
             const end = new Date(l.end as Date);
             const days = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86_400_000));
-            const available = w.hoursPerDay.times(60).times(days);
+            // By the centre's working calendar when it has one: its weekends, breaks and holidays are not time.
+            const working =
+              w.calendar === null
+                ? null
+                : await scheduleOf(lines.env as never, {
+                    calendar: w.calendar.id as number,
+                    from: new Date(start.getTime() - 2 * 86_400_000).toISOString().slice(0, 10),
+                    to: new Date(end.getTime() + 2 * 86_400_000).toISOString().slice(0, 10),
+                  });
+            let available = w.hoursPerDay.times(60).times(days);
+            if (working !== null) {
+              const first = dateIn(start, working.tz);
+              let total = 0;
+              for (let i = 0; i < days; i += 1) total += minutesOn(working, addDays(first, i));
+              available = zero.plus(total);
+            }
             const minutes =
               l.bom === null || l.bom.quantity.lte(0)
                 ? zero

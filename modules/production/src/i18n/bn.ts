@@ -153,6 +153,8 @@ export const bn: Readonly<Record<string, string>> = {
   ID: 'আইডি',
   'In progress': 'চলমান',
   Inactive: 'নিষ্ক্রিয়',
+  'Its working days and hours: work is scheduled inside them, around its breaks, weekends and holidays. Empty: every day from 08:00 for the hours a day.':
+    'এর কর্মদিবস ও সময়: কাজ এর ভেতরেই সাজানো হয়, বিরতি, সাপ্তাহিক ছুটি ও সরকারি ছুটি বাদ দিয়ে। খালি: প্রতিদিন 08:00 থেকে, দিনে যত ঘণ্টা।',
   Kind: 'ধরন',
   'Kind of bill': 'বিলের ধরন',
   Line: 'লাইন',
@@ -400,5 +402,6 @@ export const bn: Readonly<Record<string, string>> = {
   'Work orders in progress': 'চলমান কার্যাদেশ',
   'Work waiting by work centre': 'কর্মকেন্দ্র অনুযায়ী অপেক্ষমাণ কাজ',
   Workcenter: 'কর্মকেন্দ্র',
+  'Working calendar': 'কর্ম-ক্যালেন্ডার',
   Yield: 'ফলন',
 };

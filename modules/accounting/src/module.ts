@@ -21,6 +21,7 @@ import { computeTaxes, productShutro, taxRule } from '@kosh/product';
 import { reportingShutro } from '@kosh/reporting';
 import { emitting } from '@kosh/server';
 import { type Decimal, type Money, orm } from '@kosh/server/orm';
+import { addWorkingDays, scheduleOf, worktimeShutro } from '@kosh/worktime';
 import {
   check,
   compute,
@@ -431,6 +432,19 @@ export const AccountPaymentTerm = defineModel('account.payment.term', {
   fields: {
     name: f.char({ required: true, translate: true }),
     note: f.text({ label: 'Shown on documents' }),
+    counting: f.selection(
+      {
+        calendar: 'Calendar days',
+        next_working: 'Calendar days, never due on a day off',
+        working: 'Working days',
+      },
+      {
+        required: true,
+        default: 'calendar',
+        label: 'Days are',
+        help: 'How the days of each part are counted: every day; every day, a due date on a weekend or a holiday moving to the next working day; or only the working days of the company’s calendar (Working time).',
+      },
+    ),
     lines: f.one2many('account.payment.term.line', 'term'),
   },
 });
@@ -1482,12 +1496,36 @@ async function postMoves(moves: Moves): Promise<void> {
               },
             ]
           : m.paymentTerm.lines.map((pl) => ({ days: pl.days, percent: pl.percent }));
+      // Terms in working days, or never due on a day off: counted on the company's working calendar.
+      const counting = m.paymentTerm?.counting ?? 'calendar';
+      const longest = Math.max(0, ...parts.map((pt) => pt.days));
+      const working =
+        counting === 'calendar'
+          ? null
+          : await scheduleOf(env as never, {
+              company: m.company.id as number,
+              from: String(m.date).slice(0, 10),
+              to: addDays(String(m.date).slice(0, 10), longest * 3 + 90),
+            });
+      const dueOn = (days: number): string => {
+        const plain = addDays(m.date, days);
+        if (working === null) return plain;
+        try {
+          return counting === 'working'
+            ? addWorkingDays(working, String(m.date).slice(0, 10), days)
+            : addWorkingDays(working, plain, 0);
+        } catch (error) {
+          // A calendar without a working day: the plain date, rather than no document.
+          if (!(error instanceof RangeError)) throw error;
+          return plain;
+        }
+      };
       const totalMoney = orm.Money.of(total, currency);
       const amounts =
         parts.length === 1 ? [totalMoney] : totalMoney.allocate(parts.map((pt) => pt.percent));
       let latest = m.date;
       for (const [i, part] of parts.entries()) {
-        const due = addDays(m.date, part.days);
+        const due = dueOn(part.days);
         if (due > latest) latest = due;
         await linesOf.create([
           {
@@ -1781,7 +1819,14 @@ export const accountingShutro = defineModule({
       },
     },
   ],
-  depends: [contactsShutro, productShutro, messagingShutro, permissionsShutro, reportingShutro],
+  depends: [
+    contactsShutro,
+    productShutro,
+    messagingShutro,
+    permissionsShutro,
+    reportingShutro,
+    worktimeShutro,
+  ],
   groups: [
     orm.defineGroup({
       code: 'account.invoicing',

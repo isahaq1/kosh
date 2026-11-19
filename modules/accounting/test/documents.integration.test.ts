@@ -547,3 +547,57 @@ test('fiscal years: one starting in July ends in June; the year a date falls in'
   expect(fiscalYearOf('2026-07-01', 7)).toEqual({ dateFrom: '2026-07-01', dateTo: '2027-06-30' });
   expect(fiscalYearOf('2026-12-31', 1)).toEqual({ dateFrom: '2026-01-01', dateTo: '2026-12-31' });
 });
+
+test('payment terms in working days, and never due on a day off (RFC 0034 §2.4)', async () => {
+  // Victory Day, a Wednesday in 2026, is a holiday of the company.
+  await host.server.shutro.bootstrap({ reason: 'test', company }, async (env) => {
+    await (
+      env.model('work.holiday' as never) as unknown as { create(rows: unknown[]): Promise<unknown> }
+    ).create([{ name: 'Victory Day', company, dateFrom: '2026-12-16', dateTo: '2026-12-16' }]);
+  });
+  const term = async (name: string, counting: string, days: number) => {
+    const made = await call('POST', '/api/v1/models/account.payment.term', 'maria', {
+      name,
+      counting,
+      lines: { create: [{ days, percent: '100' }] },
+    });
+    expectStatus(made, 201);
+    return made.json.id as number;
+  };
+  const dueOf = async (paymentTerm: number) => {
+    const created = await call('POST', '/api/v1/models/account.move', 'eve', {
+      kind: 'out_invoice',
+      journal: journals['INV'],
+      partner: customer,
+      currency: bdt,
+      date: '2026-12-10', // a Thursday
+      paymentTerm,
+      lines: {
+        create: [{ lineKind: 'product', name: 'Steel beams', quantity: '1', priceUnit: '100.00' }],
+      },
+    });
+    expectStatus(created, 201);
+    const posted = await transition(created.json.id, 'post', 'rahim');
+    expectStatus(posted, 200);
+    const lines = await linesOf(created.json.id, 'lineKind,dateMaturity');
+    const [part] = lines.json.items.filter((l: Json) => l.lineKind === 'counterpart');
+    return [posted.json.dateDue, part.dateMaturity];
+  };
+  // Ten calendar days: Sunday the 20th, whatever the week.
+  expect(await dueOf(await term('10 days', 'calendar', 10))).toEqual(['2026-12-20', '2026-12-20']);
+  // Ten working days on a Sunday-to-Thursday week, the holiday not counted: 13, 14, 15, 17, 20–24, then Sunday 27.
+  expect(await dueOf(await term('10 working days', 'working', 10))).toEqual([
+    '2026-12-27',
+    '2026-12-27',
+  ]);
+  // Thirty calendar days falls on Saturday 9 January: moved to Sunday the 10th.
+  expect(await dueOf(await term('30 days, on a working day', 'next_working', 30))).toEqual([
+    '2027-01-10',
+    '2027-01-10',
+  ]);
+  // Six days falls on the holiday itself: the next working day.
+  expect(await dueOf(await term('6 days, on a working day', 'next_working', 6))).toEqual([
+    '2026-12-17',
+    '2026-12-17',
+  ]);
+});

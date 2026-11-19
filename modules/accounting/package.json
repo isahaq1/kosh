@@ -50,6 +50,7 @@
     "@kosh/server": "workspace:*",
     "@kosh/views": "workspace:*",
     "@kosh/contacts": "workspace:*",
+    "@kosh/worktime": "workspace:*",
     "@kosh/import": "workspace:*",
     "@kosh/product": "workspace:*",
     "@kosh/permissions": "workspace:*",

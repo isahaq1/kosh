@@ -21,6 +21,7 @@ import { product } from '@kosh/product';
 import { reporting } from '@kosh/reporting';
 import { HttpProblem, isSuperuser, type ModuleContext, problemOf } from '@kosh/server';
 import { action, field, form, hierarchy, list, pivot, search, stat } from '@kosh/views';
+import { worktime } from '@kosh/worktime';
 import type { Env } from './.kosh/bindings.js';
 import {
   ChartInstalledError,
@@ -404,7 +405,7 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
       },
     ],
   },
-  depends: [contacts, product, messaging, permissions, reporting],
+  depends: [contacts, product, messaging, permissions, reporting, worktime],
   app: {
     code: 'accounting',
     label: 'Accounting',
@@ -1784,7 +1785,7 @@ export const accounting: ReturnType<typeof defineModule> = defineModule({
     'account.payment.term.form': form(AccountPaymentTerm, (k) => ({
       header: { buttons: [] },
       sheet: [
-        k.group('main', ['name']),
+        k.group('main', ['name', 'counting']),
         k.lines('lines', ['days', 'percent']),
         k.group('notes', ['note'], { columns: 1 }),
       ],

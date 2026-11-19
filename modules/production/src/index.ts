@@ -16,6 +16,7 @@ import { reporting } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import { stock } from '@kosh/stock';
 import { action, field, form, gantt, kanban, list, search } from '@kosh/views';
+import { hoursOn, instantOf, type Schedule, worktime } from '@kosh/worktime';
 import type { Env } from './.kosh/bindings.js';
 import { productionDemo } from './demo.js';
 import {
@@ -25,6 +26,7 @@ import {
   ProductionSpecParameter,
 } from './depth.js';
 import {
+  centreSchedule,
   DAY_STARTS_AT,
   ProductionBom,
   ProductionBomLine,
@@ -51,6 +53,7 @@ export {
   reachedValues,
 } from './depth.js';
 export {
+  centreSchedule,
   ProductionBom,
   ProductionBomByproduct,
   ProductionBomLine,
@@ -64,6 +67,7 @@ export {
   reviseBom,
   ScrapProduction,
   schedule,
+  scheduleWithin,
   validBom,
 } from './module.js';
 export {
@@ -101,53 +105,80 @@ function registerCapacityRoutes({ app }: ModuleContext): void {
       if (day > String(q.to) || days.length > 92) break;
       days.push(day);
     }
-    return request.env(async (raw) => {
-      const env = raw as Env;
-      const centres = await (await env.model('production.workcenter').search({})).load([
-        'name',
-        'hoursPerDay',
-      ]);
-      const orders = await (
-        await env
-          .model('production.workorder')
-          .search({ where: { state: { in: ['ready', 'progress'] } } })
-      ).load({ workcenter: true });
-      return {
-        days,
-        workcenters: [...centres].map((c) => ({
-          id: c.id,
-          name: c.name,
-          hoursPerDay: c.hoursPerDay.toString(),
-          days: days.map((day) => {
-            // The centre's working window that day: the work planned outside it (the night) does not count.
-            const from = new Date(
-              `${day}T${String(DAY_STARTS_AT).padStart(2, '0')}:00:00`,
-            ).getTime();
-            const to = from + Number(c.hoursPerDay) * 3_600_000;
-            let ms = 0;
-            for (const w of orders) {
-              if (
-                w.workcenter.id !== c.id ||
-                !(w.plannedStart instanceof Date) ||
-                !(w.plannedStop instanceof Date)
-              )
-                continue;
-              ms += Math.max(
-                0,
-                Math.min(to, w.plannedStop.getTime()) - Math.max(from, w.plannedStart.getTime()),
-              );
-            }
-            const hours = ms / 3_600_000;
-            const capacity = Number(c.hoursPerDay);
-            return {
-              day,
-              plannedHours: hours.toFixed(2),
-              load: capacity > 0 ? Math.round((hours / capacity) * 100) : 0,
-            };
-          }),
-        })),
-      };
-    });
+    return request.env(
+      async (raw) => {
+        const env = raw as Env;
+        const centres = await (await env.model('production.workcenter').search({})).load({
+          calendar: true,
+        });
+        // Each centre's working time over the period: its calendar's, when it has one.
+        const working = new Map<number, Schedule | null>();
+        for (const c of centres)
+          working.set(
+            c.id as number,
+            await centreSchedule(
+              env,
+              c.calendar?.id as number | undefined,
+              new Date(`${String(q.from)}T00:00:00Z`),
+            ),
+          );
+        const orders = await (
+          await env
+            .model('production.workorder')
+            .search({ where: { state: { in: ['ready', 'progress'] } } })
+        ).load({ workcenter: true });
+        return {
+          days,
+          workcenters: [...centres].map((c) => ({
+            id: c.id,
+            name: c.name,
+            hoursPerDay: c.hoursPerDay.toString(),
+            days: days.map((day) => {
+              // The centre's working windows that day — its calendar's hours, else from the day's start for its
+              // hours a day —: the work planned outside them (the night, a break) does not count.
+              const calendar = working.get(c.id as number) ?? null;
+              const start = new Date(
+                `${day}T${String(DAY_STARTS_AT).padStart(2, '0')}:00:00`,
+              ).getTime();
+              const windows: [number, number][] =
+                calendar === null
+                  ? [[start, start + Number(c.hoursPerDay) * 3_600_000]]
+                  : hoursOn(calendar, day).map(([a, b]) => [
+                      instantOf(day, a, calendar.tz),
+                      instantOf(day, b, calendar.tz),
+                    ]);
+              let ms = 0;
+              for (const w of orders) {
+                if (
+                  w.workcenter.id !== c.id ||
+                  !(w.plannedStart instanceof Date) ||
+                  !(w.plannedStop instanceof Date)
+                )
+                  continue;
+                for (const [from, to] of windows)
+                  ms += Math.max(
+                    0,
+                    Math.min(to, w.plannedStop.getTime()) -
+                      Math.max(from, w.plannedStart.getTime()),
+                  );
+              }
+              const hours = ms / 3_600_000;
+              const capacity =
+                windows.reduce((sum, [from, to]) => sum + (to - from), 0) / 3_600_000;
+              return {
+                day,
+                // What the centre can work that day: nothing on its weekend or a holiday.
+                capacityHours: capacity.toFixed(2),
+                plannedHours: hours.toFixed(2),
+                load: capacity > 0 ? Math.round((hours / capacity) * 100) : 0,
+              };
+            }),
+          })),
+        };
+        // Reading a calendar is done as the system, which a read-only request cannot open.
+      },
+      { write: true },
+    );
   });
 }
 
@@ -212,7 +243,7 @@ export const production: ReturnType<typeof defineModule> = defineModule({
       levels: [{ name: 'Production manager', condition: {}, approverRole: 'production.manager' }],
     },
   ],
-  depends: [product, stock, contacts, messaging, reporting, permissions],
+  depends: [product, stock, contacts, messaging, reporting, permissions, worktime],
   app: {
     code: 'production',
     label: 'Production',
@@ -1223,7 +1254,7 @@ export const production: ReturnType<typeof defineModule> = defineModule({
     'production.workcenter.form': form(ProductionWorkcenter, (k) => ({
       header: { buttons: [] },
       sheet: [
-        k.group('main', ['name', 'code', 'hoursPerDay', 'costPerHour']),
+        k.group('main', ['name', 'code', 'calendar', 'hoursPerDay', 'costPerHour']),
         k.group(
           'batches',
           ['batchMin', 'batchMax', 'setupMinutes', 'cleanupMinutes', 'oeeTarget'],
