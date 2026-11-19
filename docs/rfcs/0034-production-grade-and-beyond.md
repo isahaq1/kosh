@@ -372,3 +372,27 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   second step after a password, an Administrator removing someone's passkeys from Settings › People (deactivating
   the person refuses them), a policy that requires passkeys. **Step 5 is complete** — password reset, single
   sign-on with groups to roles (certified against Keycloak), SCIM provisioning, passkeys.
+- **Step 6, part 1 (2026-11-19).** **Working calendars: the model and the engine.** The design, decided before the
+  code. Today four apps count time four ways — Workforce by a weekend setting, Helpdesk by a team's opening hours,
+  Attendance by its own holiday list, Production by hours a day — and none knows the others' holidays. One module,
+  `@kosh/worktime` (the **Working time** app), holds what they all need: **calendars** (`work.calendar`: a time
+  zone, hours in a day, and a week of hours as lines — two lines for a day make a break between them; one calendar
+  is the company's), **holidays** (`work.holiday`: a date or a span, once or **every year**, of every calendar of
+  the company or of one) and **personal exceptions** (`work.exception`: a person's day off, or a day they work
+  hours of their own, also on a weekend or a holiday). The **engine** (`time.ts`) is pure functions over a schedule
+  — is this a working day, working days between two dates, the date so many working days later or earlier, the
+  first and last working day of a month, working minutes between two moments, the moment so many working minutes
+  later, the next moment inside working hours — in the calendar's time zone, daylight saving included;
+  `scheduleOf(env, { from, to, calendar?, user? })` reads a schedule from the database as the system (counting
+  time needs no right of its own). A company starts with its calendar (Sunday to Thursday, 09:00–13:00 and
+  14:00–18:00) and **the fixed-date public holidays of its country, yearly**: Bangladesh (21 February, 26 March,
+  14 April, 1 May, 16 December, 25 December) and India's three national holidays. **Holidays that move with the
+  moon or a government notice — the Eids, Durga Puja, Diwali, Holi — are not guessed**: a manager adds them when
+  they are announced or imports the year's list (the import template is there). Hours that are not hours or
+  overlap, a second calendar "of the company" and a time zone that is none are refused. Roles: users read,
+  managers write. Tests: 9 on the engine (breaks, a working Saturday, a half day, both directions, a
+  daylight-saving change in London), 4 on PostgreSQL through the API, an E2E. The module standard passes (search,
+  lists and forms, import templates, Bangla, overview, demo). **Not yet done — the next parts:** the apps still
+  count their own way; part 2 moves Workforce leave onto the calendar (holidays not charged), then Helpdesk SLAs,
+  Attendance, Production capacity, and payment terms and delivery dates in working days; recurring events, ICS and
+  the Google / Microsoft sync follow.
