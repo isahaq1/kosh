@@ -16,6 +16,7 @@ import { randomBytes } from 'node:crypto';
 import { mailerFromEnv } from '@kosh/mail';
 import { installationSetting } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
+import { type Schedule, scheduleOf } from '@kosh/worktime';
 import type { Env } from './.kosh/bindings.js';
 import { addBusinessMinutes, businessMinutesBetween, type Hours, WEEKENDS } from './hours.js';
 import { RANK } from './module.js';
@@ -35,10 +36,29 @@ interface TeamHours {
   readonly open: string;
   readonly close: string;
   readonly weekend: string;
+  /** A working calendar (Working time): its hours, breaks and holidays, instead of the team's own hours. */
+  readonly calendar?: { readonly id: number } | null;
 }
 
-/** A team's business hours; without a team, every day from 09:00 to 18:00. */
-export async function hoursOf(env: Env, team: TeamHours | null): Promise<Hours> {
+const DAY_MS = 86_400_000;
+/**
+ * A team's business hours: its working calendar when it has one — with its breaks, its holidays and its time
+ * zone, from two days before `since` to 400 days from now —, else its own hours; without a team, every day from
+ * 09:00 to 18:00.
+ */
+export async function hoursOf(
+  env: Env,
+  team: TeamHours | null,
+  since: Date = new Date(),
+): Promise<Hours | Schedule> {
+  if (team?.calendar != null) {
+    const day = (t: number) => new Date(t).toISOString().slice(0, 10);
+    return scheduleOf(env as never, {
+      calendar: Number(team.calendar.id),
+      from: day(Math.min(since.getTime(), Date.now()) - 2 * DAY_MS),
+      to: day(Date.now() + 400 * DAY_MS),
+    });
+  }
   return {
     open: team?.open ?? '09:00',
     close: team?.close ?? '18:00',
@@ -54,7 +74,11 @@ export async function pausedSince(
   now: Date,
 ): Promise<number> {
   if (ticket.waitingSince === null) return 0;
-  return businessMinutesBetween(ticket.waitingSince, now, await hoursOf(env, ticket.team));
+  return businessMinutesBetween(
+    ticket.waitingSince,
+    now,
+    await hoursOf(env, ticket.team, ticket.waitingSince),
+  );
 }
 
 /** Refreshes the tickets given (every open, waiting and just-solved ticket when none). */
@@ -173,7 +197,7 @@ export async function refreshSla(
     }
     // Deadlines and the status.
     if (sla !== null) {
-      const hours = await hoursOf(env, t.team);
+      const hours = await hoursOf(env, t.team, t.createdAt);
       const opened = t.createdAt;
       const firstBy = addBusinessMinutes(opened, Number(sla.firstReplyHours) * 60, hours);
       const waitingNow =

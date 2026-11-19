@@ -10,6 +10,7 @@
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
 import { orm } from '@kosh/server/orm';
+import { worktimeShutro } from '@kosh/worktime';
 import { defineModel, defineModule, type Env, f, record, records } from './.kosh/bindings.js';
 
 const READ = ['read'] as const;
@@ -40,6 +41,11 @@ export const HelpdeskTeam = defineModel('helpdesk.team', {
         help: 'How new tickets get their agent: in turn among the agents, or to the one with the fewest open tickets.',
       },
     ),
+    calendar: f.many2one('work.calendar', {
+      ondelete: 'set null',
+      label: 'Working calendar',
+      help: 'SLA targets count this calendar’s hours — its breaks and holidays are not counted. Empty: the hours below.',
+    }),
     open: f.char({ size: 5, required: true, default: '09:00', label: 'Opens (HH:MM)' }),
     close: f.char({ size: 5, required: true, default: '18:00', label: 'Closes (HH:MM)' }),
     weekend: f.selection(
@@ -317,12 +323,12 @@ async function closePause(tickets: unknown): Promise<void> {
 export const helpdeskShutro = defineModule({
   name: 'helpdesk',
   version: '0.1.0',
-  depends: [contactsShutro, messagingShutro],
+  depends: [contactsShutro, messagingShutro, worktimeShutro],
   groups: [
     orm.defineGroup({
       code: 'helpdesk.user',
       label: 'Helpdesk agent',
-      implies: ['contacts.user', 'messaging.user'],
+      implies: ['contacts.user', 'messaging.user', 'worktime.user'],
     }),
     orm.defineGroup({
       code: 'helpdesk.manager',

@@ -113,7 +113,6 @@ export const bn: Readonly<Record<string, string>> = {
   'Phone check-ins: from the site.': 'ফোনে চেক-ইন: সাইট থেকে।',
   'Phones check in on site only': 'ফোনে চেক-ইন শুধু সাইটে',
   Present: 'উপস্থিত',
-  'Public holiday': 'সরকারি ছুটি',
   'Public holidays': 'সরকারি ছুটিসমূহ',
   Radius: 'ব্যাসার্ধ',
   'Radius (metres)': 'ব্যাসার্ধ (মিটার)',
@@ -139,7 +138,6 @@ export const bn: Readonly<Record<string, string>> = {
   'The person’s number on the attendance device (ZKTeco user ID).':
     'হাজিরা যন্ত্রে ব্যক্তির নম্বর (ZKTeco ব্যবহারকারী আইডি)।',
   'The shift on days without a roster.': 'রোস্টারবিহীন দিনের শিফট।',
-  'There is already a holiday on this date.': 'এই তারিখে ইতিমধ্যে একটি ছুটি আছে।',
   'This overlaps another check-in of the same person.':
     'এটি একই ব্যক্তির অন্য একটি চেক-ইনের সাথে মিলে যায়।',
   'This person is already checked in.': 'এই ব্যক্তি ইতিমধ্যে চেক-ইন করেছেন।',

@@ -1,14 +1,15 @@
 /**
  * Attendance computed (RFC 0024 §2.2): the day of each person from their punches, their shift (the roster's, else
- * their usual one), the weekend (Workforce's setting), public holidays and approved leave — in the installation's
+ * their usual one), their working calendar — its week, its holidays, their own exceptions (Working time) — and
+ * approved leave, in the installation's
  * time zone (App settings › Attendance). Approved days are never recomputed.
  *
  * Also here: a punch from the phone or the kiosk (check in, or out when checked in), the geofence, and device files
  * (ZKTeco's attendance log and a plain CSV) turned into punches, each once.
  */
-import { weekendOf } from '@kosh/hr';
 import { installationSetting } from '@kosh/server';
 import { type Decimal, type Id, orm } from '@kosh/server/orm';
+import { hoursOn, scheduleOf } from '@kosh/worktime';
 import type { Env } from './.kosh/bindings.js';
 
 const DAY = 86_400_000;
@@ -205,26 +206,24 @@ export async function recomputeDays(
 ): Promise<number> {
   if (employees.length === 0 || to < from) return 0;
   const tz = await timeZoneOf(env);
-  const weekend = await weekendOf(env as never);
   let written = 0;
   for (const e of await env
     .model('hr.employee')
     .browse(employees as never)
-    .load({ attendanceShift: true, company: true })) {
+    .load({ attendanceShift: true, company: true, calendar: true, user: true })) {
     const rosters = await (
       await env.model('attendance.roster').search({
         where: { employee: e.id, dateFrom: { lte: to }, dateTo: { gte: from } },
       })
     ).load({ shift: true });
-    const holidays = new Set(
-      [
-        ...(await (
-          await env.model('attendance.holiday').search({
-            where: { company: e.company.id, date: { gte: from, lte: to } },
-          })
-        ).load(['date'])),
-      ].map((h) => isoDate(h.date)),
-    );
+    // The person's working calendar (the company's when they have none), its holidays and their exceptions.
+    const schedule = await scheduleOf(env as never, {
+      from,
+      to,
+      calendar: (e.calendar?.id as number | undefined) ?? null,
+      user: (e.user?.id as number | undefined) ?? null,
+      company: e.company.id as number,
+    });
     const leaves = [
       ...(await (
         await env.model('hr.leave').search({
@@ -269,8 +268,10 @@ export async function recomputeDays(
         date,
         tz,
         shift,
-        weekend: weekend.includes(dow),
-        holiday: holidays.has(date),
+        // A day the calendar's week does not work is the weekend; a worked weekday taken off — a public holiday,
+        // the person's own day off — is a holiday. A day with hours of its own (a worked Saturday) is neither.
+        weekend: !schedule.extra.has(date) && (schedule.week[dow] ?? []).length === 0,
+        holiday: hoursOn(schedule, date).length === 0 && (schedule.week[dow] ?? []).length > 0,
         leave: leaves.some(([a, b]) => a <= date && b >= date),
         punches: mine,
       });

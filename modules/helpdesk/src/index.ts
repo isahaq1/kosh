@@ -12,6 +12,7 @@ import { defineModule } from '@kosh/modules-sdk';
 import { reporting } from '@kosh/reporting';
 import type { ModuleContext } from '@kosh/server';
 import { action, form, kanban, list, pivot, search, stat } from '@kosh/views';
+import { worktime } from '@kosh/worktime';
 import type { Env } from './.kosh/bindings.js';
 import { helpdeskDemo } from './demo.js';
 import {
@@ -25,7 +26,13 @@ import {
 } from './module.js';
 import { registerHelpdeskRoutes } from './routes.js';
 
-export { addBusinessMinutes, businessMinutesBetween, type Hours, WEEKENDS } from './hours.js';
+export {
+  addBusinessMinutes,
+  businessMinutesBetween,
+  type Hours,
+  scheduleOfHours,
+  WEEKENDS,
+} from './hours.js';
 export {
   HelpdeskCanned,
   HelpdeskSla,
@@ -65,7 +72,7 @@ export const helpdesk: ReturnType<typeof defineModule> = defineModule({
   shutro: helpdeskShutro,
   kosh: '^0.1.0',
   hooks: { demo: helpdeskDemo },
-  depends: [contacts, messaging, reporting],
+  depends: [contacts, messaging, reporting, worktime],
   app: {
     code: 'helpdesk',
     label: 'Helpdesk',
@@ -417,7 +424,7 @@ export const helpdesk: ReturnType<typeof defineModule> = defineModule({
           }),
         ]),
         k.group('main', ['name', 'members', 'assignment', 'rating']),
-        k.group('hours', ['open', 'close', 'weekend'], { label: 'Business hours' }),
+        k.group('hours', ['calendar', 'open', 'close', 'weekend'], { label: 'Business hours' }),
       ],
     })),
     'helpdesk.sla.list': list(HelpdeskSla, {

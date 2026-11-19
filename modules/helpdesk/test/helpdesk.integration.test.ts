@@ -287,6 +287,79 @@ test('from email: the sender found or added as a contact, the first team', async
   expect(values[1]?.['partner']).toBe(values[0]?.['partner']);
 });
 
+test('a team on a working calendar: its holidays are not counted towards the SLA', async () => {
+  // A calendar open around the clock, closed from yesterday to three days from now (a long holiday).
+  const day = (offset: number) =>
+    new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+  const calendar = await host.server.shutro.bootstrap({ reason: 'test', company }, async (env) => {
+    const made = await (
+      env.model('work.calendar' as never) as unknown as {
+        create(rows: unknown[]): Promise<{ ids: readonly number[] }>;
+      }
+    ).create([
+      {
+        name: 'Support desk',
+        company,
+        tz: 'Asia/Dhaka',
+        hours: {
+          create: ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].map((weekday) => ({
+            weekday,
+            fromTime: '00:00',
+            toTime: '24:00',
+          })),
+        },
+        holidays: {
+          create: [{ name: 'Long holiday', company, dateFrom: day(-1), dateTo: day(3) }],
+        },
+      },
+    ]);
+    return made.ids[0] as number;
+  });
+  const desk = await call('POST', '/api/v1/models/helpdesk.team', 'mona', {
+    name: 'Desk on a calendar',
+    members: { set: [users['ali']] },
+    assignment: 'manual',
+    calendar,
+  });
+  expect(desk.status, JSON.stringify(desk.json)).toBe(201);
+  expect(
+    (
+      await call('POST', '/api/v1/models/helpdesk.sla', 'mona', {
+        name: 'Desk standard',
+        sequence: 1,
+        team: desk.json.id,
+        firstReplyHours: '4',
+        resolveHours: '24',
+      })
+    ).status,
+  ).toBe(201);
+  const ticket = await call('POST', T, 'mona', {
+    subject: 'Asked during the holiday',
+    team: desk.json.id,
+    email: 'holiday@customer.example',
+  });
+  expect(ticket.status, JSON.stringify(ticket.json)).toBe(201);
+  await refresh();
+  const read1 = await read(ticket.json.id, 'slaStatus,firstReplyDeadline,resolveDeadline');
+  const hoursAhead = (iso: string) => (Date.parse(iso) - Date.now()) / 3_600_000;
+  // Four working hours start counting when the holiday ends: days away, not four hours.
+  expect(hoursAhead(read1.firstReplyDeadline)).toBeGreaterThan(60);
+  expect(hoursAhead(read1.resolveDeadline)).toBeGreaterThan(
+    hoursAhead(read1.firstReplyDeadline) + 19,
+  );
+  expect(read1.slaStatus).toBe('on_track');
+  // The team without a calendar keeps its own hours: its tickets are due in hours.
+  const plain = await call('POST', T, 'mona', {
+    subject: 'Plain',
+    team,
+    email: 'p@customer.example',
+  });
+  await refresh();
+  expect(
+    hoursAhead((await read(plain.json.id, 'firstReplyDeadline')).firstReplyDeadline),
+  ).toBeLessThan(5);
+});
+
 test('the demo data loads', async () => {
   const auth = host.server.auth;
   if (auth === undefined) throw new Error('base is installed');

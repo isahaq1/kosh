@@ -45,6 +45,7 @@
     "@kosh/server": "workspace:*",
     "@kosh/views": "workspace:*",
     "@kosh/contacts": "workspace:*",
+    "@kosh/worktime": "workspace:*",
     "@kosh/messaging": "workspace:*",
     "@kosh/reporting": "workspace:*",
     "@kosh/mail": "workspace:*"

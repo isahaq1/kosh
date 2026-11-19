@@ -13,7 +13,6 @@ import { action, calendar, field, form, list, pivot, search, stat } from '@kosh/
 import { attendanceDemo } from './demo.js';
 import {
   AttendanceDay,
-  AttendanceHoliday,
   AttendanceRecord,
   AttendanceRoster,
   AttendanceShift,
@@ -40,7 +39,6 @@ export {
 } from './days.js';
 export {
   AttendanceDay,
-  AttendanceHoliday,
   AttendanceRecord,
   AttendanceRoster,
   AttendanceShift,
@@ -161,15 +159,6 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
       ],
     },
     {
-      key: 'holidays',
-      model: 'attendance.holiday',
-      label: 'Public holidays',
-      columns: [
-        { header: 'Name', field: 'name' },
-        { header: 'Date', field: 'date' },
-      ],
-    },
-    {
       key: 'shifts',
       model: 'attendance.shift',
       label: 'Shifts',
@@ -284,10 +273,6 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
       views: ['list', 'form'],
     }),
     'attendance.action_sites': action(AttendanceSite, { label: 'Sites', views: ['list', 'form'] }),
-    'attendance.action_holidays': action(AttendanceHoliday, {
-      label: 'Public holidays',
-      views: ['list', 'form'],
-    }),
   },
   menus: [
     { id: 'attendance.root', label: 'Attendance', app: 'attendance' },
@@ -351,7 +336,8 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
       id: 'attendance.holidays',
       parent: 'attendance.configuration',
       label: 'Public holidays',
-      action: 'attendance.action_holidays',
+      // The company's holidays are Working time's: the menu opens them there.
+      action: 'worktime.action_holidays',
       sequence: 3,
     },
   ],
@@ -474,11 +460,6 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
       header: { buttons: [] },
       sheet: [k.group('main', ['name', 'latitude', 'longitude', 'radius', 'geofence'])],
     })),
-    'attendance.holiday.list': list(AttendanceHoliday, { columns: ['date', 'name'] }),
-    'attendance.holiday.form': form(AttendanceHoliday, (k) => ({
-      header: { buttons: [] },
-      sheet: [k.group('main', ['name', 'date'])],
-    })),
   },
   viewExtensions: [
     {
@@ -551,6 +532,5 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
     }),
     'attendance.shift': search(AttendanceShift, { fields: ['name'] }),
     'attendance.site': search(AttendanceSite, { fields: ['name'] }),
-    'attendance.holiday': search(AttendanceHoliday, { fields: ['name'], groupBy: ['date:year'] }),
   },
 });

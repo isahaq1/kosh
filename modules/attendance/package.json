@@ -50,6 +50,7 @@
     "@kosh/server": "workspace:*",
     "@kosh/views": "workspace:*",
     "@kosh/hr": "workspace:*",
+    "@kosh/worktime": "workspace:*",
     "@kosh/reporting": "workspace:*",
     "@kosh/ui": "workspace:*"
   },

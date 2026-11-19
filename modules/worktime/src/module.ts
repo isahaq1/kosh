@@ -159,19 +159,23 @@ export const WorkCalendarHours = defineModel('work.calendar.hours', {
       ...check(
         'work.calendar.hours',
         ['calendar', 'weekday', 'fromTime', 'toTime'],
-        async (lines) => {
-          const failing: number[] = [];
-          for (const l of lines) {
-            const same = await lines.env
-              .model('work.calendar.hours')
-              .search({ where: { calendar: l.calendar.id, weekday: l.weekday, id: { ne: l.id } } });
-            const from = time(l.fromTime) ?? 0;
-            const to = time(l.toTime) ?? 0;
-            if ([...same].some((o) => (time(o.fromTime) ?? 0) < to && from < (time(o.toTime) ?? 0)))
-              failing.push(l.id);
-          }
-          return failing;
-        },
+        async (lines) =>
+          // As the system: a constraint may run when the request's rights are gone (the final flush).
+          lines.env.asSuperuser({ reason: 'overlapping working hours' }, async (su) => {
+            const failing: number[] = [];
+            for (const l of lines) {
+              const same = await su.model('work.calendar.hours').search({
+                where: { calendar: l.calendar.id, weekday: l.weekday, id: { ne: l.id } },
+              });
+              const from = time(l.fromTime) ?? 0;
+              const to = time(l.toTime) ?? 0;
+              if (
+                [...same].some((o) => (time(o.fromTime) ?? 0) < to && from < (time(o.toTime) ?? 0))
+              )
+                failing.push(l.id);
+            }
+            return failing;
+          }),
       ),
       message: 'These hours overlap other hours of the same day.',
     },

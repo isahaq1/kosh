@@ -854,6 +854,9 @@ importers:
       '@kosh/views':
         specifier: workspace:*
         version: link:../../packages/views
+      '@kosh/worktime':
+        specifier: workspace:*
+        version: link:../worktime
       '@tanstack/react-query':
         specifier: ^5.104.3
         version: 5.104.3(react@19.3.1)
@@ -1208,6 +1211,9 @@ importers:
       '@kosh/views':
         specifier: workspace:*
         version: link:../../packages/views
+      '@kosh/worktime':
+        specifier: workspace:*
+        version: link:../worktime
     devDependencies:
       '@kosh/settings':
         specifier: workspace:*

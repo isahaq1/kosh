@@ -1,7 +1,7 @@
 /**
  * The data layer of Attendance (RFC 0024 §2.2): shifts (hours, break, grace, overtime after so many minutes and in
  * steps, the overtime rate; night shifts end after midnight), rosters that assign them, sites with a geofence,
- * punches (`attendance.record`) from the phone, the kiosk or a device file, public holidays, and the **attendance
+ * punches (`attendance.record`) from the phone, the kiosk or a device file, and the **attendance
  * day** of each person — worked hours, late arrival, early leave, absence, leave and holidays from Workforce,
  * overtime — computed by `days.ts` and approved by HR before Payroll reads it.
  *
@@ -255,21 +255,6 @@ export const AttendanceRecord = defineModel('attendance.record', {
   },
 });
 
-export const AttendanceHoliday = defineModel('attendance.holiday', {
-  label: 'Public holiday',
-  recName: 'name',
-  order: ['date asc'],
-  companyScoped: { required: true },
-  access: { 'attendance.user': READ, 'attendance.manager': [...ALL, 'export', 'import'] },
-  fields: {
-    name: f.char({ required: true, translate: true }),
-    date: f.date({ required: true }),
-  },
-  sqlConstraints: {
-    oneADay: { unique: ['company', 'date'], message: 'There is already a holiday on this date.' },
-  },
-});
-
 const DAY_STATUS = {
   present: 'Present',
   absent: 'Absent',
@@ -427,14 +412,7 @@ export const attendanceShutro = defineModule({
       groups: ['attendance.manager'],
     }),
   ],
-  models: [
-    AttendanceShift,
-    AttendanceRoster,
-    AttendanceSite,
-    AttendanceRecord,
-    AttendanceHoliday,
-    AttendanceDay,
-  ],
+  models: [AttendanceShift, AttendanceRoster, AttendanceSite, AttendanceRecord, AttendanceDay],
   extensions: [EmployeeAttendance],
   data: [
     record(

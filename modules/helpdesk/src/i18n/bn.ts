@@ -89,6 +89,8 @@ export const bn: Readonly<Record<string, string>> = {
   'SLA breached': 'এসএলএ লঙ্ঘিত',
   'SLA policies': 'এসএলএ নীতিমালা',
   'SLA policy': 'এসএলএ নীতি',
+  'SLA targets count this calendar’s hours — its breaks and holidays are not counted. Empty: the hours below.':
+    'SLA লক্ষ্য এই ক্যালেন্ডারের কাজের সময় গোনে — এর বিরতি ও ছুটি গোনা হয় না। খালি: নিচের সময়।',
   'SLA targets count working hours only: from opening to closing, outside the weekend.':
     'এসএলএ লক্ষ্যে শুধু কার্যঘণ্টা গোনা হয়: খোলা থেকে বন্ধ পর্যন্ত, সাপ্তাহিক ছুটি বাদে।',
   Solved: 'সমাধানকৃত',
@@ -139,4 +141,5 @@ export const bn: Readonly<Record<string, string>> = {
     'টিকিট সমাধান হলে গ্রাহককে সহায়তার রেটিং দিতে বলা হয় (এক থেকে পাঁচ)।',
   'Where replies go when the customer is not a contact yet.':
     'গ্রাহক এখনও যোগাযোগ না হলে উত্তর যেখানে যায়।',
+  'Working calendar': 'কর্ম-ক্যালেন্ডার',
 };

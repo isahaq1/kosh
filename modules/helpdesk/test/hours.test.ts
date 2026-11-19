@@ -53,3 +53,36 @@ describe('working minutes between', () => {
     ).toBe(0);
   });
 });
+
+describe('a working calendar instead of a team’s own hours', () => {
+  // 09:00–13:00 and 14:00–18:00, Friday and Saturday off, Wednesday 21 October a holiday.
+  const calendar = {
+    tz: 'Asia/Dhaka',
+    week: Object.fromEntries(
+      [0, 1, 2, 3, 4, 5, 6].map((d) => [
+        d,
+        d === 5 || d === 6
+          ? []
+          : ([
+              [540, 780],
+              [840, 1080],
+            ] as [number, number][]),
+      ]),
+    ),
+    off: new Set(['2026-10-21']),
+    extra: new Map<string, [number, number][]>(),
+  };
+  test('the lunch break and a holiday are not counted', () => {
+    // Tuesday 12:00 plus two hours: one before lunch, one after.
+    expect(addBusinessMinutes(dhaka('2026-10-20', '12:00'), 120, calendar)).toEqual(
+      dhaka('2026-10-20', '15:00'),
+    );
+    // Tuesday 17:00 plus two hours: one on Tuesday, the holiday skipped, one on Thursday.
+    expect(addBusinessMinutes(dhaka('2026-10-20', '17:00'), 120, calendar)).toEqual(
+      dhaka('2026-10-22', '10:00'),
+    );
+    expect(
+      businessMinutesBetween(dhaka('2026-10-20', '17:00'), dhaka('2026-10-22', '10:00'), calendar),
+    ).toBe(120);
+  });
+});

@@ -273,9 +273,10 @@ test('a device file: each punch once; the days with lateness, overtime, absence 
 
   expect(
     (
-      await call('POST', '/api/v1/models/attendance.holiday', 'hana', {
+      await call('POST', '/api/v1/models/work.holiday', 'hana', {
         name: 'Durga Puja',
-        date: '2026-10-21',
+        dateFrom: '2026-10-21',
+        dateTo: '2026-10-21',
       })
     ).status,
   ).toBe(201);
