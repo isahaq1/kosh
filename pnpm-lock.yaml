@@ -860,6 +860,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.104.3
         version: 5.104.3(react@19.3.1)
+      fastify:
+        specifier: ^5.12.7
+        version: 5.12.7
     devDependencies:
       '@kosh/settings':
         specifier: workspace:*

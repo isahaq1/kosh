@@ -11,8 +11,11 @@ import { reporting } from '@kosh/reporting';
 import type { ModuleContext } from '@kosh/server';
 import { action, calendar, field, form, list, pivot, search, stat } from '@kosh/views';
 import { attendanceDemo } from './demo.js';
+import { registerDeviceRoutes } from './devices.js';
 import {
   AttendanceDay,
+  AttendanceDevice,
+  AttendanceDevicePunch,
   AttendanceRecord,
   AttendanceRoster,
   AttendanceShift,
@@ -38,7 +41,16 @@ export {
   timeZoneOf,
 } from './days.js';
 export {
+  PENDING_LIMIT,
+  type PushedPunch,
+  parseAttlog,
+  replayPunches,
+  takePunches,
+} from './devices.js';
+export {
   AttendanceDay,
+  AttendanceDevice,
+  AttendanceDevicePunch,
   AttendanceRecord,
   AttendanceRoster,
   AttendanceShift,
@@ -71,7 +83,11 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
     },
     kiosk: { label: 'Kiosk (a device at the gate)', groups: ['attendance.kiosk'] },
   },
-  routes: (context: ModuleContext) => registerAttendanceRoutes(context),
+  routes: (context: ModuleContext) => {
+    registerAttendanceRoutes(context);
+    // Machines that push their punches (RFC 0037 §2).
+    registerDeviceRoutes(context);
+  },
   settings: {
     sections: [
       {
@@ -159,6 +175,18 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
       ],
     },
     {
+      key: 'devices',
+      model: 'attendance.device',
+      label: 'Devices',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'Serial number', field: 'serial' },
+        { header: 'Site', field: 'site' },
+        { header: 'Status', field: 'status' },
+        { header: 'Only from addresses', field: 'allowedAddresses' },
+      ],
+    },
+    {
       key: 'shifts',
       model: 'attendance.shift',
       label: 'Shifts',
@@ -189,6 +217,11 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
         rule: 'I1',
         model: 'attendance.day',
         reason: 'Days are computed from the check-ins, which import; they are never typed.',
+      },
+      {
+        rule: 'I1',
+        model: 'attendance.device.punch',
+        reason: 'Punches are what the machines send, kept as received; never typed or imported.',
       },
     ],
   },
@@ -273,6 +306,14 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
       views: ['list', 'form'],
     }),
     'attendance.action_sites': action(AttendanceSite, { label: 'Sites', views: ['list', 'form'] }),
+    'attendance.action_devices': action(AttendanceDevice, {
+      label: 'Devices',
+      views: ['list', 'form'],
+    }),
+    'attendance.action_device_punches': action(AttendanceDevicePunch, {
+      label: 'Device punches',
+      views: ['list', 'form'],
+    }),
   },
   menus: [
     { id: 'attendance.root', label: 'Attendance', app: 'attendance' },
@@ -324,6 +365,20 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
       label: 'Shifts',
       action: 'attendance.action_shifts',
       sequence: 1,
+    },
+    {
+      id: 'attendance.devices',
+      parent: 'attendance.configuration',
+      label: 'Devices',
+      action: 'attendance.action_devices',
+      sequence: 4,
+    },
+    {
+      id: 'attendance.device_punches',
+      parent: 'attendance.configuration',
+      label: 'Device punches',
+      action: 'attendance.action_device_punches',
+      sequence: 5,
     },
     {
       id: 'attendance.sites',
@@ -456,6 +511,45 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
     'attendance.site.list': list(AttendanceSite, {
       columns: ['name', 'latitude', 'longitude', 'radius', 'geofence'],
     }),
+    'attendance.device.list': list(AttendanceDevice, {
+      columns: [
+        'name',
+        'serial',
+        'site',
+        { field: 'status', widget: 'badge' },
+        'lastSeenAt',
+        'lastPunchAt',
+      ],
+      decorations: { warning: { status: 'pending' } },
+    }),
+    'attendance.device.form': form(AttendanceDevice, (k) => ({
+      header: { buttons: [] },
+      sheet: [
+        k.group('main', ['name', 'serial', 'protocol', 'status', 'site'], {
+          description:
+            'On the machine, set this server’s address and port (Comm › Cloud Server Setting). Its punches arrive by themselves once it is Active.',
+        }),
+        k.group('safety', ['allowedAddresses'], {
+          label: 'Safety',
+          description:
+            'The machine’s protocol has no password: its serial number is all it says. Limit it to the site’s address where you can.',
+        }),
+        k.group('seen', ['lastSeenAt', 'lastAddress', 'lastPunchAt', 'stamp'], {
+          label: 'Last heard of',
+        }),
+      ],
+    })),
+    'attendance.device.punch.list': list(AttendanceDevicePunch, {
+      columns: ['at', 'device', 'userCode', 'employee', { field: 'outcome', widget: 'badge' }],
+      decorations: {
+        warning: { outcome: { in: ['unknown', 'unpaired'] } },
+        neutral: { outcome: { in: ['duplicate', 'late'] } },
+      },
+    }),
+    'attendance.device.punch.form': form(AttendanceDevicePunch, (k) => ({
+      header: { buttons: [] },
+      sheet: [k.group('main', ['device', 'userCode', 'localTime', 'at', 'employee', 'outcome'])],
+    })),
     'attendance.site.form': form(AttendanceSite, (k) => ({
       header: { buttons: [] },
       sheet: [k.group('main', ['name', 'latitude', 'longitude', 'radius', 'geofence'])],
@@ -532,5 +626,23 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
     }),
     'attendance.shift': search(AttendanceShift, { fields: ['name'] }),
     'attendance.site': search(AttendanceSite, { fields: ['name'] }),
+    'attendance.device': search(AttendanceDevice, {
+      fields: ['name', 'serial'],
+      filters: {
+        pending: { label: 'Waiting for approval', domain: { status: 'pending' }, group: 'status' },
+        active: { label: 'Active', domain: { status: 'active' }, group: 'status' },
+        off: { label: 'Off', domain: { status: 'off' }, group: 'status' },
+      },
+      groupBy: ['site', 'status'],
+    }),
+    'attendance.device.punch': search(AttendanceDevicePunch, {
+      fields: ['userCode', 'employee.name', 'device.name'],
+      filters: {
+        unknown: { label: 'Unknown person', domain: { outcome: 'unknown' }, group: 'outcome' },
+        unpaired: { label: 'Unpaired', domain: { outcome: 'unpaired' }, group: 'outcome' },
+        counted: { label: 'Counted', domain: { outcome: 'applied' }, group: 'outcome' },
+      },
+      groupBy: ['device', 'employee', 'outcome', 'at:day'],
+    }),
   },
 });

@@ -186,7 +186,13 @@ export const AttendanceRecord = defineModel('attendance.record', {
     checkIn: f.datetime({ required: true, label: 'Check-in' }),
     checkOut: f.datetime({ label: 'Check-out' }),
     source: f.selection(
-      { phone: 'Phone', kiosk: 'Kiosk', device: 'Device file', manual: 'By hand' },
+      {
+        phone: 'Phone',
+        kiosk: 'Kiosk',
+        device: 'Device file',
+        push: 'Device',
+        manual: 'By hand',
+      },
       {
         required: true,
         default: 'manual',
@@ -251,6 +257,88 @@ export const AttendanceRecord = defineModel('attendance.record', {
         }),
       ),
       message: 'This overlaps another check-in of the same person.',
+    },
+  },
+});
+
+/**
+ * An attendance machine that sends its punches itself (RFC 0037 §2): registered by its serial number. One that
+ * knocks without being registered waits here for a manager's approval; nothing it sends is taken until then.
+ * Shared by every company: a punch goes to its person's company.
+ */
+export const AttendanceDevice = defineModel('attendance.device', {
+  label: 'Device',
+  recName: 'name',
+  order: ['name asc'],
+  archivable: true,
+  access: { 'attendance.manager': [...ALL, 'export', 'import'] },
+  fields: {
+    name: f.char({ required: true }),
+    serial: f.char({
+      size: 64,
+      required: true,
+      index: 'unique',
+      label: 'Serial number',
+      help: 'As the machine shows it (Menu › System info). It is how the machine says who it is.',
+    }),
+    protocol: f.selection(
+      { zk_push: 'ZKTeco push (ADMS)' },
+      { required: true, default: 'zk_push', help: 'How the machine talks to the server.' },
+    ),
+    status: f.selection(
+      { pending: 'Waiting for approval', active: 'Active', off: 'Off' },
+      {
+        required: true,
+        default: 'active',
+        help: 'Only an active device’s punches are taken. A machine that knocks unregistered waits for approval.',
+      },
+    ),
+    site: f.many2one('attendance.site', { ondelete: 'set null' }),
+    allowedAddresses: f.char({
+      label: 'Only from addresses',
+      help: 'The network addresses the machine may send from, separated by commas (the site’s public address). Empty: any.',
+    }),
+    lastSeenAt: f.datetime({ label: 'Last seen', groups: { write: [] } }),
+    lastAddress: f.char({ label: 'Last address', groups: { write: [] } }),
+    lastPunchAt: f.datetime({ label: 'Last punch', groups: { write: [] } }),
+    /** The machine's own mark of what it has sent: given back to it so that it sends only what is new. */
+    stamp: f.char({ size: 32, label: 'Sent up to', groups: { write: [] } }),
+    punches: f.one2many('attendance.device.punch', 'device'),
+  },
+});
+
+const PUNCH_OUTCOME = {
+  new: 'Received',
+  applied: 'Counted',
+  duplicate: 'Second tap',
+  unpaired: 'Unpaired',
+  unknown: 'Unknown person',
+  late: 'Day already approved',
+} as const;
+
+/** A punch as a machine sent it, kept once: what attendance is replayed from (RFC 0037 §2.3). */
+export const AttendanceDevicePunch = defineModel('attendance.device.punch', {
+  label: 'Device punch',
+  recName: 'userCode',
+  order: ['at desc', 'id desc'],
+  access: { 'attendance.manager': READ },
+  fields: {
+    device: f.many2one('attendance.device', { required: true, ondelete: 'cascade' }),
+    userCode: f.char({ size: 32, required: true, label: 'Number on the device' }),
+    /** As the machine sent it (`2026-11-19 08:58:12`), in the installation's time zone. */
+    localTime: f.char({ size: 19, required: true, label: 'Time on the device' }),
+    at: f.datetime({ required: true, index: true, label: 'Time' }),
+    employee: f.many2one('hr.employee', { ondelete: 'set null', index: true }),
+    outcome: f.selection(PUNCH_OUTCOME, {
+      required: true,
+      default: 'new',
+      help: 'What became of the punch: counted as a check-in or a check-out, or why it was not.',
+    }),
+  },
+  sqlConstraints: {
+    once: {
+      unique: ['device', 'userCode', 'localTime'],
+      message: 'This punch was received already.',
     },
   },
 });
@@ -412,7 +500,15 @@ export const attendanceShutro = defineModule({
       groups: ['attendance.manager'],
     }),
   ],
-  models: [AttendanceShift, AttendanceRoster, AttendanceSite, AttendanceRecord, AttendanceDay],
+  models: [
+    AttendanceShift,
+    AttendanceRoster,
+    AttendanceSite,
+    AttendanceRecord,
+    AttendanceDay,
+    AttendanceDevice,
+    AttendanceDevicePunch,
+  ],
   extensions: [EmployeeAttendance],
   data: [
     record(

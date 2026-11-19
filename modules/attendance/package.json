@@ -51,6 +51,7 @@
     "@kosh/views": "workspace:*",
     "@kosh/hr": "workspace:*",
     "@kosh/worktime": "workspace:*",
+    "fastify": "^5.12.7",
     "@kosh/reporting": "workspace:*",
     "@kosh/ui": "workspace:*"
   },
