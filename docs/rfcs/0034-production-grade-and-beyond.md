@@ -408,3 +408,20 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   a leave's dates or days change. **For an installation that had changed the weekend setting**: its choice is not
   carried over — set the company's calendar's week once (Working time › Calendars). Next: Helpdesk SLAs,
   Attendance's holidays, Production capacity, terms in working days.
+- **Step 6, part 2b (2026-11-19).** **Attendance and Helpdesk count with Working time.**
+  *Attendance*: each person's day is computed from their working calendar (the company's when they have none):
+  a day its week does not work is the weekend, a worked weekday taken off — a public holiday, the person's own day
+  off — is a holiday, a day with hours of its own (a worked Saturday) is neither. **Attendance's own holiday list
+  (`attendance.holiday`) is removed**: holidays are entered once, in Working time, and Attendance › Configuration ›
+  Public holidays opens them there. *An installation that had entered holidays in Attendance loses that list on
+  upgrade* (the model is gone): re-enter or import them in Working time. None is in production yet; had there been,
+  this step would have needed a data migration first.
+  *Helpdesk*: a team may work by a **working calendar** — its breaks and its holidays are then not counted towards
+  the SLA, in the calendar's time zone — or keep its own opening hours and weekend as before (a support desk often
+  keeps other hours than the company; the default is unchanged). The counting is Working time's engine for both:
+  Helpdesk's own was a copy of it and is gone (`hours.ts` is now an adapter). Found on the way and fixed: the
+  check that a calendar's hours do not overlap read with the request's rights, which are gone when a constraint
+  runs at the final flush — it reads as the system now. Tests: a holiday on a team's calendar moves a four-hour
+  target days away while a team on its own hours is due in hours; the lunch break and a holiday in the engine's
+  adapter; Attendance's holiday test through Working time. Next: Production capacity and terms in working days,
+  then recurring events and ICS.

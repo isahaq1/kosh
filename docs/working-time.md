@@ -1,8 +1,8 @@
 # Working time
 
 One place says when the company works: the **Working time** app. Every app that counts time — leave, support
-deadlines, attendance, production capacity, due dates in working days — is meant to count with it. (Part 1 ships the
-app and its engine; the apps move onto it one by one, see the roadmap.)
+deadlines, attendance, production capacity, due dates in working days — is meant to count with it. (The apps move onto it one by one:
+see *Who counts with it* below.)
 
 ## What you set up
 
@@ -42,8 +42,14 @@ Managers (the *Working time manager* role) set all this; everyone with the app r
   not work anyway. The form counts as the dates are typed and the server checks it when the leave is saved. HR
   managers set calendars, holidays and exceptions. (The old *Working week* setting of Workforce is gone: set the
   week on the company's calendar.)
-- **Attendance** reads the company's weekend from the calendar. Its own holiday list is still separate — next.
-- Helpdesk deadlines, Production capacity and due dates in working days: still to move.
+- **Attendance.** A person's day is read from their working calendar: a day its week does not work is the
+  weekend, a public holiday or the person's own day off is a holiday, a worked Saturday (a personal exception with
+  hours) is an ordinary day. Holidays are entered here only — Attendance › Configuration › Public holidays opens
+  this list.
+- **Helpdesk.** A team may have a *Working calendar* (Team › Business hours): its SLA targets then count that
+  calendar's hours, without its breaks and holidays. Left empty, the team keeps its own opening hours and weekend
+  — right for a desk that works other hours than the office.
+- Production capacity and due dates in working days: still to move.
 
 ## For module authors
 
