@@ -8,10 +8,12 @@
  */
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
+import { emitting } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
 import { workingDays as countWorkingDays, scheduleOf, worktimeShutro } from '@kosh/worktime';
 import {
   check,
+  compute,
   defineModel,
   defineModule,
   type Env,
@@ -451,15 +453,186 @@ export const HrLeave = defineModel('hr.leave', {
   },
 });
 
-/** The leaves among `records` that the acting user asked for themself. */
-async function undecidable(records: unknown): Promise<number[]> {
+const TOUR_DECIDES =
+  'Your own tour is decided by someone else; others’ by an HR manager or their leave approver.';
+
+/**
+ * An official tour (RFC 0037 §3): a person sent away on the company's business for some days — where to, why, how
+ * they travel, the advance they ask for — approved by their leave approver or HR, never by themselves. Attendance
+ * reads approved tours: a working day on tour without a punch is *On tour*, not absent.
+ */
+export const HrTour = defineModel('hr.tour', {
+  label: 'Tour',
+  recName: 'name',
+  order: ['dateFrom desc', 'id desc'],
+  companyScoped: { required: true },
+  tracking: ['state', 'dateFrom', 'dateTo'],
+  access: { 'hr.user': ALL, 'hr.manager': ALL },
+  rules: {
+    seeOwn: { groups: ['hr.user'], perms: ['read'], domain: { 'employee.user': me } },
+    draftOwn: {
+      groups: ['hr.user'],
+      perms: ['write', 'create', 'unlink'],
+      domain: { 'employee.user': me, state: 'draft' },
+    },
+    team: { groups: ['hr.user'], perms: ['read'], domain: { 'employee.manager.user': me } },
+    // Who decides writes the decision: the leave approver, else the manager (the guard says which of the two).
+    approver: {
+      groups: ['hr.user'],
+      perms: ['read', 'write'],
+      domain: {
+        or: [{ 'employee.leaveApprover': me }, { 'employee.manager.user': me }],
+        state: { in: ['submitted', 'approved', 'refused', 'cancelled'] },
+      },
+    },
+    all: { groups: ['hr.manager'], perms: [...ALL], domain: {} },
+  },
+  fields: {
+    name: f.char({ required: true, sequence: 'hr.tour', label: 'Reference' }),
+    employee: f.many2one('hr.employee', { required: true, ondelete: 'cascade' }),
+    dateFrom: f.date({ required: true, label: 'From' }),
+    dateTo: f.date({ required: true, label: 'To' }),
+    days: f.integer({
+      store: true,
+      label: 'Working days',
+      help: 'The working days of the person’s calendar inside the tour: what Attendance counts as on tour.',
+      ...compute('hr.tour', 'days', ['employee', 'dateFrom', 'dateTo'], async (tours) => {
+        for (const t of tours)
+          t.days =
+            t.dateFrom === null || t.dateTo === null || t.employee === null
+              ? 0
+              : await leaveDays(tours.env, t.employee.id as number, iso(t.dateFrom), iso(t.dateTo));
+      }),
+    }),
+    places: f.char({ required: true, label: 'Where to', help: 'The places visited, in order.' }),
+    purpose: f.text({ required: true }),
+    travelBy: f.selection(
+      {
+        road: 'Road',
+        rail: 'Rail',
+        air: 'Air',
+        water: 'Water',
+        own: 'Own vehicle',
+        company: 'Company vehicle',
+      },
+      {
+        label: 'Travels by',
+        help: 'How the person travels: it decides what the allowance covers.',
+      },
+    ),
+    advanceAmount: f.decimal({
+      scale: 2,
+      label: 'Advance asked',
+      help: 'Cash the person needs before leaving; with Spend, an approved tour drafts the cash advance.',
+    }),
+    decisionNote: f.char({
+      label: 'Note of the decision',
+      help: 'Why it was refused or cancelled (needed), or a word with the approval.',
+    }),
+    state: f.state({
+      help: 'A request waits once submitted; someone other than the traveller approves or refuses it.',
+      states: {
+        draft: 'Draft',
+        submitted: 'Waiting',
+        approved: 'Approved',
+        refused: 'Refused',
+        cancelled: 'Cancelled',
+      },
+      initial: 'draft',
+      transitions: {
+        submit: emitting('hr.tour.submitted', { from: ['draft'], to: 'submitted' }),
+        approve: emitting('hr.tour.approved', {
+          from: ['submitted'],
+          to: 'approved',
+          guard: records('hr.tour', (tours) => undecidable(tours, 'hr.tour', 'hr.tour_decide')),
+          message: TOUR_DECIDES,
+        }),
+        refuse: {
+          from: ['submitted'],
+          to: 'refused',
+          guard: records('hr.tour', (tours) => undecidable(tours, 'hr.tour', 'hr.tour_decide')),
+          message: TOUR_DECIDES,
+        },
+        // Called off after approval: by who could have approved it.
+        cancel: emitting('hr.tour.cancelled', {
+          from: ['approved'],
+          to: 'cancelled',
+          guard: records('hr.tour', (tours) => undecidable(tours, 'hr.tour', 'hr.tour_decide')),
+          message: TOUR_DECIDES,
+        }),
+        redraft: { from: ['submitted', 'refused'], to: 'draft' },
+      },
+    }),
+  },
+  sqlConstraints: {
+    ordered: {
+      check: orm.sql`date_to >= date_from`,
+      message: 'A tour ends on or after it starts.',
+    },
+    advance: {
+      check: orm.sql`advance_amount IS NULL OR advance_amount >= 0`,
+      message: 'An advance is not negative.',
+    },
+  },
+  constraints: {
+    said: {
+      ...check('hr.tour', ['state', 'decisionNote'], async (tours) =>
+        [...tours]
+          .filter(
+            (t) =>
+              (t.state === 'refused' || t.state === 'cancelled') &&
+              (t.decisionNote ?? '').trim() === '',
+          )
+          .map((t) => t.id),
+      ),
+      message: 'Say why in the note of the decision first.',
+    },
+    noOverlap: {
+      ...check('hr.tour', ['employee', 'dateFrom', 'dateTo', 'state'], async (tours) =>
+        tours.env.asSuperuser({ reason: 'overlapping tours and leave' }, async (su) => {
+          const failing: number[] = [];
+          for (const t of tours) {
+            if (t.state === 'refused' || t.state === 'cancelled') continue;
+            const during = { dateFrom: { lte: t.dateTo }, dateTo: { gte: t.dateFrom } };
+            const tour = await su.model('hr.tour').search({
+              where: {
+                employee: t.employee.id,
+                id: { ne: t.id },
+                state: { in: ['draft', 'submitted', 'approved'] },
+                ...during,
+              },
+              limit: 1,
+            });
+            const leave = await su.model('hr.leave').search({
+              where: { employee: t.employee.id, state: 'approved', ...during },
+              limit: 1,
+            });
+            if (tour.length > 0 || leave.length > 0) failing.push(t.id);
+          }
+          return failing;
+        }),
+      ),
+      message: 'This person already has a tour or approved leave on some of these days.',
+    },
+  },
+});
+
+/**
+ * The requests among `records` the acting user may not decide: their own, and — unless they hold the permission —
+ * those of people whose leave approver they are not.
+ */
+async function undecidable(
+  records: unknown,
+  model: 'hr.leave' | 'hr.tour' = 'hr.leave',
+  permission: 'hr.leave_decide' | 'hr.tour_decide' = 'hr.leave_decide',
+): Promise<number[]> {
   const { env, ids } = records as { env: Env; ids: readonly number[] };
-  const decides = env.su || env.access.has('hr.leave_decide');
+  const decides = env.su || env.access.has(permission);
   return env.asSuperuser({ reason: 'who decides leave' }, async (su) => {
     const leaves = (
       await su
-        .model('hr.leave')
-        .browse([...ids])
+        .model(model)
+        .browse([...ids] as never)
         .load(['employee'])
     ).read(['id', 'employee']);
     const people = new Map(
@@ -467,15 +640,36 @@ async function undecidable(records: unknown): Promise<number[]> {
         await su
           .model('hr.employee')
           .browse(leaves.map((l) => l['employee'] as never))
-          .load(['user', 'leaveApprover'])
+          .load(['user', 'leaveApprover', 'manager'])
       )
-        .read(['id', 'user', 'leaveApprover'])
+        .read(['id', 'user', 'leaveApprover', 'manager'])
         .map((e) => [e['id'], e]),
+    );
+    // A tour without a leave approver is decided by the person's manager (leave has its own route for that).
+    const managers = new Map(
+      model !== 'hr.tour'
+        ? []
+        : (
+            await su
+              .model('hr.employee')
+              .browse(
+                [...people.values()]
+                  .map((e) => e['manager'])
+                  .filter((m) => m !== null && m !== undefined) as never,
+              )
+              .load(['user'])
+          )
+            .read(['id', 'user'])
+            .map((m) => [m['id'], m['user']] as const),
     );
     return leaves
       .filter((l) => {
         const person = people.get(l['employee']);
-        return person?.['user'] === env.uid || (!decides && person?.['leaveApprover'] !== env.uid);
+        const decider =
+          model === 'hr.tour'
+            ? (person?.['leaveApprover'] ?? managers.get(person?.['manager'] as never) ?? null)
+            : person?.['leaveApprover'];
+        return person?.['user'] === env.uid || (!decides && decider !== env.uid);
       })
       .map((l) => l['id'] as number);
   });
@@ -521,6 +715,11 @@ export const hrShutro = defineModule({
       label: 'Approve and refuse leave',
       groups: ['hr.manager'],
     }),
+    orm.definePermission({
+      code: 'hr.tour_decide',
+      label: 'Approve, refuse and cancel tours',
+      groups: ['hr.manager'],
+    }),
   ],
   models: [
     HrDepartment,
@@ -531,6 +730,10 @@ export const hrShutro = defineModule({
     HrContract,
     HrLeaveType,
     HrLeave,
+    HrTour,
+  ],
+  sequences: [
+    orm.defineSequence({ code: 'hr.tour', prefix: 'TOUR/{year}/', padding: 4, reset: 'yearly' }),
   ],
   data: [
     record(

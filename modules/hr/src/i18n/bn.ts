@@ -6,8 +6,14 @@ export const bn: Readonly<Record<string, string>> = {
   'A leave ends on or after it starts.': 'ছুটি শুরুর দিন বা তার পরে শেষ হয়।',
   'A request waits once submitted, and someone other than the requester approves or refuses it.':
     'জমা দেওয়ার পর অনুরোধটি অপেক্ষায় থাকে, এবং অনুরোধকারী ছাড়া অন্য কেউ তা অনুমোদন বা নামঞ্জুর করেন।',
+  'A request waits once submitted; someone other than the traveller approves or refuses it.':
+    'জমা দেওয়ার পর অনুরোধ অপেক্ষায় থাকে; ভ্রমণকারী ছাড়া অন্য কেউ অনুমোদন বা প্রত্যাখ্যান করেন।',
   'A short code used in reports and payroll files.': 'রিপোর্ট ও বেতনের ফাইলে ব্যবহৃত সংক্ষিপ্ত কোড।',
+  'A tour ends on or after it starts.': 'ট্যুর শুরুর দিন বা তার পরে শেষ হয়।',
   Active: 'সক্রিয়',
+  'Advance asked': 'চাওয়া অগ্রিম',
+  Air: 'আকাশপথ',
+  'An advance is not negative.': 'অগ্রিম ঋণাত্মক হয় না।',
   'An IANA time zone (Asia/Dhaka, Asia/Kolkata): the person’s working hours and reminders follow it.':
     'একটি IANA সময় অঞ্চল (Asia/Dhaka, Asia/Kolkata): ব্যক্তির কর্মঘণ্টা ও রিমাইন্ডার এটি অনুসরণ করে।',
   Approve: 'অনুমোদন করুন',
@@ -21,12 +27,17 @@ export const bn: Readonly<Record<string, string>> = {
   Birthday: 'জন্মদিন',
   'By department': 'বিভাগ অনুযায়ী',
   Cancel: 'বাতিল করুন',
+  'Cancel the tour': 'ট্যুর বাতিল করুন',
+  'Cancel this approved tour?': 'এই অনুমোদিত ট্যুর বাতিল করবেন?',
   'Cancel this contract?': 'এই চুক্তি বাতিল করবেন?',
   Cancelled: 'বাতিল',
+  'Cash the person needs before leaving; with Spend, an approved tour drafts the cash advance.':
+    'যাওয়ার আগে ব্যক্তির যে নগদ দরকার; স্পেন্ড থাকলে অনুমোদিত ট্যুর নগদ অগ্রিমের খসড়া তৈরি করে।',
   Coach: 'কোচ',
   Code: 'কোড',
   Colour: 'রং',
   Company: 'প্রতিষ্ঠান',
+  'Company vehicle': 'কোম্পানির গাড়ি',
   Configuration: 'কনফিগারেশন',
   Contract: 'চুক্তি',
   Contracts: 'চুক্তিসমূহ',
@@ -57,6 +68,8 @@ export const bn: Readonly<Record<string, string>> = {
   From: 'থেকে',
   Head: 'প্রধান',
   'Home address': 'বাসার ঠিকানা',
+  'How the person travels: it decides what the allowance covers.':
+    'ব্যক্তি যেভাবে যাতায়াত করেন: ভাতা কী কী ঢাকবে তা এর ওপর নির্ভর করে।',
   'HR manager': 'মানবসম্পদ ব্যবস্থাপক',
   'HR manager (everything, personal data)': 'মানবসম্পদ ব্যবস্থাপক (সবকিছু, ব্যক্তিগত তথ্য)',
   ID: 'আইডি',
@@ -78,8 +91,13 @@ export const bn: Readonly<Record<string, string>> = {
   'My team': 'আমার দল',
   Name: 'নাম',
   'National ID': 'জাতীয় পরিচয়পত্র',
+  'Needed to refuse or cancel: write it, then press the button.':
+    'প্রত্যাখ্যান বা বাতিলের জন্য দরকার: আগে লিখুন, তারপর বোতাম চাপুন।',
   'Not enough days left of this leave type this year.': 'এ বছর এই ধরনের ছুটির যথেষ্ট দিন বাকি নেই।',
+  'Note of the decision': 'সিদ্ধান্তের নোট',
   Overview: 'সারসংক্ষেপ',
+  'Own vehicle': 'নিজের গাড়ি',
+  'Page {{page}} of {{pages}}': 'পৃষ্ঠা {{page}} / {{pages}}',
   'Part of': 'অন্তর্ভুক্ত',
   People: 'জনবল',
   'People who approve for this department when an approval level asks for the department’s approvers.':
@@ -89,18 +107,23 @@ export const bn: Readonly<Record<string, string>> = {
   Positions: 'পদসমূহ',
   Probation: 'শিক্ষানবিশ',
   Property: 'প্রপার্টি',
+  Purpose: 'উদ্দেশ্য',
+  Rail: 'রেলপথ',
   Reason: 'কারণ',
   Reference: 'রেফারেন্স',
   Refuse: 'নামঞ্জুর করুন',
   Refused: 'নামঞ্জুর',
   'Reports to': 'যাঁর কাছে জবাবদিহি',
+  Road: 'সড়কপথ',
   Running: 'চলমান',
   'Running contracts': 'চলমান চুক্তি',
+  'Say why in the note of the decision first.': 'আগে সিদ্ধান্তের নোটে কারণ লিখুন।',
   Schedule: 'সময়সূচি',
   Sequence: 'ক্রম',
   Start: 'শুরু',
   Starts: 'শুরু',
   State: 'অবস্থা',
+  Status: 'অবস্থা',
   Submit: 'জমা দিন',
   Tags: 'ট্যাগ',
   Team: 'দল',
@@ -112,23 +135,41 @@ export const bn: Readonly<Record<string, string>> = {
     'ব্যক্তির ইউনিটের প্রধান (কারখানা, ডিপো, খামার), লাইন ম্যানেজারের পাশাপাশি; অনুমোদনে তাঁকে চাওয়া হতে পারে।',
   'The kind of employment the contract is for: permanent, a fixed term, probation or an internship.':
     'চুক্তিটি কোন ধরনের চাকরির জন্য: স্থায়ী, নির্দিষ্ট মেয়াদি, শিক্ষানবিশ বা ইন্টার্নশিপ।',
+  'The places visited, in order.': 'যেসব জায়গায় যাওয়া হবে, ক্রমানুসারে।',
   'The property or unit the person works for (a mill, a farm, a depot).':
     'ব্যক্তি যে প্রপার্টি বা ইউনিটে কাজ করেন (মিল, খামার, ডিপো)।',
   'The working days do not match the dates (or none falls on a working day).':
     'কর্মদিবস তারিখের সাথে মেলে না (অথবা কোনো দিনই কর্মদিবস নয়)।',
+  'The working days of the person’s calendar inside the tour: what Attendance counts as on tour.':
+    'ট্যুরের ভেতরে ব্যক্তির ক্যালেন্ডারের কর্মদিবস: হাজিরায় যা ট্যুরে হিসেবে গোনা হয়।',
+  'This person already has a tour or approved leave on some of these days.':
+    'এই দিনগুলোর কয়েকটিতে এই ব্যক্তির আগে থেকেই ট্যুর বা অনুমোদিত ছুটি আছে।',
   'This person already has leave on some of these days.':
     'এই ব্যক্তির এর মধ্যে কিছু দিনে আগেই ছুটি আছে।',
   'This user is already another employee.': 'এই ব্যবহারকারী ইতিমধ্যে অন্য একজন কর্মী।',
   'Time zone': 'সময় অঞ্চল',
   To: 'পর্যন্ত',
+  Tour: 'ট্যুর',
+  'Tour approved': 'ট্যুর অনুমোদিত',
+  'Tour cancelled': 'ট্যুর বাতিল',
+  'Tour order': 'ট্যুর আদেশ',
+  'Tour order {{name}}': 'ট্যুর আদেশ {{name}}',
+  'Tour requested': 'ট্যুরের অনুরোধ',
+  Tours: 'ট্যুর',
+  'Tours waiting approval': 'অনুমোদনের অপেক্ষায় ট্যুর',
+  'Travels by': 'যাতায়াতের মাধ্যম',
   Type: 'ধরন',
   'Unit head': 'ইউনিট প্রধান',
   'Updated At': 'হালনাগাদের সময়',
   'Updated By': 'হালনাগাদ করেছেন',
   User: 'ব্যবহারকারী',
   Waiting: 'অপেক্ষমাণ',
+  Water: 'নৌপথ',
+  'Where to': 'কোথায়',
   'Who approves this person’s expenses and leave first.':
     'এই ব্যক্তির খরচ ও ছুটি প্রথমে কে অনুমোদন করেন।',
+  'Why it was refused or cancelled (needed), or a word with the approval.':
+    'কেন প্রত্যাখ্যান বা বাতিল হয়েছে (আবশ্যক), অথবা অনুমোদনের সাথে একটি কথা।',
   'Work email': 'অফিসের ইমেইল',
   'Work mobile': 'অফিসের মোবাইল',
   'Work phone': 'অফিসের ফোন',
@@ -137,4 +178,6 @@ export const bn: Readonly<Record<string, string>> = {
   'Working days': 'কর্মদিবস',
   'Your own leave is decided by someone else; others’ by an HR manager or their leave approver.':
     'আপনার নিজের ছুটির সিদ্ধান্ত অন্য কেউ নেন; অন্যদেরটা এইচআর ব্যবস্থাপক বা তাঁদের ছুটি অনুমোদনকারী।',
+  'Your own tour is decided by someone else; others’ by an HR manager or their leave approver.':
+    'আপনার নিজের ট্যুরের সিদ্ধান্ত অন্য কেউ নেন; অন্যদের ট্যুরের সিদ্ধান্ত নেন এইচআর ম্যানেজার বা তাঁদের ছুটি অনুমোদনকারী।',
 };

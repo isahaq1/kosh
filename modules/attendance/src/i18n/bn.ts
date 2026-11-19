@@ -110,6 +110,7 @@ export const bn: Readonly<Record<string, string>> = {
   'On site': 'সাইটে',
   'On the machine, set this server’s address and port (Comm › Cloud Server Setting). Its punches arrive by themselves once it is Active.':
     'মেশিনে এই সার্ভারের ঠিকানা ও পোর্ট বসান (Comm › Cloud Server Setting)। সক্রিয় হলে এর পাঞ্চ নিজে থেকেই আসে।',
+  'On tour': 'ট্যুরে',
   'One attendance day per person and date.': 'প্রতি ব্যক্তি ও তারিখে একটি হাজিরার দিন।',
   'Only an active device’s punches are taken. A machine that knocks unregistered waits for approval.':
     'শুধু সক্রিয় ডিভাইসের পাঞ্চ নেওয়া হয়। নিবন্ধন ছাড়া যে মেশিন যোগাযোগ করে সেটি অনুমোদনের অপেক্ষায় থাকে।',

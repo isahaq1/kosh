@@ -347,6 +347,7 @@ const DAY_STATUS = {
   present: 'Present',
   absent: 'Absent',
   leave: 'On leave',
+  tour: 'On tour',
   holiday: 'Holiday',
   weekend: 'Weekend',
   incomplete: 'Check-out missing',

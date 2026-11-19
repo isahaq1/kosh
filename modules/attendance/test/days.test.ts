@@ -77,6 +77,13 @@ describe('a day shift', () => {
   test('absent, on leave, a holiday; a missing check-out', () => {
     expect(day([]).status).toBe('absent');
     expect(day([], { leave: true }).status).toBe('leave');
+    // On an approved tour: a working day without a punch is On tour; a weekend, a holiday or leave stay what
+    // they are, and a day with punches is computed from them.
+    expect(day([], { tour: true }).status).toBe('tour');
+    expect(day([], { tour: true, weekend: true }).status).toBe('weekend');
+    expect(day([], { tour: true, holiday: true }).status).toBe('holiday');
+    expect(day([], { tour: true, leave: true }).status).toBe('leave');
+    expect(day([['09:00', '18:00']], { tour: true }).status).toBe('present');
     expect(day([], { holiday: true }).status).toBe('holiday');
     expect(day([], { weekend: true }).status).toBe('weekend');
     expect(day([], { shift: null }).status).toBe('off');

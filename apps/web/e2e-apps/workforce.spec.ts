@@ -74,6 +74,49 @@ test('an employee asks for leave counted in working days; HR approves it', async
   await expect(page.getByRole('button', { name: /^State: Approved/ })).toBeVisible();
 });
 
+test('an employee asks for an official tour; it is refused only with a reason, then approved (RFC 0037)', async ({
+  page,
+  browser,
+}) => {
+  // Three weeks from now, Sunday to Tuesday: clear of the leave above. (Rahim is an employee since that test.)
+  const [sunday] = nextWeek();
+  const from = new Date(Date.parse(sunday) + 14 * 86_400_000).toISOString().slice(0, 10);
+  const to = new Date(Date.parse(from) + 2 * 86_400_000).toISOString().slice(0, 10);
+
+  const context = await browser.newContext();
+  const rahim = await context.newPage();
+  await signIn(rahim, 'rahim');
+  await rahim.goto('/workforce/a/workforce.action_tours/new');
+  await pick(rahim, 'Employee', 'Rahim Uddin');
+  const start = rahim.getByRole('textbox', { name: 'From', exact: true });
+  await start.fill(from);
+  await start.blur();
+  const end = rahim.getByRole('textbox', { name: 'To', exact: true });
+  await end.fill(to);
+  await end.blur();
+  await rahim.getByRole('textbox', { name: 'Where to' }).fill('Bogura depot');
+  await rahim.getByRole('textbox', { name: 'Purpose' }).fill('Quarterly stock audit');
+  await rahim.getByRole('button', { name: 'Save' }).click();
+  await expect(rahim).toHaveURL(/workforce\.action_tours\/\d+$/);
+  await expect(rahim.getByRole('heading', { name: /^TOUR\/\d{4}\/\d{4}$/ })).toBeVisible();
+  await rahim.getByRole('button', { name: 'Submit' }).click();
+  await expect(rahim.getByRole('button', { name: /^State: Waiting/ })).toBeVisible();
+  // Not his to approve: the server refuses, and it still waits.
+  await rahim.getByRole('button', { name: 'Approve' }).click();
+  await expect(rahim.getByRole('button', { name: /^State: Waiting/ })).toBeVisible();
+  const tour = rahim.url().replace(/^https?:\/\/[^/]+/, '');
+  await context.close();
+
+  await signIn(page, 'dina'); // HR manager
+  await page.goto(tour);
+  // Refusing without saying why is refused.
+  await page.getByRole('button', { name: 'Refuse' }).click();
+  await expect(page.getByText('Say why in the note of the decision first.')).toBeVisible();
+  await expect(page.getByRole('button', { name: /^State: Waiting/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Approve' }).click();
+  await expect(page.getByRole('button', { name: /^State: Approved/ })).toBeVisible();
+});
+
 test('the Workforce overview (RFC 0022 step 2)', async ({ page }) => {
   await signIn(page, 'dina');
   await page.goto('/workforce/a/hr.action_overview');

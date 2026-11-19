@@ -671,7 +671,7 @@ export const payroll: ReturnType<typeof defineModule> = defineModule({
         k.group('calculation', ['formula', 'condition'], {
           label: 'Formula',
           description:
-            'Variables: WAGE, PERIOD_DAYS, CONTRACT_DAYS, SERVICE_MONTHS, MONTH, FY_MONTH, MONTHS_LEFT, FESTIVAL, E_…, PRESENT_DAYS, ABSENT_DAYS, LEAVE_DAYS, HOLIDAYS, LATE_DAYS, OVERTIME_HOURS, OVERTIME_RATE, LOAN, INPUT_…, YTD_…, P_…, and the codes of earlier rules. Functions: min, max, abs, round, floor, ceil, if, slab.',
+            'Variables: WAGE, PERIOD_DAYS, CONTRACT_DAYS, SERVICE_MONTHS, MONTH, FY_MONTH, MONTHS_LEFT, FESTIVAL, E_…, PRESENT_DAYS (days on tour included), TOUR_DAYS, ABSENT_DAYS, LEAVE_DAYS, HOLIDAYS, LATE_DAYS, OVERTIME_HOURS, OVERTIME_RATE, LOAN, INPUT_…, YTD_…, P_…, and the codes of earlier rules. Functions: min, max, abs, round, floor, ceil, if, slab.',
         }),
         k.group('validity', ['dateFrom', 'dateTo', 'note'], { label: 'In force' }),
       ],

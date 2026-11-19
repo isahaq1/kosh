@@ -325,6 +325,61 @@ test('a device file: each punch once; the days with lateness, overtime, absence 
   expect(sumiSees.length).toBeGreaterThanOrEqual(3);
 });
 
+test('an approved official tour: its working days are On tour, not absent; cancelled, they are absent again', async () => {
+  const TOUR = '/api/v1/models/hr.tour';
+  // Friday 6 to Thursday 12 November 2026: a weekend, then five working days.
+  const tour = await call('POST', TOUR, 'hana', {
+    employee: employees['sumi'],
+    dateFrom: '2026-11-06',
+    dateTo: '2026-11-12',
+    places: 'Khulna depot',
+    purpose: 'Stock audit',
+  });
+  expect(tour.status, JSON.stringify(tour.json)).toBe(201);
+  const step = (name: string) =>
+    call('POST', `${TOUR}/${tour.json.id}/transitions/${name}`, 'hana');
+  const statuses = async () => {
+    const computed = await call('POST', '/api/v1/attendance/days/compute', 'hana', {
+      from: '2026-11-05',
+      to: '2026-11-12',
+      employees: [employees['sumi']],
+    });
+    expect(computed.status, JSON.stringify(computed.json)).toBe(200);
+    const days = (
+      await call(
+        'GET',
+        `${D}?filter=${encodeURIComponent(JSON.stringify({ employee: employees['sumi'], date: { gte: '2026-11-05', lte: '2026-11-12' } }))}&fields=date,status&order=date%20asc`,
+        'hana',
+      )
+    ).json.items as Json[];
+    return Object.fromEntries(days.map((d) => [String(d.date).slice(5, 10), d.status]));
+  };
+  // Asked for, not yet approved: she is absent on those days like anyone without a punch.
+  expect((await step('submit')).status).toBe(200);
+  expect(await statuses()).toEqual({
+    '11-05': 'absent',
+    '11-08': 'absent',
+    '11-09': 'absent',
+    '11-10': 'absent',
+    '11-11': 'absent',
+    '11-12': 'absent',
+  });
+  // Approved: the working days inside it are On tour; the day before stays absent, the weekend says nothing.
+  expect((await step('approve')).status).toBe(200);
+  expect(await statuses()).toEqual({
+    '11-05': 'absent',
+    '11-08': 'tour',
+    '11-09': 'tour',
+    '11-10': 'tour',
+    '11-11': 'tour',
+    '11-12': 'tour',
+  });
+  // Called off: absent again.
+  await call('PATCH', `${TOUR}/${tour.json.id}`, 'hana', { decisionNote: 'Postponed' });
+  expect((await step('cancel')).status).toBe(200);
+  expect((await statuses())['11-10']).toBe('absent');
+});
+
 test('the demo data loads', async () => {
   const auth = host.server.auth;
   if (auth === undefined) throw new Error('base is installed');

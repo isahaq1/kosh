@@ -309,12 +309,100 @@ test('leave follows the working calendar: a person’s own week, holidays not ch
   expect((await call('GET', `${C}/${contract.json.id}`, 'sumi')).status).toBe(403);
 });
 
+test('official tours: numbered, counted in working days, decided by the manager or HR, never by the traveller', async () => {
+  const TOUR = '/api/v1/models/hr.tour';
+  const tour = (
+    who: string,
+    dateFrom: string,
+    dateTo: string,
+    more: Record<string, unknown> = {},
+  ) =>
+    call('POST', TOUR, who, {
+      employee: employees[who],
+      dateFrom,
+      dateTo,
+      places: 'Bogura depot, Rangpur farm',
+      purpose: 'Quarterly stock audit',
+      ...more,
+    });
+  const step = (id: number, name: string, as: string) =>
+    call('POST', `${TOUR}/${id}/transitions/${name}`, as);
+
+  // Sunday 10 to Thursday 14 January 2027: five working days, numbered.
+  const made = await tour('rahim', '2027-01-10', '2027-01-14', {
+    travelBy: 'road',
+    advanceAmount: '5000',
+  });
+  expect(made.status, JSON.stringify(made.json)).toBe(201);
+  const id = made.json.id as number;
+  const read = async (fields: string, as = 'rahim') =>
+    (await call('GET', `${TOUR}/${id}?fields=${fields}`, as)).json;
+  expect(await read('name,days,state')).toMatchObject({ days: 5, state: 'draft' });
+  expect((await read('name')).name).toMatch(/^TOUR\/\d{4}\/0001$/);
+  // A tour over a weekend only is a tour all the same (travel on a weekend): no working day, not refused.
+  const weekend = await tour('sumi', '2027-01-16', '2027-01-17'); // her week is Monday to Friday
+  expect(weekend.status, JSON.stringify(weekend.json)).toBe(201);
+  expect((await call('GET', `${TOUR}/${weekend.json.id}?fields=days`, 'sumi')).json.days).toBe(0);
+  // Backwards, a negative advance, another tour on the same days, an approved leave on them: refused.
+  expect((await tour('rahim', '2027-02-10', '2027-02-08')).status).toBe(422);
+  expect((await tour('rahim', '2027-02-08', '2027-02-10', { advanceAmount: '-1' })).status).toBe(
+    422,
+  );
+  expect((await tour('rahim', '2027-01-14', '2027-01-18')).status).toBe(422);
+  expect((await tour('rahim', '2026-11-05', '2026-11-09')).status).toBe(422); // his approved leave
+  // Someone else's tour is not his to ask for, nor to see.
+  expect(
+    (await tour('rahim', '2027-03-01', '2027-03-02', { employee: employees['sumi'] })).status,
+  ).toBe(403);
+  expect((await call('GET', `${TOUR}/${id}`, 'sumi')).status).toBe(403);
+
+  expect((await step(id, 'submit', 'rahim')).status).toBe(200);
+  // Not by himself, not by a colleague; by his manager (he has no leave approver), who sees it.
+  expect((await step(id, 'approve', 'rahim')).status).toBeGreaterThanOrEqual(400);
+  expect((await step(id, 'approve', 'sumi')).status).toBeGreaterThanOrEqual(400);
+  expect((await read('state', 'dina')).state).toBe('submitted');
+  const approved = await step(id, 'approve', 'dina');
+  expect(approved.status, JSON.stringify(approved.json)).toBe(200);
+  expect((await read('state')).state).toBe('approved');
+  // No longer a draft: not his to change.
+  expect((await call('PATCH', `${TOUR}/${id}`, 'rahim', { places: 'Elsewhere' })).status).toBe(403);
+
+  // Cancelled only with the reason said, and not by the traveller.
+  expect((await step(id, 'cancel', 'rahim')).status).toBeGreaterThanOrEqual(400);
+  expect((await step(id, 'cancel', 'hana')).status).toBe(422); // no note
+  expect(
+    (await call('PATCH', `${TOUR}/${id}`, 'hana', { decisionNote: 'The audit moved to February' }))
+      .status,
+  ).toBe(200);
+  expect((await step(id, 'cancel', 'hana')).status).toBe(200);
+  expect((await read('state')).state).toBe('cancelled');
+  // The days are free again: a new tour on them, refused with a reason by HR.
+  const again = await tour('rahim', '2027-01-10', '2027-01-12');
+  expect(again.status, JSON.stringify(again.json)).toBe(201);
+  await step(again.json.id, 'submit', 'rahim');
+  expect((await step(again.json.id, 'refuse', 'hana')).status).toBe(422);
+  await call('PATCH', `${TOUR}/${again.json.id}`, 'hana', { decisionNote: 'Not this month' });
+  expect((await step(again.json.id, 'refuse', 'hana')).status).toBe(200);
+});
+
 test('an HR manager does not approve their own leave, through the route or the transition', async () => {
   const self = await call('POST', '/api/v1/models/hr.employee', 'hana', {
     name: 'Hana',
     user: users['hana'],
   });
   expect(self.status).toBe(201);
+  // Nor her own tour.
+  const hers = await call('POST', '/api/v1/models/hr.tour', 'hana', {
+    employee: self.json.id,
+    dateFrom: '2027-04-04',
+    dateTo: '2027-04-05',
+    places: 'Chattogram office',
+    purpose: 'Recruitment drive',
+  });
+  expect(hers.status, JSON.stringify(hers.json)).toBe(201);
+  const T = `/api/v1/models/hr.tour/${hers.json.id}/transitions`;
+  expect((await call('POST', `${T}/submit`, 'hana')).status).toBe(200);
+  expect((await call('POST', `${T}/approve`, 'hana')).status).toBeGreaterThanOrEqual(400);
   const made = await call('POST', L, 'hana', {
     employee: self.json.id,
     type: types['Sick leave'],

@@ -95,11 +95,21 @@ export interface DayInput {
   readonly weekend: boolean;
   readonly holiday: boolean;
   readonly leave: boolean;
+  /** On an approved official tour (RFC 0037 §3.2): a working day without a punch is *On tour*, not absent. */
+  readonly tour?: boolean;
   readonly punches: readonly { readonly checkIn: Date; readonly checkOut: Date | null }[];
 }
 
 export interface DayResult {
-  readonly status: 'present' | 'absent' | 'leave' | 'holiday' | 'weekend' | 'incomplete' | 'off';
+  readonly status:
+    | 'present'
+    | 'absent'
+    | 'leave'
+    | 'tour'
+    | 'holiday'
+    | 'weekend'
+    | 'incomplete'
+    | 'off';
   readonly firstIn: Date | null;
   readonly lastOut: Date | null;
   readonly workedMinutes: number;
@@ -126,7 +136,9 @@ export function computeDay(input: DayInput): DayResult {
             ? 'weekend'
             : shift === null
               ? 'off'
-              : 'absent',
+              : input.tour === true
+                ? 'tour'
+                : 'absent',
       firstIn: null,
       lastOut: null,
       workedMinutes: 0,
@@ -236,6 +248,18 @@ export async function recomputeDays(
         })
       ).load(['dateFrom', 'dateTo'])),
     ].map((l) => [isoDate(l.dateFrom), isoDate(l.dateTo)] as const);
+    const tours = [
+      ...(await (
+        await env.model('hr.tour').search({
+          where: {
+            employee: e.id,
+            state: 'approved',
+            dateFrom: { lte: to },
+            dateTo: { gte: from },
+          },
+        })
+      ).load(['dateFrom', 'dateTo'])),
+    ].map((t) => [isoDate(t.dateFrom), isoDate(t.dateTo)] as const);
     const punches = [
       ...(await (
         await env.model('attendance.record').search({
@@ -273,6 +297,7 @@ export async function recomputeDays(
         weekend: !schedule.extra.has(date) && (schedule.week[dow] ?? []).length === 0,
         holiday: hoursOn(schedule, date).length === 0 && (schedule.week[dow] ?? []).length > 0,
         leave: leaves.some(([a, b]) => a <= date && b >= date),
+        tour: tours.some(([a, b]) => a <= date && b >= date),
         punches: mine,
       });
       // Nothing to say about a weekend, a holiday or a day without a shift nobody worked.

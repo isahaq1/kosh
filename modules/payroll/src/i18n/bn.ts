@@ -213,8 +213,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Valid from': 'কার্যকর শুরু',
   'Valid to': 'কার্যকর পর্যন্ত',
   Value: 'মান',
-  'Variables: WAGE, PERIOD_DAYS, CONTRACT_DAYS, SERVICE_MONTHS, MONTH, FY_MONTH, MONTHS_LEFT, FESTIVAL, E_…, PRESENT_DAYS, ABSENT_DAYS, LEAVE_DAYS, HOLIDAYS, LATE_DAYS, OVERTIME_HOURS, OVERTIME_RATE, LOAN, INPUT_…, YTD_…, P_…, and the codes of earlier rules. Functions: min, max, abs, round, floor, ceil, if, slab.':
-    'চলক: WAGE, PERIOD_DAYS, CONTRACT_DAYS, SERVICE_MONTHS, MONTH, FY_MONTH, MONTHS_LEFT, FESTIVAL, E_…, PRESENT_DAYS, ABSENT_DAYS, LEAVE_DAYS, HOLIDAYS, LATE_DAYS, OVERTIME_HOURS, OVERTIME_RATE, LOAN, INPUT_…, YTD_…, P_… এবং আগের নিয়মগুলোর কোড। ফাংশন: min, max, abs, round, floor, ceil, if, slab।',
+  'Variables: WAGE, PERIOD_DAYS, CONTRACT_DAYS, SERVICE_MONTHS, MONTH, FY_MONTH, MONTHS_LEFT, FESTIVAL, E_…, PRESENT_DAYS (days on tour included), TOUR_DAYS, ABSENT_DAYS, LEAVE_DAYS, HOLIDAYS, LATE_DAYS, OVERTIME_HOURS, OVERTIME_RATE, LOAN, INPUT_…, YTD_…, P_…, and the codes of earlier rules. Functions: min, max, abs, round, floor, ceil, if, slab.':
+    'চলক: WAGE, PERIOD_DAYS, CONTRACT_DAYS, SERVICE_MONTHS, MONTH, FY_MONTH, MONTHS_LEFT, FESTIVAL, E_…, PRESENT_DAYS (ট্যুরের দিনসহ), TOUR_DAYS, ABSENT_DAYS, LEAVE_DAYS, HOLIDAYS, LATE_DAYS, OVERTIME_HOURS, OVERTIME_RATE, LOAN, INPUT_…, YTD_…, P_… এবং আগের নিয়মগুলোর কোড। ফাংশন: min, max, abs, round, floor, ceil, if, slab।',
   Wallet: 'ওয়ালেট',
   'Wallet number': 'ওয়ালেট নম্বর',
   Warnings: 'সতর্কবার্তা',

@@ -26,6 +26,7 @@ import {
   HrJob,
   HrLeave,
   HrLeaveType,
+  HrTour,
   hrShutro,
 } from './module.js';
 
@@ -38,6 +39,7 @@ export {
   HrJob,
   HrLeave,
   HrLeaveType,
+  HrTour,
   hrShutro,
   leaveDays,
   WEEKENDS,
@@ -201,7 +203,57 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
     category: 'People',
     summary: 'Employees, the org chart, contracts and leave',
   },
+  documents: [
+    {
+      key: 'tour_order',
+      name: 'Tour order',
+      model: 'hr.tour',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Tour order {{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'who',
+            items: [
+              { label: 'Employee', bind: 'employee.name' },
+              { label: 'From', bind: 'dateFrom' },
+              { label: 'To', bind: 'dateTo' },
+              { label: 'Working days', bind: 'days' },
+              { label: 'Where to', bind: 'places' },
+              { label: 'Travels by', bind: 'travelBy' },
+              { label: 'Advance asked', bind: 'advanceAmount' },
+              { label: 'Status', bind: 'state' },
+            ],
+          },
+          { kind: 'text', id: 'purpose', text: '{{purpose}}' },
+          { kind: 'text', id: 'note', text: '{{decisionNote}}' },
+        ],
+      },
+    },
+  ],
+  events: [
+    { topic: 'hr.tour.submitted', model: 'hr.tour', label: 'Tour requested' },
+    { topic: 'hr.tour.approved', model: 'hr.tour', label: 'Tour approved' },
+    { topic: 'hr.tour.cancelled', model: 'hr.tour', label: 'Tour cancelled' },
+  ],
   importTemplates: [
+    {
+      key: 'hr_tour',
+      model: 'hr.tour',
+      label: 'Tour',
+      columns: [
+        { header: 'Employee', field: 'employee' },
+        { header: 'From', field: 'dateFrom' },
+        { header: 'To', field: 'dateTo' },
+        { header: 'Where to', field: 'places' },
+        { header: 'Purpose', field: 'purpose' },
+        { header: 'Travels by', field: 'travelBy' },
+        { header: 'Advance asked', field: 'advanceAmount' },
+      ],
+    },
     {
       key: 'hr_contract_type',
       model: 'hr.contract.type',
@@ -313,6 +365,15 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
         w: 3,
       },
       {
+        id: 'tours_waiting',
+        title: 'Tours waiting approval',
+        kind: 'kpi',
+        model: 'hr.tour',
+        measure: 'count',
+        filter: { state: 'submitted' },
+        w: 3,
+      },
+      {
         id: 'leave_month',
         title: 'Leave days this month',
         kind: 'kpi',
@@ -372,6 +433,10 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
       label: 'Leave',
       views: ['list', 'calendar', 'form'],
     }),
+    'workforce.action_tours': action(HrTour, {
+      label: 'Tours',
+      views: ['list', 'calendar', 'form'],
+    }),
     'workforce.action_contracts': action(HrContract, {
       label: 'Contracts',
       views: ['list', 'form'],
@@ -408,6 +473,13 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
       parent: 'workforce.root',
       label: 'Leave',
       action: 'workforce.action_leaves',
+      sequence: 2,
+    },
+    {
+      id: 'workforce.tours',
+      parent: 'workforce.root',
+      label: 'Tours',
+      action: 'workforce.action_tours',
       sequence: 2,
     },
     {
@@ -621,6 +693,55 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
         danger: { state: 'refused' },
       },
     }),
+    'hr.tour.list': list(HrTour, {
+      columns: [
+        'name',
+        'employee',
+        'places',
+        'dateFrom',
+        'dateTo',
+        'days',
+        'advanceAmount',
+        { field: 'state', widget: 'badge' },
+      ],
+      defaultOrder: ['dateFrom desc'],
+      decorations: {
+        success: { state: 'approved' },
+        warning: { state: 'submitted' },
+        danger: { state: 'refused' },
+        neutral: { state: 'cancelled' },
+      },
+    }),
+    'hr.tour.calendar': calendar(HrTour, {
+      dateStart: 'dateFrom',
+      dateStop: 'dateTo',
+      title: 'employee',
+      color: 'state',
+      mode: 'month',
+    }),
+    'hr.tour.form': form(HrTour, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('submit', { primary: true, label: 'Submit' }),
+          k.button('approve', { primary: true, label: 'Approve' }),
+          k.button('refuse', { label: 'Refuse' }),
+          k.button('cancel', { label: 'Cancel the tour', confirm: 'Cancel this approved tour?' }),
+          k.button('redraft', { label: 'Back to draft' }),
+        ],
+      },
+      sheet: [
+        k.group('main', ['name', 'employee', 'state']),
+        k.group('when', ['dateFrom', 'dateTo', 'days']),
+        k.group('where', ['places', 'travelBy', 'advanceAmount']),
+        k.group('why', ['purpose'], { columns: 1 }),
+        k.group('decision', ['decisionNote'], {
+          columns: 1,
+          description: 'Needed to refuse or cancel: write it, then press the button.',
+        }),
+      ],
+      chatter: true,
+    })),
     'hr.leave.calendar': calendar(HrLeave, {
       dateStart: 'dateFrom',
       dateStop: 'dateTo',
@@ -668,6 +789,16 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
         team: { label: 'My team', domain: { 'employee.manager.user': { $env: 'uid' } } },
       },
       groupBy: ['employee', 'type', 'state', 'dateFrom:month'],
+    }),
+    'hr.tour': search(HrTour, {
+      fields: ['name', 'employee.name', 'places', 'purpose'],
+      filters: {
+        waiting: { label: 'Waiting', domain: { state: 'submitted' }, group: 'state' },
+        approved: { label: 'Approved', domain: { state: 'approved' }, group: 'state' },
+        mine: { label: 'Mine', domain: { 'employee.user': { $env: 'uid' } } },
+        team: { label: 'My team', domain: { 'employee.manager.user': { $env: 'uid' } } },
+      },
+      groupBy: ['employee', 'state', 'travelBy', 'dateFrom:month'],
     }),
     'hr.contract': search(HrContract, {
       fields: ['name', 'employee.name'],

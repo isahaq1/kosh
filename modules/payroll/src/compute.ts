@@ -5,7 +5,7 @@
  * - `WAGE` (the contract's monthly wage), `PERIOD_DAYS`, `CONTRACT_DAYS` (the contract's days in the period: joiners
  *   and leavers paid in proportion), `SERVICE_MONTHS` (since joining), `MONTH`, `FY_MONTH` and `MONTHS_LEFT` (in the
  *   fiscal year that starts in the month of App settings › Payroll, July by default);
- * - from Attendance's **approved** days: `PRESENT_DAYS`, `ABSENT_DAYS`, `LEAVE_DAYS`, `HOLIDAYS`, `LATE_DAYS`,
+ * - from Attendance's **approved** days: `PRESENT_DAYS` (days on tour included), `TOUR_DAYS`, `ABSENT_DAYS`, `LEAVE_DAYS`, `HOLIDAYS`, `LATE_DAYS`,
  *   `OVERTIME_HOURS` (approved), `OVERTIME_RATE` — a payslip warns when days of the period wait for approval;
  * - `GROSS` and `DEDUCTIONS` (the totals of the rules before), `E_<CODE>` (the person's own values: a provident fund membership, a declared investment), `FESTIVAL` (the run
  *   pays a festival bonus), `INPUT_<CODE>` (the month's one-off inputs), `LOAN` (instalments of running loans, never more than remains),
@@ -163,7 +163,9 @@ export async function computeRuns(env: Env, ids: readonly number[]): Promise<voi
       ];
       const approved = attendance.filter((d) => d.state === 'approved');
       const count = (status: string) => approved.filter((d) => d.status === status).length;
-      set('PRESENT_DAYS', count('present'));
+      // A day on an approved official tour is a day worked (RFC 0037 §3.2); `TOUR_DAYS` says how many.
+      set('PRESENT_DAYS', count('present') + count('tour'));
+      set('TOUR_DAYS', count('tour'));
       set('ABSENT_DAYS', count('absent'));
       set('LEAVE_DAYS', count('leave'));
       set('HOLIDAYS', count('holiday'));
