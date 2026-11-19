@@ -528,3 +528,23 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   and record links inside text, images from storage with an upload button (an image can be pasted by address
   only), clean-up of Word and Google Docs paste beyond what the allow-list already drops, rich text printed with
   its formatting, more fields.
+- **Step 7, part 2 (2026-11-19). Rich text in the chatter, with mentions.** The chatter keeps its plain box —
+  the small markdown of `body.ts`, safe by construction, is still the default and what email and the assistant
+  write — and gains **Formatting**: a toggle on the composer (remembered per browser) that swaps the box for the
+  editor, with a **Mention someone** button that searches people by name and puts the mention in the text as one
+  unit. What was typed comes along when the toggle is pressed. Ctrl+Enter sends.
+  On the server a message may be sent as `html` instead of `text` (`POST …/messages`, `PATCH …/messages/:id`):
+  it is rebuilt from the allow-list, then **each mention is written again from its id with the user's current
+  name** — the label that was sent is never trusted, and a mention of nobody who exists becomes its plain text;
+  the mentioned people are the message's mentions as before (notifications, the outbox event). The message keeps
+  `rich: true`, its formatted body, and its **words** as `text` (previews, notifications, search, the assistant).
+  An empty message — empty paragraphs, or only what was stripped — is refused; 100 000 characters of HTML at
+  most. A rich message is shown through the rich-text view (rebuilt from the allow-list again in the browser) and
+  **edited in the editor it was written in**, its mentions intact; a plain one is as before.
+  Tests: the API round trip (a forged mention label, a ghost, a script, a handler, the words, the event, the
+  refusals, the edit, someone else's edit refused, a plain message untouched), an E2E that formats, mentions,
+  sends and edits a note. Fixed on the way: plain words of rich text had a blank line after every list.
+  **Left out, deliberately or for later**: the internal chat (channels and directs stay plain: short messages,
+  typed fast), typing `@` in the editor to open the people list (the button does it; the suggestion plugin is
+  another dependency), links to records inside text, images uploaded into the text (attach files as before), rich
+  text printed with its formatting.

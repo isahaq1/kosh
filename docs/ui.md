@@ -492,3 +492,7 @@ description: f.html(),            // instead of f.text()
   Print templates already print `html` fields this way.
 - A field changed from `f.text()` to `f.html()` keeps its values: plain text shows as paragraphs.
 - The editor is downloaded when a rich-text field is first edited, not with the page.
+- **In the chatter**, *Formatting* on the composer swaps the plain box for the editor, with *Mention someone* in its
+  toolbar. A message sent this way (`{ html }` instead of `{ text }`) is rebuilt from the allow-list, and each
+  mention is written by the server from the person's id with their real name. The plain box and its small markdown
+  remain the default; the internal chat stays plain.
