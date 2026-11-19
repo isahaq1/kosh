@@ -1,6 +1,7 @@
 # RFC 0037 — Attendance devices that push, and official tours
 
-- Status: **Accepted** (2026-11-19, asked for by the owner: "attendance device integration" and "official tours")
+- Status: **Accepted** (2026-11-19, asked for by the owner: "attendance device integration" and "official tours");
+  steps 1–3 done (2026-11-19)
 - Builds on: RFC 0024 §2.2 (Attendance: shifts, punches, device files), RFC 0021 (Workforce), RFC 0024 §2.1 (Spend:
   expense reports and cash advances), RFC 0025 (Approvals), RFC 0034 §2.4 (Working time)
 
@@ -150,3 +151,15 @@ Each step: typed end to end, tests on real PostgreSQL, permission tests, English
   Tests: the tour's rules through the API (9 Workforce tests pass), *On tour* before approval, after it and after
   cancelling, the day's status in the engine, one E2E through the form. Left out: *cut short* as an action (HR
   edits the end date of an approved tour), per-grade allowance tables. Next: the Spend bridge (step 3).
+- **Step 3 (2026-11-19). Tours and Spend.** Spend already depends on Workforce, so this lives in Spend itself: no
+  separate bridge module (§3.2 called it `hr_tour_expense`). A cash advance and an expense report may name a
+  **tour** (*For the tour*); a report may only name an approved tour of its own employee. **An approved tour that
+  asks for an advance drafts the cash advance** — for the traveller, the amount asked, dated the tour's first day,
+  "Tour TOUR/2027/0001: Bogura depot" — through the outbox (`hr.tour.approved`), **once**: a tour that has an
+  advance already gets no other. It is the person's own draft: they submit it, and it is approved and paid like
+  any advance (the tour's approval is not the advance's — Spend's approvers and its *Large advance* policy still
+  decide the money). The tour's form shows **Advanced** (its advances not refused) and **Claimed** (its reports
+  submitted and not refused). Tests: nothing drafted before approval, one advance after, none again, none for a
+  tour that asks for no cash, the totals on the tour, someone else's or an unapproved tour refused on a report.
+  **RFC 0037 complete.** Left for later, as §2.4 and §3.3 say: a physical machine's certification, enrolling users
+  from Kosh, other vendors' protocols; allowance tables by grade and city, travel booking, foreign tours.

@@ -1079,4 +1079,7 @@ the person's working calendar.
   after approving tours, as you do after approving leave.
 - **In Payroll**, `PRESENT_DAYS` includes the days on tour; `TOUR_DAYS` is their number, for a rule that pays a daily
   allowance on the payslip (`TOUR_DAYS * 500`).
+- **With Spend**: a tour that asks for an advance drafts the **cash advance** for the traveller when it is approved,
+  once; they submit it and it is approved and paid like any advance. An expense report may name its tour (*For the
+  tour*, an approved tour of the same person); the tour's form shows what was **Advanced** and **Claimed**.
 - Print *Tour order* from the form; `hr.tour.approved` is an event automations and webhooks can listen to.
