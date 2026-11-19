@@ -470,3 +470,29 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   entered on the series itself (cancel the one event instead), the series as one line on the calendar, the
   organizer's own time zone. **Next:** ICS — an invitation by email that lands in any mail client, and a calendar
   feed — then the Google / Microsoft sync (which needs the company's credentials).
+- **Step 6, part 3b (2026-11-19). ICS: invitations by email and calendar addresses.** No dependency: iCalendar
+  (RFC 5545) is written by `ics.ts` — UTC times (all-day events as dates, the end the day after the last), text
+  escaped, lines folded at 75 bytes without cutting a character, CRLF, and nothing a title or an address can
+  inject as a line of its own (tested).
+  **Invitations**: *Send invitations* on an event (the organizer or an Agenda manager) emails each attendee —
+  people of the company and contacts — the meeting in words (when, in the calendar's time zone; where; the video
+  link) with `invite.ics` (`METHOD:REQUEST`: the organizer, every attendee with their answer). Sent again after a
+  change it is an *Updated invitation* with the same event id and a higher sequence, so the client updates its
+  event. **Cancelling** an event that was sent emails `METHOD:CANCEL` to those who had been invited, and nobody
+  when it never was. The organizer is not written to about their own meeting. Through the outbox
+  (`calendar.event.invited`, `calendar.event.cancelled`), after the commit; English or Bangla by the person's
+  language. **Explicit, not automatic**: nothing is emailed by saving an event — an ERP that mails on every edit
+  trains people to ignore it.
+  **Calendar addresses**: *Agenda › My calendar address* gives a person a secret link
+  (`/api/v1/agenda/feed/<secret>.ics`, 192 bits) that Google Calendar, Outlook or a phone subscribes to: their
+  events — organized, or attended and not declined — from 30 days back to 400 days ahead, repeating events
+  included as the events they are. Read without a sign-in, rate limited, read only; its owner's alone (not even a
+  manager sees it); deleting it closes it, and a wrong, malformed or closed address gets one answer.
+  Tests: 4 on the writer, 2 on PostgreSQL (the invitation, the update, the cancellation, the quiet cancel, an
+  attendee refused; the feed's contents, its privacy, its closing).
+  **Limits, said plainly**: the `.ics` is an attachment — Gmail and Outlook read it and offer to add the event;
+  an answer given in the mail client goes to the organizer's mailbox (reply-to), **not back into Agenda** (people
+  of the company answer in Agenda; reading replies needs the inbound mail route, a later step). A whole series is
+  not sent as one invitation: send the occurrences, or share the calendar address. Not verified in real Gmail and
+  Outlook mailboxes — the format is the standard's; try one invitation to yourself first. **Next**: the Google
+  and Microsoft two-way sync, which needs the company's OAuth credentials.

@@ -1104,3 +1104,22 @@ cancelled alone. If the room is taken on one of the dates, nothing is generated 
 Changing the series and pressing **Generate** again redoes the occurrences still to come. It never rewrites the
 past, an occurrence you ticked *Keep as it is*, or one you moved to another time yourself. **Stop the series** removes
 the occurrences still to come (not the ones you kept or moved).
+
+## Invitations and calendar addresses (Agenda)
+
+**Send invitations** (on an event, by its organizer): each attendee with an email address — people of the company
+and contacts — gets the meeting by email with an `invite.ics` their mail client and calendar read. After you change
+the time or the place, press it again: they get an *Updated invitation* that replaces the event they have.
+Cancelling an event that was sent emails the cancellation to those who were invited. Nothing is emailed by saving.
+
+- Email must be configured (`SMTP_URL`, `MAIL_FROM`); without it the button does nothing but note the time.
+- An answer given in the mail client goes to the organizer's mailbox, not into Agenda. People of the company
+  answer in Agenda.
+- To invite people to a repeating event, send its occurrences, or share a calendar address.
+
+**My calendar address** (*Agenda › My calendar address › New*, then Save): a secret link to paste into Google
+Calendar (*Other calendars › From URL*), Outlook (*Add calendar › Subscribe from web*) or a phone. It shows the events
+you organize or attend (not the ones you declined), from a month back to about a year ahead; the other calendar
+refreshes it on its own schedule (often every few hours). Anyone who has the link reads those events: do not share
+it. Delete it to close it — a new one has a new secret. `KOSH_BASE_URL` must be the address your server is reached
+at, as the link is built from it.
