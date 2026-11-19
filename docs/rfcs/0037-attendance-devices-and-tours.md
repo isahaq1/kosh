@@ -109,3 +109,26 @@ grade and city class is a later step), mileage from a map, foreign tours with a 
 3. **Tours and Spend**: the bridge — the advance, expense reports on a tour, the totals on the tour.
 
 Each step: typed end to end, tests on real PostgreSQL, permission tests, English and Bangla, the module standard.
+
+## 5. Notes
+
+- **Step 1 (2026-11-19). Devices that push.** `attendance.device` (serial number, status — waiting for approval,
+  active, off —, site, the addresses it may send from, when it was last seen and its last punch, the machine's own
+  stamp) and `attendance.device.punch` (each line once per device, number and time, with what became of it:
+  counted, second tap, unpaired, unknown person, day already approved). The `/iclock` endpoints of §2.2 in a scope
+  of their own (text bodies whatever the content type, rate limited per address, 2 MB at most). The replay of §2.3
+  (`replayPunches`): it starts at the check-in still open at the earliest new punch, makes the records of pushed
+  punches again from every punch kept, and leaves approved days as they are. Records made this way have their own
+  source (*Device*, beside *Device file*), so a replay never touches what a file, a phone or a kiosk recorded.
+  **A machine belongs to no company**: its lines are kept outside any, then each company takes the punches of its
+  own people (employees are seen within their company only) — one machine at a shared gate serves several
+  companies. *Apply again* (`POST /api/v1/attendance/devices/:id/apply`) matches numbers unknown until now; it also
+  happens by itself at the device's next punch. Screens: Attendance › Configuration › Devices and Device punches,
+  English and Bangla. Tests: 9 with a simulated machine (refused and waiting, options, one day sent three times and
+  without a content type, a second tap, a night shift, a forgotten check-out, a backlog out of order, live one punch
+  at a time, an approved day, an unknown number, off and wrong address), one E2E through the Devices screen.
+  **Not certified against a physical machine**: the requests and answers are the push protocol as published and as
+  I know it; the first real machine pointed at a test server is the certification, and firmware differences (the
+  stamp, extra tables) may need a change. Left out: an *Approve* button (the status is set on the form), a button
+  for *Apply again* (the API has it), the punch's status code (check-in / check-out keys on the machine are not
+  read: order decides), pairing a pushed punch with a phone or kiosk check-in of the same day.

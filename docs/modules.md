@@ -879,8 +879,8 @@ Manifests may now declare levels decided by `'department_head'`, `'department_ap
 ### Attendance (`modules/attendance`, RFC 0024)
 
 Shifts (night shifts included) and rosters; check-in from the phone inside a site's geofence, at a kiosk by badge or
-PIN (set on the employee's form; five wrong PINs lock the person for 15 minutes), or from a device file (ZKTeco's log
-or a CSV, each punch once); public holidays; and each person's day — worked time with the break deducted, late,
+PIN (set on the employee's form; five wrong PINs lock the person for 15 minutes), from a device file (ZKTeco's log
+or a CSV, each punch once), or **from the machines themselves** (see *Attendance machines that push* below); public holidays; and each person's day — worked time with the break deducted, late,
 early, absent, on leave, overtime past the shift's threshold in its steps and all of it on weekends and holidays —
 approved by an Attendance manager before Payroll reads it. Days follow the time zone in App settings › Attendance.
 Install it with `shutro-erp apps install attendance`.
@@ -1039,3 +1039,27 @@ rule). Managers see every order of their companies.
 | Purchase | `purchase.order` (PO/2026/00001…), `purchase.order.line` | RFQ → submit → approvals (manager > 100,000, director > 1,000,000, editable) → order; the last approval confirms |
 | Bangladesh (`l10n_bd`) | BIN and TIN on `res.partner` and `res.company`; the Bangladesh chart, VAT / SD / AT taxes, VDS and TDS withholdings | installed with Accounting for a company in Bangladesh (`shutro-erp init --country BD`): sets up each company without a chart, July–June year, lakh grouping; BIN 13 and TIN 12 digits checked (RFC 0016) |
 | India (`l10n_in`) | GSTIN and PAN on `res.partner` and `res.company`, HSN / SAC on `product.product`; the India chart, GST with CGST / SGST / IGST components, cess, reverse charge, TDS | installed with Accounting for a company in India (`shutro-erp init --country IN`): April–March year, lakh grouping; CGST + SGST within the company's state, IGST otherwise (RFC 0016) |
+
+## Attendance machines that push
+
+A ZKTeco machine can send each punch to the server by itself, within seconds (the vendor's push protocol, "ADMS").
+
+1. **Reach**: the machine calls `http(s)://<your server>/iclock/…`. Your reverse proxy must route `/iclock/` to the
+   server (it is not under `/api`), on an address and port the machines can reach.
+2. **On the machine**: *Menu › Comm › Cloud Server Setting* — the server's address and port (and *Enable Domain
+   Name* / *HTTPS* where its firmware has them).
+3. **In Attendance › Configuration › Devices**: add the machine by its **serial number** (*Menu › System info*), name
+   it, choose its site, status *Active*. Or let it knock first: an unregistered machine is listed as *Waiting for
+   approval* with its serial number and address — open it, name it, set it *Active*.
+4. **People**: each employee's *Device user ID* (their number on the machine), as for device files.
+
+From then on: *Device punches* lists every line received with what became of it — *Counted*, *Second tap* (within a
+minute), *Unpaired* (a check-in never closed within sixteen hours), *Unknown person* (set the employee's Device user
+ID; the punches are taken at the device's next punch), *Day already approved* (approved days are never changed). A
+machine that was offline sends its backlog later, in any order: the days come out the same.
+
+**Safety.** The protocol has no password — a machine is its serial number. So: only registered, active machines are
+heard; set *Only from addresses* to the site's public address where it has one; use https where the firmware
+supports it, or a VPN from the site. A machine can only add punches of people who exist; it reads nothing.
+
+Tested with a simulated machine; **try your own model on a test server first** — firmware versions differ.
