@@ -227,6 +227,9 @@ importers:
       '@kosh/website_sale_stock':
         specifier: workspace:*
         version: link:../../modules/website_sale_stock
+      '@kosh/worktime':
+        specifier: workspace:*
+        version: link:../../modules/worktime
     devDependencies:
       '@testcontainers/postgresql':
         specifier: ^12.2.1
@@ -560,6 +563,9 @@ importers:
       '@kosh/views':
         specifier: workspace:*
         version: link:../../packages/views
+      '@kosh/worktime':
+        specifier: workspace:*
+        version: link:../../modules/worktime
       '@playwright/test':
         specifier: ^1.55.0
         version: 1.64.1
@@ -2990,6 +2996,25 @@ importers:
         specifier: ^12.2.1
         version: 12.2.1
 
+  modules/worktime:
+    dependencies:
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   packages/assistant:
     dependencies:
       '@anthropic-ai/sdk':
@@ -3303,6 +3328,9 @@ importers:
       '@kosh/website_sale_stock':
         specifier: workspace:*
         version: link:../../modules/website_sale_stock
+      '@kosh/worktime':
+        specifier: workspace:*
+        version: link:../../modules/worktime
     devDependencies:
       '@testcontainers/postgresql':
         specifier: ^12.2.1

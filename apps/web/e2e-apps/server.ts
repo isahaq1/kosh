@@ -93,6 +93,7 @@ import { website } from '@kosh/website';
 import { websiteCrm } from '@kosh/website_crm';
 import { websiteSale } from '@kosh/website_sale';
 import { websiteSaleStock } from '@kosh/website_sale_stock';
+import { worktime } from '@kosh/worktime';
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
 
 export const ADMIN_TOTP_SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
@@ -153,6 +154,7 @@ const CATALOGUE = [
   project,
   todo,
   calendarApp,
+  worktime,
   crm,
   hr,
   recruitment,
@@ -227,6 +229,7 @@ await applyApps(
         'project',
         'todo',
         'calendar',
+        'worktime',
         'crm',
         'hr',
         'recruitment',
@@ -304,6 +307,7 @@ for (const [login, name, groups] of [
       'project.manager',
       'todo.user',
       'calendar.manager',
+      'worktime.manager',
       'crm.manager',
       'hr.manager',
       'hiring.manager',
@@ -350,6 +354,7 @@ for (const [login, name, groups] of [
       'reporting.user',
       'todo.user',
       'calendar.user',
+      'worktime.user',
       'crm.user',
       'hr.user',
       'hiring.user',

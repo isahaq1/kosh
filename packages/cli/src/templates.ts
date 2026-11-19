@@ -17,6 +17,7 @@ export type AppName =
   | 'project'
   | 'todo'
   | 'calendar'
+  | 'worktime'
   | 'crm'
   | 'hr'
   | 'recruitment'
@@ -146,6 +147,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     label: 'Agenda: meetings, rooms that are never double-booked, who is free when',
     icon: '📅',
     server: 'calendarApp',
+  },
+  worktime: {
+    label:
+      'Working time: calendars, public holidays and personal exceptions, for every app that counts time',
+    icon: '🗓️',
+    server: 'worktime',
   },
   crm: {
     label: 'Pipeline: deals on a board, stage rules, the weighted forecast',

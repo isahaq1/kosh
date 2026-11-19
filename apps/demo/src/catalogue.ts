@@ -64,6 +64,7 @@ import { website } from '@kosh/website';
 import { websiteCrm } from '@kosh/website_crm';
 import { websiteSale } from '@kosh/website_sale';
 import { websiteSaleStock } from '@kosh/website_sale_stock';
+import { worktime } from '@kosh/worktime';
 
 /** What the demo installs; the bridges come as proposals of the plan. */
 export const DEMO_APPS: readonly string[] = [
@@ -78,6 +79,7 @@ export const DEMO_APPS: readonly string[] = [
   'project',
   'todo',
   'calendar',
+  'worktime',
   'crm',
   'hr',
   'recruitment',
@@ -121,6 +123,7 @@ export function demoCatalogue(): KoshModule[] {
     project,
     todo,
     calendarApp,
+    worktime,
     crm,
     hr,
     recruitment,
