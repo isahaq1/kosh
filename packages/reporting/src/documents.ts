@@ -5,6 +5,7 @@
  * audited. Modules ship default templates in their manifests; administrators edit copies as data.
  */
 
+import { htmlToText } from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
 import type { Block, Layout } from '@kosh/views';
 import QRCode from 'qrcode';
@@ -34,6 +35,8 @@ export function formatValue(
 ): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'boolean') return value ? '✓' : '—';
+  // Rich text prints as its words, a line per block (formatting on paper is a later step).
+  if (kind === 'html' && typeof value === 'string') return htmlToText(value);
   if (value instanceof Date)
     return new Intl.DateTimeFormat(format.locale, {
       dateStyle: 'medium',

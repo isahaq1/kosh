@@ -204,7 +204,7 @@ export const HelpdeskTicket = defineModel('helpdesk.ticket', {
   fields: {
     name: f.char({ required: true, sequence: 'helpdesk.ticket', label: 'Reference' }),
     subject: f.char({ required: true }),
-    description: f.text(),
+    description: f.html(),
     team: f.many2one('helpdesk.team', { ondelete: 'restrict' }),
     stage: f.many2one('helpdesk.stage', { ondelete: 'restrict' }),
     type: f.many2one('helpdesk.type', { ondelete: 'set null' }),

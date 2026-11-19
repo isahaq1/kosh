@@ -28,6 +28,7 @@ import {
 import { useKosh } from '../context.js';
 import { cn } from '../lib/cn.js';
 import type { Registry, WidgetProps } from '../registry.js';
+import { RichTextInput, RichTextView } from '../richtext/RichText.js';
 import { DateField } from './DateField.js';
 
 const text = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
@@ -54,6 +55,28 @@ function TextWidget({ id, value, readonly, onChange, invalid }: WidgetProps): Re
       value={text(value)}
       aria-invalid={invalid === true ? true : undefined}
       onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
+    />
+  );
+}
+
+/** Rich text: formatted where it is read, the editor where it is written; a list cell shows its words. */
+function RichTextWidget({
+  id,
+  value,
+  readonly,
+  onChange,
+  invalid,
+  field,
+}: WidgetProps): ReactElement {
+  const html = typeof value === 'string' ? value : null;
+  if (onChange === undefined || readonly) return <RichTextView value={html} />;
+  return (
+    <RichTextInput
+      id={id}
+      value={html}
+      onChange={onChange}
+      label={field.label}
+      {...(invalid === undefined ? {} : { invalid })}
     />
   );
 }
@@ -833,7 +856,7 @@ export function registerDefaultWidgets(registry: Registry): Registry {
   for (const [name, widget] of [
     ['char', CharWidget],
     ['text', TextWidget],
-    ['html', TextWidget],
+    ['html', RichTextWidget],
     ['integer', IntegerWidget],
     ['bigint', IntegerWidget],
     ['float', DecimalWidget],

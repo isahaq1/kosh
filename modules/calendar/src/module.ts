@@ -104,7 +104,7 @@ export const CalendarEvent = defineModel('calendar.event', {
         invite: emitting('calendar.event.invited', { from: ['confirmed'], to: 'confirmed' }),
       },
     }),
-    description: f.text(),
+    description: f.html(),
     /** The record of another app it is about (`sale.order`, 42), if any. */
     resModel: f.char({ label: 'About (model)' }),
     resId: f.integer({ label: 'About (id)' }),
@@ -211,7 +211,7 @@ export const CalendarRecurrence = defineModel('calendar.recurrence', {
         help: 'As on an event: public for everyone in Agenda, or private to the organizer and the people invited.',
       },
     ),
-    description: f.text(),
+    description: f.html(),
     freq: f.selection(
       { daily: 'Day', weekly: 'Week', monthly: 'Month', yearly: 'Year' },
       {

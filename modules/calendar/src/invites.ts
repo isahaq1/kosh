@@ -13,7 +13,7 @@
  * Answers typed in a mail client go to the organizer's mailbox, not here: people of the company answer in Agenda.
  */
 import { layout, type Mailer } from '@kosh/mail';
-import type { ModuleContext } from '@kosh/server';
+import { htmlToText, type ModuleContext } from '@kosh/server';
 import type { Worker } from '@kosh/server/orm';
 import { dateIn, scheduleOf } from '@kosh/worktime';
 import type { FastifyRequest } from 'fastify';
@@ -121,7 +121,7 @@ async function loadEvent(su: Env, id: number, fallbackFrom: string): Promise<Loa
         ? { startDate: dateIn(e.start, tz), stopDate: dateIn(new Date(e.stop.getTime() - 1), tz) }
         : null,
       title: e.name,
-      description: e.description,
+      description: e.description === null ? null : htmlToText(e.description),
       location: [e.room?.name, e.location].filter((x) => x != null && x !== '').join(', ') || null,
       url: e.videoUrl,
       cancelled: e.state === 'cancelled',

@@ -20,6 +20,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { audit } from '../audit.js';
 import { HttpProblem } from '../errors.js';
+import { sanitizeHtml } from '../html.js';
 import type { Driver, Env } from '../orm.js';
 import { announceChange } from './changes.js';
 import { duplicateValues } from './duplicate.js';
@@ -222,8 +223,9 @@ async function send(reply: FastifyReply, outcome: Outcome): Promise<void> {
 }
 
 /**
- * JSON has no dates: datetime fields arrive as ISO strings and become `Date`s (Shutro stores them in UTC); other
- * kinds are left to Shutro's own validation. Applied to create, update and import values, and through the lines
+ * JSON has no dates: datetime fields arrive as ISO strings and become `Date`s (Shutro stores them in UTC). Rich
+ * text (`html` fields) is rebuilt from the allow-list of `html.ts`, whoever sends it: nothing that runs is ever
+ * stored. Other kinds are left to Shutro's own validation. Applied to create, update and import values, and through the lines
  * of one2many and many2many commands (`create` rows and `update` values) to the lines' own datetimes.
  */
 function coerceValues(
@@ -239,6 +241,10 @@ function coerceValues(
     if (field.kind === 'datetime' && typeof value === 'string') {
       const date = new Date(value);
       if (!Number.isNaN(date.getTime())) out[key] = date;
+      continue;
+    }
+    if (field.kind === 'html' && typeof value === 'string') {
+      out[key] = sanitizeHtml(value);
       continue;
     }
     if (

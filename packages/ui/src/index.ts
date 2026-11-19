@@ -99,6 +99,8 @@ export {
   type ViewProps,
   type WidgetProps,
 } from './registry.js';
+export { RichTextInput, RichTextView } from './richtext/RichText.js';
+export { isEmptyRichText, sanitizeForDisplay } from './richtext/sanitize.js';
 export { SearchBar, type SearchBarProps } from './search/SearchBar.js';
 export { Login } from './shell/Login.js';
 export { FormView } from './views/FormView.js';

@@ -35,3 +35,48 @@ test('the Helpdesk overview', async ({ page }) => {
   for (const title of ['Open tickets', 'SLA breached', 'Tickets by SLA'])
     await expect(page.getByRole('region', { name: title, exact: true })).toBeVisible();
 });
+
+test('a ticket’s description is rich text: typed, made bold and a list from the toolbar, kept after a reload (RFC 0034)', async ({
+  page,
+}) => {
+  await signIn(page, 'dina');
+  await page.goto('/helpdesk/a/helpdesk.action_tickets/new');
+  await page.getByRole('textbox', { name: 'Subject' }).fill(`Formatted ${Date.now()}`);
+  await page.getByRole('textbox', { name: 'Customer email' }).fill('rich@example.test');
+  const editor = page.getByRole('textbox', { name: 'Description' });
+  await editor.click();
+  await page.keyboard.type('Steps to see it');
+  // The toolbar acts on the selection, and says what is on.
+  await page.keyboard.press('ControlOrMeta+a');
+  const toolbar = page.getByRole('toolbar', { name: 'Formatting' });
+  await toolbar.getByRole('button', { name: 'Bold' }).click();
+  await expect(toolbar.getByRole('button', { name: 'Bold' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  await toolbar.getByRole('button', { name: 'Bold' }).click();
+  await toolbar.getByRole('button', { name: 'Bulleted list' }).click();
+  await page.keyboard.type('Open the cart');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Press Pay');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/helpdesk\.action_tickets\/\d+$/);
+
+  await page.reload();
+  const saved = page.getByRole('textbox', { name: 'Description' });
+  await expect(saved.locator('strong')).toHaveText('Steps to see it');
+  await expect(saved.locator('ul > li')).toHaveText(['Open the cart', 'Press Pay']);
+  // What the server keeps is the allow-list's: nothing but the tags a note needs.
+  const id = /\/(\d+)$/.exec(page.url())?.[1];
+  const stored = await page.evaluate(async (ticket) => {
+    const response = await fetch(`/api/v1/models/helpdesk.ticket/${ticket}?fields=description`, {
+      credentials: 'include',
+    });
+    return ((await response.json()) as { description: string }).description;
+  }, id);
+  expect(stored).toBe(
+    '<p><strong>Steps to see it</strong></p><ul><li><p>Open the cart</p></li><li><p>Press Pay</p></li></ul>',
+  );
+});

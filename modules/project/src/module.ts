@@ -818,7 +818,7 @@ export const ProjectProject = defineModel('project.project', {
     sequence: f.integer({ required: true, default: 10 }),
     dateStart: f.date({ label: 'Start' }),
     dateEnd: f.date({ label: 'Deadline' }),
-    description: f.text(),
+    description: f.html(),
     scope: f.text(),
     assumptions: f.text(),
     constraints: f.text(),
@@ -1321,7 +1321,7 @@ export const ProjectTask = defineModel('project.task', {
       }),
     }),
     sequence: f.integer({ required: true, default: 10 }),
-    description: f.text(),
+    description: f.html(),
     timesheets: f.one2many('project.timesheet', 'task'),
     /** When it starts (RFC 0026 step 5); it ends on its deadline. */
     dateStart: f.date({ label: 'Start' }),
