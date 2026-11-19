@@ -1083,3 +1083,24 @@ the person's working calendar.
   once; they submit it and it is approved and paid like any advance. An expense report may name its tour (*For the
   tour*, an approved tour of the same person); the tour's form shows what was **Advanced** and **Claimed**.
 - Print *Tour order* from the form; `hr.tour.approved` is an event automations and webhooks can listen to.
+
+## Repeating events (Agenda)
+
+*Agenda › Repeating events*: a meeting that happens again by a rule. Fill in the first meeting (title, start, end,
+who is invited, the room), then how it repeats:
+
+| | |
+| --- | --- |
+| *Repeats every* / *Every* | every 1 week, every 2 weeks, every 3 months… |
+| *On these days* | for a series by week: the weekdays (none ticked: the first meeting's weekday) |
+| *In the month, on* | the same day (the 31st becomes the month's last day); the same weekday (*the second Tuesday*); the last such weekday (*the last Friday*); **the first / the last working day** |
+| *On a weekend or a holiday* | keep it that day, skip it, or move it to the working day before or after — by the company's working calendar (Working time) |
+| *Ends* | after a number of times, or on a date; one of the two is needed, at most 366 occurrences |
+
+The form says the rule back in words (*Every 2 weeks on Tuesday and Thursday, 10 times*). **Generate** makes the
+occurrences: each is an ordinary event — it holds the room, has its own attendees and answers, and can be moved or
+cancelled alone. If the room is taken on one of the dates, nothing is generated and the date is named.
+
+Changing the series and pressing **Generate** again redoes the occurrences still to come. It never rewrites the
+past, an occurrence you ticked *Keep as it is*, or one you moved to another time yourself. **Stop the series** removes
+the occurrences still to come (not the ones you kept or moved).

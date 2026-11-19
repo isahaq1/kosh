@@ -443,3 +443,30 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   Helpdesk SLAs, production scheduling and capacity, payment due dates. Left out: delivery and arrival dates in
   working days (Sales and Purchase lead days are still calendar days), Projects' schedule, quiet hours of
   notifications. Next in step 6: recurring events and ICS invitations, then the Google / Microsoft sync.
+- **Step 6, part 3a (2026-11-19). Repeating events.** The design, decided before the code: **a series generates
+  real events**. A *repeating event* (`calendar.recurrence`, Agenda › Repeating events) holds the first meeting,
+  the rule and who is invited; *Generate* makes its occurrences as `calendar.event` records. So everything an event
+  already does keeps working without a second path: a room is never double-booked, each occurrence has its own
+  attendees and answers, privacy and record rules apply, the calendar, the list and the home page show them, and
+  one occurrence can be moved or cancelled alone. (The other design — occurrences computed at read time from the
+  rule — needs every reader to know recurrence: the room check, free / busy, record rules, the calendar view, the
+  API. That is the cost Odoo's own history with recurrence shows.)
+  **The rule** (`recurrence.ts`, pure): every *n* days, weeks (on chosen weekdays), months or years; in a month
+  the same day (the last when the month is shorter), the same weekday in the same week (*the second Tuesday*; the
+  last when there is no fifth), the last such weekday, or **the first / the last working day**; ends after a
+  number of times or on a date, one of the two required, at most 366 occurrences and ten years. **On a weekend or
+  a holiday** of the company's working calendar an occurrence is kept, skipped, or moved to the working day before
+  or after (two that land on the same day are one). The rule is said in words on the form (*Every 2 weeks on
+  Tuesday and Thursday, 10 times*). Occurrences keep the first meeting's time of day in the calendar's time zone,
+  whatever daylight saving does.
+  **Generating again** after a change redoes the occurrences still to come and still the series' own: the past is
+  never rewritten, nor an occurrence ticked *Keep as it is*, nor one moved to another time by hand. *Stop the
+  series* removes what was still to come and the series' own. A room taken on one of the dates refuses the whole
+  generation, naming the date, and nothing of it is made. Only the organizer (and Agenda managers) generates.
+  Agenda now depends on Working time. Tests: 8 on the rule (each kind, months that are shorter, working days, days
+  off kept / skipped / moved, 29 February, the limits, the words), 2 on PostgreSQL through the API (generate,
+  attendees, the refused room, a moved and a kept occurrence across a change, stop; a Friday moved to Sunday), an
+  E2E through the form. Left out: a series without an end (it would need a job that extends it), exceptions
+  entered on the series itself (cancel the one event instead), the series as one line on the calendar, the
+  organizer's own time zone. **Next:** ICS — an invitation by email that lands in any mail client, and a calendar
+  feed — then the Google / Microsoft sync (which needs the company's credentials).
