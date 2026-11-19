@@ -496,3 +496,35 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   not sent as one invitation: send the occurrences, or share the calendar address. Not verified in real Gmail and
   Outlook mailboxes — the format is the standard's; try one invitation to yourself first. **Next**: the Google
   and Microsoft two-way sync, which needs the company's OAuth credentials.
+- **Step 7, part 1 (2026-11-19). Rich text in fields.** The dependency, approved by the owner on this date:
+  **Tiptap 3** (`@tiptap/react`, `@tiptap/pm`, `@tiptap/starter-kit`, `@tiptap/extension-table`,
+  `@tiptap/extension-image`; MIT, on ProseMirror) in `@kosh/ui` only. Why a dependency at all: a text editor that
+  handles selections, undo, lists, tables, composition (Bangla input) and paste on every browser is years of
+  work that is not ours to redo; nothing else in the stack edits rich text. The decided design:
+  **The server is the gate.** Whatever is saved into an `html` field through the API — a record, its lines, an
+  import — is **rebuilt from an allow-list** by `sanitizeHtml` (`packages/server/src/html.ts`, no dependency: a
+  tokenizer that writes its own output and never copies the input's markup): paragraphs, headings, emphasis,
+  lists, a quote, code, links (web, mail, phone, or a path of this installation; always with `rel="noopener
+  noreferrer nofollow"`), images (https or this installation's files), tables, and mention / record spans. Tags it
+  does not know lose their tag and keep their text; what holds code (`script`, `style`, `iframe`, `svg`, `math`,
+  `template`…) goes with its content; open tags are closed; nesting stops at 40; 500 000 characters at most.
+  Tested with 27 attack strings (handlers, `javascript:` written five ways, unclosed scripts hiding the rest,
+  comments, CDATA, attribute break-outs) and proved stable when run twice.
+  **The browser is a second gate**: what is shown is rebuilt again from the same allow-list
+  (`sanitizeForDisplay`, the browser's inert parser, node by node) — for values that reached the database another
+  way (a module's own code, an old import).
+  **The editor** (`RichTextEditor`, loaded on demand so a page without rich text never downloads it): a toolbar of
+  labelled buttons — bold, italic, underline, strikethrough, two headings, bulleted and numbered lists, a quote, a
+  code block, a link with its address field, a table, undo, redo — reached by the keyboard, named for a screen
+  reader, saying what is on at the cursor; English and Bangla; the theme's colours in light and dark. The `html`
+  widget shows formatted text where a field is read and the editor where it is written; plain text written before
+  a field became rich shows as paragraphs, a line each.
+  **Elsewhere**: print templates print rich text as its words, a line per block (`htmlToText`); an invitation's
+  description too. **First fields**: the description of a project, a task, a Helpdesk ticket, an event and a
+  repeating event.
+  Tests: 7 on the sanitizer, the API round trip on a ticket (what was sent with a script, a handler and a
+  `javascript:` link against what the database holds), an E2E typing in the editor with the toolbar and reading
+  back what the server kept. **Left for part 2**: the chatter (comments and notes are still plain text), mentions
+  and record links inside text, images from storage with an upload button (an image can be pasted by address
+  only), clean-up of Word and Google Docs paste beyond what the allow-list already drops, rich text printed with
+  its formatting, more fields.

@@ -472,3 +472,23 @@ next steps its status allows, Save when there are changes, and "Go to its …" f
 letters, Enter, and the step runs as if its button were clicked. On a phone, the next step (and Save) sit in a
 bar at the bottom of the record.
 
+## Rich text
+
+A field declared `f.html()` is rich text: on a form it is an editor with a toolbar (bold, italic, underline,
+strikethrough, headings, lists, a quote, a code block, a link, a table, undo / redo); where it is only read it shows
+as formatted text. Nothing else is needed in the view: `k.group('about', ['description'])`.
+
+```ts
+description: f.html(),            // instead of f.text()
+```
+
+- **What may be saved** is decided by the server, not the editor: every `html` value written through the API is
+  rebuilt from an allow-list (`sanitizeHtml` of `@kosh/server`). Scripts, styles, frames, event handlers and
+  `javascript:` addresses never reach the database, whoever sends them. Module code that writes an `html` field
+  itself should call `sanitizeHtml` on anything it did not write.
+- **What is shown** is rebuilt again in the browser from the same list (`RichTextView`, `sanitizeForDisplay` of
+  `@kosh/ui`). Use `RichTextView` — never `dangerouslySetInnerHTML` — to show rich text in a custom page.
+- `htmlToText` (`@kosh/server`) gives the words of rich text, a line per block: for an email, a search, a print.
+  Print templates already print `html` fields this way.
+- A field changed from `f.text()` to `f.html()` keeps its values: plain text shows as paragraphs.
+- The editor is downloaded when a rich-text field is first edited, not with the page.
