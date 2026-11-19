@@ -10,9 +10,11 @@ import { defineModule } from '@kosh/modules-sdk';
 import { permissions } from '@kosh/permissions';
 import { product } from '@kosh/product';
 import { reporting } from '@kosh/reporting';
-import { action, form, graph, kanban, list, pivot, search } from '@kosh/views';
+import type { ModuleContext } from '@kosh/server';
+import { action, field, form, graph, kanban, list, pivot, search } from '@kosh/views';
 import { expenseDemo } from './demo.js';
 import {
+  draftTourAdvance,
   ExpenseAdvance,
   ExpenseCategory,
   ExpenseExpense,
@@ -22,19 +24,68 @@ import {
 
 export {
   advanceLeft,
+  draftTourAdvance,
   ExpenseAdvance,
   ExpenseCategory,
   ExpenseExpense,
   ExpenseSheet,
   expenseShutro,
   isoDate,
+  TourSpend,
 } from './module.js';
+
+type Worker = ReturnType<ModuleContext['shutro']['subscribe']>;
+/**
+ * The subscriber that drafts the cash advance of an approved tour that asks for one (RFC 0037 §3.2), once; tests
+ * `drain()` it, the server starts it.
+ */
+export function tourAdvanceWorker(context: Pick<ModuleContext, 'shutro'>): Worker {
+  return context.shutro.subscribe(
+    'expense.tour_advances',
+    'hr.tour.approved',
+    async (event, env) => {
+      const id = Number(((event.payload ?? {}) as { id?: unknown }).id);
+      if (Number.isInteger(id) && id > 0) await draftTourAdvance(env as unknown as never, id);
+    },
+    { pollMs: 5000 },
+  );
+}
 
 export const expense: ReturnType<typeof defineModule> = defineModule({
   shutro: expenseShutro,
   kosh: '^0.1.0',
   hooks: { demo: expenseDemo },
   depends: [hr, product, permissions, reporting],
+  routes: (context: ModuleContext) => {
+    if (process.env['KOSH_SCHEDULES'] === 'off') return;
+    const worker = tourAdvanceWorker(context);
+    worker.start();
+    context.app.addHook('onClose', async () => {
+      await worker.stop();
+    });
+  },
+  // A tour's money on its form (RFC 0037 §3.2).
+  viewExtensions: [
+    {
+      view: 'hr.tour.form',
+      operations: [
+        {
+          insertAfter: 'where',
+          nodes: [
+            {
+              kind: 'group',
+              id: 'tour_money',
+              label: 'Advances and expenses',
+              children: [
+                field({ field: 'advanced', id: 'tour_advanced' }),
+                field({ field: 'claimed', id: 'tour_claimed' }),
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  ],
   // Exceptions to the module standard (RFC 0023), each with its reason.
   standard: {
     waive: [
@@ -424,7 +475,7 @@ export const expense: ReturnType<typeof defineModule> = defineModule({
         ],
       },
       sheet: [
-        k.group('main', ['name', 'title', 'employee', 'advance']),
+        k.group('main', ['name', 'title', 'employee', 'advance', 'tour']),
         k.component('approvals', 'approvals.Panel'),
         k.lines('expenses', [
           'date',
@@ -455,7 +506,7 @@ export const expense: ReturnType<typeof defineModule> = defineModule({
         ],
       },
       sheet: [
-        k.group('main', ['name', 'employee', 'purpose', 'date', 'amount']),
+        k.group('main', ['name', 'employee', 'purpose', 'date', 'amount', 'tour']),
         k.component('advance_approvals', 'approvals.Panel'),
         k.group('settlement', ['settled', 'balance'], {
           label: 'Settlement',

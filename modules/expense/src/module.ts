@@ -18,6 +18,7 @@ import {
   defineModel,
   defineModule,
   type Env,
+  extendModel,
   f,
   method,
   onchange,
@@ -472,6 +473,11 @@ export const ExpenseSheet = defineModel('expense.sheet', {
       label: 'Settles advance',
       help: 'A cash advance paid to the employee that this report’s expenses settle.',
     }),
+    tour: f.many2one('hr.tour', {
+      ondelete: 'set null',
+      label: 'For the tour',
+      help: 'The official tour these expenses were made on: the tour shows what was claimed.',
+    }),
     advanceUsed: f.decimal({
       scale: 2,
       required: true,
@@ -538,6 +544,22 @@ export const ExpenseSheet = defineModel('expense.sheet', {
       ),
       message: 'A report settles a paid advance of its own employee.',
     },
+    // A report claims the expenses of its own employee's tour.
+    tourOfTheEmployee: {
+      ...check('expense.sheet', ['tour', 'employee'], async (sheets) =>
+        sheets.env.asSuperuser({ reason: 'the tour of an expense report' }, async (su) => {
+          const failing: number[] = [];
+          for (const s of sheets) {
+            if (s.tour === null) continue;
+            const [t] = await su.model('hr.tour').browse([s.tour.id]).load({ employee: true });
+            if (t === undefined || t.employee.id !== s.employee.id || t.state !== 'approved')
+              failing.push(s.id);
+          }
+          return failing;
+        }),
+      ),
+      message: 'A report names an approved tour of its own employee.',
+    },
   },
   onchange: {
     title: onchange('expense.sheet', async (d, env) => {
@@ -577,6 +599,11 @@ export const ExpenseAdvance = defineModel('expense.advance', {
     purpose: f.char({ required: true }),
     date: f.date({ required: true, label: 'Needed on' }),
     amount: f.decimal({ scale: 2, required: true }),
+    tour: f.many2one('hr.tour', {
+      ondelete: 'set null',
+      label: 'For the tour',
+      help: 'The official tour this cash is for: an approved tour that asks for an advance drafts it.',
+    }),
     sheets: f.one2many('expense.sheet', 'advance', { label: 'Settling reports' }),
     settled: f.decimal({
       scale: 2,
@@ -671,6 +698,68 @@ export const ExpenseAdvance = defineModel('expense.advance', {
   },
 });
 
+/**
+ * A tour's money (RFC 0037 §3.2): the advances drafted or asked for it and the reports that claim its expenses,
+ * with what was advanced and what was claimed.
+ */
+export const TourSpend = extendModel('hr.tour', {
+  fields: {
+    advances: f.one2many('expense.advance', 'tour', { label: 'Cash advances' }),
+    expenseSheets: f.one2many('expense.sheet', 'tour', { label: 'Expense reports' }),
+    advanced: f.decimal({
+      scale: 2,
+      store: true,
+      label: 'Advanced',
+      help: 'The cash advances of the tour that were not refused.',
+      ...compute('hr.tour', 'advanced', ['advances.amount', 'advances.state'], (tours) => {
+        for (const t of tours)
+          t.advanced = [...t.advances]
+            .filter((a) => a.state !== 'refused')
+            .reduce((sum, a) => sum.plus(a.amount), ZERO);
+      }),
+    }),
+    claimed: f.decimal({
+      scale: 2,
+      store: true,
+      label: 'Claimed',
+      help: 'The expenses of the tour’s reports that were submitted and not refused.',
+      ...compute('hr.tour', 'claimed', ['expenseSheets.total', 'expenseSheets.state'], (tours) => {
+        for (const t of tours)
+          t.claimed = [...t.expenseSheets]
+            .filter((r) => r.state !== 'draft' && r.state !== 'refused')
+            .reduce((sum, r) => sum.plus(r.total ?? ZERO), ZERO);
+      }),
+    }),
+  },
+});
+
+/**
+ * The cash advance of an approved tour that asks for one, drafted for the traveller — once: a tour that has an
+ * advance already (drafted before, or asked for by hand) gets no other. The person submits it; it is approved and
+ * paid like any advance. Returns the advance's id, or null when there is nothing to draft.
+ */
+export async function draftTourAdvance(env: Env, tour: number): Promise<number | null> {
+  return env.asSuperuser({ reason: 'the cash advance of an approved tour' }, async (su) => {
+    const [t] = await (
+      await su.model('hr.tour').search({ where: { id: tour as never }, limit: 1 })
+    ).load({ employee: true, company: true, advances: true });
+    if (t === undefined || t.state !== 'approved') return null;
+    if (t.advanceAmount === null || !t.advanceAmount.gt(0) || t.advances.length > 0) return null;
+    const made = await su.model('expense.advance').create([
+      {
+        employee: t.employee.id,
+        company: t.company.id,
+        purpose: `Tour ${t.name}: ${t.places}`.slice(0, 200),
+        date: t.dateFrom,
+        amount: t.advanceAmount,
+        tour: t.id,
+      } as never,
+    ]);
+    await su.flush();
+    return (made.ids[0] as number | undefined) ?? null;
+  });
+}
+
 export const expenseShutro = defineModule({
   name: 'expense',
   version: '0.1.0',
@@ -715,6 +804,7 @@ export const expenseShutro = defineModule({
     }),
   ],
   models: [ExpenseCategory, ExpenseExpense, ExpenseSheet, ExpenseAdvance],
+  extensions: [TourSpend],
   data: [
     record(
       'expense.category',

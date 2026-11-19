@@ -6,12 +6,16 @@ export const bn: Readonly<Record<string, string>> = {
     'দৈনিক বা প্রতি কিলোমিটার ভিত্তিক খাতের একটি হার থাকে।',
   'A person’s expenses of this category in a month, together.': 'এক মাসে এই খাতে একজনের মোট খরচ।',
   'A report holds the expenses of its own employee.': 'একটি প্রতিবেদনে শুধু সেই কর্মীর খরচ থাকে।',
+  'A report names an approved tour of its own employee.':
+    'রিপোর্টে নিজের কর্মীর অনুমোদিত ট্যুরই উল্লেখ করা যায়।',
   'A report settles a paid advance of its own employee.':
     'একটি প্রতিবেদন শুধু সেই কর্মীর পরিশোধিত অগ্রিম সমন্বয় করে।',
   Active: 'সক্রিয়',
   'Add the expenses to the report before submitting it.': 'জমা দেওয়ার আগে প্রতিবেদনে খরচগুলো যোগ করুন।',
   'Advance reference': 'অগ্রিমের রেফারেন্স',
+  Advanced: 'অগ্রিম দেওয়া',
   Advances: 'অগ্রিমসমূহ',
+  'Advances and expenses': 'অগ্রিম ও খরচ',
   'Advances to settle': 'সমন্বয়যোগ্য অগ্রিম',
   Amount: 'অঙ্ক',
   'Amount (tax included)': 'অঙ্ক (করসহ)',
@@ -44,6 +48,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Categories and policies': 'খাত ও নীতি',
   Category: 'খাত',
   'Checked when the report is submitted.': 'প্রতিবেদন জমা দেওয়ার সময় যাচাই করা হয়।',
+  Claimed: 'দাবি করা',
   'Claimed as': 'যেভাবে দাবি',
   Company: 'প্রতিষ্ঠান',
   Configuration: 'কনফিগারেশন',
@@ -80,6 +85,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Expenses, receipts, approvals and cash advances': 'খরচ, রসিদ, অনুমোদন ও নগদ অগ্রিম',
   Finance: 'অর্থ বিভাগ',
   'Follows the report the expense is in.': 'খরচটি যে প্রতিবেদনে আছে তার অনুসরণ করে।',
+  'For the tour': 'যে ট্যুরের জন্য',
   'From the advance': 'অগ্রিম থেকে',
   Guidance: 'নির্দেশনা',
   'Guidance for employees': 'কর্মীদের জন্য নির্দেশনা',
@@ -159,9 +165,16 @@ export const bn: Readonly<Record<string, string>> = {
     'অগ্রিম থেকে প্রতিবেদনে সমন্বিত অংশ বাদে: আর খরচ না হলে কর্মী এটি ফেরত দেন।',
   'The amount is the category’s rate times the days or kilometres.':
     'অঙ্ক হলো খাতের হার গুণ দিন বা কিলোমিটার।',
+  'The cash advances of the tour that were not refused.': 'ট্যুরের যেসব নগদ অগ্রিম প্রত্যাখ্যাত হয়নি।',
   'The company (company card)': 'প্রতিষ্ঠান (প্রতিষ্ঠানের কার্ড)',
   'The employee (to reimburse)': 'কর্মী (ফেরতযোগ্য)',
   'The expenses of the report, tax included.': 'প্রতিবেদনের খরচ, করসহ।',
+  'The expenses of the tour’s reports that were submitted and not refused.':
+    'ট্যুরের যেসব রিপোর্ট জমা হয়েছে ও প্রত্যাখ্যাত হয়নি তাদের খরচ।',
+  'The official tour these expenses were made on: the tour shows what was claimed.':
+    'যে অফিসিয়াল ট্যুরে এই খরচ হয়েছে: ট্যুরে দেখা যায় কত দাবি করা হয়েছে।',
+  'The official tour this cash is for: an approved tour that asks for an advance drafts it.':
+    'যে অফিসিয়াল ট্যুরের জন্য এই নগদ: অগ্রিম চাওয়া অনুমোদিত ট্যুর এর খসড়া তৈরি করে।',
   'The purchase tax included in the amounts of this category.': 'এই খাতের অঙ্কে অন্তর্ভুক্ত ক্রয় কর।',
   'The tax included in the amount, from the tax’s rate.': 'করের হার অনুযায়ী অঙ্কে অন্তর্ভুক্ত কর।',
   'To reimburse': 'ফেরত দেওয়া বাকি',

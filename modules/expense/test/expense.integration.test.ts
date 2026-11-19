@@ -23,7 +23,7 @@ import { type Driver, orm, pg } from '@kosh/server/orm';
 import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { settings } from '@kosh/settings';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { expense } from '../src/index.js';
+import { draftTourAdvance, expense, tourAdvanceWorker } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
 const catalogue = [base, settings, expense];
@@ -36,6 +36,7 @@ let driver: Driver;
 let dir: string;
 let files: string;
 let host: AppHost;
+let company = 0;
 const employees: Record<string, number> = {};
 const categories: Record<string, number> = {};
 const tokens = new Map<string, string>();
@@ -133,10 +134,10 @@ beforeAll(async () => {
   });
   const auth = host.server.auth;
   if (auth === undefined) throw new Error('base is installed');
-  const { company } = await installBase(host.server.shutro, auth, {
+  ({ company } = await installBase(host.server.shutro, auth, {
     company: { name: 'Padma Traders', currency: 'BDT' },
     admin: { login: 'admin', name: 'Administrator', password: PASSWORD },
-  });
+  }));
   await installDefaults(host.server.shutro, host.server.registry.loaded.modules, { company });
   const users: Record<string, number> = {};
   for (const [login, groups] of [
@@ -326,6 +327,84 @@ test('the employee’s expense approver decides first (RFC 0032 §3.2), not the 
   expect(await decideAll('expense.sheet', sheet, 'anna')).toBe(0);
   expect(await decideAll('expense.sheet', sheet, 'mona')).toBe(1);
   expect((await call('GET', `${S}/${sheet}?fields=state`, 'sumi')).json.state).toBe('approved');
+});
+
+test('an approved tour drafts its cash advance once; its reports show on the tour (RFC 0037)', async () => {
+  const TOUR = '/api/v1/models/hr.tour';
+  const worker = tourAdvanceWorker({ shutro: host.server.shutro });
+  const tour = async (who: string, dateFrom: string, dateTo: string, advanceAmount?: string) => {
+    const made = await call('POST', TOUR, who, {
+      employee: employees[who],
+      dateFrom,
+      dateTo,
+      places: 'Bogura depot',
+      purpose: 'Stock audit',
+      ...(advanceAmount === undefined ? {} : { advanceAmount }),
+    });
+    expect(made.status, JSON.stringify(made.json)).toBe(201);
+    return made.json.id as number;
+  };
+  const advancesOf = async (id: number) =>
+    (
+      await call(
+        'GET',
+        `${A}?filter=${encodeURIComponent(JSON.stringify({ tour: id }))}&fields=employee,amount,state,purpose,date`,
+        'mona',
+      )
+    ).json.items as Json[];
+
+  const id = await tour('rahim', '2027-02-07', '2027-02-09', '3000');
+  expect((await run('hr.tour', id, 'submit', 'rahim')).status).toBe(200);
+  // Asked for, not approved: nothing is drafted.
+  expect(await worker.drain()).toBe(0);
+  expect(await advancesOf(id)).toEqual([]);
+  expect((await run('hr.tour', id, 'approve', 'hana')).status).toBe(200);
+  expect(await worker.drain()).toBe(1);
+  const drafted = await advancesOf(id);
+  expect(drafted).toHaveLength(1);
+  expect(drafted[0]).toMatchObject({ state: 'draft' });
+  expect(Number(drafted[0].amount)).toBe(3000);
+  expect(String(drafted[0].purpose)).toMatch(/^Tour TOUR\/\d{4}\/\d{4}: Bogura depot$/);
+  expect(String(drafted[0].date).slice(0, 10)).toBe('2027-02-07');
+  // Once: asked again, nothing more is drafted.
+  const again = await host.server.shutro.bootstrap({ reason: 'test', company }, (env) =>
+    draftTourAdvance(env as never, id),
+  );
+  expect(again).toBeNull();
+  expect(await advancesOf(id)).toHaveLength(1);
+  // It is his own draft: he submits it like any advance; the tour shows it.
+  expect((await run('expense.advance', drafted[0].id, 'submit', 'rahim')).status).toBe(200);
+  const shown = (await call('GET', `${TOUR}/${id}?fields=advanced,claimed`, 'rahim')).json;
+  expect(Number(shown.advanced)).toBe(3000);
+  expect(Number(shown.claimed)).toBe(0);
+
+  // His expense report names the tour; submitted, the tour shows what was claimed.
+  const allowance = await newExpense('rahim', {
+    name: 'Daily allowance',
+    date: '2027-02-08',
+    category: categories['Daily allowance'],
+    quantity: '3',
+    amount: '2400',
+  });
+  const sheet = await newSheet('rahim', [allowance], { tour: id });
+  expect(Number((await call('GET', `${TOUR}/${id}?fields=claimed`, 'rahim')).json.claimed)).toBe(0);
+  expect((await run('expense.sheet', sheet, 'submit', 'rahim')).status).toBe(200);
+  expect(Number((await call('GET', `${TOUR}/${id}?fields=claimed`, 'rahim')).json.claimed)).toBe(
+    2400,
+  );
+  // Someone else's tour, or one not approved, is refused on a report.
+  const hers = await call('POST', S, 'sumi', { employee: employees['sumi'], tour: id });
+  expect([403, 404, 422]).toContain(hers.status);
+  const waiting = await tour('sumi', '2027-02-14', '2027-02-15');
+  await run('hr.tour', waiting, 'submit', 'sumi');
+  expect(
+    (await call('POST', S, 'sumi', { employee: employees['sumi'], tour: waiting })).status,
+  ).toBe(422);
+  // A tour that asks for no advance drafts none.
+  expect((await run('hr.tour', waiting, 'approve', 'hana')).status).toBe(200);
+  expect(await worker.drain()).toBe(1);
+  expect(await advancesOf(waiting)).toEqual([]);
+  await worker.stop();
 });
 
 test('the demo data loads', async () => {
