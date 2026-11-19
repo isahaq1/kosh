@@ -548,3 +548,29 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   typed fast), typing `@` in the editor to open the people list (the button does it; the suggestion plugin is
   another dependency), links to records inside text, images uploaded into the text (attach files as before), rich
   text printed with its formatting.
+
+- **Step 8 — subscriptions (2026-11-19).** `@kosh/subscription`, the Subscriptions app. Plans (every *n* days,
+  weeks, months or years, a trial, invoices posted or drafted), subscriptions with lines billed every period or by
+  usage, priced by the price list unless typed in; transitions `begin`, `pause`, `resume`, `amend` (Apply changes)
+  and `close` with a reason. The arithmetic is in `billing.ts` without a database and without floating point:
+  periods counted from the anchor day (the 31st bills on 28 February, then on the 31st again), MRR, and the share
+  of an amount for the days left. **One invoice per subscription and period**: `account.move` gains `subscription`
+  and `subscriptionPeriod`; the invoice of a period is looked for before it is made, in the transaction that
+  advances the subscription, so a second server, a retry or a crash between the two makes no second invoice (a
+  test kills the run between the invoice and the counter). Catch-up of up to twelve periods; a pause does not
+  bill the periods it covered. Usage is invoiced once and locked. Proration invoices or credits each changed line
+  for the days left of the paid period. The overview: MRR, running, started and closed this month, MRR by plan,
+  why customers left, the largest; a cohort view by starting month. Hourly on a running server, and
+  `POST /api/v1/subscriptions/run` for managers (audited).
+  Tests: the arithmetic (4), the API with real PostgreSQL (6: once per period, catch-up, the crash, a trial with
+  posted invoices, usage once, proration both ways, closing with a reason, forged billing dates refused, someone
+  without the role refused), an E2E.
+  **Found on the way, and fixed in four modules**: a field declared `groups: { write: [] }` is *not* system-only —
+  Shutro reads an empty list as no restriction, so a manager could move a subscription's next invoice date, and
+  the same held for Agenda's series links and invitation counters, attendance machines' last-seen marks and stock
+  valuation's accounting date and unit cost. They are now `['base.admin']` (the system and Administrators);
+  Shutro request #38 asks for a way to say "the server only". Request #39: `f.html`'s `sanitize` is declared but
+  Shutro has no sanitizer (Shutro ERP rebuilds HTML itself, in the REST layer).
+  **Left for later**: usage fed by Counter sales and timesheets through bridges, payments taken by themselves at
+  each invoice (the providers of RFC 0017 keep no card on file yet), plan changes by the customer in the portal,
+  failed payments pausing a subscription (follow-ups already chase its invoices).

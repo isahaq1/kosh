@@ -1123,3 +1123,49 @@ you organize or attend (not the ones you declined), from a month back to about a
 refreshes it on its own schedule (often every few hours). Anyone who has the link reads those events: do not share
 it. Delete it to close it — a new one has a new secret. `KOSH_BASE_URL` must be the address your server is reached
 at, as the link is built from it.
+
+## Subscriptions
+
+The **Subscriptions** app (`@kosh/subscription`, RFC 0034 §2.5) bills a customer again and again without anyone
+remembering to. It needs Accounting, Products and Contacts; its invoices are ordinary customer invoices, so
+sending, follow-ups, payments and the portal work as for any invoice.
+
+- **Plans** (Subscriptions › Configuration › Plans): bills every *n* days, weeks, months or years; a **trial** in
+  days before the first invoice; *Post the invoices* — off, each invoice is a draft for a person to check.
+- **A subscription**: a customer, a plan, a start day, a price list and payment terms if wanted, and its lines.
+  A line is billed **every period** (a quantity) or **by usage** (what was recorded since the last invoice). Its
+  price is the one typed in, else the price list's, else the product's list price; a discount in percent; the
+  product's sales taxes unless others are chosen.
+- **Start** needs at least one line. **Pause** stops the invoices; **Resume** starts them again — a period that fell
+  due during the pause is not billed afterwards: billing starts again on the day it is resumed. **Close** needs the
+  reason the customer left, and is for good.
+- **Invoices make themselves**: every hour a running server invoices each subscription whose next invoice date has
+  come, **one invoice per subscription and period** — two servers, a retry or a crash in the middle make no second
+  one. A subscription left behind (a server that was down) catches up, up to twelve periods at once. Monthly
+  periods keep the day they started on: started on the 31st, it bills on 28 February and on 31 March again.
+  A manager may also run what is due now: `POST /api/v1/subscriptions/run`.
+- **Usage** (Subscriptions › Usage, the import screen, or the API): so many units on a day against a line billed
+  by usage. Each record goes on the next invoice once, and cannot be changed after that.
+- **Apply changes**: when the lines of a running subscription change in the middle of a period already invoiced,
+  the difference is invoiced — or credited with a credit note — for the days left in that period, to the paisa.
+  Without it, the change simply counts from the next invoice.
+- **What it is worth**: *Per period* and **MRR** (the amount brought to a month: a yearly 12 000 is 1 000 a month;
+  nothing while it is not running) on each subscription. The overview shows MRR, running subscriptions, started
+  and closed this month, MRR by plan, why customers left, and the largest; the **cohort** view shows retention by
+  the month they started.
+
+Roles: **User** makes subscriptions and records usage (and reads invoices); **Manager** also keeps the plans and
+runs what is due. The billing dates, the periods invoiced and what each line was billed are the server's: nobody
+but an Administrator can write them through the API.
+
+```ts
+import { invoiceDue, invoiceSubscription, applyChanges } from '@kosh/subscription';
+
+await invoiceDue(env); // every running subscription of the company that is due today
+await invoiceSubscription(env, id); // one subscription, every period that is due
+await applyChanges(env, id); // invoice or credit a change for the days left
+```
+
+Another app feeds usage by creating `subscription.usage` records (`line`, `date`, `quantity`, `note`).
+**Not yet**: usage fed by Counter sales or timesheets through bridges, card payments taken by themselves at each
+invoice, upgrades chosen by the customer in the portal.
