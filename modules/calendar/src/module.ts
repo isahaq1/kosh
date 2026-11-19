@@ -9,7 +9,31 @@ import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
 import { emitting, installationSetting } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
-import { check, defineModel, defineModule, type Env, f, onchange } from './.kosh/bindings.js';
+import {
+  addDays,
+  dateIn,
+  instantOf,
+  isWorkingDay,
+  scheduleOf,
+  worktimeShutro,
+} from '@kosh/worktime';
+import {
+  check,
+  compute,
+  defineModel,
+  defineModule,
+  type Env,
+  f,
+  onchange,
+  records,
+} from './.kosh/bindings.js';
+import {
+  describeRule,
+  type MonthlyOn,
+  type OnDayOff,
+  occurrences,
+  type Rule,
+} from './recurrence.js';
 
 const ALL = ['read', 'write', 'create', 'unlink'] as const;
 const me = { $env: 'uid' } as const;
@@ -81,6 +105,18 @@ export const CalendarEvent = defineModel('calendar.event', {
     /** The record of another app it is about (`sale.order`, 42), if any. */
     resModel: f.char({ label: 'About (model)' }),
     resId: f.integer({ label: 'About (id)' }),
+    /** The repeating series it is an occurrence of, and the date of the series it stands for. */
+    recurrence: f.many2one('calendar.recurrence', {
+      ondelete: 'set null',
+      label: 'Repeats as',
+      groups: { write: [] },
+    }),
+    recurrenceDate: f.date({ label: 'Date in the series', groups: { write: [] } }),
+    detached: f.boolean({
+      default: false,
+      label: 'Keep as it is',
+      help: 'An occurrence of a series that the series no longer changes: tick it after moving or rewording this one meeting.',
+    }),
   },
   sqlConstraints: {
     endsAfterStart: { check: orm.sql`stop > start`, message: 'An event ends after it starts.' },
@@ -122,6 +158,300 @@ export const CalendarEvent = defineModel('calendar.event', {
     }),
   },
 });
+
+const WEEKDAY_FIELDS = ['onSun', 'onMon', 'onTue', 'onWed', 'onThu', 'onFri', 'onSat'] as const;
+
+/**
+ * A repeating series (RFC 0034 §2.4): a meeting that happens again by a rule — every week on Tuesday, the second
+ * Tuesday of the month, the last working day — until a date or for so many times. *Generate* makes its occurrences
+ * as events of their own, so each holds its room, has its attendees' answers and can be moved or cancelled alone;
+ * generating again after a change redoes the occurrences still to come, and leaves the past and the ones kept as
+ * they are. Days off come from the company's working calendar.
+ */
+export const CalendarRecurrence = defineModel('calendar.recurrence', {
+  label: 'Repeating event',
+  recName: 'name',
+  order: ['start desc', 'id desc'],
+  tracking: ['state', 'start', 'freq', 'interval', 'until', 'count'],
+  access: { 'calendar.user': ALL, 'calendar.manager': ALL },
+  rules: {
+    see: {
+      groups: ['calendar.user'],
+      perms: ['read'],
+      domain: { or: [{ privacy: 'public' }, { organizer: me }, { people: { any: { id: me } } }] },
+    },
+    organize: {
+      groups: ['calendar.user'],
+      perms: ['write', 'create', 'unlink'],
+      domain: { organizer: me },
+    },
+    all: { groups: ['calendar.manager'], perms: [...ALL], domain: {} },
+  },
+  fields: {
+    name: f.char({ required: true, label: 'Title' }),
+    start: f.datetime({ required: true, label: 'First starts' }),
+    stop: f.datetime({ required: true, label: 'First ends' }),
+    organizer: f.many2one('res.users', { required: true, default: (env: Env) => env.userId }),
+    people: f.many2many('res.users', { label: 'People invited' }),
+    contacts: f.many2many('res.partner', { label: 'Contacts invited' }),
+    room: f.many2one('calendar.room', { ondelete: 'restrict' }),
+    location: f.char(),
+    videoUrl: f.char({ label: 'Video call link' }),
+    privacy: f.selection(
+      { public: 'Public', private: 'Private (busy for others)' },
+      {
+        required: true,
+        default: 'public',
+        help: 'As on an event: public for everyone in Agenda, or private to the organizer and the people invited.',
+      },
+    ),
+    description: f.text(),
+    freq: f.selection(
+      { daily: 'Day', weekly: 'Week', monthly: 'Month', yearly: 'Year' },
+      {
+        required: true,
+        default: 'weekly',
+        label: 'Repeats every',
+        help: 'The unit the series repeats by.',
+      },
+    ),
+    interval: f.integer({
+      required: true,
+      default: 1,
+      label: 'Every',
+      help: '1: every week; 2: every second week; and so on.',
+    }),
+    onSun: f.boolean({ default: false, label: 'Sunday' }),
+    onMon: f.boolean({ default: false, label: 'Monday' }),
+    onTue: f.boolean({ default: false, label: 'Tuesday' }),
+    onWed: f.boolean({ default: false, label: 'Wednesday' }),
+    onThu: f.boolean({ default: false, label: 'Thursday' }),
+    onFri: f.boolean({ default: false, label: 'Friday' }),
+    onSat: f.boolean({ default: false, label: 'Saturday' }),
+    monthlyOn: f.selection(
+      {
+        day: 'The same day of the month',
+        weekday: 'The same weekday (the second Tuesday)',
+        last_weekday: 'The last such weekday (the last Friday)',
+        first_working: 'The first working day',
+        last_working: 'The last working day',
+      },
+      {
+        required: true,
+        default: 'day',
+        label: 'In the month, on',
+        help: 'For a series by month or by year: which day it falls on, counted from the first meeting’s date.',
+      },
+    ),
+    onDayOff: f.selection(
+      {
+        keep: 'Keep it that day',
+        skip: 'Skip it',
+        before: 'Move it to the working day before',
+        after: 'Move it to the working day after',
+      },
+      {
+        required: true,
+        default: 'keep',
+        label: 'On a weekend or a holiday',
+        help: 'What becomes of an occurrence that falls on a day off of the company’s working calendar.',
+      },
+    ),
+    count: f.integer({ label: 'Times', help: 'Ends after this many occurrences.' }),
+    until: f.date({ label: 'Until', help: 'Ends on this date (included).' }),
+    summary: f.char({
+      store: true,
+      label: 'In words',
+      help: 'The rule as a sentence.',
+      ...compute(
+        'calendar.recurrence',
+        'summary',
+        ['start', 'freq', 'interval', 'monthlyOn', 'onDayOff', 'count', 'until', ...WEEKDAY_FIELDS],
+        (series) => {
+          for (const r of series) {
+            try {
+              r.summary =
+                r.start === null
+                  ? ''
+                  : describeRule(ruleOf(r as never), r.start.toISOString().slice(0, 10));
+            } catch {
+              r.summary = '';
+            }
+          }
+        },
+      ),
+    }),
+    events: f.one2many('calendar.event', 'recurrence', { label: 'Occurrences' }),
+    state: f.state({
+      states: { draft: 'Draft', active: 'Running', stopped: 'Stopped' },
+      initial: 'draft',
+      help: 'Drafted until its occurrences are generated; running while it has some to come; stopped once its future occurrences are removed.',
+      transitions: {
+        generate: {
+          from: ['draft', 'active', 'stopped'],
+          to: 'active',
+          after: records('calendar.recurrence', async (series) => {
+            for (const id of series.ids) {
+              await generateSeries(series.env, id as number);
+              await series.env.emit('calendar.recurrence.generated', { id });
+            }
+          }),
+        },
+        // Not `stop`: a transition is a method of the record, and the series has a field of that name.
+        halt: {
+          from: ['active'],
+          to: 'stopped',
+          after: records('calendar.recurrence', async (series) => {
+            for (const id of series.ids) await generateSeries(series.env, id as number, true);
+          }),
+        },
+      },
+    }),
+  },
+  sqlConstraints: {
+    endsAfterStart: { check: orm.sql`stop > start`, message: 'An event ends after it starts.' },
+    everyOne: { check: orm.sql`"interval" >= 1`, message: 'A series repeats every 1 or more.' },
+    ends: {
+      check: orm.sql`(count IS NOT NULL AND count >= 1) OR until IS NOT NULL`,
+      message: 'A series ends: after a number of times, or on a date.',
+    },
+  },
+});
+
+/** The rule of a series, from its fields. */
+function ruleOf(r: {
+  freq: string;
+  interval: number;
+  monthlyOn: string;
+  onDayOff: string;
+  count: number | null;
+  until: unknown;
+  [day: string]: unknown;
+}): Rule {
+  return {
+    freq: r.freq as Rule['freq'],
+    interval: r.interval,
+    weekdays: WEEKDAY_FIELDS.map((key, day) => (r[key] === true ? day : -1)).filter((d) => d >= 0),
+    monthlyOn: r.monthlyOn as MonthlyOn,
+    onDayOff: r.onDayOff as OnDayOff,
+    count: r.count,
+    until: r.until == null ? null : String(r.until).slice(0, 10),
+  };
+}
+
+/**
+ * Makes a series' occurrences as events, or — `stopping` — removes the ones still to come. The past is never
+ * touched, nor an occurrence marked *Keep as it is* or moved to another time by hand. Occurrences keep the first
+ * meeting's time of day in the company's time zone, whatever daylight saving does. A room taken on one of the
+ * dates refuses the whole series, naming the date.
+ */
+export async function generateSeries(env: Env, id: number, stopping = false): Promise<number> {
+  return env.asSuperuser({ reason: 'the occurrences of a repeating event' }, async (su) => {
+    const [r] = await (
+      await su.model('calendar.recurrence').search({ where: { id: id as never }, limit: 1 })
+    ).load({ people: true, contacts: true, events: true });
+    if (r === undefined) return 0;
+    const first = r.start.toISOString().slice(0, 10);
+    const schedule = await scheduleOf(su as never, { from: first, to: addDays(first, 3660) });
+    const tz = schedule.tz;
+    // The first meeting's local date, time of day and length: what every occurrence keeps.
+    const day0 = dateIn(r.start, tz);
+    const minutes = Math.round((r.start.getTime() - instantOf(day0, 0, tz)) / 60_000);
+    const length = r.stop.getTime() - r.start.getTime();
+    const startOn = (date: string) => new Date(instantOf(date, minutes, tz));
+    const dates = stopping
+      ? []
+      : occurrences(ruleOf(r as never), day0, (date) => isWorkingDay(schedule, date));
+    const wanted = new Set(dates);
+    const now = Date.now();
+    const firstTime = r.events.length === 0;
+
+    type Occurrence = {
+      id: number;
+      start: Date;
+      detached: boolean;
+      recurrenceDate: unknown;
+    };
+    const have = new Map<string, Occurrence>();
+    const gone: number[] = [];
+    for (const e of [...r.events] as unknown as Occurrence[]) {
+      const date = e.recurrenceDate === null ? null : String(e.recurrenceDate).slice(0, 10);
+      if (date === null) continue;
+      // The past stands; so does an occurrence kept as it is, or moved by hand to another time.
+      const own = e.detached || e.start.getTime() !== startOn(date).getTime();
+      if (e.start.getTime() < now || own) {
+        have.set(date, e);
+        continue;
+      }
+      if (wanted.has(date)) have.set(date, e);
+      else gone.push(e.id);
+    }
+    if (gone.length > 0)
+      await su
+        .model('calendar.event')
+        .browse(gone as never)
+        .unlink();
+
+    const values = {
+      name: r.name,
+      organizer: r.organizer.id,
+      room: r.room?.id ?? null,
+      location: r.location,
+      videoUrl: r.videoUrl,
+      privacy: r.privacy,
+      description: r.description,
+    };
+    const fresh: Record<string, unknown>[] = [];
+    for (const date of dates) {
+      const start = startOn(date);
+      const stop = new Date(start.getTime() + length);
+      const existing = have.get(date);
+      if (existing !== undefined) {
+        // Redone only when still to come and still the series' own.
+        if (
+          existing.start.getTime() >= now &&
+          !existing.detached &&
+          existing.start.getTime() === start.getTime()
+        )
+          await su
+            .model('calendar.event')
+            .browse([existing.id as never])
+            .write({ ...values, stop } as never);
+        continue;
+      }
+      if (!firstTime && start.getTime() < now) continue; // a changed rule does not rewrite the past
+      if (r.room !== null) {
+        const clash = await su.model('calendar.event').search({
+          where: { room: r.room.id, state: 'confirmed', start: { lt: stop }, stop: { gt: start } },
+          limit: 1,
+        });
+        if (clash.length > 0)
+          throw new orm.ValidationError(
+            'calendar.recurrence',
+            ['room'],
+            `The room is already booked on ${date}.`,
+            'Choose another room or another time, or free the room on that day, then generate again.',
+          );
+      }
+      fresh.push({
+        ...values,
+        start,
+        stop,
+        recurrence: r.id,
+        recurrenceDate: date,
+        attendees: {
+          create: [
+            ...[...r.people].map((u) => ({ user: u.id })),
+            ...[...r.contacts].map((c) => ({ partner: c.id })),
+          ],
+        },
+      });
+    }
+    if (fresh.length > 0) await su.model('calendar.event').create(fresh as never);
+    await su.flush();
+    return fresh.length;
+  });
+}
 
 /** An attendee: a person of the company (`user`) or a contact from outside (`partner`), with their answer. */
 export const CalendarAttendee = defineModel('calendar.attendee', {
@@ -184,12 +514,12 @@ export const CalendarAttendee = defineModel('calendar.attendee', {
 export const calendarShutro = defineModule({
   name: 'calendar',
   version: '0.1.0',
-  depends: [contactsShutro, messagingShutro],
+  depends: [contactsShutro, messagingShutro, worktimeShutro],
   groups: [
     orm.defineGroup({
       code: 'calendar.user',
       label: 'Agenda user',
-      implies: ['contacts.user', 'messaging.user'],
+      implies: ['contacts.user', 'messaging.user', 'worktime.user'],
     }),
     orm.defineGroup({
       code: 'calendar.manager',
@@ -197,5 +527,5 @@ export const calendarShutro = defineModule({
       implies: ['calendar.user'],
     }),
   ],
-  models: [CalendarRoom, CalendarEvent, CalendarAttendee],
+  models: [CalendarRoom, CalendarEvent, CalendarAttendee, CalendarRecurrence],
 });

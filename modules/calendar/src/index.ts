@@ -15,10 +15,19 @@ import { reporting } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
 import { action, calendar, form, list, search } from '@kosh/views';
+import { worktime } from '@kosh/worktime';
 import { calendarDemo } from './demo.js';
-import { CalendarEvent, CalendarRoom, calendarShutro } from './module.js';
+import { CalendarEvent, CalendarRecurrence, CalendarRoom, calendarShutro } from './module.js';
 
-export { CalendarAttendee, CalendarEvent, CalendarRoom, calendarShutro } from './module.js';
+export {
+  CalendarAttendee,
+  CalendarEvent,
+  CalendarRecurrence,
+  CalendarRoom,
+  calendarShutro,
+  generateSeries,
+} from './module.js';
+export * from './recurrence.js';
 
 const RESPONSES = new Set(['accepted', 'tentative', 'declined']);
 type Row = Record<string, unknown>;
@@ -154,7 +163,7 @@ export const calendarApp: ReturnType<typeof defineModule> = defineModule({
   shutro: calendarShutro,
   kosh: '^0.1.0',
   hooks: { demo: calendarDemo },
-  depends: [contacts, messaging, reporting],
+  depends: [contacts, messaging, reporting, worktime],
   app: {
     code: 'agenda',
     label: 'Agenda',
@@ -164,6 +173,42 @@ export const calendarApp: ReturnType<typeof defineModule> = defineModule({
     summary: 'Meetings, rooms and who is free when',
   },
   documents: [
+    {
+      key: 'repeating_event',
+      name: 'Repeating event',
+      model: 'calendar.recurrence',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: '{{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'rule',
+            items: [
+              { label: 'Repeats', bind: 'summary' },
+              { label: 'First starts', bind: 'start' },
+              { label: 'First ends', bind: 'stop' },
+              { label: 'Organizer', bind: 'organizer.name' },
+              { label: 'Room', bind: 'room.name' },
+              { label: 'Location', bind: 'location' },
+              { label: 'Status', bind: 'state' },
+            ],
+          },
+          {
+            kind: 'table',
+            id: 'occurrences',
+            bind: 'events',
+            columns: [
+              { label: 'Starts', bind: 'start' },
+              { label: 'Ends', bind: 'stop' },
+              { label: 'Status', bind: 'state' },
+            ],
+          },
+        ],
+      },
+    },
     {
       key: 'meeting',
       name: 'Meeting',
@@ -205,6 +250,24 @@ export const calendarApp: ReturnType<typeof defineModule> = defineModule({
   ],
   importTemplates: [
     {
+      key: 'calendar_recurrence',
+      model: 'calendar.recurrence',
+      label: 'Repeating event',
+      columns: [
+        { header: 'Title', field: 'name' },
+        { header: 'First starts', field: 'start' },
+        { header: 'First ends', field: 'stop' },
+        { header: 'Organizer', field: 'organizer' },
+        { header: 'Room', field: 'room' },
+        { header: 'Repeats every', field: 'freq' },
+        { header: 'Every', field: 'interval' },
+        { header: 'In the month, on', field: 'monthlyOn' },
+        { header: 'On a weekend or a holiday', field: 'onDayOff' },
+        { header: 'Times', field: 'count' },
+        { header: 'Until', field: 'until' },
+      ],
+    },
+    {
       key: 'calendar_room',
       model: 'calendar.room',
       label: 'Room',
@@ -237,6 +300,11 @@ export const calendarApp: ReturnType<typeof defineModule> = defineModule({
   ],
   events: [
     { topic: 'calendar.event.cancelled', model: 'calendar.event', label: 'Meeting cancelled' },
+    {
+      topic: 'calendar.recurrence.generated',
+      model: 'calendar.recurrence',
+      label: 'Repeating event generated',
+    },
   ],
   // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
   i18n: { bn: () => import('./i18n/bn.js') },
@@ -333,6 +401,10 @@ export const calendarApp: ReturnType<typeof defineModule> = defineModule({
       label: 'Calendar',
       views: ['calendar', 'list', 'form'],
     }),
+    'agenda.action_recurrences': action(CalendarRecurrence, {
+      label: 'Repeating events',
+      views: ['list', 'form'],
+    }),
     'agenda.action_rooms': action(CalendarRoom, { label: 'Rooms', views: ['list', 'form'] }),
   },
   menus: [
@@ -343,6 +415,13 @@ export const calendarApp: ReturnType<typeof defineModule> = defineModule({
       label: 'Calendar',
       action: 'agenda.action_events',
       sequence: 1,
+    },
+    {
+      id: 'agenda.recurrences',
+      parent: 'agenda.root',
+      label: 'Repeating events',
+      action: 'agenda.action_recurrences',
+      sequence: 2,
     },
     { id: 'agenda.configuration', parent: 'agenda.root', label: 'Configuration', sequence: 9 },
     {
@@ -389,6 +468,70 @@ export const calendarApp: ReturnType<typeof defineModule> = defineModule({
         k.group('where', ['room', 'location', 'videoUrl']),
         k.lines('attendees', ['user', 'partner', 'response']),
         k.group('about', ['description'], { columns: 1 }),
+        k.group('series', ['recurrence', 'recurrenceDate', 'detached'], {
+          label: 'Repeating',
+          description: 'For an occurrence of a repeating event.',
+        }),
+      ],
+      chatter: true,
+    })),
+    'calendar.recurrence.list': list(CalendarRecurrence, {
+      columns: [
+        'name',
+        'summary',
+        'start',
+        'organizer',
+        'room',
+        { field: 'state', widget: 'badge' },
+      ],
+      defaultOrder: ['start desc'],
+    }),
+    'calendar.recurrence.form': form(CalendarRecurrence, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('generate', {
+            primary: true,
+            label: 'Generate',
+            confirm:
+              'Generate the occurrences? The ones still to come are redone; the past and the ones kept as they are stay.',
+          }),
+          k.button('halt', {
+            label: 'Stop the series',
+            confirm: 'Stop? The occurrences still to come are removed.',
+          }),
+        ],
+      },
+      sheet: [
+        k.group('when', [
+          'name',
+          { field: 'start', id: 'first_start' },
+          { field: 'stop', id: 'first_stop' },
+          'organizer',
+          'privacy',
+        ]),
+        k.group('rule', ['freq', 'interval', 'monthlyOn', 'onDayOff', 'summary'], {
+          label: 'Repeats',
+        }),
+        k.group('days', ['onSun', 'onMon', 'onTue', 'onWed', 'onThu', 'onFri', 'onSat'], {
+          label: 'On these days',
+          description: 'For a series by week; none ticked: the weekday of the first meeting.',
+        }),
+        k.group('end', ['count', 'until'], {
+          label: 'Ends',
+          description:
+            'After a number of times, or on a date (whichever comes first). At most 366 occurrences.',
+        }),
+        k.group('who', ['people', 'contacts'], { label: 'Invited', columns: 1 }),
+        k.group('where', ['room', 'location', 'videoUrl']),
+        k.group('about', ['description'], { columns: 1 }),
+        k.lines('events', [
+          { field: 'start', id: 'occurrence_start' },
+          { field: 'stop', id: 'occurrence_stop' },
+          { field: 'room', id: 'occurrence_room' },
+          { field: 'state', id: 'occurrence_state' },
+          'detached',
+        ]),
       ],
       chatter: true,
     })),
@@ -414,6 +557,15 @@ export const calendarApp: ReturnType<typeof defineModule> = defineModule({
         cancelled: { label: 'Cancelled', domain: { state: 'cancelled' }, group: 'state' },
       },
       groupBy: ['organizer', 'room', 'start:week'],
+    }),
+    'calendar.recurrence': search(CalendarRecurrence, {
+      fields: ['name', 'location', 'room.name'],
+      filters: {
+        mine: { label: 'I organize', domain: { organizer: { $env: 'uid' } } },
+        running: { label: 'Running', domain: { state: 'active' }, group: 'state' },
+        stopped: { label: 'Stopped', domain: { state: 'stopped' }, group: 'state' },
+      },
+      groupBy: ['organizer', 'room', 'freq', 'state'],
     }),
     'calendar.room': search(CalendarRoom, { fields: ['name', 'location'] }),
   },

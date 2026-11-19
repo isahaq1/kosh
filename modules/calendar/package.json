@@ -46,6 +46,7 @@
     "@kosh/views": "workspace:*",
     "@kosh/messaging": "workspace:*",
     "@kosh/contacts": "workspace:*",
+    "@kosh/worktime": "workspace:*",
     "@kosh/reporting": "workspace:*"
   },
   "devDependencies": {

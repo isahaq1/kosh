@@ -93,3 +93,40 @@ test('the calendar in full: month, week and day, the meeting at its hour; a new 
     .click();
   await expect(page).toHaveURL(/agenda\.action_events\/new/);
 });
+
+test('a repeating event: the rule in words, generated into its occurrences, then stopped (RFC 0034)', async ({
+  page,
+}) => {
+  await signIn(page, 'dina');
+  await page.goto('/agenda/a/agenda.action_recurrences/new');
+  const title = `Board meeting ${Date.now()}`;
+  await page.getByRole('textbox', { name: 'Title', exact: true }).fill(title);
+  // Monday 3 March 2031 (far ahead: every occurrence is still to come).
+  const start = page.getByRole('textbox', { name: 'First starts', exact: true });
+  await start.fill('2031-03-03T10:00');
+  await start.blur();
+  const end = page.getByRole('textbox', { name: 'First ends', exact: true });
+  await end.fill('2031-03-03T11:00');
+  await end.blur();
+  await page.getByRole('textbox', { name: 'Times', exact: true }).fill('3');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/agenda\.action_recurrences\/\d+$/);
+  await expect(page.getByText('Every week on Monday, 3 times')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Generate', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Yes' }).click();
+  await expect(page.getByRole('button', { name: /^State: Running/ })).toBeVisible();
+  // Its three Mondays are events of their own, on the calendar's list.
+  await page.goto('/agenda/a/agenda.action_events?view=list');
+  await expect(page.getByRole('row', { name: new RegExp(title) })).toHaveCount(3, {
+    timeout: 20_000,
+  });
+
+  await page.goBack();
+  await page.getByRole('button', { name: 'Stop the series' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Yes' }).click();
+  await expect(page.getByRole('button', { name: /^State: Stopped/ })).toBeVisible();
+  await page.goto('/agenda/a/agenda.action_events?view=list');
+  await expect(page.getByRole('heading', { name: 'Calendar', level: 1 })).toBeVisible();
+  await expect(page.getByRole('row', { name: new RegExp(title) })).toHaveCount(0);
+});

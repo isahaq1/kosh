@@ -270,6 +270,154 @@ test('the end follows the start by the default length of App settings', async ()
   ).toBe(403);
 });
 
+test('a repeating event: generated as events of their own, redone after a change, stopped; a taken room refuses it (RFC 0034)', async () => {
+  const R = '/api/v1/models/calendar.recurrence';
+  const step = (id: number, name: string, as: string) =>
+    call('POST', `${R}/${id}/transitions/${name}`, as);
+  /** The series' occurrences as `MM-DD HH:MM title` in UTC, in order. */
+  const occurrencesOf = async (id: number, as = 'rahim') =>
+    (
+      (
+        await call(
+          'GET',
+          `${E}?filter=${encodeURIComponent(JSON.stringify({ recurrence: id }))}&fields=name,start,stop,room,detached&order=start%20asc&limit=400`,
+          as,
+        )
+      ).json.items as Json[]
+    ).map((e) => ({
+      ...e,
+      at: `${String(e.start).slice(5, 10)} ${String(e.start).slice(11, 16)} ${e.name}`,
+    }));
+
+  // A rule without an end, or repeating every 0, is refused.
+  const base = {
+    name: 'Weekly review',
+    start: '2030-01-07T04:00:00Z', // Monday 10:00 in Dhaka
+    stop: '2030-01-07T05:00:00Z',
+    freq: 'weekly',
+    onMon: true,
+    onWed: true,
+    room,
+    people: { set: [users['sumi']] },
+  };
+  expect((await call('POST', R, 'rahim', base)).status).toBe(422);
+  expect((await call('POST', R, 'rahim', { ...base, count: 4, interval: 0 })).status).toBe(422);
+  const made = await call('POST', R, 'rahim', { ...base, count: 4 });
+  expect(made.status, JSON.stringify(made.json)).toBe(201);
+  const id = made.json.id as number;
+  expect((await call('GET', `${R}/${id}?fields=summary,state`, 'rahim')).json).toMatchObject({
+    summary: 'Every week on Monday and Wednesday, 4 times',
+    state: 'draft',
+  });
+  // Not someone else's to generate; nobody outside Agenda sees it.
+  expect((await step(id, 'generate', 'sumi')).status).toBe(403);
+  expect((await call('GET', R, 'bob')).status).toBe(403);
+
+  expect((await step(id, 'generate', 'rahim')).status).toBe(200);
+  let events = await occurrencesOf(id);
+  expect(events.map((e) => e.at)).toEqual([
+    '01-07 04:00 Weekly review',
+    '01-09 04:00 Weekly review',
+    '01-14 04:00 Weekly review',
+    '01-16 04:00 Weekly review',
+  ]);
+  // Each is an event of its own: an hour long, in the room, with Sumi invited — who sees them.
+  expect(String(events[0]?.stop).slice(11, 16)).toBe('05:00');
+  expect(events.every((e) => (e.room?.id ?? e.room) === room)).toBe(true);
+  expect(await occurrencesOf(id, 'sumi')).toHaveLength(4);
+  const attendees = (
+    await call(
+      'GET',
+      `/api/v1/models/calendar.attendee?filter=${encodeURIComponent(JSON.stringify({ event: events[0]?.id }))}&fields=user,response`,
+      'rahim',
+    )
+  ).json.items as Json[];
+  expect(attendees.map((a) => [a.user?.id ?? a.user, a.response])).toEqual([
+    [users['sumi'], 'needs_action'],
+  ]);
+
+  // Another series in the same room at that hour is refused, naming the date; nothing of it is made.
+  const other = await call('POST', R, 'sumi', {
+    name: 'Stand-up',
+    start: '2030-01-14T04:30:00Z',
+    stop: '2030-01-14T04:45:00Z',
+    freq: 'daily',
+    count: 3,
+    room,
+  });
+  expect(other.status, JSON.stringify(other.json)).toBe(201);
+  const refused = await step(other.json.id, 'generate', 'sumi');
+  expect(refused.status).toBe(422);
+  expect(JSON.stringify(refused.json)).toContain('already booked on 2030-01-14');
+  expect(await occurrencesOf(other.json.id, 'sumi')).toEqual([]);
+  expect((await call('GET', `${R}/${other.json.id}?fields=state`, 'sumi')).json.state).toBe(
+    'draft',
+  );
+
+  // One occurrence is moved by hand, another is kept as it is; then the series changes: renamed, six times.
+  expect(
+    (
+      await call('PATCH', `${E}/${events[1]?.id}`, 'rahim', {
+        start: '2030-01-09T08:00:00Z',
+        stop: '2030-01-09T09:00:00Z',
+      })
+    ).status,
+  ).toBe(200);
+  expect((await call('PATCH', `${E}/${events[2]?.id}`, 'rahim', { detached: true })).status).toBe(
+    200,
+  );
+  expect((await call('PATCH', `${R}/${id}`, 'rahim', { name: 'Review', count: 6 })).status).toBe(
+    200,
+  );
+  expect((await step(id, 'generate', 'rahim')).status).toBe(200);
+  events = await occurrencesOf(id);
+  expect(events.map((e) => e.at)).toEqual([
+    '01-07 04:00 Review',
+    '01-09 08:00 Weekly review', // moved by hand: left alone
+    '01-14 04:00 Weekly review', // kept as it is
+    '01-16 04:00 Review',
+    '01-21 04:00 Review',
+    '01-23 04:00 Review',
+  ]);
+
+  // Stopped: what was still the series' own is removed; the two that are their own stay.
+  expect((await step(id, 'halt', 'rahim')).status).toBe(200);
+  expect((await occurrencesOf(id)).map((e) => e.at)).toEqual([
+    '01-09 08:00 Weekly review',
+    '01-14 04:00 Weekly review',
+  ]);
+  expect((await call('GET', `${R}/${id}?fields=state`, 'rahim')).json.state).toBe('stopped');
+});
+
+test('a repeating event on a day off: moved to the working day after, by the working calendar', async () => {
+  const R = '/api/v1/models/calendar.recurrence';
+  // Fridays from 4 January 2030, 11:00 in Dhaka; Friday and Saturday are the weekend.
+  const made = await call('POST', R, 'sumi', {
+    name: 'Site visit',
+    start: '2030-01-04T05:00:00Z',
+    stop: '2030-01-04T06:00:00Z',
+    freq: 'weekly',
+    count: 2,
+    onDayOff: 'after',
+  });
+  expect(made.status, JSON.stringify(made.json)).toBe(201);
+  expect((await call('POST', `${R}/${made.json.id}/transitions/generate`, 'sumi')).status).toBe(
+    200,
+  );
+  const events = (
+    await call(
+      'GET',
+      `${E}?filter=${encodeURIComponent(JSON.stringify({ recurrence: made.json.id }))}&fields=start&order=start%20asc`,
+      'sumi',
+    )
+  ).json.items as Json[];
+  // Sunday the 6th and Sunday the 13th, at the same time of day.
+  expect(events.map((e) => new Date(e.start).toISOString())).toEqual([
+    '2030-01-06T05:00:00.000Z',
+    '2030-01-13T05:00:00.000Z',
+  ]);
+});
+
 test('the demo data loads', async () => {
   const auth = host.server.auth;
   if (auth === undefined) throw new Error('base is installed');
