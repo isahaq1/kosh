@@ -200,6 +200,9 @@ importers:
       '@kosh/stock_account':
         specifier: workspace:*
         version: link:../../modules/stock_account
+      '@kosh/subscription':
+        specifier: workspace:*
+        version: link:../../modules/subscription
       '@kosh/todo':
         specifier: workspace:*
         version: link:../../modules/todo
@@ -545,6 +548,9 @@ importers:
       '@kosh/stock_account':
         specifier: workspace:*
         version: link:../../modules/stock_account
+      '@kosh/subscription':
+        specifier: workspace:*
+        version: link:../../modules/subscription
       '@kosh/todo':
         specifier: workspace:*
         version: link:../../modules/todo
@@ -2666,6 +2672,37 @@ importers:
         specifier: ^17.0.21
         version: 17.0.21(i18next@26.4.7(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
 
+  modules/subscription:
+    dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../accounting
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   modules/todo:
     dependencies:
       '@kosh/messaging':
@@ -3328,6 +3365,9 @@ importers:
       '@kosh/studio':
         specifier: workspace:*
         version: link:../studio
+      '@kosh/subscription':
+        specifier: workspace:*
+        version: link:../../modules/subscription
       '@kosh/todo':
         specifier: workspace:*
         version: link:../../modules/todo

@@ -106,6 +106,7 @@
     "@kosh/storage": "workspace:*",
     "@kosh/studio": "workspace:*",
     "@kosh/todo": "workspace:*",
+    "@kosh/subscription": "workspace:*",
     "@kosh/worktime": "workspace:*",
     "@kosh/trade_finance": "workspace:*",
     "@kosh/trade_finance_account": "workspace:*",

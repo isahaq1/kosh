@@ -84,6 +84,7 @@ import { settings } from '@kosh/settings';
 import { sign } from '@kosh/sign';
 import { stock } from '@kosh/stock';
 import { stockAccount } from '@kosh/stock_account';
+import { subscription } from '@kosh/subscription';
 import { todo } from '@kosh/todo';
 import { tradeFinance } from '@kosh/trade_finance';
 import { tradeFinanceAccount } from '@kosh/trade_finance_account';
@@ -155,6 +156,7 @@ const CATALOGUE = [
   todo,
   calendarApp,
   worktime,
+  subscription,
   crm,
   hr,
   recruitment,
@@ -230,6 +232,7 @@ await applyApps(
         'todo',
         'calendar',
         'worktime',
+        'subscription',
         'crm',
         'hr',
         'recruitment',
@@ -308,6 +311,7 @@ for (const [login, name, groups] of [
       'todo.user',
       'calendar.manager',
       'worktime.manager',
+      'subscription.manager',
       'crm.manager',
       'hr.manager',
       'hiring.manager',
@@ -355,6 +359,7 @@ for (const [login, name, groups] of [
       'todo.user',
       'calendar.user',
       'worktime.user',
+      'subscription.user',
       'crm.user',
       'hr.user',
       'hiring.user',

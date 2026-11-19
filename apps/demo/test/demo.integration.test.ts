@@ -133,6 +133,7 @@ test('every app with demo data loaded it, once', async () => {
     'sale_stock',
     'sales',
     'stock',
+    'subscription',
     'todo',
     'trade_finance',
     'website',
@@ -166,7 +167,7 @@ test('every app with demo data loaded it, once', async () => {
     text: 'SELECT count(*)::text AS n FROM kosh_module WHERE demo_at IS NOT NULL',
     params: [],
   });
-  expect(Number(marks[0]?.n)).toBe(34);
+  expect(Number(marks[0]?.n)).toBe(35);
 });
 
 test('the salesperson sees the orders and the invoices made from them; the buyer the approvals', async () => {
@@ -239,5 +240,9 @@ test('projects, tasks and the timesheets of their authors; the service products 
     ['Consulting day', 'none'],
     ['Installation hours', 'task'],
     ['Site audit', 'project'],
+    // Subscriptions' services: sold again and again, they make no task.
+    ['SMS sent', 'none'],
+    ['Software seat', 'none'],
+    ['Support plan', 'none'],
   ]);
 });
