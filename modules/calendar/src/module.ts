@@ -36,6 +36,12 @@ import {
   type Rule,
 } from './recurrence.js';
 
+/**
+ * Fields the server maintains: written by its own code (as the system) and by Administrators only. An empty list
+ * would mean *everyone* — Shutro reads no groups as no restriction.
+ */
+const SYSTEM = ['base.admin'] as const;
+
 const ALL = ['read', 'write', 'create', 'unlink'] as const;
 const me = { $env: 'uid' } as const;
 
@@ -112,12 +118,16 @@ export const CalendarEvent = defineModel('calendar.event', {
     recurrence: f.many2one('calendar.recurrence', {
       ondelete: 'set null',
       label: 'Repeats as',
-      groups: { write: [] },
+      groups: { write: [...SYSTEM] },
     }),
-    recurrenceDate: f.date({ label: 'Date in the series', groups: { write: [] } }),
+    recurrenceDate: f.date({ label: 'Date in the series', groups: { write: [...SYSTEM] } }),
     /** Raised at each invitation sent: a mail client keeps the latest version of the event. */
-    inviteSequence: f.integer({ default: 0, label: 'Invitation version', groups: { write: [] } }),
-    invitedAt: f.datetime({ label: 'Invitations sent', groups: { write: [] } }),
+    inviteSequence: f.integer({
+      default: 0,
+      label: 'Invitation version',
+      groups: { write: [...SYSTEM] },
+    }),
+    invitedAt: f.datetime({ label: 'Invitations sent', groups: { write: [...SYSTEM] } }),
     detached: f.boolean({
       default: false,
       label: 'Keep as it is',
@@ -494,7 +504,7 @@ export const CalendarAttendee = defineModel('calendar.attendee', {
     event: f.many2one('calendar.event', { required: true, ondelete: 'cascade' }),
     user: f.many2one('res.users', { label: 'Person' }),
     partner: f.many2one('res.partner', { label: 'Contact' }),
-    invitedAt: f.datetime({ label: 'Invited by email', groups: { write: [] } }),
+    invitedAt: f.datetime({ label: 'Invited by email', groups: { write: [...SYSTEM] } }),
     response: f.selection(
       {
         needs_action: 'Not answered',
@@ -541,14 +551,14 @@ export const CalendarFeed = defineModel('calendar.feed', {
       required: true,
       default: (env: Env) => env.userId,
       ondelete: 'cascade',
-      groups: { write: [] },
+      groups: { write: [...SYSTEM] },
     }),
     token: f.char({
       size: 64,
       required: true,
       index: 'unique',
       default: () => randomBytes(24).toString('base64url'),
-      groups: { write: [] },
+      groups: { write: [...SYSTEM] },
     }),
     address: f.char({
       label: 'Address to subscribe to',
@@ -559,7 +569,7 @@ export const CalendarFeed = defineModel('calendar.feed', {
       }),
       store: true,
     }),
-    lastReadAt: f.datetime({ label: 'Last read', groups: { write: [] } }),
+    lastReadAt: f.datetime({ label: 'Last read', groups: { write: [...SYSTEM] } }),
   },
 });
 

@@ -20,6 +20,12 @@ import {
 } from './.kosh/bindings.js';
 import { ProductLanded, StockLandedCost, StockLandedCostLine } from './landed.js';
 
+/**
+ * Fields the server maintains: written by its own code (as the system) and by Administrators only. An empty list
+ * would mean *everyone* — Shutro reads no groups as no restriction.
+ */
+const SYSTEM = ['base.admin'] as const;
+
 const zero = orm.toDecimal(0);
 const money = (d: Decimal) => d.toDecimalPlaces(2);
 
@@ -116,7 +122,7 @@ export const PickingLayers = extendModel('stock.picking', {
     accountingDate: f.date({
       label: 'Accounting date',
       help: 'The date of its stock entry and valuation; empty, the day it is validated.',
-      groups: { write: [] },
+      groups: { write: [...SYSTEM] },
     }),
   },
 });
@@ -388,7 +394,7 @@ export const MoveCost = extendModel('stock.move', {
       scale: 6,
       label: 'Unit cost',
       help: 'What each unit of this line comes into stock at; empty, the product’s cost or its order’s price.',
-      groups: { write: [] },
+      groups: { write: [...SYSTEM] },
     }),
   },
   overrides: {

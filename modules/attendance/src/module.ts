@@ -22,6 +22,12 @@ import {
   records,
 } from './.kosh/bindings.js';
 
+/**
+ * Fields the server maintains: written by its own code (as the system) and by Administrators only. An empty list
+ * would mean *everyone* — Shutro reads no groups as no restriction.
+ */
+const SYSTEM = ['base.admin'] as const;
+
 const READ = ['read'] as const;
 const ALL = ['read', 'write', 'create', 'unlink'] as const;
 const MANAGERS = ['attendance.manager'];
@@ -298,11 +304,11 @@ export const AttendanceDevice = defineModel('attendance.device', {
       label: 'Only from addresses',
       help: 'The network addresses the machine may send from, separated by commas (the site’s public address). Empty: any.',
     }),
-    lastSeenAt: f.datetime({ label: 'Last seen', groups: { write: [] } }),
-    lastAddress: f.char({ label: 'Last address', groups: { write: [] } }),
-    lastPunchAt: f.datetime({ label: 'Last punch', groups: { write: [] } }),
+    lastSeenAt: f.datetime({ label: 'Last seen', groups: { write: [...SYSTEM] } }),
+    lastAddress: f.char({ label: 'Last address', groups: { write: [...SYSTEM] } }),
+    lastPunchAt: f.datetime({ label: 'Last punch', groups: { write: [...SYSTEM] } }),
     /** The machine's own mark of what it has sent: given back to it so that it sends only what is new. */
-    stamp: f.char({ size: 32, label: 'Sent up to', groups: { write: [] } }),
+    stamp: f.char({ size: 32, label: 'Sent up to', groups: { write: [...SYSTEM] } }),
     punches: f.one2many('attendance.device.punch', 'device'),
   },
 });
