@@ -396,3 +396,15 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   count their own way; part 2 moves Workforce leave onto the calendar (holidays not charged), then Helpdesk SLAs,
   Attendance, Production capacity, and payment terms and delivery dates in working days; recurring events, ICS and
   the Google / Microsoft sync follow.
+- **Step 6, part 2a (2026-11-19).** **Leave counts by the working calendar.** Workforce depends on Working time.
+  An employee has a **working calendar** (empty: the company's); a leave's days are the working days of that
+  calendar between its dates — **public holidays are not charged**, nor the days the person does not work anyway
+  (their personal exceptions) — on the form as the dates are typed and checked by the server when it is saved
+  (`leaveDays`). Someone on a Monday-to-Friday calendar and someone on the company's Sunday-to-Thursday week get
+  different counts for the same dates, each right. **The weekend setting of Workforce is gone** (App settings ›
+  Workforce › Working week): the week is the company's calendar now, and Attendance reads its weekend from it
+  (`weekendOf`: the days the calendar has no hours on). HR managers are Working time managers (they set calendars,
+  holidays and exceptions); employees read them. Leave already requested keeps its days: the count is checked when
+  a leave's dates or days change. **For an installation that had changed the weekend setting**: its choice is not
+  carried over — set the company's calendar's week once (Working time › Calendars). Next: Helpdesk SLAs,
+  Attendance's holidays, Production capacity, terms in working days.

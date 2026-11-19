@@ -35,6 +35,16 @@ remove or add what your company observes.
 
 Managers (the *Working time manager* role) set all this; everyone with the app reads it.
 
+## Who counts with it
+
+- **Leave (Workforce).** An employee has a *Working calendar* (Employee › Schedule; empty: the company's). A leave
+  takes the working days of that calendar between its dates: holidays are not charged, nor a day the person does
+  not work anyway. The form counts as the dates are typed and the server checks it when the leave is saved. HR
+  managers set calendars, holidays and exceptions. (The old *Working week* setting of Workforce is gone: set the
+  week on the company's calendar.)
+- **Attendance** reads the company's weekend from the calendar. Its own holiday list is still separate — next.
+- Helpdesk deadlines, Production capacity and due dates in working days: still to move.
+
 ## For module authors
 
 ```ts

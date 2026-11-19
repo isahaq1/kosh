@@ -598,7 +598,7 @@ duplicates by email, phone or company (`GET /api/v1/pipeline/deals/:id/duplicate
 ### Workforce (`modules/hr`, RFC 0021)
 
 Employees (separate from users), the org chart, departments, positions, contracts and leave. Leave counts working
-days by the weekend set in App settings › Workforce, keeps to the year's balance, never overlaps, and is decided by
+days by the person's working calendar (Working time: holidays are not charged), keeps to the year's balance, never overlaps, and is decided by
 the line manager (`POST /api/v1/workforce/leaves/:id/decide`) or HR — never by the person asking. Personal details
 and wages are for HR managers only. Install it with `shutro-erp apps install hr`.
 
