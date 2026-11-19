@@ -49,7 +49,14 @@ Managers (the *Working time manager* role) set all this; everyone with the app r
 - **Helpdesk.** A team may have a *Working calendar* (Team › Business hours): its SLA targets then count that
   calendar's hours, without its breaks and holidays. Left empty, the team keeps its own opening hours and weekend
   — right for a desk that works other hours than the office.
-- Production capacity and due dates in working days: still to move.
+- **Production.** A work centre may have a *Working calendar*: its work orders are scheduled inside the calendar's
+  hours, around breaks, weekends and holidays, and *Capacity* shows each day's capacity hours (none on a day off).
+  Left empty, the centre works every day from 08:00 for its *Hours a day*, as before.
+- **Accounting.** A payment term's *Days are*: *Calendar days* (the default); *Calendar days, never due on a day
+  off* — a due date on a weekend or a holiday moves to the next working day —; or *Working days*, counted on the
+  company's calendar. "10 working days" from Thursday 10 December 2026 is Sunday the 27th when the 16th is a
+  holiday.
+- Not yet: delivery and arrival dates of Sales and Purchase (their lead days are calendar days).
 
 ## For module authors
 

@@ -425,3 +425,21 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   target days away while a team on its own hours is due in hours; the lunch break and a holiday in the engine's
   adapter; Attendance's holiday test through Working time. Next: Production capacity and terms in working days,
   then recurring events and ICS.
+- **Step 6, part 2c (2026-11-19). Production and payment terms on Working time.**
+  *Production*: a work centre may have a **working calendar**; its work orders are then scheduled inside the
+  calendar's hours — starting at the next working moment and stopping when that many working minutes have passed,
+  around its breaks, weekends and holidays (`centreSchedule`, `scheduleWithin`). The capacity by day says each
+  day's **capacity hours** (none on a weekend or a holiday) and counts planned work inside the working windows
+  only; a plan line's capacity check adds up the working minutes of its slot's days. A centre without a calendar
+  works as before: every day from 08:00 for its hours a day (the default is unchanged, and so are existing
+  schedules). The capacity request reads calendars as the system, so it is opened for writing.
+  *Accounting*: a payment term says how its **days are** counted — *calendar days* (as before, the default),
+  *calendar days, never due on a day off* (a due date on a weekend or a holiday moves to the next working day), or
+  *working days* (counted on the company's calendar, holidays not counted). Applied when a document is posted, to
+  each part's maturity and the document's due date. Accounting now depends on Working time.
+  Tests: ten hours from a Friday around lunch and over the weekend, twenty more over a holiday, the capacity of
+  six days with a weekend and a shutdown; ten working days over Victory Day, thirty days landing on a Saturday,
+  six days landing on the holiday. **The apps that count time now count with one engine**: leave, attendance,
+  Helpdesk SLAs, production scheduling and capacity, payment due dates. Left out: delivery and arrival dates in
+  working days (Sales and Purchase lead days are still calendar days), Projects' schedule, quiet hours of
+  notifications. Next in step 6: recurring events and ICS invitations, then the Google / Microsoft sync.
