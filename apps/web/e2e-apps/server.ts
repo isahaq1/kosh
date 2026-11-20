@@ -98,6 +98,7 @@ import { website } from '@kosh/website';
 import { websiteCrm } from '@kosh/website_crm';
 import { websiteHiring } from '@kosh/website_hiring';
 import { websiteSale } from '@kosh/website_sale';
+import { websiteSaleLoyalty } from '@kosh/website_sale_loyalty';
 import { websiteSaleStock } from '@kosh/website_sale_stock';
 import { worktime } from '@kosh/worktime';
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
@@ -197,6 +198,7 @@ const CATALOGUE = [
   saleCrm,
   websiteSale,
   websiteSaleStock,
+  websiteSaleLoyalty,
   posStock,
   expense,
   indent,

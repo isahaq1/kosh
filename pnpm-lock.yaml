@@ -242,6 +242,9 @@ importers:
       '@kosh/website_sale':
         specifier: workspace:*
         version: link:../../modules/website_sale
+      '@kosh/website_sale_loyalty':
+        specifier: workspace:*
+        version: link:../../modules/website_sale_loyalty
       '@kosh/website_sale_stock':
         specifier: workspace:*
         version: link:../../modules/website_sale_stock
@@ -439,6 +442,9 @@ importers:
       '@kosh/website_sale':
         specifier: workspace:*
         version: link:../../modules/website_sale
+      '@kosh/website_sale_loyalty':
+        specifier: workspace:*
+        version: link:../../modules/website_sale_loyalty
       '@kosh/website_sale_stock':
         specifier: workspace:*
         version: link:../../modules/website_sale_stock
@@ -3184,6 +3190,25 @@ importers:
         specifier: ^12.2.1
         version: 12.2.1
 
+  modules/website_sale_loyalty:
+    dependencies:
+      '@kosh/loyalty':
+        specifier: workspace:*
+        version: link:../loyalty
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/website_sale':
+        specifier: workspace:*
+        version: link:../website_sale
+    devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   modules/website_sale_stock:
     dependencies:
       '@kosh/modules-sdk':
@@ -3589,6 +3614,9 @@ importers:
       '@kosh/website_sale':
         specifier: workspace:*
         version: link:../../modules/website_sale
+      '@kosh/website_sale_loyalty':
+        specifier: workspace:*
+        version: link:../../modules/website_sale_loyalty
       '@kosh/website_sale_stock':
         specifier: workspace:*
         version: link:../../modules/website_sale_stock

@@ -47,6 +47,7 @@ export type AppName =
   | 'project_billing'
   | 'hr_accrual'
   | 'website_hiring'
+  | 'website_sale_loyalty'
   | 'project_purchase'
   | 'approvals_purchase'
   | 'indent_purchase'
@@ -332,6 +333,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'websiteHiring',
     bridge: ['website', 'recruitment'],
+  },
+  website_sale_loyalty: {
+    label: 'Loyalty in the Shop: promotions on every cart, promotion codes and gift cards',
+    icon: '🔗',
+    server: 'websiteSaleLoyalty',
+    bridge: ['website_sale', 'loyalty'],
   },
   project_purchase: {
     label:

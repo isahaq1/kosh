@@ -873,11 +873,15 @@ async function ordersOf(
     out.set(o.id as number, {
       date: iso(o.dateOrder),
       partner: o.partner.id as number,
-      lines: [...o.lines].map((l) => ({
-        product: l.product.id as number,
-        category: (l.product.category?.id as number | undefined) ?? null,
-        amount: cents(l.subtotal),
-      })),
+      // What earns: the goods, and everything that takes off them. A charge an app adds — a delivery fee — is
+      // a product that cannot be sold by hand, and earns nothing.
+      lines: [...o.lines]
+        .filter((l) => l.product.saleOk !== false || cents(l.subtotal) < 0)
+        .map((l) => ({
+          product: l.product.id as number,
+          category: (l.product.category?.id as number | undefined) ?? null,
+          amount: cents(l.subtotal),
+        })),
     });
   return out;
 }
@@ -1109,7 +1113,8 @@ async function promoOrdersOf(su: Env, ids: readonly number[]): Promise<Map<numbe
       date: iso(o.dateOrder),
       code: (o.promoCode ?? '').trim().toUpperCase(),
       lines: [...o.lines]
-        .filter((l) => l.loyaltyKind === null)
+        // The goods: not what Loyalty added, nor an app's fees and coupons (products not sold by hand).
+        .filter((l) => l.loyaltyKind === null && l.product.saleOk !== false)
         .map((l) => ({
           product: l.product.id as number,
           category: (l.product.category?.id as number | undefined) ?? null,
