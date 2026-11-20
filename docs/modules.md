@@ -1328,3 +1328,61 @@ activate (Workforce › Configuration › Accrual plans, filter *Archived*):
 
 Until a plan is switched on, its leave type keeps its days per year. Someone who joins after January is given
 their share of casual and sick leave as an adjustment.
+
+## Surveys
+
+The **Surveys** app (`@kosh/survey`, RFC 0034 §2.6) is one engine for every questionnaire: customer feedback, a
+screening before an interview, an event's evaluation, a qualification form. Odoo has a survey app; this one adds
+anonymity that is kept by the server, scores against what each respondent was actually asked, and NPS and CSAT
+without a spreadsheet.
+
+- **Questions** (written on the survey while it is a draft): a line of text, a paragraph, a number, yes or no,
+  one of several choices, several choices, a rating in stars (2 to 10), the 0-to-10 *would you recommend us*
+  question, a date. Each may be required.
+- **Logic**: a question may be *asked only when* an earlier question's answer *is*, *is not*, *is more than*,
+  *is less than* a value, or *is answered*. A choice is named by its label. A question that is not asked hides the
+  ones that wait for it, and takes no answer — whatever was sent for it is dropped.
+- **Points**: a choice has points (below zero takes away); a rating or a recommendation scores its value times
+  *points per step*. A response's score is counted **against what the questions it was asked could give**, so a
+  short path through the survey is not a low score. With a *pass mark %*, a response passes or does not.
+- **Who answers**: *anyone with the link* — one address, any number of times — or *invited people only*: each
+  invitation (Surveys › Invitations) has a link of its own, **good once**.
+- **Anonymous**: nothing that names the respondent is kept — no name, email, contact or invitation on the
+  response; the invitation is only marked as answered.
+- **Open, close**: a survey opens only when it holds together (a question, choices where they are needed, every
+  condition on an earlier question and a value it can have). Open, its questions do not change; with responses it
+  cannot go back to draft — duplicate it. Closed, it takes no answers.
+- **Results**: each response with its answers, score and outcome; on the survey the number of responses, the
+  average score, **NPS** (promoters 9–10 less detractors 0–6, in percent) and **CSAT** (the share of ratings in
+  the top two fifths of their scale); Surveys › Answers counts every question's answers.
+
+### The public page
+
+`/api/v1/public/surveys/<key>/page` is one self-contained document: no sign-in, no framework, nothing loaded from
+elsewhere, a strict content security policy, never cached or framed. It works with a keyboard and a screen
+reader, in light and dark, on a phone, in English or Bangla (`?lang=bn`, or the browser's language). It shows and
+hides questions as they are answered; **the server reviews every answer again** and returns each problem with its
+question.
+
+A site that draws its own form uses the data instead:
+
+```http
+GET  /api/v1/public/surveys/<key>          the questions as they are asked — never the points
+POST /api/v1/public/surveys/<key>          { "answers": { "<question id>": 9, … }, "name": "…", "email": "…" }
+     201 { "thanks": "…" }    422 { "errors": [{ "question": 12, "title": "…", "problem": "needs an answer" }] }
+     404 unknown key          410 closed, or an invitation already used
+GET  /api/v1/surveys/<id>/results          signed in: every question with its count, average, NPS / CSAT, choices
+```
+
+```ts
+import { review, nps, csat } from '@kosh/survey';
+
+review(questions, { 1: 3, 2: 'Late' }); // { answers, errors, score, maxScore } — the engine, without a database
+```
+
+Roles: **User** invites people and reads responses and results; **Manager** writes surveys.
+An invitation may say what record it is about (`resModel`, `resId`); the response carries it, for the apps that
+ask on behalf of a ticket, an applicant or a registration.
+
+**Not yet** (RFC 0034 step 11, next parts): invitations emailed by themselves; Helpdesk's rating, Hiring's
+screening and Event Hub's feedback asked through a survey; the careers page.

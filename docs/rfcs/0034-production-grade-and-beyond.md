@@ -656,3 +656,22 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   **Left out**: cancelling an approved payout from its form, payouts decided through the Approvals engine,
   payout at the end of service (final settlement), a pro-rata first year for casual and sick leave in the
   Bangladesh plans. Step 10 complete.
+
+- **Step 11 part 1 — the survey engine and its app (2026-11-20).** `@kosh/survey`, the Surveys app.
+  `engine.ts` without a database: `visibleQuestions` (a question waits for an earlier one that is itself shown),
+  `review` (answers by kind, an error per question, nothing kept for questions not asked, the score against the
+  maximum of what was asked), `nps`, `csat`. Models: `survey.survey` (`publish`, `close`, `reopen`, `redraft`),
+  `survey.question` with `survey.choice`, `survey.invitation` (a key of its own, used once), `survey.response`
+  with `survey.answer` — made by the server only. A condition on a choice is written by its label and resolved
+  to the choice when the survey is loaded; a survey with a condition that cannot hold does not open. Keys are
+  18 random bytes, written by the server. The public page is one HTML document with a nonce'd script and a
+  `default-src 'none'` policy; it is answered as the system by the key alone, in a `bootstrap` without a company.
+  Tests: the engine (5), the API on real PostgreSQL (6: what opens, the page and its headers in two languages,
+  the review's errors, what is kept and scored, the figures and the results, an invitation used once on an
+  anonymous survey, the locks, who may do what), an E2E with a visitor who is not signed in.
+  **Found on the way**: a boolean cannot be empty in Shutro, so "passed" is a three-way *outcome* — a survey
+  without a pass mark has neither passed nor failed.
+  **Left for the next parts**: invitations sent by email, the bridges (Helpdesk CSAT and NPS, Hiring screening,
+  Event Hub feedback, Pipeline qualification), the careers page. **Left out**: pages and sections, a time limit,
+  file uploads as answers, one answer per person on a public link (that is what invitations are for), a captcha
+  (the server's rate limit applies).
