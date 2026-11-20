@@ -11,6 +11,7 @@
 import { attendanceShutro } from '@kosh/attendance';
 import { hrShutro, leaveDays } from '@kosh/hr';
 import { evaluate, FormulaError, parse, payrollShutro, variablesOf } from '@kosh/payroll';
+import { emitting } from '@kosh/server';
 import { type Decimal, orm } from '@kosh/server/orm';
 import {
   check,
@@ -20,6 +21,7 @@ import {
   extendModel,
   f,
   type Records,
+  records,
 } from './.kosh/bindings.js';
 import {
   type AccrualRules,
@@ -62,10 +64,21 @@ export const ACCRUAL_VARIABLES = {
   BALANCE: 'The balance before the month’s accrual, in days',
 } as const;
 
+/** What the value of a day paid out may read. */
+export const ENCASH_VARIABLES = {
+  WAGE: 'The monthly wage of the person’s running contract',
+  DAYS: 'The days paid out',
+  BALANCE: 'The balance on the day, before the days are paid out',
+  SERVICE_YEARS: 'Full years of service on the day',
+} as const;
+
 /** The first problem of a formula, or `null`: it parses, and reads only what a plan knows. */
-export function formulaProblem(text: string): string | null {
+export function formulaProblem(
+  text: string,
+  known: Readonly<Record<string, string>> = ACCRUAL_VARIABLES,
+): string | null {
   try {
-    const unknown = variablesOf(parse(text)).filter((v) => !(v in ACCRUAL_VARIABLES));
+    const unknown = variablesOf(parse(text)).filter((v) => !(v in known));
     return unknown.length === 0 ? null : `Unknown: ${unknown.join(', ')}.`;
   } catch (error) {
     if (error instanceof FormulaError) return error.message;
@@ -79,7 +92,15 @@ export const AccrualPlan = defineModel('hr.accrual.plan', {
   order: ['name asc'],
   archivable: true,
   companyScoped: { required: true },
-  tracking: ['formula', 'cap', 'carryOver', 'carryExpiryMonth', 'probationMonths'],
+  tracking: [
+    'formula',
+    'cap',
+    'carryOver',
+    'carryExpiryMonth',
+    'probationMonths',
+    'encashable',
+    'encashFormula',
+  ],
   access: { 'hr.user': READ, 'hr.manager': [...ALL, 'export', 'import'] },
   fields: {
     name: f.char({ required: true }),
@@ -122,6 +143,33 @@ export const AccrualPlan = defineModel('hr.accrual.plan', {
       label: 'Carried days expire after month',
       help: 'Carried days not used by the end of this month of the new year are lost (3: on 31 March); empty: never.',
     }),
+    note: f.text({ label: 'Note', help: 'Where the rule comes from, and what to check.' }),
+    encashable: f.boolean({
+      default: false,
+      label: 'Days may be paid out',
+      help: 'People ask to be paid for days they did not take; HR approves, Payroll pays.',
+    }),
+    encashKeep: f.decimal({
+      scale: 2,
+      required: true,
+      default: '0',
+      label: 'Days that stay',
+      help: 'The balance never goes below this by a payout.',
+    }),
+    encashFormula: f.char({
+      size: 500,
+      required: true,
+      default: 'WAGE / 30',
+      label: 'A day is worth',
+      help: 'In Payroll’s formula language: WAGE / 30 — WAGE * 0.6 / 26. It may read WAGE, DAYS, BALANCE and SERVICE_YEARS.',
+    }),
+    encashCode: f.char({
+      size: 40,
+      required: true,
+      default: 'LEAVE_ENCASH',
+      label: 'Payroll input',
+      help: 'The amount goes to Payroll as this input; the salary structure pays it with a rule that reads INPUT_ and this code.',
+    }),
   },
   sqlConstraints: {
     sane: {
@@ -138,6 +186,17 @@ export const AccrualPlan = defineModel('hr.accrual.plan', {
       ),
       message:
         'The formula does not read: use numbers, + - * /, min, max, round, if(…), and SERVICE_MONTHS, SERVICE_YEARS, WORKED_DAYS, WORKING_DAYS, MONTH, BALANCE.',
+    },
+    encashReads: {
+      ...check('hr.accrual.plan', ['encashFormula', 'encashCode'], (plans) =>
+        plans.filter(
+          (p) =>
+            formulaProblem(p.encashFormula, ENCASH_VARIABLES) !== null ||
+            !/^[A-Z][A-Z0-9_]*$/.test(p.encashCode),
+        ),
+      ),
+      message:
+        'The value of a day does not read (it may use WAGE, DAYS, BALANCE and SERVICE_YEARS), or the payroll input is not a code in capitals.',
     },
     onePerType: {
       ...check('hr.accrual.plan', ['type', 'active', 'company'], (plans) =>
@@ -707,6 +766,271 @@ export async function projectLeave(
   });
 }
 
+// ---- paying days out
+
+const ENCASH_DECIDES =
+  'A payout is approved or refused by an HR manager, never one’s own; a refusal says why.';
+
+/** The requests among `ids` the acting user may not decide: all without the permission, and their own. */
+async function payoutUndecidable(
+  env: Env,
+  ids: readonly number[],
+  refusing: boolean,
+): Promise<number[]> {
+  if (!env.su && !env.access.has('hr_accrual.encash_decide')) return [...ids];
+  const me = env.userId;
+  const system = env.su;
+  return env.asSuperuser({ reason: 'who decides a leave payout' }, async (su) => {
+    const failing: number[] = [];
+    const loaded = await su
+      .model('hr.leave.encashment')
+      .browse([...ids] as never)
+      .load({ employee: { user: true } });
+    for (const r of loaded) {
+      const own = !system && r.employee.user?.id === me;
+      const silent = refusing && (r.refuseReason === null || r.refuseReason.trim() === '');
+      if (own || silent) failing.push(r.id as number);
+    }
+    return failing;
+  });
+}
+
+const refusePayout = (message: string, hint: string): never => {
+  throw new orm.ValidationError('hr.leave.encashment', ['state'], message, hint);
+};
+
+/**
+ * Pays days out (RFC 0034 §2.5): checks the plan allows it and that the balance on the day keeps what must stay,
+ * values a day by the plan's formula on the person's running contract, takes the days from the ledger and leaves
+ * the amount as a Payroll input of that month — which the person's salary structure must pay. Returns the amount.
+ */
+export async function payOut(env: Env, id: number): Promise<string> {
+  return env.asSuperuser({ reason: 'leave paid out' }, async (su) => {
+    const [r] = await su
+      .model('hr.leave.encashment')
+      .browse([id as never])
+      .load({ employee: { company: true }, plan: { type: true, company: true } });
+    if (r === undefined) return refusePayout('The request is gone.', 'Make a new one.');
+    const plan = planRow(r.plan);
+    if (r.plan.active !== true || r.plan.encashable !== true)
+      return refusePayout(
+        'Days of this plan are not paid out.',
+        'Switch on Days may be paid out on the accrual plan.',
+      );
+    const person = personOf(r.employee);
+    if (person === null)
+      return refusePayout('The person has no joining date.', 'Give it on the employee.');
+    const date = iso(r.date);
+    const wanted = cents(r.days);
+    const on = await projectPerson(su, plan, person, date, iso(su.today()));
+    const balance = cents(on.balance);
+    const free = balance - cents(r.plan.encashKeep);
+    if (wanted > free)
+      return refusePayout(
+        `Only ${days(Math.max(0, free))} day(s) can be paid out: the balance on ${date} is ${days(balance)}, and ${days(cents(r.plan.encashKeep))} stay.`,
+        'Ask for fewer days.',
+      );
+    const [contract] = await su
+      .model('hr.contract')
+      .search({
+        where: { employee: person.id as never, state: 'running' } as never,
+        order: ['dateStart desc'],
+        limit: 1,
+      })
+      .then((found) => found.load({ structure: { rules: true } }));
+    if (contract === undefined || contract.wage === null)
+      return refusePayout(
+        'The person has no running contract with a wage.',
+        'Start their contract in Workforce › Contracts.',
+      );
+    const input = `INPUT_${r.plan.encashCode}`;
+    const pays =
+      contract.structure !== null &&
+      [...contract.structure.rules].some((rule) => {
+        try {
+          return variablesOf(parse(rule.formula)).includes(input);
+        } catch {
+          return false;
+        }
+      });
+    if (!pays)
+      return refusePayout(
+        `The person’s salary structure has no rule that pays ${input}.`,
+        `Add a rule with the formula ${input} to the structure (Payroll › Configuration), or choose the structure on the contract.`,
+      );
+    const value = evaluate(parse(r.plan.encashFormula), {
+      variables: new Map<string, Decimal>(
+        Object.entries({
+          WAGE: contract.wage,
+          DAYS: days(wanted),
+          BALANCE: days(balance),
+          SERVICE_YEARS: Math.floor(serviceMonthsAt(person.joined, date.slice(0, 7)) / 12),
+        }).map(([name, v]) => [name, orm.toDecimal(v)]),
+      ),
+      slabs: new Map(),
+    }).toDecimalPlaces(2);
+    const amount = value.times(days(wanted)).toDecimalPlaces(2);
+    if (amount.lte(0))
+      return refusePayout('A day is worth nothing by the plan’s formula.', 'Check the formula.');
+    const entry = (
+      await su.model('hr.accrual.entry').create([
+        {
+          employee: person.id,
+          plan: plan.id,
+          company: plan.company,
+          date,
+          kind: 'encashment',
+          days: days(-wanted),
+          period: date.slice(0, 7),
+          note: `Paid out: ${r.name}`,
+        } as never,
+      ])
+    ).ids[0];
+    const made = (
+      await su.model('payroll.input').create([
+        {
+          employee: person.id,
+          company: plan.company,
+          date,
+          code: r.plan.encashCode,
+          amount: amount.toFixed(2),
+          note: `${r.name}: ${days(wanted)} day(s) of leave paid out`,
+        } as never,
+      ])
+    ).ids[0];
+    await su
+      .model('hr.leave.encashment')
+      .browse([r.id])
+      .write({
+        dayValue: value.toFixed(2),
+        amount: amount.toFixed(2),
+        entry,
+        input: made,
+        refuseReason: null,
+      } as never);
+    await su.flush();
+    await refreshPerson(su, plan, person, iso(su.today()));
+    return amount.toFixed(2);
+  });
+}
+
+/** The requests among `ids` that are no longer drafts. */
+async function payoutsAsked(env: Env, ids: readonly number[]): Promise<number[]> {
+  const rows = await env.asSuperuser({ reason: 'a payout asked for' }, async (su) =>
+    (
+      await su
+        .model('hr.leave.encashment')
+        .browse([...ids] as never)
+        .load(['state'])
+    ).read(['id', 'state']),
+  );
+  return rows.filter((r) => r['state'] !== 'draft').map((r) => Number(r['id']));
+}
+
+/** Days a person asks to be paid for instead of taking them: approved by HR, paid by Payroll. */
+export const LeaveEncashment = defineModel('hr.leave.encashment', {
+  label: 'Leave payout',
+  recName: 'name',
+  order: ['date desc', 'id desc'],
+  companyScoped: { required: true },
+  tracking: ['state', 'days', 'amount'],
+  access: { 'hr.user': ALL, 'hr.manager': [...ALL, 'export'] },
+  rules: {
+    seeOwn: { groups: ['hr.user'], perms: ['read'], domain: { 'employee.user': me } },
+    draftOwn: {
+      groups: ['hr.user'],
+      perms: ['write', 'create', 'unlink'],
+      domain: { 'employee.user': me, state: 'draft' },
+    },
+    all: { groups: ['hr.manager'], perms: [...ALL], domain: {} },
+  },
+  fields: {
+    name: f.char({ required: true, sequence: 'hr.leave.encashment', label: 'Reference' }),
+    employee: f.many2one('hr.employee', { required: true, ondelete: 'cascade' }),
+    plan: f.many2one('hr.accrual.plan', {
+      required: true,
+      ondelete: 'restrict',
+      checkCompany: true,
+      label: 'Plan',
+      help: 'A plan whose days may be paid out.',
+    }),
+    days: f.decimal({ scale: 2, required: true, label: 'Days' }),
+    date: f.date({
+      required: true,
+      default: (env: Env) => env.today(),
+      label: 'Paid in the month of',
+      help: 'The days leave the balance on this day, and the amount is in this month’s payroll.',
+    }),
+    note: f.char({ label: 'Note' }),
+    refuseReason: f.char({ label: 'Why refused' }),
+    dayValue: f.decimal({
+      scale: 2,
+      label: 'A day is worth',
+      groups: { write: [...SYSTEM] },
+      help: 'By the plan’s formula on the running contract, when it was approved.',
+    }),
+    amount: f.decimal({ scale: 2, label: 'Amount', groups: { write: [...SYSTEM] } }),
+    entry: f.many2one('hr.accrual.entry', {
+      ondelete: 'set null',
+      label: 'Ledger line',
+      groups: { write: [...SYSTEM] },
+    }),
+    input: f.many2one('payroll.input', {
+      ondelete: 'set null',
+      label: 'Payroll input',
+      groups: { write: [...SYSTEM] },
+    }),
+    state: f.state({
+      states: { draft: 'Draft', submitted: 'Submitted', approved: 'Approved', refused: 'Refused' },
+      initial: 'draft',
+      help: 'Approved: the days have left the balance and the amount waits for the month’s payroll.',
+      transitions: {
+        submit: { from: ['draft'], to: 'submitted' },
+        approve: emitting('hr.leave.encashment.approved', {
+          from: ['submitted'],
+          to: 'approved',
+          guard: records('hr.leave.encashment', (requests) =>
+            payoutUndecidable(
+              requests.env as unknown as Env,
+              requests.ids as readonly number[],
+              false,
+            ),
+          ),
+          message: ENCASH_DECIDES,
+          after: records('hr.leave.encashment', async (requests) => {
+            const env = requests.env as unknown as Env;
+            for (const id of requests.ids) await payOut(env, id as number);
+          }),
+        }),
+        refuse: {
+          from: ['submitted'],
+          to: 'refused',
+          guard: records('hr.leave.encashment', (requests) =>
+            payoutUndecidable(
+              requests.env as unknown as Env,
+              requests.ids as readonly number[],
+              true,
+            ),
+          ),
+          message: ENCASH_DECIDES,
+        },
+        redraft: { from: ['submitted', 'refused'], to: 'draft' },
+      },
+    }),
+  },
+  sqlConstraints: {
+    daysPositive: { check: orm.sql`days > 0`, message: 'A payout is for more than no days.' },
+  },
+  constraints: {
+    lockedOnceAsked: {
+      ...check('hr.leave.encashment', ['employee', 'plan', 'days', 'date'], (requests) =>
+        payoutsAsked(requests.env as unknown as Env, requests.ids as readonly number[]),
+      ),
+      message: 'A payout that was submitted does not change: take it back to draft first.',
+    },
+  },
+});
+
 /** Leave of a type with a plan is checked against the balance on the day it starts. */
 export const LeaveByAccrual = extendModel('hr.leave', {
   overrides: {
@@ -751,6 +1075,21 @@ export const hrAccrualShutro = defineModule({
       implies: ['hr.user'],
     }),
   ],
-  models: [AccrualPlan, AccrualEntry, AccrualBalance],
+  permissions: [
+    orm.definePermission({
+      code: 'hr_accrual.encash_decide',
+      label: 'Approve and refuse leave payouts',
+      groups: ['hr.manager'],
+    }),
+  ],
+  sequences: [
+    orm.defineSequence({
+      code: 'hr.leave.encashment',
+      prefix: 'ENC/{year}/',
+      padding: 4,
+      reset: 'yearly',
+    }),
+  ],
+  models: [AccrualPlan, AccrualEntry, AccrualBalance, LeaveEncashment],
   extensions: [LeaveByAccrual],
 });

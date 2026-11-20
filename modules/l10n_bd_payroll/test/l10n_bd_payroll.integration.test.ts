@@ -276,3 +276,42 @@ test('garments: the minimum wage breakdown; the festival bonus after a year, not
   const nupur = (await linesOf(eid, 'Nupur')).amount;
   expect(nupur['FESTIVAL_BONUS']).toBeUndefined(); // six months' service
 });
+
+test('leave by the Labour Act: the rule that pays leave out, and three plans installed switched off', async () => {
+  // Both structures pay an approved leave payout, and do not project it forward as regular pay.
+  for (const structure of Object.values(structures)) {
+    const rules = (
+      await call(
+        'GET',
+        `/api/v1/models/payroll.rule?filter=${q({ structure })}&fields=code,formula&limit=100`,
+      )
+    ).json.items as Json[];
+    const formula = (code: string) => rules.find((r) => r.code === code)?.formula;
+    expect(formula('LEAVE_ENCASH')).toBe('INPUT_LEAVE_ENCASH');
+    expect(formula('REGULAR_PAY')).toBe('GROSS - OVERTIME - FESTIVAL_BONUS - LEAVE_ENCASH');
+  }
+  const plans = () =>
+    driver.query<{ name: string; active: boolean; formula: string; encashable: boolean }>({
+      text: `SELECT p.name, p.active, p.formula, p.encashable FROM hr_accrual_plan p ORDER BY p.name`,
+      params: [],
+    });
+  const installed = await plans();
+  expect(installed.map((p) => [p.name, p.active, p.formula, p.encashable])).toEqual([
+    ['Bangladesh — casual leave, 10 days a year', false, 'if(MONTH == 1, 10, 0)', false],
+    ['Bangladesh — earned leave, a day for 18 worked', false, 'WORKED_DAYS / 18', true],
+    ['Bangladesh — sick leave, 14 days a year', false, 'if(MONTH == 1, 14, 0)', false],
+  ]);
+  // Switched off: leave is still counted by the types' days per year, and nothing shows among the active plans.
+  expect(
+    ((await call('GET', '/api/v1/models/hr.accrual.plan?fields=name')).json.items as Json[]).length,
+  ).toBe(0);
+  // A second pass adds none, switched on or not.
+  const [row] = await driver.query<{ id: number }>({
+    text: 'SELECT id FROM res_company LIMIT 1',
+    params: [],
+  });
+  await installDefaults(host.server.shutro, host.server.registry.loaded.modules, {
+    company: row?.id as number,
+  });
+  expect(await plans()).toHaveLength(3);
+});

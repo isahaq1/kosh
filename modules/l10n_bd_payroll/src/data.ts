@@ -171,6 +171,20 @@ export interface RuleData {
 
 const PRORATA = 'CONTRACT_DAYS / PERIOD_DAYS';
 
+/**
+ * Leave paid out (RFC 0034 §2.5): an approved payout of leave days arrives as the month's input and is paid here,
+ * taxed in the month like other irregular pay. Added to a structure that was installed before it existed.
+ */
+export const LEAVE_ENCASH_RULE: RuleData = {
+  sequence: 57,
+  code: 'LEAVE_ENCASH',
+  name: 'Leave paid out',
+  category: 'allowance',
+  formula: 'INPUT_LEAVE_ENCASH',
+  condition: 'INPUT_LEAVE_ENCASH > 0',
+  note: 'Approved leave payouts of the month (Workforce › Leave payouts).',
+};
+
 /** What both structures share after the pay itself: overtime, the festival bonus, deductions and income tax. */
 const COMMON: readonly RuleData[] = [
   {
@@ -191,6 +205,7 @@ const COMMON: readonly RuleData[] = [
     condition: 'FESTIVAL and SERVICE_MONTHS >= P_BD_FESTIVAL_SERVICE_MONTHS',
     note: 'In a run marked as a festival bonus run, after the qualifying service.',
   },
+  LEAVE_ENCASH_RULE,
   {
     sequence: 60,
     code: 'ABSENCE',
@@ -239,7 +254,7 @@ const COMMON: readonly RuleData[] = [
     code: 'REGULAR_PAY',
     name: 'Regular pay (projected forward)',
     category: 'info',
-    formula: 'GROSS - OVERTIME - FESTIVAL_BONUS',
+    formula: 'GROSS - OVERTIME - FESTIVAL_BONUS - LEAVE_ENCASH',
     appearsOnSlip: false,
   },
   {
@@ -385,5 +400,62 @@ export const STRUCTURES: readonly StructureData[] = [
       },
       ...COMMON,
     ],
+  },
+];
+
+const LABOUR_ACT =
+  'Verify against the Bangladesh Labour Act 2006 (sections 115 to 117), the Labour Rules 2015 and your own service rules before switching it on.';
+
+/** A statutory leave plan (RFC 0034 §2.5), by the name of the leave type it is for. */
+export interface LeavePlanData {
+  readonly type: string;
+  readonly name: string;
+  readonly formula: string;
+  readonly probationMonths: number;
+  readonly cap: string | null;
+  readonly carryOver: string | null;
+  readonly encashable: boolean;
+  readonly encashFormula: string;
+  readonly note: string;
+}
+
+/**
+ * Leave by the Labour Act, as accrual plans: installed **switched off** for each company, for HR to check against
+ * the law and the company's rules, then activate. Casual and sick leave are given each January and not carried;
+ * earned leave is a day for every eighteen worked after a year of service, carried up to forty days and payable.
+ */
+export const LEAVE_PLANS: readonly LeavePlanData[] = [
+  {
+    type: 'Casual leave',
+    name: 'Bangladesh — casual leave, 10 days a year',
+    formula: 'if(MONTH == 1, 10, 0)',
+    probationMonths: 0,
+    cap: '10',
+    carryOver: '0',
+    encashable: false,
+    encashFormula: 'WAGE / 30',
+    note: `Ten days with full wages each calendar year, not carried forward (section 115). Someone who joins after January is given their share as an adjustment. ${LABOUR_ACT}`,
+  },
+  {
+    type: 'Sick leave',
+    name: 'Bangladesh — sick leave, 14 days a year',
+    formula: 'if(MONTH == 1, 14, 0)',
+    probationMonths: 0,
+    cap: '14',
+    carryOver: '0',
+    encashable: false,
+    encashFormula: 'WAGE / 30',
+    note: `Fourteen days with full wages each calendar year, not carried forward (section 116). ${LABOUR_ACT}`,
+  },
+  {
+    type: 'Earned leave',
+    name: 'Bangladesh — earned leave, a day for 18 worked',
+    formula: 'WORKED_DAYS / 18',
+    probationMonths: 12,
+    cap: '40',
+    carryOver: '40',
+    encashable: true,
+    encashFormula: 'WAGE / 30',
+    note: `After a year of continuous service, one day for every eighteen days of work, carried up to forty days for commercial and industrial establishments and factories; other establishments differ (section 117). ${LABOUR_ACT}`,
   },
 ];

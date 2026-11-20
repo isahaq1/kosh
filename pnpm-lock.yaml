@@ -1424,6 +1424,12 @@ importers:
 
   modules/l10n_bd_payroll:
     dependencies:
+      '@kosh/hr':
+        specifier: workspace:*
+        version: link:../hr
+      '@kosh/hr_accrual':
+        specifier: workspace:*
+        version: link:../hr_accrual
       '@kosh/l10n_bd':
         specifier: workspace:*
         version: link:../l10n_bd
@@ -1443,9 +1449,6 @@ importers:
       '@kosh/attendance':
         specifier: workspace:*
         version: link:../attendance
-      '@kosh/hr':
-        specifier: workspace:*
-        version: link:../hr
       '@kosh/reporting':
         specifier: workspace:*
         version: link:../../packages/reporting

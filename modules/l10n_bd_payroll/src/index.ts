@@ -6,19 +6,28 @@
  * provident fund for its members, and income tax deducted at source from the year's slabs, the exemption, the
  * investment rebate and the minimum tax, spread over the months left. All of it data a payroll manager can change.
  */
+import { hrAccrual } from '@kosh/hr_accrual';
 import { l10nBd } from '@kosh/l10n_bd';
 import { defineModule } from '@kosh/modules-sdk';
 import { payroll } from '@kosh/payroll';
 import type { Env } from './.kosh/bindings.js';
 import { installBangladeshPayroll, l10nBdPayrollShutro } from './module.js';
 
-export { PARAMETERS, type RuleData, SLABS, STRUCTURES } from './data.js';
-export { installBangladeshPayroll, l10nBdPayrollShutro } from './module.js';
+export {
+  LEAVE_ENCASH_RULE,
+  LEAVE_PLANS,
+  type LeavePlanData,
+  PARAMETERS,
+  type RuleData,
+  SLABS,
+  STRUCTURES,
+} from './data.js';
+export { installBangladeshPayroll, installLeavePlans, l10nBdPayrollShutro } from './module.js';
 
 export const l10nBdPayroll: ReturnType<typeof defineModule> = defineModule({
   shutro: l10nBdPayrollShutro,
   kosh: '^0.1.0',
-  depends: [l10nBd, payroll],
+  depends: [l10nBd, payroll, hrAccrual],
   bridge: [l10nBd, payroll],
   hooks: { defaults: async (env) => installBangladeshPayroll(env as Env) },
   // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).

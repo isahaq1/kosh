@@ -44,7 +44,9 @@
     "@kosh/modules-sdk": "workspace:*",
     "@kosh/server": "workspace:*",
     "@kosh/payroll": "workspace:*",
-    "@kosh/l10n_bd": "workspace:*"
+    "@kosh/l10n_bd": "workspace:*",
+    "@kosh/hr": "workspace:*",
+    "@kosh/hr_accrual": "workspace:*"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.1",

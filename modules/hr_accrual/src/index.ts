@@ -26,6 +26,7 @@ import {
   AccrualPlan,
   accrueLeave,
   hrAccrualShutro,
+  LeaveEncashment,
   projectLeave,
 } from './module.js';
 
@@ -46,11 +47,14 @@ export {
   AccrualEntry,
   AccrualPlan,
   accrueLeave,
+  ENCASH_VARIABLES,
   formulaProblem,
   hrAccrualShutro,
   LeaveByAccrual,
+  LeaveEncashment,
   type Projection,
   type ProjectionStep,
+  payOut,
   projectLeave,
 } from './module.js';
 
@@ -168,6 +172,52 @@ export const hrAccrual: ReturnType<typeof defineModule> = defineModule({
     user: { label: 'Leave balances', groups: ['hr_accrual.user'] },
   },
   routes: (context: ModuleContext) => registerAccrualRoutes(context),
+  // Exceptions to the module standard (RFC 0023), each with its reason.
+  standard: {
+    waive: [
+      {
+        rule: 'I1',
+        model: 'hr.leave.encashment',
+        reason:
+          'A payout is asked for by its person and approved against the balance; there is nothing to import.',
+      },
+    ],
+  },
+  events: [
+    {
+      topic: 'hr.leave.encashment.approved',
+      model: 'hr.leave.encashment',
+      label: 'Leave payout approved',
+    },
+  ],
+  documents: [
+    {
+      key: 'hr_leave_encashment',
+      name: 'Leave payout',
+      model: 'hr.leave.encashment',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Leave payout {{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'what',
+            items: [
+              { label: 'Employee', bind: 'employee.name' },
+              { label: 'Plan', bind: 'plan.name' },
+              { label: 'Days', bind: 'days' },
+              { label: 'Paid in the month of', bind: 'date' },
+              { label: 'A day is worth', bind: 'dayValue' },
+              { label: 'Amount', bind: 'amount' },
+              { label: 'Status', bind: 'state' },
+            ],
+          },
+        ],
+      },
+    },
+  ],
   importTemplates: [
     {
       key: 'hr_accrual_plan',
@@ -206,6 +256,10 @@ export const hrAccrual: ReturnType<typeof defineModule> = defineModule({
       label: 'Leave ledger',
       views: ['list', 'form'],
     }),
+    'workforce.action_leave_payouts': action(LeaveEncashment, {
+      label: 'Leave payouts',
+      views: ['list', 'form'],
+    }),
     'workforce.action_accrual_plans': action(AccrualPlan, {
       label: 'Accrual plans',
       views: ['list', 'form'],
@@ -225,6 +279,13 @@ export const hrAccrual: ReturnType<typeof defineModule> = defineModule({
       label: 'Leave ledger',
       action: 'workforce.action_leave_ledger',
       sequence: 2.6,
+    },
+    {
+      id: 'workforce.leave_payouts',
+      parent: 'workforce.root',
+      label: 'Leave payouts',
+      action: 'workforce.action_leave_payouts',
+      sequence: 2.8,
     },
     {
       id: 'workforce.accrual_plans',
@@ -249,7 +310,7 @@ export const hrAccrual: ReturnType<typeof defineModule> = defineModule({
     'hr.accrual.plan.form': form(AccrualPlan, (k) => ({
       header: { buttons: [] },
       sheet: [
-        k.group('main', ['name', 'type', 'dateStart', 'formula', 'probationMonths'], {
+        k.group('main', ['name', 'type', 'dateStart', 'formula', 'probationMonths', 'note'], {
           description:
             'Each month that is over, every employee with a joining date earns what the formula gives, at the month’s end. Balances from before the plan are given in the Leave ledger as adjustments.',
         }),
@@ -257,6 +318,49 @@ export const hrAccrual: ReturnType<typeof defineModule> = defineModule({
           label: 'Limits',
           description:
             'The cap stops the accrual; the carry-over is checked on 1 January; carried days are used first and expire at the end of the month given.',
+        }),
+        k.group('payout', ['encashable', 'encashKeep', 'encashFormula', 'encashCode'], {
+          label: 'Paying days out',
+          description:
+            'An approved payout takes the days from the ledger and leaves the amount as a Payroll input of that month; the person’s salary structure pays it with a rule that reads that input.',
+        }),
+      ],
+      chatter: true,
+    })),
+    'hr.leave.encashment.list': list(LeaveEncashment, {
+      columns: [
+        'name',
+        'employee',
+        'plan',
+        'days',
+        'date',
+        { field: 'amount', sum: true },
+        'state',
+      ],
+      decorations: { neutral: { state: 'refused' }, success: { state: 'approved' } },
+    }),
+    'hr.leave.encashment.form': form(LeaveEncashment, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('submit', { primary: true, label: 'Submit' }),
+          k.button('approve', {
+            primary: true,
+            label: 'Approve',
+            confirm:
+              'Take the days from the balance and leave the amount for this month’s payroll?',
+          }),
+          k.button('refuse', { label: 'Refuse' }),
+          k.button('redraft', { label: 'Back to draft' }),
+        ],
+      },
+      sheet: [
+        k.group('main', ['name', 'employee', 'plan', 'days', 'date', 'note'], {
+          description:
+            'Days not taken, paid instead: approved by an HR manager against the balance on that day, paid with the month’s payroll.',
+        }),
+        k.group('paid', ['dayValue', 'amount', 'entry', 'input', 'refuseReason'], {
+          label: 'Decision',
         }),
       ],
       chatter: true,
@@ -300,12 +404,21 @@ export const hrAccrual: ReturnType<typeof defineModule> = defineModule({
   },
   search: {
     'hr.accrual.plan': search(AccrualPlan, { fields: ['name', 'type.name'], groupBy: ['type'] }),
+    'hr.leave.encashment': search(LeaveEncashment, {
+      fields: ['name', 'employee.name'],
+      filters: {
+        waiting: { label: 'To decide', domain: { state: 'submitted' }, group: 'state' },
+        approved: { label: 'Approved', domain: { state: 'approved' }, group: 'state' },
+      },
+      groupBy: ['employee', 'plan', 'state', 'date:month'],
+    }),
     'hr.accrual.entry': search(AccrualEntry, {
       fields: ['employee.name', 'note'],
       filters: {
         accrued: { label: 'Accrued', domain: { kind: 'accrual' }, group: 'kind' },
         lost: { label: 'Lost', domain: { kind: { in: ['lapse', 'expiry'] } }, group: 'kind' },
         adjustments: { label: 'Adjustments', domain: { kind: 'adjustment' }, group: 'kind' },
+        paid: { label: 'Paid out', domain: { kind: 'encashment' }, group: 'kind' },
       },
       groupBy: ['employee', 'plan', 'kind', 'date:month'],
     }),

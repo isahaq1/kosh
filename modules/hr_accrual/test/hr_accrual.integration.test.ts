@@ -334,3 +334,115 @@ test('a formula may count the days worked: a day for every eighteen', async () =
   expect(await ledger('rafi', 'worked')).toEqual(['accrual 2027-08-31 1.11']);
   expect(await ledger('sumi', 'worked')).toEqual([]);
 });
+
+const X = '/api/v1/models/hr.leave.encashment';
+
+test('days are paid out through Payroll: approved by HR against the balance, valued by the plan, once', async () => {
+  const payout = async (as: string, daysAsked: string, date = '2027-09-10') => {
+    const id = await make('hr.leave.encashment', as, {
+      employee: ids[as],
+      plan: ids['plan'],
+      days: daysAsked,
+      date,
+    });
+    expect((await call('POST', `${X}/${id}/transitions/submit`, as)).status).toBe(200);
+    return id;
+  };
+  const approve = (id: number, as = 'pia') => call('POST', `${X}/${id}/transitions/approve`, as);
+  // The plan does not pay days out yet.
+  const first = await payout('rafi', '1');
+  const refused = await approve(first);
+  expect(refused.status).toBe(422);
+  expect(JSON.stringify(refused.json)).toContain('not paid out');
+  // HR switches it on: a day is worth the wage over 30, and two days stay.
+  expect(
+    (
+      await call('PATCH', `${P}/${ids['plan']}`, 'pia', {
+        encashable: true,
+        encashKeep: '2',
+        encashFormula: 'WAGE / 30',
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (await call('PATCH', `${P}/${ids['plan']}`, 'pia', { encashFormula: 'BASIC / 26' })).status,
+  ).toBeGreaterThanOrEqual(400);
+  // No contract yet.
+  expect(JSON.stringify((await approve(first)).json)).toContain('no running contract');
+  // A contract on a structure that does not pay the input.
+  const structure = await make('payroll.structure', 'pia', {
+    name: 'Plain',
+    rules: {
+      create: [{ sequence: 10, code: 'BASIC', name: 'Basic', category: 'basic', formula: 'WAGE' }],
+    },
+  });
+  const contract = await make('hr.contract', 'pia', {
+    name: 'Rafi 2027',
+    employee: ids['rafi'],
+    dateStart: '2027-01-01',
+    wage: '45000',
+    structure,
+  });
+  expect(
+    (await call('POST', `/api/v1/models/hr.contract/${contract}/transitions/start`, 'pia')).status,
+  ).toBe(200);
+  expect(JSON.stringify((await approve(first)).json)).toContain('INPUT_LEAVE_ENCASH');
+  await make('payroll.rule', 'pia', {
+    structure,
+    sequence: 40,
+    code: 'LEAVE_ENCASH',
+    name: 'Leave paid out',
+    category: 'allowance',
+    formula: 'INPUT_LEAVE_ENCASH',
+  });
+  // Never one's own; not by someone who only asks.
+  expect((await approve(first, 'rafi')).status).toBeGreaterThanOrEqual(403);
+  // Rafi's balance on 10 September: 6 − 2 taken in August, + 1.5 for August = 5.5; two stay: 3.5 are free.
+  const tooMany = await payout('rafi', '4');
+  const short = await approve(tooMany);
+  expect(short.status).toBe(422);
+  expect(JSON.stringify(short.json)).toContain('Only 3.50 day(s)');
+  // One day: 45,000 / 30.
+  const done = await approve(first);
+  expect(done.status, JSON.stringify(done.json)).toBe(200);
+  const r = (await call('GET', `${X}/${first}?fields=name,state,dayValue,amount,input`, 'pia'))
+    .json as Json;
+  expect(r.name).toMatch(/^ENC\/\d{4}\/\d{4}$/);
+  expect([r.state, Number(r.dayValue).toFixed(2), Number(r.amount).toFixed(2)]).toEqual([
+    'approved',
+    '1500.00',
+    '1500.00',
+  ]);
+  // In the ledger, and waiting for September's payroll.
+  expect((await ledger('rafi', 'plan')).at(-1)).toBe('encashment 2027-09-10 -1.00');
+  const inputs = await erp.host.server.driver.query<{ code: string; amount: string; date: string }>(
+    {
+      text: `SELECT code, amount::text AS amount, to_char(date, 'YYYY-MM-DD') AS date FROM payroll_input
+              WHERE employee_id = $1`,
+      params: [ids['rafi']],
+    },
+  );
+  expect(inputs.map((i) => [i.code, Number(i.amount).toFixed(2), i.date])).toEqual([
+    ['LEAVE_ENCASH', '1500.00', '2027-09-10'],
+  ]);
+  // Approved once: not again, and not changed.
+  expect((await approve(first)).status).toBe(409);
+  expect(
+    (await call('PATCH', `${X}/${first}`, 'pia', { days: '3' })).status,
+  ).toBeGreaterThanOrEqual(400);
+  expect((await call('PATCH', `${X}/${first}`, 'pia', { amount: '99999' })).status).toBe(403);
+  // What is left: 2.5 more, not the 4 asked before; a refusal says why.
+  expect((await approve(tooMany)).status).toBe(422);
+  expect((await call('POST', `${X}/${tooMany}/transitions/refuse`, 'pia')).status).toBe(409);
+  expect(
+    (await call('PATCH', `${X}/${tooMany}`, 'pia', { refuseReason: 'More than may be paid out' }))
+      .status,
+  ).toBe(200);
+  expect((await call('POST', `${X}/${tooMany}/transitions/refuse`, 'pia')).status).toBe(200);
+  // Each sees their own requests.
+  const mine = (await call('GET', `${X}?fields=employee`, 'sumi')).json.items as Json[];
+  expect(mine).toEqual([]);
+  expect((await call('GET', X, 'bob')).status).toBe(403);
+  // The balance follows.
+  expect((await projection('pia', 'rafi', '2027-09-10')).json.balance).toBe('4.50');
+});
