@@ -18,7 +18,9 @@ import {
   defineModule,
   type Env,
   f,
+  method,
   onchange,
+  type Records,
   record,
   records,
 } from './.kosh/bindings.js';
@@ -411,40 +413,51 @@ export const HrLeave = defineModel('hr.leave', {
       ),
       message: 'This person already has leave on some of these days.',
     },
-    // The year's days of its type: what is waiting and approved, this one included.
+    // The days left of its type: what is waiting and approved, this one included (see `overBalance`).
     balance: {
-      ...check('hr.leave', ['employee', 'type', 'days', 'dateFrom', 'state'], async (leaves) =>
-        leaves.env.asSuperuser({ reason: 'leave balance' }, async (su) => {
-          const failing: number[] = [];
-          for (const l of leaves) {
-            if (l.state !== 'submitted' && l.state !== 'approved') continue;
-            const [type] = (
-              await su.model('hr.leave.type').browse([l.type.id]).load(['daysPerYear'])
-            ).read(['daysPerYear']);
-            const allowed = type?.['daysPerYear'];
-            if (allowed === null || allowed === undefined) continue;
-            const year = iso(l.dateFrom).slice(0, 4);
-            const taken = (
-              await (
-                await su.model('hr.leave').search({
-                  where: {
-                    employee: l.employee.id,
-                    type: l.type.id,
-                    state: { in: ['submitted', 'approved'] },
-                    dateFrom: { gte: `${year}-01-01`, lte: `${year}-12-31` },
-                  },
-                })
-              ).load(['days'])
-            )
-              .read(['days'])
-              .reduce((sum, r) => sum + Number(r['days'] ?? 0), 0);
-            if (taken > Number(allowed)) failing.push(l.id);
-          }
-          return failing;
-        }),
+      ...check('hr.leave', ['employee', 'type', 'days', 'dateFrom', 'state'], (leaves) =>
+        (leaves as unknown as { overBalance(): Promise<number[]> }).overBalance(),
       ),
-      message: 'Not enough days left of this leave type this year.',
+      message: 'Not enough days left of this leave type.',
     },
+  },
+  methods: {
+    /**
+     * Of these requests, those that ask for more days than are left. Here: a type's days per calendar year. An
+     * app that keeps balances another way overrides it for its types (leave accruals: the ledger's balance on
+     * the day the leave starts).
+     */
+    overBalance: method('hr.leave', async function (this: unknown): Promise<number[]> {
+      const leaves = this as Records<'hr.leave'>;
+      return leaves.env.asSuperuser({ reason: 'leave balance' }, async (su) => {
+        const failing: number[] = [];
+        for (const l of leaves) {
+          if (l.state !== 'submitted' && l.state !== 'approved') continue;
+          const [type] = (
+            await su.model('hr.leave.type').browse([l.type.id]).load(['daysPerYear'])
+          ).read(['daysPerYear']);
+          const allowed = type?.['daysPerYear'];
+          if (allowed === null || allowed === undefined) continue;
+          const year = iso(l.dateFrom).slice(0, 4);
+          const taken = (
+            await (
+              await su.model('hr.leave').search({
+                where: {
+                  employee: l.employee.id,
+                  type: l.type.id,
+                  state: { in: ['submitted', 'approved'] },
+                  dateFrom: { gte: `${year}-01-01`, lte: `${year}-12-31` },
+                },
+              })
+            ).load(['days'])
+          )
+            .read(['days'])
+            .reduce((sum, r) => sum + Number(r['days'] ?? 0), 0);
+          if (taken > Number(allowed)) failing.push(l.id);
+        }
+        return failing;
+      });
+    }),
   },
   onchange: {
     dateFrom: onchange('hr.leave', async (d, env): Promise<void> => fillDays(d, env)),

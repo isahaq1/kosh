@@ -93,7 +93,7 @@ export const bn: Readonly<Record<string, string>> = {
   'National ID': 'জাতীয় পরিচয়পত্র',
   'Needed to refuse or cancel: write it, then press the button.':
     'প্রত্যাখ্যান বা বাতিলের জন্য দরকার: আগে লিখুন, তারপর বোতাম চাপুন।',
-  'Not enough days left of this leave type this year.': 'এ বছর এই ধরনের ছুটির যথেষ্ট দিন বাকি নেই।',
+  'Not enough days left of this leave type.': 'এই ধরনের ছুটির পর্যাপ্ত দিন বাকি নেই।',
   'Note of the decision': 'সিদ্ধান্তের নোট',
   Overview: 'সারসংক্ষেপ',
   'Own vehicle': 'নিজের গাড়ি',
