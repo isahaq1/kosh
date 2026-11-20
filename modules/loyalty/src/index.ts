@@ -56,7 +56,9 @@ export {
   ageCards,
   applyCredits,
   CompanyLoyalty,
+  type EarningSale,
   earnOrder,
+  earnSale,
   LineLoyalty,
   LoyaltyCard,
   LoyaltyEntry,
@@ -75,6 +77,8 @@ export {
   releaseCredits,
   releaseOrder,
   reverseOrder,
+  type SaleReturn,
+  takeBackSale,
 } from './module.js';
 export {
   applyPromotions,

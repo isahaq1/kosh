@@ -31,6 +31,7 @@ import {
   expiredPoints,
   monthsBefore,
   type Order,
+  type OrderLine,
   preview,
   redeemLimit,
   type Tier,
@@ -975,10 +976,138 @@ async function cardOf(su: Env, program: Loaded, partner: number): Promise<number
   return made.ids[0] as number;
 }
 
+/** A sale of any app, as Loyalty earns on it: a Sales order, a sale at the Counter. */
+export interface EarningSale {
+  readonly company: number;
+  readonly partner: number;
+  /** `YYYY-MM-DD`. */
+  readonly date: string;
+  /** What earns: the goods, before taxes, and everything that takes off them. */
+  readonly lines: readonly OrderLine[];
+  /** The record the points are about: a sale earns **once** for it. */
+  readonly resModel: string;
+  readonly resId: number;
+  /** What the ledger line says: the sale's number. */
+  readonly label: string;
+}
+
+/** `su` is the system: the points of a sale on its customer's card, once. */
+async function earnOn(su: Env, sale: EarningSale): Promise<number> {
+  const program = await runningProgram(su, sale.company);
+  if (program === null) return 0;
+  const card = await cardOf(su, program, sale.partner);
+  if (card === null) return 0;
+  const before = await su.model('loyalty.entry').search({
+    where: {
+      card: card as never,
+      kind: 'earn',
+      resModel: sale.resModel,
+      resId: sale.resId,
+    } as never,
+    limit: 1,
+  });
+  if (before.length > 0) return 0;
+  const [loaded] = await su
+    .model('loyalty.card')
+    .browse([card as never])
+    .load({ tier: true });
+  const tier = program.tiers.find((t) => t.id === (loaded?.tier?.id as number | undefined)) ?? null;
+  const earned = earn(program.rules, { date: sale.date, lines: sale.lines }, tier);
+  if (earned.points <= 0) return 0;
+  await su.model('loyalty.entry').create([
+    {
+      card,
+      company: program.company,
+      date: sale.date,
+      kind: 'earn',
+      points: earned.points,
+      resModel: sale.resModel,
+      resId: sale.resId,
+      note: `${sale.label}${earned.multiplier === 100 ? '' : ` × ${(earned.multiplier / 100).toFixed(2)}`}`,
+    } as never,
+  ]);
+  await su.flush();
+  await refreshCard(su, card, program);
+  return earned.points;
+}
+
 /**
- * A confirmed order earns (RFC 0034 §2.6): by the company's running program, on the customer's card — theirs, or
- * a new one when every customer joins —, at their tier, **once**: a second call for the same order finds the first
- * line. Returns the points.
+ * A sale earns (RFC 0034 §2.6): by the company's running program, on the customer's card — theirs, or a new one
+ * when every customer joins —, at their tier, **once** for the record it is about. For the apps that sell: Sales
+ * orders use it themselves, the Counter through `pos_loyalty`. Returns the points.
+ */
+export async function earnSale(env: Env, sale: EarningSale): Promise<number> {
+  return env.asSuperuser({ reason: 'loyalty points earned' }, (su) => earnOn(su, sale));
+}
+
+/** Goods that came back from a sale that earned. */
+export interface SaleReturn {
+  /** The sale that earned. */
+  readonly sale: { readonly resModel: string; readonly resId: number };
+  /** The return itself: points are taken back **once** for it. */
+  readonly about: { readonly resModel: string; readonly resId: number };
+  /** The sale's other returns, already counted: their lines on the ledger are about them. */
+  readonly earlier: readonly number[];
+  /** Everything returned so far, this return included, and what the sale came to — in hundredths. */
+  readonly returned: number;
+  readonly sold: number;
+  readonly label: string;
+}
+
+/**
+ * Goods come back: the sale gives back the share of its points that the returned goods are of it — all of them
+ * when everything came back —, never more than it earned over all its returns, and never more than the card
+ * holds (a customer who spent them owes nothing). Once per return. Returns the points taken back.
+ */
+export async function takeBackSale(env: Env, back: SaleReturn): Promise<number> {
+  return env.asSuperuser({ reason: 'loyalty points taken back' }, async (su) => {
+    const all = su.withFlags({ checkCompany: false }) as Env;
+    const [earned] = await all
+      .model('loyalty.entry')
+      .search({
+        where: { kind: 'earn', resModel: back.sale.resModel, resId: back.sale.resId } as never,
+        limit: 1,
+      })
+      .then((rows) => rows.load({ card: { program: true } }));
+    if (earned === undefined || back.sold <= 0) return 0;
+    const taken = [
+      ...(await all.model('loyalty.entry').search({
+        where: {
+          card: earned.card.id as never,
+          kind: 'reverse',
+          resModel: back.about.resModel,
+          resId: { in: [...back.earlier, back.about.resId] },
+        } as never,
+      })),
+    ];
+    if (taken.some((e) => e.resId === back.about.resId)) return 0;
+    const already = -taken.reduce((sum, e) => sum + e.points, 0);
+    const share = Math.min(1, Math.max(0, back.returned / back.sold));
+    const owed = Math.round(earned.points * share) - already;
+    const points = Math.min(owed, earned.points - already, Math.max(0, earned.card.points ?? 0));
+    if (points <= 0) return 0;
+    await su.model('loyalty.entry').create([
+      {
+        card: earned.card.id,
+        company: earned.company.id,
+        date: iso(su.today()),
+        kind: 'reverse',
+        points: -points,
+        resModel: back.about.resModel,
+        resId: back.about.resId,
+        note: back.label,
+      } as never,
+    ]);
+    await su.flush();
+    const program = await loadProgram(su, earned.card.program.id as number);
+    if (program !== null) await refreshCard(su, earned.card.id as number, program);
+    return points;
+  });
+}
+
+/**
+ * A confirmed order earns (RFC 0034 §2.6), **once**: a second call for the same order finds the first line.
+ * Returns the points.
  */
 export async function earnOrder(env: Env, order: number): Promise<number> {
   return env.asSuperuser({ reason: 'loyalty points earned' }, async (su) => {
@@ -987,44 +1116,24 @@ export async function earnOrder(env: Env, order: number): Promise<number> {
       .browse([order as never])
       .load({ company: true });
     if (o === undefined || (o.state !== 'sale' && o.state !== 'done')) return 0;
-    const program = await runningProgram(su, o.company.id as number);
-    if (program === null) return 0;
     const read = (await ordersOf(su, [order])).get(order);
     if (read === undefined) return 0;
-    const card = await cardOf(su, program, read.partner);
-    if (card === null) return 0;
-    const before = await su.model('loyalty.entry').search({
-      where: { card: card as never, kind: 'earn', resModel: 'sale.order', resId: order } as never,
-      limit: 1,
+    const points = await earnOn(su, {
+      company: o.company.id as number,
+      partner: read.partner,
+      date: read.date,
+      lines: read.lines,
+      resModel: 'sale.order',
+      resId: order,
+      label: o.name,
     });
-    if (before.length > 0) return 0;
-    const [loaded] = await su
-      .model('loyalty.card')
-      .browse([card as never])
-      .load({ tier: true });
-    const tier =
-      program.tiers.find((t) => t.id === (loaded?.tier?.id as number | undefined)) ?? null;
-    const earned = earn(program.rules, read, tier);
-    if (earned.points <= 0) return 0;
-    await su.model('loyalty.entry').create([
-      {
-        card,
-        company: program.company,
-        date: read.date,
-        kind: 'earn',
-        points: earned.points,
-        resModel: 'sale.order',
-        resId: order,
-        note: `${o.name}${earned.multiplier === 100 ? '' : ` × ${(earned.multiplier / 100).toFixed(2)}`}`,
-      } as never,
-    ]);
+    if (points <= 0) return 0;
     await su
       .model('sale.order')
       .browse([order as never])
-      .write({ loyaltyPoints: earned.points } as never);
+      .write({ loyaltyPoints: points } as never);
     await su.flush();
-    await refreshCard(su, card, program);
-    return earned.points;
+    return points;
   });
 }
 
