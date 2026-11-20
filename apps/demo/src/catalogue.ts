@@ -16,6 +16,7 @@ import { expense } from '@kosh/expense';
 import { expenseAccount } from '@kosh/expense_account';
 import { helpdesk } from '@kosh/helpdesk';
 import { hr } from '@kosh/hr';
+import { hrAccrual } from '@kosh/hr_accrual';
 import { indent } from '@kosh/indent';
 import { indentPurchase } from '@kosh/indent_purchase';
 import { l10nBd } from '@kosh/l10n_bd';
@@ -173,6 +174,7 @@ export function demoCatalogue(): KoshModule[] {
     posStock,
     expenseAccount,
     payrollAccount,
+    hrAccrual,
     l10nBd,
     l10nBdPayroll,
     l10nBdPos,

@@ -83,6 +83,9 @@ importers:
       '@kosh/hr':
         specifier: workspace:*
         version: link:../../modules/hr
+      '@kosh/hr_accrual':
+        specifier: workspace:*
+        version: link:../../modules/hr_accrual
       '@kosh/indent':
         specifier: workspace:*
         version: link:../../modules/indent
@@ -467,6 +470,9 @@ importers:
       '@kosh/hr':
         specifier: workspace:*
         version: link:../../modules/hr
+      '@kosh/hr_accrual':
+        specifier: workspace:*
+        version: link:../../modules/hr_accrual
       '@kosh/indent_purchase':
         specifier: workspace:*
         version: link:../../modules/indent_purchase
@@ -1276,6 +1282,31 @@ importers:
       '@kosh/settings':
         specifier: workspace:*
         version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/hr_accrual:
+    dependencies:
+      '@kosh/attendance':
+        specifier: workspace:*
+        version: link:../attendance
+      '@kosh/hr':
+        specifier: workspace:*
+        version: link:../hr
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/payroll':
+        specifier: workspace:*
+        version: link:../payroll
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
       '@testcontainers/postgresql':
         specifier: ^12.2.1
         version: 12.2.1
@@ -3270,6 +3301,9 @@ importers:
       '@kosh/hr':
         specifier: workspace:*
         version: link:../../modules/hr
+      '@kosh/hr_accrual':
+        specifier: workspace:*
+        version: link:../../modules/hr_accrual
       '@kosh/import':
         specifier: workspace:*
         version: link:../import

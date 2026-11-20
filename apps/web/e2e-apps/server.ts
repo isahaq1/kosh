@@ -32,6 +32,7 @@ import { expense } from '@kosh/expense';
 import { expenseAccount } from '@kosh/expense_account';
 import { helpdesk } from '@kosh/helpdesk';
 import { hr } from '@kosh/hr';
+import { hrAccrual } from '@kosh/hr_accrual';
 import { dataImport } from '@kosh/import';
 import { indent } from '@kosh/indent';
 import { indentPurchase } from '@kosh/indent_purchase';
@@ -197,6 +198,7 @@ const CATALOGUE = [
   attendance,
   payroll,
   payrollAccount,
+  hrAccrual,
   helpdesk,
   documents,
   sign,
@@ -314,6 +316,7 @@ for (const [login, name, groups] of [
       'calendar.manager',
       'worktime.manager',
       'project_billing.manager',
+      'hr_accrual.user',
       'subscription.manager',
       'crm.manager',
       'hr.manager',

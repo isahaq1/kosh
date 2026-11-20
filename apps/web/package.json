@@ -74,6 +74,7 @@
     "@kosh/calendar": "workspace:*",
     "@kosh/crm": "workspace:*",
     "@kosh/hr": "workspace:*",
+    "@kosh/hr_accrual": "workspace:*",
     "@kosh/recruitment": "workspace:*",
     "@kosh/stock": "workspace:*",
     "@kosh/production": "workspace:*",

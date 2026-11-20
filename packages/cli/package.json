@@ -62,6 +62,7 @@
     "@kosh/expense_account": "workspace:*",
     "@kosh/helpdesk": "workspace:*",
     "@kosh/hr": "workspace:*",
+    "@kosh/hr_accrual": "workspace:*",
     "@kosh/import": "workspace:*",
     "@kosh/integrations": "workspace:*",
     "@kosh/l10n_bd": "workspace:*",

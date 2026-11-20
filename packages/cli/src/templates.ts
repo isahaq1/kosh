@@ -43,6 +43,7 @@ export type AppName =
   | 'sale_project'
   | 'project_account'
   | 'project_billing'
+  | 'hr_accrual'
   | 'project_purchase'
   | 'approvals_purchase'
   | 'indent_purchase'
@@ -302,6 +303,13 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'projectBilling',
     bridge: ['project', 'accounting'],
+  },
+  hr_accrual: {
+    label:
+      'Leave accruals: plans as formulas, caps, carry-over and expiry, balances projected to any date',
+    icon: '🔗',
+    server: 'hrAccrual',
+    bridge: ['hr', 'payroll'],
   },
   project_purchase: {
     label:

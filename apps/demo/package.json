@@ -25,6 +25,7 @@
     "@kosh/expense_account": "workspace:*",
     "@kosh/helpdesk": "workspace:*",
     "@kosh/hr": "workspace:*",
+    "@kosh/hr_accrual": "workspace:*",
     "@kosh/l10n_bd": "workspace:*",
     "@kosh/l10n_bd_payroll": "workspace:*",
     "@kosh/l10n_bd_pos": "workspace:*",
