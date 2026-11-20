@@ -58,6 +58,7 @@ import { sign } from '@kosh/sign';
 import { stock } from '@kosh/stock';
 import { stockAccount } from '@kosh/stock_account';
 import { subscription } from '@kosh/subscription';
+import { survey } from '@kosh/survey';
 import { todo } from '@kosh/todo';
 import { tradeFinance } from '@kosh/trade_finance';
 import { tradeFinanceAccount } from '@kosh/trade_finance_account';
@@ -84,6 +85,7 @@ export const DEMO_APPS: readonly string[] = [
   'calendar',
   'worktime',
   'subscription',
+  'survey',
   'crm',
   'hr',
   'recruitment',
@@ -129,6 +131,7 @@ export function demoCatalogue(): KoshModule[] {
     calendarApp,
     worktime,
     subscription,
+    survey,
     crm,
     hr,
     recruitment,

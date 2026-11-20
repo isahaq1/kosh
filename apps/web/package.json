@@ -93,6 +93,7 @@
     "@kosh/purchase_stock_account": "workspace:*",
     "@kosh/todo": "workspace:*",
     "@kosh/subscription": "workspace:*",
+    "@kosh/survey": "workspace:*",
     "@kosh/worktime": "workspace:*",
     "@kosh/project_account": "workspace:*",
     "@kosh/project_billing": "workspace:*",

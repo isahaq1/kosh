@@ -19,6 +19,7 @@ export type AppName =
   | 'calendar'
   | 'worktime'
   | 'subscription'
+  | 'survey'
   | 'crm'
   | 'hr'
   | 'recruitment'
@@ -162,6 +163,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
       'Subscriptions: plans, recurring invoices billed once per period, trials, proration, usage, MRR and churn',
     icon: '🔁',
     server: 'subscription',
+  },
+  survey: {
+    label:
+      'Surveys: questions with logic and scoring, answered by link or invitation, NPS and CSAT',
+    icon: '📝',
+    server: 'survey',
   },
   crm: {
     label: 'Pipeline: deals on a board, stage rules, the weighted forecast',

@@ -87,6 +87,7 @@ import { sign } from '@kosh/sign';
 import { stock } from '@kosh/stock';
 import { stockAccount } from '@kosh/stock_account';
 import { subscription } from '@kosh/subscription';
+import { survey } from '@kosh/survey';
 import { todo } from '@kosh/todo';
 import { tradeFinance } from '@kosh/trade_finance';
 import { tradeFinanceAccount } from '@kosh/trade_finance_account';
@@ -159,6 +160,7 @@ const CATALOGUE = [
   calendarApp,
   worktime,
   subscription,
+  survey,
   crm,
   hr,
   recruitment,
@@ -237,6 +239,7 @@ await applyApps(
         'calendar',
         'worktime',
         'subscription',
+        'survey',
         'crm',
         'hr',
         'recruitment',
@@ -318,6 +321,7 @@ for (const [login, name, groups] of [
       'project_billing.manager',
       'hr_accrual.user',
       'subscription.manager',
+      'survey.manager',
       'crm.manager',
       'hr.manager',
       'hiring.manager',
@@ -366,6 +370,7 @@ for (const [login, name, groups] of [
       'calendar.user',
       'worktime.user',
       'subscription.user',
+      'survey.user',
       'crm.user',
       'hr.user',
       'hiring.user',

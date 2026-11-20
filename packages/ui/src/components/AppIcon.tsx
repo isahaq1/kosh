@@ -90,6 +90,7 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   agenda: CalendarDays,
   worktime: CalendarClock,
   subscriptions: Repeat,
+  surveys: ClipboardList,
   pipeline: TrendingUp,
   workforce: Briefcase,
   hiring: UserPlus,

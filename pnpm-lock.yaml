@@ -209,6 +209,9 @@ importers:
       '@kosh/subscription':
         specifier: workspace:*
         version: link:../../modules/subscription
+      '@kosh/survey':
+        specifier: workspace:*
+        version: link:../../modules/survey
       '@kosh/todo':
         specifier: workspace:*
         version: link:../../modules/todo
@@ -563,6 +566,9 @@ importers:
       '@kosh/subscription':
         specifier: workspace:*
         version: link:../../modules/subscription
+      '@kosh/survey':
+        specifier: workspace:*
+        version: link:../../modules/survey
       '@kosh/todo':
         specifier: workspace:*
         version: link:../../modules/todo
@@ -2774,6 +2780,31 @@ importers:
         specifier: ^12.2.1
         version: 12.2.1
 
+  modules/survey:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   modules/todo:
     dependencies:
       '@kosh/messaging':
@@ -3445,6 +3476,9 @@ importers:
       '@kosh/subscription':
         specifier: workspace:*
         version: link:../../modules/subscription
+      '@kosh/survey':
+        specifier: workspace:*
+        version: link:../../modules/survey
       '@kosh/todo':
         specifier: workspace:*
         version: link:../../modules/todo
