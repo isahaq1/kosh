@@ -2,6 +2,7 @@
 export const bn: Readonly<Record<string, string>> = {
   'A milestone has a price above zero.': 'মাইলফলকের দাম শূন্যের বেশি হতে হবে।',
   'A milestone on a billing statement does not change.': 'বিলিং বিবরণীতে থাকা মাইলফলক বদলানো যায় না।',
+  'A posted recognition does not change.': 'পোস্ট করা স্বীকৃতি বদলানো যায় না।',
   'A rate is not negative.': 'রেট ঋণাত্মক হয় না।',
   'A rate names a person, a role or a kind of task (the card has the rate for everyone else).':
     'একটি রেটে একজন ব্যক্তি, একটি ভূমিকা বা এক ধরনের কাজ থাকতে হবে (বাকি সবার রেট কার্ডেই আছে)।',
@@ -13,6 +14,10 @@ export const bn: Readonly<Record<string, string>> = {
   Approval: 'অনুমোদন',
   Approve: 'অনুমোদন করুন',
   Approved: 'অনুমোদিত',
+  'Approved billable hours and reached milestones that are on no posted invoice yet, at what they sell for.':
+    'অনুমোদিত বিলযোগ্য ঘণ্টা ও অর্জিত মাইলফলক, যা এখনো কোনো পোস্ট করা ইনভয়েসে নেই, বিক্রয় মূল্যে।',
+  'Approved billable hours on the phase’s tasks at their rate, and reached milestones tied to its tasks.':
+    'ধাপের কাজগুলোর অনুমোদিত বিলযোগ্য ঘণ্টা তাদের রেটে, এবং এর কাজের সাথে যুক্ত অর্জিত মাইলফলক।',
   'Approved by': 'অনুমোদন করেছেন',
   'Approved hours are reopened by a Projects manager, and not once they are on a billing statement.':
     'অনুমোদিত ঘণ্টা প্রজেক্ট ম্যানেজার আবার খুলতে পারেন, তবে বিলিং বিবরণীতে উঠে গেলে নয়।',
@@ -32,6 +37,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Billing statement {{name}}': 'বিলিং বিবরণী {{name}}',
   'Billing statement invoiced': 'বিলিং বিবরণী ইনভয়েস হয়েছে',
   'Billing statements': 'বিলিং বিবরণী',
+  'Book the work in progress of every billed project on that day as revenue, reversed the day after?':
+    'ওই দিনে প্রতিটি বিল করা প্রজেক্টের চলমান কাজ আয় হিসেবে বুক করবেন, পরের দিন উল্টানোসহ?',
   'Cancel its invoice first (a posted invoice is corrected by a credit note).':
     'আগে এর ইনভয়েস বাতিল করুন (পোস্ট করা ইনভয়েস ক্রেডিট নোট দিয়ে সংশোধন হয়)।',
   Cancelled: 'বাতিল',
@@ -46,7 +53,11 @@ export const bn: Readonly<Record<string, string>> = {
   Draft: 'খসড়া',
   'Draft until it is invoiced; cancelled when it was discarded, or released after its invoice was cancelled.':
     'ইনভয়েস না হওয়া পর্যন্ত খসড়া; বাদ দিলে, অথবা ইনভয়েস বাতিলের পর ছেড়ে দিলে বাতিল।',
+  Earned: 'অর্জিত আয়',
+  'Earned less labour cost (costs booked in Accounting are the project’s, not a phase’s).':
+    'অর্জিত আয় থেকে শ্রম খরচ বাদ (হিসাবে বুক করা খরচ প্রজেক্টের, ধাপের নয়)।',
   'Empty: the project’s service.': 'খালি: প্রজেক্টের সেবা।',
+  Entry: 'এন্ট্রি',
   Expected: 'প্রত্যাশিত',
   'From the project’s rate card on the day it was approved; a later change of the card does not move it.':
     'অনুমোদনের দিনে প্রজেক্টের রেট কার্ড থেকে; পরে কার্ড বদলালে এটি বদলায় না।',
@@ -56,21 +67,27 @@ export const bn: Readonly<Record<string, string>> = {
   'Hours to approve': 'অনুমোদনের অপেক্ষায় ঘণ্টা',
   'Hours up to': 'যে দিন পর্যন্ত ঘণ্টা',
   ID: 'আইডি',
+  'In the books': 'হিসাবের খাতায়',
   Invoice: 'ইনভয়েস',
   'Invoice the project’s approved hours up to that day and its reached milestones?':
     'ওই দিন পর্যন্ত প্রজেক্টের অনুমোদিত ঘণ্টা ও অর্জিত মাইলফলক ইনভয়েস করবেন?',
   Invoiced: 'ইনভয়েস হয়েছে',
   'Invoiced as': 'যে নামে ইনভয়েস হয়',
+  'Invoiced revenue': 'ইনভয়েস করা আয়',
+  'Invoiced revenue and work in progress, less labour and booked costs.':
+    'ইনভয়েস করা আয় ও চলমান কাজ, শ্রম ও বুক করা খরচ বাদে।',
   'It is on a billing statement: release the statement first.':
     'এটি একটি বিলিং বিবরণীতে আছে: আগে বিবরণীটি ছেড়ে দিন।',
   'Its approved hours and reached milestones are invoiced through billing statements.':
     'এর অনুমোদিত ঘণ্টা ও অর্জিত মাইলফলক বিলিং বিবরণীর মাধ্যমে ইনভয়েস হয়।',
   'Its task is not done yet.': 'এর কাজ এখনো শেষ হয়নি।',
   'Kind of task': 'কাজের ধরন',
+  'Labour cost': 'শ্রম খরচ',
   Lines: 'লাইন',
   'Make the invoice': 'ইনভয়েস তৈরি করুন',
   'Make the invoice gathers the project’s approved billable hours up to the day and its reached milestones; each is invoiced once.':
     '‘ইনভয়েস তৈরি করুন’ ওই দিন পর্যন্ত প্রজেক্টের অনুমোদিত বিলযোগ্য ঘণ্টা ও অর্জিত মাইলফলক একত্র করে; প্রতিটি একবারই ইনভয়েস হয়।',
+  'Margin %': 'মার্জিন %',
   Milestone: 'মাইলফলক',
   Milestones: 'মাইলফলক',
   Name: 'নাম',
@@ -81,12 +98,21 @@ export const bn: Readonly<Record<string, string>> = {
     'ইনভয়েস করার কিছু নেই: ওই দিন পর্যন্ত কোনো অনুমোদিত বিলযোগ্য ঘণ্টা নেই, কোনো অর্জিত মাইলফলকও নেই।',
   'Off: time the customer does not pay for (it still costs, and still needs approving).':
     'বন্ধ: যে সময়ের জন্য গ্রাহক টাকা দেন না (তবু খরচ হয়, এবং অনুমোদন লাগে)।',
+  On: 'তারিখ',
   'Optional: with a task, the milestone cannot be reached before the task is done.':
     'ঐচ্ছিক: কাজ দেওয়া থাকলে, কাজ শেষ হওয়ার আগে মাইলফলক অর্জিত ধরা যায় না।',
   'Page {{page}} of {{pages}}': 'পৃষ্ঠা {{page}} / {{pages}}',
   'Per hour': 'প্রতি ঘণ্টায়',
   Person: 'ব্যক্তি',
+  Posted: 'পোস্ট করা',
+  'Posted customer invoices and credit notes on the project’s cost centre, before taxes.':
+    'প্রজেক্টের কস্ট সেন্টারে পোস্ট করা গ্রাহক ইনভয়েস ও ক্রেডিট নোট, কর বাদে।',
+  'Posted: its entry is in the books on the day, and reversed the day after.':
+    'পোস্ট করা: এর এন্ট্রি ওই দিনে খাতায় আছে, এবং পরের দিন উল্টানো হয়েছে।',
   Price: 'দাম',
+  Profit: 'লাভ',
+  'Profit as a share of invoiced revenue and work in progress.':
+    'ইনভয়েস করা আয় ও চলমান কাজের অংশ হিসেবে লাভ।',
   Project: 'প্রজেক্ট',
   'Project billing': 'প্রজেক্ট বিলিং',
   'Project billing (rate cards, milestones, statements)': 'প্রজেক্ট বিলিং (রেট কার্ড, মাইলফলক, বিবরণী)',
@@ -106,6 +132,10 @@ export const bn: Readonly<Record<string, string>> = {
   'Reached, not invoiced': 'অর্জিত, ইনভয়েস হয়নি',
   'Reached: delivered, and on the project’s next billing statement.':
     'অর্জিত: সরবরাহ হয়েছে, এবং প্রজেক্টের পরের বিলিং বিবরণীতে উঠবে।',
+  Recognise: 'স্বীকৃতি দিন',
+  Recognised: 'স্বীকৃত',
+  'Recognised work': 'স্বীকৃত কাজ',
+  Recognition: 'স্বীকৃতি',
   'Records must reference shared records or records of their own company.':
     'রেকর্ডকে শেয়ার করা রেকর্ড বা নিজের কোম্পানির রেকর্ড নির্দেশ করতে হবে।',
   Reference: 'রেফারেন্স',
@@ -115,6 +145,11 @@ export const bn: Readonly<Record<string, string>> = {
   'Release its hours and milestones, so that they can be invoiced again? Its invoice must be cancelled.':
     'এর ঘণ্টা ও মাইলফলক ছেড়ে দেবেন, যাতে আবার ইনভয়েস করা যায়? এর ইনভয়েস বাতিল থাকতে হবে।',
   Reopen: 'আবার খুলুন',
+  'Revenue is already recognised on that day.': 'ওই দিনের আয় ইতিমধ্যে স্বীকৃত হয়েছে।',
+  'Revenue recognised': 'আয় স্বীকৃত হয়েছে',
+  'Revenue recognition': 'আয় স্বীকৃতি',
+  'Revenue recognition {{name}}': 'আয় স্বীকৃতি {{name}}',
+  'Reversed by': 'যে এন্ট্রি দিয়ে উল্টানো',
   Role: 'ভূমিকা',
   Sequence: 'ক্রম',
   State: 'অবস্থা',
@@ -125,12 +160,15 @@ export const bn: Readonly<Record<string, string>> = {
   'Submitted by the person, approved or refused by a Projects manager; only approved hours are invoiced.':
     'ব্যক্তি জমা দেন, প্রজেক্ট ম্যানেজার অনুমোদন বা প্রত্যাখ্যান করেন; শুধু অনুমোদিত ঘণ্টাই ইনভয়েস হয়।',
   Task: 'কাজ',
+  'The hours on the phase’s tasks at each person’s cost.': 'ধাপের কাজগুলোর ঘণ্টা, প্রত্যেকের খরচের হারে।',
   'The most specific line wins: a person before a role, a role before a kind of task.':
     'সবচেয়ে নির্দিষ্ট লাইনটি প্রযোজ্য: ভূমিকার আগে ব্যক্তি, কাজের ধরনের আগে ভূমিকা।',
   'The most specific rate wins: a person before a role, a role before a kind of task; then the rate for everyone else.':
     'সবচেয়ে নির্দিষ্ট রেটটি প্রযোজ্য: ভূমিকার আগে ব্যক্তি, কাজের ধরনের আগে ভূমিকা; তারপর বাকি সবার রেট।',
   'The service on the invoice lines: its income account and its sales taxes.':
     'ইনভয়েস লাইনের সেবা: এর আয়ের হিসাব ও বিক্রয় কর।',
+  'The work in progress of every billed project on that day, booked as revenue.':
+    'ওই দিনে প্রতিটি বিল করা প্রজেক্টের চলমান কাজ, আয় হিসেবে বুক করা।',
   Time: 'সময়',
   'Time and milestones together: what the invoice was made for.':
     'সময় ও মাইলফলক একসাথে: যে পরিমাণের ইনভয়েস তৈরি হয়েছে।',
@@ -141,8 +179,13 @@ export const bn: Readonly<Record<string, string>> = {
   'Total before taxes': 'কর বাদে মোট',
   'Updated At': 'হালনাগাদের সময়',
   'Updated By': 'হালনাগাদ করেছেন',
+  'Usually the last day of a month: work approved up to this day and not on a posted invoice.':
+    'সাধারণত মাসের শেষ দিন: এই দিন পর্যন্ত অনুমোদিত কাজ, যা কোনো পোস্ট করা ইনভয়েসে নেই।',
   'What an hour is sold for; frozen on each hour when it is approved.':
     'এক ঘণ্টা যে দামে বিক্রি হয়; অনুমোদনের সময় প্রতিটি ঘণ্টায় স্থির হয়ে যায়।',
   'Why refused': 'প্রত্যাখ্যানের কারণ',
+  'Work approved up to the day and on no posted invoice is booked as revenue on that day — accrued income against income, on each project’s cost centre — and reversed the day after, so the invoices that follow are not counted twice.':
+    'ওই দিন পর্যন্ত অনুমোদিত, কোনো পোস্ট করা ইনভয়েসে নেই এমন কাজ ওই দিনে আয় হিসেবে বুক হয় — প্রাপ্য আয়ের বিপরীতে আয়, প্রতিটি প্রজেক্টের কস্ট সেন্টারে — এবং পরের দিন উল্টানো হয়, যাতে পরের ইনভয়েস দুবার গণনা না হয়।',
   'Work done': 'যে কাজ হয়েছে',
+  'Work in progress': 'চলমান কাজ',
 };

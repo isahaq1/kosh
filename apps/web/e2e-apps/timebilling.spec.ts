@@ -1,7 +1,8 @@
 /**
  * Project billing end to end (RFC 0034 §2.5): someone logs hours on a project billed to its customer and submits
  * them from the form; a manager approves them — the rate comes from the project's rate card —, makes a billing
- * statement from the project and its invoice. (Rates, refusals, milestones, once-only: the integration tests.)
+ * statement from the project and its invoice; at month end the work not yet on a posted invoice is recognised as
+ * revenue. (Rates, refusals, milestones, once-only, the entries: the integration tests.)
  */
 import { expect, type Page, test } from '@playwright/test';
 
@@ -79,4 +80,17 @@ test('hours submitted, approved at the card’s rate, and invoiced from a billin
   await expect(page.getByRole('button', { name: 'Release', exact: true })).toBeVisible();
   await expect(page.getByRole('table', { name: 'timesheets' }).getByRole('row')).toHaveCount(2);
   await expect(page.getByText('6,000').first()).toBeVisible();
+
+  // Month end: the invoice is still a draft, so its 6,000 is work in progress, recognised as revenue.
+  await page.goto('/projects/a/projects.action_recognitions/new');
+  await page.getByLabel('Note').fill('Month end');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/projects\.action_recognitions\/\d+$/);
+  await page.getByRole('button', { name: 'Recognise', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Yes' }).click();
+  await expect(page.getByRole('button', { name: 'Recognise', exact: true })).toHaveCount(0);
+  const recognised = page.getByRole('table', { name: 'lines' });
+  await expect(recognised.getByRole('row', { name: new RegExp(`Rollout ${stamp}`) })).toContainText(
+    '6,000',
+  );
 });

@@ -16,7 +16,7 @@ import { defineModule } from '@kosh/modules-sdk';
 import { product } from '@kosh/product';
 import { project } from '@kosh/project';
 import { projectAccount } from '@kosh/project_account';
-import { action, field, form, list, search, stat } from '@kosh/views';
+import { action, field, form, list, pivot, search, stat } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import {
   BillingMilestone,
@@ -24,6 +24,8 @@ import {
   projectBillingShutro,
   RateCard,
   RateCardLine,
+  Recognition,
+  RecognitionLine,
   removeBillingGuards,
   Statement,
 } from './module.js';
@@ -33,12 +35,17 @@ export {
   installBillingGuards,
   invoiceStatement,
   MoveStatement,
+  PhaseProfit,
   ProjectBilling,
+  postRecognition,
   projectBillingShutro,
   RateCard,
   RateCardLine,
+  Recognition,
+  RecognitionLine,
   Statement,
   TimesheetBilling,
+  unbilledOf,
 } from './module.js';
 export {
   type RateFound,
@@ -61,6 +68,12 @@ export const projectBilling: ReturnType<typeof defineModule> = defineModule({
         reason:
           'A statement is made of approved hours and reached milestones by the server; there is nothing to import.',
       },
+      {
+        rule: 'I1',
+        model: 'project.recognition',
+        reason:
+          'A recognition is computed from the projects’ work in progress and posted by the server.',
+      },
     ],
   },
   hooks: {
@@ -81,6 +94,11 @@ export const projectBilling: ReturnType<typeof defineModule> = defineModule({
   },
   events: [
     {
+      topic: 'project.recognition.posted',
+      model: 'project.recognition',
+      label: 'Revenue recognised',
+    },
+    {
       topic: 'project.statement.billed',
       model: 'project.statement',
       label: 'Billing statement invoiced',
@@ -92,6 +110,41 @@ export const projectBilling: ReturnType<typeof defineModule> = defineModule({
     },
   ],
   documents: [
+    {
+      key: 'project_recognition',
+      name: 'Revenue recognition',
+      model: 'project.recognition',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Revenue recognition {{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'what',
+            items: [
+              { label: 'On', bind: 'date' },
+              { label: 'Entry', bind: 'move.name' },
+              { label: 'Reversed by', bind: 'reversal.name' },
+              { label: 'Recognised', bind: 'amount' },
+            ],
+          },
+          {
+            kind: 'table',
+            id: 'projects',
+            bind: 'lines',
+            columns: [
+              { label: 'Project', bind: 'project.name' },
+              { label: 'Hours', bind: 'hours' },
+              { label: 'Time', bind: 'amountTime' },
+              { label: 'Milestones', bind: 'amountMilestones' },
+              { label: 'Recognised', bind: 'amount' },
+            ],
+          },
+        ],
+      },
+    },
     {
       key: 'project_statement',
       name: 'Billing statement',
@@ -189,6 +242,14 @@ export const projectBilling: ReturnType<typeof defineModule> = defineModule({
       label: 'Rate cards',
       views: ['list', 'form'],
     }),
+    'projects.action_recognitions': action(Recognition, {
+      label: 'Revenue recognition',
+      views: ['list', 'form'],
+    }),
+    'projects.action_recognition_lines': action(RecognitionLine, {
+      label: 'Recognised work',
+      views: ['list', 'form', 'pivot'],
+    }),
     'projects.action_rate_lines': action(RateCardLine, { label: 'Rates', views: ['list', 'form'] }),
   },
   menus: [
@@ -211,6 +272,13 @@ export const projectBilling: ReturnType<typeof defineModule> = defineModule({
       label: 'Billing milestones',
       action: 'projects.action_billing_milestones',
       sequence: 2,
+    },
+    {
+      id: 'projects.recognitions',
+      parent: 'projects.billing',
+      label: 'Revenue recognition',
+      action: 'projects.action_recognitions',
+      sequence: 3,
     },
     {
       id: 'projects.rate_cards',
@@ -243,7 +311,7 @@ export const projectBilling: ReturnType<typeof defineModule> = defineModule({
       columns: [
         'project',
         'name',
-        { field: 'dateDue', widget: 'days_left' },
+        { field: 'dateDue', widget: 'daysLeft' },
         { field: 'amount', sum: true },
         'state',
         'statement',
@@ -264,6 +332,71 @@ export const projectBilling: ReturnType<typeof defineModule> = defineModule({
       ],
       chatter: true,
     })),
+    'project.recognition.list': list(Recognition, {
+      columns: ['name', 'date', { field: 'amount', sum: true }, 'move', 'state'],
+      decorations: { neutral: { state: 'cancelled' } },
+    }),
+    'project.recognition.form': form(Recognition, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('recognise', {
+            primary: true,
+            label: 'Recognise',
+            confirm:
+              'Book the work in progress of every billed project on that day as revenue, reversed the day after?',
+          }),
+          k.button('discard', { label: 'Discard' }),
+        ],
+      },
+      sheet: [
+        k.group('main', ['name', 'date', 'note'], {
+          description:
+            'Work approved up to the day and on no posted invoice is booked as revenue on that day — accrued income against income, on each project’s cost centre — and reversed the day after, so the invoices that follow are not counted twice.',
+        }),
+        k.group('booked', ['amount', 'move', 'reversal'], { label: 'In the books' }),
+        k.lines(
+          'lines',
+          [
+            { field: 'project', id: 'line_project' },
+            { field: 'hours', id: 'line_hours', sum: true },
+            { field: 'amountTime', id: 'line_time', sum: true },
+            { field: 'amountMilestones', id: 'line_milestones', sum: true },
+            { field: 'amount', id: 'line_amount', sum: true },
+          ],
+          { readonlyWhen: {} },
+        ),
+      ],
+      chatter: true,
+    })),
+    'project.recognition.line.list': list(RecognitionLine, {
+      columns: [
+        'recognition',
+        'project',
+        'hours',
+        'amountTime',
+        'amountMilestones',
+        { field: 'amount', sum: true },
+      ],
+    }),
+    'project.recognition.line.form': form(RecognitionLine, (k) => ({
+      header: { buttons: [] },
+      sheet: [
+        k.group('main', [
+          'recognition',
+          'project',
+          'hours',
+          'amountTime',
+          'amountMilestones',
+          'amount',
+        ]),
+      ],
+    })),
+    'project.recognition.line.pivot': pivot(RecognitionLine, {
+      rows: ['project'],
+      cols: ['recognition'],
+      measures: [{ sum: 'amount' }],
+    }),
     'project.statement.list': list(Statement, {
       columns: [
         'name',
@@ -338,6 +471,10 @@ export const projectBilling: ReturnType<typeof defineModule> = defineModule({
             field({ field: 'billable', id: 'billing_billable' }),
             field({ field: 'rateCard', id: 'billing_rate_card' }),
             field({ field: 'billingProduct', id: 'billing_product' }),
+            field({ field: 'revenue', id: 'billing_revenue' }),
+            field({ field: 'unbilled', id: 'billing_unbilled' }),
+            field({ field: 'profit', id: 'billing_profit' }),
+            field({ field: 'margin', id: 'billing_margin' }),
           ],
         },
         {
@@ -426,6 +563,19 @@ export const projectBilling: ReturnType<typeof defineModule> = defineModule({
       ],
     },
     {
+      view: 'project.phase.list',
+      operations: [
+        {
+          insertAfter: 'progress',
+          nodes: [
+            field({ field: 'phaseCost', id: 'phase_cost', sum: true }),
+            field({ field: 'phaseEarned', id: 'phase_earned', sum: true }),
+            field({ field: 'phaseProfit', id: 'phase_profit', sum: true }),
+          ],
+        },
+      ],
+    },
+    {
       view: 'project.timesheet.list',
       operations: [
         {
@@ -456,6 +606,15 @@ export const projectBilling: ReturnType<typeof defineModule> = defineModule({
         },
       },
       groupBy: ['project', 'state'],
+    }),
+    'project.recognition': search(Recognition, {
+      fields: ['name'],
+      filters: { posted: { label: 'Posted', domain: { state: 'posted' }, group: 'state' } },
+      groupBy: ['state', 'date:month'],
+    }),
+    'project.recognition.line': search(RecognitionLine, {
+      fields: ['project.name', 'recognition.name'],
+      groupBy: ['project', 'recognition'],
     }),
     'project.statement': search(Statement, {
       fields: ['name', 'project.name', 'partner.name'],

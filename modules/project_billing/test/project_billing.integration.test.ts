@@ -393,3 +393,147 @@ test('a statement is released only once its invoice is cancelled; its hours are 
   // The first one's invoice still stands: it is not released.
   expect((await call('POST', `${S}/${ids['first']}/transitions/release`, 'mona')).status).toBe(409);
 });
+
+const R = '/api/v1/models/project.recognition';
+/** A project's money, as a Projects manager reads it after a refresh. */
+const figures = async () => {
+  const refreshed = await call('POST', '/api/v1/projects/refresh', 'pia', {
+    projects: [ids['project']],
+  });
+  expect(refreshed.status, JSON.stringify(refreshed.json)).toBe(200);
+  const p = (
+    await call(
+      'GET',
+      `/api/v1/models/project.project/${ids['project']}?fields=revenue,unbilled,profit,margin,labourCost`,
+      'pia',
+    )
+  ).json as Json;
+  return {
+    revenue: money(p.revenue),
+    unbilled: money(p.unbilled),
+    labour: money(p.labourCost),
+    profit: money(p.profit),
+    margin: p.margin === null ? null : Number(p.margin).toFixed(1),
+  };
+};
+
+test('what a project earned: invoiced revenue from the books, work in progress, profit and margin', async () => {
+  // Sumi costs 1,000 an hour: 11.5 h logged on the project.
+  const members = (await call('GET', '/api/v1/models/project.member?fields=user,project', 'pia'))
+    .json.items as Json[];
+  const sumi = members.find((m) => (m.user?.id ?? m.user) === users['sumi']);
+  expect(
+    (
+      await call('PATCH', `/api/v1/models/project.member/${sumi.id}`, 'pia', {
+        hourlyCost: '1000',
+      })
+    ).status,
+  ).toBe(200);
+  // Nothing is posted yet: both statements' invoices are drafts, so all of it is work in progress.
+  expect(await figures()).toEqual({
+    revenue: '0.00',
+    unbilled: '88000.00',
+    labour: '11500.00',
+    profit: '76500.00',
+    margin: '86.9',
+  });
+  // The first invoice is posted: it is revenue now, and no longer in progress.
+  const invoice = await invoiceOf(ids['first'] as number);
+  const posted = await call(
+    'POST',
+    `/api/v1/models/account.move/${invoice?.id}/transitions/post`,
+    'mona',
+  );
+  expect(posted.status, JSON.stringify(posted.json)).toBe(200);
+  expect(await figures()).toEqual({
+    revenue: '73000.00',
+    unbilled: '15000.00',
+    labour: '11500.00',
+    profit: '76500.00',
+    margin: '86.9',
+  });
+  // Someone who logs time sees no money.
+  const seen = (await call('GET', `/api/v1/models/project.project/${ids['project']}`, 'rafi'))
+    .json as Json;
+  expect(seen.name).toBe('ERP rollout');
+  expect(seen.revenue).toBeUndefined();
+  expect(seen.profit).toBeUndefined();
+  // A phase: the hours on its tasks.
+  const phase = await make('project.phase', 'pia', { name: 'Design', project: ids['project'] });
+  expect(
+    (await call('PATCH', `/api/v1/models/project.task/${ids['analysis']}`, 'pia', { phase }))
+      .status,
+  ).toBe(200);
+  await figures();
+  const ph = (
+    await call(
+      'GET',
+      `/api/v1/models/project.phase/${phase}?fields=phaseCost,phaseEarned,phaseProfit`,
+      'pia',
+    )
+  ).json as Json;
+  // Sumi's 10 h on Analysis; Rafi 8,000, Sumi 9,000 and 15,000, Pia 1,500 approved there.
+  expect([money(ph.phaseCost), money(ph.phaseEarned), money(ph.phaseProfit)]).toEqual([
+    '10000.00',
+    '33500.00',
+    '23500.00',
+  ]);
+});
+
+test('revenue recognition books the work in progress on the day and reverses it the day after, once', async () => {
+  // Before any work: nothing to recognise.
+  const early = await make('project.recognition', 'mona', { date: '2027-01-03' });
+  expect((await call('POST', `${R}/${early}/transitions/recognise`, 'mona')).status).toBe(422);
+  expect((await call('POST', `${R}/${early}/transitions/discard`, 'mona')).status).toBe(200);
+
+  const id = await make('project.recognition', 'mona', { date: '2027-02-28' });
+  const done = await call('POST', `${R}/${id}/transitions/recognise`, 'mona');
+  expect(done.status, JSON.stringify(done.json)).toBe(200);
+  const r = (await call('GET', `${R}/${id}?fields=name,state,amount`, 'mona')).json as Json;
+  expect(r.name).toMatch(/^REV\/\d{4}\/\d{4}$/);
+  // The posted invoice's 73,000 is revenue already; the draft one's 15,000 is recognised.
+  expect([r.state, money(r.amount)]).toEqual(['posted', '15000.00']);
+  const rows = (
+    await call('GET', '/api/v1/models/project.recognition.line?fields=project,hours,amount', 'mona')
+  ).json.items as Json[];
+  expect(rows.map((l) => [money(l.hours), money(l.amount)])).toEqual([['5.00', '15000.00']]);
+  // In the books: the entry on the day, its opposite the day after, both posted; the income on the cost centre.
+  const entries = await erp.host.server.driver.query<{
+    date: string;
+    state: string;
+    code: string;
+    debit: string;
+    credit: string;
+    analytic: number | null;
+  }>({
+    text: `SELECT to_char(m.date, 'YYYY-MM-DD') AS date, m.state, a.code, l.debit::text AS debit,
+                  l.credit::text AS credit, l.analytic_id AS analytic
+             FROM account_move m JOIN account_move_line l ON l.move_id = m.id
+             JOIN account_account a ON a.id = l.account_id
+            WHERE m.project_recognition_id = $1 ORDER BY m.date, l.id`,
+    params: [id],
+  });
+  expect(entries.map((e) => [e.date, e.state, money(e.debit), money(e.credit)])).toEqual([
+    ['2027-02-28', 'posted', '15000.00', '0.00'],
+    ['2027-02-28', 'posted', '0.00', '15000.00'],
+    ['2027-03-01', 'posted', '0.00', '15000.00'],
+    ['2027-03-01', 'posted', '15000.00', '0.00'],
+  ]);
+  expect(entries[0]?.code).toBe('1180');
+  expect(entries[0]?.analytic).toBeNull();
+  expect(entries[1]?.analytic).not.toBeNull();
+  expect(entries[3]?.analytic).toBe(entries[1]?.analytic);
+  // The project's invoiced revenue is the invoices', not the accrual's.
+  expect((await figures()).revenue).toBe('73000.00');
+
+  // Once a day; posted, it does not change; its figures are the server's.
+  const again = await make('project.recognition', 'mona', { date: '2027-02-28' });
+  expect((await call('POST', `${R}/${again}/transitions/recognise`, 'mona')).status).toBe(409);
+  expect(
+    (await call('PATCH', `${R}/${id}`, 'mona', { date: '2027-03-31' })).status,
+  ).toBeGreaterThanOrEqual(400);
+  expect((await call('PATCH', `${R}/${id}`, 'mona', { amount: '1' })).status).toBe(403);
+  // Not for Projects managers, nor for those who log time.
+  for (const who of ['pia', 'rafi', 'bob'])
+    expect((await call('GET', R, who)).status, who).toBe(403);
+});

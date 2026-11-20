@@ -23,6 +23,7 @@ import {
   type Env,
   extendModel,
   f,
+  type Records,
   records,
 } from './.kosh/bindings.js';
 import { type RateLine, rateFor } from './rates.js';
@@ -34,6 +35,8 @@ import { type RateLine, rateFor } from './rates.js';
 const SYSTEM = ['base.admin'] as const;
 /** What an hour is sold for: Projects managers and those who bill, not everyone who logs time. */
 const RATES = ['project.manager', 'project_billing.manager'] as const;
+/** A project's money: read by Projects managers, written by the server. */
+const FIGURES = { read: ['project.manager'], write: [...SYSTEM] };
 
 const READ = ['read'] as const;
 const WRITE = ['read', 'write'] as const;
@@ -128,6 +131,70 @@ export const ProjectBilling = extendModel('project.project', {
       help: 'The service on the invoice lines: its income account and its sales taxes.',
     }),
     billingMilestones: f.one2many('project.billing.milestone', 'project'),
+    revenue: f.decimal({
+      scale: 2,
+      label: 'Invoiced revenue',
+      groups: FIGURES,
+      help: 'Posted customer invoices and credit notes on the project’s cost centre, before taxes.',
+    }),
+    unbilled: f.decimal({
+      scale: 2,
+      label: 'Work in progress',
+      groups: FIGURES,
+      help: 'Approved billable hours and reached milestones that are on no posted invoice yet, at what they sell for.',
+    }),
+    profit: f.decimal({
+      scale: 2,
+      label: 'Profit',
+      groups: FIGURES,
+      help: 'Invoiced revenue and work in progress, less labour and booked costs.',
+    }),
+    margin: f.decimal({
+      scale: 1,
+      label: 'Margin %',
+      groups: FIGURES,
+      help: 'Profit as a share of invoiced revenue and work in progress.',
+    }),
+  },
+  overrides: {
+    // With every refresh of a project's figures (hourly, and Refresh on the project): what it earned.
+    moneyOf: async function (
+      this: unknown,
+      next: () => Promise<Map<number, { booked: string; committed: string }>>,
+    ): Promise<Map<number, { booked: string; committed: string }>> {
+      const out = await next();
+      const projects = this as Records<'project.project'>;
+      await refreshProfit(
+        projects.env as unknown as Env,
+        projects.ids.map(Number),
+        new Map([...out].map(([id, money]) => [id, money.booked])),
+      );
+      return out;
+    },
+  },
+});
+
+/** What a phase cost in labour and earned, from the hours on its tasks and the milestones tied to them. */
+export const PhaseProfit = extendModel('project.phase', {
+  fields: {
+    phaseCost: f.decimal({
+      scale: 2,
+      label: 'Labour cost',
+      groups: FIGURES,
+      help: 'The hours on the phase’s tasks at each person’s cost.',
+    }),
+    phaseEarned: f.decimal({
+      scale: 2,
+      label: 'Earned',
+      groups: FIGURES,
+      help: 'Approved billable hours on the phase’s tasks at their rate, and reached milestones tied to its tasks.',
+    }),
+    phaseProfit: f.decimal({
+      scale: 2,
+      label: 'Profit',
+      groups: FIGURES,
+      help: 'Earned less labour cost (costs booked in Accounting are the project’s, not a phase’s).',
+    }),
   },
 });
 
@@ -495,6 +562,10 @@ export const MoveStatement = extendModel('account.move', {
       ondelete: 'set null',
       label: 'Billing statement',
     }),
+    projectRecognition: f.many2one('project.recognition', {
+      ondelete: 'set null',
+      label: 'Revenue recognition',
+    }),
   },
 });
 
@@ -647,6 +718,26 @@ async function gather(su: Env, project: number, dateTo: string): Promise<Gathere
   };
 }
 
+/** A project's cost centre (Projects ↔ Accounting): the one it has, else made with its code, as a refresh would. */
+async function costCentreOf(su: Env, project: number): Promise<number> {
+  const [p] = await su
+    .model('project.project')
+    .browse([project as never])
+    .load({ analytic: true, company: true });
+  if (p === undefined) throw new Error(`No project ${project}.`);
+  if (p.analytic !== null) return p.analytic.id as number;
+  const made = (
+    await su
+      .model('account.analytic')
+      .create([{ code: p.code ?? `PRJ-${p.id}`, name: p.name, company: p.company.id }])
+  ).ids[0] as number;
+  await su
+    .model('project.project')
+    .browse([p.id])
+    .write({ analytic: made } as never);
+  return made;
+}
+
 const refuse = (message: string, hint: string): never => {
   throw new orm.ValidationError('project.statement', ['state'], message, hint);
 };
@@ -696,7 +787,8 @@ export async function invoiceStatement(env: Env, id: number): Promise<number> {
         'The company has no sales journal.',
         'Install a chart of accounts (Accounting › Configuration).',
       );
-    const analytic = project.analytic === null ? {} : { analytic: project.analytic.id };
+    // Its cost centre, made now when the project's figures were never refreshed: revenue is the project's.
+    const analytic = { analytic: await costCentreOf(su, project.id as number) };
     const taxes = { set: [...service.taxes].map((t) => t.id) };
     // Hours: one line per person and rate, with the days it covers.
     const groups = new Map<
@@ -788,6 +880,415 @@ export async function invoiceStatement(env: Env, id: number): Promise<number> {
   });
 }
 
+// ---- work in progress, profit, revenue recognition
+
+const INCOME = ['income', 'income_other'];
+const dayAfter = (date: string): string => {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+};
+
+interface Unbilled {
+  readonly hours: Decimal;
+  readonly time: Decimal;
+  readonly milestones: Decimal;
+}
+
+/**
+ * A project's work in progress on a day (RFC 0034 §2.5), as the books stand now: approved billable hours up to
+ * that day and milestones reached by then that are on no **posted** invoice — on no statement, or on one whose
+ * invoice is still a draft —, at what they sell for.
+ */
+export async function unbilledOf(su: Env, project: number, date: string): Promise<Unbilled> {
+  const open = (statement: { invoice: { state: string } | null } | null): boolean =>
+    statement === null || statement.invoice === null || statement.invoice.state !== 'posted';
+  let hours = ZERO;
+  let time = ZERO;
+  for (const l of await su
+    .model('project.timesheet')
+    .search({
+      where: {
+        project: project as never,
+        approval: 'approved',
+        billable: true,
+        date: { lte: date },
+      } as never,
+    })
+    .then((found) => found.load({ statement: { invoice: true } }))) {
+    if (l.billAmount === null || !open(l.statement)) continue;
+    hours = hours.plus(l.hours);
+    time = time.plus(l.billAmount);
+  }
+  let milestones = ZERO;
+  for (const m of await su
+    .model('project.billing.milestone')
+    .search({ where: { project: project as never, state: 'reached' } as never })
+    .then((found) => found.load({ statement: { invoice: true } }))) {
+    if (m.reachedOn !== null && iso(m.reachedOn) > date) continue;
+    if (open(m.statement)) milestones = milestones.plus(m.amount);
+  }
+  return { hours, time, milestones };
+}
+
+/**
+ * Writes what each project earned (RFC 0034 §2.5): invoiced revenue from the books — the income lines of posted
+ * entries on its cost centre, recognition entries left out —, work in progress, the profit after labour and the
+ * costs booked (`booked`, as this refresh found them), the margin; and each phase's labour, earnings and profit.
+ */
+async function refreshProfit(
+  su: Env,
+  ids: readonly number[],
+  booked: ReadonlyMap<number, string>,
+): Promise<void> {
+  if (ids.length === 0) return;
+  const projects = await su
+    .model('project.project')
+    .browse([...ids] as never)
+    .load({ analytic: true });
+  for (const p of projects) {
+    let revenue = ZERO;
+    if (p.analytic !== null) {
+      const lines = await su
+        .model('account.move.line')
+        .search({
+          where: {
+            posted: true,
+            analytic: p.analytic.id,
+            accountType: { in: INCOME },
+          } as never,
+        })
+        .then((found) => found.load({ move: true }));
+      for (const l of lines) {
+        if (l.move.projectRecognition !== null) continue;
+        revenue = revenue.plus(l.credit.amount).minus(l.debit.amount);
+      }
+    }
+    // Everything approved, whatever its day: the figure says what is still to invoice.
+    const wip = await unbilledOf(su, p.id as number, '9999-12-31');
+    const unbilled = wip.time.plus(wip.milestones);
+    const earned = revenue.plus(unbilled);
+    const profit = earned
+      .minus(p.labourCost ?? ZERO)
+      .minus(orm.toDecimal(booked.get(p.id as number) ?? '0'));
+    await su
+      .model('project.project')
+      .browse([p.id])
+      .write({
+        revenue,
+        unbilled,
+        profit,
+        margin: earned.isZero() ? null : profit.times(100).dividedBy(earned).toDecimalPlaces(1),
+      } as never);
+  }
+  // Phases: the hours on their tasks, and the milestones tied to their tasks.
+  const phases = await su
+    .model('project.phase')
+    .search({ where: { project: { in: [...ids] } } as never });
+  if (phases.length === 0) return;
+  const cost = new Map<number, Decimal>();
+  const earned = new Map<number, Decimal>();
+  const add = (map: Map<number, Decimal>, phase: number, amount: Decimal): void => {
+    map.set(phase, (map.get(phase) ?? ZERO).plus(amount));
+  };
+  for (const l of await su
+    .model('project.timesheet')
+    .search({ where: { project: { in: [...ids] } } as never })
+    .then((found) => found.load({ task: { phase: true } }))) {
+    const phase = l.task.phase?.id as number | undefined;
+    if (phase === undefined) continue;
+    add(cost, phase, l.cost ?? ZERO);
+    if (l.approval === 'approved' && l.billable === true && l.billAmount !== null)
+      add(earned, phase, l.billAmount);
+  }
+  for (const m of await su
+    .model('project.billing.milestone')
+    .search({ where: { project: { in: [...ids] }, state: 'reached' } as never })
+    .then((found) => found.load({ task: { phase: true } }))) {
+    const phase = m.task?.phase?.id as number | undefined;
+    if (phase !== undefined) add(earned, phase, m.amount);
+  }
+  for (const id of phases.ids.map(Number)) {
+    const c = cost.get(id) ?? ZERO;
+    const e = earned.get(id) ?? ZERO;
+    await su
+      .model('project.phase')
+      .browse([id as never])
+      .write({ phaseCost: c, phaseEarned: e, phaseProfit: e.minus(c) } as never);
+  }
+  await su.flush();
+}
+
+/** The accrued income account of revenue recognition: found by its code, made the first time. */
+export const ACCRUED_INCOME = {
+  code: '1180',
+  name: 'Accrued income (work not yet invoiced)',
+  type: 'asset_current',
+} as const;
+
+const refuseRecognition = (message: string, hint: string): never => {
+  throw new orm.ValidationError('project.recognition', ['state'], message, hint);
+};
+
+/**
+ * Posts a revenue recognition (RFC 0034 §2.5): for every billed project of the company, its work in progress on
+ * the day — debit accrued income, credit revenue on the project's cost centre —, in one entry dated that day,
+ * and the same entry reversed the day after: the period shows what was earned, and the invoices that follow are
+ * not counted twice. Returns the entry.
+ */
+export async function postRecognition(env: Env, id: number): Promise<number> {
+  return env.asSuperuser({ reason: 'revenue recognised' }, async (su) => {
+    const [r] = await su
+      .model('project.recognition')
+      .browse([id as never])
+      .load({ company: { currency: true } });
+    if (r === undefined) return refuseRecognition('The recognition is gone.', 'Make a new one.');
+    if (r.move !== null) return r.move.id as number;
+    const company = r.company.id as number;
+    const date = iso(r.date);
+    const chart = await su
+      .model('account.account')
+      .search({ where: { company: company as never }, limit: 1 });
+    if (chart.length === 0)
+      return refuseRecognition(
+        'The company has no chart of accounts yet.',
+        'Install a chart in Accounting first.',
+      );
+    const [sales] = await su
+      .model('account.journal')
+      .search({ where: { company: company as never, type: 'sale' } as never, limit: 1 })
+      .then((found) => found.load({ defaultAccount: true }));
+    if (sales === undefined || sales.defaultAccount === null)
+      return refuseRecognition(
+        'The sales journal has no default income account.',
+        'Choose it on the journal (Accounting › Configuration › Journals).',
+      );
+    const accrued =
+      (
+        await su.model('account.account').search({
+          where: { company: company as never, code: ACCRUED_INCOME.code } as never,
+          limit: 1,
+        })
+      ).ids[0] ??
+      (await su.model('account.account').create([{ ...ACCRUED_INCOME, company } as never])).ids[0];
+    const journal =
+      (
+        await su.model('account.journal').search({
+          where: { company: company as never, code: 'REVR' } as never,
+          limit: 1,
+        })
+      ).ids[0] ??
+      (
+        await su
+          .model('account.journal')
+          .create([
+            { company, code: 'REVR', name: 'Revenue recognition', type: 'general' } as never,
+          ])
+      ).ids[0];
+    const projects = await su
+      .model('project.project')
+      .search({ where: { company: company as never, billable: true, active: true } as never })
+      .then((found) => found.load({ analytic: true }));
+    const rows: Record<string, unknown>[] = [];
+    const entry: Record<string, unknown>[] = [];
+    const back: Record<string, unknown>[] = [];
+    let total = ZERO;
+    for (const p of projects) {
+      const wip = await unbilledOf(su, p.id as number, date);
+      const amount = wip.time.plus(wip.milestones);
+      if (amount.lte(0)) continue;
+      total = total.plus(amount);
+      rows.push({
+        recognition: r.id,
+        project: p.id,
+        company,
+        hours: wip.hours,
+        amountTime: wip.time,
+        amountMilestones: wip.milestones,
+        amount,
+      });
+      const name = `${p.name}: work not yet invoiced on ${date}`;
+      const analytic = p.analytic === null ? {} : { analytic: p.analytic.id };
+      const value = amount.toFixed(2);
+      entry.push(
+        { account: accrued, name, debit: value, credit: '0' },
+        { account: sales.defaultAccount.id, name, debit: '0', credit: value, ...analytic },
+      );
+      back.push(
+        { account: accrued, name, debit: '0', credit: value },
+        { account: sales.defaultAccount.id, name, debit: value, credit: '0', ...analytic },
+      );
+    }
+    if (rows.length === 0)
+      return refuseRecognition(
+        'Nothing to recognise: no billed project has work that is not on a posted invoice on that day.',
+        'Approve the hours and mark the milestones reached first.',
+      );
+    await su.model('project.recognition.line').create(rows as never);
+    const moves = su.model('account.move');
+    const base = {
+      kind: 'entry',
+      journal,
+      company,
+      currency: r.company.currency.id,
+      projectRecognition: r.id,
+    };
+    const made = (
+      await moves.create([
+        { ...base, date, ref: `${r.name}: work in progress`, lines: { create: entry } } as never,
+      ])
+    ).ids[0] as number;
+    await moves.browse([made as never]).post();
+    const reversal = (
+      await moves.create([
+        {
+          ...base,
+          date: dayAfter(date),
+          ref: `${r.name}: reversal`,
+          reversalOf: made,
+          lines: { create: back },
+        } as never,
+      ])
+    ).ids[0] as number;
+    await moves.browse([reversal as never]).post();
+    await moves.browse([made as never]).write({ reversedBy: reversal } as never);
+    await su
+      .model('project.recognition')
+      .browse([r.id])
+      .write({ move: made, reversal, amount: total } as never);
+    await su.flush();
+    return made;
+  });
+}
+
+/** The recognitions among `ids` whose day another posted recognition of the company already has. */
+async function recognisedAlready(env: Env, ids: readonly number[]): Promise<number[]> {
+  return env.asSuperuser({ reason: 'one recognition a day' }, async (su) => {
+    const out: number[] = [];
+    const rows = (
+      await su
+        .model('project.recognition')
+        .browse([...ids] as never)
+        .load(['date', 'company'])
+    ).read(['id', 'date', 'company']);
+    for (const row of rows) {
+      const others = await su.model('project.recognition').search({
+        where: {
+          company: row['company'] as never,
+          date: iso(row['date']),
+          state: 'posted',
+          id: { ne: row['id'] as never },
+        } as never,
+        limit: 1,
+      });
+      if (others.length > 0) out.push(Number(row['id']));
+    }
+    return out;
+  });
+}
+
+/** The recognitions among `ids` that are not drafts. */
+async function recognitionsPosted(env: Env, ids: readonly number[]): Promise<number[]> {
+  const rows = (
+    await env
+      .model('project.recognition')
+      .browse([...ids] as never)
+      .load(['state'])
+  ).read(['id', 'state']);
+  return rows.filter((r) => r['state'] !== 'draft').map((r) => Number(r['id']));
+}
+
+/**
+ * Revenue recognised at a period's end (RFC 0034 §2.5): work done and approved that is not invoiced yet, booked
+ * as revenue on the day and reversed the day after.
+ */
+export const Recognition = defineModel('project.recognition', {
+  label: 'Revenue recognition',
+  recName: 'name',
+  order: ['date desc', 'id desc'],
+  companyScoped: { required: true },
+  tracking: ['state', 'amount'],
+  access: { 'project_billing.manager': [...KEEP, 'export'] },
+  fields: {
+    name: f.char({ required: true, sequence: 'project.recognition', label: 'Reference' }),
+    date: f.date({
+      required: true,
+      default: (env: Env) => env.today(),
+      label: 'On',
+      help: 'Usually the last day of a month: work approved up to this day and not on a posted invoice.',
+    }),
+    note: f.text({ label: 'Note' }),
+    amount: f.decimal({
+      scale: 2,
+      label: 'Recognised',
+      groups: { write: [...SYSTEM] },
+      help: 'The work in progress of every billed project on that day, booked as revenue.',
+    }),
+    move: f.many2one('account.move', {
+      ondelete: 'set null',
+      label: 'Entry',
+      groups: { write: [...SYSTEM] },
+    }),
+    reversal: f.many2one('account.move', {
+      ondelete: 'set null',
+      label: 'Reversed by',
+      groups: { write: [...SYSTEM] },
+    }),
+    lines: f.one2many('project.recognition.line', 'recognition'),
+    state: f.state({
+      states: { draft: 'Draft', posted: 'Posted', cancelled: 'Cancelled' },
+      initial: 'draft',
+      help: 'Posted: its entry is in the books on the day, and reversed the day after.',
+      transitions: {
+        recognise: emitting('project.recognition.posted', {
+          from: ['draft'],
+          to: 'posted',
+          guard: records('project.recognition', (runs) =>
+            recognisedAlready(runs.env as unknown as Env, runs.ids as readonly number[]),
+          ),
+          message: 'Revenue is already recognised on that day.',
+          after: records('project.recognition', async (runs) => {
+            const env = runs.env as unknown as Env;
+            for (const id of runs.ids) await postRecognition(env, id as number);
+          }),
+        }),
+        discard: { from: ['draft'], to: 'cancelled' },
+      },
+    }),
+  },
+  constraints: {
+    lockedOncePosted: {
+      ...check('project.recognition', ['date'], (runs) =>
+        recognitionsPosted(runs.env as unknown as Env, runs.ids as readonly number[]),
+      ),
+      message: 'A posted recognition does not change.',
+    },
+  },
+});
+
+export const RecognitionLine = defineModel('project.recognition.line', {
+  label: 'Recognised work',
+  order: ['recognition desc', 'id asc'],
+  companyScoped: { required: true },
+  access: { 'project_billing.manager': READ },
+  fields: {
+    recognition: f.many2one('project.recognition', {
+      required: true,
+      checkCompany: true,
+      ondelete: 'cascade',
+    }),
+    project: f.many2one('project.project', {
+      required: true,
+      checkCompany: true,
+      ondelete: 'restrict',
+    }),
+    hours: f.decimal({ scale: 2, label: 'Hours' }),
+    amountTime: f.decimal({ scale: 2, label: 'Time' }),
+    amountMilestones: f.decimal({ scale: 2, label: 'Milestones' }),
+    amount: f.decimal({ scale: 2, label: 'Recognised' }),
+  },
+});
+
 /**
  * Submitted and approved hours, and milestones on a statement, are not deleted — by their author, with their task
  * or with their project —: at the database too, as nothing in the models runs before a delete. Idempotent.
@@ -844,7 +1345,13 @@ export const projectBillingShutro = defineModule({
       padding: 5,
       reset: 'yearly',
     }),
+    orm.defineSequence({
+      code: 'project.recognition',
+      prefix: 'REV/{year}/',
+      padding: 4,
+      reset: 'yearly',
+    }),
   ],
-  models: [RateCard, RateCardLine, BillingMilestone, Statement],
-  extensions: [ProjectBilling, TimesheetBilling, MoveStatement],
+  models: [RateCard, RateCardLine, BillingMilestone, Statement, Recognition, RecognitionLine],
+  extensions: [ProjectBilling, PhaseProfit, TimesheetBilling, MoveStatement],
 });
