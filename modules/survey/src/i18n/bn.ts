@@ -1,8 +1,14 @@
 /** Bangla for the module's labels, keyed by their English text (RFC 0023 §3.1; `pnpm i18n:extract`). */
 export const bn: Readonly<Record<string, string>> = {
   'A date': 'একটি তারিখ',
+  'A field whose value starts with bn for Bangla; empty: English.':
+    'যে ফিল্ডের মান bn দিয়ে শুরু হলে বাংলা; খালি: ইংরেজি।',
   'A line of text': 'এক লাইনের লেখা',
+  'A list on the record whose rows are the people to ask (registrations of an event); empty: the record itself.':
+    'রেকর্ডের একটি তালিকা, যার সারিগুলো জিজ্ঞাসা করার মানুষ (ইভেন্টের নিবন্ধন); খালি: রেকর্ডটি নিজেই।',
   'A number': 'একটি সংখ্যা',
+  'A number field of the record asked about (rating on a ticket). Not on an anonymous survey.':
+    'যে রেকর্ডের বিষয়ে জিজ্ঞাসা, তার একটি সংখ্যা ফিল্ড (টিকিটের রেটিং)। বেনামি জরিপে নয়।',
   'A number, yes or no, text, or a choice by its label.':
     'একটি সংখ্যা, হ্যাঁ বা না, লেখা, অথবা লেবেল ধরে একটি পছন্দ।',
   'A paragraph': 'একটি অনুচ্ছেদ',
@@ -13,6 +19,7 @@ export const bn: Readonly<Record<string, string>> = {
     'রেটিংয়ে এতগুলো তারকা থাকে; রেটিং বা সুপারিশের স্কোর হলো এর মান গুণ প্রতি ধাপের পয়েন্ট। পছন্দগুলোর নিজস্ব পয়েন্ট থাকে।',
   'A rating or a recommendation scores its value times this; 0: it does not count in the score.':
     'রেটিং বা সুপারিশের স্কোর হলো এর মান গুণ এই সংখ্যা; ০: স্কোরে গণনা হয় না।',
+  'A rating, a recommendation or a number of the survey.': 'জরিপের একটি রেটিং, সুপারিশ বা সংখ্যা প্রশ্ন।',
   'A survey opens with at least one question; a choice question has choices; a question waits only for one before it, on a value that exists.':
     'জরিপ খুলতে অন্তত একটি প্রশ্ন লাগে; পছন্দের প্রশ্নে পছন্দ থাকতে হয়; একটি প্রশ্ন কেবল তার আগের প্রশ্নের, এবং বিদ্যমান মানের ওপর নির্ভর করে।',
   'About (model)': 'যার বিষয়ে (মডেল)',
@@ -23,10 +30,15 @@ export const bn: Readonly<Record<string, string>> = {
   'After answering': 'উত্তর দেওয়ার পরে',
   'Against the survey’s pass mark; empty when it has none, or when nothing asked could score.':
     'জরিপের পাস নম্বরের বিপরীতে; পাস নম্বর না থাকলে, বা কোনো প্রশ্নে স্কোর না থাকলে খালি।',
+  'An answer on the record': 'রেকর্ডে একটি উত্তর',
   'An earlier question, a condition and a value — a number, yes or no, text, or a choice by its label. Empty: always asked.':
     'আগের একটি প্রশ্ন, একটি শর্ত ও একটি মান — সংখ্যা, হ্যাঁ বা না, লেখা, অথবা লেবেল ধরে একটি পছন্দ। খালি: সবসময় জিজ্ঞাসা করা হয়।',
   'An earlier question: this one is asked only when its answer meets the condition.':
     'আগের একটি প্রশ্ন: তার উত্তর শর্ত পূরণ করলেই কেবল এই প্রশ্ন করা হয়।',
+  'An event of an installed app (helpdesk.ticket.solved, event.event.ended), or a model and .created (hiring.applicant.created). The list is at /api/v1/surveys/events.':
+    'ইনস্টল করা অ্যাপের একটি ইভেন্ট (helpdesk.ticket.solved, event.event.ended), অথবা একটি মডেল ও .created (hiring.applicant.created)। তালিকা /api/v1/surveys/events-এ আছে।',
+  'An invitation with an email address is emailed once, when its survey is open.':
+    'ইমেইল ঠিকানা থাকা আমন্ত্রণ একবার ইমেইল করা হয়, যখন জরিপ খোলা থাকে।',
   Anonymous: 'বেনামি',
   Answer: 'উত্তর',
   Answered: 'উত্তর দেওয়া হয়েছে',
@@ -39,9 +51,13 @@ export const bn: Readonly<Record<string, string>> = {
   'Anyone with the link': 'লিংক আছে এমন যে কেউ',
   'Anyone with the link: the same address for everyone, answered any number of times. Invited people only: each invitation has its own address, good once.':
     'লিংক আছে এমন যে কেউ: সবার জন্য একই ঠিকানা, যতবার খুশি উত্তর দেওয়া যায়। শুধু আমন্ত্রিতরা: প্রতিটি আমন্ত্রণের নিজস্ব ঠিকানা, একবারই কার্যকর।',
+  'Asked by': 'যে নিয়মে জিজ্ঞাসা',
   'Asked only when': 'শুধু তখনই জিজ্ঞাসা',
+  'Automatic invitation': 'স্বয়ংক্রিয় আমন্ত্রণ',
+  'Automatic invitations': 'স্বয়ংক্রিয় আমন্ত্রণ',
   'Average score %': 'গড় স্কোর %',
   'Back to draft': 'খসড়ায় ফেরত',
+  Bangla: 'বাংলা',
   Choice: 'পছন্দ',
   Choices: 'পছন্দ',
   Chosen: 'নির্বাচিত',
@@ -50,6 +66,7 @@ export const bn: Readonly<Record<string, string>> = {
   Company: 'কোম্পানি',
   Condition: 'শর্ত',
   Contact: 'যোগাযোগ',
+  'Contact in': 'যোগাযোগ যে ফিল্ডে',
   'Created At': 'তৈরির সময়',
   'Created By': 'তৈরি করেছেন',
   'CSAT %': 'গ্রাহক সন্তুষ্টি %',
@@ -59,6 +76,10 @@ export const bn: Readonly<Record<string, string>> = {
   'Draft while it is written; open while it takes answers; closed after.':
     'লেখার সময় খসড়া; উত্তর নেওয়ার সময় খোলা; এরপর বন্ধ।',
   Email: 'ইমেইল',
+  'Email in': 'ইমেইল যে ফিল্ডে',
+  'Emailed at': 'ইমেইলের সময়',
+  English: 'ইংরেজি',
+  'For each of': 'প্রতিটির জন্য',
   'From the rating questions: the share of ratings in the top two fifths of their scale.':
     'রেটিং প্রশ্ন থেকে: স্কেলের ওপরের দুই-পঞ্চমাংশে থাকা রেটিংয়ের অংশ।',
   'From the recommendation questions: promoters (9 and 10) less detractors (0 to 6), in percent, from −100 to 100.':
@@ -66,6 +87,7 @@ export const bn: Readonly<Record<string, string>> = {
   Hint: 'ইঙ্গিত',
   'How the earlier answer is compared with the value.': 'আগের উত্তরকে মানের সাথে যেভাবে তুলনা করা হয়।',
   ID: 'আইডি',
+  'into the field': 'যে ফিল্ডে',
   Introduction: 'ভূমিকা',
   Invitation: 'আমন্ত্রণ',
   Invitations: 'আমন্ত্রণ',
@@ -78,10 +100,14 @@ export const bn: Readonly<Record<string, string>> = {
   'It has responses: its questions stay as they were answered. Duplicate it to change them.':
     'এতে সাড়া আছে: প্রশ্নগুলো যেমন উত্তর দেওয়া হয়েছে তেমনই থাকে। বদলাতে চাইলে এর প্রতিলিপি করুন।',
   Label: 'লেবেল',
+  Language: 'ভাষা',
+  'Language in': 'ভাষা যে ফিল্ডে',
+  'Last problem': 'সর্বশেষ সমস্যা',
   'Link key': 'লিংক কী',
   'Manager (writes surveys)': 'ম্যানেজার (জরিপ লেখেন)',
   Marketing: 'বিপণন',
   Name: 'নাম',
+  'Name in': 'নাম যে ফিল্ডে',
   'Not answered': 'উত্তর দেওয়া হয়নি',
   'Nothing that names the respondent is kept: no name, no email, no contact, no invitation — an invitation is only marked as answered.':
     'উত্তরদাতাকে চেনা যায় এমন কিছু রাখা হয় না: নাম, ইমেইল, যোগাযোগ বা আমন্ত্রণ নয় — আমন্ত্রণে শুধু ‘উত্তর দেওয়া হয়েছে’ চিহ্ন পড়ে।',
@@ -89,10 +115,15 @@ export const bn: Readonly<Record<string, string>> = {
   Number: 'সংখ্যা',
   Of: 'মোট',
   'One of several choices': 'কয়েকটির মধ্যে একটি পছন্দ',
+  'Only records — or rows — whose field has this value are asked (state is attended).':
+    'যেসব রেকর্ড — বা সারির — ফিল্ডে এই মান আছে শুধু তাদের জিজ্ঞাসা করা হয় (অবস্থা: উপস্থিত)।',
   'Only when': 'শুধু যখন',
+  'Only when the field': 'শুধু যখন ফিল্ডটি',
   Open: 'খোলা',
   'Open again': 'আবার খুলুন',
   'Open surveys': 'খোলা জরিপ',
+  'Optional: a rating of the survey written into a number field of the record, such as a ticket’s rating.':
+    'ঐচ্ছিক: জরিপের একটি রেটিং রেকর্ডের সংখ্যা ফিল্ডে লেখা হয়, যেমন টিকিটের রেটিং।',
   Outcome: 'ফলাফল',
   Overview: 'সারসংক্ষেপ',
   'Page {{page}} of {{pages}}': 'পৃষ্ঠা {{page}} / {{pages}}',
@@ -148,6 +179,13 @@ export const bn: Readonly<Record<string, string>> = {
     'তাঁদের পাঠানোর ঠিকানা: এটি তাঁদের জন্য একবার জরিপ খোলে।',
   'The average of the responses’ scores, each as a share of what it could score.':
     'সাড়াগুলোর স্কোরের গড়, প্রতিটি তার সম্ভাব্য সর্বোচ্চ স্কোরের অংশ হিসেবে।',
+  'The event is not one of an installed app, or a field named here is not on its record (see /api/v1/surveys/events).':
+    'ইভেন্টটি কোনো ইনস্টল করা অ্যাপের নয়, অথবা এখানে দেওয়া একটি ফিল্ড এর রেকর্ডে নেই (/api/v1/surveys/events দেখুন)।',
+  'The field with the person’s email; when it is empty, the email of the contact below.':
+    'ব্যক্তির ইমেইলের ফিল্ড; খালি থাকলে নিচের যোগাযোগের ইমেইল।',
+  'The fields of the record — or of each row — that say who the person is.':
+    'রেকর্ডের — বা প্রতিটি সারির — যেসব ফিল্ড বলে ব্যক্তিটি কে।',
+  'The language of the email, and of the page its link opens.': 'ইমেইলের, এবং লিংকে খোলা পৃষ্ঠার ভাষা।',
   'The questions of a survey are changed while it is a draft.': 'জরিপের প্রশ্ন খসড়া অবস্থায় বদলানো যায়।',
   'The score as a share of what the questions this respondent was asked could give.':
     'এই উত্তরদাতাকে করা প্রশ্নগুলো থেকে সম্ভাব্য সর্বোচ্চের অংশ হিসেবে স্কোর।',
@@ -162,10 +200,16 @@ export const bn: Readonly<Record<string, string>> = {
   'What the answer is: text, a number, yes or no, one or several choices, a rating, the 0-to-10 recommendation question, a date.':
     'উত্তর কী ধরনের: লেখা, সংখ্যা, হ্যাঁ বা না, এক বা একাধিক পছন্দ, রেটিং, ০ থেকে ১০ সুপারিশের প্রশ্ন, তারিখ।',
   'What the respondent reads once their answers are in.': 'উত্তর জমা হলে উত্তরদাতা যা পড়েন।',
+  When: 'কখন',
+  'When this happens in another app, the people concerned are invited to the survey — once each — and emailed their link. Ticket solved: helpdesk.ticket.solved. After an event, those who came: event.event.ended, for each of registrations, only when state is attended. A new applicant: hiring.applicant.created.':
+    'অন্য অ্যাপে এটি ঘটলে সংশ্লিষ্ট মানুষদের জরিপে আমন্ত্রণ জানানো হয় — প্রত্যেককে একবার — এবং তাঁদের লিংক ইমেইল করা হয়। টিকিট সমাধান: helpdesk.ticket.solved। ইভেন্টের পরে যাঁরা এসেছিলেন: event.event.ended, registrations-এর প্রতিটির জন্য, শুধু যখন state হলো attended। নতুন আবেদনকারী: hiring.applicant.created।',
   Who: 'কে',
+  'Who is asked': 'কাকে জিজ্ঞাসা করা হয়',
+  'With a problem': 'সমস্যাসহ',
   'With points: a response at or above this share of what it could score passes; empty: no pass or fail.':
     'পয়েন্ট থাকলে: সম্ভাব্য স্কোরের এই অংশ বা তার বেশি পেলে পাস; খালি: পাস-ফেল নেই।',
   'Would you recommend us? (0 to 10)': 'আপনি কি আমাদের সুপারিশ করবেন? (০ থেকে ১০)',
+  'Write the answer of': 'যে প্রশ্নের উত্তর লেখা হবে',
   'Write the questions while it is a draft, then open it: anyone with the link answers, or only the people invited — each with a link of their own, good once.':
     'খসড়া অবস্থায় প্রশ্ন লিখুন, তারপর খুলুন: লিংক আছে এমন যে কেউ উত্তর দেন, অথবা শুধু আমন্ত্রিতরা — প্রত্যেকের নিজস্ব লিংক, একবারই কার্যকর।',
   'Yes or no': 'হ্যাঁ বা না',

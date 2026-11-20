@@ -125,6 +125,7 @@ export const Survey = defineModel('survey.survey', {
       }),
     }),
     questions: f.one2many('survey.question', 'survey'),
+    invitations: f.one2many('survey.invitation', 'survey'),
     responseCount: f.integer({ label: 'Responses', groups: { write: [...SYSTEM] } }),
     averagePercent: f.decimal({
       scale: 1,
@@ -315,6 +316,25 @@ export const SurveyInvitation = defineModel('survey.invitation', {
       },
     ),
     answeredAt: f.datetime({ label: 'Answered at', groups: { write: [...SYSTEM] } }),
+    lang: f.selection(
+      { en: 'English', bn: 'Bangla' },
+      {
+        required: true,
+        default: 'en',
+        label: 'Language',
+        help: 'The language of the email, and of the page its link opens.',
+      },
+    ),
+    sentAt: f.datetime({
+      label: 'Emailed at',
+      groups: { write: [...SYSTEM] },
+      help: 'An invitation with an email address is emailed once, when its survey is open.',
+    }),
+    trigger: f.many2one('survey.trigger', {
+      ondelete: 'set null',
+      label: 'Asked by',
+      groups: { write: [...SYSTEM] },
+    }),
   },
 });
 
@@ -691,10 +711,52 @@ export async function submitSurvey(
         .browse([invitation.id])
         .write({ status: 'answered', answeredAt: new Date() } as never);
     await su.flush();
+    if (invitation !== undefined && !s.anonymous)
+      await writeBack(su, invitation.id as number, reviewed.answers);
     await refreshStats(su, s.id);
     await su.emit('survey.response.received', { id: made.ids[0], survey: s.id });
     return { ok: true, response: made.ids[0] as number, thanks: s.thanks };
   });
+}
+
+/**
+ * An answer written on the record its invitation is about (a ticket's rating), when the trigger that asked says
+ * so. A record that refuses the value keeps the response: the trigger says what went wrong.
+ */
+async function writeBack(
+  su: Env,
+  invitation: number,
+  answers: readonly { readonly question: number; readonly number: number | null }[],
+): Promise<void> {
+  const [i] = await su
+    .model('survey.invitation')
+    .browse([invitation as never])
+    .load({ trigger: { answerQuestion: true } });
+  const t = i?.trigger ?? null;
+  if (i === undefined || t === null || t.answerQuestion === null) return;
+  if (t.answerField === null || t.answerField === '' || i.resModel === null || i.resId === null)
+    return;
+  const given = answers.find((a) => a.question === (t.answerQuestion?.id as number));
+  if (given === undefined || given.number === null) return;
+  try {
+    await (
+      su.model(i.resModel as never) as unknown as {
+        browse(ids: readonly number[]): {
+          write(values: Record<string, unknown>): Promise<unknown>;
+        };
+      }
+    )
+      .browse([i.resId])
+      .write({ [t.answerField]: given.number });
+    await su.flush();
+  } catch (error) {
+    await su
+      .model('survey.trigger')
+      .browse([t.id])
+      .write({
+        lastError: (error instanceof Error ? error.message : String(error)).slice(0, 250),
+      } as never);
+  }
 }
 
 /** The count, the average score, NPS and CSAT of a survey, from its responses. */
@@ -798,6 +860,365 @@ export async function surveyResults(env: Env, id: number): Promise<QuestionResul
   });
 }
 
+/**
+ * Asking by itself (RFC 0034 §2.6): when something happens in another app — a ticket is solved, an event ends, an
+ * applicant arrives —, the people concerned are invited to a survey, once each, and an answer may be written back
+ * on the record (a ticket's rating). One rule for every app: the event, where the person's name and email are, and
+ * which rows count.
+ */
+export const SurveyTrigger = defineModel('survey.trigger', {
+  label: 'Automatic invitation',
+  recName: 'name',
+  order: ['name asc'],
+  archivable: true,
+  companyScoped: { required: true },
+  tracking: ['topic', 'survey'],
+  access: { 'survey.user': READ, 'survey.manager': [...ALL, 'export'] },
+  fields: {
+    name: f.char({ required: true }),
+    survey: f.many2one('survey.survey', {
+      required: true,
+      checkCompany: true,
+      ondelete: 'cascade',
+    }),
+    topic: f.char({
+      size: 120,
+      required: true,
+      label: 'When',
+      help: 'An event of an installed app (helpdesk.ticket.solved, event.event.ended), or a model and .created (hiring.applicant.created). The list is at /api/v1/surveys/events.',
+    }),
+    each: f.char({
+      size: 60,
+      label: 'For each of',
+      help: 'A list on the record whose rows are the people to ask (registrations of an event); empty: the record itself.',
+    }),
+    whenField: f.char({ size: 60, label: 'Only when the field' }),
+    whenValue: f.char({
+      size: 120,
+      label: 'is',
+      help: 'Only records — or rows — whose field has this value are asked (state is attended).',
+    }),
+    nameField: f.char({ size: 60, required: true, default: 'name', label: 'Name in' }),
+    emailField: f.char({
+      size: 60,
+      required: true,
+      default: 'email',
+      label: 'Email in',
+      help: 'The field with the person’s email; when it is empty, the email of the contact below.',
+    }),
+    partnerField: f.char({ size: 60, label: 'Contact in' }),
+    langField: f.char({
+      size: 60,
+      label: 'Language in',
+      help: 'A field whose value starts with bn for Bangla; empty: English.',
+    }),
+    answerQuestion: f.many2one('survey.question', {
+      ondelete: 'set null',
+      label: 'Write the answer of',
+      help: 'A rating, a recommendation or a number of the survey.',
+    }),
+    answerField: f.char({
+      size: 60,
+      label: 'into the field',
+      help: 'A number field of the record asked about (rating on a ticket). Not on an anonymous survey.',
+    }),
+    lastError: f.char({ label: 'Last problem', groups: { write: [...SYSTEM] } }),
+  },
+  constraints: {
+    holdsTogether: {
+      ...check(
+        'survey.trigger',
+        [
+          'topic',
+          'each',
+          'whenField',
+          'nameField',
+          'emailField',
+          'partnerField',
+          'langField',
+          'answerField',
+        ],
+        (triggers) =>
+          brokenTriggers(triggers.env as unknown as Env, triggers.ids as readonly number[]),
+      ),
+      message:
+        'The event is not one of an installed app, or a field named here is not on its record (see /api/v1/surveys/events).',
+    },
+  },
+});
+
+// ---- what the installed apps offer
+
+/** A field of a model, as the metadata describes it. */
+interface Described {
+  readonly kind: string;
+  readonly target?: unknown;
+}
+
+/** The events a trigger may wait for and the models behind them: set when the server starts. */
+export interface TriggerCatalogue {
+  /** Topic to model: the apps' named events, and `<model>.created` for every model. */
+  modelOf(topic: string): string | null;
+  /** The fields of a model, or `null` when there is no such model. */
+  fieldsOf(model: string): Readonly<Record<string, Described>> | null;
+}
+
+let catalogue: TriggerCatalogue | null = null;
+
+/** Tells Surveys what the installed apps offer (the server does, when it starts). */
+export function setTriggerCatalogue(value: TriggerCatalogue | null): void {
+  catalogue = value;
+}
+
+interface TriggerPlan {
+  /** The model the event is about. */
+  readonly model: string;
+  /** The model of the people asked: the record's, or its rows'. */
+  readonly rowModel: string;
+}
+
+/** What a trigger needs to run, or what is wrong with it. */
+function planOf(t: {
+  readonly topic: string;
+  readonly each: string | null;
+  readonly whenField: string | null;
+  readonly nameField: string;
+  readonly emailField: string;
+  readonly partnerField: string | null;
+  readonly langField: string | null;
+  readonly answerField: string | null;
+}): TriggerPlan | string {
+  if (catalogue === null) return 'The server has not listed its events yet.';
+  const model = catalogue.modelOf(t.topic);
+  if (model === null) return `No installed app has the event ${t.topic}.`;
+  const fields = catalogue.fieldsOf(model);
+  if (fields === null) return `There is no model ${model}.`;
+  let rowModel = model;
+  let rowFields = fields;
+  if (t.each !== null && t.each !== '') {
+    const list = fields[t.each];
+    if (list === undefined || list.kind !== 'one2many' || typeof list.target !== 'string')
+      return `${t.each} is not a list on ${model}.`;
+    rowModel = list.target;
+    const found = catalogue.fieldsOf(rowModel);
+    if (found === null) return `There is no model ${rowModel}.`;
+    rowFields = found;
+  }
+  for (const name of [t.whenField, t.nameField, t.emailField, t.partnerField, t.langField])
+    if (name !== null && name !== '' && rowFields[name] === undefined)
+      return `${rowModel} has no field ${name}.`;
+  if (
+    t.partnerField !== null &&
+    t.partnerField !== '' &&
+    rowFields[t.partnerField]?.kind !== 'many2one'
+  )
+    return `${t.partnerField} is not a contact on ${rowModel}.`;
+  if (t.answerField !== null && t.answerField !== '') {
+    const target = rowFields[t.answerField];
+    if (target === undefined || !['integer', 'decimal', 'float'].includes(target.kind))
+      return `${t.answerField} is not a number on ${rowModel}.`;
+  }
+  return { model, rowModel };
+}
+
+/** The triggers among `ids` that do not hold together (none before the server listed its events). */
+async function brokenTriggers(env: Env, ids: readonly number[]): Promise<number[]> {
+  if (catalogue === null) return [];
+  const rows = await env.asSuperuser({ reason: 'an automatic invitation checked' }, async (su) => [
+    ...(await su
+      .model('survey.trigger')
+      .browse([...ids] as never)
+      .load([
+        'topic',
+        'each',
+        'whenField',
+        'nameField',
+        'emailField',
+        'partnerField',
+        'langField',
+        'answerField',
+      ])),
+  ]);
+  return rows.filter((t) => typeof planOf(t) === 'string').map((t) => t.id as number);
+}
+
+/**
+ * Invites someone to a survey about a record, once: a second call for the same survey and record returns the
+ * invitation that exists. Returns its id.
+ */
+export async function inviteAbout(
+  su: Env,
+  to: {
+    readonly survey: number;
+    readonly company: number;
+    readonly name: string;
+    readonly email: string | null;
+    readonly partner?: number | null;
+    readonly lang?: 'en' | 'bn';
+    readonly resModel: string;
+    readonly resId: number;
+    readonly trigger?: number | null;
+  },
+): Promise<{ readonly id: number; readonly made: boolean }> {
+  const [existing] = await su.model('survey.invitation').search({
+    where: { survey: to.survey as never, resModel: to.resModel, resId: to.resId } as never,
+    limit: 1,
+  });
+  if (existing !== undefined) return { id: existing.id as number, made: false };
+  const made = await su.model('survey.invitation').create([
+    {
+      survey: to.survey,
+      company: to.company,
+      name: to.name.slice(0, 120),
+      email: to.email,
+      partner: to.partner ?? null,
+      lang: to.lang ?? 'en',
+      resModel: to.resModel,
+      resId: to.resId,
+      trigger: to.trigger ?? null,
+    } as never,
+  ]);
+  return { id: made.ids[0] as number, made: true };
+}
+
+const text = (value: unknown): string | null => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'object' && 'id' in value) return String((value as { id: unknown }).id);
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  const said = String(value).trim();
+  return said === '' ? null : said;
+};
+
+/**
+ * What happened, to the triggers that wait for it (RFC 0034 §2.6): for every active trigger of the company on
+ * this event whose survey is open, the record — or each of its rows — that meets the condition and has an email is
+ * invited, once. A trigger that cannot run says why on itself. Returns the invitations made.
+ */
+export async function fireTriggers(su: Env, topic: string, id: number): Promise<number[]> {
+  const made: number[] = [];
+  const triggers = await su
+    .model('survey.trigger')
+    .search({ where: { topic, active: true } as never })
+    .then((found) => found.load({ survey: true, company: true }));
+  for (const t of triggers) {
+    if (t.survey.state !== 'open') continue;
+    const plan = planOf(t);
+    const fail = async (problem: string): Promise<void> => {
+      await su
+        .model('survey.trigger')
+        .browse([t.id])
+        .write({ lastError: problem.slice(0, 250) } as never);
+    };
+    if (typeof plan === 'string') {
+      await fail(plan);
+      continue;
+    }
+    try {
+      const partner = t.partnerField === null || t.partnerField === '' ? null : t.partnerField;
+      const spec = partner === null ? {} : { [partner]: true };
+      const loaded = await (
+        su.model(plan.model as never) as unknown as {
+          browse(ids: readonly number[]): {
+            load(spec: unknown): Promise<Iterable<Record<string, unknown>>>;
+          };
+        }
+      )
+        .browse([id])
+        .load(t.each === null || t.each === '' ? spec : { [t.each]: spec });
+      const [record] = [...loaded];
+      if (record === undefined) continue;
+      const rows: Record<string, unknown>[] =
+        t.each === null || t.each === ''
+          ? [record]
+          : [...(record[t.each] as Iterable<Record<string, unknown>>)];
+      for (const row of rows) {
+        if (
+          t.whenField !== null &&
+          t.whenField !== '' &&
+          text(row[t.whenField]) !== (t.whenValue ?? '')
+        )
+          continue;
+        const contact = partner === null ? null : (row[partner] as Record<string, unknown> | null);
+        const email = text(row[t.emailField]) ?? text(contact?.['email']);
+        if (email === null) continue;
+        const lang =
+          t.langField !== null &&
+          t.langField !== '' &&
+          (text(row[t.langField]) ?? '').startsWith('bn')
+            ? 'bn'
+            : 'en';
+        const invited = await inviteAbout(su, {
+          survey: t.survey.id as number,
+          company: t.company.id as number,
+          name: text(row[t.nameField]) ?? text(contact?.['name']) ?? email,
+          email,
+          partner: contact === null ? null : (contact['id'] as number),
+          lang,
+          resModel: plan.rowModel,
+          resId: row['id'] as number,
+          trigger: t.id as number,
+        });
+        if (invited.made) made.push(invited.id);
+      }
+      if (t.lastError !== null)
+        await su
+          .model('survey.trigger')
+          .browse([t.id])
+          .write({ lastError: null } as never);
+    } catch (error) {
+      await fail(error instanceof Error ? error.message : String(error));
+    }
+  }
+  await su.flush();
+  return made;
+}
+
+/** The pending invitations among these that are to be emailed now: marked as sent, and returned with their link. */
+export async function takeToSend(
+  su: Env,
+  where: { readonly invitations?: readonly number[]; readonly survey?: number },
+): Promise<
+  {
+    readonly to: string;
+    readonly name: string;
+    readonly lang: 'en' | 'bn';
+    readonly survey: string;
+    readonly description: string | null;
+    readonly path: string;
+  }[]
+> {
+  const found = await su
+    .model('survey.invitation')
+    .search({
+      where: {
+        status: 'pending',
+        sentAt: { isNull: true },
+        email: { isNull: false },
+        ...(where.invitations === undefined ? {} : { id: { in: [...where.invitations] } }),
+        ...(where.survey === undefined ? {} : { survey: where.survey }),
+      } as never,
+    })
+    .then((rows) => rows.load({ survey: true }));
+  const out = [];
+  for (const i of found) {
+    if (i.survey.state !== 'open' || i.email === null || i.email.trim() === '') continue;
+    await su
+      .model('survey.invitation')
+      .browse([i.id])
+      .write({ sentAt: new Date() } as never);
+    out.push({
+      to: i.email.trim(),
+      name: i.name,
+      lang: (i.lang === 'bn' ? 'bn' : 'en') as 'en' | 'bn',
+      survey: i.survey.name,
+      description: i.survey.description,
+      path: `${surveyPath(i.token)}${i.lang === 'bn' ? '?lang=bn' : ''}`,
+    });
+  }
+  await su.flush();
+  return out;
+}
+
 export const surveyShutro = defineModule({
   name: 'survey',
   version: '0.1.0',
@@ -814,5 +1235,13 @@ export const surveyShutro = defineModule({
       implies: ['survey.user'],
     }),
   ],
-  models: [Survey, SurveyQuestion, SurveyChoice, SurveyInvitation, SurveyResponse, SurveyAnswer],
+  models: [
+    Survey,
+    SurveyQuestion,
+    SurveyChoice,
+    SurveyInvitation,
+    SurveyResponse,
+    SurveyAnswer,
+    SurveyTrigger,
+  ],
 });

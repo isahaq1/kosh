@@ -2785,6 +2785,9 @@ importers:
       '@kosh/contacts':
         specifier: workspace:*
         version: link:../contacts
+      '@kosh/mail':
+        specifier: workspace:*
+        version: link:../../packages/mail
       '@kosh/messaging':
         specifier: workspace:*
         version: link:../../packages/messaging
@@ -2801,6 +2804,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/views
     devDependencies:
+      '@kosh/helpdesk':
+        specifier: workspace:*
+        version: link:../helpdesk
       '@testcontainers/postgresql':
         specifier: ^12.2.1
         version: 12.2.1
