@@ -75,6 +75,7 @@
     "@kosh/trade_finance_sale": "workspace:*",
     "@kosh/website": "workspace:*",
     "@kosh/website_crm": "workspace:*",
+    "@kosh/website_hiring": "workspace:*",
     "@kosh/website_sale": "workspace:*",
     "@kosh/website_sale_stock": "workspace:*",
     "@kosh/sale_crm": "workspace:*"

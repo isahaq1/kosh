@@ -95,6 +95,7 @@ import { tradeFinancePurchase } from '@kosh/trade_finance_purchase';
 import { tradeFinanceSale } from '@kosh/trade_finance_sale';
 import { website } from '@kosh/website';
 import { websiteCrm } from '@kosh/website_crm';
+import { websiteHiring } from '@kosh/website_hiring';
 import { websiteSale } from '@kosh/website_sale';
 import { websiteSaleStock } from '@kosh/website_sale_stock';
 import { worktime } from '@kosh/worktime';
@@ -190,6 +191,7 @@ const CATALOGUE = [
   tradeFinanceSale,
   eventAccount,
   websiteCrm,
+  websiteHiring,
   saleCrm,
   websiteSale,
   websiteSaleStock,
@@ -320,6 +322,7 @@ for (const [login, name, groups] of [
       'worktime.manager',
       'project_billing.manager',
       'hr_accrual.user',
+      'website_hiring.user',
       'subscription.manager',
       'survey.manager',
       'crm.manager',

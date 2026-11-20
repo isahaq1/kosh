@@ -45,6 +45,7 @@ export type AppName =
   | 'project_account'
   | 'project_billing'
   | 'hr_accrual'
+  | 'website_hiring'
   | 'project_purchase'
   | 'approvals_purchase'
   | 'indent_purchase'
@@ -317,6 +318,13 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'hrAccrual',
     bridge: ['hr', 'payroll'],
+  },
+  website_hiring: {
+    label:
+      'The careers page: openings on the site, applications with a CV, emails to candidates at each stage',
+    icon: '🔗',
+    server: 'websiteHiring',
+    bridge: ['website', 'recruitment'],
   },
   project_purchase: {
     label:
