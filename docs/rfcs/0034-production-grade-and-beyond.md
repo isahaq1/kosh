@@ -616,3 +616,25 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   recognition in a foreign currency, cancelling a posted recognition from its form, production and expense costs
   split by phase (they are the project's, through the cost centre), a chart of profit over time.
   Step 9 complete.
+
+- **Step 10 part 1 — leave accruals (2026-11-20).** `@kosh/hr_accrual`, a bridge of Workforce and Payroll (it
+  uses Payroll's formula language and Attendance's approved days). `accrual.ts` steps a balance through a month
+  without a database, in hundredths of a day: the year's lapse above the carry-over on 1 January, leave taken
+  (carried days first), the expiry of what was carried, then the month's accrual after probation and up to the
+  cap. `hr.accrual.plan` (a formula checked when saved, one active plan per type), `hr.accrual.entry` (the
+  ledger: read and create only; `kind` and `period` are the server's, so a line made by hand is an adjustment),
+  `hr.accrual.balance` (per person and plan: the last month accrued, what is carried, today's and the year's
+  figures, the projection to 31 December, what expires and when). `accrueLeave` writes the months that are over,
+  once; `projectLeave` runs the same steps forward to any day with the leave asked for and the working days of
+  the months to come.
+  **Workforce changed for it**: the balance check of a leave is now a model method, `overBalance()`, that the
+  bridge overrides for types with a plan — the balance on the day the leave starts, future accruals included —
+  and leaves alone for the others (days per calendar year, as before).
+  Tests: the arithmetic (6), the API on real PostgreSQL (7: a formula refused, one plan per type, probation, the
+  cap, the month joined, nothing twice, leave refused and allowed by the day it starts, the projection over a
+  year's end with carry-over and expiry, balances and who reads them, adjustments and a ledger that is never
+  changed, a formula on days worked), an E2E.
+  **Left for part 2**: encashment through Payroll, the Bangladesh plans as data. **Left out**: accrual by the
+  day or the fortnight (a month is the step), plans per department or employment type (one plan per leave type
+  and company), a person without a joining date (they accrue nothing, and their leave of such a type is refused),
+  the balance shown on the leave form itself (it is on the Leave balances screen and in the API).

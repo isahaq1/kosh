@@ -1241,3 +1241,54 @@ import { unbilledOf, postRecognition } from '@kosh/project_billing';
 
 await unbilledOf(env, projectId, '2027-02-28'); // { hours, time, milestones }
 ```
+
+## Leave accruals
+
+`@kosh/hr_accrual` (RFC 0034 §2.5) is proposed whenever Workforce and Payroll are installed. Without it, a leave
+type gives so many days a calendar year. With it, a leave type can have an **accrual plan**: its days are earned
+month by month, by a formula. Give people the **Leave balances** role to see its screens.
+
+- **A plan** (Workforce › Configuration › Accrual plans) belongs to one leave type; a type has one active plan.
+  *Days a month* is a formula in Payroll's formula language — numbers, `+ - * /`, `min`, `max`,
+  `round`, `if(…)` — evaluated for each person and month:
+
+  | Formula | What it gives |
+  | --- | --- |
+  | `10 / 12` | ten days a year, in twelve parts |
+  | `WORKED_DAYS / 18` | a day for every eighteen days worked |
+  | `if(SERVICE_YEARS >= 5, 2, 1.5)` | more after five years |
+  | `if(MONTH == 1, 10, 0)` | ten days every January |
+
+  It may read `SERVICE_MONTHS`, `SERVICE_YEARS` (full, at the month's end), `WORKED_DAYS` (approved attendance
+  days present or on tour), `WORKING_DAYS` (by the person's working calendar), `MONTH` and `BALANCE`. A formula
+  that does not read is refused when the plan is saved.
+- **Limits**: *Probation* — nothing accrues before so many full months of service; *Never above* — the balance
+  stops accruing at the cap, and accrues again when leave makes room; *Carried into a new year* — what is above
+  it on 1 January is lost (empty: everything is carried, 0: nothing); *Carried days expire after month* — carried
+  days are used first, and those not used by the end of that month are lost.
+- **The run**: every six hours a running server writes each person's months that are over to the **leave ledger**
+  (Workforce › Leave ledger) — once: the balance remembers the last month accrued, so a second server or a second
+  run adds nothing. A person needs a joining date; they accrue from the month they joined or the plan's first
+  month, whichever is later. `POST /api/v1/leave-accruals/run` does it now (HR managers).
+- **The ledger** holds every day earned, lost at a year's start, expired, or given. HR managers add
+  **adjustments** — an opening balance from the old system, days given, a correction (the import screen takes a
+  whole sheet of them). A line is never changed or deleted: a mistake is corrected by another line.
+- **Balances** (Workforce › Leave balances; each person their own, managers their team's, HR everyone's):
+  the balance now, what is available after leave already asked for, accrued and taken this year, **the balance
+  on 31 December**, and carried days that will expire with their date.
+- **Asking for leave**: a leave of a type with a plan is checked against the balance **on the day it starts** —
+  what will have accrued by then counts, and so does every other leave waiting or approved. The type's days per
+  year no longer apply.
+- **Any date**: `GET /api/v1/leave-accruals/projection?employee=&type=&date=` returns the balance on that day and
+  the months that lead to it (accrued, taken, lost), with the carried days about to expire. Months to come assume
+  the person's working days are worked.
+
+```ts
+import { accrueLeave, projectLeave } from '@kosh/hr_accrual';
+
+await accrueLeave(env); // the company's months that are over, once
+await projectLeave(env, employeeId, leaveTypeId, '2027-12-31'); // { balance: '2.50', steps, expiring }
+```
+
+**Not yet** (RFC 0034 step 10, next part): days paid out through Payroll (encashment), and the Bangladesh plans
+as data.
