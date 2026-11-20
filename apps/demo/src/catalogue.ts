@@ -37,6 +37,7 @@ import { production } from '@kosh/production';
 import { productionAccount } from '@kosh/production_account';
 import { project } from '@kosh/project';
 import { projectAccount } from '@kosh/project_account';
+import { projectBilling } from '@kosh/project_billing';
 import { projectPurchase } from '@kosh/project_purchase';
 import { purchase } from '@kosh/purchase';
 import { purchaseAccount } from '@kosh/purchase_account';
@@ -151,6 +152,7 @@ export function demoCatalogue(): KoshModule[] {
     accountBudget,
     saleProject,
     projectAccount,
+    projectBilling,
     projectPurchase,
     approvalsPurchase,
     indentPurchase,

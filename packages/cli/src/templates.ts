@@ -42,6 +42,7 @@ export type AppName =
   | 'approvals'
   | 'sale_project'
   | 'project_account'
+  | 'project_billing'
   | 'project_purchase'
   | 'approvals_purchase'
   | 'indent_purchase'
@@ -293,6 +294,13 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
       'Bridge: each project its cost centre, costs booked on it against its budget (Projects ↔ Accounting)',
     icon: '🔗',
     server: 'projectAccount',
+    bridge: ['project', 'accounting'],
+  },
+  project_billing: {
+    label:
+      'Projects billed to customers: rate cards, approved hours, milestones, billing statements',
+    icon: '🔗',
+    server: 'projectBilling',
     bridge: ['project', 'accounting'],
   },
   project_purchase: {

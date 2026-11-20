@@ -146,6 +146,9 @@ importers:
       '@kosh/project_account':
         specifier: workspace:*
         version: link:../../modules/project_account
+      '@kosh/project_billing':
+        specifier: workspace:*
+        version: link:../../modules/project_billing
       '@kosh/project_purchase':
         specifier: workspace:*
         version: link:../../modules/project_purchase
@@ -503,6 +506,9 @@ importers:
       '@kosh/project_account':
         specifier: workspace:*
         version: link:../../modules/project_account
+      '@kosh/project_billing':
+        specifier: workspace:*
+        version: link:../../modules/project_billing
       '@kosh/project_purchase':
         specifier: workspace:*
         version: link:../../modules/project_purchase
@@ -2019,6 +2025,37 @@ importers:
         specifier: ^12.2.1
         version: 12.2.1
 
+  modules/project_billing:
+    dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../accounting
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/project':
+        specifier: workspace:*
+        version: link:../project
+      '@kosh/project_account':
+        specifier: workspace:*
+        version: link:../project_account
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   modules/project_portal:
     dependencies:
       '@kosh/contacts':
@@ -3305,6 +3342,9 @@ importers:
       '@kosh/project_account':
         specifier: workspace:*
         version: link:../../modules/project_account
+      '@kosh/project_billing':
+        specifier: workspace:*
+        version: link:../../modules/project_billing
       '@kosh/project_purchase':
         specifier: workspace:*
         version: link:../../modules/project_purchase

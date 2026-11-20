@@ -55,6 +55,7 @@ import { production } from '@kosh/production';
 import { productionAccount } from '@kosh/production_account';
 import { project } from '@kosh/project';
 import { projectAccount } from '@kosh/project_account';
+import { projectBilling } from '@kosh/project_billing';
 import { projectPurchase } from '@kosh/project_purchase';
 import { purchase } from '@kosh/purchase';
 import { purchaseAccount } from '@kosh/purchase_account';
@@ -171,6 +172,7 @@ const CATALOGUE = [
   purchaseAccount,
   saleProject,
   projectAccount,
+  projectBilling,
   projectPurchase,
   approvalsPurchase,
   indentPurchase,
@@ -311,6 +313,7 @@ for (const [login, name, groups] of [
       'todo.user',
       'calendar.manager',
       'worktime.manager',
+      'project_billing.manager',
       'subscription.manager',
       'crm.manager',
       'hr.manager',
