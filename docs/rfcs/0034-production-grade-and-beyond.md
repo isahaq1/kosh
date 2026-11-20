@@ -726,3 +726,21 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   **Left for the next parts**: spending points (a discount line on the order, taken at confirmation), wallets and
   gift cards, promotions and *buy X get Y* with their preview, the Counter. **Left out**: tiers in the preview,
   points on taxes or delivery, a program per customer group, points shared by a company's contacts.
+
+- **Step 12 part 2 — loyalty: spending, wallets and gift cards (2026-11-20).** In `@kosh/loyalty`. The engine
+  gains `redeemLimit` (whole points, never past the card or the share of the order points may pay) and
+  `voucherUse`. `loyalty.voucher` (gift card or wallet, a code of twelve letters made by the server, a balance
+  computed from its ledger) and `loyalty.voucher.entry`. On `sale.order`: `loyaltyRedeem`, `voucherCode` and a
+  transition `credit` from draft to draft — `applyCredits` first gives back whatever the order held
+  (`releaseCredits`: the net of its `redeem` / `refund` lines per card and of its `spend` / `refund` lines per
+  voucher), then writes a line below zero on the order and a line in the ledger for each. The lines are service
+  products of the company made on first use, marked with `loyaltyKind`. The worker on `sale.order.cancelled`
+  gives back what the order held, keeping its lines.
+  Tests: the engine (2 more), the API on real PostgreSQL (2 more: the three refusals of points in words, held at
+  once, changed without holding twice, a second quotation refused what the first holds, earning on what is left,
+  everything back on cancellation; a gift card paying in full and in part, emptied, an unknown code, another
+  customer's wallet, the refund on cancellation, expiry).
+  **Known limits**: points and credit come off after taxes, as tender, so the order's tax is on the full goods;
+  a quotation deleted — not cancelled — while it holds points keeps them held (cancel it instead); a credit line
+  removed by hand is put right by pressing the button again. **Left for part 3**: promotions and *buy X get Y*
+  with their preview; gift cards sold as a product; the Shop's checkout and the Counter.

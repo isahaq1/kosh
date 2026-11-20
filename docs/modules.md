@@ -1492,5 +1492,27 @@ import { earn, preview, tierOf, expiredPoints } from '@kosh/loyalty';
 earn(rules, { date: '2027-03-10', lines }, tier); // { points, byRule, multiplier } — the engine, no database
 ```
 
-**Not yet** (RFC 0034 step 12, next parts): spending points on an order, wallets and gift cards, promotions and
-*buy X get Y* with their own preview, points at the Counter.
+### Spending points, wallets and gift cards
+
+On a **quotation** (Sales › an order, while it is a draft): type *Points to spend* and / or the code of a *Gift
+card or wallet*, and press **Apply points and credit**.
+
+- **Points** come off at the value of a point, as a line below zero — after taxes, like a payment. No more than the
+  card holds, nor than the share of the order the program lets points pay (*Points pay at most %*), and not fewer
+  than *Spent from*. What cannot be taken is refused in words: *Only 250 point(s) can be spent on this order…*
+- **A gift card or a wallet** (Loyalty › Wallets and gift cards) pays what the order still comes to, or all it
+  holds. A **gift card** pays for whoever has its code; a **wallet** only for its customer. Each has a code the
+  server makes, an optional last day, and its own ledger: a manager **loads** it with a line; orders write the rest.
+- **Held at once**: the points leave the card and the money leaves the gift card when they are applied, so two
+  quotations cannot spend the same balance. Pressing the button again after a change gives back what was held
+  first — never both. A **cancelled** order gives everything back, once.
+- A confirmed order **earns on what is left to pay**: points spent are not earned again.
+
+```ts
+import { redeemLimit, voucherUse } from '@kosh/loyalty';
+
+redeemLimit({ balance: 300, pointValue: 200, orderTotal: 100_000, maxPercent: 50 }); // { points: 250, amount: 50_000 }
+```
+
+**Not yet** (RFC 0034 step 12, next part): promotions and *buy X get Y* with their own preview, gift cards sold as
+a product, points and credit on a quotation already sent, the Shop's checkout and the Counter.
