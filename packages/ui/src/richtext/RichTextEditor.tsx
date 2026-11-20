@@ -33,7 +33,7 @@ import {
   Underline,
   Undo2,
 } from 'lucide-react';
-import { type ReactElement, useEffect, useId, useRef, useState } from 'react';
+import { type ReactElement, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Input } from '../components/primitives.js';
 import { cn } from '../lib/cn.js';
@@ -374,6 +374,21 @@ function Toolbar({
   );
 }
 
+/** The editor's extensions, made once for every editor: the same objects on every render. */
+const EXTENSIONS = [
+  StarterKit.configure({
+    heading: { levels: [2, 3, 4] },
+    link: { openOnClick: false, autolink: true, protocols: ['http', 'https', 'mailto', 'tel'] },
+  }),
+  Table.configure({ resizable: false }),
+  TableRow,
+  TableHeader,
+  TableCell,
+  Image.configure({ inline: false, allowBase64: false }),
+  // Always understood, so a mention already in the text stays one; the button to add one needs `mentions`.
+  Mention,
+];
+
 export default function RichTextEditor({
   id,
   value,
@@ -387,23 +402,17 @@ export default function RichTextEditor({
   // The latest handler, read by the editor's key handler (made once).
   const submit = useRef(onSubmit);
   submit.current = onSubmit;
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        heading: { levels: [2, 3, 4] },
-        link: { openOnClick: false, autolink: true, protocols: ['http', 'https', 'mailto', 'tel'] },
-      }),
-      Table.configure({ resizable: false }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      Image.configure({ inline: false, allowBase64: false }),
-      // Always understood, so a mention already in the text stays one; the button to add one needs `mentions`.
-      Mention,
-    ],
-    // What is loaded is what may be shown: older plain text becomes paragraphs.
-    content: sanitizeForDisplay(value ?? ''),
-    editorProps: {
+  const change = useRef(onChange);
+  change.current = onChange;
+  const updated = useRef(({ editor: e }: { editor: { getHTML(): string } }): void => {
+    // The editor keeps an empty paragraph at the end to type into: it is not part of the text.
+    const html = e.getHTML().replace(/(<p><\/p>)+$/, '');
+    change.current(isEmptyRichText(html) ? null : html);
+  }).current;
+  // What the editor starts with: later values reach it through the effect below, not by making it anew.
+  const initial = useRef(sanitizeForDisplay(value ?? '')).current;
+  const editorProps = useMemo(
+    () => ({
       attributes: {
         id,
         role: 'textbox',
@@ -412,7 +421,7 @@ export default function RichTextEditor({
         class: `kosh-richtext ${compact === true ? 'min-h-20' : 'min-h-32'} px-3 py-2 outline-none`,
         ...(invalid === true ? { 'aria-invalid': 'true' } : {}),
       },
-      handleKeyDown: (_view, event) => {
+      handleKeyDown: (_view: unknown, event: KeyboardEvent): boolean => {
         if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && submit.current) {
           event.preventDefault();
           submit.current();
@@ -420,19 +429,25 @@ export default function RichTextEditor({
         }
         return false;
       },
-    },
-    onUpdate: ({ editor: e }) => {
-      // The editor keeps an empty paragraph at the end to type into: it is not part of the text.
-      const html = e.getHTML().replace(/(<p><\/p>)+$/, '');
-      onChange(isEmptyRichText(html) ? null : html);
-    },
+    }),
+    [id, label, compact, invalid],
+  );
+  // The same options on every render: the editor is set up once, and nothing rebuilds it while someone types
+  // (a key pressed right after a toolbar button used to be lost in the rebuild).
+  const editor = useEditor({
+    extensions: EXTENSIONS,
+    content: initial,
+    editorProps,
+    onUpdate: updated,
   });
   // The record changed under the editor (a reload, Discard, someone else's save): show what it has now.
   useEffect(() => {
     // Not before the editor is on the page: until then it has no view to ask (and it starts with this value).
     if (editor === null || !editor.isInitialized || editor.isDestroyed || editor.isFocused) return;
     const next = sanitizeForDisplay(value ?? '');
-    const current = editor.getHTML();
+    // Compared as it is sent: without the empty paragraph kept at the end to type into. Otherwise a line just
+    // started with Enter would be taken away again whenever this runs while a toolbar button has the focus.
+    const current = editor.getHTML().replace(/(<p><\/p>)+$/, '');
     if ((isEmptyRichText(current) ? '' : current) !== next)
       editor.commands.setContent(next, { emitUpdate: false });
   }, [editor, value]);

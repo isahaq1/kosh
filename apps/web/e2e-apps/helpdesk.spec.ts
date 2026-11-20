@@ -54,10 +54,23 @@ test('a ticket’s description is rich text: typed, made bold and a list from th
     'aria-pressed',
     'true',
   );
+  // A toolbar button hands the caret back to the text: the keys wait for that, or they would go to the button.
+  await expect(editor).toBeFocused();
   await page.keyboard.press('End');
-  await page.keyboard.press('Enter');
+  // A key pressed within milliseconds of a toolbar button is, rarely, not taken (RFC 0034's notes): a person
+  // is never that fast, so the test presses Enter again only while no new line is there.
+  await expect(async () => {
+    if ((await editor.locator('p').count()) < 2) await page.keyboard.press('Enter');
+    await expect(editor.locator('p')).toHaveCount(2, { timeout: 1000 });
+  }).toPass();
   await toolbar.getByRole('button', { name: 'Bold' }).click();
+  await expect(toolbar.getByRole('button', { name: 'Bold' })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  );
   await toolbar.getByRole('button', { name: 'Bulleted list' }).click();
+  await expect(editor.locator('ul > li')).toHaveCount(1);
+  await expect(editor).toBeFocused();
   await page.keyboard.type('Open the cart');
   await page.keyboard.press('Enter');
   await page.keyboard.type('Press Pay');
