@@ -709,3 +709,20 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   proposal on a record that exists needs that opened up and a place in the form to confirm it. It is the one
   item of §2.6's careers line left, and worth a step of its own rather than a half of one here.
   Step 11 complete but for that.
+
+- **Step 12 part 1 — loyalty: earning (2026-11-20).** `@kosh/loyalty`, the Loyalty app. `engine.ts` without a
+  database, money in hundredths and points whole: `earn` (every rule in force gives for each full step of the
+  order — or of its product's or category's lines, never more than the order is worth after its discounts —,
+  the sum multiplied by the tier and rounded down), `tierOf`, `expiredPoints` (what was earned before the cutoff
+  less everything ever taken off the card: the oldest points go first, and writing the result makes the next
+  answer zero), `preview`. Models: `loyalty.program` (`look` for the preview — a transition from draft to draft —,
+  `launch`, `finish`), `loyalty.rule`, `loyalty.tier`, `loyalty.card` (one per program and customer),
+  `loyalty.entry` (read and create only; `kind` is the server's, so a line made by hand is an adjustment).
+  Workers on Sales' `sale.order.confirmed` and `sale.order.cancelled`: `earnOrder` and `reverseOrder`, each
+  finding its own earlier line before writing another.
+  Tests: the engine (5), the API on real PostgreSQL with Sales (6: the preview's figures and that it gives
+  nothing, one program at a time, an order earning once and reversed once, the tier multiplying the next order,
+  adjustments and their limits, expiry once, an ended program), an E2E of the preview.
+  **Left for the next parts**: spending points (a discount line on the order, taken at confirmation), wallets and
+  gift cards, promotions and *buy X get Y* with their preview, the Counter. **Left out**: tiers in the preview,
+  points on taxes or delivery, a program per customer group, points shared by a company's contacts.

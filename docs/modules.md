@@ -1453,3 +1453,44 @@ To screen applicants, add an automatic invitation in Surveys on `hiring.applican
 **Not yet**: the CV read by the assistant on an applicant that already exists (the assistant fills a *new*
 applicant from a CV: Applicants › Fill from a document), a careers page drawn by Sites itself (the site's
 front end draws it from this API), one email per language.
+
+## Loyalty
+
+The **Loyalty** app (`@kosh/loyalty`, RFC 0034 §2.6) gives customers points for what they buy. It needs Sales;
+orders of the Shop are Sales orders, so they earn too.
+
+- **A program** (Loyalty › Programs): what a point is worth, whether every customer joins with their first
+  confirmed order or only those given a card, how many months tiers count, and after how many months unused
+  points expire. One program runs at a time.
+- **Earning rules**: *so many points for every so much*, before taxes and after discounts — on the whole order, or
+  on the lines of one product or one category; from a minimum order; between dates, for a campaign. Every rule
+  that applies gives its points: a point for every 100 and three more for every 100 of drinks is two rules.
+- **Tiers**: points earned in the program's window put a customer in a tier, and the tier multiplies what their
+  next orders earn (Gold: × 1.5), rounded down.
+- **Preview before it runs**: on a draft, **Preview** runs the rules over the confirmed orders of a past period —
+  the month before this one unless you give dates — and writes on the program how many orders would have earned,
+  the points, **what they are worth** at the value of a point, and **that as a share of the sales**. Nothing is
+  earned by looking, and no card is made. Tiers are left out: nobody has one before the program starts. To try
+  other rules, duplicate the program.
+- **Earning**: once the program is launched, an order earns when it is **confirmed** — once, however often the
+  event is delivered — on the customer's card, and the points are on the order. A **cancelled** order gives them
+  back, once. An order worth less than a rule's step, or a return, earns nothing.
+- **Cards and the ledger** (Loyalty › Cards, Points): each card has its number, its balance, what it earned lately
+  and its tier, and every movement: earned, taken back, expired, adjustment. Managers add **adjustments** — opening
+  points from an old scheme (the import screen takes a sheet), a gift, a correction; a card never goes below zero
+  by hand, and a line is never changed or deleted.
+- **Expiry**: once a day a running server writes off, on each card, the points that are older than the program
+  allows and that nothing has used — the oldest points count as spent first. Once: the line itself makes the next
+  day's answer zero. `POST /api/v1/loyalty/age` does it now (managers).
+- An ended program gives nothing more; cards keep their points.
+
+Roles: **User** reads cards and gives a customer a card; **Manager** writes programs and adjustments.
+
+```ts
+import { earn, preview, tierOf, expiredPoints } from '@kosh/loyalty';
+
+earn(rules, { date: '2027-03-10', lines }, tier); // { points, byRule, multiplier } — the engine, no database
+```
+
+**Not yet** (RFC 0034 step 12, next parts): spending points on an order, wallets and gift cards, promotions and
+*buy X get Y* with their own preview, points at the Counter.
