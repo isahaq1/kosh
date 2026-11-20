@@ -1514,5 +1514,37 @@ import { redeemLimit, voucherUse } from '@kosh/loyalty';
 redeemLimit({ balance: 300, pointValue: 200, orderTotal: 100_000, maxPercent: 50 }); // { points: 250, amount: 50_000 }
 ```
 
-**Not yet** (RFC 0034 step 12, next part): promotions and *buy X get Y* with their own preview, gift cards sold as
-a product, points and credit on a quotation already sent, the Shop's checkout and the Counter.
+### Promotions and *buy X get Y*
+
+A **promotion** (Loyalty › Promotions) takes something off an order by itself — no card, no points:
+
+| Gives | What it does |
+| --- | --- |
+| *A percentage off* | its share of the whole order, or of the lines of one product or category |
+| *An amount off* | so much off, never more than what it applies to is worth |
+| *Buy some, get some free* | of every *Buy* + *Get* units of what it applies to, the **cheapest** *Get* are free; with a *Free product*, *Get* units of it for every *Buy* bought, as many as are on the order |
+
+Each may ask for a **minimum order**, run **between dates**, and need a **code** typed on the order.
+
+- **Preview before it runs**: on a draft, **Preview** runs it over the confirmed orders of a past period and writes
+  how many it would have applied to, **what it would have taken off**, **that as a share of the sales**, and the
+  units given free. A promotion with a code is counted as if every customer had typed it — the most it can cost.
+  No order is touched.
+- **On a quotation**: **Apply promotions** takes every running promotion that applies, each as a line below zero
+  with its name. Pressed again, they are worked out anew — never twice.
+- **Together or alone**: promotions add up. One marked *Not with other promotions* is taken **alone** when that
+  gives the customer more than the others together; otherwise it is left out. What is taken off never passes what
+  the goods are worth.
+- **With points and gift cards**: promotions come first. If points or a gift card were already applied, pressing
+  Apply promotions works them out again on what the order now comes to.
+- A wrong code is refused in words. Ended promotions leave the orders that took them as they are.
+
+```ts
+import { applyPromotions, discountOf, previewPromotion } from '@kosh/loyalty';
+
+applyPromotions(promotions, { date: '2027-03-10', code: 'EID27', lines }); // [{ promotion, amount, freeUnits }]
+```
+
+**Not yet**: gift cards sold as a product, points, credit and promotions on a quotation already sent, the Shop's
+checkout and the Counter (they keep their own coupons for now), a discount that lowers the tax of the order —
+promotion lines, like the Shop's amount coupons, come off without tax.
