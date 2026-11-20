@@ -1207,5 +1207,37 @@ import { rateFor } from '@kosh/project_billing';
 rateFor(lines, { user, role, category }, card.defaultRate); // { rate: '3000.00', source: 'role' } | null
 ```
 
-**Not yet** (RFC 0034 step 9, next part): work in progress and revenue recognition posted to Accounting, and
-profit per project and phase.
+### What a project earned
+
+On every refresh of a project's figures (hourly, and *Refresh* on the project), the *Money* group also shows, to
+Projects managers:
+
+| Figure | What it is |
+| --- | --- |
+| **Invoiced revenue** | the income of posted customer invoices and credit notes on the project's cost centre, from the books |
+| **Work in progress** | approved billable hours and reached milestones that are on no **posted** invoice yet, at what they sell for |
+| **Profit** | invoiced revenue and work in progress, less labour (timesheets at each person's cost) and the costs booked on the cost centre — bills, expenses, production |
+| **Margin %** | profit as a share of invoiced revenue and work in progress |
+
+Each **phase** (Projects › Phases) shows its labour cost, what it earned — the approved billable hours on its
+tasks and the milestones tied to them — and the difference. Costs booked in Accounting belong to the project, not
+to a phase.
+
+### Revenue recognition
+
+At a month's end, work that is done and approved but not invoiced yet is revenue of that month. *Projects ›
+Billing › Revenue recognition*: choose the day and press **Recognise**. For every billed project, its work in
+progress on that day is booked in one entry — debit *1180 Accrued income*, credit the sales journal's income
+account **on the project's cost centre** — and **reversed the day after**, so the invoices that follow are not
+counted twice. The recognition lists each project with its hours and amounts and prints. One recognition a day
+per company; a posted one does not change. The entries are in the *Revenue recognition* journal (`REVR`).
+
+A posted recognition cannot be cancelled from here: it has already reversed itself, and a wrong one is corrected
+in Accounting like any entry. Fixed-price work is recognised when a milestone is reached, not by percentage of
+completion.
+
+```ts
+import { unbilledOf, postRecognition } from '@kosh/project_billing';
+
+await unbilledOf(env, projectId, '2027-02-28'); // { hours, time, milestones }
+```

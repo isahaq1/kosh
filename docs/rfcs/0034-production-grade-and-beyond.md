@@ -595,3 +595,24 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   not be saved until a field was touched. Both fixed in `@kosh/ui`, and now covered by this step's E2E.
   **Left for part 2**: work in progress and revenue recognition posted to Accounting, profit per project and
   phase from timesheets, purchases, expenses and production; invoices posted by themselves; expenses re-invoiced.
+
+- **Step 9 part 2 — work in progress, recognition, profit (2026-11-20).** In `@kosh/project_billing`.
+  `unbilledOf(env, project, date)`: approved billable hours up to a day and milestones reached by then that are
+  on no posted invoice, at their frozen rate. The project gains `revenue` (income lines of posted entries on its
+  cost centre, recognition entries left out), `unbilled`, `profit` and `margin`, written with every refresh of
+  its figures through the `moneyOf` chain of RFC 0026 — after `project_account` found the booked costs —, and each
+  phase `phaseCost`, `phaseEarned` and `phaseProfit`. `project.recognition` with `recognise`: one entry dated the
+  day (accrued income `1180`, made the first time, against the sales journal's income account on each project's
+  cost centre) and its opposite dated the day after, both posted in the `REVR` journal and linked; once a day per
+  company. Its own reversal, not Accounting's `reverseMove`: that one does not copy the cost centre of an
+  entry's lines.
+  A statement now makes the project's cost centre when it has none yet — before, the first invoice of a project
+  whose figures were never refreshed carried no cost centre, and its revenue was nobody's.
+  Tests: the API on real PostgreSQL (2 more: the figures before and after an invoice is posted, hidden from
+  those who log time, a phase's figures; the recognition's four ledger lines with their dates and cost centre,
+  nothing to recognise, once a day, locked, forged amounts refused, who may read), the E2E recognises from the
+  screen.
+  **Left out**: percentage of completion for fixed-price work (milestones are the recognition points),
+  recognition in a foreign currency, cancelling a posted recognition from its form, production and expense costs
+  split by phase (they are the project's, through the cost centre), a chart of profit over time.
+  Step 9 complete.
