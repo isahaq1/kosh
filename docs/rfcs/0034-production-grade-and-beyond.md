@@ -638,3 +638,21 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   day or the fortnight (a month is the step), plans per department or employment type (one plan per leave type
   and company), a person without a joining date (they accrue nothing, and their leave of such a type is refused),
   the balance shown on the leave form itself (it is on the Leave balances screen and in the API).
+
+- **Step 10 part 2 — payouts and Bangladesh (2026-11-20).** In `@kosh/hr_accrual`: the plan says whether days
+  are paid out, how many stay, what a day is worth (a formula on `WAGE`, `DAYS`, `BALANCE`, `SERVICE_YEARS`) and
+  the Payroll input's code. `hr.leave.encashment`: `submit`, `approve` (the permission `hr_accrual.encash_decide`
+  of HR managers, never one's own), `refuse` with a reason, `redraft`. `payOut` checks the balance projected to
+  the day against what must stay, the running contract and that its structure has a rule reading the input — each
+  refusal in words —, then writes the ledger line (`encashment`) and the `payroll.input` in one transaction.
+  Payroll is unchanged: the month's run reads the input as it reads any other.
+  `l10n_bd_payroll` now needs `hr_accrual`: a `LEAVE_ENCASH` rule in both structures (added to structures
+  installed earlier; their other rules are left as they are, so there `REGULAR_PAY` still projects a payout
+  forward until the manager subtracts it), and the Labour Act's casual, sick and earned leave as plans installed
+  **switched off** per company, each with what to verify in its note.
+  Tests: the API on real PostgreSQL (the payout: not payable, no contract, no rule, never one's own, more than
+  may be paid, the amount, the ledger, the input, once, locked, refused with a reason, who reads), the Bangladesh
+  rule and plans installed once, the E2E approves a payout on screen.
+  **Left out**: cancelling an approved payout from its form, payouts decided through the Approvals engine,
+  payout at the end of service (final settlement), a pro-rata first year for casual and sick leave in the
+  Bangladesh plans. Step 10 complete.

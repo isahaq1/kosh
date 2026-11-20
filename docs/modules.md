@@ -1290,5 +1290,41 @@ await accrueLeave(env); // the company's months that are over, once
 await projectLeave(env, employeeId, leaveTypeId, '2027-12-31'); // { balance: '2.50', steps, expiring }
 ```
 
-**Not yet** (RFC 0034 step 10, next part): days paid out through Payroll (encashment), and the Bangladesh plans
-as data.
+### Paying days out
+
+A plan may let people be **paid for days they did not take** (*Paying days out* on the plan):
+
+- *Days that stay* — a payout never takes the balance below this.
+- *A day is worth* — a formula: `WAGE / 30`, `WAGE * 0.6 / 26`. It may read `WAGE` (the monthly wage of the
+  running contract), `DAYS`, `BALANCE` and `SERVICE_YEARS`.
+- *Payroll input* — the code the amount reaches Payroll under (`LEAVE_ENCASH`).
+
+The person asks (Workforce › Leave payouts: the plan, the days, the month it is paid in) and submits; an **HR
+manager approves — never their own** — or refuses with a reason. Approving checks the balance **on that day**,
+values a day on the person's running contract, takes the days from the ledger (*Paid out*) and leaves the amount
+as a **Payroll input of that month**. The month's payroll run pays it, through a rule of the person's salary
+structure that reads the input:
+
+| Code | Category | Formula |
+| --- | --- | --- |
+| `LEAVE_ENCASH` | Allowance | `INPUT_LEAVE_ENCASH` |
+
+Approval is refused, in words, when the plan does not pay days out, the days are more than may be paid, the person
+has no running contract with a wage, or their structure has no such rule. An approved payout does not change; a
+mistake is corrected by an adjustment in the ledger and by the payroll officer on the input.
+
+### Bangladesh
+
+With Bangladesh payroll (`l10n_bd_payroll`) both structures have the `LEAVE_ENCASH` rule — taxed in the month
+it is paid, not projected over the year — and each company gets three plans, **switched off**, for HR to check
+against the Labour Act 2006 (sections 115 to 117), the Labour Rules 2015 and the company's own rules, then
+activate (Workforce › Configuration › Accrual plans, filter *Archived*):
+
+| Leave | Plan | Carried | Paid out |
+| --- | --- | --- | --- |
+| Casual | 10 days each January: `if(MONTH == 1, 10, 0)` | no | no |
+| Sick | 14 days each January: `if(MONTH == 1, 14, 0)` | no | no |
+| Earned | a day for 18 worked, after a year: `WORKED_DAYS / 18` | up to 40 days | yes, `WAGE / 30` a day |
+
+Until a plan is switched on, its leave type keeps its days per year. Someone who joins after January is given
+their share of casual and sick leave as an adjustment.
