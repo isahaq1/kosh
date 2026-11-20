@@ -51,6 +51,25 @@ export interface CounterOptions {
   readonly messenger?: Messenger | undefined;
 }
 
+/**
+ * A customer's own price list (RFC 0028 §3.1) — Sales' field, so read only when Sales is installed —, as the
+ * caller; none otherwise. The sale and the till's catalogue both ask here, so the till shows what is charged.
+ */
+async function ownList(env: Env, customer: number | null): Promise<number | null> {
+  if (customer === null) return null;
+  try {
+    const partners = env.model('res.partner' as never) as unknown as {
+      browse(ids: number[]): {
+        load(keys: string[]): Promise<{ read(keys: string[]): Record<string, unknown>[] }>;
+      };
+    };
+    const [row] = (await partners.browse([customer]).load(['pricelist'])).read(['pricelist']);
+    return typeof row?.['pricelist'] === 'number' ? (row['pricelist'] as number) : null;
+  } catch {
+    return null; // Sales is not installed: no customer lists
+  }
+}
+
 export function registerCounterRoutes(context: ModuleContext, options: CounterOptions = {}): void {
   const { app } = context;
   const mailer = 'mailer' in options ? options.mailer : mailerFromEnv();
@@ -179,7 +198,8 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
     }),
   );
 
-  // `GET /api/v1/counter/catalogue?shop=`: the products on sale, at the shop's prices (its price list).
+  // `GET /api/v1/counter/catalogue?shop=&partner=`: the products on sale, at the shop's prices (its price list)
+  // — or, for a named customer with a list of their own, at theirs: what the sale will charge.
   app.get('/api/v1/counter/catalogue', async (request) =>
     request.env(async (raw) => {
       const env = raw as unknown as Env;
@@ -191,7 +211,9 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
               .browse([shopId as Id<'pos.shop'>])
               .load({ pricelist: true })
           : [];
-      const list = (shop?.pricelist?.id as number | undefined) ?? null;
+      const partner = Number((request.query as { partner?: unknown } | null)?.partner);
+      const own = Number.isSafeInteger(partner) && partner > 0 ? await ownList(env, partner) : null;
+      const list = own ?? (shop?.pricelist?.id as number | undefined) ?? null;
       const today = env.today();
       const products = await (
         await env
@@ -239,6 +261,48 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
       };
     }),
   );
+
+  // `GET /api/v1/counter/customers?shop=&q=`: the one customer a phone number, an email address — or what another
+  // app knows, a loyalty card — points at, for the sale being rung up; 404 when none, or more than one.
+  app.get('/api/v1/counter/customers', async (request) => {
+    const query = request.query as { shop?: unknown; q?: unknown };
+    const shop = idOf(query.shop, 'shop');
+    const typed = text(query.q);
+    if (typed.length < 4 || typed.length > 80)
+      throw new HttpProblem(
+        400,
+        'invalid-input',
+        'What to look for',
+        'A phone number, an email address or a card number.',
+      );
+    return request.env(
+      async (raw) => {
+        const env = raw as unknown as Env;
+        // The cashier's own right to the shop decides; the contact is then read as the system.
+        const seen = await env
+          .model('pos.shop')
+          .search({ where: { id: shop as Id<'pos.shop'> }, limit: 1 });
+        if (seen.length === 0)
+          throw new HttpProblem(404, 'missing-record', 'Not found', 'No such shop.');
+        const found = await env.asSuperuser({ reason: 'a customer named at the till' }, (su) =>
+          su
+            .model('pos.shop')
+            .browse([shop as Id<'pos.shop'>])
+            .findCustomer(typed),
+        );
+        if (found === null)
+          throw new HttpProblem(
+            404,
+            'no-customer',
+            'No customer',
+            'Nobody, or more than one contact, has this.',
+          );
+        // With prices of their own, the till asks for the catalogue again: it shows what the sale will charge.
+        return { customer: { ...found, ownPrices: (await ownList(env, found.partner)) !== null } };
+      },
+      { write: true },
+    );
+  });
 
   app.get('/api/v1/counter/session', async (request) =>
     request.env(async (raw) => {
@@ -313,22 +377,7 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
           input.partner === undefined || input.partner === null
             ? null
             : idOf(input.partner, 'partner');
-        // A customer's price list is Sales' field: read when Sales is installed.
-        let own: number | null = null;
-        if (customer !== null)
-          try {
-            const partners = env.model('res.partner' as never) as unknown as {
-              browse(ids: number[]): {
-                load(keys: string[]): Promise<{ read(keys: string[]): Record<string, unknown>[] }>;
-              };
-            };
-            const [row] = (await partners.browse([customer]).load(['pricelist'])).read([
-              'pricelist',
-            ]);
-            own = typeof row?.['pricelist'] === 'number' ? (row['pricelist'] as number) : null;
-          } catch {
-            own = null; // Sales is not installed: no customer lists
-          }
+        const own = await ownList(env, customer);
         const list = own ?? (current.shop.pricelist?.id as number | undefined) ?? null;
         const today = env.today();
         const listed = new Map<string, ReturnType<typeof orm.toDecimal>>();

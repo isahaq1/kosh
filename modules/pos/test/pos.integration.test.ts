@@ -496,3 +496,55 @@ test('the shop’s price list prices the catalogue and a line sold without a pri
   ).json.items as { priceUnit: string }[];
   expect(lines.map((l) => Number(l.priceUnit))).toEqual([200]);
 });
+
+test('the customer of a sale is named by a phone number or an email: one contact or none, by people of the Counter', async () => {
+  const rina = await call('maria', 'POST', '/api/v1/models/res.partner', {
+    name: 'Rina Akter',
+    email: 'rina@example.com',
+    mobile: '+880 1711-000111',
+  });
+  expect(rina.status, JSON.stringify(rina.json)).toBe(201);
+  for (const twin of [
+    { name: 'Karim Uddin', phone: '01999 555 444' },
+    { name: 'Salma Uddin', mobile: '01999-555444' },
+  ])
+    expect((await call('maria', 'POST', '/api/v1/models/res.partner', twin)).status).toBe(201);
+  const find = (login: string, q: string) =>
+    call(login, 'GET', `/api/v1/counter/customers?shop=${ids['shop']}&q=${encodeURIComponent(q)}`);
+  // However the number was written down, and however it is typed.
+  const byPhone = await find('rahim', '880 1711 000111');
+  expect(byPhone.status, JSON.stringify(byPhone.json)).toBe(200);
+  expect(byPhone.json.customer).toEqual({
+    partner: rina.json.id,
+    name: 'Rina Akter',
+    note: null,
+    ownPrices: false,
+  });
+  expect((await find('rahim', 'RINA@example.com')).json.customer.partner).toBe(rina.json.id);
+  // A part of a number, nobody's address, a number two contacts share, too little to look for.
+  expect((await find('rahim', '1711000111')).status).toBe(404);
+  expect((await find('rahim', 'nobody@example.com')).status).toBe(404);
+  expect((await find('rahim', '01999555444')).status).toBe(404);
+  expect((await find('rahim', '017')).status).toBe(400);
+  // The sale carries the customer named.
+  const session = await call('rahim', 'GET', `/api/v1/counter/session?shop=${ids['shop']}`);
+  const price = Number(
+    (
+      (await call('rahim', 'GET', `/api/v1/counter/catalogue?shop=${ids['shop']}`)).json
+        .products as { id: number; price: string }[]
+    ).find((p) => p.id === ids['tea'])?.price,
+  );
+  const sale = await call('rahim', 'POST', '/api/v1/counter/orders', {
+    session: session.json.session.id,
+    partner: byPhone.json.customer.partner,
+    lines: [{ product: ids['tea'], quantity: '1' }],
+    payments: [{ method: ids['cash'], amount: String(price) }],
+  });
+  expect(sale.status, JSON.stringify(sale.json)).toBe(201);
+  const kept = await call(
+    'maria',
+    'GET',
+    `/api/v1/models/pos.order/${sale.json.order.id}?fields=partner`,
+  );
+  expect(kept.json.partner?.id ?? kept.json.partner).toBe(rina.json.id);
+});

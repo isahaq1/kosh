@@ -15,7 +15,7 @@ import {
   Spinner,
   useKosh,
 } from '@kosh/ui';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactElement, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -72,6 +72,14 @@ interface CartLine {
   readonly product: Product;
   quantity: number;
 }
+/** The customer named on the sale being rung up; `note` is what an app says about them (a loyalty card). */
+interface Customer {
+  readonly partner: number;
+  readonly name: string;
+  readonly note: string | null;
+  /** They have a price list of their own: the till shows the catalogue at their prices. */
+  readonly ownPrices: boolean;
+}
 interface Sale {
   readonly id: number;
   readonly name: string;
@@ -117,13 +125,24 @@ export function Register({ api }: PageProps): ReactElement {
         .then((r) => r.session),
     enabled: shop !== undefined,
   });
+  // The customer of the sale being rung up: found by what they say — a phone number, an email, a card number.
+  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [customerQuery, setCustomerQuery] = useState('');
+  const [customerMissing, setCustomerMissing] = useState(false);
+  // A customer with prices of their own sees them: the catalogue is asked for again at their price list.
+  const pricedFor = customer?.ownPrices === true ? customer.partner : null;
   const catalogue = useQuery({
-    queryKey: ['counter', 'catalogue', shop?.id],
+    queryKey: ['counter', 'catalogue', shop?.id, pricedFor],
     queryFn: () =>
       api
-        .call<{ products: Product[] }>('GET', `/api/v1/counter/catalogue?shop=${shop?.id ?? 0}`)
+        .call<{ products: Product[] }>(
+          'GET',
+          `/api/v1/counter/catalogue?shop=${shop?.id ?? 0}${pricedFor === null ? '' : `&partner=${pricedFor}`}`,
+        )
         .then((r) => r.products),
     enabled: shop !== undefined,
+    // The tiles stay while the other prices load.
+    placeholderData: keepPreviousData,
   });
   const [query, setQuery] = useState('');
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -229,11 +248,35 @@ export function Register({ api }: PageProps): ReactElement {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['counter', 'session'] }),
     onError: (e) => setError(e instanceof Error ? e.message : String(e)),
   });
+  const priced = catalogue.data;
+  useEffect(() => {
+    if (priced === undefined) return;
+    const byId = new Map(priced.map((p) => [p.id, p]));
+    setCart((lines) =>
+      lines.some((l) => (byId.get(l.product.id)?.price ?? l.product.price) !== l.product.price)
+        ? lines.map((l) => ({ ...l, product: byId.get(l.product.id) ?? l.product }))
+        : lines,
+    );
+  }, [priced]);
+  const findCustomer = useMutation({
+    mutationFn: (typed: string) =>
+      api.call<{ customer: Customer }>(
+        'GET',
+        `/api/v1/counter/customers?shop=${shop?.id ?? 0}&q=${encodeURIComponent(typed)}`,
+      ),
+    onSuccess: (r) => {
+      setCustomer(r.customer);
+      setCustomerQuery('');
+      setCustomerMissing(false);
+    },
+    onError: () => setCustomerMissing(true),
+  });
   const sell = useMutation({
     mutationFn: async (): Promise<{ order: Sale | null; queued: boolean }> => {
       const body = {
         session: session.data?.id,
         clientId: clientId.current,
+        ...(customer === null ? {} : { partner: customer.partner }),
         lines: cart.map((l) => ({ product: l.product.id, quantity: String(l.quantity) })),
         payments: Object.entries(payments)
           .filter(([, amount]) => Number(amount) > 0)
@@ -264,6 +307,9 @@ export function Register({ api }: PageProps): ReactElement {
       if (r.queued) setQueued((n) => n + 1);
       setLastSale(r.order);
       setCart([]);
+      setCustomer(null);
+      setCustomerQuery('');
+      setCustomerMissing(false);
       setPayments({});
       setPaying(false);
       setError(null);
@@ -535,6 +581,56 @@ export function Register({ api }: PageProps): ReactElement {
             {format.decimal(money(total))}
           </span>
         </div>
+        {customer === null ? (
+          <form
+            className="grid gap-1"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (customerQuery.trim().length >= 4) findCustomer.mutate(customerQuery.trim());
+            }}
+          >
+            <div className="flex gap-2">
+              <Input
+                aria-label={t('customer')}
+                placeholder={t('customerHint')}
+                value={customerQuery}
+                onChange={(e) => {
+                  setCustomerQuery(e.target.value);
+                  setCustomerMissing(false);
+                }}
+              />
+              <Button
+                type="submit"
+                disabled={customerQuery.trim().length < 4}
+                busy={findCustomer.isPending}
+              >
+                {t('findCustomer')}
+              </Button>
+            </div>
+            {customerMissing ? (
+              <p role="alert" className="text-xs text-muted-foreground">
+                {t('noCustomer')}
+              </p>
+            ) : null}
+          </form>
+        ) : (
+          // biome-ignore lint/a11y/useSemanticElements: a named group of the sale, not a form's fieldset
+          <div
+            role="group"
+            aria-label={t('customer')}
+            className="flex items-center justify-between gap-2 rounded-md border p-2 text-sm"
+          >
+            <span>
+              <span className="font-semibold">{customer.name}</span>
+              {customer.note === null ? null : (
+                <span className="block text-xs text-muted-foreground">{customer.note}</span>
+              )}
+            </span>
+            <Button variant="ghost" size="sm" onClick={() => setCustomer(null)}>
+              {t('clearCustomer')}
+            </Button>
+          </div>
+        )}
         <Button variant="primary" disabled={cart.length === 0} onClick={() => setPaying(true)}>
           {t('pay')}
         </Button>

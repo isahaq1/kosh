@@ -73,6 +73,44 @@ export const PosShop = defineModel('pos.shop', {
       const shops = this as { readonly ids: readonly number[] };
       return new Map(shops.ids.map((id) => [id, 'pos.receipt']));
     }),
+    /**
+     * The customer a cashier names at the till: **one** contact that what was typed points at exactly — a phone
+     * number (its digits) or an email address —, or none. Never a list: a till is not a way to browse the
+     * customers. An app that knows customers another way adds it (`pos_loyalty`: a loyalty card's number, and
+     * says what the card holds in `note`). Called as the system, in the shop's company.
+     */
+    findCustomer: method('pos.shop', async function (this: unknown, typed: string): Promise<{
+      partner: number;
+      name: string;
+      note: string | null;
+    } | null> {
+      const shops = this as { readonly env: Env };
+      const wanted = typed.trim();
+      const digits = wanted.replace(/\D/g, '');
+      const contacts = shops.env.model('res.partner');
+      // A number is matched on its digits, however it was written down; in the database, so a till never
+      // reads the contacts to find one.
+      const ids = wanted.includes('@')
+        ? (
+            await shops.env.sql<{ id: number }>`
+              SELECT id FROM res_partner WHERE active AND lower(email) = ${wanted.toLowerCase()} LIMIT 2`
+          ).map((r) => Number(r.id))
+        : digits.length < 6
+          ? []
+          : (
+              await shops.env.sql<{ id: number }>`
+                SELECT id FROM res_partner
+                 WHERE active
+                   AND (regexp_replace(coalesce(phone, ''), '[^0-9]', '', 'g') = ${digits}
+                     OR regexp_replace(coalesce(mobile, ''), '[^0-9]', '', 'g') = ${digits})
+                 LIMIT 2`
+            ).map((r) => Number(r.id));
+      const found = ids.length === 0 ? [] : await contacts.browse(ids as never).load(['name']);
+      const [one, another] = [...found];
+      // Two contacts with the number: the till cannot tell which.
+      if (one === undefined || another !== undefined) return null;
+      return { partner: one.id as number, name: one.name, note: null };
+    }),
   },
 });
 
