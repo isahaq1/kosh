@@ -24,6 +24,7 @@ import {
   LoyaltyCard,
   LoyaltyEntry,
   LoyaltyProgram,
+  LoyaltyPromotion,
   LoyaltyRule,
   LoyaltyTier,
   LoyaltyVoucher,
@@ -60,6 +61,7 @@ export {
   LoyaltyCard,
   LoyaltyEntry,
   LoyaltyProgram,
+  LoyaltyPromotion,
   LoyaltyRule,
   LoyaltyTier,
   LoyaltyVoucher,
@@ -67,11 +69,25 @@ export {
   loyaltyShutro,
   OrderLoyalty,
   previewProgram,
+  previewPromotionOf,
+  promoteOrder,
   refreshCard,
   releaseCredits,
   releaseOrder,
   reverseOrder,
 } from './module.js';
+export {
+  applyPromotions,
+  type Discount,
+  discountOf,
+  PROMOTION_KINDS,
+  type PromoLine,
+  type PromoOrder,
+  type Promotion,
+  type PromotionKind,
+  type PromotionPreview,
+  previewPromotion,
+} from './promotions.js';
 
 /** The workers that give and take back points as orders are confirmed and cancelled; tests `drain()` them. */
 export function loyaltyWorkers(context: Pick<ModuleContext, 'shutro'>): Worker[] {
@@ -193,8 +209,51 @@ export function loyaltyModule(options: LoyaltyOptions = {}): ReturnType<typeof d
         model: 'loyalty.program',
         label: 'Loyalty program launched',
       },
+      {
+        topic: 'loyalty.promotion.launched',
+        model: 'loyalty.promotion',
+        label: 'Promotion launched',
+      },
     ],
     documents: [
+      {
+        key: 'loyalty_promotion',
+        name: 'Promotion',
+        model: 'loyalty.promotion',
+        layout: {
+          paper: 'A4',
+          header: '{{company.name}}',
+          footer: 'Page {{page}} of {{pages}}',
+          blocks: [
+            { kind: 'heading', id: 'title', text: '{{name}}', level: 1 },
+            {
+              kind: 'fields',
+              id: 'what',
+              items: [
+                { label: 'Gives', bind: 'kind' },
+                { label: 'Percentage or amount', bind: 'value' },
+                { label: 'Orders from', bind: 'minimumOrder' },
+                { label: 'Code', bind: 'code' },
+                { label: 'From', bind: 'dateFrom' },
+                { label: 'To', bind: 'dateTo' },
+                { label: 'Status', bind: 'state' },
+              ],
+            },
+            {
+              kind: 'fields',
+              id: 'preview',
+              items: [
+                { label: 'Preview from', bind: 'previewFrom' },
+                { label: 'Preview to', bind: 'previewTo' },
+                { label: 'Orders', bind: 'previewOrders' },
+                { label: 'Orders it would have applied to', bind: 'previewApplied' },
+                { label: 'Taken off', bind: 'previewDiscount' },
+                { label: 'Share of sales %', bind: 'previewShare' },
+              ],
+            },
+          ],
+        },
+      },
       {
         key: 'loyalty_program',
         name: 'Loyalty program',
@@ -262,6 +321,20 @@ export function loyaltyModule(options: LoyaltyOptions = {}): ReturnType<typeof d
         columns: [
           { header: 'Program', field: 'program' },
           { header: 'Customer', field: 'partner' },
+        ],
+      },
+      {
+        key: 'loyalty_promotion',
+        model: 'loyalty.promotion',
+        label: 'Promotions',
+        columns: [
+          { header: 'Name', field: 'name' },
+          { header: 'Gives', field: 'kind' },
+          { header: 'Percentage or amount', field: 'value' },
+          { header: 'Orders from', field: 'minimumOrder' },
+          { header: 'Code', field: 'code' },
+          { header: 'From', field: 'dateFrom' },
+          { header: 'To', field: 'dateTo' },
         ],
       },
       {
@@ -370,6 +443,10 @@ export function loyaltyModule(options: LoyaltyOptions = {}): ReturnType<typeof d
         label: 'Wallet and gift card movements',
         views: ['list', 'form'],
       }),
+      'loyalty.action_promotions': action(LoyaltyPromotion, {
+        label: 'Promotions',
+        views: ['list', 'form'],
+      }),
       'loyalty.action_programs': action(LoyaltyProgram, {
         label: 'Programs',
         views: ['list', 'form'],
@@ -402,6 +479,13 @@ export function loyaltyModule(options: LoyaltyOptions = {}): ReturnType<typeof d
         label: 'Wallets and gift cards',
         action: 'loyalty.action_vouchers',
         sequence: 2.5,
+      },
+      {
+        id: 'loyalty.promotions',
+        parent: 'loyalty.root',
+        label: 'Promotions',
+        action: 'loyalty.action_promotions',
+        sequence: 2.8,
       },
       {
         id: 'loyalty.programs',
@@ -528,6 +612,64 @@ export function loyaltyModule(options: LoyaltyOptions = {}): ReturnType<typeof d
           ),
         ],
       })),
+      'loyalty.promotion.list': list(LoyaltyPromotion, {
+        columns: ['name', 'kind', 'value', 'code', 'dateFrom', 'dateTo', 'previewShare', 'state'],
+        decorations: { success: { state: 'running' }, neutral: { state: 'ended' } },
+      }),
+      'loyalty.promotion.form': form(LoyaltyPromotion, (k) => ({
+        header: {
+          statusbar: 'state',
+          buttons: [
+            k.button('look', { label: 'Preview' }),
+            k.button('launch', {
+              primary: true,
+              label: 'Launch',
+              confirm: 'Let quotations take this promotion from now on?',
+            }),
+            k.button('finish', { label: 'End' }),
+          ],
+        },
+        sheet: [
+          k.stats('related', [
+            {
+              id: 'promotion_lines',
+              label: 'Order lines',
+              model: 'sale.order.line',
+              where: { promotion: { $record: 'id' } },
+            },
+          ]),
+          k.group('main', ['name', 'kind', 'value', 'minimumOrder', 'code', 'exclusive'], {
+            description:
+              'Write it, press Preview to see what it would have taken off past orders, then Launch. On a quotation, Apply promotions takes every running promotion that applies.',
+          }),
+          k.group('scope', ['product', 'category', 'dateFrom', 'dateTo'], { label: 'Applies to' }),
+          k.group('free', ['buy', 'get', 'rewardProduct'], {
+            label: 'Buy and get',
+            description:
+              'Buy 2, get 1: of every three units of what it applies to, the cheapest is free. With a free product: one of it for every two bought.',
+          }),
+          k.group(
+            'preview',
+            [
+              'previewFrom',
+              'previewTo',
+              'previewOrders',
+              'previewApplied',
+              'previewDiscount',
+              'previewRevenue',
+              'previewShare',
+              'previewFree',
+              'previewAt',
+            ],
+            {
+              label: 'Preview',
+              description:
+                'What it would have taken off the confirmed orders of the period — the month before this one unless you give dates. A promotion with a code is counted as if every customer had typed it: the most it can cost.',
+            },
+          ),
+        ],
+        chatter: true,
+      })),
       'loyalty.voucher.list': list(LoyaltyVoucher, {
         columns: ['code', 'kind', 'partner', { field: 'balance', sum: true }, 'dateExpiry'],
         decorations: { neutral: { balance: { lte: 0 } } },
@@ -577,6 +719,8 @@ export function loyaltyModule(options: LoyaltyOptions = {}): ReturnType<typeof d
           {
             append: 'dates',
             nodes: [
+              field({ field: 'promoCode', id: 'loyalty_promo_code' }),
+              field({ field: 'promotionAmount', id: 'loyalty_promotion_amount' }),
               field({ field: 'loyaltyRedeem', id: 'loyalty_redeem' }),
               field({ field: 'voucherCode', id: 'loyalty_voucher_code' }),
               field({ field: 'loyaltyRedeemed', id: 'loyalty_redeemed' }),
@@ -587,6 +731,13 @@ export function loyaltyModule(options: LoyaltyOptions = {}): ReturnType<typeof d
           {
             append: 'header',
             nodes: [
+              {
+                kind: 'button',
+                id: 'loyalty_promote',
+                transition: 'promote',
+                label: 'Apply promotions',
+                visibleWhen: { state: 'draft' },
+              },
               {
                 kind: 'button',
                 id: 'loyalty_credit',
@@ -628,6 +779,11 @@ export function loyaltyModule(options: LoyaltyOptions = {}): ReturnType<typeof d
         fields: ['code', 'partner.name'],
         filters: { holding: { label: 'With points', domain: { points: { gt: 0 } } } },
         groupBy: ['program', 'tier'],
+      }),
+      'loyalty.promotion': search(LoyaltyPromotion, {
+        fields: ['name', 'code'],
+        filters: { running: { label: 'Running', domain: { state: 'running' }, group: 'state' } },
+        groupBy: ['state', 'kind'],
       }),
       'loyalty.voucher': search(LoyaltyVoucher, {
         fields: ['code', 'partner.name', 'note'],

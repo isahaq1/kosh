@@ -1,5 +1,7 @@
 /** Bangla for the module's labels, keyed by their English text (RFC 0023 §3.1; `pnpm i18n:extract`). */
 export const bn: Readonly<Record<string, string>> = {
+  'A code is 2 to 40 capitals, digits, - or _.':
+    'কোড ২ থেকে ৪০টি বড় হাতের অক্ষর, সংখ্যা, - বা _ দিয়ে হয়।',
   'A customer gets a card with their first confirmed order; off: only customers given a card earn.':
     'গ্রাহক তাঁর প্রথম নিশ্চিত অর্ডারে কার্ড পান; বন্ধ থাকলে: শুধু কার্ড দেওয়া গ্রাহকরা পয়েন্ট পান।',
   'A customer’s tier comes from the points they earned in this many months.':
@@ -12,6 +14,13 @@ export const bn: Readonly<Record<string, string>> = {
   'A line added here is an adjustment: opening points, a gift, a correction. Lines are not changed afterwards — correct one with another. A card never goes below zero by hand.':
     'এখানে যোগ করা লাইন একটি সমন্বয়: প্রারম্ভিক পয়েন্ট, উপহার, বা সংশোধন। লাইন পরে বদলানো যায় না — আরেকটি লাইন দিয়ে সংশোধন করুন। হাতে কোনো কার্ড শূন্যের নিচে নামানো যায় না।',
   'A movement is for more than nothing.': 'লেনদেন শূন্যের বেশি হতে হবে।',
+  'A percentage is from 0 to 100, an amount zero or more; buy and get both need a number of units.':
+    'শতাংশ ০ থেকে ১০০, টাকা শূন্য বা তার বেশি; ‘কিনুন’ ও ‘পান’ দুটোতেই ইউনিটের সংখ্যা লাগে।',
+  'A percentage off': 'শতাংশ ছাড়',
+  'A percentage off: 15 is 15 %. An amount off: in the company’s currency, before taxes.':
+    'শতাংশ ছাড়: ১৫ মানে ১৫ %। টাকার ছাড়: কোম্পানির মুদ্রায়, কর বাদে।',
+  'A percentage or an amount off what it applies to, or free units for units bought.':
+    'যেখানে প্রযোজ্য সেখানে শতাংশ বা টাকার ছাড়, অথবা কেনা ইউনিটের জন্য বিনামূল্যে ইউনিট।',
   'A point is worth': 'এক পয়েন্টের মূল্য',
   'A point is worth zero or more; tiers and expiry count at least one month.':
     'এক পয়েন্টের মূল্য শূন্য বা তার বেশি; স্তর ও মেয়াদ অন্তত এক মাস গণনা করে।',
@@ -19,6 +28,7 @@ export const bn: Readonly<Record<string, string>> = {
     'প্রোগ্রামের পূর্বরূপ খসড়া অবস্থায় দেখা যায়: অন্য নিয়ম পরীক্ষা করতে এর প্রতিলিপি করুন।',
   'A program runs with at least one rule, and one program runs at a time: end the other first.':
     'প্রোগ্রাম চালাতে অন্তত একটি নিয়ম লাগে, এবং একসাথে একটিই প্রোগ্রাম চলে: আগে অন্যটি শেষ করুন।',
+  'A promotion ends on or after it starts.': 'প্রমোশন শুরুর দিন বা তার পরে শেষ হয়।',
   'A rule ends on or after it starts.': 'নিয়ম শুরুর দিন বা তার পরে শেষ হয়।',
   'A rule gives at least a point for an amount above zero.':
     'নিয়ম শূন্যের বেশি পরিমাণের জন্য অন্তত এক পয়েন্ট দেয়।',
@@ -41,10 +51,19 @@ export const bn: Readonly<Record<string, string>> = {
   'After this day it pays nothing; empty: no end.':
     'এই দিনের পর এটি কিছু পরিশোধ করে না; খালি: মেয়াদ নেই।',
   Amount: 'পরিমাণ (টাকা)',
+  'An amount off': 'টাকার ছাড়',
   'Another wallet or gift card has this code.': 'অন্য একটি ওয়ালেট বা গিফট কার্ডের এই কোড আছে।',
   'Applies to': 'যেখানে প্রযোজ্য',
   'Apply points and credit': 'পয়েন্ট ও ক্রেডিট প্রয়োগ করুন',
+  'Apply promotions': 'প্রমোশন প্রয়োগ করুন',
   Balance: 'ব্যালেন্স',
+  'Buy (units)': 'কিনুন (ইউনিট)',
+  'Buy 2, get 1: of every three units of what it applies to, the cheapest is free. With a free product: one of it for every two bought.':
+    '২টি কিনলে ১টি: প্রযোজ্য পণ্যের প্রতি তিন ইউনিটের মধ্যে সবচেয়ে সস্তাটি বিনামূল্যে। বিনামূল্যের পণ্য থাকলে: প্রতি দুটি কেনায় তার একটি।',
+  'Buy and get': 'কিনুন ও পান',
+  'Buy and get: the free units are of this product, when it is on the order; empty: of what was bought.':
+    'কিনুন ও পান: অর্ডারে থাকলে বিনামূল্যের ইউনিট এই পণ্যের; খালি: যা কেনা হয়েছে তার।',
+  'Buy some, get some free': 'কিছু কিনলে কিছু বিনামূল্যে',
   Card: 'কার্ড',
   'Card number': 'কার্ড নম্বর',
   Cards: 'কার্ড',
@@ -60,6 +79,8 @@ export const bn: Readonly<Record<string, string>> = {
   Draft: 'খসড়া',
   'Draft while it is written and previewed; running while orders earn; ended after — cards keep their points.':
     'লেখা ও পূর্বরূপ দেখার সময় খসড়া; অর্ডারে পয়েন্ট দেওয়ার সময় চলমান; এরপর শেষ — কার্ডে পয়েন্ট থেকে যায়।',
+  'Draft while it is written and previewed; running while orders may take it; ended after.':
+    'লেখা ও পূর্বরূপ দেখার সময় খসড়া; অর্ডারে নেওয়া যায় এমন সময় চলমান; এরপর শেষ।',
   Earned: 'অর্জিত',
   'Earned lately': 'সম্প্রতি অর্জিত',
   'Earned this month': 'এই মাসে অর্জিত',
@@ -78,20 +99,30 @@ export const bn: Readonly<Record<string, string>> = {
   'Expired this month': 'এই মাসে মেয়াদোত্তীর্ণ',
   'Fewer points than this are not spent on an order.': 'এর কম পয়েন্ট অর্ডারে খরচ করা যায় না।',
   'For every': 'প্রতি',
+  'For every Buy and Get units together, the cheapest Get are free; with a free product, Get of it for every Buy bought.':
+    '‘কিনুন’ ও ‘পান’ মিলিয়ে প্রতি এত ইউনিটে সবচেয়ে সস্তা ‘পান’ সংখ্যক বিনামূল্যে; বিনামূল্যের পণ্য থাকলে প্রতি ‘কিনুন’ সংখ্যক কেনায় তার ‘পান’ সংখ্যক।',
+  'For promotions that ask for one; the others apply by themselves with Apply promotions.':
+    'যেসব প্রমোশনে কোড লাগে তাদের জন্য; বাকিগুলো ‘প্রমোশন প্রয়োগ করুন’ চাপলে নিজে থেকেই প্রযোজ্য হয়।',
+  'Free product': 'বিনামূল্যের পণ্য',
   From: 'থেকে',
   'From (points earned)': 'থেকে (অর্জিত পয়েন্ট)',
+  'Get free (units)': 'বিনামূল্যে পান (ইউনিট)',
   'Gift card': 'গিফট কার্ড',
   'Gift card or wallet': 'গিফট কার্ড বা ওয়ালেট',
   'Gift cards': 'গিফট কার্ড',
   'Given back': 'ফেরত দেওয়া হয়েছে',
+  Gives: 'যা দেয়',
   ID: 'আইডি',
   'In the company’s currency: what the previews count the points at, and what a point is worth when it is spent.':
     'কোম্পানির মুদ্রায়: পূর্বরূপে পয়েন্টের যে মূল্য ধরা হয়, এবং খরচের সময় এক পয়েন্টের মূল্য।',
   'It does not hold that much.': 'এতে এত টাকা নেই।',
+  'It is taken alone, when that gives the customer more than the others together.':
+    'এটি একা নেওয়া হয়, যখন তা গ্রাহককে বাকি সবগুলোর চেয়ে বেশি দেয়।',
   'Its code: it pays what the order still comes to, or all it holds.':
     'এর কোড: অর্ডারের বাকি টাকা, অথবা এতে যা আছে সবটুকু পরিশোধ করে।',
   Kind: 'ধরন',
   Launch: 'চালু করুন',
+  'Let quotations take this promotion from now on?': 'এখন থেকে কোটেশনে এই প্রমোশন নেওয়া যাবে?',
   'Load it with a line below. On a quotation, type its code and press Apply points and credit: it pays what the order still comes to, or all it holds.':
     'নিচে একটি লাইন দিয়ে লোড করুন। কোটেশনে এর কোড লিখে ‘পয়েন্ট ও ক্রেডিট প্রয়োগ করুন’ চাপুন: এটি অর্ডারের বাকি টাকা, অথবা এতে যা আছে সবটুকু পরিশোধ করে।',
   Loaded: 'লোড করা',
@@ -108,16 +139,21 @@ export const bn: Readonly<Record<string, string>> = {
   'Movements › Amount': 'লেনদেন › পরিমাণ',
   'Movements › Why': 'লেনদেন › কারণ',
   Name: 'নাম',
+  'Not with other promotions': 'অন্য প্রমোশনের সাথে নয়',
   Note: 'নোট',
   'On a quotation, the points typed come off what the customer pays — after taxes, like a payment — and leave the card at once; a cancelled order gives them back.':
     'কোটেশনে লেখা পয়েন্ট গ্রাহকের প্রদেয় টাকা থেকে বাদ যায় — করের পরে, পরিশোধের মতো — এবং সাথে সাথে কার্ড থেকে কাটা হয়; অর্ডার বাতিল হলে ফেরত আসে।',
   'On an order, points come off what the customer pays, at the value of a point.':
     'অর্ডারে পয়েন্টের মূল্য অনুযায়ী গ্রাহকের প্রদেয় টাকা থেকে পয়েন্ট বাদ যায়।',
+  'Only orders that carry this code get it; empty: every order it applies to.':
+    'শুধু এই কোড থাকা অর্ডারে মেলে; খালি: প্রযোজ্য প্রতিটি অর্ডারে।',
   'Only this category': 'শুধু এই বিভাগ',
   'Only this product': 'শুধু এই পণ্য',
   'Opening points (adjustments)': 'প্রারম্ভিক পয়েন্ট (সমন্বয়)',
+  'Order lines': 'অর্ডার লাইন',
   Orders: 'অর্ডার',
   'Orders from': 'যত টাকার অর্ডার থেকে',
+  'Orders it would have applied to': 'যেসব অর্ডারে প্রযোজ্য হতো',
   'Orders that would have earned': 'যেসব অর্ডারে পয়েন্ট মিলত',
   'Orders worth less, before taxes, earn nothing by this rule.':
     'কর বাদে এর কম মূল্যের অর্ডারে এই নিয়মে কিছু মেলে না।',
@@ -125,6 +161,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Page {{page}} of {{pages}}': 'পৃষ্ঠা {{page}} / {{pages}}',
   'Paid by gift card or wallet': 'গিফট কার্ড বা ওয়ালেটে পরিশোধ',
   'Paid with': 'যা দিয়ে পরিশোধ',
+  'Percentage or amount': 'শতাংশ বা টাকা',
   Points: 'পয়েন্ট',
   'Points by movement': 'চলাচল অনুযায়ী পয়েন্ট',
   'Points by rules, tiers, cards with a ledger, previewed on past orders before it runs':
@@ -151,8 +188,13 @@ export const bn: Readonly<Record<string, string>> = {
   'Previewed at': 'পূর্বরূপের সময়',
   'Product of gift cards and wallets': 'গিফট কার্ড ও ওয়ালেটের পণ্য',
   'Product of points spent': 'খরচ হওয়া পয়েন্টের পণ্য',
+  'Product of promotions': 'প্রমোশনের পণ্য',
   Program: 'প্রোগ্রাম',
   Programs: 'প্রোগ্রাম',
+  Promotion: 'প্রমোশন',
+  'Promotion code': 'প্রমোশন কোড',
+  'Promotion launched': 'প্রমোশন চালু হয়েছে',
+  Promotions: 'প্রমোশন',
   'Records must reference shared records or records of their own company.':
     'রেকর্ডকে শেয়ার করা রেকর্ড বা নিজের কোম্পানির রেকর্ড নির্দেশ করতে হবে।',
   Rule: 'নিয়ম',
@@ -178,7 +220,11 @@ export const bn: Readonly<Record<string, string>> = {
   Status: 'অবস্থা',
   'Stop giving points? Cards keep what they have.': 'পয়েন্ট দেওয়া বন্ধ করবেন? কার্ডে যা আছে তা থেকে যাবে।',
   'Taken back': 'ফেরত নেওয়া হয়েছে',
+  'Taken off': 'ছাড় দেওয়া হয়েছে',
+  'Taken off by promotions': 'প্রমোশনে ছাড়',
   'The card does not have that many points.': 'কার্ডে এত পয়েন্ট নেই।',
+  'The goods of the order must be worth this, before taxes.':
+    'অর্ডারের পণ্যের মূল্য কর বাদে অন্তত এত হতে হবে।',
   'The points at the value of a point: what the program would have cost if every point were spent.':
     'পয়েন্টের মূল্যে হিসাব: সব পয়েন্ট খরচ হলে প্রোগ্রামের যত খরচ হতো।',
   'The share of an order — taxes included — that points may pay.':
@@ -190,6 +236,7 @@ export const bn: Readonly<Record<string, string>> = {
   To: 'পর্যন্ত',
   'Type the points, then press Apply points and credit: they come off the order and leave the card.':
     'পয়েন্ট লিখে ‘পয়েন্ট ও ক্রেডিট প্রয়োগ করুন’ চাপুন: এগুলো অর্ডার থেকে বাদ যায় এবং কার্ড থেকে কাটা হয়।',
+  'Units given free': 'বিনামূল্যে দেওয়া ইউনিট',
   'Updated At': 'হালনাগাদের সময়',
   'Updated By': 'হালনাগাদ করেছেন',
   'User (cards and their points)': 'ব্যবহারকারী (কার্ড ও পয়েন্ট)',
@@ -204,6 +251,13 @@ export const bn: Readonly<Record<string, string>> = {
   'What an order earns is multiplied by this: 1.5 gives half as much again.':
     'অর্ডারে অর্জিত পয়েন্ট এই সংখ্যা দিয়ে গুণ হয়: ১.৫ হলে দেড় গুণ।',
   'What is typed on an order to pay with it.': 'এটি দিয়ে পরিশোধ করতে অর্ডারে যা লিখতে হয়।',
+  'What it applies to — and, for buy and get, what must be bought; empty: everything.':
+    'যেখানে প্রযোজ্য — এবং ‘কিনুন ও পান’-এ যা কিনতে হবে; খালি: সবকিছু।',
+  'What it would have cost over those orders — with a code, as if every customer had typed it.':
+    'ওই অর্ডারগুলোতে এর যত খরচ হতো — কোড থাকলে, যেন প্রত্যেক গ্রাহক তা লিখেছেন।',
+  'What it would have taken off the confirmed orders of the period — the month before this one unless you give dates. A promotion with a code is counted as if every customer had typed it: the most it can cost.':
+    'ওই সময়ের নিশ্চিত অর্ডার থেকে এটি যত ছাড় দিত — তারিখ না দিলে এর আগের মাস। কোডসহ প্রমোশন এমনভাবে গণনা হয় যেন প্রত্যেক গ্রাহক কোড লিখেছেন: সর্বোচ্চ সম্ভাব্য খরচ।',
+  'What the customer reads on the order.': 'গ্রাহক অর্ডারে যা পড়েন।',
   'What the customer’s loyalty card earned with this order, when it was confirmed.':
     'অর্ডার নিশ্চিত হওয়ার সময় গ্রাহকের লয়্যালটি কার্ডে এই অর্ডার থেকে যত পয়েন্ট জমা হয়েছে।',
   'What the rules would have given over the confirmed orders of the period — the month before this one unless you give dates —, and what that is worth at the value of a point. Tiers are left out: nobody has one before the program starts.':
@@ -216,6 +270,8 @@ export const bn: Readonly<Record<string, string>> = {
     'পণ্য বা বিভাগ থাকলে নিয়মটি শুধু তাদের লাইন গণনা করে; খালি: পুরো অর্ডার।',
   'With points': 'পয়েন্টসহ',
   Worth: 'মূল্য',
+  'Write it, press Preview to see what it would have taken off past orders, then Launch. On a quotation, Apply promotions takes every running promotion that applies.':
+    'এটি লিখুন, অতীত অর্ডারে কত ছাড় দিত তা দেখতে ‘পূর্বরূপ’ চাপুন, তারপর ‘চালু করুন’। কোটেশনে ‘প্রমোশন প্রয়োগ করুন’ প্রযোজ্য সব চলমান প্রমোশন নেয়।',
   'Write the rules, press Preview to see what they would have given over past orders, then Launch. One program runs at a time.':
     'নিয়ম লিখুন, অতীত অর্ডারে সেগুলো কী দিত তা দেখতে ‘পূর্বরূপ’ চাপুন, তারপর ‘চালু করুন’। একসাথে একটিই প্রোগ্রাম চলে।',
 };

@@ -37,6 +37,13 @@ import {
   tierOf,
   voucherUse,
 } from './engine.js';
+import {
+  applyPromotions,
+  type PromoOrder,
+  type Promotion,
+  type PromotionKind,
+  previewPromotion,
+} from './promotions.js';
 
 /**
  * Fields the server maintains: written by its own code (as the system) and by Administrators only. An empty list
@@ -371,6 +378,145 @@ export const LoyaltyEntry = defineModel('loyalty.entry', {
   },
 });
 
+const PROMOTION_KIND_LABELS = {
+  percent: 'A percentage off',
+  amount: 'An amount off',
+  buy_get: 'Buy some, get some free',
+} as const;
+
+/**
+ * A promotion (RFC 0034 §2.6): a percentage or an amount off — the whole order, a product or a category —, or
+ * *buy X get Y*; by itself or with a code; between dates. Like a program, it is previewed on past orders before it
+ * runs: what it would have taken off, and what share of the sales that is.
+ */
+export const LoyaltyPromotion = defineModel('loyalty.promotion', {
+  label: 'Promotion',
+  recName: 'name',
+  order: ['id desc'],
+  archivable: true,
+  companyScoped: { required: true },
+  tracking: ['state', 'kind', 'value', 'dateFrom', 'dateTo'],
+  access: { 'loyalty.user': READ, 'loyalty.manager': [...ALL, 'export', 'import'] },
+  fields: {
+    name: f.char({ required: true, help: 'What the customer reads on the order.' }),
+    kind: f.selection(PROMOTION_KIND_LABELS, {
+      required: true,
+      default: 'percent',
+      label: 'Gives',
+      help: 'A percentage or an amount off what it applies to, or free units for units bought.',
+    }),
+    value: f.decimal({
+      scale: 2,
+      required: true,
+      default: '0',
+      label: 'Percentage or amount',
+      help: 'A percentage off: 15 is 15 %. An amount off: in the company’s currency, before taxes.',
+    }),
+    product: f.many2one('product.product', { ondelete: 'cascade', label: 'Only this product' }),
+    category: f.many2one('product.category', {
+      ondelete: 'cascade',
+      label: 'Only this category',
+      help: 'What it applies to — and, for buy and get, what must be bought; empty: everything.',
+    }),
+    minimumOrder: f.decimal({
+      scale: 2,
+      required: true,
+      default: '0',
+      label: 'Orders from',
+      help: 'The goods of the order must be worth this, before taxes.',
+    }),
+    buy: f.integer({ required: true, default: 0, label: 'Buy (units)' }),
+    get: f.integer({
+      required: true,
+      default: 0,
+      label: 'Get free (units)',
+      help: 'For every Buy and Get units together, the cheapest Get are free; with a free product, Get of it for every Buy bought.',
+    }),
+    rewardProduct: f.many2one('product.product', {
+      ondelete: 'cascade',
+      label: 'Free product',
+      help: 'Buy and get: the free units are of this product, when it is on the order; empty: of what was bought.',
+    }),
+    code: f.char({
+      size: 40,
+      label: 'Code',
+      help: 'Only orders that carry this code get it; empty: every order it applies to.',
+    }),
+    dateFrom: f.date({ label: 'From' }),
+    dateTo: f.date({ label: 'To' }),
+    exclusive: f.boolean({
+      default: false,
+      label: 'Not with other promotions',
+      help: 'It is taken alone, when that gives the customer more than the others together.',
+    }),
+    previewFrom: f.date({
+      label: 'Preview from',
+      help: 'Preview counts the confirmed orders from this day; empty: the month before this one.',
+    }),
+    previewTo: f.date({ label: 'Preview to' }),
+    previewOrders: f.integer({ label: 'Orders', groups: { write: [...SYSTEM] } }),
+    previewApplied: f.integer({
+      label: 'Orders it would have applied to',
+      groups: { write: [...SYSTEM] },
+    }),
+    previewDiscount: f.decimal({
+      scale: 2,
+      label: 'Taken off',
+      groups: { write: [...SYSTEM] },
+      help: 'What it would have cost over those orders — with a code, as if every customer had typed it.',
+    }),
+    previewRevenue: f.decimal({
+      scale: 2,
+      label: 'Sales before taxes',
+      groups: { write: [...SYSTEM] },
+    }),
+    previewShare: f.decimal({
+      scale: 2,
+      label: 'Share of sales %',
+      groups: { write: [...SYSTEM] },
+    }),
+    previewFree: f.integer({ label: 'Units given free', groups: { write: [...SYSTEM] } }),
+    previewAt: f.datetime({ label: 'Previewed at', groups: { write: [...SYSTEM] } }),
+    state: f.state({
+      states: { draft: 'Draft', running: 'Running', ended: 'Ended' },
+      initial: 'draft',
+      help: 'Draft while it is written and previewed; running while orders may take it; ended after.',
+      transitions: {
+        look: {
+          from: ['draft'],
+          to: 'draft',
+          after: records('loyalty.promotion', async (promotions) => {
+            const env = promotions.env as unknown as Env;
+            for (const id of promotions.ids) await previewPromotionOf(env, id as number);
+          }),
+        },
+        launch: emitting('loyalty.promotion.launched', { from: ['draft'], to: 'running' }),
+        finish: { from: ['running'], to: 'ended' },
+      },
+    }),
+  },
+  sqlConstraints: {
+    sane: {
+      check: orm.sql`value >= 0 AND minimum_order >= 0 AND buy >= 0 AND get >= 0
+        AND (kind <> 'percent' OR value <= 100) AND (kind <> 'buy_get' OR (buy > 0 AND get > 0))`,
+      message:
+        'A percentage is from 0 to 100, an amount zero or more; buy and get both need a number of units.',
+    },
+    ordered: {
+      check: orm.sql`date_to IS NULL OR date_from IS NULL OR date_to >= date_from`,
+      message: 'A promotion ends on or after it starts.',
+    },
+  },
+  constraints: {
+    codeReads: {
+      ...check('loyalty.promotion', ['code'], (promotions) =>
+        promotions.filter((x) => x.code !== null && !/^[A-Z0-9_-]{2,40}$/.test(x.code)),
+      ),
+      message: 'A code is 2 to 40 capitals, digits, - or _.',
+    },
+  },
+});
+
 const VOUCHER_KINDS = { gift_card: 'Gift card', wallet: 'Wallet' } as const;
 const voucherCode = (): string => {
   const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -506,6 +652,16 @@ export const OrderLoyalty = extendModel('sale.order', {
       label: 'Gift card or wallet',
       help: 'Its code: it pays what the order still comes to, or all it holds.',
     }),
+    promoCode: f.char({
+      size: 40,
+      label: 'Promotion code',
+      help: 'For promotions that ask for one; the others apply by themselves with Apply promotions.',
+    }),
+    promotionAmount: f.decimal({
+      scale: 2,
+      label: 'Taken off by promotions',
+      groups: { write: [...SYSTEM] },
+    }),
     loyaltyRedeemed: f.integer({ label: 'Points spent', groups: { write: [...SYSTEM] } }),
     voucherUsed: f.decimal({
       scale: 2,
@@ -516,6 +672,15 @@ export const OrderLoyalty = extendModel('sale.order', {
   fieldOverrides: {
     state: {
       transitionsAdd: {
+        // The running promotions that apply, each as a line below zero; pressed again, they are worked out anew.
+        promote: {
+          from: ['draft'],
+          to: 'draft',
+          after: records('sale.order', async (orders) => {
+            const env = orders.env as unknown as Env;
+            for (const id of orders.ids) await promoteOrder(env, id as number);
+          }),
+        },
         // Takes the points and the credit off the quotation, or changes what was taken: held from now on.
         credit: {
           from: ['draft'],
@@ -534,13 +699,18 @@ export const OrderLoyalty = extendModel('sale.order', {
 export const LineLoyalty = extendModel('sale.order.line', {
   fields: {
     loyaltyKind: f.selection(
-      { points: 'Loyalty points', voucher: 'Gift card or wallet' },
+      { points: 'Loyalty points', voucher: 'Gift card or wallet', promotion: 'Promotion' },
       {
         label: 'Paid with',
         groups: { write: [...SYSTEM] },
         help: 'Set on the lines Loyalty adds: what they took is held until the order is cancelled.',
       },
     ),
+    promotion: f.many2one('loyalty.promotion', {
+      ondelete: 'set null',
+      label: 'Promotion',
+      groups: { write: [...SYSTEM] },
+    }),
   },
 });
 
@@ -555,6 +725,11 @@ export const CompanyLoyalty = extendModel('res.company', {
     loyaltyVoucherProduct: f.many2one('product.product', {
       ondelete: 'set null',
       label: 'Product of gift cards and wallets',
+      groups: { write: [...SYSTEM] },
+    }),
+    loyaltyPromotionProduct: f.many2one('product.product', {
+      ondelete: 'set null',
+      label: 'Product of promotions',
       groups: { write: [...SYSTEM] },
     }),
   },
@@ -886,6 +1061,179 @@ export async function reverseOrder(env: Env, order: number): Promise<number> {
   });
 }
 
+// ---- promotions on an order
+
+/** A promotion as the engine reads it. */
+function promotionRow(x: {
+  id: unknown;
+  kind: string;
+  value: unknown;
+  product: { id: unknown } | null;
+  category: { id: unknown } | null;
+  minimumOrder: unknown;
+  buy: number;
+  get: number;
+  rewardProduct: { id: unknown } | null;
+  code: string | null;
+  dateFrom: unknown;
+  dateTo: unknown;
+  exclusive: boolean | null;
+}): Promotion {
+  return {
+    id: x.id as number,
+    kind: x.kind as PromotionKind,
+    // A percentage in hundredths of a percent, an amount in hundredths: both are the value times a hundred.
+    value: cents(x.value),
+    product: (x.product?.id as number | undefined) ?? null,
+    category: (x.category?.id as number | undefined) ?? null,
+    minimumOrder: cents(x.minimumOrder),
+    buy: x.buy,
+    get: x.get,
+    rewardProduct: (x.rewardProduct?.id as number | undefined) ?? null,
+    code: (x.code ?? '').trim().toUpperCase(),
+    dateFrom: x.dateFrom === null ? null : iso(x.dateFrom),
+    dateTo: x.dateTo === null ? null : iso(x.dateTo),
+    exclusive: x.exclusive === true,
+  };
+}
+
+/** The goods of sales orders, as the promotion engine reads them: the lines Loyalty added are left out. */
+async function promoOrdersOf(su: Env, ids: readonly number[]): Promise<Map<number, PromoOrder>> {
+  const out = new Map<number, PromoOrder>();
+  if (ids.length === 0) return out;
+  for (const o of await su
+    .model('sale.order')
+    .browse([...ids] as never)
+    .load({ lines: { product: { category: true } } }))
+    out.set(o.id as number, {
+      date: iso(o.dateOrder),
+      code: (o.promoCode ?? '').trim().toUpperCase(),
+      lines: [...o.lines]
+        .filter((l) => l.loyaltyKind === null)
+        .map((l) => ({
+          product: l.product.id as number,
+          category: (l.product.category?.id as number | undefined) ?? null,
+          quantity: Number(l.quantity),
+          amount: cents(l.subtotal),
+        })),
+    });
+  return out;
+}
+
+/**
+ * What a promotion would have taken off (RFC 0034 §2.6): over the company's confirmed orders of the preview's
+ * period — the month before this one unless dates are given —, written on the promotion. No order is touched.
+ */
+export async function previewPromotionOf(env: Env, id: number): Promise<void> {
+  await env.asSuperuser({ reason: 'a promotion previewed' }, async (su) => {
+    const [x] = await su
+      .model('loyalty.promotion')
+      .browse([id as never])
+      .load({ company: true, product: true, category: true, rewardProduct: true });
+    if (x === undefined) return;
+    const today = iso(su.today());
+    const firstOfMonth = `${today.slice(0, 7)}-01`;
+    const from = x.previewFrom === null ? monthsBefore(firstOfMonth, 1) : iso(x.previewFrom);
+    const to =
+      x.previewTo === null
+        ? iso(new Date(Date.parse(`${firstOfMonth}T00:00:00Z`) - 86_400_000))
+        : iso(x.previewTo);
+    const found = await su.model('sale.order').search({
+      where: {
+        company: x.company.id,
+        state: { in: ['sale', 'done'] },
+        dateOrder: { gte: from, lte: to },
+      } as never,
+    });
+    // Its own dates are left out: the question is what it would cost on orders like those.
+    const promotion = { ...promotionRow(x), dateFrom: null, dateTo: null };
+    const orders = [...(await promoOrdersOf(su, found.ids.map(Number))).values()];
+    const result = previewPromotion(promotion, orders);
+    await su
+      .model('loyalty.promotion')
+      .browse([id as never])
+      .write({
+        previewFrom: from,
+        previewTo: to,
+        previewOrders: result.orders,
+        previewApplied: result.applied,
+        previewDiscount: money(result.discount),
+        previewRevenue: money(result.revenue),
+        previewShare: (result.share / 100).toFixed(2),
+        previewFree: result.freeUnits,
+        previewAt: new Date(),
+      } as never);
+    await su.flush();
+  });
+}
+
+/**
+ * Puts the running promotions on a quotation (RFC 0034 §2.6): the lines of earlier promotions go, and each
+ * promotion that applies — together, or the one that goes alone when it gives more — is a line below zero with
+ * its name. Points and credit already taken are worked out again on what the order now comes to.
+ */
+export async function promoteOrder(env: Env, order: number): Promise<void> {
+  await env.asSuperuser({ reason: 'promotions on an order' }, async (su) => {
+    const [o] = await su
+      .model('sale.order')
+      .browse([order as never])
+      .load({ company: true });
+    if (o === undefined) return;
+    if (o.state !== 'draft')
+      refuseCredit(
+        'state',
+        'Promotions are applied to a quotation.',
+        'Not once it is sent or confirmed.',
+      );
+    const old = await su.model('sale.order.line').search({
+      where: { order: order as never, loyaltyKind: 'promotion' } as never,
+    });
+    if (old.length > 0) await old.unlink();
+    await su.flush();
+    const companyId = o.company.id as number;
+    const running = await su
+      .model('loyalty.promotion')
+      .search({
+        where: { company: companyId as never, state: 'running' } as never,
+        order: ['id asc'],
+      })
+      .then((rows) => rows.load({ product: true, category: true, rewardProduct: true }));
+    const names = new Map([...running].map((x) => [x.id as number, x.name]));
+    const read = (await promoOrdersOf(su, [order])).get(order);
+    const code = (o.promoCode ?? '').trim().toUpperCase();
+    if (code !== '' && ![...running].some((x) => (x.code ?? '').toUpperCase() === code))
+      refuseCredit(
+        'promoCode',
+        'No running promotion has this code.',
+        'Check the code, or leave it empty.',
+      );
+    const discounts =
+      read === undefined ? [] : applyPromotions([...running].map(promotionRow), read);
+    let taken = 0;
+    for (const d of discounts) {
+      taken += d.amount;
+      await su.model('sale.order.line').create([
+        {
+          order,
+          product: await creditProduct(su, companyId, 'promotion'),
+          name: names.get(d.promotion) ?? 'Promotion',
+          quantity: '1',
+          priceUnit: money(-d.amount),
+          loyaltyKind: 'promotion',
+          promotion: d.promotion,
+        } as never,
+      ]);
+    }
+    await su
+      .model('sale.order')
+      .browse([order as never])
+      .write({ promotionAmount: money(taken) } as never);
+    await su.flush();
+    // What points and a gift card may pay depends on what the order comes to now.
+    if ((o.loyaltyRedeemed ?? 0) > 0 || cents(o.voucherUsed) > 0) await applyCredits(su, order);
+  });
+}
+
 // ---- spending: points and credit on an order
 
 const refuseCredit = (field: string, message: string, hint: string): never => {
@@ -896,19 +1244,33 @@ const refuseCredit = (field: string, message: string, hint: string): never => {
 async function creditProduct(
   su: Env,
   company: number,
-  kind: 'points' | 'voucher',
+  kind: 'points' | 'voucher' | 'promotion',
 ): Promise<number> {
-  const key = kind === 'points' ? 'loyaltyPointsProduct' : 'loyaltyVoucherProduct';
+  const key =
+    kind === 'points'
+      ? 'loyaltyPointsProduct'
+      : kind === 'voucher'
+        ? 'loyaltyVoucherProduct'
+        : 'loyaltyPromotionProduct';
   const [c] = await su
     .model('res.company')
     .browse([company as never])
-    .load({ loyaltyPointsProduct: true, loyaltyVoucherProduct: true });
+    .load({
+      loyaltyPointsProduct: true,
+      loyaltyVoucherProduct: true,
+      loyaltyPromotionProduct: true,
+    });
   const have = c?.[key] ?? null;
   if (have !== null) return have.id as number;
   const made = (
     await su.model('product.product').create([
       {
-        name: kind === 'points' ? 'Loyalty points' : 'Gift card or wallet',
+        name:
+          kind === 'points'
+            ? 'Loyalty points'
+            : kind === 'voucher'
+              ? 'Gift card or wallet'
+              : 'Promotion',
         kind: 'service',
         saleOk: false,
         purchaseOk: false,
@@ -934,7 +1296,7 @@ export async function releaseCredits(
 ): Promise<void> {
   if (options.keepLines !== true) {
     const lines = await su.model('sale.order.line').search({
-      where: { order: order as never, loyaltyKind: { isNull: false } } as never,
+      where: { order: order as never, loyaltyKind: { in: ['points', 'voucher'] } } as never,
     });
     if (lines.length > 0) await lines.unlink();
   }
@@ -1237,6 +1599,7 @@ export const loyaltyShutro = defineModule({
     LoyaltyEntry,
     LoyaltyVoucher,
     LoyaltyVoucherEntry,
+    LoyaltyPromotion,
   ],
   extensions: [OrderLoyalty, LineLoyalty, CompanyLoyalty],
 });

@@ -424,3 +424,168 @@ test('a gift card and a wallet pay what an order comes to, or all they hold', as
   const late = await quote('rupali', '100', { voucherCode: g.code });
   expect(JSON.stringify((await credit(late)).json)).toContain('valid until');
 });
+
+const M = '/api/v1/models/loyalty.promotion';
+/** The lines Loyalty put on an order: what they are called and what they take off. */
+const creditLines = async (order: number) =>
+  (
+    await erp.host.server.driver.query<{ name: string; kind: string; price: string }>({
+      text: `SELECT name, loyalty_kind AS kind, price_unit::text AS price FROM sale_order_line
+              WHERE order_id = $1 AND loyalty_kind IS NOT NULL ORDER BY id`,
+      params: [order],
+    })
+  ).map((l) => `${l.kind}: ${l.name} ${Number(l.price)}`);
+const promote = (order: number) => call('POST', `${O}/${order}/transitions/promote`, 'rahim');
+
+test('a promotion is previewed on past orders before it runs, then taken by quotations', async () => {
+  expect((await call('POST', M, 'lina', { name: 'Not mine to write', value: '5' })).status).toBe(
+    403,
+  );
+  // What cannot be: 120 %, buy and get without numbers, a code in small letters.
+  const bad = async (values: Record<string, unknown>) =>
+    (await call('POST', M, 'mona', { name: 'Broken', ...values })).status;
+  expect(await bad({ kind: 'percent', value: '120' })).toBeGreaterThanOrEqual(400);
+  expect(await bad({ kind: 'buy_get', buy: 2 })).toBeGreaterThanOrEqual(400);
+  expect(await bad({ kind: 'percent', value: '5', code: 'eid' })).toBeGreaterThanOrEqual(400);
+  const drinks = await make('loyalty.promotion', 'mona', {
+    name: 'Drinks week: 20 % off',
+    kind: 'percent',
+    value: '20',
+    category: ids['drinks'],
+    previewFrom: day(-2),
+    previewTo: day(1),
+  });
+  const looked = await call('POST', `${M}/${drinks}/transitions/look`, 'mona');
+  expect(looked.status, JSON.stringify(looked.json)).toBe(200);
+  const p = (
+    await call(
+      'GET',
+      `${M}/${drinks}?fields=state,previewOrders,previewApplied,previewDiscount,previewShare`,
+      'mona',
+    )
+  ).json as Json;
+  // Of this file's orders still confirmed, two had tea — 380.50 and 90 (the third was cancelled): 20 % is 94.10.
+  expect([p.state, p.previewApplied, Number(p.previewDiscount)]).toEqual(['draft', 2, 94.1]);
+  expect(p.previewOrders).toBeGreaterThan(2);
+  expect(Number(p.previewShare)).toBeGreaterThan(0);
+  expect((await call('PATCH', `${M}/${drinks}`, 'mona', { previewDiscount: 1 })).status).toBe(403);
+  // A draft is taken by nobody.
+  const order = await make('sale.order', 'rahim', {
+    partner: ids['shapla'],
+    currency: ids['currency'],
+    lines: {
+      create: [
+        { product: ids['rice'], name: 'Rice', quantity: '1', priceUnit: '1000' },
+        { product: ids['tea'], name: 'Tea', quantity: '3', priceUnit: '150' },
+      ],
+    },
+  });
+  expect((await promote(order)).status).toBe(200);
+  expect(await creditLines(order)).toEqual([]);
+  expect((await call('POST', `${M}/${drinks}/transitions/launch`, 'lina')).status).toBe(403);
+  expect((await call('POST', `${M}/${drinks}/transitions/launch`, 'mona')).status).toBe(200);
+  // Running: 20 % of 450 of tea.
+  expect((await promote(order)).status).toBe(200);
+  expect(await creditLines(order)).toEqual(['promotion: Drinks week: 20 % off -90']);
+  expect(await total(order)).toBe(1360);
+  // Pressed again: worked out anew, not twice.
+  expect((await promote(order)).status).toBe(200);
+  expect(await creditLines(order)).toHaveLength(1);
+  ids['promoted'] = order;
+  ids['drinksPromo'] = drinks;
+});
+
+test('buy two get one, a code, and a promotion that goes alone', async () => {
+  const order = ids['promoted'] as number;
+  // Buy two packs of tea, the third is free: 150 — together with the 20 %.
+  const b2g1 = await make('loyalty.promotion', 'mona', {
+    name: 'Tea: buy 2, get 1',
+    kind: 'buy_get',
+    product: ids['tea'],
+    buy: 2,
+    get: 1,
+  });
+  expect((await call('POST', `${M}/${b2g1}/transitions/launch`, 'mona')).status).toBe(200);
+  expect((await promote(order)).status).toBe(200);
+  expect(await creditLines(order)).toEqual([
+    'promotion: Drinks week: 20 % off -90',
+    'promotion: Tea: buy 2, get 1 -150',
+  ]);
+  // With a code: 100 off from 1,000 — only when the order carries it.
+  const coded = await make('loyalty.promotion', 'mona', {
+    name: 'EID27: 100 off',
+    kind: 'amount',
+    value: '100',
+    minimumOrder: '1000',
+    code: 'EID27',
+  });
+  expect((await call('POST', `${M}/${coded}/transitions/launch`, 'mona')).status).toBe(200);
+  expect((await promote(order)).status).toBe(200);
+  expect(await creditLines(order)).toHaveLength(2);
+  expect((await call('PATCH', `${O}/${order}`, 'rahim', { promoCode: 'nope' })).status).toBe(200);
+  expect(JSON.stringify((await promote(order)).json)).toContain(
+    'No running promotion has this code',
+  );
+  expect((await call('PATCH', `${O}/${order}`, 'rahim', { promoCode: 'eid27' })).status).toBe(200);
+  expect((await promote(order)).status).toBe(200);
+  expect((await creditLines(order)).map((l) => l.split(': ')[1])).toEqual([
+    'Drinks week',
+    'Tea',
+    'EID27',
+  ]);
+  expect(await total(order)).toBe(1450 - 90 - 150 - 100);
+  // A clearance that goes alone, 30 % of everything: 435, more than the 340 of the three together.
+  const alone = await make('loyalty.promotion', 'mona', {
+    name: 'Clearance: 30 % off',
+    kind: 'percent',
+    value: '30',
+    exclusive: true,
+  });
+  expect((await call('POST', `${M}/${alone}/transitions/launch`, 'mona')).status).toBe(200);
+  expect((await promote(order)).status).toBe(200);
+  expect(await creditLines(order)).toEqual(['promotion: Clearance: 30 % off -435']);
+  expect(
+    Number(
+      (await call('GET', `${O}/${order}?fields=promotionAmount`, 'rahim')).json.promotionAmount,
+    ),
+  ).toBe(435);
+  // Ended: the others come back.
+  expect((await call('POST', `${M}/${alone}/transitions/finish`, 'mona')).status).toBe(200);
+  expect((await promote(order)).status).toBe(200);
+  expect(await creditLines(order)).toHaveLength(3);
+});
+
+test('promotions first, then a gift card on what is left; the order earns on what is paid', async () => {
+  const order = ids['promoted'] as number;
+  const gift = await make('loyalty.voucher', 'mona', { entries: { create: [{ amount: '2000' }] } });
+  const code = (await call('GET', `${V}/${gift}?fields=code`, 'lina')).json.code as string;
+  expect((await call('PATCH', `${O}/${order}`, 'rahim', { voucherCode: code })).status).toBe(200);
+  expect((await credit(order)).status).toBe(200);
+  // 1,450 less 340 of promotions: the gift card pays 1,110.
+  expect(await total(order)).toBe(0);
+  expect(Number((await call('GET', `${V}/${gift}?fields=balance`, 'lina')).json.balance)).toBe(890);
+  // A promotion ends and Apply promotions is pressed: the gift card is worked out again on the new total.
+  expect((await call('POST', `${M}/${ids['drinksPromo']}/transitions/finish`, 'mona')).status).toBe(
+    200,
+  );
+  expect((await promote(order)).status).toBe(200);
+  expect(await total(order)).toBe(0);
+  expect(Number((await call('GET', `${V}/${gift}?fields=balance`, 'lina')).json.balance)).toBe(800);
+  expect((await creditLines(order)).map((l) => l.split(':')[0])).toEqual([
+    'promotion',
+    'promotion',
+    'voucher',
+  ]);
+  // A promotion's lines are the server's.
+  const [line] = await erp.host.server.driver.query<{ id: number }>({
+    text: `SELECT id FROM sale_order_line WHERE order_id = $1 AND loyalty_kind = 'promotion' LIMIT 1`,
+    params: [order],
+  });
+  expect(
+    (
+      await call('PATCH', `/api/v1/models/sale.order.line/${line?.id}`, 'rahim', {
+        loyaltyKind: 'points',
+      })
+    ).status,
+  ).toBe(403);
+});

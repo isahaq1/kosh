@@ -109,3 +109,50 @@ test('a gift card pays part of a quotation from the order form', async ({ page }
   const read = await page.request.get(`/api/v1/models/sale.order/${order}?fields=voucherUsed`);
   expect(Number(((await read.json()) as { voucherUsed: string }).voucherUsed)).toBe(300);
 });
+
+test('a promotion launched and taken by a quotation from the order form', async ({ page }) => {
+  await signIn(page, 'dina');
+  const csrf = await page.evaluate(() => sessionStorage.getItem('kosh.csrf'));
+  const headers = { 'x-csrf-token': csrf ?? '' };
+  const make = async (model: string, data: Record<string, unknown>): Promise<number> => {
+    const made = await page.request.post(`/api/v1/models/${model}`, { headers, data });
+    expect(made.status(), `${model}: ${await made.text()}`).toBe(201);
+    return ((await made.json()) as { id: number }).id;
+  };
+  const stamp = Date.now();
+  // A promotion on one product only, so that no other spec's orders can take it.
+  const product = await make('product.product', { name: `Promo Goods ${stamp}`, listPrice: '500' });
+  const name = `Ten percent ${stamp}`;
+  const promotion = await make('loyalty.promotion', {
+    name,
+    kind: 'percent',
+    value: '10',
+    product,
+  });
+  await page.goto(`/loyalty/a/loyalty.action_promotions/${promotion}`);
+  await page.getByRole('button', { name: 'Launch', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Yes' }).click();
+  await expect(page.getByRole('button', { name: 'End', exact: true })).toBeVisible();
+
+  const customer = await make('res.partner', { name: `Promo Buyer ${stamp}` });
+  const [currency] = (
+    (await (await page.request.get('/api/v1/models/res.currency?fields=name&limit=1')).json()) as {
+      items: { id: number }[];
+    }
+  ).items;
+  const order = await make('sale.order', {
+    partner: customer,
+    currency: currency?.id,
+    lines: { create: [{ product, name: 'Goods', quantity: '2', priceUnit: '500' }] },
+  });
+  await page.goto(`/sales/a/sales.action_orders/${order}`);
+  await page.getByRole('button', { name: 'Apply promotions' }).click();
+  // Ten percent of 1,000.
+  await expect(page.getByRole('row', { name: new RegExp(name) })).toContainText('-100');
+  // Ended again, so that it stays this test's.
+  const ended = await page.request.post(
+    `/api/v1/models/loyalty.promotion/${promotion}/transitions/finish`,
+    { headers },
+  );
+  expect(ended.status()).toBe(200);
+});
