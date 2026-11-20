@@ -1026,6 +1026,56 @@ GET /api/v1/counter/catalogue?shop=1&partner=42      the catalogue at that custo
 Another app may know customers another way: it overrides `findCustomer` of `pos.shop` (Loyalty at the Counter
 adds the loyalty card's number, and says what the card holds in `note`).
 
+### Live chat (`modules/livechat`, RFC 0034)
+
+A chat your site offers, answered by the people who are there. Install it with `shutro-erp apps install livechat`.
+
+- **Channels** (*Live chat › Configuration › Channels*): a name visitors read, the **operators** who answer it, how
+  conversations are given out — **in turn** (to the operator who waited longest for one), **to the least busy**, or
+  **taken by hand** —, how many an operator has at once, what visitors read before they write and when nobody is
+  there, and after how long a conversation left alone is **missed** (nobody answered) or **closed** (nobody wrote).
+- **The chat window** is a page of this server (the channel's *Chat window* address): no sign-in, nothing loaded
+  from elsewhere, English or Bangla (`?lang=bn`, or the browser's language), light and dark, keyboard and screen
+  reader. Open it from a button of your site. It is **framed by nobody** unless the channel names the sites that
+  may (*Sites that may frame it*, one address per line).
+- **A conversation is its visitor's by a secret** the server gives once, when it starts; only its hash is kept.
+  Without it — or with it on another channel — there is nothing to read. Everything said is kept as text and
+  written as text: markup is never run.
+- **Who is there**: an operator who switched *Taking conversations* on in *Live chat › Inbox* and whose inbox was
+  open in the last minute and a half. A new conversation goes to one of them; when all are at their limit it
+  **waits** in the inbox of every operator of the channel until one takes it.
+- **Nobody there**: the visitor is asked for an **email**, their message is kept, and the conversation is missed
+  when its time is up — with the address to write back to.
+- **The inbox**: the conversations that wait and those you are in, the one that is open, your answer, *End the
+  conversation*. Only the operator a conversation was given to answers and ends it.
+- **Kept**: every conversation with its messages, how long the visitor waited for the first answer, whether an
+  operator was there, and the rating (one to five) the visitor gave at the end. *Conversations* lists them; the
+  overview shows who waits now, the month, the average wait and rating; a transcript prints from the form.
+
+Operators (`livechat.user`) see the conversations of **their channels** only; managers (`livechat.manager`) see
+all and set the channels up. What happened is the server's to write: nobody edits a conversation.
+
+```http
+GET  /api/v1/public/livechat/<key>                           { "name", "welcome", "offline", "online" }
+GET  /api/v1/public/livechat/<key>/widget                    the chat window
+POST /api/v1/public/livechat/<key>/sessions                  { "message", "name"?, "email"?, "page"? }
+                                                             → 201 { "secret", "online", "session" }
+GET  /api/v1/public/livechat/<key>/sessions/current?after=7  x-chat-secret: …  → state, operator, new messages
+POST /api/v1/public/livechat/<key>/sessions/current/messages { "body" }
+POST /api/v1/public/livechat/<key>/sessions/current/close    { "rating"? }
+
+GET  /api/v1/livechat/inbox                 operators: also says "I am here"
+PUT  /api/v1/livechat/presence              { "available": true }
+GET  /api/v1/livechat/sessions/<id>?after=  POST …/take · …/messages { "body" } · …/close
+```
+
+A site that draws its own chat uses the same public API. Other apps hear `livechat.session.closed` and
+`livechat.session.missed`.
+
+**Not yet**: conversations routed into Helpdesk tickets and Pipeline deals, the assistant answering from published
+pages, typing indicators, files in a conversation, a chat block for Sites pages. The window and the inbox ask the
+server every few seconds rather than holding a socket open.
+
 ## Demo data (RFC 0008 §5.8)
 
 `npx shutro-erp init --demo` (or a yes to the question after the apps) loads every installed app's demo data: a sample

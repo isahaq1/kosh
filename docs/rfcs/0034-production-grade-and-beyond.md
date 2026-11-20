@@ -808,3 +808,35 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   **Left out**: spending points, promotions and gift cards at the till — an offline sale cannot ask what a code is
   worth, and a gift card is a tender the session's entry must book; that is a design of its own. A sale's date
   for the earning rules is its UTC day.
+
+- **Step 13 part 1 — Live chat, the app (2026-11-20).** `@kosh/livechat`, an app of its own on Contacts and
+  Messaging. Design, as built:
+  - *Models*: `livechat.channel` (operators, how conversations are given out, the limit, the texts, the times, the
+    sites that may frame the window), `livechat.presence` (one row per operator: takes conversations, inbox last
+    open), `livechat.session` (the document: waiting → active → closed, or waiting → missed; the server's fields
+    are written by the server only) and `livechat.message` (visitor, operator or a note of the server; never
+    changed).
+  - *A visitor has no account.* `POST …/sessions` answers with a secret of 24 random bytes, once; the session
+    keeps its SHA-256, readable by nobody. Every later call is by the channel's key and that secret, and a miss
+    is the same 404 whatever was wrong. Public calls run as the system; a visitor's body is read field by field —
+    nothing they send is a field of the record.
+  - *The engine* (`engine.ts`, pure): who is there (said so, inbox open within 90 s), who gets the next
+    conversation (in turn, least busy, by hand; the limit), what text is kept (control characters out, cut at
+    2,000), what time does (missed, closed).
+  - *Operators* are checked twice: a role of Live chat, and their own read right on the conversation (the record
+    rule: a channel they are on); the work is then done as the system. Only the operator a conversation was given
+    to answers and ends it.
+  - *Polling, not sockets*: the window asks every 3 s, the inbox every 4 s — which is also the operator's "I am
+    here". The realtime gateway serves signed-in users; a visitor is not one, and a chat's volume does not need it
+    yet. 400 messages a conversation at most.
+  - *The window*: one self-contained page, a nonce'd script, `frame-ancestors 'none'` unless the channel names
+    origins (only `http(s)://host[:port]` are kept, so the setting cannot inject a directive); a honeypot field —
+    what fills it is told all went well and nothing is kept; starting a conversation is rate limited per address.
+  Tests: the engine (7), the API on real PostgreSQL (6: the window and its headers, a whole conversation with the
+  rating, the secret — none, wrong, right on another channel —, forged fields, the honeypot, the limit and taking
+  by hand, in turn, nobody there and the email, time, presence going stale, operators of another channel, people
+  without a role, writes through the models' API refused), E2E (an operator and a visitor in two browser contexts,
+  the window in Bangla, the overview).
+  **Left for the next parts**: routing into Helpdesk and Pipeline by rules with the conversation on the ticket or
+  the deal (part 2), the assistant answering from published pages and handing over (part 3). Also not built:
+  typing indicators, files, a chat block for Sites pages, an operator's sound or desktop notification.
