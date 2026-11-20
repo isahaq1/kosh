@@ -380,6 +380,7 @@ export function FormView({
   crumbs,
   pager,
   proposed,
+  prefilled,
 }: FormProps): ReactElement {
   const { api, registry, uid, companyId, offline } = useKosh();
   const { t } = useTranslation();
@@ -1169,7 +1170,8 @@ export function FormView({
         onSubmit={(e) => {
           e.preventDefault();
           // After the pending onchange, on the render that holds its answer.
-          if (dirty && !locked) void onchangePending.current.then(() => setSaveAsked(true));
+          if ((dirty || (isNew && prefilled === true)) && !locked)
+            void onchangePending.current.then(() => setSaveAsked(true));
         }}
       >
         <div className="sticky top-12 z-20 -mx-4 flex flex-wrap items-center justify-between gap-2 border-b bg-background/95 px-4 py-2 backdrop-blur">
@@ -1310,18 +1312,21 @@ export function FormView({
                 </Button>
               </div>
             )}
-            {dirty && !locked ? (
+            {/* A new record that arrives filled is saved as it is: nothing has to be touched first. */}
+            {(dirty || (isNew && prefilled === true)) && !locked ? (
               <>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    setChanges({});
-                    setLines(new Map());
-                    setProblem(null);
-                  }}
-                >
-                  {t('views.discard')}
-                </Button>
+                {dirty ? (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setChanges({});
+                      setLines(new Map());
+                      setProblem(null);
+                    }}
+                  >
+                    {t('views.discard')}
+                  </Button>
+                ) : null}
                 <Button
                   type="submit"
                   variant="primary"

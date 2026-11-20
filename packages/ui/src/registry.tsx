@@ -60,6 +60,8 @@ export interface FormProps {
   readonly crumbs?: readonly { readonly label: string; readonly onClick?: () => void }[];
   /** Fields whose values are proposals (from a document): marked until the record is saved. */
   readonly proposed?: readonly string[];
+  /** A new record opened already filled (a button of another record): it can be saved as it is. */
+  readonly prefilled?: boolean;
   /** Its position in the list it was opened from, and the way to its neighbours. */
   readonly pager?: {
     readonly position: number;

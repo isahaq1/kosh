@@ -99,7 +99,7 @@ import {
   offlinePersistOptions,
 } from './offline/persist.js';
 import { OfflineQueue } from './offline/queue.js';
-import { setPrefill, takePrefill } from './prefill.js';
+import { type Prefill, setPrefill, takePrefill } from './prefill.js';
 import { onAppUpdate, registerServiceWorker } from './pwa/register.js';
 import { createRealtimeClient, type RealtimeClient } from './realtime.js';
 import type { Registry } from './registry.js';
@@ -1216,8 +1216,18 @@ function RecordPage(): ReactElement {
   const { api, uid, apps } = useRecordContext();
   const model = action.data?.model;
   const recordId = id === 'new' ? 'new' : Number(id);
-  // Values proposed for this new record (Fill from a document), taken once.
-  const [prefill] = useState(() => (recordId === 'new' ? takePrefill(actionId) : undefined));
+  // Values proposed for this new record (Fill from a document, a button of another record), taken once per
+  // record page: going from one record to another keeps this component, so a state set at mount would miss them.
+  const taken = useRef<{ readonly key: string; readonly prefill: Prefill | undefined } | null>(
+    null,
+  );
+  const pageKey = `${actionId}/${id}`;
+  if (taken.current?.key !== pageKey)
+    taken.current = {
+      key: pageKey,
+      prefill: recordId === 'new' ? takePrefill(actionId) : undefined,
+    };
+  const prefill = taken.current.prefill;
   const name = useQuery({
     queryKey: ['names', model, recordId],
     queryFn: () => api.names(model as string, { ids: [recordId as number] }),
@@ -1251,7 +1261,7 @@ function RecordPage(): ReactElement {
       {...(action.data?.defaults === undefined && prefill === undefined
         ? {}
         : { defaults: { ...(action.data?.defaults ?? {}), ...(prefill?.values ?? {}) } })}
-      {...(prefill === undefined ? {} : { proposed: prefill.proposed })}
+      {...(prefill === undefined ? {} : { proposed: prefill.proposed, prefilled: true })}
       crumbs={[
         // The app, then the list; one crumb when they share a name (Contacts › Contacts says nothing more).
         ...(appLabel === undefined || appLabel === listLabel
