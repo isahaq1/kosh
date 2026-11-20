@@ -59,3 +59,53 @@ test('a program written on screen and previewed on past orders before it runs', 
   );
   expect(((await cards.json()) as { items: unknown[] }).items).toEqual([]);
 });
+
+test('a gift card pays part of a quotation from the order form', async ({ page }) => {
+  await signIn(page, 'dina');
+  const csrf = await page.evaluate(() => sessionStorage.getItem('kosh.csrf'));
+  const headers = { 'x-csrf-token': csrf ?? '' };
+  const make = async (model: string, data: Record<string, unknown>): Promise<number> => {
+    const made = await page.request.post(`/api/v1/models/${model}`, { headers, data });
+    expect(made.status(), `${model}: ${await made.text()}`).toBe(201);
+    return ((await made.json()) as { id: number }).id;
+  };
+  const stamp = Date.now();
+  const gift = await make('loyalty.voucher', {
+    entries: { create: [{ amount: '300', note: 'Sold at the counter' }] },
+  });
+  const code = (
+    (await (
+      await page.request.get(`/api/v1/models/loyalty.voucher/${gift}?fields=code`)
+    ).json()) as {
+      code: string;
+    }
+  ).code;
+  const customer = await make('res.partner', { name: `Gift Buyer ${stamp}` });
+  const product = await make('product.product', { name: `Gift Goods ${stamp}`, listPrice: '1000' });
+  const [currency] = (
+    (await (await page.request.get('/api/v1/models/res.currency?fields=name&limit=1')).json()) as {
+      items: { id: number }[];
+    }
+  ).items;
+  const order = await make('sale.order', {
+    partner: customer,
+    currency: currency?.id,
+    lines: { create: [{ product, name: 'Goods', quantity: '1', priceUnit: '1000' }] },
+  });
+
+  await page.goto(`/sales/a/sales.action_orders/${order}`);
+  await page.getByLabel('Gift card or wallet').fill(code);
+  await page.getByRole('button', { name: 'Apply points and credit' }).click();
+  // The line is on the order, and the card is empty.
+  await expect(page.getByRole('row', { name: new RegExp(`Gift card ${code}`) })).toContainText(
+    '-300',
+  );
+  await expect
+    .poll(async () => {
+      const read = await page.request.get(`/api/v1/models/loyalty.voucher/${gift}?fields=balance`);
+      return Number(((await read.json()) as { balance: string }).balance);
+    })
+    .toBe(0);
+  const read = await page.request.get(`/api/v1/models/sale.order/${order}?fields=voucherUsed`);
+  expect(Number(((await read.json()) as { voucherUsed: string }).voucherUsed)).toBe(300);
+});

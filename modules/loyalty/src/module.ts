@@ -8,6 +8,7 @@
  * Before a program runs, **Preview** says what it would have given over the orders of a past period, and what
  * that is worth: the cost is known before the first point is.
  */
+import { randomBytes } from 'node:crypto';
 import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
 import { productShutro } from '@kosh/product';
@@ -16,6 +17,7 @@ import { emitting } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
 import {
   check,
+  compute,
   defineModel,
   defineModule,
   type Env,
@@ -30,8 +32,10 @@ import {
   monthsBefore,
   type Order,
   preview,
+  redeemLimit,
   type Tier,
   tierOf,
+  voucherUse,
 } from './engine.js';
 
 /**
@@ -90,6 +94,23 @@ export const LoyaltyProgram = defineModel('loyalty.program', {
     expireMonths: f.integer({
       label: 'Points expire after (months)',
       help: 'Points not used this long after they were earned are lost, the oldest first; empty: never.',
+    }),
+    redeemable: f.boolean({
+      default: true,
+      label: 'Points can be spent',
+      help: 'On an order, points come off what the customer pays, at the value of a point.',
+    }),
+    redeemMaxPercent: f.integer({
+      required: true,
+      default: 100,
+      label: 'Points pay at most (%)',
+      help: 'The share of an order — taxes included — that points may pay.',
+    }),
+    redeemMinPoints: f.integer({
+      required: true,
+      default: 0,
+      label: 'Spent from (points)',
+      help: 'Fewer points than this are not spent on an order.',
     }),
     rules: f.one2many('loyalty.rule', 'program'),
     tiers: f.one2many('loyalty.tier', 'program'),
@@ -155,7 +176,8 @@ export const LoyaltyProgram = defineModel('loyalty.program', {
   },
   sqlConstraints: {
     sane: {
-      check: orm.sql`point_value >= 0 AND tier_months > 0 AND (expire_months IS NULL OR expire_months > 0)`,
+      check: orm.sql`point_value >= 0 AND tier_months > 0 AND (expire_months IS NULL OR expire_months > 0)
+        AND redeem_max_percent BETWEEN 0 AND 100 AND redeem_min_points >= 0`,
       message: 'A point is worth zero or more; tiers and expiry count at least one month.',
     },
   },
@@ -305,6 +327,7 @@ const ENTRY_KINDS = {
   expire: 'Expired',
   adjust: 'Adjustment',
   redeem: 'Spent',
+  refund: 'Given back',
 } as const;
 
 /** The ledger of a card. Never changed: a mistake is another line. */
@@ -348,13 +371,191 @@ export const LoyaltyEntry = defineModel('loyalty.entry', {
   },
 });
 
-/** The points an order earned, on the order. */
+const VOUCHER_KINDS = { gift_card: 'Gift card', wallet: 'Wallet' } as const;
+const voucherCode = (): string => {
+  const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = randomBytes(12);
+  let code = 'GC';
+  for (let n = 0; n < 12; n += 1)
+    code += `${n % 4 === 0 ? '-' : ''}${letters[(bytes[n] as number) % 32]}`;
+  return code;
+};
+
+/**
+ * Money a customer holds with the company (RFC 0034 §2.6): a **gift card** — for whoever has its code — or a
+ * **wallet** of one customer. What it holds is its ledger; an order takes from it, and gives back when cancelled.
+ */
+export const LoyaltyVoucher = defineModel('loyalty.voucher', {
+  label: 'Wallet or gift card',
+  recName: 'code',
+  order: ['id desc'],
+  archivable: true,
+  companyScoped: { required: true },
+  tracking: ['dateExpiry', 'partner'],
+  access: {
+    'loyalty.user': ['read', 'export'],
+    'loyalty.manager': ['read', 'write', 'create', 'export', 'import'],
+  },
+  fields: {
+    code: f.char({
+      size: 40,
+      required: true,
+      default: voucherCode,
+      label: 'Code',
+      groups: { write: [...SYSTEM] },
+      help: 'What is typed on an order to pay with it.',
+    }),
+    kind: f.selection(VOUCHER_KINDS, {
+      required: true,
+      default: 'gift_card',
+      help: 'A gift card pays for whoever has its code; a wallet only for its customer.',
+    }),
+    partner: f.many2one('res.partner', {
+      ondelete: 'restrict',
+      checkCompany: true,
+      label: 'Customer',
+      help: 'A wallet’s owner; on a gift card, who it was given to, if known.',
+    }),
+    dateExpiry: f.date({
+      label: 'Valid until',
+      help: 'After this day it pays nothing; empty: no end.',
+    }),
+    note: f.char({ label: 'Note' }),
+    entries: f.one2many('loyalty.voucher.entry', 'voucher'),
+    balance: f.decimal({
+      scale: 2,
+      store: true,
+      label: 'Balance',
+      help: 'What was loaded and given back, less what orders took.',
+      ...compute('loyalty.voucher', 'balance', ['entries.amount'], (vouchers) => {
+        for (const v of vouchers)
+          v.balance = [...v.entries].reduce((sum, e) => sum.plus(e.amount), orm.toDecimal(0));
+      }),
+    }),
+  },
+  sqlConstraints: {
+    oneCode: { unique: ['company', 'code'], message: 'Another wallet or gift card has this code.' },
+  },
+  constraints: {
+    walletOwner: {
+      ...check('loyalty.voucher', ['kind', 'partner'], (vouchers) =>
+        vouchers.filter((v) => v.kind === 'wallet' && v.partner === null),
+      ),
+      message: 'A wallet belongs to a customer.',
+    },
+  },
+});
+
+const VOUCHER_ENTRY_KINDS = { load: 'Loaded', spend: 'Spent', refund: 'Given back' } as const;
+
+/** The ledger of a wallet or a gift card. Never changed: a mistake is another line. */
+export const LoyaltyVoucherEntry = defineModel('loyalty.voucher.entry', {
+  label: 'Wallet or gift card movement',
+  order: ['date desc', 'id desc'],
+  companyScoped: { required: true },
+  access: {
+    'loyalty.user': ['read', 'export'],
+    'loyalty.manager': ['read', 'create', 'export', 'import'],
+  },
+  fields: {
+    voucher: f.many2one('loyalty.voucher', { required: true, ondelete: 'cascade' }),
+    date: f.date({ required: true, default: (env: Env) => env.today() }),
+    kind: f.selection(VOUCHER_ENTRY_KINDS, {
+      required: true,
+      default: 'load',
+      groups: { write: [...SYSTEM] },
+      help: 'A line added by hand is a load — or, below zero, money taken off; orders write the others.',
+    }),
+    amount: f.decimal({
+      scale: 2,
+      required: true,
+      label: 'Amount',
+      help: 'Above zero: loaded or given back; below: spent or taken off.',
+    }),
+    resModel: f.char({ size: 80, label: 'About (model)', groups: { write: [...SYSTEM] } }),
+    resId: f.integer({ label: 'About (record)', groups: { write: [...SYSTEM] } }),
+    note: f.char({ label: 'Why' }),
+  },
+  sqlConstraints: {
+    notZero: { check: orm.sql`amount <> 0`, message: 'A movement is for more than nothing.' },
+  },
+  constraints: {
+    notBelowZero: {
+      ...check('loyalty.voucher.entry', ['amount', 'voucher'], (entries) =>
+        overspent(entries.env as unknown as Env, entries.ids as readonly number[]),
+      ),
+      message: 'It does not hold that much.',
+    },
+  },
+});
+
+/** The points an order earned and spent, and the wallet or gift card it took from. */
 export const OrderLoyalty = extendModel('sale.order', {
   fields: {
     loyaltyPoints: f.integer({
       label: 'Points earned',
       groups: { write: [...SYSTEM] },
       help: 'What the customer’s loyalty card earned with this order, when it was confirmed.',
+    }),
+    loyaltyRedeem: f.integer({
+      label: 'Points to spend',
+      help: 'Type the points, then press Apply points and credit: they come off the order and leave the card.',
+    }),
+    voucherCode: f.char({
+      size: 40,
+      label: 'Gift card or wallet',
+      help: 'Its code: it pays what the order still comes to, or all it holds.',
+    }),
+    loyaltyRedeemed: f.integer({ label: 'Points spent', groups: { write: [...SYSTEM] } }),
+    voucherUsed: f.decimal({
+      scale: 2,
+      label: 'Paid by gift card or wallet',
+      groups: { write: [...SYSTEM] },
+    }),
+  },
+  fieldOverrides: {
+    state: {
+      transitionsAdd: {
+        // Takes the points and the credit off the quotation, or changes what was taken: held from now on.
+        credit: {
+          from: ['draft'],
+          to: 'draft',
+          after: records('sale.order', async (orders) => {
+            const env = orders.env as unknown as Env;
+            for (const id of orders.ids) await applyCredits(env, id as number);
+          }),
+        },
+      },
+    },
+  },
+});
+
+/** A line that takes points or a gift card off an order. */
+export const LineLoyalty = extendModel('sale.order.line', {
+  fields: {
+    loyaltyKind: f.selection(
+      { points: 'Loyalty points', voucher: 'Gift card or wallet' },
+      {
+        label: 'Paid with',
+        groups: { write: [...SYSTEM] },
+        help: 'Set on the lines Loyalty adds: what they took is held until the order is cancelled.',
+      },
+    ),
+  },
+});
+
+/** The service products the credit lines of a company are charged as, made the first time. */
+export const CompanyLoyalty = extendModel('res.company', {
+  fields: {
+    loyaltyPointsProduct: f.many2one('product.product', {
+      ondelete: 'set null',
+      label: 'Product of points spent',
+      groups: { write: [...SYSTEM] },
+    }),
+    loyaltyVoucherProduct: f.many2one('product.product', {
+      ondelete: 'set null',
+      label: 'Product of gift cards and wallets',
+      groups: { write: [...SYSTEM] },
     }),
   },
 });
@@ -376,6 +577,27 @@ async function overdrawn(env: Env, ids: readonly number[]): Promise<number[]> {
       if (Number(row['points']) > 0 || row['kind'] === 'reverse') continue;
       const all = await su.model('loyalty.entry').search({ where: { card: row['card'] as never } });
       if ([...all].reduce((sum, e) => sum + e.points, 0) < 0) out.push(Number(row['id']));
+    }
+    return out;
+  });
+}
+
+/** The movements among `ids` that leave their wallet or gift card below zero. */
+async function overspent(env: Env, ids: readonly number[]): Promise<number[]> {
+  return env.asSuperuser({ reason: 'a wallet’s balance' }, async (su) => {
+    const out: number[] = [];
+    const rows = (
+      await su
+        .model('loyalty.voucher.entry')
+        .browse([...ids] as never)
+        .load(['voucher', 'amount'])
+    ).read(['id', 'voucher', 'amount']);
+    for (const row of rows) {
+      if (cents(row['amount']) > 0) continue;
+      const all = await su
+        .model('loyalty.voucher.entry')
+        .search({ where: { voucher: row['voucher'] as never } });
+      if ([...all].reduce((sum, e) => sum + cents(e.amount), 0) < 0) out.push(Number(row['id']));
     }
     return out;
   });
@@ -406,6 +628,9 @@ interface Loaded {
   readonly autoEnrol: boolean;
   readonly tierMonths: number;
   readonly expireMonths: number | null;
+  readonly redeemable: boolean;
+  readonly redeemMaxPercent: number;
+  readonly redeemMinPoints: number;
   readonly rules: readonly EarnRule[];
   readonly tiers: readonly Tier[];
 }
@@ -427,6 +652,9 @@ async function loadProgram(su: Env, id: number): Promise<Loaded | null> {
     autoEnrol: p.autoEnrol === true,
     tierMonths: p.tierMonths,
     expireMonths: p.expireMonths,
+    redeemable: p.redeemable === true,
+    redeemMaxPercent: p.redeemMaxPercent,
+    redeemMinPoints: p.redeemMinPoints,
     rules: [...p.rules]
       .sort((a, b) => a.sequence - b.sequence || (a.id as number) - (b.id as number))
       .map((r) => ({
@@ -658,6 +886,287 @@ export async function reverseOrder(env: Env, order: number): Promise<number> {
   });
 }
 
+// ---- spending: points and credit on an order
+
+const refuseCredit = (field: string, message: string, hint: string): never => {
+  throw new orm.ValidationError('sale.order', [field], message, hint);
+};
+
+/** The product a credit line is charged as: the company's, made the first time. */
+async function creditProduct(
+  su: Env,
+  company: number,
+  kind: 'points' | 'voucher',
+): Promise<number> {
+  const key = kind === 'points' ? 'loyaltyPointsProduct' : 'loyaltyVoucherProduct';
+  const [c] = await su
+    .model('res.company')
+    .browse([company as never])
+    .load({ loyaltyPointsProduct: true, loyaltyVoucherProduct: true });
+  const have = c?.[key] ?? null;
+  if (have !== null) return have.id as number;
+  const made = (
+    await su.model('product.product').create([
+      {
+        name: kind === 'points' ? 'Loyalty points' : 'Gift card or wallet',
+        kind: 'service',
+        saleOk: false,
+        purchaseOk: false,
+      } as never,
+    ])
+  ).ids[0] as number;
+  await su
+    .model('res.company')
+    .browse([company as never])
+    .write({ [key]: made } as never);
+  return made;
+}
+
+/**
+ * Gives back what an order holds (RFC 0034 §2.6): the points it took from a card and the money it took from
+ * wallets and gift cards, as far as nothing gave them back yet — so a second call gives nothing. With
+ * `keepLines`, the order's lines stay as they are (a cancelled order is not rewritten).
+ */
+export async function releaseCredits(
+  su: Env,
+  order: number,
+  options: { readonly keepLines?: boolean } = {},
+): Promise<void> {
+  if (options.keepLines !== true) {
+    const lines = await su.model('sale.order.line').search({
+      where: { order: order as never, loyaltyKind: { isNull: false } } as never,
+    });
+    if (lines.length > 0) await lines.unlink();
+  }
+  const today = iso(su.today());
+  const about = { resModel: 'sale.order', resId: order };
+  // Points, by card.
+  const held = new Map<number, number>();
+  for (const e of await su
+    .model('loyalty.entry')
+    .search({ where: { ...about, kind: { in: ['redeem', 'refund'] } } as never })
+    .then((rows) => rows.load(['card'])))
+    held.set(e.card.id as number, (held.get(e.card.id as number) ?? 0) + e.points);
+  for (const [card, net] of held) {
+    if (net >= 0) continue;
+    const [c] = await su
+      .model('loyalty.card')
+      .browse([card as never])
+      .load({ program: true, company: true });
+    if (c === undefined) continue;
+    await su.model('loyalty.entry').create([
+      {
+        card,
+        company: c.company.id,
+        date: today,
+        kind: 'refund',
+        points: -net,
+        ...about,
+        note: 'Taken off the order.',
+      } as never,
+    ]);
+    await su.flush();
+    const program = await loadProgram(su, c.program.id as number);
+    if (program !== null) await refreshCard(su, card, program);
+  }
+  // Money, by wallet or gift card.
+  const taken = new Map<number, number>();
+  const company = new Map<number, number>();
+  for (const e of await su
+    .model('loyalty.voucher.entry')
+    .search({ where: { ...about, kind: { in: ['spend', 'refund'] } } as never })
+    .then((rows) => rows.load(['voucher', 'company']))) {
+    taken.set(e.voucher.id as number, (taken.get(e.voucher.id as number) ?? 0) + cents(e.amount));
+    company.set(e.voucher.id as number, e.company.id as number);
+  }
+  for (const [voucher, net] of taken) {
+    if (net >= 0) continue;
+    await su.model('loyalty.voucher.entry').create([
+      {
+        voucher,
+        company: company.get(voucher),
+        date: today,
+        kind: 'refund',
+        amount: money(-net),
+        ...about,
+        note: 'Taken off the order.',
+      } as never,
+    ]);
+  }
+  await su.flush();
+}
+
+/**
+ * Takes points and credit off a quotation (RFC 0034 §2.6): whatever it held before is given back first, then the
+ * points asked for — no more than the card holds or the program lets points pay — and the gift card or wallet,
+ * for what the order still comes to. Each is a line below zero on the order and a line in its ledger: held from
+ * now on, and given back if the order is cancelled. Refuses, in words, what cannot be taken.
+ */
+export async function applyCredits(env: Env, order: number): Promise<void> {
+  await env.asSuperuser({ reason: 'points and credit on an order' }, async (su) => {
+    const [o] = await su
+      .model('sale.order')
+      .browse([order as never])
+      .load({ partner: true, company: true });
+    if (o === undefined) return;
+    if (o.state !== 'draft')
+      refuseCredit(
+        'state',
+        'Points and credit are applied to a quotation.',
+        'Not once it is sent or confirmed.',
+      );
+    await releaseCredits(su, order);
+    const companyId = o.company.id as number;
+    const [fresh] = (
+      await su
+        .model('sale.order')
+        .browse([order as never])
+        .load(['amountTotal'])
+    ).read(['amountTotal']);
+    let due = cents(fresh?.['amountTotal']);
+    const today = iso(su.today());
+    let spent = 0;
+    const asked = o.loyaltyRedeem ?? 0;
+    if (asked > 0) {
+      const program = await runningProgram(su, companyId);
+      if (program === null || !program.redeemable)
+        refuseCredit(
+          'loyaltyRedeem',
+          'Points cannot be spent now.',
+          'No running program lets points be spent.',
+        );
+      const running = program as Loaded;
+      const [card] = await su.model('loyalty.card').search({
+        where: { program: running.id as never, partner: o.partner.id } as never,
+        limit: 1,
+      });
+      if (card === undefined)
+        refuseCredit(
+          'loyaltyRedeem',
+          'This customer has no loyalty card.',
+          'Give them one in Loyalty › Cards.',
+        );
+      const cardId = (card as { id: unknown }).id as number;
+      const balance = [
+        ...(await su.model('loyalty.entry').search({ where: { card: cardId as never } })),
+      ].reduce((sum, e) => sum + e.points, 0);
+      const limit = redeemLimit({
+        balance,
+        pointValue: running.pointValue,
+        orderTotal: due,
+        maxPercent: running.redeemMaxPercent,
+      });
+      if (asked > limit.points)
+        refuseCredit(
+          'loyaltyRedeem',
+          `Only ${limit.points} point(s) can be spent on this order: the card holds ${balance}, and points pay at most ${running.redeemMaxPercent} % of it.`,
+          'Type fewer points.',
+        );
+      if (asked < running.redeemMinPoints)
+        refuseCredit(
+          'loyaltyRedeem',
+          `Points are spent from ${running.redeemMinPoints} at a time.`,
+          'Type more points, or none.',
+        );
+      const amount = asked * running.pointValue;
+      await su.model('sale.order.line').create([
+        {
+          order,
+          product: await creditProduct(su, companyId, 'points'),
+          name: `${asked} loyalty points`,
+          quantity: '1',
+          priceUnit: money(-amount),
+          loyaltyKind: 'points',
+        } as never,
+      ]);
+      await su.model('loyalty.entry').create([
+        {
+          card: cardId,
+          company: companyId,
+          date: today,
+          kind: 'redeem',
+          points: -asked,
+          resModel: 'sale.order',
+          resId: order,
+          note: o.name,
+        } as never,
+      ]);
+      await su.flush();
+      await refreshCard(su, cardId, running);
+      due -= amount;
+      spent = asked;
+    }
+    let paid = 0;
+    const code = (o.voucherCode ?? '').trim().toUpperCase();
+    if (code !== '') {
+      const [v] = await su
+        .model('loyalty.voucher')
+        .search({ where: { code, company: companyId as never } as never, limit: 1 })
+        .then((rows) => rows.load({ partner: true }));
+      if (v === undefined)
+        refuseCredit('voucherCode', 'No gift card or wallet has this code.', 'Check the code.');
+      const voucher = v as NonNullable<typeof v>;
+      if (voucher.dateExpiry !== null && iso(voucher.dateExpiry) < today)
+        refuseCredit(
+          'voucherCode',
+          `It was valid until ${iso(voucher.dateExpiry)}.`,
+          'Use another.',
+        );
+      if (voucher.kind === 'wallet' && voucher.partner?.id !== o.partner.id)
+        refuseCredit(
+          'voucherCode',
+          'This wallet belongs to another customer.',
+          'Use the customer’s own.',
+        );
+      const balance = cents(voucher.balance);
+      if (balance <= 0)
+        refuseCredit('voucherCode', 'It holds nothing.', 'Load it, or use another.');
+      paid = voucherUse(balance, due);
+      if (paid > 0) {
+        await su.model('sale.order.line').create([
+          {
+            order,
+            product: await creditProduct(su, companyId, 'voucher'),
+            name: `${voucher.kind === 'wallet' ? 'Wallet' : 'Gift card'} ${voucher.code}`,
+            quantity: '1',
+            priceUnit: money(-paid),
+            loyaltyKind: 'voucher',
+          } as never,
+        ]);
+        await su.model('loyalty.voucher.entry').create([
+          {
+            voucher: voucher.id,
+            company: companyId,
+            date: today,
+            kind: 'spend',
+            amount: money(-paid),
+            resModel: 'sale.order',
+            resId: order,
+            note: o.name,
+          } as never,
+        ]);
+      }
+    }
+    await su
+      .model('sale.order')
+      .browse([order as never])
+      .write({ loyaltyRedeemed: spent, voucherUsed: money(paid) } as never);
+    await su.flush();
+  });
+}
+
+/** A cancelled order gives back the points and the credit it held, once; its lines stay as they were. */
+export async function releaseOrder(env: Env, order: number): Promise<void> {
+  await env.asSuperuser({ reason: 'points and credit given back' }, async (su) => {
+    await releaseCredits(su.withFlags({ checkCompany: false }) as Env, order, { keepLines: true });
+    await su
+      .model('sale.order')
+      .browse([order as never])
+      .write({ loyaltyRedeemed: 0, voucherUsed: '0' } as never);
+    await su.flush();
+  });
+}
+
 /**
  * The daily round (RFC 0034 §2.6), for the company of `env`: on every card of a program whose points expire, what
  * grew too old is written off — once: the line itself makes the next answer zero —, and every card's balance,
@@ -720,6 +1229,14 @@ export const loyaltyShutro = defineModule({
     }),
   ],
   sequences: [orm.defineSequence({ code: 'loyalty.card', prefix: 'LC', padding: 7 })],
-  models: [LoyaltyProgram, LoyaltyRule, LoyaltyTier, LoyaltyCard, LoyaltyEntry],
-  extensions: [OrderLoyalty],
+  models: [
+    LoyaltyProgram,
+    LoyaltyRule,
+    LoyaltyTier,
+    LoyaltyCard,
+    LoyaltyEntry,
+    LoyaltyVoucher,
+    LoyaltyVoucherEntry,
+  ],
+  extensions: [OrderLoyalty, LineLoyalty, CompanyLoyalty],
 });

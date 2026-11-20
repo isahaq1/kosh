@@ -279,3 +279,148 @@ test('an ended program gives nothing more; cards keep their points', async () =>
   await sell('rupali', '3000', '0');
   expect(await cardOf('rupali')).toEqual(before);
 });
+
+const V = '/api/v1/models/loyalty.voucher';
+/** A draft quotation of a customer for so much rice. */
+const quote = async (customer: string, rice: string, more: Record<string, unknown> = {}) =>
+  make('sale.order', 'rahim', {
+    partner: ids[customer],
+    currency: ids['currency'],
+    lines: { create: [{ product: ids['rice'], name: 'Rice', quantity: '1', priceUnit: rice }] },
+    ...more,
+  });
+const total = async (order: number) =>
+  Number(
+    ((await call('GET', `${O}/${order}?fields=amountTotal`, 'rahim')).json.amountTotal?.amount ??
+      (await call('GET', `${O}/${order}?fields=amountTotal`, 'rahim')).json.amountTotal) as string,
+  );
+const credit = (order: number) => call('POST', `${O}/${order}/transitions/credit`, 'rahim');
+
+test('points are spent on a quotation: held at once, limited, and given back when it is cancelled', async () => {
+  // A new program: a point is worth 2.00, and points pay at most half an order.
+  const program = await make('loyalty.program', 'mona', {
+    name: 'Rewards with spending',
+    pointValue: '2',
+    redeemMaxPercent: 50,
+    redeemMinPoints: 10,
+    rules: { create: [{ name: 'A point for every 100', points: 1 }] },
+  });
+  expect((await call('POST', `${P}/${program}/transitions/launch`, 'mona')).status).toBe(200);
+  ids['spending'] = program;
+  const card = await make('loyalty.card', 'lina', { program, partner: ids['rupali'] });
+  await make('loyalty.entry', 'mona', { card, points: 300, note: 'Opening' });
+  const order = await quote('rupali', '1000', { loyaltyRedeem: 400 });
+  // More than the card holds, more than half the order (250 points), fewer than ten: refused, in words.
+  const tooMany = await credit(order);
+  expect(tooMany.status).toBe(422);
+  expect(JSON.stringify(tooMany.json)).toContain('Only 250 point(s)');
+  expect((await call('PATCH', `${O}/${order}`, 'rahim', { loyaltyRedeem: 5 })).status).toBe(200);
+  expect(JSON.stringify((await credit(order)).json)).toContain('from 10 at a time');
+  // A hundred points: 200.00 off, and off the card at once.
+  expect((await call('PATCH', `${O}/${order}`, 'rahim', { loyaltyRedeem: 100 })).status).toBe(200);
+  const applied = await credit(order);
+  expect(applied.status, JSON.stringify(applied.json)).toBe(200);
+  expect(await total(order)).toBe(800);
+  expect(
+    (await call('GET', `${O}/${order}?fields=loyaltyRedeemed`, 'rahim')).json.loyaltyRedeemed,
+  ).toBe(100);
+  expect(await ledger(card)).toEqual(['adjust 300', 'redeem -100']);
+  // Changed to 150: what was held is given back first — never both.
+  expect((await call('PATCH', `${O}/${order}`, 'rahim', { loyaltyRedeem: 150 })).status).toBe(200);
+  expect((await credit(order)).status).toBe(200);
+  expect(await total(order)).toBe(700);
+  expect(await ledger(card)).toEqual(['adjust 300', 'redeem -100', 'refund 100', 'redeem -150']);
+  // Another quotation cannot spend what this one holds.
+  const other = await quote('rupali', '1000', { loyaltyRedeem: 200 });
+  expect(JSON.stringify((await credit(other)).json)).toContain('the card holds 150');
+  // What is spent is the server's to say.
+  expect((await call('PATCH', `${O}/${order}`, 'rahim', { loyaltyRedeemed: 0 })).status).toBe(403);
+  // Confirmed: it earns on what is left to pay — 700 — and keeps what it spent.
+  expect((await call('POST', `${O}/${order}/transitions/confirm`, 'rahim')).status).toBe(200);
+  await drain();
+  expect((await ledger(card)).slice(-1)).toEqual(['earn 7']);
+  // Cancelled: the points spent come back, and the points earned go, once each.
+  expect((await call('POST', `${O}/${order}/transitions/cancel`, 'rahim')).status).toBe(200);
+  await drain();
+  await drain();
+  expect((await ledger(card)).slice(-2).sort()).toEqual(['refund 150', 'reverse -7']);
+  expect(
+    (
+      await erp.host.server.driver.query<{ n: string }>({
+        text: 'SELECT coalesce(sum(points), 0)::text AS n FROM loyalty_entry WHERE card_id = $1',
+        params: [card],
+      })
+    )[0]?.n,
+  ).toBe('300');
+});
+
+test('a gift card and a wallet pay what an order comes to, or all they hold', async () => {
+  // A gift card of 500.00 and a wallet of Shapla's with 2,000.00.
+  const gift = await make('loyalty.voucher', 'mona', {
+    entries: { create: [{ amount: '500', note: 'Sold at the counter' }] },
+  });
+  const wallet = await make('loyalty.voucher', 'mona', {
+    kind: 'wallet',
+    partner: ids['shapla'],
+    entries: { create: [{ amount: '2000', note: 'A refund kept as credit' }] },
+  });
+  const read = async (id: number) =>
+    (await call('GET', `${V}/${id}?fields=code,balance`, 'lina')).json as Json;
+  const g = await read(gift);
+  expect(g.code).toMatch(/^GC-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+  expect(Number(g.balance)).toBe(500);
+  // A wallet needs its customer; the code is the server's; a user loads nothing.
+  expect((await call('POST', V, 'mona', { kind: 'wallet' })).status).toBeGreaterThanOrEqual(400);
+  expect((await call('PATCH', `${V}/${gift}`, 'mona', { code: 'GC-MINE' })).status).toBe(403);
+  expect(
+    (
+      await call('POST', '/api/v1/models/loyalty.voucher.entry', 'lina', {
+        voucher: gift,
+        amount: '50',
+      })
+    ).status,
+  ).toBe(403);
+  expect(
+    (
+      await call('POST', '/api/v1/models/loyalty.voucher.entry', 'mona', {
+        voucher: gift,
+        amount: '-9000',
+      })
+    ).status,
+  ).toBeGreaterThanOrEqual(400);
+
+  // An order of 300: the gift card pays it all and keeps 200.
+  const small = await quote('rupali', '300', { voucherCode: g.code.toLowerCase() });
+  expect((await credit(small)).status).toBe(200);
+  expect(await total(small)).toBe(0);
+  expect(Number((await read(gift)).balance)).toBe(200);
+  // An order of 1,000: the 200 left, and 800 still to pay.
+  const big = await quote('rupali', '1000', { voucherCode: g.code });
+  expect((await credit(big)).status).toBe(200);
+  expect(await total(big)).toBe(800);
+  expect(Number((await read(gift)).balance)).toBe(0);
+  // Empty now; a code that is nobody's; another customer's wallet.
+  const third = await quote('rupali', '100', { voucherCode: g.code });
+  expect(JSON.stringify((await credit(third)).json)).toContain('holds nothing');
+  expect((await call('PATCH', `${O}/${third}`, 'rahim', { voucherCode: 'GC-NOPE' })).status).toBe(
+    200,
+  );
+  expect(JSON.stringify((await credit(third)).json)).toContain('No gift card or wallet');
+  const w = await read(wallet);
+  expect((await call('PATCH', `${O}/${third}`, 'rahim', { voucherCode: w.code })).status).toBe(200);
+  expect(JSON.stringify((await credit(third)).json)).toContain('another customer');
+  // Its owner's order: paid from the wallet.
+  const own = await quote('shapla', '750', { voucherCode: w.code });
+  expect((await credit(own)).status).toBe(200);
+  expect(await total(own)).toBe(0);
+  expect(Number((await read(wallet)).balance)).toBe(1250);
+  // The first order cancelled: its 300 are back on the gift card, once.
+  expect((await call('POST', `${O}/${small}/transitions/cancel`, 'rahim')).status).toBe(200);
+  await drain();
+  await drain();
+  expect(Number((await read(gift)).balance)).toBe(300);
+  // An expired card pays nothing.
+  expect((await call('PATCH', `${V}/${gift}`, 'mona', { dateExpiry: day(-1) })).status).toBe(200);
+  const late = await quote('rupali', '100', { voucherCode: g.code });
+  expect(JSON.stringify((await credit(late)).json)).toContain('valid until');
+});

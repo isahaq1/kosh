@@ -26,7 +26,10 @@ import {
   LoyaltyProgram,
   LoyaltyRule,
   LoyaltyTier,
+  LoyaltyVoucher,
+  LoyaltyVoucherEntry,
   loyaltyShutro,
+  releaseOrder,
   reverseOrder,
 } from './module.js';
 
@@ -42,21 +45,31 @@ export {
   orderAmount,
   type Preview,
   preview,
+  type Redeemable,
+  redeemLimit,
   type Tier,
   tierOf,
+  voucherUse,
 } from './engine.js';
 export {
   ageCards,
+  applyCredits,
+  CompanyLoyalty,
   earnOrder,
+  LineLoyalty,
   LoyaltyCard,
   LoyaltyEntry,
   LoyaltyProgram,
   LoyaltyRule,
   LoyaltyTier,
+  LoyaltyVoucher,
+  LoyaltyVoucherEntry,
   loyaltyShutro,
   OrderLoyalty,
   previewProgram,
   refreshCard,
+  releaseCredits,
+  releaseOrder,
   reverseOrder,
 } from './module.js';
 
@@ -81,7 +94,9 @@ export function loyaltyWorkers(context: Pick<ModuleContext, 'shutro'>): Worker[]
       'sale.order.cancelled',
       async (event, env) => {
         const id = idOf(event.payload);
-        if (id !== null) await reverseOrder(env as unknown as Env, id);
+        if (id === null) return;
+        await reverseOrder(env as unknown as Env, id);
+        await releaseOrder(env as unknown as Env, id);
       },
       { pollMs: 5000 },
     ),
@@ -250,6 +265,19 @@ export function loyaltyModule(options: LoyaltyOptions = {}): ReturnType<typeof d
         ],
       },
       {
+        key: 'loyalty_voucher',
+        model: 'loyalty.voucher',
+        label: 'Wallets and gift cards',
+        columns: [
+          { header: 'Kind', field: 'kind' },
+          { header: 'Customer', field: 'partner' },
+          { header: 'Valid until', field: 'dateExpiry' },
+          { header: 'Note', field: 'note' },
+          { header: 'Movements › Amount', field: 'entries.amount' },
+          { header: 'Movements › Why', field: 'entries.note' },
+        ],
+      },
+      {
         key: 'loyalty_opening',
         model: 'loyalty.entry',
         label: 'Opening points (adjustments)',
@@ -334,6 +362,14 @@ export function loyaltyModule(options: LoyaltyOptions = {}): ReturnType<typeof d
     actions: {
       'loyalty.action_cards': action(LoyaltyCard, { label: 'Cards', views: ['list', 'form'] }),
       'loyalty.action_entries': action(LoyaltyEntry, { label: 'Points', views: ['list', 'form'] }),
+      'loyalty.action_vouchers': action(LoyaltyVoucher, {
+        label: 'Wallets and gift cards',
+        views: ['list', 'form'],
+      }),
+      'loyalty.action_voucher_entries': action(LoyaltyVoucherEntry, {
+        label: 'Wallet and gift card movements',
+        views: ['list', 'form'],
+      }),
       'loyalty.action_programs': action(LoyaltyProgram, {
         label: 'Programs',
         views: ['list', 'form'],
@@ -359,6 +395,13 @@ export function loyaltyModule(options: LoyaltyOptions = {}): ReturnType<typeof d
         label: 'Points',
         action: 'loyalty.action_entries',
         sequence: 2,
+      },
+      {
+        id: 'loyalty.vouchers',
+        parent: 'loyalty.root',
+        label: 'Wallets and gift cards',
+        action: 'loyalty.action_vouchers',
+        sequence: 2.5,
       },
       {
         id: 'loyalty.programs',
@@ -402,6 +445,11 @@ export function loyaltyModule(options: LoyaltyOptions = {}): ReturnType<typeof d
           k.group('main', ['name', 'pointValue', 'autoEnrol', 'tierMonths', 'expireMonths'], {
             description:
               'Write the rules, press Preview to see what they would have given over past orders, then Launch. One program runs at a time.',
+          }),
+          k.group('spending', ['redeemable', 'redeemMaxPercent', 'redeemMinPoints'], {
+            label: 'Spending points',
+            description:
+              'On a quotation, the points typed come off what the customer pays — after taxes, like a payment — and leave the card at once; a cancelled order gives them back.',
           }),
           k.lines('rules', [
             { field: 'sequence', id: 'rule_sequence' },
@@ -480,6 +528,34 @@ export function loyaltyModule(options: LoyaltyOptions = {}): ReturnType<typeof d
           ),
         ],
       })),
+      'loyalty.voucher.list': list(LoyaltyVoucher, {
+        columns: ['code', 'kind', 'partner', { field: 'balance', sum: true }, 'dateExpiry'],
+        decorations: { neutral: { balance: { lte: 0 } } },
+      }),
+      'loyalty.voucher.form': form(LoyaltyVoucher, (k) => ({
+        header: { buttons: [] },
+        sheet: [
+          k.group('main', ['code', 'kind', 'partner', 'dateExpiry', 'note', 'balance'], {
+            description:
+              'Load it with a line below. On a quotation, type its code and press Apply points and credit: it pays what the order still comes to, or all it holds.',
+          }),
+          k.lines('entries', [
+            { field: 'date', id: 'movement_date' },
+            { field: 'amount', id: 'movement_amount', sum: true },
+            { field: 'note', id: 'movement_note' },
+            { field: 'kind', id: 'movement_kind' },
+          ]),
+        ],
+        chatter: true,
+      })),
+      'loyalty.voucher.entry.list': list(LoyaltyVoucherEntry, {
+        columns: ['date', 'voucher', 'kind', { field: 'amount', sum: true }, 'note'],
+        decorations: { danger: { amount: { lt: 0 } } },
+      }),
+      'loyalty.voucher.entry.form': form(LoyaltyVoucherEntry, (k) => ({
+        header: { buttons: [] },
+        sheet: [k.group('main', ['voucher', 'date', 'amount', 'note', 'kind'])],
+      })),
       'loyalty.entry.list': list(LoyaltyEntry, {
         columns: ['date', 'card', 'kind', { field: 'points', sum: true }, 'note'],
         decorations: { danger: { points: { lt: 0 } } },
@@ -498,7 +574,28 @@ export function loyaltyModule(options: LoyaltyOptions = {}): ReturnType<typeof d
       {
         view: 'sale.order.form',
         operations: [
-          { append: 'dates', nodes: [field({ field: 'loyaltyPoints', id: 'loyalty_points' })] },
+          {
+            append: 'dates',
+            nodes: [
+              field({ field: 'loyaltyRedeem', id: 'loyalty_redeem' }),
+              field({ field: 'voucherCode', id: 'loyalty_voucher_code' }),
+              field({ field: 'loyaltyRedeemed', id: 'loyalty_redeemed' }),
+              field({ field: 'voucherUsed', id: 'loyalty_voucher_used' }),
+              field({ field: 'loyaltyPoints', id: 'loyalty_points' }),
+            ],
+          },
+          {
+            append: 'header',
+            nodes: [
+              {
+                kind: 'button',
+                id: 'loyalty_credit',
+                transition: 'credit',
+                label: 'Apply points and credit',
+                visibleWhen: { state: 'draft' },
+              },
+            ],
+          },
         ],
       },
       {
@@ -532,12 +629,26 @@ export function loyaltyModule(options: LoyaltyOptions = {}): ReturnType<typeof d
         filters: { holding: { label: 'With points', domain: { points: { gt: 0 } } } },
         groupBy: ['program', 'tier'],
       }),
+      'loyalty.voucher': search(LoyaltyVoucher, {
+        fields: ['code', 'partner.name', 'note'],
+        filters: {
+          holding: { label: 'With a balance', domain: { balance: { gt: 0 } } },
+          wallets: { label: 'Wallets', domain: { kind: 'wallet' }, group: 'kind' },
+          gift_cards: { label: 'Gift cards', domain: { kind: 'gift_card' }, group: 'kind' },
+        },
+        groupBy: ['kind', 'partner'],
+      }),
+      'loyalty.voucher.entry': search(LoyaltyVoucherEntry, {
+        fields: ['note', 'voucher.code'],
+        groupBy: ['voucher', 'kind', 'date:month'],
+      }),
       'loyalty.entry': search(LoyaltyEntry, {
         fields: ['note', 'card.code'],
         filters: {
           earned: { label: 'Earned', domain: { kind: 'earn' }, group: 'kind' },
           expired: { label: 'Expired', domain: { kind: 'expire' }, group: 'kind' },
           adjustments: { label: 'Adjustments', domain: { kind: 'adjust' }, group: 'kind' },
+          spent: { label: 'Spent', domain: { kind: 'redeem' }, group: 'kind' },
         },
         groupBy: ['card', 'kind', 'date:month'],
       }),

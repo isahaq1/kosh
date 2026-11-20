@@ -176,3 +176,35 @@ export function preview(
     byRule: [...byRule].map(([rule, p]) => ({ rule, points: p })),
   };
 }
+
+/** How many points an order may take, and what they are worth. */
+export interface Redeemable {
+  readonly points: number;
+  /** In hundredths. */
+  readonly amount: number;
+}
+
+/**
+ * The most points an order may take (RFC 0034 §2.6): no more than the card holds, and no more than the share of
+ * the order the program lets points pay — whole points, so the amount never passes that share. A point worth
+ * nothing pays nothing.
+ */
+export function redeemLimit(input: {
+  readonly balance: number;
+  /** What a point is worth, in hundredths. */
+  readonly pointValue: number;
+  /** What the order comes to, taxes included, before anything is taken off, in hundredths. */
+  readonly orderTotal: number;
+  /** The share of the order points may pay, 0 to 100. */
+  readonly maxPercent: number;
+}): Redeemable {
+  if (input.pointValue <= 0 || input.orderTotal <= 0 || input.balance <= 0)
+    return { points: 0, amount: 0 };
+  const share = Math.floor((input.orderTotal * Math.min(100, Math.max(0, input.maxPercent))) / 100);
+  const points = Math.min(input.balance, Math.floor(share / input.pointValue));
+  return { points, amount: points * input.pointValue };
+}
+
+/** What a wallet or a gift card pays of what is still due: all of it, or all it holds. In hundredths. */
+export const voucherUse = (balance: number, due: number): number =>
+  Math.max(0, Math.min(balance, due));

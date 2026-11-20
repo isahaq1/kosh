@@ -9,8 +9,10 @@ import {
   monthsBefore,
   type Order,
   preview,
+  redeemLimit,
   type Tier,
   tierOf,
+  voucherUse,
 } from '../src/engine.js';
 
 const RICE = 1;
@@ -193,4 +195,34 @@ test('the preview: what a program would have given over past orders, and what sh
     ],
   });
   expect(preview(rules, [], 100)).toMatchObject({ orders: 0, points: 0, cost: 0, share: 0 });
+});
+
+test('spending: no more points than the card holds, nor than the share of the order they may pay', () => {
+  // A point is worth 0.50; the order comes to 1,000.00.
+  const order = { pointValue: 50, orderTotal: 100_000, maxPercent: 100 };
+  expect(redeemLimit({ ...order, balance: 300 })).toEqual({ points: 300, amount: 15_000 });
+  // The whole order at most: 2,000 points, whatever the card holds.
+  expect(redeemLimit({ ...order, balance: 5000 })).toEqual({ points: 2000, amount: 100_000 });
+  // Half the order at most.
+  expect(redeemLimit({ ...order, balance: 5000, maxPercent: 50 })).toEqual({
+    points: 1000,
+    amount: 50_000,
+  });
+  // Whole points: a share of 333.33 at 0.70 a point is 476 points, 333.20.
+  expect(
+    redeemLimit({ balance: 9999, pointValue: 70, orderTotal: 100_000, maxPercent: 33.333 }),
+  ).toEqual({ points: 476, amount: 33_320 });
+  // Nothing to spend, nothing to pay, a point worth nothing.
+  expect(redeemLimit({ ...order, balance: 0 }).points).toBe(0);
+  expect(redeemLimit({ ...order, orderTotal: 0, balance: 10 }).points).toBe(0);
+  expect(redeemLimit({ ...order, pointValue: 0, balance: 10 }).points).toBe(0);
+  expect(redeemLimit({ ...order, maxPercent: 0, balance: 10 }).points).toBe(0);
+});
+
+test('a wallet or a gift card pays what is due, or all it holds', () => {
+  expect(voucherUse(50_000, 12_000)).toBe(12_000);
+  expect(voucherUse(5_000, 12_000)).toBe(5_000);
+  expect(voucherUse(5_000, 0)).toBe(0);
+  expect(voucherUse(0, 12_000)).toBe(0);
+  expect(voucherUse(5_000, -100)).toBe(0);
 });
