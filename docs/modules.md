@@ -1416,4 +1416,40 @@ record. For Helpdesk: the survey's five-star question into `rating` — the tick
 satisfaction figures, then come from the survey. Switch off *Ask for a rating* on the team, so the customer gets
 one email and not two. Nothing is written back from an anonymous survey.
 
-**Not yet** (RFC 0034 step 11, last part): the careers page on Sites.
+## The careers page
+
+`@kosh/website_hiring` (RFC 0034 §2.6) is proposed whenever Sites and Hiring are installed. Give people the
+**Careers page** role to see its fields.
+
+- **On an opening**: *On the careers page*, the place of work, the employment as candidates should read it, and
+  *Applications until*. An opening is shown while it is published, open, and not past that date.
+- **The site** reads the openings and takes applications without a sign-in:
+
+  ```http
+  GET  /api/v1/public/sites/<site>/careers          { "site": "…", "openings": [{ "id", "name", "department",
+                                                    "location", "employment", "closingDate", "description" }] }
+  GET  /api/v1/public/sites/<site>/careers/<id>     one of them (404 when it is not shown)
+  POST /api/v1/public/sites/<site>/careers/<id>/apply
+       { "name": "…", "email": "…", "phone": "…", "cover": "…",
+         "cv": { "name": "CV", "mediaType": "application/pdf", "data": "<base64>" } }
+       201 { "message": "Thank you — your application is in." }
+       422 a name and an email address are needed; the CV is a PDF, a Word or OpenDocument text or plain text,
+           at most 5 MB        409 this address already applied for this opening        410 not taking applications
+  ```
+
+  Only what a candidate should read leaves the server — never the hiring manager, the headcount or the other
+  applicants.
+- **An application** is an applicant like any other: from the *Website*, in the first stage, with the letter on
+  the record and the CV among its attachments. One per email address and opening. A form field named `website`
+  that no person fills marks a robot: it is thanked, and nothing is kept.
+- **Emails to candidates**: give a stage an *Email subject* and an *Email text* (Hiring › Configuration ›
+  Stages) and every candidate who reaches it is emailed **once** — also the first stage, as "we received your
+  application" — and again if they come back to it after another stage. The text may use `{{name}}`,
+  `{{opening}}` and `{{company}}`; empty lines separate paragraphs. Refused candidates are not emailed. It needs
+  a mailer.
+
+To screen applicants, add an automatic invitation in Surveys on `hiring.applicant.created`.
+
+**Not yet**: the CV read by the assistant on an applicant that already exists (the assistant fills a *new*
+applicant from a CV: Applicants › Fill from a document), a careers page drawn by Sites itself (the site's
+front end draws it from this API), one email per language.

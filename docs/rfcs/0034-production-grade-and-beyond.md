@@ -692,3 +692,20 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   **Left out**: reminders for invitations not answered, a delay before asking (three days after delivery), a
   response shown as a tile on the other app's record (each app would add it), the answers of a screening summed
   into Hiring's scorecards.
+
+- **Step 11 part 3 — the careers page (2026-11-20).** `@kosh/website_hiring`, a bridge of Sites and Hiring (it
+  needs Attachments for the CV). Openings gain `published`, `location`, `employment`, `closingDate`; applicants
+  `cover` and `mailedStage`; stages `mailSubject` and `mailBody`. Three public routes under the site's key, read
+  and written as the system in the site's company; `apply` makes the applicant in the first stage, once per
+  address and opening, and the CV is stored with `saveAttachment` — a document type only, 5 MB at most. A worker
+  on Shutro's change events of `hiring.applicant` (asked for with `changeEvents`) emails a candidate when they
+  are made and when their stage changes: `takeStageEmail` remembers the stage on the applicant, so each stage
+  reached is emailed once.
+  Tests: the API on real PostgreSQL (3: what is listed and what is not, an application with its CV on disk, a
+  bad one refused, a duplicate, a robot, a closed opening, the emails by stage), an E2E from the opening's form to
+  the applicant.
+  **Not built — the CV read by the assistant on an existing applicant.** The assistant's *Fill from a document*
+  proposes values for a **new** record, in the form, and its budget, switch and log live inside its routes; a
+  proposal on a record that exists needs that opened up and a place in the form to confirm it. It is the one
+  item of §2.6's careers line left, and worth a step of its own rather than a half of one here.
+  Step 11 complete but for that.
