@@ -68,3 +68,57 @@ test('a shop, a session, a sale paid in cash, the session closed', async ({ page
   await closing.getByRole('button', { name: 'Close the session' }).click();
   await expect(page.getByText(/closed: .* sold, difference/)).toBeVisible();
 });
+
+test('the customer of a sale is named at the till by what they say, and is on the sale', async ({
+  page,
+}) => {
+  await signIn(page, 'dina');
+  await page.goto('/contacts/a/contacts.action_partners/new');
+  await page.getByRole('textbox', { name: 'Name', exact: true }).fill('E2E Till Customer');
+  await page.getByRole('textbox', { name: 'Email', exact: true }).fill('till.customer@example.com');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/contacts\.action_partners\/\d+$/);
+
+  await page.goto('/counter/a/counter.action_register');
+  const shopButton = page.getByRole('button', { name: 'E2E Shop' });
+  if (await shopButton.isVisible().catch(() => false)) await shopButton.click();
+  await page.getByLabel('Cash in the drawer').fill('500');
+  await page.getByRole('button', { name: 'Open the session' }).click();
+  const box = page.getByRole('textbox', { name: 'Customer of this sale' });
+  await expect(box).toBeVisible();
+  // Nobody has this: said in words, and the sale goes on without a customer.
+  await box.fill('nobody@example.com');
+  await page.getByRole('button', { name: 'Find', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Nobody, or more than one contact');
+  // The address, however it is typed.
+  await box.fill('Till.Customer@example.com');
+  await box.press('Enter');
+  const named = page.getByRole('group', { name: 'Customer of this sale' });
+  await expect(named).toContainText('E2E Till Customer');
+
+  await page.getByRole('textbox', { name: 'Search or scan' }).fill('Steel beam');
+  await page
+    .getByRole('button', { name: /Steel beam/ })
+    .first()
+    .click();
+  await page.getByRole('button', { name: 'Pay', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Cash').focus();
+  await dialog.getByRole('button', { name: 'Confirm the sale' }).click();
+  await expect(page.getByRole('status')).toContainText(/R\//);
+  // The next sale starts without a customer.
+  await expect(named).toHaveCount(0);
+  await expect(box).toBeVisible();
+
+  // The sale carries its customer.
+  await page.goto('/counter/a/counter.action_orders');
+  await expect(page.getByRole('row').nth(1)).toContainText('E2E Till Customer');
+
+  await page.goto('/counter/a/counter.action_register');
+  await page.getByRole('button', { name: 'Close the session' }).click();
+  const closing = page.getByRole('dialog');
+  await closing.getByLabel('Cash counted').fill('500');
+  await closing.getByLabel('If it differs, why').fill('E2E');
+  await closing.getByRole('button', { name: 'Close the session' }).click();
+  await expect(page.getByText(/closed: .* sold, difference/)).toBeVisible();
+});

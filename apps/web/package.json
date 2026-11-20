@@ -35,6 +35,7 @@
     "@kosh/permissions": "workspace:*",
     "@kosh/portal": "workspace:*",
     "@kosh/pos": "workspace:*",
+    "@kosh/pos_loyalty": "workspace:*",
     "@kosh/pos_stock": "workspace:*",
     "@kosh/reporting": "workspace:*",
     "@kosh/settings": "workspace:*",

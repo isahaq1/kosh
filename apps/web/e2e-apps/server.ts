@@ -51,6 +51,7 @@ import { payrollAccount } from '@kosh/payroll_account';
 import { installApprovalPolicies, permissions } from '@kosh/permissions';
 import { portal } from '@kosh/portal';
 import { pos } from '@kosh/pos';
+import { posLoyalty } from '@kosh/pos_loyalty';
 import { posStock } from '@kosh/pos_stock';
 import { product } from '@kosh/product';
 import { production } from '@kosh/production';
@@ -200,6 +201,7 @@ const CATALOGUE = [
   websiteSaleStock,
   websiteSaleLoyalty,
   posStock,
+  posLoyalty,
   expense,
   indent,
   expenseAccount,
