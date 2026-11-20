@@ -22,6 +22,7 @@ import { indentPurchase } from '@kosh/indent_purchase';
 import { l10nBd } from '@kosh/l10n_bd';
 import { l10nBdPayroll } from '@kosh/l10n_bd_payroll';
 import { l10nBdPos } from '@kosh/l10n_bd_pos';
+import { livechat } from '@kosh/livechat';
 import { loyalty } from '@kosh/loyalty';
 import { mail } from '@kosh/mail';
 import { maintenance } from '@kosh/maintenance';
@@ -90,6 +91,7 @@ export const DEMO_APPS: readonly string[] = [
   'worktime',
   'subscription',
   'survey',
+  'livechat',
   'loyalty',
   'crm',
   'hr',
@@ -137,6 +139,7 @@ export function demoCatalogue(): KoshModule[] {
     worktime,
     subscription,
     survey,
+    livechat,
     loyalty,
     crm,
     hr,

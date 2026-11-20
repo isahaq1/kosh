@@ -14,6 +14,7 @@ import { importMessages, registerImportWeb } from '@kosh/import/web';
 import { integrationsMessages, registerIntegrationsWeb } from '@kosh/integrations/web';
 import { l10n_bdMessages, registerL10nBdWeb } from '@kosh/l10n_bd/web';
 import { l10n_inMessages, registerL10nInWeb } from '@kosh/l10n_in/web';
+import { livechatMessages, registerLivechatWeb } from '@kosh/livechat/web';
 import { mailMessages, registerMailWeb } from '@kosh/mail/web';
 import { messagingMessages, registerMessagingWeb } from '@kosh/messaging/web';
 import { notifyMessages, registerNotifyWeb } from '@kosh/notify/web';
@@ -59,6 +60,7 @@ registerStockAccountWeb(registry);
 registerEventWeb(registry);
 registerWebsiteWeb(registry);
 registerPosWeb(registry);
+registerLivechatWeb(registry);
 registerProductWeb(registry);
 registerAttendanceWeb(registry);
 registerDocumentsWeb(registry);
@@ -82,6 +84,7 @@ const messages = {
   event: eventMessages,
   website: websiteMessages,
   pos: posMessages,
+  livechat: livechatMessages,
   attendance: attendanceMessages,
   documents: documentsMessages,
   approvalPanel: approvalPanelMessages,

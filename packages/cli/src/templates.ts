@@ -20,6 +20,7 @@ export type AppName =
   | 'worktime'
   | 'subscription'
   | 'survey'
+  | 'livechat'
   | 'loyalty'
   | 'crm'
   | 'hr'
@@ -173,6 +174,13 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
       'Surveys: questions with logic and scoring, answered by link or invitation, NPS and CSAT',
     icon: '📝',
     server: 'survey',
+  },
+  livechat: {
+    label:
+      'Live chat: a chat your site offers, answered by the operators who are there, every conversation kept',
+    icon: '💬',
+    server: 'livechat',
+    web: 'registerLivechatWeb',
   },
   loyalty: {
     label:

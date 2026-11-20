@@ -40,6 +40,7 @@ import { l10nBd } from '@kosh/l10n_bd';
 import { l10nBdPayroll } from '@kosh/l10n_bd_payroll';
 import { l10nBdPos } from '@kosh/l10n_bd_pos';
 import { l10nIn } from '@kosh/l10n_in';
+import { livechat } from '@kosh/livechat';
 import { loyalty } from '@kosh/loyalty';
 import { createMemoryMailer, mailModule } from '@kosh/mail';
 import { maintenance } from '@kosh/maintenance';
@@ -165,6 +166,7 @@ const CATALOGUE = [
   worktime,
   subscription,
   survey,
+  livechat,
   loyalty,
   crm,
   hr,
@@ -248,6 +250,7 @@ await applyApps(
         'worktime',
         'subscription',
         'survey',
+        'livechat',
         'loyalty',
         'crm',
         'hr',
@@ -332,6 +335,7 @@ for (const [login, name, groups] of [
       'website_hiring.user',
       'subscription.manager',
       'survey.manager',
+      'livechat.manager',
       'loyalty.manager',
       'crm.manager',
       'hr.manager',
@@ -382,6 +386,7 @@ for (const [login, name, groups] of [
       'worktime.user',
       'subscription.user',
       'survey.user',
+      'livechat.user',
       'loyalty.user',
       'crm.user',
       'hr.user',

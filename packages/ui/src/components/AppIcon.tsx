@@ -92,6 +92,7 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   worktime: CalendarClock,
   subscriptions: Repeat,
   surveys: ClipboardList,
+  livechat: MessagesSquare,
   loyalty: Gift,
   pipeline: TrendingUp,
   workforce: Briefcase,

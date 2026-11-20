@@ -69,6 +69,7 @@
     "@kosh/stock_account": "workspace:*",
     "@kosh/todo": "workspace:*",
     "@kosh/subscription": "workspace:*",
+    "@kosh/livechat": "workspace:*",
     "@kosh/survey": "workspace:*",
     "@kosh/worktime": "workspace:*",
     "@kosh/trade_finance": "workspace:*",
