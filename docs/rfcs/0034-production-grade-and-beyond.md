@@ -787,3 +787,24 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   the placed order, a card that expires while on a cart). No browser E2E: the Shop has no page in this
   repository — a site's front end draws it from the API.
   **Left out**: points spent in the Shop (it has no signed-in customer), the Counter.
+
+- **Step 12 part 5 — loyalty at the Counter (2026-11-20).** The till could not name a customer at all (the API
+  took `partner`, the register never sent one), so that came first, in the Counter itself: `findCustomer(typed)`,
+  a method of `pos.shop` — one contact by the digits of a phone number or by an email address, matched in SQL, or
+  none when two contacts share it —, `GET /api/v1/counter/customers` (the cashier's right to the shop decides, the
+  contact is then read as the system: a name and an id, never a list) and the customer box on the register.
+  Naming a customer exposed a defect waiting to happen: the sale charges a customer's own price list, the till
+  showed the shop's. `ownList` is now asked by both the sale and the catalogue (`&partner=`), the lookup says
+  `ownPrices`, and the register asks for the catalogue again and reprices the cart.
+  Loyalty gains `earnSale` (a sale of any app earns once for the record it is about; Sales orders use it too) and
+  `takeBackSale` (a return takes back the share of the points that everything returned so far is of the sale,
+  once per return, capped by what the sale earned and what the card holds). `@kosh/pos_loyalty` overrides
+  `findCustomer` (the card's number; `note` says the card, its points and tier, in the request's language) and
+  subscribes to `pos.order.paid`: a sale earns, a refund gives back; `loyaltyPoints` on the sale is the server's.
+  Tests: the Counter's own lookup (1), the bridge on real PostgreSQL (4: the lookup and who may use it, earning
+  once with the device's repeat and the event read twice, an anonymous sale, a forged write refused, partial and
+  full refunds with the ledger, a customer's own prices on the till and on the sale), E2E on the register (the
+  customer found by email, the sale carrying them).
+  **Left out**: spending points, promotions and gift cards at the till — an offline sale cannot ask what a code is
+  worth, and a gift card is a tender the session's entry must book; that is a design of its own. A sale's date
+  for the earning rules is its UTC day.

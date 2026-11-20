@@ -1012,6 +1012,20 @@ text from the register. A refund is a negative sale with a reason, linked to the
 sales of their own open session, managers (`pos.refund_any`) any sale. Quantities are typed on the register for
 weighed goods.
 
+**The customer of a sale** is named at the till by what they say: a phone number — matched on its digits,
+however it was written down — or an email address. The till finds **one** contact or none, never a list (two
+contacts with the same number are not found: a till is no way to browse the customers), and only for people with
+a role at the Counter. A customer with a price list of their own sees their prices on the tiles and in the cart:
+the till shows what the sale will charge. The next sale starts without a customer.
+
+```http
+GET /api/v1/counter/customers?shop=1&q=01711000111   { "customer": { "partner", "name", "note", "ownPrices" } }
+GET /api/v1/counter/catalogue?shop=1&partner=42      the catalogue at that customer's prices
+```
+
+Another app may know customers another way: it overrides `findCustomer` of `pos.shop` (Loyalty at the Counter
+adds the loyalty card's number, and says what the card holds in `note`).
+
 ## Demo data (RFC 0008 §5.8)
 
 `npx shutro-erp init --demo` (or a yes to the question after the apps) loads every installed app's demo data: a sample
@@ -1569,6 +1583,22 @@ GET /api/v1/public/shop/<site>/cart/loyalty     { "promotions": [{ "name", "amou
 
 Spending **points** needs a signed-in customer, which the Shop does not have: points are spent on Sales orders.
 
-**Not yet**: the Counter, gift cards sold as a product, points, credit and promotions on a quotation already sent,
+### At the Counter
+
+With the Counter installed too (`@kosh/pos_loyalty`):
+
+- **The card names the customer.** The cashier types the loyalty card's number — or the phone number, the email
+  address — and the till shows the customer with the card, its points and its tier.
+- **A paid sale with a customer earns points**, on what it came to before taxes, by the same rules and tiers as
+  a Sales order — **once**, however often the device sends the sale, and also for a sale rung up offline and
+  sent later. A sale nobody is named on earns nothing. The sale shows its points (*Loyalty points*).
+- **Goods that come back give points back**: a refund takes the share of the sale's points that everything
+  returned from it so far is of it — all of them once everything is back —, never more than the sale earned and
+  never more than the card holds.
+
+**Not yet at the Counter**: spending points, promotions and gift cards at the till (a sale made offline cannot
+ask the server what a code is worth, and a gift card is a way to pay that the session's entry must book).
+
+**Not yet**: gift cards sold as a product, points, credit and promotions on a quotation already sent,
 a discount that lowers the tax of the order — promotion lines, like the Shop's amount coupons, come off without
 tax.
