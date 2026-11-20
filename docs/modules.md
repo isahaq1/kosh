@@ -1169,3 +1169,43 @@ await applyChanges(env, id); // invoice or credit a change for the days left
 Another app feeds usage by creating `subscription.usage` records (`line`, `date`, `quantity`, `note`).
 **Not yet**: usage fed by Counter sales or timesheets through bridges, card payments taken by themselves at each
 invoice, upgrades chosen by the customer in the portal.
+
+## Projects billed to customers
+
+`@kosh/project_billing` (RFC 0034 §2.5) is proposed whenever Projects and Accounting are installed. It turns the
+hours people log into invoices the customer can check, without anyone retyping them.
+
+- **Rate cards** (Projects › Configuration › Rate cards): what an hour is sold for. A line names a person, a role,
+  a kind of task, or several of them; **the most specific line wins** — a person before a role, a role before a
+  kind of task — and the card has a rate for everyone else. A senior consultant at 3 000, Rafi at 4 000 whatever
+  his role, travel at 500 for those nobody names.
+- **On the project** (the *Money* group): *Billed to the customer*, its rate card, and the service it is invoiced
+  as (the income account and the sales taxes come from that product).
+- **Approval**. A timesheet line is *To submit*, *Submitted*, *Approved* or *Refused*. Its author submits it; a
+  Projects manager approves or refuses it — **never their own**, and a refusal says why. Submitted and approved
+  hours do not change and are not deleted: they are reopened first (approved ones by a manager). On approval the
+  rate is taken from the card **and frozen on the hour**: a dearer card tomorrow does not move what was approved.
+  On a billed project an hour without a rate is not approved; switch off *Billable* for time the customer does not
+  pay for.
+- **Billing milestones** (Projects › Billing › Billing milestones): a fixed price for something delivered, beside
+  the hours or instead of them. *Reached* puts it on the next statement; with a task, not before the task is done.
+- **Billing statements** (Projects › Billing, or *New billing statement* on a project): choose the day up to which
+  hours count and press **Make the invoice**. The statement gathers the project's approved billable hours up to
+  that day and its reached milestones, and makes **one draft customer invoice** — a line per person and rate with
+  the days it covers, a line per milestone — on the project's cost centre. The statement prints with every hour
+  behind the invoice. **Each hour and milestone is invoiced once**: a second statement for the same days finds
+  nothing. A statement is **released** only after its invoice was cancelled; its hours can then be invoiced again.
+
+Roles: people who log time submit their own hours and do not see rates; **Projects managers** approve hours, mark
+milestones reached and read statements; **Project billing** keeps rate cards and milestones and makes statements
+(it includes Projects manager and invoicing). The rate, the amount, who approved and the statement of an hour are
+the server's: they cannot be written through the API.
+
+```ts
+import { rateFor } from '@kosh/project_billing';
+
+rateFor(lines, { user, role, category }, card.defaultRate); // { rate: '3000.00', source: 'role' } | null
+```
+
+**Not yet** (RFC 0034 step 9, next part): work in progress and revenue recognition posted to Accounting, and
+profit per project and phase.

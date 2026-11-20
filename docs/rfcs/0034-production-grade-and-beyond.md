@@ -574,3 +574,24 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   **Left for later**: usage fed by Counter sales and timesheets through bridges, payments taken by themselves at
   each invoice (the providers of RFC 0017 keep no card on file yet), plan changes by the customer in the portal,
   failed payments pausing a subscription (follow-ups already chase its invoices).
+
+- **Step 9 part 1 — time billing (2026-11-19).** `@kosh/project_billing`, a bridge of Projects and Accounting
+  (it needs `project_account`: invoice lines carry the project's cost centre). Rate cards with lines by person,
+  role and kind of task; `rates.ts` picks the most specific line without a database (person 4, role 2, task 1;
+  the first of equals; then the card's rate; else none). Timesheets gain `approval` — a state field added by an
+  extension — with `submit`, `approve`, `refuse`, `reopen`; approving is a permission of Projects managers
+  (`project_billing.approve`), never on one's own hours, and freezes `billRate` and `billAmount`. Billing
+  milestones (`reach`, `revert`). `project.statement`: `bill` gathers approved billable hours up to a day and
+  reached milestones not yet on a statement, makes one draft invoice and marks them, in one transaction;
+  `release` after the invoice was cancelled; `discard`. Deletes of submitted or approved hours and of billed
+  milestones are refused by a database trigger (Shutro has no hook before a delete: request #23), installed with
+  the defaults and dropped before an uninstall.
+  Tests: the rates (3), the API on real PostgreSQL (6: who approves, the frozen rate, refusal with a reason, the
+  locks, forged rates refused, rates hidden from those who log time, no rate no approval, the statement's invoice
+  line by line, once only, release and billing again), an E2E from the forms.
+  **Fixed on the way, in the back-office**: a button that opens a new record filled from the open one (RFC 0028
+  §3.4 — *New quotation* on a deal) lost its values, because going from one record page to another keeps the page
+  component and the values were only taken when it was first shown; and a new record that arrived filled could
+  not be saved until a field was touched. Both fixed in `@kosh/ui`, and now covered by this step's E2E.
+  **Left for part 2**: work in progress and revenue recognition posted to Accounting, profit per project and
+  phase from timesheets, purchases, expenses and production; invoices posted by themselves; expenses re-invoiced.
