@@ -675,3 +675,20 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   Event Hub feedback, Pipeline qualification), the careers page. **Left out**: pages and sections, a time limit,
   file uploads as answers, one answer per person on a public link (that is what invitations are for), a captcha
   (the server's rate limit applies).
+
+- **Step 11 part 2 — emailed invitations and asking by itself (2026-11-20).** In `@kosh/survey`, instead of a
+  bridge module per app: `survey.trigger` waits for a named event of any installed app or for `<model>.created`,
+  finds the people on the record — or on each row of one of its lists —, keeps those that meet a condition and
+  have an address, and invites each once per survey and record (`inviteAbout`); a chosen answer is written on the
+  record (`writeBack`: a ticket's rating). The server tells Surveys what the installed apps offer when it starts
+  (`triggerCatalogue`: the manifests' `events` and the metadata API's fields), and a rule is checked against it
+  when saved. Workers on the outbox (`surveyWorkers`): one per named event, one on Shutro's change events for
+  records made — Surveys asks for `changeEvents: '*'`, as Integrations and Automation do —, one on a survey
+  opening; an invitation is emailed once (`sentAt`), after the commit. `surveyModule({ mailer, baseUrl, workers })`
+  for tests.
+  Tests: the API on real PostgreSQL with Helpdesk installed (5: the email once and only when open, in Bangla, the
+  whole link; rules refused; a rule on contacts made with a condition; a rule over a record's rows; a ticket
+  solved, its customer asked, their answer on the ticket and the response tied to it).
+  **Left out**: reminders for invitations not answered, a delay before asking (three days after delivery), a
+  response shown as a tile on the other app's record (each app would add it), the answers of a screening summed
+  into Hiring's scorecards.

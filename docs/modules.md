@@ -1384,5 +1384,36 @@ Roles: **User** invites people and reads responses and results; **Manager** writ
 An invitation may say what record it is about (`resModel`, `resId`); the response carries it, for the apps that
 ask on behalf of a ticket, an applicant or a registration.
 
-**Not yet** (RFC 0034 step 11, next parts): invitations emailed by themselves; Helpdesk's rating, Hiring's
-screening and Event Hub's feedback asked through a survey; the careers page.
+### Invitations by email
+
+An invitation with an email address is **emailed once** — when it is made, or when its survey opens if it was
+made while the survey was a draft: the survey's name and introduction, and a button to the person's own link, in
+English or Bangla (the invitation's language, which is also the page's). It needs a mailer and the server's
+public address (`KOSH_BASE_URL`); without them the links are still there to copy, and the emails go out once both
+are set.
+
+### Asking by itself
+
+*Surveys › Automatic invitations* is one rule for every app: **when** something happens, **who** is concerned,
+and optionally **an answer written back** on the record.
+
+| To ask… | When | For each of | Only when | Name / email in |
+| --- | --- | --- | --- | --- |
+| a customer after their ticket is solved | `helpdesk.ticket.solved` | | | `subject` / `email`, contact in `partner` |
+| those who came to an event | `event.event.ended` | `registrations` | `state` is `attended` | `name` / `email`, language in `lang` |
+| every new applicant (a screening) | `hiring.applicant.created` | | | `name` / `email` |
+| the customer of a new deal (a qualification) | `crm.deal.created` | | | `name` / `email`, contact in `partner` |
+
+*When* is a named event of an installed app, or any model followed by `.created`;
+`GET /api/v1/surveys/events` lists the events on offer. Each person is asked **once per survey and record**; the
+invitation and the response say what they are about, so the answers can be read beside the ticket, the applicant
+or the registration. A rule that does not hold together — an unknown event, a field that is not on the record —
+is refused when it is saved; one that fails later says why in *Last problem*. Surveys does not wait for its own
+events.
+
+**An answer on the record**: choose a rating, a recommendation or a number question and a number field of the
+record. For Helpdesk: the survey's five-star question into `rating` — the ticket's rating, and Helpdesk's own
+satisfaction figures, then come from the survey. Switch off *Ask for a rating* on the team, so the customer gets
+one email and not two. Nothing is written back from an anonymous survey.
+
+**Not yet** (RFC 0034 step 11, last part): the careers page on Sites.
