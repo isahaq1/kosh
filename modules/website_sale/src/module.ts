@@ -257,14 +257,23 @@ export const OrderShop = extendModel('sale.order', {
     recoveryToken: f.char({ index: true, label: 'Recovery code' }),
     remindedAt: f.datetime({ label: 'Reminded at' }),
   },
+  methods: {
+    /**
+     * Called each time the shop has priced these carts — after a line, the delivery method, the coupon or the
+     * checkout's address changed, when the fee and the coupon are in place. Nothing here; an app with discounts
+     * of its own puts them on the cart now (`website_sale_loyalty`: promotions and gift cards), as lines marked
+     * as discounts, which the next pricing takes off again before calling this.
+     */
+    shopPriced: method('sale.order', async (): Promise<void> => {}),
+  },
 });
 
 export const LineShop = extendModel('sale.order.line', {
   fields: {
     /** The delivery fee's line (replaced when the method or the cart changes). */
     isDelivery: f.boolean({ default: false, label: 'Delivery fee' }),
-    /** A coupon's amount off (replaced when the cart or the coupon changes). */
-    isDiscount: f.boolean({ default: false, label: 'Coupon discount' }),
+    /** An amount off — a coupon's, or another app's — (replaced when the cart or the coupon changes). */
+    isDiscount: f.boolean({ default: false, label: 'Discount' }),
   },
 });
 

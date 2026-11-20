@@ -94,7 +94,7 @@ export {
   websiteSaleShutro,
 } from './module.js';
 export { draftShipments, refreshShipments, trackingOf } from './shipments.js';
-export { type CheckoutInput, checkout, setDelivery, setLine } from './shop.js';
+export { type CheckoutInput, cartView, checkout, type Site, setDelivery, setLine } from './shop.js';
 
 type Row = Record<string, unknown>;
 const notFound = (what: string): HttpProblem =>
@@ -113,11 +113,15 @@ const positive = (v: unknown): number | undefined => {
   return v === undefined || v === '' || !Number.isSafeInteger(n) || n <= 0 ? undefined : n;
 };
 
-function registerShopRoutes(context: ModuleContext): void {
-  const { app, shutro } = context;
-  const pub = { config: { auth: false } };
-  const base = '/api/v1/public/shop/:site';
-
+/**
+ * What a public shop route needs (for apps that add routes of their own to the shop's API): the site's shop in a
+ * system scope of its company — visitors have no rights —, the cart token of a request, and the cart it names.
+ */
+export function shopAccess(shutro: ModuleContext['shutro']): {
+  inShop<T>(params: unknown, reason: string, fn: (env: Env, site: Site) => Promise<T>): Promise<T>;
+  tokenOf(headers: Record<string, unknown>): string;
+  cartOr404(env: Env, site: Site, token: string): Promise<Id<'sale.order'>>;
+} {
   /** The site's shop, in a system scope of its company (as the superuser: visitors have no rights). */
   const inShop = async <T>(
     params: unknown,
@@ -142,12 +146,21 @@ function registerShopRoutes(context: ModuleContext): void {
     );
   };
   const tokenOf = (headers: Row): string => String(headers['x-cart-token'] ?? '');
-  const langOf = (query: unknown): string => String((query as Row | null)?.['lang'] ?? 'en');
   const cartOr404 = async (env: Env, site: Site, token: string): Promise<Id<'sale.order'>> => {
     const id = await orderOf(env, site, token);
     if (id === null) throw notFound('cart for this token (it may be checked out)');
     return id;
   };
+  return { inShop, tokenOf, cartOr404 };
+}
+
+function registerShopRoutes(context: ModuleContext): void {
+  const { app, shutro } = context;
+  const pub = { config: { auth: false } };
+  const base = '/api/v1/public/shop/:site';
+
+  const { inShop, tokenOf, cartOr404 } = shopAccess(shutro);
+  const langOf = (query: unknown): string => String((query as Row | null)?.['lang'] ?? 'en');
 
   app.get(`${base}/products`, pub, async (request) => {
     const q = (request.query ?? {}) as Row;

@@ -543,6 +543,9 @@ async function refreshCoupon(env: Env, id: Id<'sale.order'>): Promise<void> {
     ] as never);
   }
   await env.flush();
+  // The cart is priced: other apps' discounts go on now (see `shopPriced`).
+  await env.model('sale.order').browse([id]).shopPriced();
+  await env.flush();
 }
 
 /** The service product an amount off is charged as, made the first time. */
