@@ -20,6 +20,7 @@ export type AppName =
   | 'worktime'
   | 'subscription'
   | 'survey'
+  | 'loyalty'
   | 'crm'
   | 'hr'
   | 'recruitment'
@@ -170,6 +171,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
       'Surveys: questions with logic and scoring, answered by link or invitation, NPS and CSAT',
     icon: '📝',
     server: 'survey',
+  },
+  loyalty: {
+    label:
+      'Loyalty: points by rules, tiers, cards with a ledger, previewed on past orders before it runs',
+    icon: '🎁',
+    server: 'loyalty',
   },
   crm: {
     label: 'Pipeline: deals on a board, stage rules, the weighted forecast',
