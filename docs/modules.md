@@ -1545,6 +1545,30 @@ import { applyPromotions, discountOf, previewPromotion } from '@kosh/loyalty';
 applyPromotions(promotions, { date: '2027-03-10', code: 'EID27', lines }); // [{ promotion, amount, freeUnits }]
 ```
 
-**Not yet**: gift cards sold as a product, points, credit and promotions on a quotation already sent, the Shop's
-checkout and the Counter (they keep their own coupons for now), a discount that lowers the tax of the order —
-promotion lines, like the Shop's amount coupons, come off without tax.
+### In the Shop
+
+With the Shop installed too (`@kosh/website_sale_loyalty`), a visitor's cart takes part:
+
+- **Promotions go on every cart by themselves**, each time the shop prices it — a line added, the delivery
+  method, the coupon, the address at checkout — and follow it: never twice. The cart's `discount` includes them;
+  they are not among its goods.
+- **A promotion code** and **a gift card** are typed. What does not work is refused in words, and the cart is left
+  as it was. A gift card pays what the cart comes to, **delivery included**, or all it holds, and is worked out
+  again whenever the cart changes — what it held is given back first.
+- **A code that stops working** while the cart is open — its promotion ended, the card expired — is taken off the
+  cart at its next change, rather than breaking it; what was held goes back.
+- **The placed order earns points** for its customer like any confirmed order, on the goods as paid — not on the
+  delivery fee. The Shop's own coupons stay, beside the promotions.
+
+```http
+PUT /api/v1/public/shop/<site>/cart/promotion   { "code": "EID27" }   the cart, with `loyalty`; "" takes it off
+PUT /api/v1/public/shop/<site>/cart/gift-card   { "code": "GC-…" }    the cart, with what the card paid
+GET /api/v1/public/shop/<site>/cart/loyalty     { "promotions": [{ "name", "amount" }], "promoCode",
+                                                  "giftCard", "giftCardPaid" }
+```
+
+Spending **points** needs a signed-in customer, which the Shop does not have: points are spent on Sales orders.
+
+**Not yet**: the Counter, gift cards sold as a product, points, credit and promotions on a quotation already sent,
+a discount that lowers the tax of the order — promotion lines, like the Shop's amount coupons, come off without
+tax.

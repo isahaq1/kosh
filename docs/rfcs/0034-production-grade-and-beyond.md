@@ -772,3 +772,18 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   end, as the value sent does. **Still open**: that one in six — a key within milliseconds of a toolbar click,
   which a person is not fast enough to do; its cause is not found. The test presses Enter again only while no new
   line is there, and says so.
+
+- **Step 12 part 4 — loyalty in the Shop (2026-11-20).** The Shop gains one hook: `shopPriced()`, a method of
+  `sale.order` called at the end of every pricing of a cart (it does nothing by itself), and exports
+  `shopAccess(shutro)` — the site's scope, the cart token, the cart — and `cartView`, for apps that add routes to
+  its public API. `@kosh/website_sale_loyalty` overrides the hook: `loyaltyOnCart` gives back whatever the cart
+  held, puts the promotions on, then the gift card, and marks Loyalty's lines as discounts — which is what the
+  Shop's own pricing removes before calling the hook again, so nothing is ever there twice. Called by the hook it
+  forgives (a code that no longer works is cleared); called by the two new routes it is strict (422, and the
+  transaction leaves the cart as it was). In Loyalty, what earns and what promotions apply to now leaves out
+  products that cannot be sold by hand — an app's fees —, so a delivery fee earns no points.
+  Tests: the API on real PostgreSQL through the shop's public routes (4: promotions following the cart, a code
+  wrong, right and ended, a gift card paying, following the cart, the checkout with delivery and the points on
+  the placed order, a card that expires while on a cart). No browser E2E: the Shop has no page in this
+  repository — a site's front end draws it from the API.
+  **Left out**: points spent in the Shop (it has no signed-in customer), the Counter.
