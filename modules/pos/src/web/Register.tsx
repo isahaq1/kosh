@@ -27,7 +27,18 @@ interface Shop {
     readonly id: number;
     readonly name: string;
     readonly kind: string;
+    /** Paid on a provider's page the customer opens from a QR code: not typed in by the cashier. */
+    readonly provider?: boolean;
   }[];
+}
+/** A payment asked of a provider for the sale being rung up, by method. */
+interface Asked {
+  readonly reference: string;
+  readonly url: string;
+  readonly qr: string;
+  readonly amount: string;
+  readonly state: string;
+  readonly error: string | null;
 }
 interface Session {
   readonly id: number;
@@ -172,6 +183,8 @@ export function Register({ api }: PageProps): ReactElement {
   const [closingCash, setClosingCash] = useState('');
   const [reason, setReason] = useState('');
   const [payments, setPayments] = useState<Record<number, string>>({});
+  // Payments asked of a provider for this sale: followed until the provider confirms them.
+  const [askedOf, setAskedOf] = useState<Record<number, Asked>>({});
   const [lastSale, setLastSale] = useState<Sale | null>(null);
   const [error, setError] = useState<string | null>(null);
   const clientId = useRef<string>(crypto.randomUUID());
@@ -308,6 +321,57 @@ export function Register({ api }: PageProps): ReactElement {
         : lines,
     );
   }, [priced]);
+  const askPayment = useMutation({
+    mutationFn: (method: number) =>
+      api
+        .call<{ reference: string; url: string; qr: string }>('POST', '/api/v1/counter/payments', {
+          session: session.data?.id,
+          method,
+          amount: payments[method] ?? '',
+        })
+        .then((r) => ({ method, ...r })),
+    onSuccess: (r) => {
+      setError(null);
+      setAskedOf((all) => ({
+        ...all,
+        [r.method]: {
+          reference: r.reference,
+          url: r.url,
+          qr: r.qr,
+          amount: payments[r.method] ?? '',
+          state: 'pending',
+          error: null,
+        },
+      }));
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : String(e)),
+  });
+  // The provider's word, asked every two seconds while a payment is pending.
+  const pending = Object.entries(askedOf).filter(([, a]) => a.state === 'pending');
+  const waiting = pending.length > 0;
+  const pendingKey = pending.map(([, a]) => a.reference).join(',');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: follows the pending references, not their objects
+  useEffect(() => {
+    if (pendingKey === '' || session.data?.id === undefined) return;
+    const sessionId = session.data.id;
+    const timer = setInterval(() => {
+      for (const [method, a] of pending)
+        void api
+          .call<{ state: string; error: string | null }>(
+            'GET',
+            `/api/v1/counter/payments/${encodeURIComponent(a.reference)}?session=${sessionId}`,
+          )
+          .then((r) => {
+            if (r.state !== 'pending')
+              setAskedOf((all) => ({
+                ...all,
+                [Number(method)]: { ...a, state: r.state, error: r.error },
+              }));
+          })
+          .catch(() => undefined);
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [pendingKey, session.data?.id]);
   const findCustomer = useMutation({
     mutationFn: (typed: string) =>
       api.call<{ customer: Customer }>(
@@ -332,7 +396,14 @@ export function Register({ api }: PageProps): ReactElement {
         ...(extras === undefined ? {} : { extras: asked }),
         payments: Object.entries(payments)
           .filter(([, amount]) => Number(amount) > 0)
-          .map(([method, amount]) => ({ method: Number(method), amount })),
+          .map(([method, amount]) => {
+            const proof = askedOf[Number(method)];
+            return {
+              method: Number(method),
+              amount,
+              ...(proof === undefined ? {} : { reference: proof.reference }),
+            };
+          }),
       };
       try {
         const r = await api.call<{ order: Sale }>('POST', '/api/v1/counter/orders', body);
@@ -369,6 +440,7 @@ export function Register({ api }: PageProps): ReactElement {
       setCustomerQuery('');
       setCustomerMissing(false);
       setPayments({});
+      setAskedOf({});
       setPaying(false);
       setError(null);
       clientId.current = crypto.randomUUID();
@@ -824,21 +896,68 @@ export function Register({ api }: PageProps): ReactElement {
         title={t('payTitle', { total: format.decimal(money(total)) })}
       >
         <div className="grid gap-3">
-          {shop.methods.map((m) => (
-            <div key={m.id} className="grid grid-cols-[1fr_8rem] items-center gap-2">
-              <Label htmlFor={`pay-${m.id}`}>{m.name}</Label>
-              <Input
-                id={`pay-${m.id}`}
-                inputMode="decimal"
-                value={payments[m.id] ?? ''}
-                onFocus={() => {
-                  if ((payments[m.id] ?? '') === '' && paid < total)
-                    setPayments({ ...payments, [m.id]: money(total - paid) });
-                }}
-                onChange={(e) => setPayments({ ...payments, [m.id]: e.target.value })}
-              />
-            </div>
-          ))}
+          {shop.methods.map((m) => {
+            const proof = askedOf[m.id];
+            return (
+              <div key={m.id} className="grid gap-2">
+                <div className="grid grid-cols-[1fr_8rem] items-center gap-2">
+                  <Label htmlFor={`pay-${m.id}`}>{m.name}</Label>
+                  <Input
+                    id={`pay-${m.id}`}
+                    inputMode="decimal"
+                    value={payments[m.id] ?? ''}
+                    // What a provider was asked for is what it pays: the amount stays as it was asked.
+                    disabled={proof !== undefined && proof.state !== 'failed'}
+                    onFocus={() => {
+                      if ((payments[m.id] ?? '') === '' && paid < total)
+                        setPayments({ ...payments, [m.id]: money(total - paid) });
+                    }}
+                    onChange={(e) => setPayments({ ...payments, [m.id]: e.target.value })}
+                  />
+                </div>
+                {m.provider !== true ? null : proof === undefined || proof.state === 'failed' ? (
+                  <div className="grid gap-1">
+                    {proof?.state === 'failed' ? (
+                      <p role="alert" className="text-xs text-destructive">
+                        {t('paymentFailed')}
+                      </p>
+                    ) : null}
+                    <div>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={!(Number(payments[m.id] ?? '') > 0)}
+                        busy={askPayment.isPending && askPayment.variables === m.id}
+                        onClick={() => askPayment.mutate(m.id)}
+                      >
+                        {t('askToPay')}
+                      </Button>
+                    </div>
+                  </div>
+                ) : proof.state === 'done' ? (
+                  <p role="status" className="text-sm font-medium">
+                    {t('paymentDone', { reference: proof.reference })}
+                  </p>
+                ) : (
+                  <div className="grid justify-items-center gap-1 rounded-md border p-2">
+                    <img
+                      src={proof.qr}
+                      width={200}
+                      height={200}
+                      alt={t('qrOf', { amount: format.decimal(proof.amount), method: m.name })}
+                      className="bg-white"
+                    />
+                    <p className="text-center text-xs text-muted-foreground">
+                      {t('scanToPay', { amount: format.decimal(proof.amount), method: m.name })}
+                    </p>
+                    <p role="status" className="text-sm">
+                      {t('waitingPayment')}
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
           <div className="flex justify-between text-sm">
             <span>{t('paid')}</span>
             <span className="tabular-nums">{format.decimal(money(paid))}</span>
@@ -850,7 +969,7 @@ export function Register({ api }: PageProps): ReactElement {
           {error === null ? null : <Alert>{error}</Alert>}
           <Button
             variant="primary"
-            disabled={paid + 0.004 < total}
+            disabled={paid + 0.004 < total || waiting}
             busy={sell.isPending}
             onClick={() => sell.mutate()}
           >

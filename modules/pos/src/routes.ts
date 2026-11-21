@@ -13,7 +13,7 @@
 import { type Mailer, mailerFromEnv } from '@kosh/mail';
 import { type Messenger, messengerFromEnv } from '@kosh/notify';
 import { priceFor } from '@kosh/product';
-import { documentFields, renderDocument } from '@kosh/reporting';
+import { documentFields, qrSvg, renderDocument } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext, publicApiModels } from '@kosh/server';
 import { type Id, orm } from '@kosh/server/orm';
 import type { Env } from './.kosh/bindings.js';
@@ -191,24 +191,113 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
   });
 
   app.get('/api/v1/counter/shops', async (request) =>
-    request.env(async (raw) => {
-      const env = raw as unknown as Env;
-      const shops = await (await env.model('pos.shop').search({})).load({
-        methods: true,
-        pricelist: true,
-      });
-      return {
-        shops: shops.map((s) => ({
-          id: s.id,
-          name: s.name,
-          pricesIncludeTax: s.pricesIncludeTax,
-          receiptFooter: s.receiptFooter,
-          pricelist: (s.pricelist?.id as number | undefined) ?? null,
-          methods: [...s.methods].map((m) => ({ id: m.id, name: m.name, kind: m.kind })),
-        })),
-      };
-    }),
+    request.env(
+      async (raw) => {
+        const env = raw as unknown as Env;
+        const shops = await (await env.model('pos.shop').search({})).load({
+          methods: true,
+          pricelist: true,
+        });
+        const through = new Set(
+          shops.length === 0
+            ? []
+            : await env.asSuperuser({ reason: 'payment methods of the counter' }, (su) =>
+                su.model('pos.shop').browse(shops.ids).providerMethods(),
+              ),
+        );
+        return {
+          shops: shops.map((s) => ({
+            id: s.id,
+            name: s.name,
+            pricesIncludeTax: s.pricesIncludeTax,
+            receiptFooter: s.receiptFooter,
+            pricelist: (s.pricelist?.id as number | undefined) ?? null,
+            methods: [...s.methods].map((m) => ({
+              id: m.id,
+              name: m.name,
+              kind: m.kind,
+              // Paid on the provider's page, opened by the customer: the cashier does not type it in.
+              provider: through.has(m.id as number),
+            })),
+          })),
+        };
+      },
+      { write: true },
+    ),
   );
+
+  // `POST /api/v1/counter/payments` `{ session, method, amount }`: asks the method's provider for a payment — the
+  // reference to follow it by and the page the customer pays on, as a link and as a QR code to scan.
+  // `GET /api/v1/counter/payments/:reference?session=`: where it stands. Both in the cashier's own open session.
+  const openSession = async (env: Env, session: number) => {
+    const [current] = await env
+      .model('pos.session')
+      .search({ where: { id: session as Id<'pos.session'> }, limit: 1 })
+      .then((found) => found.load({ shop: { methods: true } }));
+    if (current === undefined)
+      throw new HttpProblem(404, 'missing-record', 'Not found', 'No such session.');
+    if (current.state !== 'open')
+      throw new HttpProblem(409, 'session-closed', 'Session closed', 'The session is closed.');
+    return current;
+  };
+  app.post('/api/v1/counter/payments', async (request, reply) => {
+    const body = (request.body ?? {}) as { session?: unknown; method?: unknown; amount?: unknown };
+    const session = idOf(body.session, 'session');
+    const method = idOf(body.method, 'method');
+    const amount = text(body.amount);
+    if (!/^\d{1,12}(\.\d{1,2})?$/.test(amount) || Number(amount) <= 0)
+      throw new HttpProblem(422, 'invalid-amount', 'Another look', 'The amount to ask for.');
+    const asked = await request.env(
+      async (raw) => {
+        const env = raw as unknown as Env;
+        const current = await openSession(env, session);
+        if (![...current.shop.methods].some((m) => m.id === method))
+          throw new HttpProblem(422, 'invalid-method', 'Another look', 'A method of this shop.');
+        return env.asSuperuser({ reason: 'a payment asked for at the counter' }, (su) =>
+          su
+            .model('pos.shop')
+            .browse([current.shop.id])
+            .requestPayment({ session, method, amount }),
+        );
+      },
+      { write: true },
+    );
+    if (asked === null)
+      throw new HttpProblem(
+        409,
+        'no-provider',
+        'No provider',
+        'This method is not paid through a payment provider.',
+      );
+    return reply.status(201).send({
+      reference: asked.reference,
+      url: asked.url,
+      // What the customer scans: drawn here, so the till shows a picture and nothing of the address is run.
+      qr: `data:image/svg+xml;base64,${Buffer.from(qrSvg(asked.url)).toString('base64')}`,
+    });
+  });
+  app.get('/api/v1/counter/payments/:reference', async (request) => {
+    const reference = text((request.params as { reference?: unknown }).reference).slice(0, 80);
+    const session = idOf((request.query as { session?: unknown }).session, 'session');
+    return request.env(
+      async (raw) => {
+        const env = raw as unknown as Env;
+        const [current] = await env
+          .model('pos.session')
+          .search({ where: { id: session as Id<'pos.session'> }, limit: 1 })
+          .then((found) => found.load({ shop: true }));
+        if (current === undefined)
+          throw new HttpProblem(404, 'missing-record', 'Not found', 'No such session.');
+        const state = await env.asSuperuser({ reason: 'a counter payment followed' }, (su) =>
+          su.model('pos.shop').browse([current.shop.id]).paymentState(session, reference),
+        );
+        if (state === null)
+          throw new HttpProblem(404, 'missing-record', 'Not found', 'No such payment here.');
+        return state;
+      },
+      { write: true },
+    );
+  });
 
   // `GET /api/v1/counter/catalogue?shop=&partner=`: the products on sale, at the shop's prices (its price list)
   // — or, for a named customer with a list of their own, at theirs: what the sale will charge.
@@ -568,6 +657,13 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
               },
             } as never);
             await env.flush();
+            // Money a provider received is proven before the sale counts it, and taken for this sale alone.
+            const unproven = await env.asSuperuser(
+              { reason: 'payments of a counter sale checked' },
+              (su) => su.model('pos.order').browse([orderId]).settlePayments(),
+            );
+            if (unproven !== null)
+              throw new HttpProblem(409, 'payment-unproven', 'Not paid yet', unproven);
             await orders.pay();
             await env.flush();
             if (extras.lines.length > 0)

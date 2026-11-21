@@ -74,6 +74,28 @@ export const PosShop = defineModel('pos.shop', {
       return new Map(shops.ids.map((id) => [id, 'pos.receipt']));
     }),
     /**
+     * Payment through a provider at the till (RFC 0021, Counter step 4): the methods (of these shops) that are
+     * paid on a provider's page the customer opens from a QR code, not typed in by the cashier. None here;
+     * `pos_payment` says so for the methods given a payment provider.
+     */
+    providerMethods: method('pos.shop', async (): Promise<number[]> => []),
+    /**
+     * Asks a provider for a payment of `amount` by `method` in `session`: the reference to follow it by and
+     * the page the customer pays on. Nothing here (`null`); `pos_payment` starts it. As the system.
+     */
+    requestPayment: method(
+      'pos.shop',
+      async (_input: PaymentAsked): Promise<{ reference: string; url: string } | null> => null,
+    ),
+    /** Where a payment asked for in `session` stands; `null`: no such payment there. As the system. */
+    paymentState: method(
+      'pos.shop',
+      async (
+        _session: number,
+        _reference: string,
+      ): Promise<{ state: string; amount: string; error: string | null } | null> => null,
+    ),
+    /**
      * What another app takes off a sale being rung up (RFC 0034 §2.6): the inputs it offers the cashier, the
      * lines below zero it adds for what was asked, and what it could not take, in words. Nothing here;
      * `pos_loyalty` adds promotions, points and gift cards. With `strict`, what cannot be taken is a problem
@@ -127,6 +149,14 @@ export const PosShop = defineModel('pos.shop', {
     }),
   },
 });
+
+/** A payment asked of a provider at the till. */
+export interface PaymentAsked {
+  readonly session: number;
+  readonly method: number;
+  /** A decimal string, above zero. */
+  readonly amount: string;
+}
 
 /** A sale being rung up, as an app that takes something off it reads it. Amounts in hundredths. */
 export interface ExtrasSale {
@@ -510,6 +540,12 @@ export const PosOrder = defineModel('pos.order', {
      * `saleExtras` returned) — points and gift cards are held for this sale. Nothing here. As the system.
      */
     extrasKept: method('pos.order', async (_token: unknown): Promise<void> => undefined),
+    /**
+     * The payments of a sale that need proof — money a provider received — are checked, and the proof is
+     * taken for this sale so that it pays no other. Returns what is wrong, in words, or `null`. Nothing to
+     * check here; `pos_payment` checks the methods that have a provider. As the system, before the sale is paid.
+     */
+    settlePayments: method('pos.order', async (): Promise<string | null> => null),
   },
   sqlConstraints: {
     oneClientId: {
