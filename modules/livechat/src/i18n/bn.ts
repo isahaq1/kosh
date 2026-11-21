@@ -6,6 +6,10 @@ export const bn: Readonly<Record<string, string>> = {
     'এত সময় কেউ না লিখলে কথোপকথন বন্ধ হয়ে যায়।',
   'A conversation nobody answered for this long is missed: it leaves the waiting list and is counted.':
     'এত সময় কেউ উত্তর না দিলে কথোপকথনটি মিস হয়: অপেক্ষার তালিকা থেকে সরে যায় এবং গণনা হয়।',
+  'A conversation that ended becomes a ticket or a deal by its channel’s routing rules, once, with what was said.':
+    'শেষ হওয়া কথোপকথন চ্যানেলের রাউটিং নিয়ম অনুযায়ী একবারই টিকিট বা ডিল হয়, যা বলা হয়েছে তা-সহ।',
+  'A part of the address of the page they wrote from, such as /pricing. Empty: any page.':
+    'যে পাতা থেকে লিখেছেন তার ঠিকানার একটি অংশ, যেমন /pricing। ফাঁকা: যেকোনো পাতা।',
   Active: 'সক্রিয়',
   'Add the chat window’s address to your server’s address and open it from a button of your site. To show it inside your pages, name the sites that may.':
     'চ্যাট উইন্ডোর ঠিকানা আপনার সার্ভারের ঠিকানার সঙ্গে যোগ করে সাইটের একটি বোতাম থেকে খুলুন। পাতার ভেতরে দেখাতে চাইলে যে সাইটগুলো দেখাতে পারবে সেগুলোর নাম দিন।',
@@ -14,11 +18,16 @@ export const bn: Readonly<Record<string, string>> = {
   'An operator was there': 'একজন অপারেটর উপস্থিত ছিলেন',
   'An operator whose inbox was not open in the last minute and a half is not there.':
     'গত দেড় মিনিটে যাঁর ইনবক্স খোলা ছিল না, সেই অপারেটর উপস্থিত নন।',
+  'And the visitor wrote': 'এবং দর্শনার্থী লিখেছেন',
   Assignment: 'বণ্টন',
   At: 'সময়',
   'Average rating': 'গড় রেটিং',
   'Average wait (seconds)': 'গড় অপেক্ষা (সেকেন্ড)',
+  Became: 'যা হয়েছে',
+  'Became (model)': 'যা হয়েছে (মডেল)',
+  'Became (record)': 'যা হয়েছে (রেকর্ড)',
   'By operator': 'অপারেটর অনুযায়ী',
+  'By the rule': 'যে নিয়মে',
   Channel: 'চ্যানেল',
   Channels: 'চ্যানেল',
   'Chat channel': 'চ্যাট চ্যানেল',
@@ -26,6 +35,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Chat ended': 'চ্যাট শেষ হয়েছে',
   'Chat message': 'চ্যাট বার্তা',
   'Chat missed (nobody answered in time)': 'চ্যাট মিস হয়েছে (সময়মতো কেউ উত্তর দেননি)',
+  'Chat routing rule': 'চ্যাট রাউটিং নিয়ম',
+  'Chat routing rules': 'চ্যাট রাউটিং নিয়ম',
   'Chat transcript': 'চ্যাটের প্রতিলিপি',
   'Chat window': 'চ্যাট উইন্ডো',
   Closed: 'বন্ধ',
@@ -46,16 +57,19 @@ export const bn: Readonly<Record<string, string>> = {
   Ended: 'শেষ হয়েছে',
   'First answer': 'প্রথম উত্তর',
   From: 'প্রেরক',
+  'From a page with': 'যে পাতার ঠিকানায় আছে',
   'From page': 'যে পাতা থেকে',
   'From the visitor’s first message to the operator’s first answer.':
     'দর্শনার্থীর প্রথম বার্তা থেকে অপারেটরের প্রথম উত্তর পর্যন্ত।',
   'Given out': 'বণ্টনের নিয়ম',
   'Given to the operator': 'অপারেটরকে দেওয়া হয়েছে',
   'How it went': 'কেমন গেল',
+  'However it ended': 'যেভাবেই শেষ হোক',
   ID: 'আইডি',
   'In turn': 'পালাক্রমে',
   Inbox: 'ইনবক্স',
   'Inbox last open': 'ইনবক্স শেষ খোলা ছিল',
+  'It becomes': 'এটি হবে',
   Language: 'ভাষা',
   'Last message': 'শেষ বার্তা',
   'Left alone': 'কেউ না দেখলে',
@@ -70,7 +84,11 @@ export const bn: Readonly<Record<string, string>> = {
   Mine: 'আমার',
   Missed: 'মিস হয়েছে',
   'Missed after (minutes)': 'মিস হবে (মিনিট পরে)',
+  'Missed: nobody answered in time. Closed: it was answered and ended. Or either.':
+    'মিস: সময়মতো কেউ উত্তর দেননি। বন্ধ: উত্তর দেওয়া হয়েছে এবং শেষ হয়েছে। অথবা যেকোনোটি।',
   Name: 'নাম',
+  'No installed app makes that of a conversation. With Helpdesk: helpdesk.ticket; with Pipeline: crm.deal.':
+    'ইনস্টল করা কোনো অ্যাপ কথোপকথন থেকে এটি তৈরি করে না। Helpdesk থাকলে: helpdesk.ticket; Pipeline থাকলে: crm.deal।',
   Note: 'নোট',
   'On your site': 'আপনার সাইটে',
   'One presence per operator.': 'প্রতি অপারেটরের একটি উপস্থিতি।',
@@ -88,6 +106,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Page {{page}} of {{pages}}': 'পৃষ্ঠা {{page}} / {{pages}}',
   Rating: 'রেটিং',
   Reference: 'রেফারেন্স',
+  'Routing rules': 'রাউটিং নিয়ম',
+  Sequence: 'ক্রম',
   Session: 'কথোপকথন',
   'Sites that may frame it': 'যে সাইটগুলো এটি পাতার ভেতরে দেখাতে পারে',
   Started: 'শুরু',
@@ -99,12 +119,17 @@ export const bn: Readonly<Record<string, string>> = {
     'এই সার্ভারে চ্যাট উইন্ডোর ঠিকানা: সাইটের একটি বোতাম থেকে খুলুন, অথবা পাতার ভেতরে দেখান।',
   'The addresses of the sites that may show the chat window inside their pages, one per line (https://shop.example.com). Empty: none — a site then opens it in a window of its own.':
     'যে সাইটগুলো তাদের পাতার ভেতরে চ্যাট উইন্ডো দেখাতে পারবে সেগুলোর ঠিকানা, প্রতি লাইনে একটি (https://shop.example.com)। ফাঁকা: কোনোটিই নয় — সাইট তখন আলাদা উইন্ডোতে খোলে।',
+  'The kind of record the conversation became when it ended: a ticket, a deal.':
+    'শেষ হওয়ার পর কথোপকথনটি যে ধরনের রেকর্ড হয়েছে: টিকিট, ডিল।',
+  'The model of the record made: helpdesk.ticket with Helpdesk, crm.deal with Pipeline — when Live chat is installed with them.':
+    'যে রেকর্ড তৈরি হবে তার মডেল: Helpdesk থাকলে helpdesk.ticket, Pipeline থাকলে crm.deal — লাইভ চ্যাট এদের সঙ্গে ইনস্টল থাকলে।',
   'The operators answer from Live chat › Inbox. A conversation goes to one who is there — their inbox open, taking conversations — or waits for one to take it.':
     'অপারেটররা Live chat › Inbox থেকে উত্তর দেন। কথোপকথন যায় উপস্থিত একজনের কাছে — যাঁর ইনবক্স খোলা এবং যিনি কথোপকথন নিচ্ছেন — অথবা কেউ নেওয়া পর্যন্ত অপেক্ষা করে।',
   'The page of the site the visitor wrote from, as their browser said.':
     'সাইটের যে পাতা থেকে দর্শনার্থী লিখেছেন, তাঁর ব্রাউজার যা জানিয়েছে।',
   'The visitor, the operator, or a note the server wrote: who joined, how it ended.':
     'দর্শনার্থী, অপারেটর, অথবা সার্ভারের লেখা নোট: কে যোগ দিলেন, কীভাবে শেষ হলো।',
+  Then: 'তখন',
   'To the least busy': 'সবচেয়ে কম ব্যস্ত জনকে',
   'Two channels cannot share a link key.': 'দুটি চ্যানেলের লিংক কী এক হতে পারে না।',
   'Updated At': 'হালনাগাদের সময়',
@@ -121,13 +146,21 @@ export const bn: Readonly<Record<string, string>> = {
   'What a visitor reads before they write.': 'লেখার আগে দর্শনার্থী যা পড়েন।',
   'What a visitor reads when no operator is there. Their message is kept, with their email.':
     'কোনো অপারেটর না থাকলে দর্শনার্থী যা পড়েন। তাঁর বার্তা ইমেইলসহ রাখা হয়।',
+  'What it became': 'এটি যা হয়েছে',
   'What visitors read': 'দর্শনার্থীরা যা পড়েন',
   'What visitors read at the top of the chat window.': 'চ্যাট উইন্ডোর উপরে দর্শনার্থীরা যা পড়েন।',
+  When: 'কখন',
+  'When a conversation of the channel ends, the first rule it meets, in order, makes it a record of another app — with what was said, the visitor and their email.':
+    'চ্যানেলের কোনো কথোপকথন শেষ হলে ক্রম অনুযায়ী প্রথম যে নিয়মটি মেলে, সেটি একে অন্য অ্যাপের রেকর্ড বানায় — যা বলা হয়েছে, দর্শনার্থী ও তাঁর ইমেইলসহ।',
+  'When it': 'যখন এটি',
   'When nobody is there': 'কেউ না থাকলে',
+  'Where conversations go': 'কথোপকথন কোথায় যায়',
   'Whether an operator was there when the visitor wrote; if not, they were asked for their email.':
     'দর্শনার্থী লেখার সময় কোনো অপারেটর ছিলেন কি না; না থাকলে তাঁর ইমেইল চাওয়া হয়েছিল।',
   'Who answers this channel. They see its conversations, and only its conversations.':
     'এই চ্যানেলের উত্তর যাঁরা দেন। তাঁরা এর কথোপকথনগুলো দেখেন, শুধু এগুলোই।',
   'Who gets a new conversation among the operators who are there: the one who waited longest, the one with the fewest conversations, or whoever takes it.':
     'উপস্থিত অপারেটরদের মধ্যে নতুন কথোপকথন কে পাবেন: যিনি সবচেয়ে বেশি অপেক্ষা করেছেন, যাঁর কথোপকথন সবচেয়ে কম, অথবা যিনি নিজে নেন।',
+  'Words separated by commas: any of them, as whole words, in what the visitor wrote. Empty: whatever they wrote.':
+    'কমা দিয়ে আলাদা করা শব্দ: দর্শনার্থীর লেখায় এগুলোর যেকোনোটি, পূর্ণ শব্দ হিসেবে। ফাঁকা: তিনি যা-ই লিখুন।',
 };

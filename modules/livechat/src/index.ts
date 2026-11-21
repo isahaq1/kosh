@@ -17,6 +17,8 @@
  * - `PUT  /api/v1/livechat/presence`               `{ available }`
  * - `GET  /api/v1/livechat/sessions/:id?after=`    a conversation of my channels
  * - `POST /api/v1/livechat/sessions/:id/take` · `…/messages` `{ body }` · `…/close`
+ * - `GET  /api/v1/livechat/targets`                what a conversation may become, with the installed apps
+ * - `POST /api/v1/livechat/sessions/:id/route`     `{ target }` — an ended conversation becomes a record, once
  */
 import { randomBytes } from 'node:crypto';
 import { contacts } from '@kosh/contacts';
@@ -24,6 +26,7 @@ import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
 import { reporting } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
+import type { Worker } from '@kosh/server/orm';
 import { action, form, list, pivot, search } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import { livechatDemo } from './demo.js';
@@ -34,9 +37,12 @@ import {
   LivechatChannel,
   LivechatMessage,
   LivechatPresence,
+  LivechatRule,
   LivechatSession,
   livechatShutro,
   type Refused,
+  routeSession,
+  routeTargets,
   say,
   sessionOf,
   sessionView,
@@ -52,12 +58,18 @@ export {
   cleanText,
   firstName,
   isThere,
+  keywordsOf,
+  type Line,
   MAX_MESSAGE,
   MAX_MESSAGES,
   type Operator,
   overdue,
   PRESENCE_TTL_MS,
   pickOperator,
+  pickRule,
+  type RouteRule,
+  subjectOf,
+  transcriptOf,
   waited,
 } from './engine.js';
 export {
@@ -69,9 +81,13 @@ export {
   LivechatChannel,
   LivechatMessage,
   LivechatPresence,
+  LivechatRule,
   LivechatSession,
   livechatShutro,
   type Refused,
+  type Routed,
+  routeSession,
+  routeTargets,
   type SessionView,
   say,
   sessionOf,
@@ -82,6 +98,27 @@ export {
   takeSession,
   widgetPath,
 } from './module.js';
+
+/** The worker that makes a conversation which ended what its channel's rules say; tests `drain()` it. */
+export function livechatWorkers(context: Pick<ModuleContext, 'shutro'>): Worker[] {
+  const route = (name: string, topic: string): Worker =>
+    context.shutro.subscribe(
+      name,
+      topic,
+      async (event, env) => {
+        const id = Number((event.payload as { id?: unknown } | null)?.id);
+        if (!Number.isInteger(id)) return;
+        await (env as unknown as Env).asSuperuser({ reason: 'a chat routed by its rules' }, (su) =>
+          routeSession(su, id),
+        );
+      },
+      { pollMs: 5000 },
+    );
+  return [
+    route('livechat.route.closed', 'livechat.session.closed'),
+    route('livechat.route.missed', 'livechat.session.missed'),
+  ];
+}
 
 const SAID = {
   unknown: [404, 'No such conversation.'],
@@ -338,7 +375,46 @@ function registerLivechatRoutes(context: ModuleContext, sweeps: boolean): void {
     );
   });
 
+  app.get('/api/v1/livechat/targets', async (request) =>
+    asOperator(request as never, 'what a chat may become', async (su) => ({
+      targets: await routeTargets(su),
+    })),
+  );
+
+  app.post('/api/v1/livechat/sessions/:id/route', async (request) => {
+    const id = idOf(request.params);
+    const target = String((request.body as { target?: unknown } | null)?.target ?? '').slice(0, 80);
+    return asOperator(
+      request as never,
+      'a chat made a record by an operator',
+      async (su) => {
+        if (!(await routeTargets(su)).includes(target))
+          throw new HttpProblem(
+            422,
+            'livechat-target',
+            'Another look',
+            'No installed app makes that of a conversation.',
+          );
+        const routed = await routeSession(su, id, target);
+        if (routed === null)
+          throw new HttpProblem(
+            409,
+            'livechat-open',
+            'Live chat',
+            'A conversation becomes a record once it has ended.',
+          );
+        return routed;
+      },
+      id,
+    );
+  });
+
   if (!sweeps) return;
+  const workers = livechatWorkers(context);
+  for (const w of workers) w.start();
+  app.addHook('onClose', async () => {
+    for (const w of workers) await w.stop();
+  });
   // Once a minute: what nobody answered is missed, what went quiet is closed. A second server finds nothing left.
   const timer = setInterval(() => {
     void asSystem('chats left alone', (env) => sweepSessions(env)).catch((error: unknown) =>
@@ -449,6 +525,18 @@ export function livechatModule(options: LivechatOptions = {}): ReturnType<typeof
           { header: 'When nobody is there', field: 'offline' },
         ],
       },
+      {
+        key: 'livechat_rule',
+        model: 'livechat.rule',
+        label: 'Chat routing rules',
+        columns: [
+          { header: 'Name', field: 'name' },
+          { header: 'Channel', field: 'channel' },
+          { header: 'When it', field: 'on' },
+          { header: 'And the visitor wrote', field: 'keywords' },
+          { header: 'It becomes', field: 'target' },
+        ],
+      },
     ],
     // The Overview (RFC 0022 step 2): who waits now, and how the month went.
     overview: {
@@ -528,6 +616,10 @@ export function livechatModule(options: LivechatOptions = {}): ReturnType<typeof
         label: 'Channels',
         views: ['list', 'form'],
       }),
+      'livechat.action_rules': action(LivechatRule, {
+        label: 'Routing rules',
+        views: ['list', 'form'],
+      }),
       'livechat.action_messages': action(LivechatMessage, {
         label: 'Messages',
         views: ['list', 'form'],
@@ -562,11 +654,18 @@ export function livechatModule(options: LivechatOptions = {}): ReturnType<typeof
         sequence: 1,
       },
       {
+        id: 'livechat.rules',
+        parent: 'livechat.config',
+        label: 'Routing rules',
+        action: 'livechat.action_rules',
+        sequence: 2,
+      },
+      {
         id: 'livechat.presence',
         parent: 'livechat.config',
         label: 'Operators',
         action: 'livechat.action_presence',
-        sequence: 2,
+        sequence: 3,
       },
     ],
     views: {
@@ -591,6 +690,14 @@ export function livechatModule(options: LivechatOptions = {}): ReturnType<typeof
           }),
           k.group('texts', ['welcome', 'offline'], { label: 'What visitors read' }),
           k.group('time', ['missAfterMin', 'closeAfterMin'], { label: 'Left alone' }),
+          k.lines('rules', [
+            { field: 'sequence', id: 'rule_sequence' },
+            { field: 'name', id: 'rule_name' },
+            { field: 'on', id: 'rule_on' },
+            { field: 'keywords', id: 'rule_keywords' },
+            { field: 'page', id: 'rule_page' },
+            { field: 'target', id: 'rule_target' },
+          ]),
           k.group('share', ['link', 'origins'], {
             label: 'On your site',
             description:
@@ -615,6 +722,7 @@ export function livechatModule(options: LivechatOptions = {}): ReturnType<typeof
           'startedAt',
           'waitSeconds',
           'messageCount',
+          'resName',
           { field: 'rating', widget: 'rating' },
           { field: 'state', widget: 'badge' },
         ],
@@ -633,6 +741,11 @@ export function livechatModule(options: LivechatOptions = {}): ReturnType<typeof
             ['startedAt', 'answeredAt', 'closedAt', 'waitSeconds', 'someoneThere', 'rating'],
             { label: 'How it went' },
           ),
+          k.group('became', ['resName', 'resModel', 'resId', 'rule'], {
+            label: 'What it became',
+            description:
+              'A conversation that ended becomes a ticket or a deal by its channel’s routing rules, once, with what was said.',
+          }),
           k.lines(
             'messages',
             [
@@ -651,6 +764,20 @@ export function livechatModule(options: LivechatOptions = {}): ReturnType<typeof
         cols: ['state'],
         measures: ['count', { avg: 'waitSeconds' }, { avg: 'rating' }],
       }),
+      'livechat.rule.list': list(LivechatRule, {
+        columns: ['channel', 'sequence', 'name', 'on', 'keywords', 'page', 'target'],
+      }),
+      'livechat.rule.form': form(LivechatRule, (k) => ({
+        header: { buttons: [] },
+        sheet: [
+          k.group('main', ['name', 'channel', 'sequence'], {
+            description:
+              'When a conversation of the channel ends, the first rule it meets, in order, makes it a record of another app — with what was said, the visitor and their email.',
+          }),
+          k.group('when', ['on', 'keywords', 'page'], { label: 'When' }),
+          k.group('then', ['target'], { label: 'Then' }),
+        ],
+      })),
       'livechat.message.list': list(LivechatMessage, {
         columns: ['session', 'at', 'kind', 'author', 'body'],
       }),
@@ -675,6 +802,10 @@ export function livechatModule(options: LivechatOptions = {}): ReturnType<typeof
           mine: { label: 'Mine', domain: { operator: { $env: 'uid' } } },
         },
         groupBy: ['channel', 'operator', 'state', 'startedAt:month'],
+      }),
+      'livechat.rule': search(LivechatRule, {
+        fields: ['name', 'keywords'],
+        groupBy: ['channel', 'target', 'on'],
       }),
       'livechat.message': search(LivechatMessage, {
         fields: ['body', 'author'],

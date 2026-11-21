@@ -7,11 +7,16 @@ import {
   cleanText,
   firstName,
   isThere,
+  keywordsOf,
   MAX_MESSAGE,
   type Operator,
   overdue,
   PRESENCE_TTL_MS,
   pickOperator,
+  pickRule,
+  type RouteRule,
+  subjectOf,
+  transcriptOf,
   waited,
 } from '../src/engine.js';
 
@@ -98,4 +103,85 @@ test('left alone: a waiting conversation is missed, a quiet one closed, an ended
 test('the wait is from the first message to the first answer, never below zero', () => {
   expect(waited(NOW, NOW + 41_400)).toBe(41);
   expect(waited(NOW, NOW - 5000)).toBe(0);
+});
+
+test('a rule’s words: separated by commas or lines, lower case, none twice', () => {
+  expect(keywordsOf(' Price, quotation\nPRICE ,, কত দাম ')).toEqual(['price', 'quotation', 'কত দাম']);
+  expect(keywordsOf(null)).toEqual([]);
+  expect(keywordsOf('  ')).toEqual([]);
+});
+
+test('the first rule a conversation meets: how it ended, a whole word, the page', () => {
+  const rule = (id: number, over: Partial<RouteRule>): RouteRule => ({
+    id,
+    on: 'any',
+    keywords: [],
+    page: null,
+    target: 'helpdesk.ticket',
+    ...over,
+  });
+  const rules = [
+    rule(1, { keywords: ['price', 'কত দাম'], target: 'crm.deal' }),
+    rule(2, { on: 'closed', keywords: ['refund'] }),
+    rule(3, { page: '/Careers' }),
+    rule(4, { on: 'missed' }),
+  ];
+  const ended = (
+    said: string,
+    over: { outcome?: 'closed' | 'missed'; page?: string | null } = {},
+  ) =>
+    pickRule(rules, { outcome: over.outcome ?? 'closed', said, page: over.page ?? null })?.id ??
+    null;
+  expect(ended('What is the PRICE?')).toBe(1);
+  expect(ended('price')).toBe(1);
+  expect(ended('এই কেটলির কত দাম?')).toBe(1);
+  // A word inside another is not that word; two words of a phrase must be together.
+  expect(ended('It is priceless')).toBeNull();
+  expect(ended('কত বেশি দাম')).toBeNull();
+  // In order: the first that is met, not the best.
+  expect(ended('A refund of the price')).toBe(1);
+  expect(ended('I want a refund.')).toBe(2);
+  // How it ended.
+  expect(ended('I want a refund.', { outcome: 'missed' })).toBe(4);
+  expect(ended('Hello', { outcome: 'missed' })).toBe(4);
+  expect(ended('Hello')).toBeNull();
+  // The page, whatever its case.
+  expect(ended('Hello', { page: 'https://example.com/careers/driver' })).toBe(3);
+  expect(ended('Hello', { page: '/pricing' })).toBeNull();
+  expect(pickRule([], { outcome: 'closed', said: 'price', page: null })).toBeNull();
+});
+
+test('a conversation as text: a line per message, with the time and who said it', () => {
+  const at = (minute: number): string => `2026-11-20T10:${String(minute).padStart(2, '0')}:00.000Z`;
+  expect(
+    transcriptOf(
+      [
+        { kind: 'visitor', author: 'Rina', body: 'Do you deliver?', at: at(0) },
+        { kind: 'system', author: '', body: 'Dina joined.', at: at(1) },
+        { kind: 'operator', author: 'Dina Rahman', body: 'Yes.', at: at(2) },
+        { kind: 'visitor', author: '', body: 'Thanks', at: at(3) },
+        { kind: 'operator', author: ' ', body: 'Welcome', at: at(4) },
+      ],
+      { visitor: 'Visitor', operator: 'Operator' },
+    ),
+  ).toBe(
+    [
+      '[10:00] Rina: Do you deliver?',
+      '[10:01] — Dina joined.',
+      '[10:02] Dina Rahman: Yes.',
+      '[10:03] Visitor: Thanks',
+      '[10:04] Operator: Welcome',
+    ].join('\n'),
+  );
+  expect(transcriptOf([], { visitor: 'V', operator: 'O' })).toBe('');
+});
+
+test('what a conversation is about: the start of the first message, cut at a word', () => {
+  expect(subjectOf('  Do you\ndeliver   to Gazipur? ')).toBe('Do you deliver to Gazipur?');
+  const long = subjectOf(`${'word '.repeat(40)}end`);
+  expect(long.length).toBeLessThanOrEqual(80);
+  expect(long.endsWith('word…')).toBe(true);
+  // One long word is cut where it must be.
+  expect(subjectOf('x'.repeat(200))).toBe(`${'x'.repeat(79)}…`);
+  expect(subjectOf('')).toBe('');
 });

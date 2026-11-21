@@ -374,6 +374,8 @@ export const helpdesk: ReturnType<typeof defineModule> = defineModule({
         ],
       },
       sheet: [
+        // Tiles other apps add: the chat a ticket came from (`livechat_helpdesk`).
+        k.stats('related', []),
         k.group('main', [
           'name',
           'subject',

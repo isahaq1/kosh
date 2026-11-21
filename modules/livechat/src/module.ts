@@ -11,16 +11,28 @@ import { contactsShutro } from '@kosh/contacts';
 import { messagingShutro } from '@kosh/messaging';
 import { emitting } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
-import { compute, defineModel, defineModule, type Env, f } from './.kosh/bindings.js';
+import {
+  check,
+  compute,
+  defineModel,
+  defineModule,
+  type Env,
+  f,
+  method,
+} from './.kosh/bindings.js';
 import {
   type AssignRule,
   cleanText,
   firstName,
   isThere,
+  keywordsOf,
   MAX_MESSAGES,
   type Operator,
   overdue,
   pickOperator,
+  pickRule,
+  subjectOf,
+  transcriptOf,
   waited,
 } from './engine.js';
 
@@ -101,6 +113,7 @@ export const LivechatChannel = defineModel('livechat.channel', {
       label: 'Sites that may frame it',
       help: 'The addresses of the sites that may show the chat window inside their pages, one per line (https://shop.example.com). Empty: none — a site then opens it in a window of its own.',
     }),
+    rules: f.one2many('livechat.rule', 'channel', { label: 'Where conversations go' }),
     missAfterMin: f.integer({
       required: true,
       default: 10,
@@ -113,6 +126,13 @@ export const LivechatChannel = defineModel('livechat.channel', {
       label: 'Closed after (quiet minutes)',
       help: 'A conversation in which nobody wrote for this long is closed.',
     }),
+  },
+  methods: {
+    /**
+     * The models a conversation may become a record of: none here; bridges add theirs (`livechat_helpdesk`:
+     * `helpdesk.ticket`, `livechat_crm`: `crm.deal`).
+     */
+    routeTargets: method('livechat.channel', async (): Promise<string[]> => []),
   },
   sqlConstraints: {
     oneKey: { unique: ['key'], message: 'Two channels cannot share a link key.' },
@@ -212,6 +232,19 @@ export const LivechatSession = defineModel('livechat.session', {
       help: 'One to five, given by the visitor when the conversation ends.',
     }),
     messages: f.one2many('livechat.message', 'session'),
+    resModel: f.char({
+      size: 80,
+      label: 'Became (model)',
+      groups: { write: [...SYSTEM] },
+      help: 'The kind of record the conversation became when it ended: a ticket, a deal.',
+    }),
+    resId: f.integer({ label: 'Became (record)', groups: { write: [...SYSTEM] } }),
+    resName: f.char({ label: 'Became', groups: { write: [...SYSTEM] } }),
+    rule: f.many2one('livechat.rule', {
+      ondelete: 'set null',
+      label: 'By the rule',
+      groups: { write: [...SYSTEM] },
+    }),
     state: f.state({
       help: 'Waiting until an operator has it; active while they talk; closed when it ends; missed when nobody answered in time.',
       states: { waiting: 'Waiting', active: 'Active', closed: 'Closed', missed: 'Missed' },
@@ -223,8 +256,94 @@ export const LivechatSession = defineModel('livechat.session', {
       },
     }),
   },
+  methods: {
+    /**
+     * Makes the record a conversation becomes, of one of the channel's `routeTargets()`, and returns its id and
+     * what it is called. Nothing here; the bridge of the target's app does it. Called as the system.
+     */
+    makeRecord: method(
+      'livechat.session',
+      async (_target: string, _about: Routed): Promise<{ id: number; name: string } | null> => null,
+    ),
+  },
   sqlConstraints: {
     rating: { check: orm.sql`rating IS NULL OR rating BETWEEN 1 AND 5`, message: 'One to five.' },
+  },
+});
+
+/** What a bridge is given to make a record of a conversation. */
+export interface Routed {
+  readonly session: number;
+  readonly company: number;
+  /** The start of the visitor's first message. */
+  readonly subject: string;
+  /** The conversation as text: a line per message. */
+  readonly transcript: string;
+  readonly visitorName: string | null;
+  readonly visitorEmail: string | null;
+  readonly page: string | null;
+  /** The operator who answered, if anybody did. */
+  readonly operator: number | null;
+  readonly outcome: 'closed' | 'missed';
+}
+
+/** The rules whose target no installed app makes records of. */
+async function badTargets(env: Env, ids: readonly number[]): Promise<number[]> {
+  if (ids.length === 0) return [];
+  const allowed = await env.model('livechat.channel').browse([]).routeTargets();
+  const rules = await env
+    .model('livechat.rule')
+    .browse([...ids] as never)
+    .load(['target']);
+  return [...rules].filter((r) => !allowed.includes(r.target)).map((r) => r.id as number);
+}
+
+const RULE_ON = { any: 'However it ended', missed: 'Missed', closed: 'Closed' } as const;
+
+/**
+ * Where a channel's conversations go when they end: the first rule, in order, that a conversation meets makes it
+ * a record of another app — a ticket, a deal — with what was said.
+ */
+export const LivechatRule = defineModel('livechat.rule', {
+  label: 'Chat routing rule',
+  recName: 'name',
+  order: ['channel asc', 'sequence asc', 'id asc'],
+  archivable: true,
+  access: { 'livechat.user': READ, 'livechat.manager': [...ALL, 'export', 'import'] },
+  fields: {
+    name: f.char({ required: true }),
+    channel: f.many2one('livechat.channel', { required: true, ondelete: 'cascade' }),
+    sequence: f.integer({ required: true, default: 10 }),
+    on: f.selection(RULE_ON, {
+      required: true,
+      default: 'any',
+      label: 'When it',
+      help: 'Missed: nobody answered in time. Closed: it was answered and ended. Or either.',
+    }),
+    keywords: f.text({
+      label: 'And the visitor wrote',
+      help: 'Words separated by commas: any of them, as whole words, in what the visitor wrote. Empty: whatever they wrote.',
+    }),
+    page: f.char({
+      size: 200,
+      label: 'From a page with',
+      help: 'A part of the address of the page they wrote from, such as /pricing. Empty: any page.',
+    }),
+    target: f.char({
+      size: 80,
+      required: true,
+      label: 'It becomes',
+      help: 'The model of the record made: helpdesk.ticket with Helpdesk, crm.deal with Pipeline — when Live chat is installed with them.',
+    }),
+  },
+  constraints: {
+    knownTarget: {
+      ...check('livechat.rule', ['target'], (rules) =>
+        badTargets(rules.env as unknown as Env, rules.ids as readonly number[]),
+      ),
+      message:
+        'No installed app makes that of a conversation. With Helpdesk: helpdesk.ticket; with Pipeline: crm.deal.',
+    },
   },
 });
 
@@ -776,6 +895,81 @@ export async function inboxOf(
   return { available: presence?.available === true, channels: ids.length, sessions };
 }
 
+/** The models a conversation may become a record of, with the installed apps. */
+export async function routeTargets(env: Env): Promise<string[]> {
+  return env.model('livechat.channel').browse([]).routeTargets();
+}
+
+/**
+ * A conversation that ended becomes a record of another app (RFC 0034 §2.6) — **once**: by the first rule of its
+ * channel that it meets, or as `target` when an operator says so. The record is made by the target's bridge, with
+ * what was said; the conversation keeps what it became. Returns it, or `null` when nothing was made.
+ */
+export async function routeSession(
+  su: Env,
+  session: number,
+  target?: string,
+): Promise<{ model: string; id: number; name: string; made: boolean } | null> {
+  const all = su.withFlags({ checkCompany: false }) as Env;
+  const sessions = all.model('livechat.session').browse([session as never]);
+  const [s] = await sessions.load({ channel: true, operator: true, messages: true });
+  if (s === undefined) return null;
+  if (s.resModel !== null && s.resId !== null)
+    return { model: s.resModel, id: s.resId, name: s.resName ?? '', made: false };
+  if (s.state !== 'closed' && s.state !== 'missed') return null;
+  const lines = [...s.messages].sort((a, b) => (a.id as number) - (b.id as number));
+  const said = lines.filter((m) => m.kind === 'visitor').map((m) => m.body);
+  let rule: number | null = null;
+  let model = target ?? null;
+  if (model === null) {
+    const rules = await all
+      .model('livechat.rule')
+      .search({ where: { channel: s.channel.id } as never, order: ['sequence asc', 'id asc'] });
+    const picked = pickRule(
+      [...rules].map((r) => ({
+        id: r.id as number,
+        on: r.on as 'any' | 'closed' | 'missed',
+        keywords: keywordsOf(r.keywords),
+        page: r.page ?? null,
+        target: r.target,
+      })),
+      { outcome: s.state, said: said.join('\n'), page: s.page ?? null },
+    );
+    if (picked === null) return null;
+    rule = picked.id;
+    model = picked.target;
+  }
+  if (!(await routeTargets(all)).includes(model)) return null;
+  const made = await sessions.makeRecord(model, {
+    session,
+    company: s.company.id as number,
+    subject: subjectOf(said[0] ?? ''),
+    transcript: transcriptOf(
+      lines.map((m) => ({
+        kind: m.kind,
+        author: m.author ?? '',
+        body: m.body,
+        at: new Date(m.at as never).toISOString(),
+      })),
+      { visitor: s.visitorName ?? 'Visitor', operator: s.operator?.name ?? 'Operator' },
+    ),
+    visitorName: s.visitorName ?? null,
+    visitorEmail: s.visitorEmail ?? null,
+    page: s.page ?? null,
+    operator: (s.operator?.id as number | undefined) ?? null,
+    outcome: s.state,
+  });
+  if (made === null) return null;
+  await sessions.write({
+    resModel: model,
+    resId: made.id,
+    resName: made.name.slice(0, 200),
+    rule,
+  } as never);
+  await all.flush();
+  return { model, id: made.id, name: made.name, made: true };
+}
+
 export const livechatShutro = defineModule({
   name: 'livechat',
   version: '0.1.0',
@@ -800,5 +994,5 @@ export const livechatShutro = defineModule({
       reset: 'yearly',
     }),
   ],
-  models: [LivechatChannel, LivechatPresence, LivechatSession, LivechatMessage],
+  models: [LivechatChannel, LivechatPresence, LivechatSession, LivechatMessage, LivechatRule],
 });

@@ -108,3 +108,92 @@ export function overdue(
 export function waited(startedAt: number, answeredAt: number): number {
   return Math.max(0, Math.round((answeredAt - startedAt) / 1000));
 }
+
+// ---- where a conversation goes when it ends
+
+/** A rule of a channel: conversations that end this way, about this, become a record of another app. */
+export interface RouteRule {
+  readonly id: number;
+  /** How the conversation ended: closed, missed, or either. */
+  readonly on: 'closed' | 'missed' | 'any';
+  /** Any of these words in what the visitor wrote (whole words, any case); none: whatever they wrote. */
+  readonly keywords: readonly string[];
+  /** A part of the address of the page they wrote from; `null`: any page. */
+  readonly page: string | null;
+  /** The model the conversation becomes a record of. */
+  readonly target: string;
+}
+
+/** The words of a rule's setting: separated by commas or lines, trimmed, lower case, none twice. */
+export function keywordsOf(setting: string | null | undefined): string[] {
+  return [
+    ...new Set(
+      (setting ?? '')
+        .split(/[,\n]/)
+        .map((w) => w.trim().toLowerCase())
+        .filter((w) => w !== ''),
+    ),
+  ].slice(0, 50);
+}
+
+const wordsOf = (text: string): string =>
+  ` ${text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ')
+    .trim()} `;
+
+/**
+ * The first rule, in the channel's order, that a conversation which ended meets: how it ended, a word the
+ * visitor wrote, the page they wrote from. `null`: no rule — the conversation stays a conversation.
+ */
+export function pickRule(
+  rules: readonly RouteRule[],
+  ended: {
+    readonly outcome: 'closed' | 'missed';
+    readonly said: string;
+    readonly page: string | null;
+  },
+): RouteRule | null {
+  const said = wordsOf(ended.said);
+  const page = (ended.page ?? '').toLowerCase();
+  return (
+    rules.find(
+      (r) =>
+        (r.on === 'any' || r.on === ended.outcome) &&
+        (r.keywords.length === 0 || r.keywords.some((k) => said.includes(wordsOf(k)))) &&
+        (r.page === null || r.page.trim() === '' || page.includes(r.page.trim().toLowerCase())),
+    ) ?? null
+  );
+}
+
+export interface Line {
+  readonly kind: string;
+  readonly author: string;
+  readonly body: string;
+  /** ISO time. */
+  readonly at: string;
+}
+
+/** A conversation as text, for the record it becomes: a line per message, with the time (UTC) and who said it. */
+export function transcriptOf(
+  lines: readonly Line[],
+  names: { readonly visitor: string; readonly operator: string },
+): string {
+  return lines
+    .map((l) => {
+      const at = l.at.slice(11, 16);
+      if (l.kind === 'system') return `[${at}] — ${l.body}`;
+      const who = l.author.trim() || (l.kind === 'operator' ? names.operator : names.visitor);
+      return `[${at}] ${who}: ${l.body}`;
+    })
+    .join('\n');
+}
+
+/** What a conversation is about, in a line: the start of the visitor's first message. */
+export function subjectOf(first: string, max = 80): string {
+  const line = first.replace(/\s+/g, ' ').trim();
+  if (line.length <= max) return line;
+  const cut = line.slice(0, max - 1);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > max / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
