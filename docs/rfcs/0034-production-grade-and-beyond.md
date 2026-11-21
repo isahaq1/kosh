@@ -917,3 +917,18 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   **Left out**: gift cards as a payment method of the session (a liability account instead of less revenue),
   discounts that lower the tax, Sales' own functions moved onto `workOutCredits`, the receipt naming the points
   left on the card. Step 12 is complete with this part.
+
+- **Leftovers taken (2026-11-21).** *The inbox's buttons*: an ended conversation offers what the installed apps
+  make of one (`GET /api/v1/livechat/targets`) as buttons — *Make a ticket of it*, *Make a deal of it* —, calls the
+  route that was there, and says what it became. *Gift cards sold as a product*: `giftCard` and `giftCardMonths`
+  on `product.product` (Loyalty's extension), `soldOn` / `soldLine` on the gift card, `giftCardsSentAt` on the
+  order. `issueGiftCards` (the worker on `sale.order.confirmed`, after the points): one card per whole unit of
+  such a line, loaded with the line's untaxed amount per unit, idempotent by counting the line's cards;
+  `giftCardsToSend` marks the order and returns the email once, sent after the commit by the module's mailer
+  (optional; `loyaltyWorkers(context, { mailer })`); `voidGiftCards` on `sale.order.cancelled` takes off what the
+  cards still hold. Gift cards are left out of what promotions apply to — in Sales, and in the goods the Counter's
+  bridge hands to `workOutCredits`. Tests: on real PostgreSQL (4: two cards once with the email once, the event
+  and the function called again; promotions on the rice only, the Bangla email, a part of a unit and a discount,
+  nobody to write to; a sold card paying an order, the cancellation taking off what is left and leaving what was
+  spent; who may, and the fields nobody writes); the inbox's button in the Live chat E2E.
+  **Left out**: cards issued for gift card products sold at the Counter; a liability account for cards sold.

@@ -1141,7 +1141,10 @@ person.
 Other apps on the server use the same assistant, under the same rules, through `assistantService(context)` of
 `@kosh/assistant` (`ready(company)`, `json(about, request)`).
 
-**Not yet**: a button in the inbox for making a ticket or a deal by hand (the API does it), a rule choosing the
+In the inbox, an ended conversation that became nothing offers **Make a ticket of it** and **Make a deal of it**
+(what the installed apps make); the inbox then says what it became.
+
+**Not yet**: a rule choosing the
 Helpdesk team, the assistant reading the Shop's products or Helpdesk's canned replies, answers streamed word by
 word, typing indicators, files in a conversation, a chat block for Sites pages. The window and the inbox ask the
 server every few seconds rather than holding a socket open.
@@ -1746,6 +1749,24 @@ nothing. Another app takes something off Counter sales by overriding `saleExtras
 tax, as on a Sales order, so the tax of the sale stays that of the goods; a gift card is not a payment method
 of the session; a sale paid in part by a gift card earns points on what its lines come to, as in Sales.
 
-**Not yet**: gift cards sold as a product, points, credit and promotions on a quotation already sent,
+### Gift cards sold as a product
+
+A product may be **Sold as a gift card** (its form, under *Sell*; a Products manager's to say), with the months a
+card is valid for. When an order with it is **confirmed** — a Sales order or one placed in the Shop —, each unit
+sold makes a gift card: loaded with what the unit was sold for before taxes (a card sold at a discount holds what
+was paid), valid for the product's months from that day, noted with the order it was sold on. Once: the order
+read again makes nothing more. The order shows them (*Gift cards sold*), and their **codes are emailed to the
+order's customer**, once, in English or Bangla, when the server can send email and the customer has an address;
+otherwise staff read them on the order. Whoever has a code pays with it, as with any gift card.
+
+Promotions leave gift cards alone — on quotations, in the Shop and at the Counter —: a card is worth what it is
+sold for. When the order is **cancelled**, its cards pay nothing more: what each still holds is taken off, once;
+what was already spent with them stays spent.
+
+**Limits**: selling a gift card is booked as a sale like any other line, and paying with one takes off the
+order it pays — not a liability carried between the two; a card sold at the Counter is a line of the sale, and
+makes no card yet.
+
+**Not yet**: points, credit and promotions on a quotation already sent,
 a discount that lowers the tax of the order — promotion lines, like the Shop's amount coupons, come off without
 tax.
