@@ -93,6 +93,25 @@ export function Inbox({ api }: PageProps): ReactElement {
     onSuccess: refresh,
     onError: failed,
   });
+  // What an ended conversation may become, with the apps installed: a ticket, a deal (RFC 0034 §2.6).
+  const targets = useQuery({
+    queryKey: ['livechat', 'targets'],
+    queryFn: () =>
+      api.call<{ targets: string[] }>('GET', '/api/v1/livechat/targets').then((r) => r.targets),
+    staleTime: 600_000,
+  });
+  const [became, setBecame] = useState<{ session: number; name: string } | null>(null);
+  const route = useMutation({
+    mutationFn: (target: string) =>
+      api.call<{ name: string }>('POST', `/api/v1/livechat/sessions/${openId ?? 0}/route`, {
+        target,
+      }),
+    onSuccess: (r) => {
+      if (openId !== null) setBecame({ session: openId, name: r.name });
+      setError(null);
+    },
+    onError: failed,
+  });
   const count = open.data?.messages.length ?? 0;
   // The newest message stays in view.
   // biome-ignore lint/correctness/useExhaustiveDependencies: scrolls when the number of messages changes
@@ -212,9 +231,34 @@ export function Inbox({ api }: PageProps): ReactElement {
               )}
             </div>
             {over ? (
-              <p role="status" className="text-sm text-muted-foreground">
-                {t('ended')}
-              </p>
+              <div className="grid gap-2">
+                <p role="status" className="text-sm text-muted-foreground">
+                  {t('ended')}
+                </p>
+                {became !== null && became.session === openId ? (
+                  <p role="status" className="text-sm">
+                    {t('became', { name: became.name })}
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {(targets.data ?? []).map((target) => (
+                      <Button
+                        key={target}
+                        size="sm"
+                        variant="secondary"
+                        busy={route.isPending && route.variables === target}
+                        onClick={() => route.mutate(target)}
+                      >
+                        {target === 'helpdesk.ticket'
+                          ? t('makeTicket')
+                          : target === 'crm.deal'
+                            ? t('makeDeal')
+                            : t('makeRecord', { model: target })}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
             ) : mine ? (
               <form
                 className="grid gap-2"

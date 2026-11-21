@@ -78,6 +78,9 @@ test('a visitor writes in the chat window, the operator answers from the inbox, 
   await chat.getByRole('button', { name: '5 out of five' }).click();
   await expect(chat.getByText('Thank you.', { exact: true })).toBeVisible();
   await expect(page.getByText('This conversation has ended.')).toBeVisible();
+  // The operator makes a deal of it from the inbox: once, with what was said.
+  await page.getByRole('button', { name: 'Make a deal of it' }).click();
+  await expect(page.getByText('It became: Do you deliver to Gazipur?')).toBeVisible();
   await visitor.close();
 
   // Kept, with who it was and what they thought.
@@ -86,18 +89,14 @@ test('a visitor writes in the chat window, the operator answers from the inbox, 
   await expect(row).toContainText(name);
   await expect(row).toContainText('Closed');
 
-  // An operator makes a deal of it: the deal carries what was said, and shows the chat it came from.
+  // The deal carries what was said, and shows the chat it came from.
   const found = await page.request.get(
-    `/api/v1/models/livechat.session?fields=name&filter=${encodeURIComponent(JSON.stringify({ visitorName: who }))}`,
+    `/api/v1/models/livechat.session?fields=resModel,resId&filter=${encodeURIComponent(JSON.stringify({ visitorName: who }))}`,
   );
-  const [session] = ((await found.json()) as { items: { id: number }[] }).items;
-  const routed = await page.request.post(`/api/v1/livechat/sessions/${session?.id}/route`, {
-    headers,
-    data: { target: 'crm.deal' },
-  });
-  expect(routed.status(), await routed.text()).toBe(200);
-  const deal = (await routed.json()) as { id: number; made: boolean };
-  expect(deal.made).toBe(true);
+  const [session] = ((await found.json()) as { items: { resModel: string; resId: number }[] })
+    .items;
+  expect(session?.resModel).toBe('crm.deal');
+  const deal = { id: session?.resId };
   await page.goto(`/pipeline/a/pipeline.action_deals/${deal.id}`);
   await expect(page.getByRole('heading', { name: 'Do you deliver to Gazipur?' })).toBeVisible();
   await expect(page.getByText('Chats', { exact: true })).toBeVisible();
