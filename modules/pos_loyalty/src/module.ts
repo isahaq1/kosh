@@ -3,8 +3,16 @@
  * card's number as well as by a phone number or an email address, and the till says what the card holds; a paid
  * sale with a customer earns points once; goods that come back give back the share of the points they were.
  */
-import { earnSale, loyaltyShutro, takeBackSale } from '@kosh/loyalty';
-import { posShutro } from '@kosh/pos';
+import {
+  earnSale,
+  holdCredits,
+  loyaltyShutro,
+  releaseHeld,
+  takeBackSale,
+  type WorkedCredits,
+  workOutCredits,
+} from '@kosh/loyalty';
+import { type ExtrasSale, posShutro, type SaleExtras } from '@kosh/pos';
 import { type Module, type ModuleBase, orm } from '@kosh/server/orm';
 import { defineModule, type Env, extendModel, f, type Records } from './.kosh/bindings.js';
 
@@ -24,6 +32,12 @@ const cents = (value: unknown): number =>
       );
 const iso = (value: unknown): string =>
   value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
+
+/** What `saleExtras` hands to `extrasKept`: Loyalty's part, and what the apps before it handed. */
+interface Token {
+  readonly loyalty?: WorkedCredits['hold'];
+  readonly next: unknown;
+}
 
 /** The customer a cashier named, as the Counter's hook returns it. */
 interface Named {
@@ -59,6 +73,74 @@ async function cardOf(
 /** At the till: a loyalty card's number names its customer, and the till says what the card holds. */
 export const ShopLoyalty = extendModel('pos.shop', {
   overrides: {
+    // What Loyalty takes off a sale at the till: the running promotions by themselves, a promotion code, the
+    // customer's points, a gift card — worked out by the same rules as on a Sales quotation.
+    saleExtras: async function (
+      this: unknown,
+      next: (
+        sale: ExtrasSale,
+        asked: Readonly<Record<string, string>>,
+        strict: boolean,
+      ) => Promise<SaleExtras>,
+      sale: ExtrasSale,
+      asked: Readonly<Record<string, string>>,
+      strict: boolean,
+    ): Promise<SaleExtras> {
+      const before = await next(sale, asked, strict);
+      const su = (this as Records<'pos.shop'>).env as unknown as Env;
+      const already = before.lines.reduce((sum, l) => sum + l.amount, 0);
+      const typed = (asked['points'] ?? '').trim();
+      const points = typed === '' ? 0 : /^\d{1,9}$/.test(typed) ? Number(typed) : -1;
+      const worked = await workOutCredits(su as never, {
+        company: sale.company,
+        partner: sale.partner,
+        date: sale.date,
+        total: Math.max(0, sale.total - already),
+        goods: sale.lines,
+        promoCode: asked['promoCode'],
+        points,
+        voucherCode: asked['giftCard'],
+      });
+      const bangla = su.lang.slice(0, 2) === 'bn';
+      const fields: SaleExtras['fields'][number][] = [];
+      if (worked.codes)
+        fields.push({
+          key: 'promoCode',
+          label: bangla ? 'প্রোমোশন কোড' : 'Promotion code',
+          kind: 'text',
+          hint: null,
+          max: null,
+        });
+      if (worked.card !== null && (worked.card.most > 0 || worked.hold.points > 0))
+        fields.push({
+          key: 'points',
+          label: bangla ? 'খরচ করার পয়েন্ট' : 'Points to spend',
+          kind: 'number',
+          hint: bangla
+            ? `কার্ডে আছে ${worked.card.points.toLocaleString('bn-BD')}`
+            : `The card holds ${worked.card.points.toLocaleString('en')}`,
+          max: Math.max(worked.card.most, worked.hold.points),
+        });
+      fields.push({
+        key: 'giftCard',
+        label: bangla ? 'গিফট কার্ড বা ওয়ালেট' : 'Gift card or wallet',
+        kind: 'text',
+        hint: null,
+        max: null,
+      });
+      return {
+        fields: [...before.fields, ...fields],
+        lines: [...before.lines, ...worked.lines],
+        problems: [
+          ...before.problems,
+          ...worked.problems.map((p) => ({
+            field: p.field === 'voucherCode' ? 'giftCard' : p.field,
+            say: p.say,
+          })),
+        ],
+        token: { loyalty: worked.hold, next: before.token } satisfies Token,
+      };
+    },
     findCustomer: async function (
       this: unknown,
       next: (typed: string) => Promise<Named | null>,
@@ -110,6 +192,26 @@ export const SaleLoyalty = extendModel('pos.order', {
       help: 'The points the sale earned for its customer; on a refund, below zero, the points it took back.',
     }),
   },
+  overrides: {
+    // The sale is paid: the points it spent and what the gift card paid are held for it, once.
+    extrasKept: async function (
+      this: unknown,
+      next: (token: unknown) => Promise<void>,
+      token: unknown,
+    ): Promise<void> {
+      const kept = token as Token | null;
+      await next(kept?.next ?? null);
+      if (kept?.loyalty === undefined) return;
+      const orders = this as Records<'pos.order'>;
+      const su = orders.env as unknown as Env;
+      for (const o of await orders.load(['name']))
+        await holdCredits(su as never, kept.loyalty, {
+          resModel: 'pos.order',
+          resId: o.id as number,
+          label: o.name,
+        });
+    },
+  },
 });
 
 /**
@@ -123,7 +225,7 @@ export async function loyaltyOfSale(env: Env, sale: number): Promise<number> {
     const [o] = await orders.load({
       company: true,
       partner: true,
-      refundOf: { refunds: true },
+      refundOf: { refunds: true, lines: true },
       lines: { product: { category: true } },
     });
     if (o === undefined || o.state !== 'paid') return 0;
@@ -162,6 +264,14 @@ export async function loyaltyOfSale(env: Env, sale: number): Promise<number> {
       await orders.write({ loyaltyPoints: -taken } as never);
       await su.flush();
     }
+    // A sale something was taken off is refunded whole: the points it spent and what the gift card paid go
+    // back with it, once.
+    if ([...original.lines].some((l) => l.extra !== null))
+      await releaseHeld(
+        su as never,
+        { resModel: 'pos.order', resId: original.id as number },
+        `Refunded: ${o.name}`,
+      );
     return -taken;
   });
 }

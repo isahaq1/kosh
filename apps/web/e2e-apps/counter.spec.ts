@@ -122,3 +122,62 @@ test('the customer of a sale is named at the till by what they say, and is on th
   await closing.getByRole('button', { name: 'Close the session' }).click();
   await expect(page.getByText(/closed: .* sold, difference/)).toBeVisible();
 });
+
+test('a gift card typed at the till comes off the sale, by the server’s arithmetic', async ({
+  page,
+}) => {
+  await signIn(page, 'dina');
+  const csrf = await page.evaluate(() => sessionStorage.getItem('kosh.csrf'));
+  const headers = { 'x-csrf-token': csrf ?? '' };
+  const made = await page.request.post('/api/v1/models/loyalty.voucher', {
+    headers,
+    data: { entries: { create: [{ amount: '1' }] } },
+  });
+  expect(made.status(), await made.text()).toBe(201);
+  const voucher = ((await made.json()) as { id: number }).id;
+  const read = async (): Promise<{ code: string; balance: string }> =>
+    (await (
+      await page.request.get(`/api/v1/models/loyalty.voucher/${voucher}?fields=code,balance`)
+    ).json()) as { code: string; balance: string };
+  const { code } = await read();
+
+  await page.goto('/counter/a/counter.action_register');
+  const shopButton = page.getByRole('button', { name: 'E2E Shop' });
+  if (await shopButton.isVisible().catch(() => false)) await shopButton.click();
+  await page.getByLabel('Cash in the drawer').fill('500');
+  await page.getByRole('button', { name: 'Open the session' }).click();
+  await page.getByRole('textbox', { name: 'Search or scan' }).fill('Steel beam');
+  await page
+    .getByRole('button', { name: /Steel beam/ })
+    .first()
+    .click();
+  // The server offers what may come off the sale; a code that is none is said in words.
+  const offers = page.getByRole('form', { name: 'Promotions, points and gift cards' });
+  const gift = offers.getByLabel('Gift card or wallet');
+  await gift.fill('GC-NOPE');
+  await offers.getByRole('button', { name: 'Apply' }).click();
+  await expect(offers.getByRole('alert')).toContainText('No gift card or wallet has this code.');
+  await gift.fill(code.toLowerCase());
+  await gift.press('Enter');
+  const off = page.getByRole('list', { name: 'Taken off the sale' });
+  await expect(off).toContainText(`Gift card ${code}`);
+  await expect(off).toContainText(/−1(.00)?$/);
+
+  await page.getByRole('button', { name: 'Pay', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Cash').focus();
+  await dialog.getByRole('button', { name: 'Confirm the sale' }).click();
+  await expect(page.getByRole('status')).toContainText(/R\//);
+  // The card paid its one taka, once.
+  expect(Number((await read()).balance)).toBe(0);
+
+  await page.getByRole('button', { name: 'Close the session' }).click();
+  const closing = page.getByRole('dialog');
+  const expected = (await closing.getByText(/Cash expected in the drawer/).textContent()) ?? '';
+  await closing
+    .getByLabel('Cash counted')
+    .fill(expected.replace(/[^0-9.]/g, '').replace(/\.$/, ''));
+  await closing.getByLabel('If it differs, why').fill('E2E');
+  await closing.getByRole('button', { name: 'Close the session' }).click();
+  await expect(page.getByText(/closed: .* sold, difference/)).toBeVisible();
+});
