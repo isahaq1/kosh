@@ -32,7 +32,17 @@ export function saleProjectWorker(context: Pick<ModuleContext, 'shutro'>): Worke
     async (event, env) => {
       const payload = (event.payload ?? {}) as { id?: unknown };
       const id = Number(payload.id);
-      if (Number.isInteger(id) && id > 0) await createTasksFor(env as Env, id);
+      // As the system: the order's confirmation is the decision; whoever confirmed it need not have Projects.
+      // (A salesperson without it left the tasks unmade, and every later order waiting behind theirs.)
+      if (Number.isInteger(id) && id > 0)
+        await env.asSuperuser(
+          { reason: 'the tasks and projects of a confirmed order' },
+          async (su) => {
+            await createTasksFor(su as unknown as Env, id);
+            // What the tasks change on the order (its count of tasks) is worked out here too, as the system.
+            await su.flush();
+          },
+        );
     },
     { pollMs: 5000 },
   );

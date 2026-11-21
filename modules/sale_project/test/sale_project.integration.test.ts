@@ -116,6 +116,15 @@ beforeAll(async () => {
     companies: [company],
     groups: ['sale_project.user'],
   });
+  // A salesperson with nothing of Projects.
+  await auth.createUser({
+    login: 'rafi',
+    name: 'Rafi',
+    password: PASSWORD,
+    company,
+    companies: [company],
+    groups: ['sales.user'],
+  });
   const ids = await host.server.shutro.bootstrap({ reason: 'test: data', company }, async (env) => {
     type Model = { create(rows: unknown[]): Promise<{ ids: number[] }> };
     const model = (name: string) => env.model(name as never) as unknown as Model;
@@ -206,4 +215,34 @@ test('confirming an order creates the tasks its service lines ask for, once', as
     (await call('GET', `/api/v1/models/sale.order/${order.json.id}?fields=taskCount`, 'sumi')).json
       .taskCount,
   ).toBe(2);
+});
+
+test('a salesperson without Projects confirms: the tasks are made all the same, and not theirs to read', async () => {
+  const worker = saleProjectWorker({ shutro: host.server.shutro });
+  await worker.drain();
+  const order = await call('POST', '/api/v1/models/sale.order', 'rafi', {
+    partner: customer,
+    currency: bdt,
+    lines: { create: [{ product: hours, name: 'Installation', quantity: '4', priceUnit: '50' }] },
+  });
+  expectStatus(order, 201);
+  expectStatus(
+    await call('POST', `/api/v1/models/sale.order/${order.json.id}/transitions/confirm`, 'rafi'),
+    200,
+  );
+  // Delivered: not left failing, with every later order waiting behind it.
+  const delivered = await worker.drain();
+  const [sub] = await driver.query<{ last_error: string | null }>({
+    text: "SELECT last_error FROM shutro_subscription WHERE name = 'sale_project.tasks'",
+    params: [],
+  });
+  expect(sub?.last_error ?? null).toBeNull();
+  expect(delivered).toBe(1);
+  const made = await driver.query<{ n: string }>({
+    text: 'SELECT count(*)::text AS n FROM project_task WHERE sale_order_id = $1',
+    params: [order.json.id],
+  });
+  expect(Number(made[0]?.n)).toBe(1);
+  // What Projects holds is still not the salesperson's.
+  expect((await call('GET', '/api/v1/models/project.task', 'rafi')).status).toBe(403);
 });

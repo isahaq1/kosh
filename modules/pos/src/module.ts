@@ -341,7 +341,8 @@ export const PosSession = defineModel('pos.session', {
           from: ['open'],
           to: 'closed',
           guard: records('pos.session', async (sessions) =>
-            sessions.filter((s) => s.closingCash === null),
+            // Loaded here: the guard also runs for the next-step guidance, on a record nothing else has read.
+            (await sessions.load(['closingCash'])).filter((s) => s.closingCash === null),
           ),
           message: 'Count the cash in the drawer before closing.',
           before: records('pos.session', async (sessions): Promise<void> => {

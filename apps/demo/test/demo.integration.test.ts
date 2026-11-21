@@ -249,3 +249,52 @@ test('projects, tasks and the timesheets of their authors; the service products 
     ['Support plan', 'none'],
   ]);
 });
+
+// Every app at once, with its demo data: the screens a person opens first must answer. Found by a smoke of an
+// installation of the published package (2026-11-21): the Counter's session crashed its next-step guidance, a
+// guard reading a field nothing had loaded.
+test('every model answers: its list, its description, a record in each state and its next step', async () => {
+  const raw = async (url: string) => {
+    await get('/api/v1/auth/me', 'dina'); // signs in once
+    const res = await host.server.app.inject({
+      method: 'GET',
+      url,
+      headers: { authorization: `Bearer ${tokens.get('dina')}` },
+    });
+    return { status: res.statusCode, body: res.body, json: () => res.json() as Json };
+  };
+  const openapi = (await raw('/api/v1/openapi.json')).json();
+  const models = Object.keys(openapi.paths)
+    .map((path) => /^\/api\/v1\/models\/([\w.]+)$/.exec(path)?.[1])
+    .filter((m): m is string => m !== undefined);
+  expect(models.length).toBeGreaterThan(250);
+  const wrong: string[] = [];
+  const seen = (url: string, res: { status: number; body: string }, allowed: number[]) => {
+    if (!allowed.includes(res.status)) wrong.push(`${res.status} ${url} ${res.body.slice(0, 160)}`);
+  };
+  let records = 0;
+  let steps = 0;
+  for (const model of models) {
+    const list = await raw(`/api/v1/models/${model}?limit=60`);
+    // 403: not this person's to read — an answer too.
+    seen(`list ${model}`, list, [200, 403]);
+    seen(`meta ${model}`, await raw(`/api/v1/meta/${model}`), [200, 403]);
+    seen(`names ${model}`, await raw(`/api/v1/models/${model}/names?limit=5`), [200, 403]);
+    if (list.status !== 200) continue;
+    // One record of each state the demo data has (a record without a state: the first one).
+    const byState = new Map<string, number>();
+    for (const item of list.json().items as Json[])
+      if (!byState.has(String(item.state ?? ''))) byState.set(String(item.state ?? ''), item.id);
+    for (const id of byState.values()) {
+      records += 1;
+      seen(`record ${model}/${id}`, await raw(`/api/v1/models/${model}/${id}`), [200]);
+      const next = await raw(`/api/v1/models/${model}/${id}/next`);
+      // 404: the model has no steps.
+      seen(`next ${model}/${id}`, next, [200, 404]);
+      if (next.status === 200) steps += 1;
+    }
+  }
+  expect(wrong).toEqual([]);
+  expect(records).toBeGreaterThan(150);
+  expect(steps).toBeGreaterThan(60);
+}, 300_000);

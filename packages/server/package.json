@@ -58,7 +58,7 @@
     "@opentelemetry/sdk-node": "^0.223.0",
     "fastify": "^5.12.7",
     "iovalkey": "^0.4.0",
-    "shutro": "^0.3.7",
+    "shutro": "^0.3.8",
     "@kosh/views": "workspace:*"
   },
   "devDependencies": {
