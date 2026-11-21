@@ -1072,7 +1072,41 @@ GET  /api/v1/livechat/sessions/<id>?after=  POST …/take · …/messages { "bod
 A site that draws its own chat uses the same public API. Other apps hear `livechat.session.closed` and
 `livechat.session.missed`.
 
-**Not yet**: conversations routed into Helpdesk tickets and Pipeline deals, the assistant answering from published
+#### Where conversations go: tickets and deals
+
+With Helpdesk or Pipeline installed too (`@kosh/livechat_helpdesk`, `@kosh/livechat_crm`), a conversation that
+**ended** becomes a ticket or a deal by the channel's **routing rules** (on the channel's form, or *Live chat ›
+Configuration › Routing rules*). A rule says:
+
+- **when it** was missed, was closed, or however it ended;
+- **and the visitor wrote** any of some words — whole words, any case, English or Bangla (`price` does not match
+  *priceless*) —, or anything when empty;
+- **from a page with** a part of an address (`/pricing`), or any page;
+- **it becomes** `helpdesk.ticket` or `crm.deal`.
+
+The **first rule in order** that a conversation meets is applied, **once**; a conversation no rule meets stays a
+conversation. The record carries what was said — a line per message with the time (UTC) and who said it —, the
+visitor's name and email, and the contact when exactly one has that email:
+
+- **A ticket**: the subject is the start of the visitor's first message; it goes to the company's first Helpdesk
+  team, whose own rules give it an agent and an SLA. What the visitor typed is text on the ticket, never markup.
+- **A deal**: named after the first message, from the website, in the first stage, for no salesperson yet — every
+  Pipeline user sees it.
+
+A typical set: *missed → ticket* (somebody writes back to the email the visitor left), *price, quotation → deal*.
+The conversation shows what it became (*What it became*); the ticket and the deal show a **Chats** tile. An
+operator of the channel can also make one by hand of an ended conversation:
+
+```http
+GET  /api/v1/livechat/targets                 { "targets": ["helpdesk.ticket", "crm.deal"] }
+POST /api/v1/livechat/sessions/<id>/route     { "target": "helpdesk.ticket" } → { "model", "id", "name", "made" }
+```
+
+Another app makes its own records of conversations by overriding `routeTargets` of `livechat.channel` and
+`makeRecord` of `livechat.session`.
+
+**Not yet**: a button in the inbox for making a ticket or a deal by hand (the API does it), a rule choosing the
+Helpdesk team, the assistant answering from published
 pages, typing indicators, files in a conversation, a chat block for Sites pages. The window and the inbox ask the
 server every few seconds rather than holding a socket open.
 

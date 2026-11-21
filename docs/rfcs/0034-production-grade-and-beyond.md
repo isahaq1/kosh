@@ -840,3 +840,22 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   **Left for the next parts**: routing into Helpdesk and Pipeline by rules with the conversation on the ticket or
   the deal (part 2), the assistant answering from published pages and handing over (part 3). Also not built:
   typing indicators, files, a chat block for Sites pages, an operator's sound or desktop notification.
+
+- **Step 13 part 2 — chats into tickets and deals (2026-11-21).** Live chat does not know Helpdesk or Pipeline: it
+  gains `livechat.rule` (a channel's rules in order: how it ended, words the visitor wrote, a part of the page's
+  address, the target model), two hooks — `routeTargets()` on `livechat.channel` (none by itself) and
+  `makeRecord(target, about)` on `livechat.session` (nothing by itself) — and `routeSession`, called by a worker on
+  `livechat.session.closed` and `.missed`, and by `POST /api/v1/livechat/sessions/:id/route` for an operator.
+  Once: a conversation that became something is that, whoever asks again. A rule's target must be one an installed
+  app makes (a constraint through the hook), so a rule cannot name `res.users`. Matching is in the engine: whole
+  words on letters and digits of any script, so Bangla phrases match and `price` is not in `priceless`.
+  `@kosh/livechat_helpdesk` and `@kosh/livechat_crm` override the two hooks: a ticket for the company's first team
+  with the transcript as escaped paragraphs; a deal from the website for no salesperson. The contact is set only
+  when exactly one has the visitor's email — a chat does not create contacts. Helpdesk's ticket form gained an
+  empty tiles group for other apps (the Chats tile).
+  Tests: the engine (4 more: words, the first rule met, the transcript, the subject), the three apps together on
+  real PostgreSQL (5: targets and a rule that names none, a deal with the known contact and the transcript made
+  once, rules in order with whole words and Bangla and no rule, missed into a ticket and nothing before it ends,
+  by hand with who may not and forged fields), E2E (a deal made of the chat, its Chats tile).
+  **Left out**: a button in the inbox to route by hand (the API is there), the Helpdesk team chosen by the rule,
+  the transcript in the record's chatter rather than its description. Part 3 is the assistant.
