@@ -983,3 +983,159 @@ test('the Stockroom overview (RFC 0022 step 2) is served to a user', async () =>
   expect(overview.status, JSON.stringify(overview.json)).toBe(200);
   expect(overview.json.cards.map((c: { id: string }) => c.id)).toContain('receipts_todo');
 });
+
+test('variant stock by family (RFC 0030 §3.4): a template’s variants in one row, and its stock as a matrix', async () => {
+  const attribute = async (name: string, values: string[]) => {
+    const made = await call('POST', '/api/v1/models/product.attribute', 'dina', {
+      name,
+      values: { create: values.map((v) => ({ name: v })) },
+    });
+    expect(made.status, JSON.stringify(made.json)).toBe(201);
+    return {
+      id: made.json.id as number,
+      values: (await find('product.attribute.value', { attribute: made.json.id }, 'name')).sort(
+        (a, b) => a.id - b.id,
+      ),
+    };
+  };
+  const size = await attribute('Size', ['S', 'M']);
+  const colour = await attribute('Colour', ['Red', 'Blue']);
+  const value = (of: { values: Json[] }, name: string): number =>
+    of.values.find((v) => v.name === name)?.id as number;
+  const template = await call('POST', '/api/v1/models/product.template', 'dina', {
+    name: 'Family shirt',
+    listPrice: '500',
+    lines: {
+      create: [
+        { attribute: size.id, values: { set: size.values.map((v) => v.id) } },
+        { attribute: colour.id, values: { set: colour.values.map((v) => v.id) } },
+      ],
+    },
+    // There is no medium blue.
+    exclusions: { create: [{ values: { set: [value(size, 'M'), value(colour, 'Blue')] } }] },
+  });
+  expect(template.status, JSON.stringify(template.json)).toBe(201);
+  expect(
+    (
+      await call(
+        'POST',
+        `/api/v1/models/product.template/${template.json.id}/transitions/generate`,
+        'dina',
+      )
+    ).status,
+  ).toBe(200);
+  const variants = await find(
+    'product.product',
+    { template: template.json.id },
+    'name,attributeValues',
+  );
+  expect(variants).toHaveLength(3);
+  const variant = (a: string, b: string): number =>
+    variants.find((v) => {
+      const have = (v.attributeValues as Json[]).map(idOf);
+      return have.includes(value(size, a)) && have.includes(value(colour, b));
+    })?.id as number;
+  // Received: 5 small red, 2 small blue, 4 medium red; one small red reserved for a delivery.
+  const receipt = await transfer('receipt', [
+    { product: variant('S', 'Red'), quantity: '5' },
+    { product: variant('S', 'Blue'), quantity: '2' },
+    { product: variant('M', 'Red'), quantity: '4' },
+  ]);
+  await run(receipt, 'confirm');
+  expect((await run(receipt, 'validate')).status).toBe(200);
+  const delivery = await transfer('delivery', [{ product: variant('S', 'Red'), quantity: '1' }]);
+  expect((await run(delivery, 'confirm')).status).toBe(200);
+
+  // Product by product, three rows; by family, one — its quantities added, saying how many variants it is.
+  const mine = (rows: Json[]): Json[] =>
+    rows.filter(
+      (r) => r.product.family === template.json.id || variants.some((v) => v.id === r.product.id),
+    );
+  const plain = mine((await call('GET', '/api/v1/stockroom/stock', 'rahim')).json.rows);
+  expect(plain).toHaveLength(3);
+  expect(plain.every((r) => r.product.family === undefined)).toBe(true);
+  const byFamily = await call('GET', '/api/v1/stockroom/stock?by=family', 'rahim');
+  expect(byFamily.status, JSON.stringify(byFamily.json)).toBe(200);
+  const folded = mine(byFamily.json.rows);
+  expect(folded).toHaveLength(1);
+  expect(folded[0].product).toMatchObject({
+    name: 'Family shirt',
+    family: template.json.id,
+    variants: 3,
+  });
+  expect([
+    Number(folded[0].onHand),
+    Number(folded[0].reserved),
+    Number(folded[0].available),
+  ]).toEqual([11, 1, 10]);
+  // What is nobody's variant stays a row of its own, as it was.
+  const panel = (rows: Json[]) => rows.find((r) => r.product.id === ids['LED panel']);
+  expect(panel(byFamily.json.rows)).toEqual(
+    panel((await call('GET', '/api/v1/stockroom/stock', 'rahim')).json.rows),
+  );
+  // The ledger's summary folds the same way: one row, eleven received, closing eleven.
+  const ledger = '/api/v1/stockroom/ledger?from=2000-01-01&to=2100-12-31';
+  expect(mine((await call('GET', ledger, 'rahim')).json.rows)).toHaveLength(3);
+  const [row] = mine((await call('GET', `${ledger}&by=family`, 'rahim')).json.rows);
+  expect(row.product).toMatchObject({ family: template.json.id, variants: 3 });
+  expect([Number(row.in.purchase_receipt.qty), Number(row.closing.qty)]).toEqual([11, 11]);
+  // Movements are never folded: each is a variant's.
+  expect(
+    mine((await call('GET', `${ledger}&mode=details&by=family`, 'rahim')).json.rows),
+  ).toHaveLength(3);
+
+  // The family's matrix: sizes down, colours across; nothing where there is no such variant.
+  const matrix = await call(
+    'GET',
+    `/api/v1/stockroom/stock/matrix?template=${template.json.id}`,
+    'rahim',
+  );
+  expect(matrix.status, JSON.stringify(matrix.json)).toBe(200);
+  expect(matrix.json.template).toEqual({ id: template.json.id, name: 'Family shirt' });
+  expect(matrix.json.rows.map((r: Json) => r.label)).toEqual(['S', 'M']);
+  expect(matrix.json.columns.map((c: Json) => c.name)).toEqual(['Red', 'Blue']);
+  const at = (a: string, b: string): Json =>
+    matrix.json.cells[`${value(size, a)}|${value(colour, b)}`];
+  expect(at('S', 'Red')).toMatchObject({
+    variant: { id: variant('S', 'Red') },
+    onHand: '5.000',
+    reserved: '1.000',
+    available: '4.000',
+    outgoing: '1.000',
+  });
+  expect(at('S', 'Blue')).toMatchObject({ onHand: '2.000', available: '2.000' });
+  expect(at('M', 'Red')).toMatchObject({ onHand: '4.000' });
+  expect(at('M', 'Blue')).toBeNull();
+  expect(matrix.json.total).toMatchObject({
+    onHand: '11.000',
+    reserved: '1.000',
+    available: '10.000',
+  });
+  // A warehouse that holds none of it: the same grid, empty.
+  const elsewhere = await call('POST', '/api/v1/models/stock.warehouse', 'dina', {
+    name: 'Empty depot',
+    code: 'EMP',
+  });
+  expect(elsewhere.status, JSON.stringify(elsewhere.json)).toBe(201);
+  const empty = await call(
+    'GET',
+    `/api/v1/stockroom/stock/matrix?template=${template.json.id}&warehouses=${elsewhere.json.id}`,
+    'rahim',
+  );
+  expect(empty.json.total).toMatchObject({ onHand: '0.000', available: '0.000' });
+  expect(empty.json.cells[`${value(size, 'S')}|${value(colour, 'Red')}`]).toMatchObject({
+    onHand: '0.000',
+  });
+  // No such family; not a number; no role in the Stockroom.
+  expect(
+    (await call('GET', '/api/v1/stockroom/stock/matrix?template=999999', 'rahim')).status,
+  ).toBe(404);
+  expect((await call('GET', '/api/v1/stockroom/stock/matrix?template=x', 'rahim')).status).toBe(
+    400,
+  );
+  expect(
+    (await call('GET', `/api/v1/stockroom/stock/matrix?template=${template.json.id}`, 'nobody'))
+      .status,
+  ).not.toBe(200);
+  expect((await call('GET', '/api/v1/stockroom/stock?by=family', 'nobody')).status).not.toBe(200);
+});

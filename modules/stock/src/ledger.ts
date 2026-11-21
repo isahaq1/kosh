@@ -11,6 +11,10 @@
  * - `GET /api/v1/stockroom/stock?warehouses&locations&categories&products` — on hand, reserved, available, incoming
  *   and outgoing per product and location in the scope.
  *
+ * - `by=family` on the summary and on the stock report folds a template's variants into one row (RFC 0030 §3.4);
+ *   `GET /api/v1/stockroom/stock/matrix?template=` is a family's stock as a matrix — the last attribute across,
+ *   the others down.
+ *
  * Both as JSON for the screen, or with `format=xlsx` / `format=pdf` as a file (the export right; audited).
  */
 import { type Cell, moneyFormat, renderPdf, type Sheet, workbook } from '@kosh/reporting';
@@ -18,6 +22,7 @@ import { audit, HttpProblem, type ModuleContext } from '@kosh/server';
 import { type Decimal, orm } from '@kosh/server/orm';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { Env } from './.kosh/bindings.js';
+import { familiesOf, foldLedger, foldStock, type MatrixCell, stockMatrix } from './families.js';
 
 const zero: Decimal = orm.toDecimal(0);
 
@@ -70,8 +75,16 @@ export interface Figure {
   readonly qty: Decimal;
   readonly value: Decimal;
 }
+/** A product of a row — or, by family, the template its variants were folded into (`family`, `variants`). */
+export interface RowProduct {
+  readonly id: number;
+  readonly name: string;
+  readonly uom: string;
+  readonly family?: number;
+  readonly variants?: number;
+}
 export interface LedgerRow {
-  readonly product: { readonly id: number; readonly name: string; readonly uom: string };
+  readonly product: RowProduct;
   readonly opening: Figure;
   readonly in: Readonly<Record<InType, Figure>>;
   readonly out: Readonly<Record<OutType, Figure>>;
@@ -91,7 +104,7 @@ export interface MovementRow {
   readonly value: Decimal;
 }
 export interface StockRow {
-  readonly product: { readonly id: number; readonly name: string; readonly uom: string };
+  readonly product: RowProduct;
   readonly location: { readonly id: number; readonly name: string };
   readonly onHand: Decimal;
   readonly reserved: Decimal;
@@ -687,10 +700,16 @@ export function registerLedgerRoutes(context: ModuleContext): void {
       reply,
       mode,
       `stock-ledger-${from}-${to}`,
-      (env) =>
-        mode === 'details'
-          ? ledgerDetails(env, scope, from, to)
-          : ledgerSummary(env, scope, from, to),
+      async (env) => {
+        if (mode === 'details') return ledgerDetails(env, scope, from, to);
+        const summary = await ledgerSummary(env, scope, from, to);
+        if (query['by'] !== 'family') return summary;
+        const families = await familiesOf(
+          env,
+          summary.rows.map((r) => r.product.id),
+        );
+        return { valued: summary.valued, rows: foldLedger(summary.rows, families) };
+      },
       (data) => ({
         valued: data.valued,
         from,
@@ -725,7 +744,15 @@ export function registerLedgerRoutes(context: ModuleContext): void {
       reply,
       'stock',
       'stock-report',
-      async (env) => ({ valued: false, rows: await stockReport(env, scope) }),
+      async (env) => {
+        const rows = await stockReport(env, scope);
+        if (query['by'] !== 'family') return { valued: false, rows };
+        const families = await familiesOf(
+          env,
+          rows.map((r) => r.product.id),
+        );
+        return { valued: false, rows: foldStock(rows, families) };
+      },
       (data) => ({
         rows: (data.rows as StockRow[]).map((r) => ({
           product: r.product,
@@ -739,5 +766,38 @@ export function registerLedgerRoutes(context: ModuleContext): void {
       }),
       isoDay(new Date()),
     );
+  });
+
+  app.get('/api/v1/stockroom/stock/matrix', async (request) => {
+    const query = request.query as Record<string, unknown>;
+    const template = Number(query['template']);
+    if (!Number.isSafeInteger(template) || template <= 0)
+      throw new HttpProblem(400, 'invalid-template', 'Which family', 'Give the template’s id.');
+    const scope = scopeOf(query);
+    return request.env(async (raw) => {
+      const env = raw as unknown as Env;
+      env.access.check('stock.move', 'read');
+      const matrix = await stockMatrix(env, scope, template);
+      const figures = (c: Omit<MatrixCell, 'variant'>) => ({
+        onHand: qtyText(c.onHand),
+        reserved: qtyText(c.reserved),
+        available: qtyText(c.available),
+        incoming: qtyText(c.incoming),
+        outgoing: qtyText(c.outgoing),
+      });
+      return {
+        template: matrix.template,
+        attributes: matrix.attributes,
+        rows: matrix.rows,
+        columns: matrix.columns,
+        cells: Object.fromEntries(
+          Object.entries(matrix.cells).map(([key, c]) => [
+            key,
+            c === null ? null : { variant: c.variant, ...figures(c) },
+          ]),
+        ),
+        total: figures(matrix.total),
+      };
+    });
   });
 }

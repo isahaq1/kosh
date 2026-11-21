@@ -3,6 +3,13 @@ export const messages: Readonly<Record<string, object>> = {
   en: {
     ledger: {
       title: 'Stock ledger',
+      byFamily: 'By family (variants together)',
+      variants_one: '{{count}} variant',
+      variants_other: '{{count}} variants',
+      matrixTitle: 'Stock of {{name}}',
+      matrixHint: 'Available in each cell, with what is on hand under it. A dash: no such variant.',
+      matrixTotal: 'All variants: {{available}} available, {{onHand}} on hand',
+      matrixCell: '{{name}}: {{available}} available, {{onHand}} on hand',
       tab: 'Report',
       tabs: { summary: 'Summary', details: 'Movements', stock: 'Stock' },
       from: 'From',
@@ -121,6 +128,13 @@ export const messages: Readonly<Record<string, object>> = {
   bn: {
     ledger: {
       title: 'স্টক লেজার',
+      byFamily: 'পরিবার অনুযায়ী (ভ্যারিয়েন্ট একসঙ্গে)',
+      variants_one: '{{count}}টি ভ্যারিয়েন্ট',
+      variants_other: '{{count}}টি ভ্যারিয়েন্ট',
+      matrixTitle: '{{name}}-এর স্টক',
+      matrixHint: 'প্রতি ঘরে প্রাপ্য পরিমাণ, তার নিচে মজুত। ড্যাশ: এমন ভ্যারিয়েন্ট নেই।',
+      matrixTotal: 'সব ভ্যারিয়েন্ট: প্রাপ্য {{available}}, মজুত {{onHand}}',
+      matrixCell: '{{name}}: প্রাপ্য {{available}}, মজুত {{onHand}}',
       tab: 'রিপোর্ট',
       tabs: { summary: 'সারসংক্ষেপ', details: 'গতিবিধি', stock: 'স্টক' },
       from: 'থেকে',

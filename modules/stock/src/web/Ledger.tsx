@@ -4,7 +4,7 @@
  * stock report (on hand, reserved, available, incoming, outgoing per product and location), as the server computes
  * them, with their XLSX and PDF files.
  */
-import { ApiError, Button, Input, Label, type PageProps, useKosh } from '@kosh/ui';
+import { ApiError, Button, Dialog, Input, Label, type PageProps, useKosh } from '@kosh/ui';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { type ReactElement, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -38,6 +38,26 @@ interface Product {
   readonly id: number;
   readonly name: string;
   readonly uom: string;
+  /** By family: the template the row's variants were folded into, and how many of them it stands for. */
+  readonly family?: number;
+  readonly variants?: number;
+}
+/** A family's stock: the last attribute across, the others down, a variant's figures in each cell. */
+interface Matrix {
+  readonly template: { readonly id: number; readonly name: string };
+  readonly rows: readonly { readonly key: string; readonly label: string }[];
+  readonly columns: readonly { readonly id: number; readonly name: string }[];
+  readonly cells: Readonly<
+    Record<
+      string,
+      {
+        readonly variant: { readonly id: number; readonly name: string };
+        readonly onHand: string;
+        readonly available: string;
+      } | null
+    >
+  >;
+  readonly total: { readonly onHand: string; readonly available: string };
 }
 interface SummaryRow {
   readonly product: Product;
@@ -129,14 +149,46 @@ export function Ledger({ api }: PageProps): ReactElement {
         })
       ).items as unknown as Named[],
   });
-  const scope = `warehouses=${warehouses.join(',')}&categories=${categories.join(',')}`;
+  // By family: a template's variants in one row, and its stock as a matrix a click away (RFC 0030 §3.4).
+  const [byFamily, setByFamily] = useState(false);
+  const [family, setFamily] = useState<{ id: number; name: string } | null>(null);
+  const folded = byFamily && tab !== 'details';
+  const scope = `warehouses=${warehouses.join(',')}&categories=${categories.join(',')}${folded ? '&by=family' : ''}`;
+  const matrix = useQuery({
+    queryKey: ['stock', 'ledger', 'matrix', family?.id, warehouses],
+    queryFn: () =>
+      api.call<Matrix>(
+        'GET',
+        `/api/v1/stockroom/stock/matrix?template=${family?.id ?? 0}&warehouses=${warehouses.join(',')}`,
+      ),
+    enabled: family !== null,
+  });
+  /** A row's product: by family, the family's name opens its matrix, and says how many variants it is. */
+  const nameOf = (product: Product): ReactElement | string => {
+    const id = product.family;
+    if (id === undefined) return product.name;
+    return (
+      <>
+        <button
+          type="button"
+          className="font-medium text-primary underline-offset-2 hover:underline"
+          onClick={() => setFamily({ id, name: product.name })}
+        >
+          {product.name}
+        </button>{' '}
+        <span className="text-muted-foreground">
+          {t('ledger.variants', { count: product.variants ?? 0 })}
+        </span>
+      </>
+    );
+  };
   const path =
     tab === 'stock'
       ? `/api/v1/stockroom/stock?${scope}`
       : `/api/v1/stockroom/ledger?from=${from}&to=${to}&mode=${tab}&${scope}`;
   const valid = /^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to) && from <= to;
   const data = useQuery({
-    queryKey: ['stock', 'ledger', tab, from, to, warehouses, categories],
+    queryKey: ['stock', 'ledger', tab, from, to, warehouses, categories, folded],
     queryFn: () => api.call<Ledger | Stock>('GET', path),
     enabled: tab === 'stock' || valid,
   });
@@ -220,6 +272,16 @@ export function Ledger({ api }: PageProps): ReactElement {
             ))}
           </select>
         </div>
+        {tab === 'details' ? null : (
+          <label className="flex items-center gap-2 pb-2 text-sm">
+            <input
+              type="checkbox"
+              checked={byFamily}
+              onChange={(e) => setByFamily(e.target.checked)}
+            />
+            {t('ledger.byFamily')}
+          </label>
+        )}
         <Button
           variant="secondary"
           disabled={download.isPending}
@@ -235,6 +297,79 @@ export function Ledger({ api }: PageProps): ReactElement {
           {t('ledger.pdf')}
         </Button>
       </div>
+      <Dialog
+        open={family !== null}
+        onOpenChange={(o) => {
+          if (!o) setFamily(null);
+        }}
+        title={t('ledger.matrixTitle', { name: family?.name ?? '' })}
+      >
+        {matrix.data === undefined ? null : (
+          <div className="grid gap-2">
+            <p className="text-sm text-muted-foreground">{t('ledger.matrixHint')}</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted">
+                  <tr>
+                    <td className={cell} />
+                    {(matrix.data.columns.length === 0
+                      ? [{ id: 0, name: '' }]
+                      : matrix.data.columns
+                    ).map((c) => (
+                      <th key={c.id} scope="col" className={`${cell} text-end`}>
+                        {c.name}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {matrix.data.rows.map((row) => (
+                    <tr key={row.key} className="border-b">
+                      <th scope="row" className={`${cell} text-start font-medium`}>
+                        {row.label}
+                      </th>
+                      {(matrix.data.columns.length === 0
+                        ? [{ id: 0, name: '' }]
+                        : matrix.data.columns
+                      ).map((c) => {
+                        const found = matrix.data.cells[`${row.key}|${c.id}`] ?? null;
+                        return found === null ? (
+                          <td key={c.id} className={`${num} text-muted-foreground`}>
+                            —
+                          </td>
+                        ) : (
+                          <td
+                            key={c.id}
+                            className={num}
+                            title={t('ledger.matrixCell', {
+                              name: found.variant.name,
+                              available: format.decimal(found.available, 3),
+                              onHand: format.decimal(found.onHand, 3),
+                            })}
+                          >
+                            <span className="block font-semibold">
+                              {format.decimal(found.available, 3)}
+                            </span>
+                            <span className="block text-xs text-muted-foreground">
+                              {format.decimal(found.onHand, 3)}
+                            </span>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm">
+              {t('ledger.matrixTotal', {
+                available: format.decimal(matrix.data.total.available, 3),
+                onHand: format.decimal(matrix.data.total.onHand, 3),
+              })}
+            </p>
+          </div>
+        )}
+      </Dialog>
       <p className="text-sm text-muted-foreground">{t(`ledger.hints.${tab}`)}</p>
       {error === null ? null : (
         <p role="alert" className="text-sm text-danger">
@@ -284,8 +419,8 @@ export function Ledger({ api }: PageProps): ReactElement {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.product.id} className="border-b">
-                <td className={cell}>{r.product.name}</td>
+              <tr key={`${r.product.family ?? ''}-${r.product.id}`} className="border-b">
+                <td className={cell}>{nameOf(r.product)}</td>
                 <td className={cell}>{r.product.uom}</td>
                 <td className={num}>{q(r.opening)}</td>
                 {IN_TYPES.map((k) => (
@@ -373,8 +508,11 @@ export function Ledger({ api }: PageProps): ReactElement {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={`${r.product.id}-${r.location.id}`} className="border-b">
-                <td className={cell}>{r.product.name}</td>
+              <tr
+                key={`${r.product.family ?? ''}-${r.product.id}-${r.location.id}`}
+                className="border-b"
+              >
+                <td className={cell}>{nameOf(r.product)}</td>
                 <td className={cell}>{r.product.uom}</td>
                 <td className={cell}>{r.location.name}</td>
                 <td className={num}>{format.decimal(r.onHand, 3)}</td>
