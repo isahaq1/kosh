@@ -15,6 +15,7 @@
     "@kosh/attendance": "workspace:*",
     "@kosh/automation": "workspace:*",
     "@kosh/calendar": "workspace:*",
+    "@kosh/calendar_sync": "workspace:*",
     "@kosh/contacts": "workspace:*",
     "@kosh/crm": "workspace:*",
     "@kosh/documents": "workspace:*",

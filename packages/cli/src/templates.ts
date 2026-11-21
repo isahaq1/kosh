@@ -67,6 +67,7 @@ export type AppName =
   | 'livechat_helpdesk'
   | 'livechat_crm'
   | 'livechat_assistant'
+  | 'calendar_sync'
   | 'sale_crm'
   | 'website_sale_stock'
   | 'pos_stock'
@@ -465,6 +466,13 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'livechatAssistant',
     bridge: ['livechat', 'website'],
+  },
+  calendar_sync: {
+    label: 'Add-on: Agenda in step with Google Calendar and Microsoft 365, both ways',
+    icon: '🔗',
+    server: 'calendarSync',
+    web: 'registerCalendarSyncWeb',
+    bridge: ['calendar'],
   },
   sale_crm: {
     label:

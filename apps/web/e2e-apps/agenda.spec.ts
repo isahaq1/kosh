@@ -160,3 +160,28 @@ test('my calendar address: made on a form, read by another calendar without a si
   );
   expect(wrong.status()).toBe(404);
 });
+
+test('my other calendars: connected by saying yes at the provider, synced, disconnected (RFC 0034)', async ({
+  page,
+}) => {
+  await signIn(page, 'dina');
+  await page.goto('/agenda/a/agenda.action_sync');
+  await expect(page.getByRole('heading', { name: 'My other calendars', level: 1 })).toBeVisible();
+  await expect(page.getByText('No calendar is connected yet.')).toBeVisible();
+  // To the provider — here the test calendar's own page —, which sends her back connected.
+  await page.getByRole('button', { name: 'Connect Test calendar' }).click();
+  await expect(page.getByRole('heading', { name: 'Test calendar' })).toBeVisible();
+  const calendar = `e2e-${Date.now()}`;
+  await page.getByLabel('Calendar to open').fill(calendar);
+  await page.getByRole('button', { name: 'Allow' }).click();
+  await expect(page.getByText('The calendar is connected, and was synced.')).toBeVisible();
+  const connected = page.getByRole('listitem').filter({ hasText: `${calendar}@fake.example` });
+  await expect(connected).toContainText('Test calendar');
+  // Her own events went there with the first sync; another one does nothing more.
+  await expect(connected).toContainText(/\d+ in, \d+ out, \d+ deleted/);
+  await connected.getByRole('button', { name: /^Sync .* now$/ }).click();
+  await expect(connected).toContainText('0 in, 0 out, 0 deleted');
+  // Disconnected: gone from the list; her events stay.
+  await connected.getByRole('button', { name: /^Disconnect / }).click();
+  await expect(page.getByText('No calendar is connected yet.')).toBeVisible();
+});

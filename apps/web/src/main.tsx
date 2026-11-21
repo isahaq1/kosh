@@ -8,6 +8,7 @@ import { approvalsMessages, registerApprovalsWeb } from '@kosh/approvals/web';
 import { assistantMessages, registerAssistantWeb } from '@kosh/assistant/web';
 import { attendanceMessages, registerAttendanceWeb } from '@kosh/attendance/web';
 import { automationMessages, registerAutomationWeb } from '@kosh/automation/web';
+import { calendarSyncMessages, registerCalendarSyncWeb } from '@kosh/calendar_sync/web';
 import { documentsMessages, registerDocumentsWeb } from '@kosh/documents/web';
 import { eventMessages, registerEventWeb } from '@kosh/event/web';
 import { importMessages, registerImportWeb } from '@kosh/import/web';
@@ -61,6 +62,7 @@ registerEventWeb(registry);
 registerWebsiteWeb(registry);
 registerPosWeb(registry);
 registerLivechatWeb(registry);
+registerCalendarSyncWeb(registry);
 registerProductWeb(registry);
 registerAttendanceWeb(registry);
 registerDocumentsWeb(registry);
@@ -85,6 +87,7 @@ const messages = {
   website: websiteMessages,
   pos: posMessages,
   livechat: livechatMessages,
+  calendarSync: calendarSyncMessages,
   attendance: attendanceMessages,
   documents: documentsMessages,
   approvalPanel: approvalPanelMessages,

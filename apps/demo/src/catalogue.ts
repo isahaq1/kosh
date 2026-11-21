@@ -7,6 +7,7 @@ import { approvalsPurchase } from '@kosh/approvals_purchase';
 import { attendance } from '@kosh/attendance';
 import { automation } from '@kosh/automation';
 import { calendarApp } from '@kosh/calendar';
+import { calendarSync } from '@kosh/calendar_sync';
 import { contacts } from '@kosh/contacts';
 import { crm } from '@kosh/crm';
 import { documents } from '@kosh/documents';
@@ -187,6 +188,7 @@ export function demoCatalogue(): KoshModule[] {
     livechatHelpdesk,
     livechatCrm,
     livechatAssistant,
+    calendarSync,
     websiteHiring,
     saleCrm,
     websiteSale,

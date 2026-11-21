@@ -23,6 +23,7 @@ import { createAssistant, fakeClient } from '@kosh/assistant';
 import { attendance } from '@kosh/attendance';
 import { automation } from '@kosh/automation';
 import { calendarApp } from '@kosh/calendar';
+import { calendarSyncModule, fakeProvider } from '@kosh/calendar_sync';
 import { contacts } from '@kosh/contacts';
 import { crm } from '@kosh/crm';
 import { documents } from '@kosh/documents';
@@ -120,6 +121,15 @@ const databaseUrl = container.getConnectionUri();
 // The AI assistant with a fake client: "Customer: …" and "Line: <product>; <quantity>; <unit price>" lines of a
 // pasted text fill a new sales order and its lines.
 const NL = String.fromCharCode(10);
+// Calendar sync against the test calendar (RFC 0034 §2.4): no real provider, a key only for this run.
+const testCalendar = fakeProvider();
+const calendarSync = calendarSyncModule({
+  providers: new Map([[testCalendar.code, testCalendar]]),
+  secretsKey: 'e2e-only-key-for-calendar-tokens-0123456789',
+  apiUrl: 'http://localhost:4174',
+  webUrl: 'http://localhost:4174',
+  workers: false,
+});
 const assistant = createAssistant({
   client: fakeClient((request) => {
     // An applicant's CV (RFC 0034 §2.6): what the recruiter is proposed.
@@ -222,6 +232,7 @@ const CATALOGUE = [
   livechatHelpdesk,
   livechatCrm,
   livechatAssistant,
+  calendarSync,
   websiteHiring,
   saleCrm,
   websiteSale,
@@ -362,6 +373,7 @@ for (const [login, name, groups] of [
       'subscription.manager',
       'survey.manager',
       'livechat.manager',
+      'calendar_sync.user',
       'loyalty.manager',
       'crm.manager',
       'hr.manager',
