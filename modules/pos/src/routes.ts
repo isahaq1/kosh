@@ -17,6 +17,7 @@ import { documentFields, renderDocument } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext, publicApiModels } from '@kosh/server';
 import { type Id, orm } from '@kosh/server/orm';
 import type { Env } from './.kosh/bindings.js';
+import type { SaleExtras } from './module.js';
 
 const idOf = (value: unknown, what: string): number => {
   const id = Number(value);
@@ -31,6 +32,8 @@ export interface SaleInput {
   readonly clientId?: string;
   readonly partner?: number | null;
   readonly note?: string;
+  /** What the cashier asked another app to take off, by the keys its fields have (`saleExtras`). */
+  readonly extras?: Readonly<Record<string, unknown>>;
   readonly lines: readonly {
     readonly product: number;
     readonly quantity: string;
@@ -42,6 +45,15 @@ export interface SaleInput {
     readonly amount: string;
     readonly reference?: string;
   }[];
+}
+
+/** A quote is worked out like a sale and then undone: this carries it out of the transaction that is rolled back. */
+class Quoted extends Error {
+  readonly value: unknown;
+  constructor(value: unknown) {
+    super('quoted');
+    this.value = value;
+  }
 }
 
 export interface CounterOptions {
@@ -337,115 +349,250 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
     return reply.status(201).send({ session: made });
   });
 
-  app.post('/api/v1/counter/orders', async (request, reply) => {
-    const input = request.body as SaleInput | null;
-    if (
-      input === null ||
-      typeof input !== 'object' ||
-      !Array.isArray(input.lines) ||
-      !Array.isArray(input.payments)
-    )
-      throw new HttpProblem(
-        400,
-        'invalid-body',
-        'Invalid sale',
-        'Send the session, the lines and the payments.',
-      );
-    if (input.lines.length === 0)
-      throw new HttpProblem(422, 'empty-sale', 'Nothing to sell', 'Add at least one line.');
-    const session = idOf(input.session, 'session');
-    const clientId = text(input.clientId);
-    const outcome = await request.env(
-      async (raw) => {
-        const env = raw as unknown as Env;
-        // The same sale sent twice (a device back online): the first one, unchanged.
-        if (clientId !== '') {
-          const [known] = await env.model('pos.order').search({
-            where: { session: session as Id<'pos.session'>, clientId },
-            limit: 1,
-          });
-          if (known !== undefined) return { order: await orderOut(env, known.id), repeated: true };
-        }
-        const [current] = await env
-          .model('pos.session')
-          .browse([session as Id<'pos.session'>])
-          .load({ shop: { pricelist: true } });
-        if (current === undefined)
-          throw new HttpProblem(404, 'missing-record', 'Not found', 'No such session.');
-        // The customer's own price list, else the shop's (RFC 0028 §3.1).
-        const customer =
-          input.partner === undefined || input.partner === null
-            ? null
-            : idOf(input.partner, 'partner');
-        const own = await ownList(env, customer);
-        const list = own ?? (current.shop.pricelist?.id as number | undefined) ?? null;
-        const today = env.today();
-        const listed = new Map<string, ReturnType<typeof orm.toDecimal>>();
-        for (const l of input.lines)
-          if (text(l.priceUnit) === '' && list !== null) {
-            const quantity = text(l.quantity) || '1';
-            listed.set(
-              `${String(l.product)}:${quantity}`,
-              (await priceFor(env as never, list, idOf(l.product, 'product'), quantity, today))
-                .price,
-            );
-          }
-        const products = await env
-          .model('product.product')
-          .browse(input.lines.map((l) => idOf(l.product, 'product') as Id<'product.product'>))
-          .load({ taxes: true });
-        const byId = new Map(products.map((p) => [p.id as number, p]));
-        const created = await env.model('pos.order').create([
-          {
-            session: session as Id<'pos.session'>,
-            pricesIncludeTax: current.shop.pricesIncludeTax === true,
-            ...(clientId === '' ? {} : { clientId }),
-            ...(input.partner === undefined || input.partner === null
-              ? {}
-              : { partner: idOf(input.partner, 'partner') }),
-            ...(text(input.note) === '' ? {} : { note: text(input.note) }),
-            lines: {
-              create: input.lines.map((l) => {
-                const product = byId.get(idOf(l.product, 'product'));
-                if (product === undefined)
-                  throw new HttpProblem(
-                    422,
-                    'unknown-product',
-                    'Unknown product',
-                    `No product ${String(l.product)}.`,
+  // `POST /api/v1/counter/quote` `{ session, partner?, lines, extras? }`: what the sale would come to — every
+  // line priced, what other apps take off it (promotions, points, a gift card) and the inputs they offer —,
+  // worked out exactly as the sale is, and undone. `POST /api/v1/counter/orders` is the sale itself.
+  for (const quote of [true, false])
+    app.post(quote ? '/api/v1/counter/quote' : '/api/v1/counter/orders', async (request, reply) => {
+      const input = request.body as SaleInput | null;
+      if (
+        input === null ||
+        typeof input !== 'object' ||
+        !Array.isArray(input.lines) ||
+        (!quote && !Array.isArray(input.payments))
+      )
+        throw new HttpProblem(
+          400,
+          'invalid-body',
+          'Invalid sale',
+          'Send the session, the lines and the payments.',
+        );
+      if (input.lines.length === 0)
+        throw new HttpProblem(422, 'empty-sale', 'Nothing to sell', 'Add at least one line.');
+      const session = idOf(input.session, 'session');
+      const clientId = quote ? '' : text(input.clientId);
+      const asked: Record<string, string> = {};
+      for (const [key, value] of Object.entries(input.extras ?? {}).slice(0, 20))
+        if ((typeof value === 'string' || typeof value === 'number') && String(value).trim() !== '')
+          asked[key.slice(0, 40)] = String(value).trim().slice(0, 80);
+      const work = () =>
+        request.env(
+          async (raw) => {
+            const env = raw as unknown as Env;
+            // The same sale sent twice (a device back online): the first one, unchanged.
+            if (clientId !== '') {
+              const [known] = await env.model('pos.order').search({
+                where: { session: session as Id<'pos.session'>, clientId },
+                limit: 1,
+              });
+              if (known !== undefined)
+                return { order: await orderOut(env, known.id), repeated: true };
+            }
+            const [current] = await env
+              .model('pos.session')
+              .browse([session as Id<'pos.session'>])
+              .load({ shop: { pricelist: true } });
+            if (current === undefined)
+              throw new HttpProblem(404, 'missing-record', 'Not found', 'No such session.');
+            // The customer's own price list, else the shop's (RFC 0028 §3.1).
+            const customer =
+              input.partner === undefined || input.partner === null
+                ? null
+                : idOf(input.partner, 'partner');
+            const own = await ownList(env, customer);
+            const list = own ?? (current.shop.pricelist?.id as number | undefined) ?? null;
+            const today = env.today();
+            const listed = new Map<string, ReturnType<typeof orm.toDecimal>>();
+            for (const l of input.lines)
+              if (text(l.priceUnit) === '' && list !== null) {
+                const quantity = text(l.quantity) || '1';
+                listed.set(
+                  `${String(l.product)}:${quantity}`,
+                  (await priceFor(env as never, list, idOf(l.product, 'product'), quantity, today))
+                    .price,
+                );
+              }
+            const products = await env
+              .model('product.product')
+              .browse(input.lines.map((l) => idOf(l.product, 'product') as Id<'product.product'>))
+              .load({ taxes: true, category: true });
+            const byId = new Map(products.map((p) => [p.id as number, p]));
+            const created = await env.model('pos.order').create([
+              {
+                session: session as Id<'pos.session'>,
+                pricesIncludeTax: current.shop.pricesIncludeTax === true,
+                ...(clientId === '' ? {} : { clientId }),
+                ...(input.partner === undefined || input.partner === null
+                  ? {}
+                  : { partner: idOf(input.partner, 'partner') }),
+                ...(text(input.note) === '' ? {} : { note: text(input.note) }),
+                lines: {
+                  create: input.lines.map((l) => {
+                    const product = byId.get(idOf(l.product, 'product'));
+                    if (product === undefined)
+                      throw new HttpProblem(
+                        422,
+                        'unknown-product',
+                        'Unknown product',
+                        `No product ${String(l.product)}.`,
+                      );
+                    return {
+                      product: product.id,
+                      name: product.name,
+                      quantity: orm.toDecimal(text(l.quantity) || '1'),
+                      priceUnit:
+                        text(l.priceUnit) !== ''
+                          ? orm.toDecimal(text(l.priceUnit))
+                          : (listed.get(`${String(l.product)}:${text(l.quantity) || '1'}`) ??
+                            product.listPrice),
+                      discount: orm.toDecimal(text(l.discount) || '0'),
+                      taxes: { set: [...product.taxes].map((t) => t.id) },
+                    };
+                  }),
+                },
+              } as never,
+            ]);
+            await env.flush();
+            const orders = env.model('pos.order').browse(created.ids);
+            const orderId = created.ids[0] as Id<'pos.order'>;
+            // What other apps take off it: worked out by them, as the system, on what the sale comes to.
+            const cents = (value: unknown): number =>
+              Number(
+                orm
+                  .toDecimal((value ?? 0) as never)
+                  .times(100)
+                  .toDecimalPlaces(0)
+                  .toString(),
+              );
+            const [priced] = await orders.load({
+              lines: true,
+              session: { shop: true },
+              company: true,
+            });
+            if (priced === undefined)
+              throw new HttpProblem(500, 'sale', 'Sale', 'The sale was not made.');
+            const goods = [...priced.lines];
+            // Read now: the record follows the sale, and the sale is about to have lines taken off it.
+            const gross = cents(priced.total);
+            // Only when the till asked: a sale rung up offline, at the prices the till showed, is kept as it
+            // was paid.
+            const none: SaleExtras = { fields: [], lines: [], problems: [], token: null };
+            const extras =
+              !quote && input.extras === undefined
+                ? none
+                : await env.asSuperuser({ reason: 'what is taken off a counter sale' }, (su) =>
+                    su
+                      .model('pos.shop')
+                      .browse([priced.session.shop.id])
+                      .saleExtras(
+                        {
+                          company: priced.company.id as number,
+                          partner: customer,
+                          date: String(today).slice(0, 10),
+                          total: gross,
+                          lines: goods.map((l) => ({
+                            product: l.product.id as number,
+                            category:
+                              (byId.get(l.product.id as number)?.category?.id as
+                                | number
+                                | undefined) ?? null,
+                            quantity: Number(l.quantity),
+                            amount: cents(l.subtotal) + cents(l.taxAmount),
+                          })),
+                        },
+                        asked,
+                        !quote,
+                      ),
                   );
-                return {
-                  product: product.id,
-                  name: product.name,
-                  quantity: orm.toDecimal(text(l.quantity) || '1'),
-                  priceUnit:
-                    text(l.priceUnit) !== ''
-                      ? orm.toDecimal(text(l.priceUnit))
-                      : (listed.get(`${String(l.product)}:${text(l.quantity) || '1'}`) ??
-                        product.listPrice),
-                  discount: orm.toDecimal(text(l.discount) || '0'),
-                  taxes: { set: [...product.taxes].map((t) => t.id) },
-                };
-              }),
-            },
-            payments: {
-              create: input.payments.map((p) => ({
-                method: idOf(p.method, 'method'),
-                amount: orm.toDecimal(text(p.amount) || '0'),
-                ...(text(p.reference) === '' ? {} : { reference: text(p.reference) }),
-              })),
-            },
-          } as never,
-        ]);
-        await env.flush();
-        await env.model('pos.order').browse(created.ids).pay();
-        await env.flush();
-        return { order: await orderOut(env, created.ids[0] as Id<'pos.order'>), repeated: false };
-      },
-      { write: true },
-    );
-    return reply.status(outcome.repeated ? 200 : 201).send(outcome);
-  });
+            const [problem] = extras.problems;
+            if (!quote && problem !== undefined)
+              throw new HttpProblem(422, `extras-${problem.field}`, 'Another look', problem.say);
+            const off = extras.lines.reduce((sum, l) => sum + l.amount, 0);
+            if (off > gross || extras.lines.some((l) => !(l.amount > 0)))
+              throw new HttpProblem(
+                422,
+                'extras-too-much',
+                'Another look',
+                'More would be taken off the sale than it comes to.',
+              );
+            if (extras.lines.length > 0) {
+              await orders.write({
+                lines: {
+                  create: extras.lines.map((l) => ({
+                    product: l.product,
+                    name: l.name.slice(0, 200),
+                    quantity: orm.toDecimal('1'),
+                    priceUnit: orm.toDecimal((-l.amount / 100).toFixed(2)),
+                    discount: orm.toDecimal('0'),
+                    extra: l.kind.slice(0, 20),
+                  })),
+                },
+              } as never);
+              await env.flush();
+            }
+            if (quote) {
+              const [quoted] = await env
+                .model('pos.order')
+                .browse(created.ids)
+                .load({ lines: true });
+              throw new Quoted({
+                lines: [...(quoted?.lines ?? [])]
+                  .filter((l) => l.extra === null)
+                  .map((l) => ({
+                    product: l.product.id,
+                    name: l.name,
+                    quantity: l.quantity.toString(),
+                    priceUnit: l.priceUnit.toString(),
+                    amount: ((cents(l.subtotal) + cents(l.taxAmount)) / 100).toFixed(2),
+                  })),
+                subtotal: (gross / 100).toFixed(2),
+                extras: {
+                  fields: extras.fields,
+                  lines: extras.lines.map((l) => ({
+                    kind: l.kind,
+                    name: l.name,
+                    amount: (l.amount / 100).toFixed(2),
+                  })),
+                  problems: extras.problems,
+                },
+                total: ((gross - off) / 100).toFixed(2),
+              });
+            }
+            await orders.write({
+              payments: {
+                create: input.payments.map((p) => ({
+                  method: idOf(p.method, 'method'),
+                  amount: orm.toDecimal(text(p.amount) || '0'),
+                  ...(text(p.reference) === '' ? {} : { reference: text(p.reference) }),
+                })),
+              },
+            } as never);
+            await env.flush();
+            await orders.pay();
+            await env.flush();
+            if (extras.lines.length > 0)
+              await env.asSuperuser({ reason: 'what was taken off a counter sale is kept' }, (su) =>
+                su.model('pos.order').browse([orderId]).extrasKept(extras.token),
+              );
+            return {
+              order: await orderOut(env, created.ids[0] as Id<'pos.order'>),
+              repeated: false,
+            };
+          },
+          { write: true },
+        );
+      if (!quote) {
+        const outcome = await work();
+        return reply.status(outcome.repeated ? 200 : 201).send(outcome);
+      }
+      try {
+        await work();
+      } catch (error) {
+        if (error instanceof Quoted) return reply.send(error.value);
+        throw error;
+      }
+      throw new HttpProblem(500, 'quote', 'Quote', 'The quote was not worked out.');
+    });
 
   // `POST /api/v1/counter/orders/:id/refund` `{ session, reason, lines?: [{ product, quantity }], method? }`:
   // the sale (or part of it) taken back — a negative sale in the open session, paid back by the method given
@@ -498,6 +645,13 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
             'refund-forbidden',
             'Not yours to refund',
             'Cashiers refund the sales of their own open session; a manager refunds any sale.',
+          );
+        if ((body.lines ?? []).length > 0 && [...original.lines].some((l) => l.extra !== null))
+          throw new HttpProblem(
+            409,
+            'refund-whole',
+            'Refund it whole',
+            'A promotion, points or a gift card took something off this sale: it is refunded whole, so that what was taken off goes back with it.',
           );
         const wanted = new Map<number, string>();
         for (const l of body.lines ?? [])
@@ -553,6 +707,7 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
                 quantity: qty.neg(),
                 priceUnit: line.priceUnit,
                 discount: line.discount,
+                extra: line.extra,
                 taxes: { set: [...line.taxes].map((t) => t.id) },
               })),
             },

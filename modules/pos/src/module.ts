@@ -74,6 +74,20 @@ export const PosShop = defineModel('pos.shop', {
       return new Map(shops.ids.map((id) => [id, 'pos.receipt']));
     }),
     /**
+     * What another app takes off a sale being rung up (RFC 0034 §2.6): the inputs it offers the cashier, the
+     * lines below zero it adds for what was asked, and what it could not take, in words. Nothing here;
+     * `pos_loyalty` adds promotions, points and gift cards. With `strict`, what cannot be taken is a problem
+     * the sale stops on; without, the quote goes on without it. Called as the system, for every quote and sale.
+     */
+    saleExtras: method(
+      'pos.shop',
+      async (
+        _sale: ExtrasSale,
+        _asked: Readonly<Record<string, string>>,
+        _strict: boolean,
+      ): Promise<SaleExtras> => ({ fields: [], lines: [], problems: [], token: null }),
+    ),
+    /**
      * The customer a cashier names at the till: **one** contact that what was typed points at exactly — a phone
      * number (its digits) or an email address —, or none. Never a list: a till is not a way to browse the
      * customers. An app that knows customers another way adds it (`pos_loyalty`: a loyalty card's number, and
@@ -113,6 +127,49 @@ export const PosShop = defineModel('pos.shop', {
     }),
   },
 });
+
+/** A sale being rung up, as an app that takes something off it reads it. Amounts in hundredths. */
+export interface ExtrasSale {
+  readonly company: number;
+  readonly partner: number | null;
+  /** `YYYY-MM-DD`. */
+  readonly date: string;
+  /** What the sale comes to, taxes included, before anything is taken off. */
+  readonly total: number;
+  /** The goods, each at what the customer pays for it (taxes included). */
+  readonly lines: readonly {
+    readonly product: number;
+    readonly category: number | null;
+    readonly quantity: number;
+    readonly amount: number;
+  }[];
+}
+
+/** An input the till shows for an app: a code to type, a number of points. Labels in the request's language. */
+export interface ExtraField {
+  readonly key: string;
+  readonly label: string;
+  readonly kind: 'text' | 'number';
+  readonly hint: string | null;
+  /** The most that can be typed (a number field). */
+  readonly max: number | null;
+}
+
+/** What an app takes off a sale. */
+export interface SaleExtras {
+  readonly fields: readonly ExtraField[];
+  /** Each a line below zero on the sale: `amount` is what it takes off, in hundredths, above zero. */
+  readonly lines: readonly {
+    readonly kind: string;
+    readonly product: number;
+    readonly name: string;
+    readonly amount: number;
+  }[];
+  /** What was asked and could not be taken, by field, in words. */
+  readonly problems: readonly { readonly field: string; readonly say: string }[];
+  /** For the app itself, once the sale is paid (`extrasKept`). */
+  readonly token: unknown;
+}
 
 /** How a shop takes money: cash, a card terminal, mobile money, a transfer; each to its journal. */
 export const PosPaymentMethod = defineModel('pos.payment.method', {
@@ -447,6 +504,13 @@ export const PosOrder = defineModel('pos.order', {
       },
     }),
   },
+  methods: {
+    /**
+     * A sale with extras was paid: the app that worked them out keeps what it must (`token` is what its
+     * `saleExtras` returned) — points and gift cards are held for this sale. Nothing here. As the system.
+     */
+    extrasKept: method('pos.order', async (_token: unknown): Promise<void> => undefined),
+  },
   sqlConstraints: {
     oneClientId: {
       unique: ['session', 'clientId'],
@@ -499,6 +563,12 @@ export const PosOrderLine = defineModel('pos.order.line', {
     /** The unit price as shown on the register (taxes included when the shop's prices include them). */
     priceUnit: f.decimal({ scale: 2, required: true, default: '0', label: 'Unit price' }),
     discount: f.decimal({ scale: 2, required: true, default: '0', label: 'Discount %' }),
+    /** What another app took off the sale: a promotion, points, a gift card (`saleExtras`). */
+    extra: f.char({
+      size: 20,
+      label: 'Taken off as',
+      help: 'Set on a line another app added to take something off the sale: a promotion, points, a gift card. Such a sale is refunded whole.',
+    }),
     taxes: f.many2many('account.tax', { relation: 'pos_line_tax_rel' }),
     subtotal: f.decimal({
       scale: 2,

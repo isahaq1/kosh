@@ -31,6 +31,11 @@ export const messages: Readonly<Record<string, object>> = {
     changeLine: 'Change to give: {{change}}',
     printReceipt: 'Print the receipt',
     quantityOf: 'Quantity of {{name}}',
+    takenOff: 'Taken off the sale',
+    extras: 'Promotions, points and gift cards',
+    apply: 'Apply',
+    needsNetwork:
+      'A promotion, points or a gift card is on this sale: it needs the network. Try again, or take them off.',
     customer: 'Customer of this sale',
     customerHint: 'Customer: phone, email or card',
     findCustomer: 'Find',
@@ -82,6 +87,11 @@ export const messages: Readonly<Record<string, object>> = {
     changeLine: 'ফেরত দিন: {{change}}',
     printReceipt: 'রসিদ ছাপুন',
     quantityOf: '{{name}}-এর পরিমাণ',
+    takenOff: 'বিক্রি থেকে বাদ',
+    extras: 'প্রোমোশন, পয়েন্ট ও গিফট কার্ড',
+    apply: 'প্রয়োগ করুন',
+    needsNetwork:
+      'এই বিক্রিতে প্রোমোশন, পয়েন্ট বা গিফট কার্ড আছে: এর জন্য নেটওয়ার্ক দরকার। আবার চেষ্টা করুন, অথবা সেগুলো সরিয়ে দিন।',
     customer: 'এই বিক্রির ক্রেতা',
     customerHint: 'ক্রেতা: ফোন, ইমেইল বা কার্ড',
     findCustomer: 'খুঁজুন',

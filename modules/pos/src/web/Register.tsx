@@ -80,6 +80,26 @@ interface Customer {
   /** They have a price list of their own: the till shows the catalogue at their prices. */
   readonly ownPrices: boolean;
 }
+/** What the server says the sale would come to, with what other apps take off it and the inputs they offer. */
+interface Quote {
+  readonly subtotal: string;
+  readonly total: string;
+  readonly extras: {
+    readonly fields: readonly {
+      readonly key: string;
+      readonly label: string;
+      readonly kind: 'text' | 'number';
+      readonly hint: string | null;
+      readonly max: number | null;
+    }[];
+    readonly lines: readonly {
+      readonly kind: string;
+      readonly name: string;
+      readonly amount: string;
+    }[];
+    readonly problems: readonly { readonly field: string; readonly say: string }[];
+  };
+}
 interface Sale {
   readonly id: number;
   readonly name: string;
@@ -201,7 +221,37 @@ export function Register({ api }: PageProps): ReactElement {
     }
     return tiles.map((t) => (t.kind === 'family' ? (families.get(t.id) ?? t) : t)).slice(0, 200);
   }, [products, query]);
-  const total = cart.reduce((sum, l) => sum + lineAmount(l, shop?.pricesIncludeTax ?? true), 0);
+  // What other apps take off the sale — promotions, points, a gift card (RFC 0034 §2.6) — is the server's to
+  // work out: the till asks for a quote of what is in the cart, shows it, and asks for the same with the sale.
+  // Without the network there is no quote: the sale is then what the till itself adds up.
+  const [asked, setAsked] = useState<Record<string, string>>({});
+  const [typed, setTyped] = useState<Record<string, string>>({});
+  const cartKey = cart.map((l) => `${l.product.id}:${l.quantity}`).join(',');
+  const sessionId = session.data?.id ?? null;
+  const quote = useQuery({
+    queryKey: ['counter', 'quote', sessionId, customer?.partner ?? null, cartKey, asked],
+    queryFn: () =>
+      api.call<Quote>('POST', '/api/v1/counter/quote', {
+        session: sessionId,
+        ...(customer === null ? {} : { partner: customer.partner }),
+        lines: cart.map((l) => ({ product: l.product.id, quantity: String(l.quantity) })),
+        extras: asked,
+      }),
+    enabled: sessionId !== null && cart.length > 0,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+  const extras = cart.length === 0 || quote.isError ? undefined : quote.data?.extras;
+  const own = cart.reduce((sum, l) => sum + lineAmount(l, shop?.pricesIncludeTax ?? true), 0);
+  const total =
+    extras === undefined || quote.data === undefined ? own : Number(quote.data.total) || 0;
+  // Points are a customer's: another customer, another question.
+  const customerId = customer?.partner ?? null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: asked again when the customer changes
+  useEffect(() => {
+    setAsked({});
+    setTyped({});
+  }, [customerId]);
   const paid = Object.values(payments).reduce((sum, v) => sum + (Number(v) || 0), 0);
   const change = Math.max(0, paid - total);
 
@@ -278,6 +328,8 @@ export function Register({ api }: PageProps): ReactElement {
         clientId: clientId.current,
         ...(customer === null ? {} : { partner: customer.partner }),
         lines: cart.map((l) => ({ product: l.product.id, quantity: String(l.quantity) })),
+        // What the server quoted is asked for again with the sale; without a quote, the sale is as shown.
+        ...(extras === undefined ? {} : { extras: asked }),
         payments: Object.entries(payments)
           .filter(([, amount]) => Number(amount) > 0)
           .map(([method, amount]) => ({ method: Number(method), amount })),
@@ -289,6 +341,9 @@ export function Register({ api }: PageProps): ReactElement {
         // Offline: the sale waits on the device, sent in order when the network is back, accepted once by
         // its device reference (offline/queue.ts).
         if (!(error instanceof NetworkError) || offline === undefined) throw error;
+        // Something was taken off it by the server: it cannot wait on the device, where nobody can check
+        // that the points or the gift card are still there.
+        if ((extras?.lines.length ?? 0) > 0) throw new Error(t('needsNetwork'));
         await offline.add({
           kind: 'request',
           method: 'POST',
@@ -297,7 +352,8 @@ export function Register({ api }: PageProps): ReactElement {
           modelLabel: t('cart'),
           recordId: null,
           title: `${t('cart')} ${format.decimal(money(total))}`,
-          values: body,
+          // Kept as it was paid: nothing is taken off it when it is sent later.
+          values: { ...body, extras: undefined },
           etag: null,
         });
         return { order: null, queued: true };
@@ -307,6 +363,8 @@ export function Register({ api }: PageProps): ReactElement {
       if (r.queued) setQueued((n) => n + 1);
       setLastSale(r.order);
       setCart([]);
+      setAsked({});
+      setTyped({});
       setCustomer(null);
       setCustomerQuery('');
       setCustomerMissing(false);
@@ -575,12 +633,74 @@ export function Register({ api }: PageProps): ReactElement {
             </li>
           ))}
         </ul>
+        {extras === undefined || extras.lines.length === 0 ? null : (
+          <ul aria-label={t('takenOff')} className="grid gap-1 border-t pt-2 text-sm">
+            {extras.lines.map((l, index) => (
+              <li
+                // biome-ignore lint/suspicious/noArrayIndexKey: the server's lines have no id, and their order is theirs
+                key={`${l.kind}-${index}`}
+                className="flex items-baseline justify-between gap-2"
+              >
+                <span>{l.name}</span>
+                <span className="tabular-nums">−{format.decimal(l.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
         <div className="flex items-baseline justify-between border-t pt-2">
           <span className="text-sm font-semibold">{t('total')}</span>
           <span className="text-xl font-semibold tabular-nums" aria-live="polite">
             {format.decimal(money(total))}
           </span>
         </div>
+        {extras === undefined || extras.fields.length === 0 ? null : (
+          <form
+            aria-label={t('extras')}
+            className="grid gap-2 rounded-md border p-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setAsked(
+                Object.fromEntries(
+                  Object.entries(typed).filter(([, value]) => value.trim() !== ''),
+                ),
+              );
+            }}
+          >
+            {extras.fields.map((f) => {
+              const problem = extras.problems.find((x) => x.field === f.key);
+              return (
+                <div key={f.key} className="grid gap-1">
+                  <Label htmlFor={`extra-${f.key}`}>{f.label}</Label>
+                  <Input
+                    id={`extra-${f.key}`}
+                    type={f.kind === 'number' ? 'number' : 'text'}
+                    inputMode={f.kind === 'number' ? 'numeric' : undefined}
+                    min={f.kind === 'number' ? 0 : undefined}
+                    max={f.kind === 'number' && f.max !== null ? f.max : undefined}
+                    value={typed[f.key] ?? ''}
+                    aria-describedby={f.hint === null ? undefined : `extra-${f.key}-hint`}
+                    onChange={(e) => setTyped({ ...typed, [f.key]: e.target.value })}
+                  />
+                  {f.hint === null ? null : (
+                    <p id={`extra-${f.key}-hint`} className="text-xs text-muted-foreground">
+                      {f.hint}
+                    </p>
+                  )}
+                  {problem === undefined ? null : (
+                    <p role="alert" className="text-xs text-destructive">
+                      {problem.say}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+            <div>
+              <Button type="submit" size="sm" busy={quote.isFetching}>
+                {t('apply')}
+              </Button>
+            </div>
+          </form>
+        )}
         {customer === null ? (
           <form
             className="grid gap-1"
@@ -631,7 +751,11 @@ export function Register({ api }: PageProps): ReactElement {
             </Button>
           </div>
         )}
-        <Button variant="primary" disabled={cart.length === 0} onClick={() => setPaying(true)}>
+        <Button
+          variant="primary"
+          disabled={cart.length === 0 || quote.isFetching}
+          onClick={() => setPaying(true)}
+        >
           {t('pay')}
         </Button>
         {queued === 0 ? null : (

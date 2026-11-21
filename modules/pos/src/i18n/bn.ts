@@ -101,6 +101,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Session {{name}}': 'সেশন {{name}}',
   'Session report': 'সেশন প্রতিবেদন',
   Sessions: 'সেশন',
+  'Set on a line another app added to take something off the sale: a promotion, points, a gift card. Such a sale is refunded whole.':
+    'অন্য অ্যাপ বিক্রি থেকে কিছু বাদ দিতে যে লাইন যোগ করেছে তাতে থাকে: প্রোমোশন, পয়েন্ট, গিফট কার্ড। এমন বিক্রি পুরোটাই ফেরত হয়।',
   Shop: 'দোকান',
   Shops: 'দোকান',
   Sold: 'বিক্রীত',
@@ -108,6 +110,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Sold this month': 'এ মাসে বিক্রিত',
   State: 'অবস্থা',
   Status: 'অবস্থা',
+  'Taken off as': 'যা হিসেবে বাদ',
   Tax: 'কর',
   Taxes: 'কর',
   'The cash counted at closing less the cash expected; negative when cash is missing.':
