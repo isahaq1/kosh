@@ -105,9 +105,11 @@ export function searchInstructions(input: {
 }
 
 export class SearchAnswerError extends Error {
-  constructor(readonly problems: readonly string[]) {
+  readonly problems: readonly string[];
+  constructor(problems: readonly string[]) {
     super(`The assistant's filters are not valid: ${problems.join('; ')}`);
     this.name = 'SearchAnswerError';
+    this.problems = problems;
   }
 }
 
