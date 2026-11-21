@@ -98,6 +98,13 @@ test('left alone: a waiting conversation is missed, a quiet one closed, an ended
   expect(overdue({ state: 'active', lastAt: NOW - 30 * min }, NOW, limits)).toBe('close');
   expect(overdue({ state: 'closed', lastAt: NOW - 900 * min }, NOW, limits)).toBeNull();
   expect(overdue({ state: 'missed', lastAt: NOW - 900 * min }, NOW, limits)).toBeNull();
+  // Nobody has it, but what was asked was answered: no person was waited for — closed when quiet, not missed.
+  const answered = { state: 'waiting', answered: true } as const;
+  expect(overdue({ ...answered, lastAt: NOW - 11 * min }, NOW, limits)).toBeNull();
+  expect(overdue({ ...answered, lastAt: NOW - 30 * min }, NOW, limits)).toBe('close');
+  expect(overdue({ state: 'waiting', answered: false, lastAt: NOW - 11 * min }, NOW, limits)).toBe(
+    'miss',
+  );
 });
 
 test('the wait is from the first message to the first answer, never below zero', () => {

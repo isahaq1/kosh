@@ -76,6 +76,7 @@ export {
   type ChannelInfo,
   channelInfo,
   endSession,
+  handOver,
   type InboxRow,
   inboxOf,
   LivechatChannel,
@@ -90,6 +91,7 @@ export {
   routeTargets,
   type SessionView,
   say,
+  sayAsAssistant,
   sessionOf,
   sessionView,
   setPresence,
@@ -98,6 +100,22 @@ export {
   takeSession,
   widgetPath,
 } from './module.js';
+
+/**
+ * What answers a visitor before a person does (RFC 0034 §2.6): called, without being waited for, each time a
+ * visitor wrote in a conversation that nobody has. One per server; `livechat_assistant` registers the assistant.
+ */
+export type Responder = (session: number, company: number) => Promise<void>;
+const responders = new WeakMap<object, Responder>();
+
+/** Registers what answers first on a server; `null` takes it away. */
+export function setResponder(
+  context: Pick<ModuleContext, 'shutro'>,
+  responder: Responder | null,
+): void {
+  if (responder === null) responders.delete(context.shutro as object);
+  else responders.set(context.shutro as object, responder);
+}
 
 /** The worker that makes a conversation which ended what its channel's rules say; tests `drain()` it. */
 export function livechatWorkers(context: Pick<ModuleContext, 'shutro'>): Worker[] {
@@ -158,6 +176,14 @@ function registerLivechatRoutes(context: ModuleContext, sweeps: boolean): void {
     shutro.bootstrap({ reason, ...(company === undefined ? {} : { company }) }, (env) =>
       fn(env as unknown as Env),
     );
+  /** A visitor wrote where nobody answers yet: what answers first is told, and not waited for. */
+  const respond = (session: number, company: number): void => {
+    const responder = responders.get(shutro as object);
+    if (responder === undefined) return;
+    void responder(session, company).catch((error: unknown) =>
+      app.log.warn({ err: error }, 'live chat: the first answer failed'),
+    );
+  };
   const unknown = (): HttpProblem =>
     new HttpProblem(404, 'livechat-unknown', 'Live chat', 'This link does not open a chat.');
   /** The visitor's conversation, or 404 — the same answer whatever was wrong. */
@@ -229,6 +255,7 @@ function registerLivechatRoutes(context: ModuleContext, sweeps: boolean): void {
       info.company,
     );
     if (!started.ok) throw problem(started);
+    if (started.waiting) respond(started.session, info.company);
     return reply
       .code(201)
       .send({ secret: started.secret, online: started.online, session: started.view });
@@ -244,10 +271,18 @@ function registerLivechatRoutes(context: ModuleContext, sweeps: boolean): void {
 
   app.post(`${base}/sessions/current/messages`, writing, async (request, reply) => {
     const body = (request.body ?? {}) as { body?: unknown };
-    const said = await asSystem('a chat message from a visitor', async (env) =>
-      say(env, await mine(env, request), {}, body.body),
-    );
+    const { said, id, company } = await asSystem('a chat message from a visitor', async (env) => {
+      const id = await mine(env, request);
+      const said = await say(env, id, {}, body.body);
+      const [s] = await env
+        .withFlags({ checkCompany: false })
+        .model('livechat.session')
+        .browse([id as never])
+        .load({ company: true });
+      return { said, id, company: (s?.company.id as number | undefined) ?? 0 };
+    });
     if (!said.ok) throw problem(said);
+    if (said.waiting) respond(id, company);
     return reply.code(201).send({ id: said.message });
   });
 

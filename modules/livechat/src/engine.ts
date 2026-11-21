@@ -87,11 +87,13 @@ export interface Idle {
   readonly state: 'waiting' | 'active' | 'closed' | 'missed';
   /** When the last message came (or the conversation started), in milliseconds. */
   readonly lastAt: number;
+  /** Nobody has it, but what the visitor asked was answered (by the assistant): no person is waited for. */
+  readonly answered?: boolean;
 }
 
 /**
- * What time does to a conversation nobody tends: one still waiting after `missAfterMin` was missed; one that was
- * being answered and went quiet for `closeAfterMin` is closed.
+ * What time does to a conversation nobody tends: one still waiting for a person after `missAfterMin` was missed;
+ * one that was being answered — or was answered without a person — and went quiet for `closeAfterMin` is closed.
  */
 export function overdue(
   session: Idle,
@@ -99,6 +101,8 @@ export function overdue(
   limits: { readonly missAfterMin: number; readonly closeAfterMin: number },
 ): 'miss' | 'close' | null {
   const quiet = (now - session.lastAt) / 60_000;
+  if (session.state === 'waiting' && session.answered === true)
+    return quiet >= limits.closeAfterMin ? 'close' : null;
   if (session.state === 'waiting' && quiet >= limits.missAfterMin) return 'miss';
   if (session.state === 'active' && quiet >= limits.closeAfterMin) return 'close';
   return null;

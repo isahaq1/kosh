@@ -133,6 +133,11 @@ export const LivechatChannel = defineModel('livechat.channel', {
      * `helpdesk.ticket`, `livechat_crm`: `crm.deal`).
      */
     routeTargets: method('livechat.channel', async (): Promise<string[]> => []),
+    /**
+     * The channels (of these) whose new conversations are not given to an operator at once: something answers
+     * first, and hands over. None here; `livechat_assistant` says so for the channels it answers.
+     */
+    answeredFirst: method('livechat.channel', async (): Promise<number[]> => []),
   },
   sqlConstraints: {
     oneKey: { unique: ['key'], message: 'Two channels cannot share a link key.' },
@@ -226,6 +231,12 @@ export const LivechatSession = defineModel('livechat.session', {
       help: 'From the visitor’s first message to the operator’s first answer.',
     }),
     messageCount: f.integer({ default: 0, label: 'Messages', groups: { write: [...SYSTEM] } }),
+    needsPerson: f.boolean({
+      default: true,
+      label: 'Waits for a person',
+      groups: { write: [...SYSTEM] },
+      help: 'Off while the assistant has answered what the visitor asked: such a conversation is closed when it goes quiet, not missed.',
+    }),
     rating: f.integer({
       label: 'Rating',
       groups: { write: [...SYSTEM] },
@@ -347,7 +358,12 @@ export const LivechatRule = defineModel('livechat.rule', {
   },
 });
 
-const MESSAGE_KINDS = { visitor: 'Visitor', operator: 'Operator', system: 'Note' } as const;
+const MESSAGE_KINDS = {
+  visitor: 'Visitor',
+  operator: 'Operator',
+  assistant: 'Assistant',
+  system: 'Note',
+} as const;
 
 /** What was said. Never changed: a conversation is kept as it happened. */
 export const LivechatMessage = defineModel('livechat.message', {
@@ -368,7 +384,7 @@ export const LivechatMessage = defineModel('livechat.message', {
     kind: f.selection(MESSAGE_KINDS, {
       required: true,
       label: 'From',
-      help: 'The visitor, the operator, or a note the server wrote: who joined, how it ended.',
+      help: 'The visitor, the operator, the assistant, or a note the server wrote: who joined, how it ended.',
     }),
     user: f.many2one('res.users', { ondelete: 'set null', label: 'Operator' }),
     author: f.char({ size: 80, label: 'Name' }),
@@ -542,7 +558,9 @@ export async function startSession(
   channelKey: string,
   input: StartInput,
   now: number = Date.now(),
-): Promise<{ ok: true; secret: string; session: number; online: boolean } | Refused> {
+): Promise<
+  { ok: true; secret: string; session: number; online: boolean; waiting: boolean } | Refused
+> {
   const channel = await channelBy(su, { key: channelKey });
   if (channel === null) return { ok: false, why: 'unknown' };
   const body = cleanText(input.message);
@@ -586,9 +604,16 @@ export async function startSession(
   const session = made.ids[0] as number;
   await addMessage(su, session, { kind: 'visitor', author: name, body }, now);
   await su.flush();
-  const operator = pickOperator(operators, channel.assignment, channel.limit);
+  // A channel answered first by something else keeps its new conversations waiting: it hands them over.
+  const held = (
+    await (su.withFlags({ checkCompany: false }) as Env)
+      .model('livechat.channel')
+      .browse([channel.id as never])
+      .answeredFirst()
+  ).includes(channel.id);
+  const operator = held ? null : pickOperator(operators, channel.assignment, channel.limit);
   if (operator !== null) await giveTo(su, session, operator, now);
-  return { ok: true, secret, session, online };
+  return { ok: true, secret, session, online, waiting: operator === null };
 }
 
 /** The conversation a visitor's secret opens in a channel, or `null`. */
@@ -659,7 +684,7 @@ export async function say(
   from: { readonly user?: number; readonly name?: string },
   text: unknown,
   now: number = Date.now(),
-): Promise<{ ok: true; message: number } | Refused> {
+): Promise<{ ok: true; message: number; waiting: boolean } | Refused> {
   const all = su.withFlags({ checkCompany: false }) as Env;
   const sessions = all.model('livechat.session').browse([session as never]);
   const [s] = await sessions.load({ operator: true });
@@ -689,9 +714,70 @@ export async function say(
     ...(byOperator && s.answeredAt === null
       ? { answeredAt: new Date(now), waitSeconds: waited(started, now) }
       : {}),
+    // What the visitor asks now is not answered yet.
+    ...(!byOperator && s.state === 'waiting' ? { needsPerson: true } : {}),
   } as never);
   await all.flush();
-  return { ok: true, message };
+  return { ok: true, message, waiting: !byOperator && s.state === 'waiting' };
+}
+
+/**
+ * The assistant says something in a conversation nobody has yet (RFC 0034 §2.6) — only while it waits: once an
+ * operator has it, or it ended, what the assistant would have said is dropped. `answered` says whether what the
+ * visitor asked was answered; if not, the conversation waits for a person. Returns the message, or `null`.
+ */
+export async function sayAsAssistant(
+  su: Env,
+  session: number,
+  said: { readonly author: string; readonly body: unknown; readonly answered: boolean },
+  now: number = Date.now(),
+): Promise<number | null> {
+  const all = su.withFlags({ checkCompany: false }) as Env;
+  const sessions = all.model('livechat.session').browse([session as never]);
+  const [s] = await sessions.load(['state', 'messageCount']);
+  if (s === undefined || s.state !== 'waiting' || (s.messageCount ?? 0) >= MAX_MESSAGES)
+    return null;
+  const body = cleanText(said.body);
+  if (body === '') return null;
+  const message = await addMessage(
+    all,
+    session,
+    { kind: 'assistant', author: cleanText(said.author, 80).replace(/\n/g, ' '), body },
+    now,
+  );
+  await sessions.write({
+    lastAt: new Date(now),
+    messageCount: (s.messageCount ?? 0) + 1,
+    needsPerson: !said.answered,
+  } as never);
+  await all.flush();
+  return message;
+}
+
+/**
+ * A conversation that waits is handed over to a person: given to an operator who is there, by the channel's way
+ * of giving them out — or left waiting, for one to take, when nobody can be given it. Returns the operator.
+ */
+export async function handOver(
+  su: Env,
+  session: number,
+  now: number = Date.now(),
+): Promise<number | null> {
+  const all = su.withFlags({ checkCompany: false }) as Env;
+  const sessions = all.model('livechat.session').browse([session as never]);
+  const [s] = await sessions.load({ channel: true });
+  if (s === undefined || s.state !== 'waiting') return null;
+  await sessions.write({ needsPerson: true } as never);
+  await all.flush();
+  const channel = await channelBy(all, { id: s.channel.id });
+  if (channel === null) return null;
+  const operator = pickOperator(
+    await operatorsOf(all, channel, now),
+    channel.assignment,
+    channel.limit,
+  );
+  if (operator !== null) await giveTo(all, session, operator, now);
+  return operator;
 }
 
 /** An operator of the channel takes a conversation that waits. */
@@ -770,7 +856,11 @@ export async function sweepSessions(
   let closed = 0;
   for (const s of open) {
     const what = overdue(
-      { state: s.state as 'waiting' | 'active', lastAt: ms(s.lastAt) ?? now },
+      {
+        state: s.state as 'waiting' | 'active',
+        lastAt: ms(s.lastAt) ?? now,
+        answered: s.needsPerson === false,
+      },
       now,
       { missAfterMin: s.channel.missAfterMin, closeAfterMin: s.channel.closeAfterMin },
     );

@@ -20,6 +20,7 @@ export const bn: Readonly<Record<string, string>> = {
     'গত দেড় মিনিটে যাঁর ইনবক্স খোলা ছিল না, সেই অপারেটর উপস্থিত নন।',
   'And the visitor wrote': 'এবং দর্শনার্থী লিখেছেন',
   Assignment: 'বণ্টন',
+  Assistant: 'সহকারী',
   At: 'সময়',
   'Average rating': 'গড় রেটিং',
   'Average wait (seconds)': 'গড় অপেক্ষা (সেকেন্ড)',
@@ -90,6 +91,8 @@ export const bn: Readonly<Record<string, string>> = {
   'No installed app makes that of a conversation. With Helpdesk: helpdesk.ticket; with Pipeline: crm.deal.':
     'ইনস্টল করা কোনো অ্যাপ কথোপকথন থেকে এটি তৈরি করে না। Helpdesk থাকলে: helpdesk.ticket; Pipeline থাকলে: crm.deal।',
   Note: 'নোট',
+  'Off while the assistant has answered what the visitor asked: such a conversation is closed when it goes quiet, not missed.':
+    'দর্শনার্থীর প্রশ্নের উত্তর সহকারী দিয়ে থাকলে বন্ধ থাকে: এমন কথোপকথন নীরব হলে বন্ধ হয়, মিস হয় না।',
   'On your site': 'আপনার সাইটে',
   'One presence per operator.': 'প্রতি অপারেটরের একটি উপস্থিতি।',
   'One to fifty conversations at once; missed and closed after one minute to a day.':
@@ -127,8 +130,8 @@ export const bn: Readonly<Record<string, string>> = {
     'অপারেটররা Live chat › Inbox থেকে উত্তর দেন। কথোপকথন যায় উপস্থিত একজনের কাছে — যাঁর ইনবক্স খোলা এবং যিনি কথোপকথন নিচ্ছেন — অথবা কেউ নেওয়া পর্যন্ত অপেক্ষা করে।',
   'The page of the site the visitor wrote from, as their browser said.':
     'সাইটের যে পাতা থেকে দর্শনার্থী লিখেছেন, তাঁর ব্রাউজার যা জানিয়েছে।',
-  'The visitor, the operator, or a note the server wrote: who joined, how it ended.':
-    'দর্শনার্থী, অপারেটর, অথবা সার্ভারের লেখা নোট: কে যোগ দিলেন, কীভাবে শেষ হলো।',
+  'The visitor, the operator, the assistant, or a note the server wrote: who joined, how it ended.':
+    'দর্শনার্থী, অপারেটর, সহকারী, অথবা সার্ভারের লেখা নোট: কে যোগ দিলেন, কীভাবে শেষ হলো।',
   Then: 'তখন',
   'To the least busy': 'সবচেয়ে কম ব্যস্ত জনকে',
   'Two channels cannot share a link key.': 'দুটি চ্যানেলের লিংক কী এক হতে পারে না।',
@@ -142,6 +145,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Waiting now': 'এখন অপেক্ষায়',
   'Waiting until an operator has it; active while they talk; closed when it ends; missed when nobody answered in time.':
     'অপারেটর না পাওয়া পর্যন্ত অপেক্ষায়; কথা চলাকালে সক্রিয়; শেষ হলে বন্ধ; সময়মতো কেউ উত্তর না দিলে মিস।',
+  'Waits for a person': 'একজন মানুষের অপেক্ষায়',
   Welcome: 'স্বাগত বার্তা',
   'What a visitor reads before they write.': 'লেখার আগে দর্শনার্থী যা পড়েন।',
   'What a visitor reads when no operator is there. Their message is kept, with their email.':

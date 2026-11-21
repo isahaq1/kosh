@@ -80,7 +80,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;padding:0 1rem 1rem}
 .m .who{display:block;font-size:.75rem;color:#555}
 .visitor{align-self:flex-end;background:#1d4ed8;color:#fff}
 .visitor .who{color:#dbeafe}
-.operator{align-self:flex-start;background:#8882}
+.operator,.assistant{align-self:flex-start;background:#8882}
 .system{align-self:center;font-size:.85rem;color:#555;background:none;padding:0}
 label{display:block;font-weight:600;font-size:.9rem;margin:.6rem 0 .25rem}
 input,textarea{font:inherit;width:100%;padding:.5rem;border:1px solid #888;border-radius:.4rem;background:transparent;color:inherit}
