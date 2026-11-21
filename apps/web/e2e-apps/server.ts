@@ -41,6 +41,7 @@ import { l10nBdPayroll } from '@kosh/l10n_bd_payroll';
 import { l10nBdPos } from '@kosh/l10n_bd_pos';
 import { l10nIn } from '@kosh/l10n_in';
 import { livechat } from '@kosh/livechat';
+import { livechatAssistant } from '@kosh/livechat_assistant';
 import { livechatCrm } from '@kosh/livechat_crm';
 import { livechatHelpdesk } from '@kosh/livechat_helpdesk';
 import { loyalty } from '@kosh/loyalty';
@@ -120,6 +121,13 @@ const databaseUrl = container.getConnectionUri();
 const NL = String.fromCharCode(10);
 const assistant = createAssistant({
   client: fakeClient((request) => {
+    // A site's chat (RFC 0034 §2.6): what the pages say is answered, anything else goes to a person.
+    if ('schema' in request && request.system.includes('in its live chat'))
+      return (request.user.split(NL).findLast((l) => l.startsWith('Visitor:')) ?? '').includes(
+        'deliver',
+      )
+        ? { answer: 'Yes — within two working days.', handover: false }
+        : { answer: 'I do not have that. A person of the team will answer here.', handover: true };
     if (!('schema' in request) || !request.system.includes('propose the values'))
       return { clauses: [], combine: 'and', unsupported: '' };
     const text = request.user.split(NL);
@@ -201,6 +209,7 @@ const CATALOGUE = [
   websiteCrm,
   livechatHelpdesk,
   livechatCrm,
+  livechatAssistant,
   websiteHiring,
   saleCrm,
   websiteSale,

@@ -104,6 +104,9 @@ importers:
       '@kosh/livechat':
         specifier: workspace:*
         version: link:../../modules/livechat
+      '@kosh/livechat_assistant':
+        specifier: workspace:*
+        version: link:../../modules/livechat_assistant
       '@kosh/livechat_crm':
         specifier: workspace:*
         version: link:../../modules/livechat_crm
@@ -521,6 +524,9 @@ importers:
       '@kosh/livechat':
         specifier: workspace:*
         version: link:../../modules/livechat
+      '@kosh/livechat_assistant':
+        specifier: workspace:*
+        version: link:../../modules/livechat_assistant
       '@kosh/livechat_crm':
         specifier: workspace:*
         version: link:../../modules/livechat_crm
@@ -1644,6 +1650,31 @@ importers:
       react-i18next:
         specifier: ^17.0.21
         version: 17.0.21(i18next@26.4.7(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
+
+  modules/livechat_assistant:
+    dependencies:
+      '@kosh/assistant':
+        specifier: workspace:*
+        version: link:../../packages/assistant
+      '@kosh/livechat':
+        specifier: workspace:*
+        version: link:../livechat
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+      '@kosh/website':
+        specifier: workspace:*
+        version: link:../website
+    devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
 
   modules/livechat_crm:
     dependencies:
@@ -3606,6 +3637,9 @@ importers:
       '@kosh/livechat':
         specifier: workspace:*
         version: link:../../modules/livechat
+      '@kosh/livechat_assistant':
+        specifier: workspace:*
+        version: link:../../modules/livechat_assistant
       '@kosh/livechat_crm':
         specifier: workspace:*
         version: link:../../modules/livechat_crm

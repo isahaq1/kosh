@@ -23,6 +23,7 @@ import { l10nBd } from '@kosh/l10n_bd';
 import { l10nBdPayroll } from '@kosh/l10n_bd_payroll';
 import { l10nBdPos } from '@kosh/l10n_bd_pos';
 import { livechat } from '@kosh/livechat';
+import { livechatAssistant } from '@kosh/livechat_assistant';
 import { livechatCrm } from '@kosh/livechat_crm';
 import { livechatHelpdesk } from '@kosh/livechat_helpdesk';
 import { loyalty } from '@kosh/loyalty';
@@ -184,6 +185,7 @@ export function demoCatalogue(): KoshModule[] {
     websiteCrm,
     livechatHelpdesk,
     livechatCrm,
+    livechatAssistant,
     websiteHiring,
     saleCrm,
     websiteSale,

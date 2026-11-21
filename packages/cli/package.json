@@ -112,6 +112,7 @@
     "@kosh/todo": "workspace:*",
     "@kosh/subscription": "workspace:*",
     "@kosh/livechat": "workspace:*",
+    "@kosh/livechat_assistant": "workspace:*",
     "@kosh/livechat_crm": "workspace:*",
     "@kosh/livechat_helpdesk": "workspace:*",
     "@kosh/survey": "workspace:*",

@@ -114,6 +114,87 @@ test('a visitor writes in the chat window, the operator answers from the inbox, 
   await bangla.close();
 });
 
+test('the assistant answers first, marked as an AI, and hands over to the operator when it does not know', async ({
+  page,
+  browser,
+}) => {
+  await signIn(page, 'dina');
+  const csrf = await page.evaluate(() => sessionStorage.getItem('kosh.csrf'));
+  const headers = { 'x-csrf-token': csrf ?? '' };
+  const post = async (url: string, data: Record<string, unknown>): Promise<number> => {
+    const made = await page.request.post(url, { headers, data });
+    expect(made.status(), `${url}: ${await made.text()}`).toBeLessThan(300);
+    return ((await made.json()) as { id: number }).id;
+  };
+  const users = await page.request.get(
+    `/api/v1/models/res.users?fields=login&filter=${encodeURIComponent(JSON.stringify({ login: 'dina' }))}`,
+  );
+  const [me] = ((await users.json()) as { items: { id: number }[] }).items;
+  const stamp = Date.now();
+  const site = await post('/api/v1/models/website.site', {
+    name: `E2E chat site ${stamp}`,
+    key: `e2e-chat-${stamp}`,
+  });
+  const delivery = await post('/api/v1/models/website.page', {
+    site,
+    path: '/delivery',
+    title: 'Delivery',
+    blocks: { create: [{ kind: 'text', body: 'We deliver within two working days.' }] },
+  });
+  await post(`/api/v1/models/website.page/${delivery}/transitions/publish`, {});
+  const name = `E2E assisted chat ${stamp}`;
+  const channel = await post('/api/v1/models/livechat.channel', {
+    name,
+    operators: { set: [me?.id] },
+    assignment: 'turn',
+    limit: 5,
+    assistant: true,
+    assistantSite: site,
+    assistantName: 'Padma',
+  });
+  // The channel's form shows who answers first.
+  await page.goto(`/livechat/a/livechat.action_channels/${channel}`);
+  await expect(page.getByText('The assistant answers first')).toBeVisible();
+  const record = await page.request.get(`/api/v1/models/livechat.channel/${channel}?fields=link`);
+  const link = ((await record.json()) as { link: string }).link;
+
+  await page.goto('/livechat/a/livechat.action_inbox');
+  const away = page.getByRole('button', { name: 'Not taking conversations' });
+  if (await away.isVisible().catch(() => false)) await away.click();
+  await expect(page.getByRole('button', { name: 'Taking conversations' })).toBeVisible();
+
+  const visitor = await browser.newContext();
+  const chat = await visitor.newPage();
+  await chat.goto(new URL(link, page.url()).toString());
+  const who = `Asker ${stamp}`;
+  await chat.getByRole('textbox', { name: 'Your name' }).fill(who);
+  await chat.getByRole('textbox', { name: 'Your message' }).fill('Do you deliver?');
+  await chat.getByRole('button', { name: 'Start the chat' }).click();
+  // The assistant answers from the site's page, under a name that says what it is; nobody has joined.
+  const log = chat.getByRole('log');
+  await expect(log).toContainText('Yes — within two working days.');
+  await expect(log).toContainText('Padma · AI');
+  await expect(log).not.toContainText('joined');
+  // What the pages do not say: it says so, and the operator has the conversation.
+  const say = chat.getByRole('textbox', { name: 'Your message' });
+  await say.fill('Where is my order 4411?');
+  await say.press('Enter');
+  await expect(log).toContainText('A person of the team will answer here.');
+  await expect(log).toContainText('joined.');
+  await expect(chat.getByRole('status').first()).toContainText('You are talking with');
+  // In the operator's inbox, theirs, with what the assistant said before them.
+  await page.getByRole('button', { name: `Open the conversation with ${who}` }).click();
+  const theirs = page.getByRole('log', { name: `Conversation with ${who}` });
+  await expect(theirs).toContainText('Padma · AI');
+  await expect(theirs).toContainText('Where is my order 4411?');
+  const reply = page.getByRole('textbox', { name: 'Your reply' });
+  await reply.fill('It left this morning.');
+  await reply.press('Enter');
+  await expect(log).toContainText('It left this morning.');
+  await chat.getByRole('button', { name: 'End the chat' }).click();
+  await visitor.close();
+});
+
 test('the Live chat overview', async ({ page }) => {
   await signIn(page, 'dina');
   await page.goto('/livechat/a/livechat.action_overview');

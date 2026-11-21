@@ -66,6 +66,7 @@ export type AppName =
   | 'website_crm'
   | 'livechat_helpdesk'
   | 'livechat_crm'
+  | 'livechat_assistant'
   | 'sale_crm'
   | 'website_sale_stock'
   | 'pos_stock'
@@ -458,6 +459,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'livechatCrm',
     bridge: ['livechat', 'crm'],
+  },
+  livechat_assistant: {
+    label: 'Bridge: the AI assistant answers the chat from the site’s pages (Live chat ↔ Sites)',
+    icon: '🔗',
+    server: 'livechatAssistant',
+    bridge: ['livechat', 'website'],
   },
   sale_crm: {
     label:
