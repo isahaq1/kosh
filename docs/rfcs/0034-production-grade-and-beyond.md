@@ -891,3 +891,29 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   daily cap of its own (the company budget is the cap), the answer written by a job rather than after the
   response (a server that stops mid-answer leaves the conversation waiting for a person, which is where it would
   go anyway). Step 13 is complete with this part.
+
+- **Step 12 part 6 — promotions, points and gift cards at the till (2026-11-21).** The design the earlier part
+  left open. *Who works it out*: the server, always — the till shows a quote and asks for the same with the sale.
+  `POST /api/v1/counter/quote` runs the sale's own code (prices, taxes, what is taken off) in the sale's
+  transaction and rolls it back, so the quote cannot disagree with the sale and leaves nothing: no record, no
+  number, nothing held. *Offline*: what is taken off is applied only when the sale asks for it (`extras` in the
+  body); a sale rung up offline does not ask, and is kept as it was paid — the till refuses to queue a sale
+  something was taken off. *The books*: each thing taken off is a line below zero on the sale (`extra` on
+  `pos.order.line`), as on a Sales order — the session's entry needs no new tender; the price is the known limit
+  that such lines carry no tax. *Refunds*: a sale with such lines is refunded whole (409 otherwise), so the money,
+  the points and the gift card go back together; `releaseHeld` gives back once.
+  In the Counter: `saleExtras(sale, asked, strict)` on `pos.shop` and `extrasKept(token)` on `pos.order`, both
+  doing nothing by themselves; the register renders whatever fields the hook offers. In Loyalty:
+  `workOutCredits` (the rules of a quotation for a sale of any app, returning lines, problems in words, the card
+  and what to hold), `holdCredits` (once per record, checked again against the card and the gift card) and
+  `releaseHeld`; the Sales functions keep their own code for now. `@kosh/pos_loyalty` overrides the two hooks.
+  A defect found on the way: the quote first read the sale's total after its lines were taken off (records follow
+  their rows); the total is now read before.
+  Tests: on real PostgreSQL (4: a quote with promotions, wrong and right codes, nothing left behind and the next
+  number following; an offline-style sale kept as paid and an asked one charged less; points within the card and
+  the program, refused in words, held once on a repeat, none for an anonymous sale; a gift card with a code and
+  points together, an empty card refused, a partial refund refused, the whole refund giving everything back
+  once), E2E (a gift card typed at the till, a wrong code said in words, the card's balance after).
+  **Left out**: gift cards as a payment method of the session (a liability account instead of less revenue),
+  discounts that lower the tax, Sales' own functions moved onto `workOutCredits`, the receipt naming the points
+  left on the card. Step 12 is complete with this part.

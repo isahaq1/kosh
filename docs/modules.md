@@ -1708,8 +1708,35 @@ With the Counter installed too (`@kosh/pos_loyalty`):
   returned from it so far is of it — all of them once everything is back —, never more than the sale earned and
   never more than the card holds.
 
-**Not yet at the Counter**: spending points, promotions and gift cards at the till (a sale made offline cannot
-ask the server what a code is worth, and a gift card is a way to pay that the session's entry must book).
+- **Promotions, points and gift cards come off the sale at the till.** The register asks the server what the
+  cart would come to and shows it: the running promotions by themselves, and — typed by the cashier, then
+  *Apply* — a **promotion code**, the customer's **points** (the field says what the card holds and takes no more
+  than the sale may) and a **gift card or wallet**. The rules are the ones of a Sales quotation: promotions first,
+  then points within the share the program allows, then the card on what is left. What cannot be taken is said
+  under its field, and the sale goes on without it.
+- **The sale asks for the same again**, and the server works it out again: points and the gift card are held
+  for the sale once, however often the device sends it. If the card or the points are gone meanwhile, the sale
+  is refused in words and nothing is kept.
+- **Without the network nothing comes off**: a sale rung up offline is at the prices the till showed, and is
+  kept as it was paid when it is sent later — no promotion is put on it after the fact. A sale something was
+  taken off cannot wait on the device: the till says it needs the network.
+- **Such a sale is refunded whole**, so that what was taken off goes back with it: the cashier gives back what
+  was paid in money, the gift card holds its amount again and the points are back on the card.
+
+```http
+POST /api/v1/counter/quote   { "session", "partner"?, "lines", "extras"?: { "promoCode", "points", "giftCard" } }
+                             → { "lines", "subtotal", "total",
+                                 "extras": { "fields", "lines": [{ "kind", "name", "amount" }], "problems" } }
+POST /api/v1/counter/orders  the sale, with the same "extras" — or without, to sell at the prices shown
+```
+
+A quote is worked out exactly as the sale is and then undone: it leaves no sale, takes no number and holds
+nothing. Another app takes something off Counter sales by overriding `saleExtras` of `pos.shop` (and
+`extrasKept` of `pos.order` for what it must keep once the sale is paid).
+
+**Limits at the Counter**: what is taken off — a promotion, points, a gift card — is a line below zero without
+tax, as on a Sales order, so the tax of the sale stays that of the goods; a gift card is not a payment method
+of the session; a sale paid in part by a gift card earns points on what its lines come to, as in Sales.
 
 **Not yet**: gift cards sold as a product, points, credit and promotions on a quotation already sent,
 a discount that lowers the tax of the order — promotion lines, like the Shop's amount coupons, come off without
