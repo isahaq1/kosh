@@ -90,6 +90,18 @@ export const messages: Readonly<Record<string, object>> = {
       landscape: 'Landscape',
       sample: 'Sample record',
       preview: 'Preview',
+      symbology: 'Kind of barcode',
+      symbologies: {
+        auto: 'Chosen by the value (EAN / UPC, or Code 128)',
+        code128: 'Code 128',
+        code39: 'Code 39',
+        ean13: 'EAN-13',
+        ean8: 'EAN-8',
+        upca: 'UPC-A',
+        itf14: 'ITF-14',
+        datamatrix: 'Data Matrix',
+        pdf417: 'PDF417',
+      },
       kinds: {
         heading: 'Heading',
         text: 'Text',
@@ -101,10 +113,21 @@ export const messages: Readonly<Record<string, object>> = {
         pageBreak: 'Page break',
         signature: 'Signatures',
         qr: 'QR code',
+        barcode: 'Barcode',
       },
     },
   },
   bn: {
+    designer: {
+      symbology: 'বারকোডের ধরন',
+      symbologies: {
+        auto: 'মান অনুযায়ী (EAN / UPC, নইলে Code 128)',
+      },
+      kinds: {
+        qr: 'কিউআর কোড',
+        barcode: 'বারকোড',
+      },
+    },
     total: 'মোট',
     none: 'কিছু না',
     measures: 'পরিমাপ',

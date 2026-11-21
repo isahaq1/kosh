@@ -31,7 +31,8 @@ export {
   stat,
 } from './builders.js';
 export { type ConditionEnv, evaluate, holds, resolveRecord } from './condition.js';
-export type { Block, Layout } from './documents.js';
+export type { BarcodeSymbology, Block, Layout } from './documents.js';
+export { BARCODE_SYMBOLOGIES } from './documents.js';
 export { nodesOf, resolveView, ViewDefinitionError } from './extend.js';
 export type * from './types.js';
 export {

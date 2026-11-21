@@ -297,6 +297,8 @@ export function Register({ api }: PageProps): ReactElement {
       add(hit);
       setQuery('');
     } else if (only?.kind === 'family') setFamily(only);
+    // Nothing on sale answers to it: the reference of a receipt, perhaps.
+    else if (shown.length === 0 && query.trim().length >= 3) findSale.mutate(query.trim());
   };
   useEffect(() => {
     search.current?.focus();
@@ -372,6 +374,17 @@ export function Register({ api }: PageProps): ReactElement {
     }, 2000);
     return () => clearInterval(timer);
   }, [pendingKey, session.data?.id]);
+  // A receipt scanned into the search box: its sale comes back, to print again or to refund.
+  const findSale = useMutation({
+    mutationFn: (name: string) =>
+      api.call<{ order: Sale }>('GET', `/api/v1/counter/sales?name=${encodeURIComponent(name)}`),
+    onSuccess: (r) => {
+      setLastSale(r.order);
+      setQuery('');
+      setError(null);
+    },
+    onError: () => setError(t('noSale')),
+  });
   const findCustomer = useMutation({
     mutationFn: (typed: string) =>
       api.call<{ customer: Customer }>(

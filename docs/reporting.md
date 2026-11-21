@@ -69,6 +69,31 @@ validated on save) or create new ones.
 - Rendering: the HTML (CSS paged media) is printed by Playwright's Chromium, one shared browser per process,
   launched on first use and closed with the server.
 
+### Barcodes and QR codes
+
+Every barcode and QR code Kosh draws — in a document, on the Counter's screen — comes from one package,
+[`isahaq-barcode`](https://www.npmjs.com/package/isahaq-barcode), through two functions of `@kosh/reporting`:
+`qrSvg(content)` and `barcodeSvg(content, { symbology, height, text })`. Both give an SVG the page sizes; nothing
+is drawn in the browser, and nothing is fetched. Code that needs a barcode calls these, never a library of its own.
+
+Two blocks of a layout use them:
+
+```ts
+{ kind: 'qr', id: 'qr', bind: 'code', size: 32, label: 'Show this at the door' }
+{ kind: 'barcode', id: 'barcode', bind: 'barcode', size: 55, height: 16, symbology: 'auto' }
+```
+
+`size` is the width and `height` the bars' height, in millimetres. `symbology` is `auto` (the default), `code128`,
+`code39`, `ean13`, `ean8`, `upca`, `itf14`, `datamatrix` or `pdf417`. With `auto`, a value that is an EAN-13, an
+EAN-8 or a UPC-A **with its check digit right** is drawn as one, and anything else as Code 128. A value the asked
+symbology cannot hold — letters in an EAN, a wrong check digit — is drawn as Code 128 rather than left out: a label
+that scans is worth more than none. An empty value, or one no bar code can hold (Bangla letters), draws nothing.
+`text: false` leaves out the value in words under the bars.
+
+Shipped with: the **Barcode label** of a product (Products), the **Attendance badge** of an employee with the code
+the kiosk reads as a QR code and as bars (Attendance), and the Counter's receipt, whose bars a till's scanner reads
+back (see the Counter).
+
 ## Scheduled reports
 
 `report.schedule` records (Reports → Scheduled reports): a pivot query, a list, or a document template over a search;

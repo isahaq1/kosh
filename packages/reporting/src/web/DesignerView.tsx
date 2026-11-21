@@ -26,7 +26,7 @@ import {
   useKosh,
   type ViewProps,
 } from '@kosh/ui';
-import type { Block, Layout } from '@kosh/views';
+import { BARCODE_SYMBOLOGIES, type BarcodeSymbology, type Block, type Layout } from '@kosh/views';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GripVertical, Plus, Trash2 } from 'lucide-react';
 import { type ReactElement, useEffect, useId, useState } from 'react';
@@ -43,6 +43,7 @@ const KINDS = [
   'pageBreak',
   'signature',
   'qr',
+  'barcode',
 ] as const;
 
 function newBlock(kind: Block['kind'], n: number): Block {
@@ -64,6 +65,8 @@ function newBlock(kind: Block['kind'], n: number): Block {
       return { kind, id, labels: ['Prepared by', 'Approved by'] };
     case 'qr':
       return { kind, id, bind: 'name' };
+    case 'barcode':
+      return { kind, id, bind: 'name', symbology: 'auto' };
     default:
       return { kind, id } as Block;
   }
@@ -107,6 +110,24 @@ function BlockEditor({
       return (
         <div className="grid gap-2">
           {text(t('designer.bind'), block.bind, (v) => onChange({ ...block, bind: v }))}
+          {text(t('designer.label'), block.label ?? '', (v) =>
+            onChange({ ...block, label: v === '' ? undefined : v } as Block),
+          )}
+        </div>
+      );
+    case 'barcode':
+      return (
+        <div className="grid gap-2">
+          {text(t('designer.bind'), block.bind, (v) => onChange({ ...block, bind: v }))}
+          <Select
+            label={t('designer.symbology')}
+            value={block.symbology ?? 'auto'}
+            options={BARCODE_SYMBOLOGIES.map((s) => ({
+              value: s,
+              label: t(`designer.symbologies.${s}`),
+            }))}
+            onChange={(v) => onChange({ ...block, symbology: v as BarcodeSymbology })}
+          />
           {text(t('designer.label'), block.label ?? '', (v) =>
             onChange({ ...block, label: v === '' ? undefined : v } as Block),
           )}

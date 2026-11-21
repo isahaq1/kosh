@@ -115,6 +115,8 @@ beforeAll(async () => {
     ['maria', ['pos.manager', 'product.manager', 'account.manager']],
     ['rahim', ['pos.cashier']],
     ['sam', ['pos.cashier']],
+    // Nobody at the Counter: the receipts are not hers to look up.
+    ['nadia', ['product.manager']],
   ] as const)
     await auth.createUser({
       login,
@@ -547,4 +549,32 @@ test('the customer of a sale is named by a phone number or an email: one contact
     `/api/v1/models/pos.order/${sale.json.order.id}?fields=partner`,
   );
   expect(kept.json.partner?.id ?? kept.json.partner).toBe(rina.json.id);
+});
+
+test('a receipt scanned at the till: the sale its reference names, for those who may read it', async () => {
+  const [mine] = (
+    await call(
+      'sam',
+      'GET',
+      `/api/v1/models/pos.order?filter=${encodeURIComponent(JSON.stringify({ state: 'paid' }))}&fields=name,total&limit=1`,
+    )
+  ).json.items as { id: number; name: string; total: string }[];
+  expect(mine).toBeDefined();
+  const found = await call(
+    'sam',
+    'GET',
+    `/api/v1/counter/sales?name=${encodeURIComponent(mine?.name ?? '')}`,
+  );
+  expect(found.status, JSON.stringify(found.json)).toBe(200);
+  expect(found.json.order).toMatchObject({ id: mine?.id, name: mine?.name, state: 'paid' });
+  expect(Number(found.json.order.total)).toBe(Number(mine?.total));
+  // No such receipt; too short to be one.
+  expect((await call('sam', 'GET', '/api/v1/counter/sales?name=NO-SUCH-SALE')).status).toBe(404);
+  expect((await call('sam', 'GET', '/api/v1/counter/sales?name=ab')).status).toBe(400);
+  const outsider = await call(
+    'nadia',
+    'GET',
+    `/api/v1/counter/sales?name=${encodeURIComponent(mine?.name ?? '')}`,
+  );
+  expect(outsider.status, JSON.stringify(outsider.json)).toBe(403);
 });

@@ -18,6 +18,8 @@ import type { ScheduleEngine } from './schedules.js';
 
 export {
   type Block,
+  barcodeSvg,
+  barcodeSymbology,
   closeDocuments,
   type DocumentData,
   type DocumentFields,

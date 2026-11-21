@@ -7,8 +7,8 @@
 
 import { htmlToText } from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
-import type { Block, Layout } from '@kosh/views';
-import QRCode from 'qrcode';
+import type { BarcodeSymbology, Block, Layout } from '@kosh/views';
+import BarcodeGenerator from 'isahaq-barcode';
 import { amountInWords } from './words.js';
 
 export type { Block, Layout };
@@ -220,20 +220,76 @@ function fill(
   );
 }
 
+/** The package's drawing with what a screen reader says of it; its size comes from the page (the viewBox stays). */
+function labelled(svg: string, label: string): string {
+  return svg.replace(
+    '<svg ',
+    `<svg role="img" aria-label="${label}" shape-rendering="crispEdges" `,
+  );
+}
+
 /**
- * A QR code as SVG (one path of dark modules, a quiet zone of 4), from `qrcode`'s synchronous matrix — rendering
- * stays synchronous. Medium error correction: a printed ticket survives a crease.
+ * A QR code as SVG, drawn by `isahaq-barcode` (synchronous, so rendering stays synchronous): a module is two units
+ * of the drawing, and the quiet zone the standard's four modules. Medium error correction: a printed ticket
+ * survives a crease.
  */
 export function qrSvg(content: string): string {
-  const { modules } = QRCode.create(content, { errorCorrectionLevel: 'M' });
-  const size = modules.size;
-  const quiet = 4;
-  let d = '';
-  for (let y = 0; y < size; y += 1)
-    for (let x = 0; x < size; x += 1)
-      if (modules.get(y, x)) d += `M${x + quiet} ${y + quiet}h1v1h-1z`;
-  const box = size + quiet * 2;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${box} ${box}" shape-rendering="crispEdges" role="img" aria-label="QR code"><rect width="${box}" height="${box}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+  return labelled(
+    BarcodeGenerator.svgSync(content, 'qrcode', {
+      width: 1,
+      quietZone: 8,
+      bwipOptions: { eclevel: 'M' },
+    }),
+    'QR code',
+  );
+}
+
+const RETAIL = [
+  ['ean13', /^\d{13}$/],
+  ['ean8', /^\d{8}$/],
+  ['upca', /^\d{12}$/],
+] as const;
+
+/**
+ * The symbology a value is drawn in. `auto`: a retail number with its check digit right is drawn as what it is
+ * (EAN-13, EAN-8, UPC-A), anything else as Code 128. A value the asked symbology cannot hold — letters in an
+ * EAN, a wrong check digit — is drawn as Code 128 rather than not at all; `null` when even that cannot hold it.
+ */
+export function barcodeSymbology(
+  content: string,
+  asked: BarcodeSymbology = 'auto',
+): Exclude<BarcodeSymbology, 'auto'> | null {
+  if (content === '') return null;
+  const holds = (type: string) => BarcodeGenerator.validate(content, type).valid;
+  if (asked === 'auto') {
+    for (const [type, shape] of RETAIL) if (shape.test(content) && holds(type)) return type;
+  } else if (holds(asked)) return asked;
+  return holds('code128') ? 'code128' : null;
+}
+
+/**
+ * A barcode as SVG, drawn by `isahaq-barcode`; `null` for a value no symbology here can hold. `height` is the
+ * bars' height against a narrow bar of 2 units — the page gives the width, the drawing keeps its proportions.
+ */
+export function barcodeSvg(
+  content: string,
+  options: { symbology?: BarcodeSymbology; height?: number; text?: boolean } = {},
+): string | null {
+  const type = barcodeSymbology(content, options.symbology);
+  if (type === null) return null;
+  try {
+    return labelled(
+      BarcodeGenerator.svgSync(content, type, {
+        width: 2,
+        height: options.height ?? 60,
+        displayValue: options.text !== false,
+        fontSize: 16,
+      }),
+      'Barcode',
+    );
+  } catch {
+    return null;
+  }
 }
 
 function blockHtml(
@@ -308,6 +364,20 @@ function blockHtml(
       const label =
         block.label === undefined ? '' : `<div class="qr-label">${esc(block.label)}</div>`;
       return `<div class="qr" style="width:${block.size ?? 32}mm">${qrSvg(content)}${label}</div>`;
+    }
+    case 'barcode': {
+      const value = resolve(data, fields, block.bind).value;
+      const content = value === null || value === undefined ? '' : String(value).trim();
+      // The bars' height in the drawing's own units, from millimetres: the drawing is scaled to `size`.
+      const svg = barcodeSvg(content, {
+        ...(block.symbology === undefined ? {} : { symbology: block.symbology }),
+        height: Math.round((block.height ?? 14) * 4),
+        ...(block.text === undefined ? {} : { text: block.text }),
+      });
+      if (svg === null) return '';
+      const label =
+        block.label === undefined ? '' : `<div class="qr-label">${esc(block.label)}</div>`;
+      return `<div class="qr barcode" style="width:${block.size ?? 50}mm">${svg}${label}</div>`;
     }
     case 'signature':
       return `<div class="signatures">${block.labels.map((l) => `<div class="signature"><div class="line"></div><div>${esc(l)}</div></div>`).join('')}</div>`;
@@ -418,7 +488,7 @@ export async function loadDocumentData(
   const paths = new Set<string>();
   const collect = (blocks: readonly Block[], prefix = ''): void => {
     for (const b of blocks) {
-      if (b.kind === 'field' || b.kind === 'qr') paths.add(prefix + b.bind);
+      if (b.kind === 'field' || b.kind === 'qr' || b.kind === 'barcode') paths.add(prefix + b.bind);
       else if (b.kind === 'fields') for (const i of b.items) paths.add(prefix + i.bind);
       else if (b.kind === 'table') {
         if (b.bind !== '$records') paths.add(b.bind);

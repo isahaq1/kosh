@@ -3,6 +3,20 @@
  * by `@kosh/reporting`. Shared here so module manifests can ship default templates.
  */
 /** One block of a layout. `bind` is a field path on the record (`partner.name`), with Money / dates formatted. */
+/** The barcodes a document can draw; `auto` chooses by the value. */
+export const BARCODE_SYMBOLOGIES = [
+  'auto',
+  'code128',
+  'code39',
+  'ean13',
+  'ean8',
+  'upca',
+  'itf14',
+  'datamatrix',
+  'pdf417',
+] as const;
+export type BarcodeSymbology = (typeof BARCODE_SYMBOLOGIES)[number];
+
 export type Block =
   | {
       readonly kind: 'heading';
@@ -39,6 +53,22 @@ export type Block =
       readonly id: string;
       readonly bind: string;
       readonly size?: number;
+      readonly label?: string;
+    }
+  /**
+   * A barcode of a field's value (a product's barcode, a badge, a document's number), `size` millimetres wide
+   * and `height` millimetres high. `auto` draws EAN-13, EAN-8 or UPC-A when the value is one — its check digit
+   * right —, and Code 128 otherwise; a value the asked symbology cannot hold is drawn as Code 128 too.
+   */
+  | {
+      readonly kind: 'barcode';
+      readonly id: string;
+      readonly bind: string;
+      readonly symbology?: BarcodeSymbology;
+      readonly size?: number;
+      readonly height?: number;
+      /** The value in words under the bars (default: shown). */
+      readonly text?: boolean;
       readonly label?: string;
     }
   | {

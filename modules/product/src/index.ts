@@ -46,6 +46,27 @@ export const product: ReturnType<typeof defineModule> = defineModule({
   ],
   documents: [
     {
+      key: 'product_label',
+      name: 'Barcode label',
+      model: 'product.product',
+      layout: {
+        paper: 'A4',
+        blocks: [
+          { kind: 'heading', id: 'name', text: '{{name}}', level: 3 },
+          {
+            kind: 'fields',
+            id: 'about',
+            items: [
+              { label: 'Code', bind: 'code' },
+              { label: 'Price', bind: 'listPrice' },
+            ],
+          },
+          // EAN-13, EAN-8 or UPC-A when the product's barcode is one, Code 128 otherwise.
+          { kind: 'barcode', id: 'barcode', bind: 'barcode', size: 55, height: 16 },
+        ],
+      },
+    },
+    {
       key: 'product_template',
       name: 'Product template',
       model: 'product.template',

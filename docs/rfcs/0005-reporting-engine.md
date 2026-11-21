@@ -96,3 +96,10 @@ receives the monthly spend pivot as XLSX every 1st at 08:00.
 - Materialized aggregates for dashboards (open question 7) are not built: dashboards are live queries, cached per
   query by the client for 15 s.
 - Budgets measured by `pnpm bench` (1M rows, CI on `main`): see docs/benchmarks.md.
+- **Barcodes and QR codes from one package (2026-11-21).** `qrcode` is replaced by `isahaq-barcode` (the owner's
+  package, on bwip-js): `qrSvg` keeps its contract — a square SVG the page sizes, the standard's quiet zone of
+  four modules, medium correction — and `barcodeSvg` with the `barcode` block is new. The symbology is chosen by
+  the value (`barcodeSymbology`, a pure function with tests): retail numbers with a right check digit as what they
+  are, the rest as Code 128, never nothing when Code 128 can hold it. Synchronous SVG only, so rendering stays
+  synchronous; the package's optional `canvas` (logos and watermarks) is not built. Used by the product's barcode
+  label, the attendance badge and the Counter's receipt, which a scanner reads back into the till.

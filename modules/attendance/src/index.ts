@@ -115,6 +115,29 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
   ],
   documents: [
     {
+      key: 'attendance_badge',
+      name: 'Attendance badge',
+      model: 'hr.employee',
+      layout: {
+        paper: 'A4',
+        blocks: [
+          { kind: 'heading', id: 'company', text: '{{company.name}}', level: 3 },
+          { kind: 'heading', id: 'name', text: '{{name}}', level: 2 },
+          {
+            kind: 'fields',
+            id: 'about',
+            items: [
+              { label: 'Position', bind: 'jobTitle' },
+              { label: 'Department', bind: 'department.name' },
+            ],
+          },
+          // The kiosk reads either: a camera the QR code, a hand scanner the bars.
+          { kind: 'qr', id: 'qr', bind: 'attendanceBadge', size: 32, label: 'Scan at the kiosk' },
+          { kind: 'barcode', id: 'barcode', bind: 'attendanceBadge', size: 55, height: 14 },
+        ],
+      },
+    },
+    {
       key: 'attendance_register',
       name: 'Attendance register',
       model: 'attendance.day',

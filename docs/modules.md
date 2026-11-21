@@ -1115,6 +1115,12 @@ GET  /api/v1/counter/payments/<reference>?session=   { "state": "pending" | "don
 POST /api/v1/counter/orders                  payments: [{ "method", "amount", "reference" }]
 ```
 
+**A receipt scanned at the till** brings its sale back: the receipt carries the sale's reference as a QR code
+and as bars, and a scanner types it into the till's search box like a product's barcode. When nothing on sale
+answers to what was scanned, the till asks `GET /api/v1/counter/sales?name=` for the paid sale of that
+reference — read as the cashier — and shows it to print again, send or refund. The refund's own rule still
+decides who may give the money back.
+
 **Limits**: the customer pays from their own phone (a QR code) — a provider pushing the request to a phone
 number, or a card terminal on the counter, is not built; a refund at the Counter gives cash back, not the
 provider's money; tested with the test provider — bKash, SSLCommerz, Razorpay and Stripe go through the same

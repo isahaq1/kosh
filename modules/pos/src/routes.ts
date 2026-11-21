@@ -690,6 +690,29 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
       throw new HttpProblem(500, 'quote', 'Quote', 'The quote was not worked out.');
     });
 
+  // `GET /api/v1/counter/sales?name=`: the paid sale a receipt names — its QR code and its barcode hold the
+  // sale's reference —, for the receipt printed again or the refund. Read as the cashier: a sale they may not
+  // read is not found, and the refund's own rule (their open session, or a manager) still decides.
+  app.get('/api/v1/counter/sales', async (request) => {
+    const name = text((request.query as { name?: unknown }).name);
+    if (name.length < 3 || name.length > 64)
+      throw new HttpProblem(400, 'invalid-input', 'Which sale', 'The reference on the receipt.');
+    return request.env(async (raw) => {
+      const env = raw as unknown as Env;
+      const [found] = await env
+        .model('pos.order')
+        .search({ where: { name, state: 'paid' }, limit: 1 });
+      if (found === undefined)
+        throw new HttpProblem(
+          404,
+          'missing-record',
+          'Not found',
+          'No paid sale has this reference.',
+        );
+      return { order: await orderOut(env, found.id) };
+    });
+  });
+
   // `POST /api/v1/counter/orders/:id/refund` `{ session, reason, lines?: [{ product, quantity }], method? }`:
   // the sale (or part of it) taken back — a negative sale in the open session, paid back by the method given
   // (the shop's cash by default), linked to the original. Cashiers refund the sales of their own open session;

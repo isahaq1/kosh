@@ -178,6 +178,8 @@ export function posModule(options: CounterOptions = {}): ReturnType<typeof defin
               ],
             },
             { kind: 'qr', id: 'qr', bind: 'name', size: 30, label: 'Sale reference' },
+            // For the till's scanner: the receipt scanned into the search box brings the sale back.
+            { kind: 'barcode', id: 'barcode', bind: 'name', size: 60, height: 12 },
             { kind: 'text', id: 'footer', text: '{{session.shop.receiptFooter}}' },
           ],
         },

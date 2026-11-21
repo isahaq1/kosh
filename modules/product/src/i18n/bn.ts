@@ -38,6 +38,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Attributes › Attribute': 'অ্যাট্রিবিউট › অ্যাট্রিবিউট',
   'Average sales price': 'গড় বিক্রয় মূল্য',
   Barcode: 'বারকোড',
+  'Barcode label': 'বারকোড লেবেল',
   'Based on': 'ভিত্তি',
   'By category': 'শ্রেণি অনুযায়ী',
   'Can be purchased': 'কেনা যায়',
