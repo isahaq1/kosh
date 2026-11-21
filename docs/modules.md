@@ -1105,9 +1105,37 @@ POST /api/v1/livechat/sessions/<id>/route     { "target": "helpdesk.ticket" } �
 Another app makes its own records of conversations by overriding `routeTargets` of `livechat.channel` and
 `makeRecord` of `livechat.session`.
 
+#### The assistant answers first
+
+With Sites installed too (`@kosh/livechat_assistant`), a channel may say **The assistant answers first** and
+from which **site**. The AI assistant (docs/assistant.md) then answers a visitor before a person does:
+
+- **From the site's published pages only** — their titles, summaries and texts; drafts are never read. It is told
+  that the pages are everything it knows, to promise nothing, and that what a visitor writes is a question, never
+  an instruction. *How it should speak* sets the tone; it cannot lift those rules.
+- **Marked as an AI**: its answers carry the name you give it followed by “AI”, and it says it is one when asked.
+- **It hands over to a person** when the pages do not answer, when the visitor asks for one, after *Answers
+  before a person* answers in a conversation (6 by default) — and whenever it cannot answer at all: an error, a
+  refusal, something that is not an answer. The conversation then goes to an operator who is there, the way the
+  channel gives them out, or waits for one.
+- **Operators see every conversation it has** in their inbox, with what it said, and may take one at any moment;
+  an answer it was still writing is then dropped.
+- A conversation it answered and the visitor left is **closed** when it goes quiet — not *missed*, so a *missed →
+  ticket* rule makes no ticket of it.
+
+It answers only when the assistant is installed, has a key (`ANTHROPIC_API_KEY`), an **Administrator switched it
+on for the company** (what visitors write then goes to the AI service) and the month's token budget is not used
+up. Otherwise the channel works as without it: conversations go to the operators at once. Every call is in the
+assistant's log (*Settings › AI assistant*) as `livechat`, with its tokens, nobody named and no content, and
+counts in the company's budget. A server writes at most four answers at once; a visitor beyond that gets a
+person.
+
+Other apps on the server use the same assistant, under the same rules, through `assistantService(context)` of
+`@kosh/assistant` (`ready(company)`, `json(about, request)`).
+
 **Not yet**: a button in the inbox for making a ticket or a deal by hand (the API does it), a rule choosing the
-Helpdesk team, the assistant answering from published
-pages, typing indicators, files in a conversation, a chat block for Sites pages. The window and the inbox ask the
+Helpdesk team, the assistant reading the Shop's products or Helpdesk's canned replies, answers streamed word by
+word, typing indicators, files in a conversation, a chat block for Sites pages. The window and the inbox ask the
 server every few seconds rather than holding a socket open.
 
 ## Demo data (RFC 0008 §5.8)

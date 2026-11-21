@@ -859,3 +859,35 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   by hand with who may not and forged fields), E2E (a deal made of the chat, its Chats tile).
   **Left out**: a button in the inbox to route by hand (the API is there), the Helpdesk team chosen by the rule,
   the transcript in the record's chatter rather than its description. Part 3 is the assistant.
+
+- **Step 13 part 3 — the assistant in the chat (2026-11-21).** Three pieces.
+  *The assistant for other apps*: `@kosh/assistant` gains `assistantService(context)` — `ready(company)` and
+  `json(about, request)` — made once by its routes: the same switch per company, the same monthly budget, the
+  same log, with the checks and the log each in a transaction of their own so that none is open while the model
+  answers. `assistant.call.user` is no longer required: a call that answered somebody who is not signed in names
+  nobody.
+  *Hooks in Live chat*: `answeredFirst()` on `livechat.channel` (the channels whose new conversations are not given
+  out at once), `setResponder(context, fn)` (called, not waited for, each time a visitor wrote where nobody
+  answers yet), `sayAsAssistant` (only while the conversation waits; a message of kind `assistant`), `handOver`
+  (the channel's way of giving conversations out, later), and `needsPerson` on the conversation: time closes a
+  waiting conversation that was answered instead of missing it.
+  *`@kosh/livechat_assistant`* (Live chat ↔ Sites; the assistant is looked up at run time, so the bridge is
+  inert without it): the channel's fields, `chatContext` (reads the conversation and the site's **published**
+  pages), the prompt (`prompt.ts`, pure: pages in the visitor's language first, whole pages up to 40,000
+  characters, the rules before the company's guidance, the last 16 messages, a JSON answer `{ answer, handover }`
+  read strictly), and the responder: read → ask (no transaction open) → write if it still waits. Decisions on
+  abuse and cost: answers only where an Administrator switched the assistant on; the company's monthly budget
+  counts every call; at most *Answers before a person* per conversation (1–30, default 6); one answer at a time
+  per conversation and four at once per server; 700 output tokens, low effort; starting conversations is already
+  rate limited per address. Whatever fails — off, budget, refusal, error, a malformed answer, too busy — the
+  conversation goes to a person, and the visitor is told once, in their language. The model has no tools and
+  writes only to the visitor it answers; what it says is kept and shown as text.
+  Tests: the prompt (6), on real PostgreSQL with a fake model (6: off → operators and no call; the published page
+  in the instructions and the draft not; the log with nobody named and no content; handover by the model; the
+  answers limit; an error, a refusal and two malformed answers; an operator taking it mid-answer; closed not
+  missed; out of budget), the engine (answered conversations), E2E (the assistant's answer marked “AI”, the
+  handover to the operator's inbox).
+  **Left out**: the Shop's products and Helpdesk's canned replies as knowledge, streamed answers, a per-channel
+  daily cap of its own (the company budget is the cap), the answer written by a job rather than after the
+  response (a server that stops mid-answer leaves the conversation waiting for a person, which is where it would
+  go anyway). Step 13 is complete with this part.

@@ -106,3 +106,12 @@ server checks it like any other). Controls in the chatter: `registry.registerCha
 Component)`, with the API, the record and `onDraft(text)`, which opens the composer with the text. Next to "New":
 `registry.registerCreateAssist('module.Name', Component)`, with the API, the model and `onCreate(values, proposed)`,
 which opens a new record with the values, the proposed ones marked. In tests, `createAssistant({ client: fakeClient(answer) })` answers without the API.
+
+## For other apps on the server
+
+An app that needs an answer for somebody who is not signed in — Live chat's visitors — asks through
+`assistantService(context)` of `@kosh/assistant`: `ready(company)` says whether the assistant may answer for the
+company now (`ok`, `off`, `budget`), and `json(about, request)` returns one answer constrained to a JSON schema.
+The rules are the assistant's own: off until an Administrator switched it on for the company, within the month's
+budget, every call logged with what it was for and its tokens — never its content, and nobody named when nobody
+was signed in. See *The assistant answers first* in docs/modules.md.
