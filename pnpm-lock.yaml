@@ -104,6 +104,12 @@ importers:
       '@kosh/livechat':
         specifier: workspace:*
         version: link:../../modules/livechat
+      '@kosh/livechat_crm':
+        specifier: workspace:*
+        version: link:../../modules/livechat_crm
+      '@kosh/livechat_helpdesk':
+        specifier: workspace:*
+        version: link:../../modules/livechat_helpdesk
       '@kosh/loyalty':
         specifier: workspace:*
         version: link:../../modules/loyalty
@@ -515,6 +521,12 @@ importers:
       '@kosh/livechat':
         specifier: workspace:*
         version: link:../../modules/livechat
+      '@kosh/livechat_crm':
+        specifier: workspace:*
+        version: link:../../modules/livechat_crm
+      '@kosh/livechat_helpdesk':
+        specifier: workspace:*
+        version: link:../../modules/livechat_helpdesk
       '@kosh/loyalty':
         specifier: workspace:*
         version: link:../../modules/loyalty
@@ -1632,6 +1644,53 @@ importers:
       react-i18next:
         specifier: ^17.0.21
         version: 17.0.21(i18next@26.4.7(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
+
+  modules/livechat_crm:
+    dependencies:
+      '@kosh/crm':
+        specifier: workspace:*
+        version: link:../crm
+      '@kosh/livechat':
+        specifier: workspace:*
+        version: link:../livechat
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/livechat_helpdesk:
+    dependencies:
+      '@kosh/helpdesk':
+        specifier: workspace:*
+        version: link:../helpdesk
+      '@kosh/livechat':
+        specifier: workspace:*
+        version: link:../livechat
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/livechat_crm':
+        specifier: workspace:*
+        version: link:../livechat_crm
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
 
   modules/loyalty:
     dependencies:
@@ -3547,6 +3606,12 @@ importers:
       '@kosh/livechat':
         specifier: workspace:*
         version: link:../../modules/livechat
+      '@kosh/livechat_crm':
+        specifier: workspace:*
+        version: link:../../modules/livechat_crm
+      '@kosh/livechat_helpdesk':
+        specifier: workspace:*
+        version: link:../../modules/livechat_helpdesk
       '@kosh/loyalty':
         specifier: workspace:*
         version: link:../../modules/loyalty

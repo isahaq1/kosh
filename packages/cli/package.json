@@ -112,6 +112,8 @@
     "@kosh/todo": "workspace:*",
     "@kosh/subscription": "workspace:*",
     "@kosh/livechat": "workspace:*",
+    "@kosh/livechat_crm": "workspace:*",
+    "@kosh/livechat_helpdesk": "workspace:*",
     "@kosh/survey": "workspace:*",
     "@kosh/worktime": "workspace:*",
     "@kosh/trade_finance": "workspace:*",

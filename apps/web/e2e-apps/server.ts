@@ -41,6 +41,8 @@ import { l10nBdPayroll } from '@kosh/l10n_bd_payroll';
 import { l10nBdPos } from '@kosh/l10n_bd_pos';
 import { l10nIn } from '@kosh/l10n_in';
 import { livechat } from '@kosh/livechat';
+import { livechatCrm } from '@kosh/livechat_crm';
+import { livechatHelpdesk } from '@kosh/livechat_helpdesk';
 import { loyalty } from '@kosh/loyalty';
 import { createMemoryMailer, mailModule } from '@kosh/mail';
 import { maintenance } from '@kosh/maintenance';
@@ -197,6 +199,8 @@ const CATALOGUE = [
   tradeFinanceSale,
   eventAccount,
   websiteCrm,
+  livechatHelpdesk,
+  livechatCrm,
   websiteHiring,
   saleCrm,
   websiteSale,

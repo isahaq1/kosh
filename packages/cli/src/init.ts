@@ -738,6 +738,9 @@ async function modulesFor(apps: readonly AppName[]): Promise<KoshModule[]> {
       modules.push((await import('@kosh/trade_finance_sale')).tradeFinanceSale);
     if (app === 'event_account') modules.push((await import('@kosh/event_account')).eventAccount);
     if (app === 'website_crm') modules.push((await import('@kosh/website_crm')).websiteCrm);
+    if (app === 'livechat_helpdesk')
+      modules.push((await import('@kosh/livechat_helpdesk')).livechatHelpdesk);
+    if (app === 'livechat_crm') modules.push((await import('@kosh/livechat_crm')).livechatCrm);
     if (app === 'sale_crm') modules.push((await import('@kosh/sale_crm')).saleCrm);
     if (app === 'website_sale_stock')
       modules.push((await import('@kosh/website_sale_stock')).websiteSaleStock);

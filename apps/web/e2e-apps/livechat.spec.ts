@@ -86,6 +86,26 @@ test('a visitor writes in the chat window, the operator answers from the inbox, 
   await expect(row).toContainText(name);
   await expect(row).toContainText('Closed');
 
+  // An operator makes a deal of it: the deal carries what was said, and shows the chat it came from.
+  const found = await page.request.get(
+    `/api/v1/models/livechat.session?fields=name&filter=${encodeURIComponent(JSON.stringify({ visitorName: who }))}`,
+  );
+  const [session] = ((await found.json()) as { items: { id: number }[] }).items;
+  const routed = await page.request.post(`/api/v1/livechat/sessions/${session?.id}/route`, {
+    headers,
+    data: { target: 'crm.deal' },
+  });
+  expect(routed.status(), await routed.text()).toBe(200);
+  const deal = (await routed.json()) as { id: number; made: boolean };
+  expect(deal.made).toBe(true);
+  await page.goto(`/pipeline/a/pipeline.action_deals/${deal.id}`);
+  await expect(page.getByRole('heading', { name: 'Do you deliver to Gazipur?' })).toBeVisible();
+  await expect(page.getByText('Chats', { exact: true })).toBeVisible();
+  await page.goto('/livechat/a/livechat.action_sessions?view=list');
+  await expect(page.getByRole('row').filter({ hasText: who })).toContainText(
+    'Do you deliver to Gazipur?',
+  );
+
   // In Bangla, the chat window speaks Bangla.
   const bangla = await browser.newContext();
   const window = await bangla.newPage();

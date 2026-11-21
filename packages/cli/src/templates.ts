@@ -64,6 +64,8 @@ export type AppName =
   | 'trade_finance_sale'
   | 'event_account'
   | 'website_crm'
+  | 'livechat_helpdesk'
+  | 'livechat_crm'
   | 'sale_crm'
   | 'website_sale_stock'
   | 'pos_stock'
@@ -444,6 +446,18 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'websiteCrm',
     bridge: ['website', 'crm'],
+  },
+  livechat_helpdesk: {
+    label: 'Bridge: chats that become tickets (Live chat ↔ Helpdesk)',
+    icon: '🔗',
+    server: 'livechatHelpdesk',
+    bridge: ['livechat', 'helpdesk'],
+  },
+  livechat_crm: {
+    label: 'Bridge: chats that become deals (Live chat ↔ Pipeline)',
+    icon: '🔗',
+    server: 'livechatCrm',
+    bridge: ['livechat', 'crm'],
   },
   sale_crm: {
     label:
