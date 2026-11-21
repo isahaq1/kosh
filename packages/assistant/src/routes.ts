@@ -34,6 +34,7 @@ import {
   searchInstructions,
   searchSchema,
 } from './search.js';
+import { provideAssistantService } from './service.js';
 
 type Row = Record<string, unknown>;
 interface Rows {
@@ -173,6 +174,8 @@ export function registerAssistantRoutes(
 ): void {
   const { app, driver } = context;
   const { client } = options;
+  // The same assistant for the other apps on this server (a site's chat), under the same rules.
+  provideAssistantService(context, options);
 
   const guard = async (request: FastifyRequest): Promise<void> =>
     request.env(async (env) => {

@@ -51,6 +51,12 @@ export {
   searchInstructions,
   searchSchema,
 } from './search.js';
+export {
+  type AssistantAbout,
+  type AssistantResult,
+  type AssistantService,
+  assistantService,
+} from './service.js';
 
 /** Package identity. */
 export const PACKAGE: { readonly name: string; readonly rfc: string } = Object.freeze({

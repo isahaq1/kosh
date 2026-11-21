@@ -25,7 +25,8 @@ const Call = defineModel('assistant.call', {
   companyScoped: { required: true },
   access: {},
   fields: {
-    user: f.many2one('res.users', { required: true, ondelete: 'cascade' }),
+    /** Who asked; empty when the call answered somebody who is not signed in (a site's chat). */
+    user: f.many2one('res.users', { ondelete: 'cascade' }),
     /** `search`, later `summary`, `reply`, `form`. */
     feature: f.char({ required: true, size: 20 }),
     /** The Claude model that answered. */
