@@ -40,6 +40,7 @@ import {
 } from './engine.js';
 import {
   applyPromotions,
+  type PromoLine,
   type PromoOrder,
   type Promotion,
   type PromotionKind,
@@ -1414,8 +1415,19 @@ export async function releaseCredits(
     });
     if (lines.length > 0) await lines.unlink();
   }
+  await releaseHeld(su, { resModel: 'sale.order', resId: order }, 'Taken off the order.');
+}
+
+/**
+ * Gives back what a record of any app holds — the points it took from a card, the money it took from wallets
+ * and gift cards — as far as nothing gave them back yet: a second call gives nothing.
+ */
+export async function releaseHeld(
+  su: Env,
+  about: { readonly resModel: string; readonly resId: number },
+  note: string,
+): Promise<void> {
   const today = iso(su.today());
-  const about = { resModel: 'sale.order', resId: order };
   // Points, by card.
   const held = new Map<number, number>();
   for (const e of await su
@@ -1438,7 +1450,7 @@ export async function releaseCredits(
         kind: 'refund',
         points: -net,
         ...about,
-        note: 'Taken off the order.',
+        note,
       } as never,
     ]);
     await su.flush();
@@ -1465,7 +1477,7 @@ export async function releaseCredits(
         kind: 'refund',
         amount: money(-net),
         ...about,
-        note: 'Taken off the order.',
+        note,
       } as never,
     ]);
   }
@@ -1629,6 +1641,281 @@ export async function applyCredits(env: Env, order: number): Promise<void> {
       .write({ loyaltyRedeemed: spent, voucherUsed: money(paid) } as never);
     await su.flush();
   });
+}
+
+// ---- promotions, points and credit on a sale of any app
+
+/** A sale of any app, as Loyalty works out what comes off it. Amounts in hundredths. */
+export interface CreditSale {
+  readonly company: number;
+  readonly partner: number | null;
+  /** `YYYY-MM-DD`. */
+  readonly date: string;
+  /** What the sale comes to before anything is taken off. */
+  readonly total: number;
+  /** The goods promotions apply to. */
+  readonly goods: readonly PromoLine[];
+  readonly promoCode?: string | undefined;
+  /** Points the customer wants to spend. */
+  readonly points?: number | undefined;
+  /** The code of a gift card or a wallet. */
+  readonly voucherCode?: string | undefined;
+}
+
+/** What comes off a sale, and what it may still take. */
+export interface WorkedCredits {
+  readonly lines: readonly {
+    readonly kind: 'promotion' | 'points' | 'voucher';
+    readonly product: number;
+    readonly name: string;
+    /** In hundredths, above zero. */
+    readonly amount: number;
+  }[];
+  /** What was asked and cannot be taken, by what was asked, in words. */
+  readonly problems: readonly {
+    readonly field: 'promoCode' | 'points' | 'voucherCode';
+    readonly say: string;
+  }[];
+  /** The customer's card, with what it holds and the most points this sale may take; none: no card. */
+  readonly card: {
+    readonly id: number;
+    readonly points: number;
+    readonly most: number;
+    readonly pointValue: number;
+  } | null;
+  /** Whether any promotion that runs has a code to type. */
+  readonly codes: boolean;
+  /** What to hold once the sale is made. */
+  readonly hold: {
+    readonly company: number;
+    readonly card: number | null;
+    readonly points: number;
+    readonly voucher: number | null;
+    readonly voucherPaid: number;
+  };
+}
+
+/**
+ * What comes off a sale (RFC 0034 §2.6), by the same rules as on a Sales quotation: the running promotions —
+ * together, or the one that goes alone when it gives more —, then the points asked for, within what the card
+ * holds and the share the program lets points pay, then the gift card or wallet on what is left. Nothing is held
+ * yet (`holdCredits` does, once the sale is made). What cannot be taken is a problem in words, and the rest is
+ * worked out without it.
+ */
+export async function workOutCredits(su: Env, sale: CreditSale): Promise<WorkedCredits> {
+  const lines: WorkedCredits['lines'][number][] = [];
+  const problems: WorkedCredits['problems'][number][] = [];
+  const running = await su
+    .model('loyalty.promotion')
+    .search({
+      where: { company: sale.company as never, state: 'running' } as never,
+      order: ['id asc'],
+    })
+    .then((rows) => rows.load({ product: true, category: true, rewardProduct: true }));
+  const names = new Map([...running].map((x) => [x.id as number, x.name]));
+  let code = (sale.promoCode ?? '').trim().toUpperCase();
+  if (code !== '' && ![...running].some((x) => (x.code ?? '').toUpperCase() === code)) {
+    problems.push({ field: 'promoCode', say: 'No running promotion has this code.' });
+    code = '';
+  }
+  let due = sale.total;
+  for (const d of applyPromotions([...running].map(promotionRow), {
+    date: sale.date,
+    code,
+    lines: sale.goods,
+  })) {
+    const amount = Math.min(d.amount, due);
+    if (amount <= 0) continue;
+    lines.push({
+      kind: 'promotion',
+      product: await creditProduct(su, sale.company, 'promotion'),
+      name: names.get(d.promotion) ?? 'Promotion',
+      amount,
+    });
+    due -= amount;
+  }
+  // Points: the customer's card in the running program.
+  const program = await runningProgram(su, sale.company);
+  let card: WorkedCredits['card'] = null;
+  let spent = 0;
+  if (program !== null && sale.partner !== null) {
+    const [found] = await su.model('loyalty.card').search({
+      where: { program: program.id as never, partner: sale.partner as never } as never,
+      limit: 1,
+    });
+    if (found !== undefined) {
+      const balance = [
+        ...(await su.model('loyalty.entry').search({ where: { card: found.id } as never })),
+      ].reduce((sum, e) => sum + e.points, 0);
+      const limit = program.redeemable
+        ? redeemLimit({
+            balance,
+            pointValue: program.pointValue,
+            orderTotal: due,
+            maxPercent: program.redeemMaxPercent,
+          })
+        : { points: 0, amount: 0 };
+      card = {
+        id: found.id as number,
+        points: balance,
+        most: limit.points >= program.redeemMinPoints ? limit.points : 0,
+        pointValue: program.pointValue,
+      };
+    }
+  }
+  const asked = Math.trunc(sale.points ?? 0);
+  if (asked > 0) {
+    if (program === null || !program.redeemable)
+      problems.push({ field: 'points', say: 'No running program lets points be spent.' });
+    else if (card === null)
+      problems.push({ field: 'points', say: 'This customer has no loyalty card.' });
+    else if (asked > card.most)
+      problems.push({
+        field: 'points',
+        say:
+          card.most === 0
+            ? `No points can be spent on this sale: the card holds ${card.points}.`
+            : `Only ${card.most} point(s) can be spent on this sale: the card holds ${card.points}, and points pay at most ${program.redeemMaxPercent} % of it.`,
+      });
+    else if (asked < program.redeemMinPoints)
+      problems.push({
+        field: 'points',
+        say: `Points are spent from ${program.redeemMinPoints} at a time.`,
+      });
+    else {
+      spent = asked;
+      const amount = asked * program.pointValue;
+      lines.push({
+        kind: 'points',
+        product: await creditProduct(su, sale.company, 'points'),
+        name: `${asked} loyalty points`,
+        amount,
+      });
+      due -= amount;
+    }
+  } else if (Number.isFinite(sale.points) && (sale.points ?? 0) < 0)
+    problems.push({ field: 'points', say: 'Points are a whole number, above zero.' });
+  // A gift card or a wallet, on what is left.
+  let voucher: number | null = null;
+  let paid = 0;
+  const voucherCode = (sale.voucherCode ?? '').trim().toUpperCase();
+  if (voucherCode !== '') {
+    const [v] = await su
+      .model('loyalty.voucher')
+      .search({ where: { code: voucherCode, company: sale.company as never } as never, limit: 1 })
+      .then((rows) => rows.load({ partner: true }));
+    const balance = v === undefined ? 0 : cents(v.balance);
+    if (v === undefined)
+      problems.push({ field: 'voucherCode', say: 'No gift card or wallet has this code.' });
+    else if (v.dateExpiry !== null && iso(v.dateExpiry) < sale.date)
+      problems.push({ field: 'voucherCode', say: `It was valid until ${iso(v.dateExpiry)}.` });
+    else if (v.kind === 'wallet' && (v.partner?.id as number | undefined) !== sale.partner)
+      problems.push({ field: 'voucherCode', say: 'This wallet belongs to another customer.' });
+    else if (balance <= 0) problems.push({ field: 'voucherCode', say: 'It holds nothing.' });
+    else {
+      paid = voucherUse(balance, due);
+      if (paid > 0) {
+        voucher = v.id as number;
+        lines.push({
+          kind: 'voucher',
+          product: await creditProduct(su, sale.company, 'voucher'),
+          name: `${v.kind === 'wallet' ? 'Wallet' : 'Gift card'} ${v.code}`,
+          amount: paid,
+        });
+        due -= paid;
+      }
+    }
+  }
+  return {
+    lines,
+    problems,
+    card,
+    codes: [...running].some((x) => (x.code ?? '').trim() !== ''),
+    hold: {
+      company: sale.company,
+      card: spent > 0 ? (card?.id ?? null) : null,
+      points: spent,
+      voucher,
+      voucherPaid: paid,
+    },
+  };
+}
+
+/**
+ * Holds what a sale took (RFC 0034 §2.6): the points off the card and the money off the gift card or wallet, each
+ * a line in its ledger about the sale — **once**: a sale that already holds something holds nothing more. Checked
+ * again against what the card and the gift card hold now, and refused in words if somebody was quicker.
+ */
+export async function holdCredits(
+  su: Env,
+  hold: WorkedCredits['hold'],
+  about: { readonly resModel: string; readonly resId: number; readonly label: string },
+): Promise<void> {
+  const today = iso(su.today());
+  const where = { resModel: about.resModel, resId: about.resId };
+  if (hold.points > 0 && hold.card !== null) {
+    const before = await su
+      .model('loyalty.entry')
+      .search({ where: { ...where, kind: 'redeem' } as never, limit: 1 });
+    if (before.length === 0) {
+      const [c] = await su
+        .model('loyalty.card')
+        .browse([hold.card as never])
+        .load({ program: true });
+      const balance = [
+        ...(await su.model('loyalty.entry').search({ where: { card: hold.card } as never })),
+      ].reduce((sum, e) => sum + e.points, 0);
+      if (c === undefined || balance < hold.points)
+        refuseCredit(
+          'loyaltyRedeem',
+          'The card no longer holds these points.',
+          'Take them off the sale.',
+        );
+      await su.model('loyalty.entry').create([
+        {
+          card: hold.card,
+          company: hold.company,
+          date: today,
+          kind: 'redeem',
+          points: -hold.points,
+          ...where,
+          note: about.label,
+        } as never,
+      ]);
+      await su.flush();
+      const program = await loadProgram(su, (c as NonNullable<typeof c>).program.id as number);
+      if (program !== null) await refreshCard(su, hold.card, program);
+    }
+  }
+  if (hold.voucherPaid > 0 && hold.voucher !== null) {
+    const before = await su
+      .model('loyalty.voucher.entry')
+      .search({ where: { ...where, kind: 'spend' } as never, limit: 1 });
+    if (before.length === 0) {
+      const [v] = await su
+        .model('loyalty.voucher')
+        .browse([hold.voucher as never])
+        .load(['balance']);
+      if (v === undefined || cents(v.balance) < hold.voucherPaid)
+        refuseCredit(
+          'voucherCode',
+          'The gift card no longer holds this much.',
+          'Take it off the sale.',
+        );
+      await su.model('loyalty.voucher.entry').create([
+        {
+          voucher: hold.voucher,
+          company: hold.company,
+          date: today,
+          kind: 'spend',
+          amount: money(-hold.voucherPaid),
+          ...where,
+          note: about.label,
+        } as never,
+      ]);
+      await su.flush();
+    }
+  }
 }
 
 /** A cancelled order gives back the points and the credit it held, once; its lines stay as they were. */
