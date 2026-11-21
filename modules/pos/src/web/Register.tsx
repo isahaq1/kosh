@@ -29,13 +29,19 @@ interface Shop {
     readonly kind: string;
     /** Paid on a provider's page the customer opens from a QR code: not typed in by the cashier. */
     readonly provider?: boolean;
+    /** How: a code to scan, a request sent to the customer's phone, or the card terminal. */
+    readonly way?: 'qr' | 'phone' | 'terminal';
   }[];
 }
 /** A payment asked of a provider for the sale being rung up, by method. */
 interface Asked {
   readonly reference: string;
   readonly url: string;
-  readonly qr: string;
+  /** The code to scan; none when the request went to the customer's phone or to the terminal. */
+  readonly qr: string | null;
+  readonly way: 'qr' | 'phone' | 'terminal';
+  /** The phone the request went to. */
+  readonly to: string;
   readonly amount: string;
   readonly state: string;
   readonly error: string | null;
@@ -185,6 +191,8 @@ export function Register({ api }: PageProps): ReactElement {
   const [payments, setPayments] = useState<Record<number, string>>({});
   // Payments asked of a provider for this sale: followed until the provider confirms them.
   const [askedOf, setAskedOf] = useState<Record<number, Asked>>({});
+  // The customer's phone number, by method, for the methods whose request is sent to it.
+  const [phoneOf, setPhoneOf] = useState<Record<number, string>>({});
   const [lastSale, setLastSale] = useState<Sale | null>(null);
   const [error, setError] = useState<string | null>(null);
   const clientId = useRef<string>(crypto.randomUUID());
@@ -326,10 +334,16 @@ export function Register({ api }: PageProps): ReactElement {
   const askPayment = useMutation({
     mutationFn: (method: number) =>
       api
-        .call<{ reference: string; url: string; qr: string }>('POST', '/api/v1/counter/payments', {
+        .call<{
+          reference: string;
+          url: string;
+          qr: string | null;
+          way?: 'qr' | 'phone' | 'terminal';
+        }>('POST', '/api/v1/counter/payments', {
           session: session.data?.id,
           method,
           amount: payments[method] ?? '',
+          ...((phoneOf[method] ?? '').trim() === '' ? {} : { phone: phoneOf[method] }),
         })
         .then((r) => ({ method, ...r })),
     onSuccess: (r) => {
@@ -340,6 +354,8 @@ export function Register({ api }: PageProps): ReactElement {
           reference: r.reference,
           url: r.url,
           qr: r.qr,
+          way: r.way ?? 'qr',
+          to: (phoneOf[r.method] ?? '').trim(),
           amount: payments[r.method] ?? '',
           state: 'pending',
           error: null,
@@ -935,11 +951,25 @@ export function Register({ api }: PageProps): ReactElement {
                         {t('paymentFailed')}
                       </p>
                     ) : null}
+                    {m.way !== 'phone' ? null : (
+                      <Input
+                        type="tel"
+                        inputMode="tel"
+                        autoComplete="off"
+                        aria-label={t('payPhone', { method: m.name })}
+                        placeholder={t('payPhoneHint')}
+                        value={phoneOf[m.id] ?? ''}
+                        onChange={(e) => setPhoneOf({ ...phoneOf, [m.id]: e.target.value })}
+                      />
+                    )}
                     <div>
                       <Button
                         size="sm"
                         variant="secondary"
-                        disabled={!(Number(payments[m.id] ?? '') > 0)}
+                        disabled={
+                          !(Number(payments[m.id] ?? '') > 0) ||
+                          (m.way === 'phone' && (phoneOf[m.id] ?? '').replace(/\D/g, '').length < 8)
+                        }
                         busy={askPayment.isPending && askPayment.variables === m.id}
                         onClick={() => askPayment.mutate(m.id)}
                       >
@@ -951,6 +981,21 @@ export function Register({ api }: PageProps): ReactElement {
                   <p role="status" className="text-sm font-medium">
                     {t('paymentDone', { reference: proof.reference })}
                   </p>
+                ) : proof.qr === null ? (
+                  // Nothing to scan: the provider sent the request to the phone, or to the terminal.
+                  <div className="grid gap-1 rounded-md border p-2">
+                    <p className="text-sm">
+                      {proof.way === 'terminal'
+                        ? t('onTerminal', { amount: format.decimal(proof.amount), method: m.name })
+                        : t('sentToPhone', {
+                            amount: format.decimal(proof.amount),
+                            phone: proof.to,
+                          })}
+                    </p>
+                    <p role="status" className="text-sm">
+                      {t('waitingPayment')}
+                    </p>
+                  </div>
                 ) : (
                   <div className="grid justify-items-center gap-1 rounded-md border p-2">
                     <img

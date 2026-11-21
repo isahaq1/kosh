@@ -4,7 +4,8 @@
  * and online payments are installed.
  *
  * - A shop's payment method is given a **payment provider**; at the till it shows a QR code the customer scans
- *   to pay on the provider's page.
+ *   to pay on the provider's page — or, by the method's way, the provider sends the request to the customer's
+ *   **phone**, or to the **card terminal** on the counter (step 5).
  * - The sale counts that payment once the provider **confirmed** it — by its callback, or asked when the callback
  *   is late — for the amount asked, in the cashier's session, and for one sale only.
  * - The session's entry books it in the method's journal, like every payment of the Counter.
@@ -53,7 +54,14 @@ export const posPayment: ReturnType<typeof defineModule> = defineModule({
       view: 'pos.shop.form',
       operations: [
         // A column of the shop's payment methods, after the journal.
-        { insertAfter: 'journal', nodes: [field({ field: 'provider', id: 'method_provider' })] },
+        {
+          insertAfter: 'journal',
+          nodes: [
+            field({ field: 'provider', id: 'method_provider' }),
+            field({ field: 'payWay', id: 'method_pay_way' }),
+            field({ field: 'terminal', id: 'method_terminal' }),
+          ],
+        },
       ],
     },
   ],

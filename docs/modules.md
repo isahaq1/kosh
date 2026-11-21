@@ -1121,10 +1121,30 @@ answers to what was scanned, the till asks `GET /api/v1/counter/sales?name=` for
 reference — read as the cashier — and shows it to print again, send or refund. The refund's own rule still
 decides who may give the money back.
 
-**Limits**: the customer pays from their own phone (a QR code) — a provider pushing the request to a phone
-number, or a card terminal on the counter, is not built; a refund at the Counter gives cash back, not the
-provider's money; tested with the test provider — bKash, SSLCommerz, Razorpay and Stripe go through the same
-adapters as the portal's, to verify at a real till.
+**To a phone, or to a card terminal** (step 5). A method with a provider says **how the customer pays**
+(*Counter › Shops*, the method's row):
+
+| How the customer pays | At the till | Providers |
+| --- | --- | --- |
+| A code the customer scans (the default) | a QR code of the provider's page | all |
+| A request sent to their phone | the cashier types the customer's phone number; the provider sends them the request | Razorpay (a payment link by text), the test provider |
+| A card terminal on the counter | the amount goes to the terminal named on the method; the customer presents their card | Stripe (Terminal, server-driven; the reader's id `tmr_…`), the test provider |
+
+Whatever the way, the rest is the same: the till follows the payment, and the sale counts it only once the
+provider confirmed it, for the amount asked, in the cashier's session, for one sale. A provider that does not have
+the way asked for refuses it in words; a reader that does not answer is said so, and nothing is left waiting.
+
+```http
+POST /api/v1/counter/payments   { "session", "method", "amount", "phone"? }
+                                → { "reference", "way": "qr" | "phone" | "terminal", "url", "qr" }
+```
+
+`url` is empty and `qr` is `null` when the request went to the phone or to the terminal.
+
+**Limits**: a refund at the Counter gives cash back, not the provider's money. The phone and the terminal are
+tested with the test provider, and the Razorpay and Stripe adapters against stubbed HTTP in the shapes their
+documentation gives — **to verify at a real till with the company's accounts**. bKash and SSLCommerz offer the
+code to scan only: neither has a request the merchant can push to a phone in the APIs Kosh uses.
 
 Another app may know customers another way: it overrides `findCustomer` of `pos.shop` (Loyalty at the Counter
 adds the loyalty card's number, and says what the card holds in `note`).

@@ -18,7 +18,14 @@ import { PosOrder, PosPaymentMethod, PosSession, PosShop, posShutro } from './mo
 import { type CounterOptions, registerCounterRoutes } from './routes.js';
 
 export { bookSessions } from './accounting.js';
-export type { ExtraField, ExtrasSale, PaymentAsked, SaleExtras } from './module.js';
+export type {
+  ExtraField,
+  ExtrasSale,
+  PaymentAsked,
+  PaymentStarted,
+  PaymentWay,
+  SaleExtras,
+} from './module.js';
 export {
   amountOf,
   PosOrder,

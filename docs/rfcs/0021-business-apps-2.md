@@ -1048,3 +1048,33 @@ receipts as documents (RFC 0005), notifications for receipts by SMS or email (RF
   payment of Accounting's), E2E (the code on the register, the customer paying, the sale).
 - **Left out**: push to a phone number, card terminals, refunds through the provider, the payment's reference on
   the receipt. Counter step 4 is complete with this part.
+
+## Implementation notes (2026-11-21): Counter step 5 — a request to the customer's phone, and card terminals
+
+Design, as built:
+
+- **One more capability of a payment adapter**, `inPerson: { ways, push(request) }` (`@kosh/payment`): `phone` or
+  `terminal`, and where to (`to`: a number, a terminal's id). `startPayment` takes `inPerson` and then asks the
+  adapter to push instead of making a page; it refuses a way the provider does not have (409 `way-unsupported`).
+  Nothing else changes: the transaction, the callback endpoint, `status`, `settle`. A payment pushed in person is
+  followed and confirmed by the code that already follows a payment with a page.
+- **Adapters**: the test provider has both (nothing is sent; the payment waits and is paid or declined on the test
+  page; a terminal named `offline` does not answer). **Razorpay** texts its payment link to the phone
+  (`notify.sms`), the same link it otherwise gives to open. **Stripe** makes a PaymentIntent for a present card
+  and hands it to the reader (`/terminal/readers/<id>/process_payment_intent`); its word is the intent's status
+  and the `payment_intent.*` events of the same signed webhook — read only for `card_present` intents, so a
+  Checkout page's own intent is still read by its session.
+- **The Counter** (`@kosh/pos`): `paymentWays` beside `providerMethods`, `phone` on what is asked, `way` on what
+  comes back. The route checks the phone number (8–15 digits) before anything is started.
+- **`@kosh/pos_payment`**: `payWay` (`qr`, `phone`, `terminal`) and `terminal` on a payment method; a constraint:
+  a way other than the code needs a provider, and the terminal its name.
+- **The till**: a phone box under a phone method (Ask to pay is disabled without a number), "sent to …" or "the
+  terminal asks for …" instead of a code, the same wait.
+
+Tests: the adapters against stubbed HTTP (3); on real PostgreSQL with the test provider (the ways on the shop's
+methods, the phone asked for and cleaned, pushed where it should, paid and counted once, a declined card, a
+reader that is off, the setup rules, another cashier and an outsider refused); E2E (a sale paid from a phone).
+
+**To verify**: Razorpay and Stripe at a real till. **Left out**: a refund to the provider; several terminals per
+method (a method names one: a shop with two counters makes two methods); bKash and SSLCommerz, which have no
+request to push.

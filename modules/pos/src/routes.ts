@@ -205,6 +205,12 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
                 su.model('pos.shop').browse(shops.ids).providerMethods(),
               ),
         );
+        const ways =
+          through.size === 0
+            ? new Map<number, string>()
+            : await env.asSuperuser({ reason: 'payment methods of the counter' }, (su) =>
+                su.model('pos.shop').browse(shops.ids).paymentWays(),
+              );
         return {
           shops: shops.map((s) => ({
             id: s.id,
@@ -218,6 +224,8 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
               kind: m.kind,
               // Paid on the provider's page, opened by the customer: the cashier does not type it in.
               provider: through.has(m.id as number),
+              // How: a code to scan (`qr`), a request sent to their phone, or a card terminal.
+              ...(through.has(m.id as number) ? { way: ways.get(m.id as number) ?? 'qr' } : {}),
             })),
           })),
         };
@@ -226,8 +234,9 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
     ),
   );
 
-  // `POST /api/v1/counter/payments` `{ session, method, amount }`: asks the method's provider for a payment — the
-  // reference to follow it by and the page the customer pays on, as a link and as a QR code to scan.
+  // `POST /api/v1/counter/payments` `{ session, method, amount, phone? }`: asks the method's provider for a
+  // payment — the reference to follow it by and, by the method's way, the page the customer pays on as a link
+  // and a QR code to scan, or nothing more: the request went to their `phone`, or to the card terminal.
   // `GET /api/v1/counter/payments/:reference?session=`: where it stands. Both in the cashier's own open session.
   const openSession = async (env: Env, session: number) => {
     const [current] = await env
@@ -241,7 +250,14 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
     return current;
   };
   app.post('/api/v1/counter/payments', async (request, reply) => {
-    const body = (request.body ?? {}) as { session?: unknown; method?: unknown; amount?: unknown };
+    const body = (request.body ?? {}) as {
+      session?: unknown;
+      method?: unknown;
+      amount?: unknown;
+      phone?: unknown;
+    };
+    // Digits, with a leading + when international; what else was typed (spaces, dashes) is dropped.
+    const phone = text(body.phone).replace(/[^\d+]/g, '');
     const session = idOf(body.session, 'session');
     const method = idOf(body.method, 'method');
     const amount = text(body.amount);
@@ -253,12 +269,23 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
         const current = await openSession(env, session);
         if (![...current.shop.methods].some((m) => m.id === method))
           throw new HttpProblem(422, 'invalid-method', 'Another look', 'A method of this shop.');
-        return env.asSuperuser({ reason: 'a payment asked for at the counter' }, (su) =>
-          su
-            .model('pos.shop')
-            .browse([current.shop.id])
-            .requestPayment({ session, method, amount }),
-        );
+        return env.asSuperuser({ reason: 'a payment asked for at the counter' }, async (su) => {
+          const shop = su.model('pos.shop').browse([current.shop.id]);
+          const way = (await shop.paymentWays()).get(method) ?? 'qr';
+          if (way === 'phone' && !/^\+?\d{8,15}$/.test(phone))
+            throw new HttpProblem(
+              422,
+              'phone-missing',
+              'Whose phone',
+              'The customer’s phone number: the request to pay is sent to it.',
+            );
+          return shop.requestPayment({
+            session,
+            method,
+            amount,
+            ...(way === 'phone' ? { phone } : {}),
+          });
+        });
       },
       { write: true },
     );
@@ -269,11 +296,17 @@ export function registerCounterRoutes(context: ModuleContext, options: CounterOp
         'No provider',
         'This method is not paid through a payment provider.',
       );
+    const way = asked.way ?? 'qr';
     return reply.status(201).send({
       reference: asked.reference,
+      way,
       url: asked.url,
       // What the customer scans: drawn here, so the till shows a picture and nothing of the address is run.
-      qr: `data:image/svg+xml;base64,${Buffer.from(qrSvg(asked.url)).toString('base64')}`,
+      // Nothing to scan when the request went to their phone or to the card terminal.
+      qr:
+        asked.url === ''
+          ? null
+          : `data:image/svg+xml;base64,${Buffer.from(qrSvg(asked.url)).toString('base64')}`,
     });
   });
   app.get('/api/v1/counter/payments/:reference', async (request) => {

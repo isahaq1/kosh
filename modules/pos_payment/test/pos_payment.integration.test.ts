@@ -5,6 +5,7 @@
  * nothing; the session's entry books it in the provider's journal and no payment of Accounting's is registered;
  * who may ask and follow a payment.
  */
+import { fakeAdapter } from '@kosh/payment';
 import { type TestInstallation, testInstallation } from '@kosh/server/testing';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { PAID_PATH, posPayment } from '../src/index.js';
@@ -286,4 +287,147 @@ test('the closed session’s entry books the provider’s money in the provider�
     params: [],
   });
   expect(Number(registered[0]?.n)).toBe(0);
+});
+
+/** The customer pays (or declines) a request that was sent to them: the test provider's page, by its reference. */
+const answer = (reference: string, outcome: 'paid' | 'declined') =>
+  customer(
+    `http://localhost/api/v1/payment/fake/checkout/${encodeURIComponent(reference)}`,
+    outcome,
+  );
+const askPhone = (as: string, session: number, method: number, amount: string, phone?: string) =>
+  call(as, 'POST', '/api/v1/counter/payments', { session, method, amount, phone });
+
+test('step 5: a request sent to the customer’s phone, and a card terminal on the counter', async () => {
+  const session = ids['other'] as number; // Sam's, still open
+  // A way other than the code needs a provider, and a terminal its name.
+  const noProvider = await call(
+    'maria',
+    'PATCH',
+    `/api/v1/models/pos.payment.method/${ids['cash']}`,
+    {
+      payWay: 'phone',
+    },
+  );
+  expect(noProvider.status).toBeGreaterThanOrEqual(400);
+  expect(JSON.stringify(noProvider.json)).toContain('goes through a payment provider');
+  const unnamed = await call('maria', 'PATCH', `/api/v1/models/pos.shop/${ids['shop']}`, {
+    methods: {
+      create: [
+        {
+          name: 'Card',
+          kind: 'card',
+          sequence: 4,
+          provider: ids['provider'],
+          journal: ids['bank'],
+          payWay: 'terminal',
+        },
+      ],
+    },
+  });
+  expect(unnamed.status).toBeGreaterThanOrEqual(400);
+  const added = await call('maria', 'PATCH', `/api/v1/models/pos.shop/${ids['shop']}`, {
+    methods: {
+      create: [
+        {
+          name: 'Wallet',
+          kind: 'mobile',
+          sequence: 3,
+          provider: ids['provider'],
+          journal: ids['bank'],
+          payWay: 'phone',
+        },
+        {
+          name: 'Card',
+          kind: 'card',
+          sequence: 4,
+          provider: ids['provider'],
+          journal: ids['bank'],
+          payWay: 'terminal',
+          terminal: 'tmr_TEST',
+        },
+      ],
+    },
+  });
+  expect(added.status, JSON.stringify(added.json)).toBe(200);
+  const shops = await call('sam', 'GET', '/api/v1/counter/shops');
+  const methods = shops.json.shops[0].methods as Json[];
+  expect(methods.map((m) => [m.name, m.provider, m.way])).toEqual([
+    ['Cash', false, undefined],
+    ['bKash', true, 'qr'],
+    ['Wallet', true, 'phone'],
+    ['Card', true, 'terminal'],
+  ]);
+  const wallet = methods.find((m) => m.name === 'Wallet')?.id as number;
+  const card = methods.find((m) => m.name === 'Card')?.id as number;
+
+  // To a phone: its number is asked for; then nothing to scan — the provider sent it.
+  expect(JSON.stringify((await askPhone('sam', session, wallet, '250')).json)).toContain(
+    'phone-missing',
+  );
+  expect((await askPhone('sam', session, wallet, '250', 'call me')).status).toBe(422);
+  const texted = await askPhone('sam', session, wallet, '250', '+880 1711-000111');
+  expect(texted.status, JSON.stringify(texted.json)).toBe(201);
+  expect(texted.json).toMatchObject({ way: 'phone', url: '', qr: null });
+  const reference = texted.json.reference as string;
+  expect(fakeAdapter.pushed(reference)).toEqual({ way: 'phone', to: '+8801711000111' });
+  expect((await follow('sam', session, reference)).json.state).toBe('pending');
+  // Not paid yet: the sale does not count it.
+  const early = await sell('sam', session, [{ method: wallet, amount: '250', reference }]);
+  expect(early.status).toBe(409);
+  expect(JSON.stringify(early.json)).toContain('not confirmed yet');
+  // Paid on the phone: the sale asks the provider itself when the callback has not come, and counts it.
+  await answer(reference, 'paid');
+  const sold = await sell('sam', session, [{ method: wallet, amount: '250', reference }]);
+  expect(sold.status, JSON.stringify(sold.json)).toBe(201);
+  expect((await follow('sam', session, reference)).json).toMatchObject({
+    state: 'done',
+    amount: '250.00',
+  });
+  // Once: the same payment pays no second sale.
+  expect((await sell('sam', session, [{ method: wallet, amount: '250', reference }])).status).toBe(
+    409,
+  );
+  // The code's method takes no phone: it stays a code to scan.
+  const scanned = await askPhone('sam', session, ids['bkash'] as number, '250', '+8801711000111');
+  expect(scanned.json).toMatchObject({ way: 'qr' });
+  expect(scanned.json.qr).toContain('data:image/svg+xml;base64,');
+  expect(fakeAdapter.pushed(scanned.json.reference)).toBeNull();
+
+  // The terminal: the amount goes to the reader the method names; a declined card pays nothing.
+  const swiped = await ask('sam', session, card, '250');
+  expect(swiped.status, JSON.stringify(swiped.json)).toBe(201);
+  expect(swiped.json).toMatchObject({ way: 'terminal', url: '', qr: null });
+  expect(fakeAdapter.pushed(swiped.json.reference)).toEqual({ way: 'terminal', to: 'tmr_TEST' });
+  await answer(swiped.json.reference, 'declined');
+  expect(
+    (
+      await sell('sam', session, [
+        { method: card, amount: '250', reference: swiped.json.reference },
+      ])
+    ).status,
+  ).toBe(409);
+  // Asked again, paid.
+  const again = await ask('sam', session, card, '250');
+  await answer(again.json.reference, 'paid');
+  expect(
+    (await sell('sam', session, [{ method: card, amount: '250', reference: again.json.reference }]))
+      .status,
+  ).toBe(201);
+  // A reader that does not answer: said so, and nothing is left waiting at the till.
+  expect(
+    (
+      await call('maria', 'PATCH', `/api/v1/models/pos.payment.method/${card}`, {
+        terminal: 'offline',
+      })
+    ).status,
+  ).toBe(200);
+  const off = await ask('sam', session, card, '250');
+  expect(off.status).toBe(502);
+  expect(JSON.stringify(off.json)).toContain('does not answer');
+  // Another cashier's session is not asked through; nobody outside the Counter asks at all.
+  expect((await askPhone('rahim', session, wallet, '250', '+8801711000111')).status).toBe(404);
+  expect(
+    (await askPhone('nadia', session, wallet, '250', '+8801711000111')).status,
+  ).toBeGreaterThanOrEqual(403);
 });

@@ -6,7 +6,7 @@
  * The money is booked by the session's entry, in the method's journal, like every payment of the Counter.
  */
 import { askProvider, paymentShutro, paymentUrls, settle, startPayment } from '@kosh/payment';
-import { type PaymentAsked, posShutro } from '@kosh/pos';
+import { type PaymentAsked, type PaymentStarted, type PaymentWay, posShutro } from '@kosh/pos';
 import { type Module, type ModuleBase, orm } from '@kosh/server/orm';
 import { check, defineModule, type Env, extendModel, f, type Records } from './.kosh/bindings.js';
 
@@ -29,6 +29,22 @@ async function otherJournal(env: Env, ids: readonly number[]): Promise<number[]>
     .map((m) => m.id as number);
 }
 
+/** The methods (of these) whose way of paying cannot be: no provider to send the request, or no reader named. */
+async function wayWithout(env: Env, ids: readonly number[]): Promise<number[]> {
+  if (ids.length === 0) return [];
+  const methods = await env
+    .model('pos.payment.method')
+    .browse([...ids] as never)
+    .load(['provider', 'payWay', 'terminal']);
+  return [...methods]
+    .filter(
+      (m) =>
+        (m.payWay !== 'qr' && m.provider === null) ||
+        (m.payWay === 'terminal' && (m.terminal ?? '').trim() === ''),
+    )
+    .map((m) => m.id as number);
+}
+
 export const MethodProvider = extendModel('pos.payment.method', {
   fields: {
     provider: f.many2one('payment.provider', {
@@ -36,8 +52,33 @@ export const MethodProvider = extendModel('pos.payment.method', {
       label: 'Payment provider',
       help: 'With a provider, this method is paid on the provider’s page, which the customer opens from a QR code at the till; the sale counts the money once the provider confirmed it. Its journal is the provider’s.',
     }),
+    payWay: f.selection(
+      {
+        qr: 'A code the customer scans',
+        phone: 'A request sent to their phone',
+        terminal: 'A card terminal on the counter',
+      },
+      {
+        required: true,
+        default: 'qr',
+        label: 'How the customer pays',
+        help: 'With a provider: the customer scans a code and pays on the provider’s page; or the cashier types their phone number and the provider sends the request to it; or the amount goes to the card terminal named below. A provider offers the ways it has.',
+      },
+    ),
+    terminal: f.char({
+      size: 64,
+      label: 'Card terminal',
+      help: 'The terminal on this counter, as the provider names it (Stripe: the reader’s id, tmr_…).',
+    }),
   },
   constraints: {
+    wayPossible: {
+      ...check('pos.payment.method', ['provider', 'payWay', 'terminal'], (methods) =>
+        wayWithout(methods.env as unknown as Env, methods.ids as readonly number[]),
+      ),
+      message:
+        'A request to a phone or a card terminal goes through a payment provider, and a terminal is named: choose the provider, and the terminal.',
+    },
     // The session's entry books a method in its journal: the provider's money arrives in the provider's.
     providerJournal: {
       ...check('pos.payment.method', ['provider', 'journal'], (methods) =>
@@ -116,11 +157,26 @@ export const ShopPayments = extendModel('pos.shop', {
       });
       return [...new Set([...(await next()), ...methods.ids.map(Number)])];
     },
+    paymentWays: async function (
+      this: unknown,
+      next: () => Promise<Map<number, PaymentWay>>,
+    ): Promise<Map<number, PaymentWay>> {
+      const shops = this as Records<'pos.shop'>;
+      const ways = new Map(await next());
+      const methods = await (shops.env as unknown as Env)
+        .model('pos.payment.method')
+        .search({
+          where: { shop: { in: [...shops.ids] }, provider: { isNull: false } } as never,
+        })
+        .then((found) => found.load(['payWay']));
+      for (const m of methods) ways.set(m.id as number, (m.payWay ?? 'qr') as PaymentWay);
+      return ways;
+    },
     requestPayment: async function (
       this: unknown,
-      next: (input: PaymentAsked) => Promise<{ reference: string; url: string } | null>,
+      next: (input: PaymentAsked) => Promise<PaymentStarted | null>,
       input: PaymentAsked,
-    ): Promise<{ reference: string; url: string } | null> {
+    ): Promise<PaymentStarted | null> {
       const su = (this as Records<'pos.shop'>).env as unknown as Env;
       const [method] = await su
         .model('pos.payment.method')
@@ -132,6 +188,7 @@ export const ShopPayments = extendModel('pos.shop', {
         .browse([input.session as never])
         .load({ company: { currency: true } });
       if (session === undefined) return null;
+      const way = (method.payWay ?? 'qr') as PaymentWay;
       const currency = session.company.currency;
       const started = await startPayment(su as never, {
         provider: method.provider.id as number,
@@ -147,12 +204,19 @@ export const ShopPayments = extendModel('pos.shop', {
         description: `${session.name} · ${method.name}`,
         returnUrl: `${paymentUrls()?.api ?? ''}${PAID_PATH}`,
         values: { posSession: input.session, posMethod: input.method },
+        // To the customer's phone, or to the terminal on the counter: the provider sends it, nothing to open.
+        ...(way === 'phone'
+          ? { inPerson: { way, to: input.phone ?? '' } }
+          : way === 'terminal'
+            ? { inPerson: { way, to: (method.terminal ?? '').trim() } }
+            : {}),
       });
+      if (way !== 'qr') return { reference: started.reference, url: '', way };
       // A provider's page is an address of its own; the test provider's is a page of this server.
       const url = started.redirectUrl.startsWith('/')
         ? `${paymentUrls()?.api ?? ''}${started.redirectUrl}`
         : started.redirectUrl;
-      return { reference: started.reference, url };
+      return { reference: started.reference, url, way };
     },
     paymentState: async function (
       this: unknown,

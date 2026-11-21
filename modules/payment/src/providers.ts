@@ -46,6 +46,19 @@ export interface PaymentResult {
   readonly error?: string;
 }
 
+/**
+ * How a payment reaches a customer who stands at a counter, without a page for them to open: the provider
+ * sends the request to their **phone** (a text with a link, a prompt in the wallet's app), or to a card
+ * **terminal** on the counter.
+ */
+export type InPersonWay = 'phone' | 'terminal';
+
+export interface InPersonRequest extends PaymentRequest {
+  readonly way: InPersonWay;
+  /** The phone number (digits, with a leading `+` when international), or the terminal's id at the provider. */
+  readonly to: string;
+}
+
 export interface PaymentAdapter {
   readonly code: string;
   /** Whether its credentials are set (the portal offers only providers whose adapter can work). */
@@ -65,6 +78,14 @@ export interface PaymentAdapter {
     providerReference: string | null,
   ): Promise<PaymentResult | null>;
   /**
+   * Payments pushed to the customer in person. The payment is then followed like any other: the provider's
+   * callback, or `status`. Absent: the provider only has a page to open.
+   */
+  readonly inPerson?: {
+    readonly ways: readonly InPersonWay[];
+    push(request: InPersonRequest): Promise<{ readonly providerReference?: string }>;
+  };
+  /**
    * The customer is back (`query`: what the provider put in the return URL — a hint, never proof). Providers that
    * complete a payment only when the merchant asks (bKash's execute) do it here; the result is settled at once.
    */
@@ -80,11 +101,19 @@ export interface PaymentAdapter {
 export const FAKE_SIGNATURE = 'x-fake-signature';
 
 /** What the fake checkout knows (per process: it is for tests and demonstrations). */
-const fakeLedger = new Map<string, PaymentResult & { readonly request: PaymentRequest }>();
+const fakeLedger = new Map<
+  string,
+  PaymentResult & {
+    readonly request: PaymentRequest;
+    readonly pushed?: { readonly way: InPersonWay; readonly to: string };
+  }
+>();
 
 export const fakeAdapter: PaymentAdapter & {
   /** The payment the fake checkout shows. */
   pending(reference: string): PaymentRequest | null;
+  /** Where a payment was pushed (a phone, a terminal), when it was. */
+  pushed(reference: string): { way: InPersonWay; to: string } | null;
   /** The customer paid or declined on the fake checkout: the result and the signed callback body. */
   complete(
     reference: string,
@@ -104,6 +133,28 @@ export const fakeAdapter: PaymentAdapter & {
     return {
       redirectUrl: `/api/v1/payment/fake/checkout/${encodeURIComponent(request.reference)}`,
     };
+  },
+  // The test phone and the test terminal: nothing is sent; the payment waits like one with a page, and is
+  // paid or declined on the same test page (by a test, or by whoever plays the customer).
+  inPerson: {
+    ways: ['phone', 'terminal'],
+    async push(request) {
+      // A reader that is switched off, as a real provider would refuse it.
+      if (request.way === 'terminal' && request.to === 'offline')
+        throw new Error('The card reader does not answer.');
+      const { way, to, ...payment } = request;
+      fakeLedger.set(request.reference, {
+        reference: request.reference,
+        status: 'pending',
+        providerReference: null,
+        request: payment,
+        pushed: { way, to },
+      });
+      return {};
+    },
+  },
+  pushed(reference) {
+    return fakeLedger.get(reference)?.pushed ?? null;
   },
   verifyCallback(call, secret) {
     const given = Buffer.from(call.headers[FAKE_SIGNATURE] ?? '');
@@ -126,7 +177,7 @@ export const fakeAdapter: PaymentAdapter & {
   async status(reference) {
     const known = fakeLedger.get(reference);
     if (known === undefined) return null;
-    const { request: _request, ...result } = known;
+    const { request: _request, pushed: _pushed, ...result } = known;
     return result;
   },
   pending(reference) {
@@ -143,7 +194,11 @@ export const fakeAdapter: PaymentAdapter & {
       amount: known.request.amount,
       currency: known.request.currency,
     };
-    fakeLedger.set(reference, { ...result, request: known.request });
+    fakeLedger.set(reference, {
+      ...result,
+      request: known.request,
+      ...(known.pushed === undefined ? {} : { pushed: known.pushed }),
+    });
     const body = JSON.stringify({ id: `evt_${randomUUID()}`, ...result });
     return { body, signature: createHmac('sha256', secret).update(body).digest('hex') };
   },

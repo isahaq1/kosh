@@ -85,8 +85,13 @@ export const PosShop = defineModel('pos.shop', {
      */
     requestPayment: method(
       'pos.shop',
-      async (_input: PaymentAsked): Promise<{ reference: string; url: string } | null> => null,
+      async (_input: PaymentAsked): Promise<PaymentStarted | null> => null,
     ),
+    /**
+     * How the customer pays each provider method (of these shops): from a QR code (the default), from a
+     * request sent to their phone, or on a card terminal. Nothing here; `pos_payment` says. As the system.
+     */
+    paymentWays: method('pos.shop', async (): Promise<Map<number, PaymentWay>> => new Map()),
     /** Where a payment asked for in `session` stands; `null`: no such payment there. As the system. */
     paymentState: method(
       'pos.shop',
@@ -156,6 +161,19 @@ export interface PaymentAsked {
   readonly method: number;
   /** A decimal string, above zero. */
   readonly amount: string;
+  /** The customer's phone number, for a method whose request is sent to their phone. */
+  readonly phone?: string;
+}
+
+/** How the customer pays a provider method at the till. */
+export type PaymentWay = 'qr' | 'phone' | 'terminal';
+
+/** A payment a provider was asked for: the reference to follow it by, and how it reaches the customer. */
+export interface PaymentStarted {
+  readonly reference: string;
+  /** The page the customer pays on (a QR code at the till); empty when the request was sent to them. */
+  readonly url: string;
+  readonly way?: PaymentWay;
 }
 
 /** A sale being rung up, as an app that takes something off it reads it. Amounts in hundredths. */

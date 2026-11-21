@@ -35,6 +35,12 @@ export const messages: Readonly<Record<string, object>> = {
     scanToPay: 'The customer scans this code and pays {{amount}} by {{method}}.',
     qrOf: 'Code to pay {{amount}} by {{method}}',
     waitingPayment: 'Waiting for the payment…',
+    payPhone: 'The customer’s phone number, to pay by {{method}}',
+    payPhoneHint: 'Customer’s phone number',
+    sentToPhone:
+      'A request to pay {{amount}} was sent to {{phone}}. The customer accepts it on their phone.',
+    onTerminal:
+      'The card terminal asks for {{amount}} ({{method}}). The customer presents their card.',
     paymentDone: 'Paid: {{reference}}',
     paymentFailed: 'The payment did not go through. Ask again, or take another method.',
     takenOff: 'Taken off the sale',
@@ -98,6 +104,11 @@ export const messages: Readonly<Record<string, object>> = {
     scanToPay: 'ক্রেতা এই কোড স্ক্যান করে {{method}}-এ {{amount}} পরিশোধ করবেন।',
     qrOf: '{{method}}-এ {{amount}} পরিশোধের কোড',
     waitingPayment: 'পরিশোধের অপেক্ষায়…',
+    payPhone: '{{method}}-এ পরিশোধের জন্য ক্রেতার ফোন নম্বর',
+    payPhoneHint: 'ক্রেতার ফোন নম্বর',
+    sentToPhone:
+      '{{amount}} পরিশোধের অনুরোধ {{phone}} নম্বরে পাঠানো হয়েছে। ক্রেতা নিজের ফোনে তা গ্রহণ করবেন।',
+    onTerminal: 'কার্ড টার্মিনাল {{amount}} চাইছে ({{method}})। ক্রেতা কার্ড দেখাবেন।',
     paymentDone: 'পরিশোধ হয়েছে: {{reference}}',
     paymentFailed: 'পরিশোধ সম্পন্ন হয়নি। আবার বলুন, অথবা অন্য পদ্ধতি নিন।',
     takenOff: 'বিক্রি থেকে বাদ',

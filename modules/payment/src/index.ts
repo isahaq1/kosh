@@ -33,7 +33,9 @@ import {
   ADAPTERS,
   FAKE_SIGNATURE,
   fakeAdapter,
+  type InPersonWay,
   type PaymentAdapter,
+  type PaymentRequest,
   type PaymentResult,
 } from './providers.js';
 import { razorpayFromEnvironment } from './razorpay.js';
@@ -54,6 +56,8 @@ export {
   ADAPTERS,
   FAKE_SIGNATURE,
   fakeAdapter,
+  type InPersonRequest,
+  type InPersonWay,
   type PaymentAdapter,
   type PaymentRequest,
   type PaymentResult,
@@ -125,6 +129,11 @@ export async function askProvider(tx: {
   return adapter.status(tx.reference, tx.mode, tx.providerReference).catch(() => null);
 }
 
+/** The in-person ways (a phone, a card terminal) the adapter of a provider's code has; none without it. */
+export function inPersonWays(code: string): readonly InPersonWay[] {
+  return current?.adapters.get(code)?.inPerson?.ways ?? [];
+}
+
 const adapterOf = (code: string): PaymentAdapter => {
   const adapter = current?.adapters.get(code);
   if (adapter === undefined)
@@ -186,6 +195,11 @@ export interface StartPayment {
   readonly returnUrl?: string;
   /** More fields of the transaction (another app's link: `saleOrder`). */
   readonly values?: Readonly<Record<string, unknown>>;
+  /**
+   * The customer stands at a counter: the provider sends the request to their phone or to a card terminal
+   * instead of giving a page to open (`redirectUrl` is then empty). Refused when the provider cannot.
+   */
+  readonly inPerson?: { readonly way: InPersonWay; readonly to: string };
 }
 
 /**
@@ -231,6 +245,16 @@ export async function startPayment(
       'Provider not set up',
       `The ${provider.name} provider has no credentials for ${provider.state} payments on this server.`,
     );
+  const push = input.inPerson;
+  if (push !== undefined && adapter.inPerson?.ways.includes(push.way) !== true)
+    throw new HttpProblem(
+      409,
+      'way-unsupported',
+      'Not with this provider',
+      push.way === 'phone'
+        ? `${provider.name} cannot send a payment request to a phone.`
+        : `${provider.name} has no card terminals.`,
+    );
   const token = await endpointOf(su, provider);
   const created = await (
     su.model('payment.transaction' as never) as unknown as {
@@ -253,9 +277,9 @@ export async function startPayment(
   const [t] = await tx.load({});
   const reference = t?.reference ?? '';
   const p = input.partner;
-  let started: Awaited<ReturnType<PaymentAdapter['createPayment']>>;
+  let started: { readonly redirectUrl: string; readonly providerReference?: string };
   try {
-    started = await adapter.createPayment({
+    const request: PaymentRequest = {
       reference,
       amount: input.amount.toFixed(input.currency.decimalPlaces ?? 2),
       currency: input.currency.name,
@@ -272,7 +296,11 @@ export async function startPayment(
       returnUrl: `${urls.api}/api/v1/payment/return/${encodeURIComponent(reference)}`,
       callbackUrl: `${urls.api}/api/v1/hooks/${token}`,
       mode: provider.state === 'live' ? 'live' : 'test',
-    });
+    };
+    started =
+      push === undefined || adapter.inPerson === undefined
+        ? await adapter.createPayment(request)
+        : { redirectUrl: '', ...(await adapter.inPerson.push({ ...request, ...push })) };
   } catch (error) {
     throw new HttpProblem(
       502,

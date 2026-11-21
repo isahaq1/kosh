@@ -250,11 +250,59 @@ test('a method paid through a provider: the till shows a code, the customer pays
   await expect(page.getByRole('status')).toContainText(/R\//);
 
   // The method goes away again, so the shop is as the other tests expect it.
-  const archived = await page.request.patch(`/api/v1/models/pos.payment.method/${method.id}`, {
-    headers,
-    data: { active: false },
+  const archive = async (id: number) => {
+    const archived = await page.request.patch(`/api/v1/models/pos.payment.method/${id}`, {
+      headers,
+      data: { active: false },
+    });
+    expect(archived.status(), await archived.text()).toBeLessThan(300);
+  };
+  await archive(method.id);
+
+  // Step 5: a method whose request goes to the customer's phone — nothing to scan at the till.
+  const byPhone = await post('/api/v1/models/pos.payment.method', {
+    shop: shop?.['id'],
+    name: 'E2E phone',
+    kind: 'mobile',
+    sequence: 6,
+    provider: provider.id,
+    journal: bank?.['id'],
+    payWay: 'phone',
   });
-  expect(archived.status(), await archived.text()).toBeLessThan(300);
+  await page.reload();
+  await page.getByRole('textbox', { name: 'Search or scan' }).fill('Steel beam');
+  await page
+    .getByRole('button', { name: /Steel beam/ })
+    .first()
+    .click();
+  await page.getByRole('button', { name: 'Pay', exact: true }).click();
+  const second = page.getByRole('dialog');
+  await second.getByLabel('E2E phone', { exact: true }).focus();
+  // Without a number there is nobody to ask.
+  await expect(second.getByRole('button', { name: 'Ask to pay' })).toBeDisabled();
+  await second
+    .getByLabel('The customer’s phone number, to pay by E2E phone')
+    .fill('+880 1711-000111');
+  await second.getByRole('button', { name: 'Ask to pay' }).click();
+  await expect(second.getByText(/A request to pay .* was sent to \+880 1711-000111/)).toBeVisible();
+  await expect(second.getByRole('img')).toHaveCount(0);
+  await expect(second.getByRole('button', { name: 'Confirm the sale' })).toBeDisabled();
+  // The customer accepts it on their phone.
+  const [pushed] = await list('payment.transaction', 'reference,state', {
+    provider: provider.id,
+    state: 'pending',
+  });
+  const accepted = await page.request.post(
+    `/api/v1/payment/fake/checkout/${String(pushed?.['reference'])}?outcome=paid`,
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, data: '', maxRedirects: 0 },
+  );
+  expect(accepted.status()).toBeLessThan(400);
+  await expect(second.getByText(`Paid: ${String(pushed?.['reference'])}`)).toBeVisible({
+    timeout: 20_000,
+  });
+  await second.getByRole('button', { name: 'Confirm the sale' }).click();
+  await expect(page.getByRole('status')).toContainText(/R\//);
+  await archive(byPhone.id);
   await page.getByRole('button', { name: 'Close the session' }).click();
   const closing = page.getByRole('dialog');
   const expected = (await closing.getByText(/Cash expected in the drawer/).textContent()) ?? '';

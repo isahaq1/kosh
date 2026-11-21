@@ -12,7 +12,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { InboundCall } from '@kosh/modules-sdk';
 import { fromSubunits, toSubunits } from './money.js';
-import type { PaymentAdapter, PaymentResult } from './providers.js';
+import type { PaymentAdapter, PaymentRequest, PaymentResult } from './providers.js';
 
 export interface RazorpayOptions {
   readonly keyId?: string | undefined;
@@ -77,30 +77,43 @@ export function razorpayAdapter(options: RazorpayOptions = {}): PaymentAdapter {
   };
   const fetchLink = (id: string) => call('GET', `/payment_links/${encodeURIComponent(id)}`);
 
+  // A payment link: the customer opens it (`sms: false`), or Razorpay texts it to `textTo` (at a counter).
+  const makeLink = async (request: PaymentRequest, textTo: string | null) => {
+    const phone = (textTo ?? request.customer.phone ?? '').replace(/[^\d+]/g, '');
+    if (textTo !== null && (phone.length < 8 || phone.length > 14))
+      throw new Error('Razorpay needs a phone number of 8 to 14 digits.');
+    const link = await call('POST', '/payment_links', {
+      amount: toSubunits(request.amount, request.currency),
+      currency: request.currency,
+      reference_id: request.reference,
+      description: request.description.slice(0, 2048),
+      customer: {
+        name: request.customer.name,
+        ...(request.customer.email === null ? {} : { email: request.customer.email }),
+        ...(phone.length >= 8 && phone.length <= 14 ? { contact: phone } : {}),
+      },
+      notify: { sms: textTo !== null, email: false },
+      reminder_enable: false,
+      callback_url: request.returnUrl,
+      callback_method: 'get',
+    });
+    const id = text(link['id']);
+    const page = text(link['short_url']);
+    if (id === '' || page === '') throw new Error('Razorpay made no payment link.');
+    return { redirectUrl: page, providerReference: id };
+  };
+
   return {
     code: 'razorpay',
     configured: (mode) => ready && keyId.startsWith(mode === 'test' ? 'rzp_test_' : 'rzp_live_'),
-    async createPayment(request) {
-      const phone = (request.customer.phone ?? '').replace(/[^\d+]/g, '');
-      const link = await call('POST', '/payment_links', {
-        amount: toSubunits(request.amount, request.currency),
-        currency: request.currency,
-        reference_id: request.reference,
-        description: request.description.slice(0, 2048),
-        customer: {
-          name: request.customer.name,
-          ...(request.customer.email === null ? {} : { email: request.customer.email }),
-          ...(phone.length >= 8 && phone.length <= 14 ? { contact: phone } : {}),
-        },
-        notify: { sms: false, email: false },
-        reminder_enable: false,
-        callback_url: request.returnUrl,
-        callback_method: 'get',
-      });
-      const id = text(link['id']);
-      const page = text(link['short_url']);
-      if (id === '' || page === '') throw new Error('Razorpay made no payment link.');
-      return { redirectUrl: page, providerReference: id };
+    createPayment: (request) => makeLink(request, null),
+    // At a counter: the same link, texted to the customer's phone by Razorpay; paid, it is followed alike.
+    inPerson: {
+      ways: ['phone'],
+      async push(request) {
+        const made = await makeLink(request, request.to);
+        return { providerReference: made.providerReference };
+      },
     },
     verifyCallback(call: InboundCall, secret: string) {
       const given = Buffer.from(call.headers['x-razorpay-signature'] ?? '');
@@ -157,6 +170,10 @@ export function razorpayFromEnvironment(env: NodeJS.ProcessEnv = process.env): P
     code: 'razorpay',
     configured: (mode) => real().configured(mode),
     createPayment: (request) => real().createPayment(request),
+    inPerson: {
+      ways: ['phone'],
+      push: (request) => real().inPerson?.push(request) ?? Promise.resolve({}),
+    },
     verifyCallback: (call, secret) => real().verifyCallback(call, secret),
     readCallback: (call) => real().readCallback(call),
     returned: (input) => real().returned?.(input) ?? Promise.resolve(null),

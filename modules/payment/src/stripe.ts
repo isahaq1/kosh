@@ -62,6 +62,43 @@ function sessionResult(reference: string, session: Answer, kind?: string): Payme
   return { reference, status: 'pending', providerReference };
 }
 
+/**
+ * What a PaymentIntent taken on a card terminal says of its payment (Stripe Terminal, server-driven): the
+ * reference is in its metadata. `requires_payment_method` after an attempt is a card that was declined.
+ */
+function intentResult(reference: string, intent: Answer, kind?: string): PaymentResult | null {
+  if (text((intent['metadata'] as Answer | undefined)?.['reference']) !== reference) return null;
+  const providerReference = text(intent['id']) || null;
+  const currency = text(intent['currency']).toUpperCase();
+  const status = text(intent['status']);
+  if (status === 'succeeded')
+    return {
+      reference,
+      status: 'done',
+      providerReference,
+      amount: fromSubunits(Number(intent['amount_received'] ?? intent['amount'] ?? 0), currency),
+      currency,
+    };
+  if (status === 'canceled') return { reference, status: 'cancelled', providerReference };
+  const declined = (intent['last_payment_error'] ?? null) as Answer | null;
+  if (
+    kind === 'payment_intent.payment_failed' ||
+    (status === 'requires_payment_method' && declined !== null)
+  )
+    return {
+      reference,
+      status: 'failed',
+      providerReference,
+      error: text(declined?.['message']) || 'The card was declined.',
+    };
+  return { reference, status: 'pending', providerReference };
+}
+
+/** Whether a PaymentIntent is one of a card terminal: the Checkout page's own intents are read by their session. */
+const onTerminal = (intent: Answer): boolean =>
+  Array.isArray(intent['payment_method_types']) &&
+  (intent['payment_method_types'] as unknown[]).includes('card_present');
+
 /** Stripe's form encoding of nested parameters (`line_items[0][price_data][currency]=bdt`). */
 function form(params: Answer, prefix = '', out = new URLSearchParams()): URLSearchParams {
   for (const [key, value] of Object.entries(params)) {
@@ -133,6 +170,32 @@ export function stripeAdapter(options: StripeOptions = {}): PaymentAdapter {
       if (id === '' || page === '') throw new Error('Stripe made no Checkout Session.');
       return { redirectUrl: page, providerReference: id };
     },
+    // A card reader on the counter (Stripe Terminal, server-driven): a PaymentIntent for a present card,
+    // handed to the reader, which asks for the card. Paid or declined, it is followed by `status` and by the
+    // `payment_intent.*` events of the same webhook.
+    inPerson: {
+      ways: ['terminal'],
+      async push(request) {
+        if (!/^tmr_[A-Za-z0-9]+$/.test(request.to))
+          throw new Error('A Stripe reader is named by its id (tmr_…).');
+        const intent = await call('POST', '/payment_intents', {
+          amount: toSubunits(request.amount, request.currency),
+          currency: request.currency.toLowerCase(),
+          payment_method_types: ['card_present'],
+          capture_method: 'automatic',
+          description: request.description,
+          metadata: { reference: request.reference },
+        });
+        const id = text(intent['id']);
+        if (id === '') throw new Error('Stripe made no payment for the reader.');
+        await call(
+          'POST',
+          `/terminal/readers/${encodeURIComponent(request.to)}/process_payment_intent`,
+          { payment_intent: id },
+        );
+        return { providerReference: id };
+      },
+    },
     verifyCallback(call: InboundCall, secret: string) {
       const header = call.headers['stripe-signature'] ?? '';
       const parts = header.split(',').map((p) => p.split('=') as [string, string]);
@@ -154,9 +217,15 @@ export function stripeAdapter(options: StripeOptions = {}): PaymentAdapter {
     readCallback(call: InboundCall) {
       const event = call.json as Answer | null;
       const kind = text(event?.['type']);
-      if (!kind.startsWith('checkout.session.')) return null;
       const object = ((event?.['data'] as Answer | undefined)?.['object'] ?? null) as Answer | null;
       if (object === null) return null;
+      if (kind.startsWith('payment_intent.')) {
+        if (!onTerminal(object)) return null;
+        const of = text((object['metadata'] as Answer | undefined)?.['reference']);
+        const said = of === '' ? null : intentResult(of, object, kind);
+        return said === null || said.status === 'pending' ? null : said;
+      }
+      if (!kind.startsWith('checkout.session.')) return null;
       const reference =
         text(object['client_reference_id']) ||
         text((object['metadata'] as Answer | undefined)?.['reference']);
@@ -170,6 +239,11 @@ export function stripeAdapter(options: StripeOptions = {}): PaymentAdapter {
     },
     async status(reference, _mode, providerReference) {
       if (!ready || providerReference === null || providerReference === '') return null;
+      if (providerReference.startsWith('pi_'))
+        return intentResult(
+          reference,
+          await call('GET', `/payment_intents/${encodeURIComponent(providerReference)}`),
+        );
       return sessionResult(reference, await session(providerReference));
     },
   };
@@ -187,6 +261,10 @@ export function stripeFromEnvironment(env: NodeJS.ProcessEnv = process.env): Pay
     code: 'stripe',
     configured: (mode) => real().configured(mode),
     createPayment: (request) => real().createPayment(request),
+    inPerson: {
+      ways: ['terminal'],
+      push: (request) => real().inPerson?.push(request) ?? Promise.resolve({}),
+    },
     verifyCallback: (call, secret) => real().verifyCallback(call, secret),
     readCallback: (call) => real().readCallback(call),
     returned: (input) => real().returned?.(input) ?? Promise.resolve(null),
