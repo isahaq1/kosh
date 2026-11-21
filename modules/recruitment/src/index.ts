@@ -6,12 +6,15 @@
  *
  * - `POST /api/v1/hiring/applicants/:id/hire`   hiring managers: the employee made, the applicant hired
  */
+import { assistantService, languageName } from '@kosh/assistant';
 import { hr } from '@kosh/hr';
 import { defineModule } from '@kosh/modules-sdk';
 import { reporting } from '@kosh/reporting';
 import { audit, HttpProblem, type ModuleContext } from '@kosh/server';
 import type { Env } from '@kosh/server/orm';
+import { attachmentsOf, openAttachment, storageOf } from '@kosh/storage';
 import { action, form, kanban, list, search } from '@kosh/views';
+import { CV_SCHEMA, CV_TYPES, cvInstructions, MAX_CV_BYTES, readCv } from './cv.js';
 import { recruitmentDemo } from './demo.js';
 import {
   HiringApplicant,
@@ -53,7 +56,133 @@ const one = async (env: Env, model: string, where: unknown, keys: readonly strin
   return set.length === 0 ? undefined : (await set.load(keys)).read(['id', ...keys])[0];
 };
 
-function registerHiringRoutes({ app }: ModuleContext): void {
+/** The models whose attachments the CV reader opens. */
+const CV_MODELS = new Set(['hiring.applicant']);
+
+function registerHiringRoutes(context: ModuleContext): void {
+  const { app } = context;
+  // `POST /api/v1/hiring/applicants/:id/cv` `{ attachment? }`: the assistant reads the applicant's CV — the file
+  // named, or the newest PDF, image or text attached to the applicant — and proposes what it says. Nothing is
+  // written: the recruiter checks the proposal and saves what they keep.
+  app.post('/api/v1/hiring/applicants/:id/cv', async (request) => {
+    const id = Number((request.params as { id?: string }).id);
+    if (!Number.isSafeInteger(id) || id <= 0)
+      throw new HttpProblem(400, 'invalid-id', 'Invalid id', 'An applicant id.');
+    const asked = Number((request.body as { attachment?: unknown } | null)?.attachment);
+    const service = assistantService(context);
+    // 1. As the recruiter: their right to the applicant, and the file they may read.
+    const prepared = await request.env(
+      async (env) => {
+        if (!env.administrator && !env.groups.has('hiring.user'))
+          throw new HttpProblem(403, 'access', 'Hiring', 'This needs a role of Hiring.');
+        if (!env.access.can('hiring.applicant' as never, 'write'))
+          throw new HttpProblem(403, 'access', 'Forbidden', 'You may not change applicants.');
+        const applicant = await one(env, 'hiring.applicant', { id }, [
+          'name',
+          'email',
+          'phone',
+          'notes',
+        ]);
+        if (applicant === undefined)
+          throw new HttpProblem(404, 'missing-record', 'Not found', 'No such applicant.');
+        if (service === null || (await service.ready(env.companyId)) === 'off')
+          throw new HttpProblem(
+            409,
+            'assistant-off',
+            'The assistant is off',
+            'An administrator switches the AI assistant on for the company in Settings.',
+          );
+        const files = (await attachmentsOf(env, CV_MODELS, 'hiring.applicant', id)).filter(
+          (a) =>
+            (CV_TYPES as readonly string[]).includes(a.mime) &&
+            a.size > 0 &&
+            a.size <= MAX_CV_BYTES,
+        );
+        const file = Number.isSafeInteger(asked) ? files.find((a) => a.id === asked) : files[0];
+        if (file === undefined)
+          throw new HttpProblem(
+            422,
+            'no-cv',
+            'No CV to read',
+            'Attach the CV to the applicant first: a PDF, an image or a text file, up to 10 MB.',
+          );
+        const { body } = await openAttachment(env, storageOf(app), CV_MODELS, file.id);
+        const chunks: Buffer[] = [];
+        let size = 0;
+        for await (const chunk of body) {
+          const part = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
+          size += part.length;
+          if (size > MAX_CV_BYTES)
+            throw new HttpProblem(422, 'no-cv', 'No CV to read', 'The file is larger than 10 MB.');
+          chunks.push(part);
+        }
+        return {
+          applicant,
+          file,
+          data: Buffer.concat(chunks),
+          company: env.companyId,
+          user: env.uid,
+          lang: env.lang,
+        };
+      },
+      { write: true },
+    );
+    // 2. With no transaction open: the assistant reads the file. The call is the company's, budgeted and logged.
+    const text = prepared.file.mime === 'text/plain';
+    const result = await (service as NonNullable<typeof service>).json(
+      {
+        company: prepared.company,
+        feature: 'cv',
+        resModel: 'hiring.applicant',
+        user: prepared.user,
+      },
+      {
+        system: cvInstructions(languageName(prepared.lang)),
+        user: text
+          ? prepared.data.toString('utf8').slice(0, 50_000)
+          : 'Read the attached curriculum vitae.',
+        ...(text
+          ? {}
+          : {
+              attachments: [
+                {
+                  mediaType: prepared.file.mime as 'application/pdf',
+                  data: prepared.data.toString('base64'),
+                },
+              ],
+            }),
+        schema: CV_SCHEMA,
+        effort: 'medium',
+        maxTokens: 1500,
+      },
+    );
+    if (!result.ok) {
+      if (result.why === 'refused') return { refused: true };
+      throw new HttpProblem(
+        result.why === 'budget' ? 429 : result.why === 'off' ? 409 : 502,
+        `assistant-${result.why}`,
+        'The assistant did not answer',
+        result.why === 'budget'
+          ? 'The month’s assistant budget is used up.'
+          : result.why === 'off'
+            ? 'The AI assistant is off for the company.'
+            : 'Try again in a moment.',
+      );
+    }
+    const proposal = readCv(result.data);
+    if (proposal === null) return { refused: true };
+    return {
+      file: { id: prepared.file.id, name: prepared.file.name },
+      proposal,
+      current: {
+        name: prepared.applicant['name'] ?? null,
+        email: prepared.applicant['email'] ?? null,
+        phone: prepared.applicant['phone'] ?? null,
+        notes: prepared.applicant['notes'] ?? null,
+      },
+    };
+  });
+
   app.post('/api/v1/hiring/applicants/:id/hire', async (request) => {
     const id = Number((request.params as { id?: string }).id);
     if (!Number.isSafeInteger(id) || id <= 0)
@@ -158,6 +287,16 @@ function registerHiringRoutes({ app }: ModuleContext): void {
     );
   });
 }
+
+export {
+  CV_SCHEMA,
+  CV_TYPES,
+  type CvProposal,
+  cvInstructions,
+  MAX_CV_BYTES,
+  notesWith,
+  readCv,
+} from './cv.js';
 
 export const recruitment: ReturnType<typeof defineModule> = defineModule({
   shutro: recruitmentShutro,
@@ -400,6 +539,8 @@ export const recruitment: ReturnType<typeof defineModule> = defineModule({
       header: { buttons: [] },
       sheet: [
         k.component('hire', 'hiring.Hire'),
+        // The assistant reads the attached CV and proposes what it says (RFC 0034 §2.6).
+        k.component('read_cv', 'hiring.ReadCv'),
         k.group('candidate', ['name', 'email', 'phone', 'source']),
         k.group('application', [
           'opening',

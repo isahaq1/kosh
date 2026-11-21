@@ -121,6 +121,17 @@ const databaseUrl = container.getConnectionUri();
 const NL = String.fromCharCode(10);
 const assistant = createAssistant({
   client: fakeClient((request) => {
+    // An applicant's CV (RFC 0034 §2.6): what the recruiter is proposed.
+    if ('schema' in request && request.system.includes('curriculum vitae'))
+      return {
+        name: 'Karim Uddin',
+        email: '',
+        phone: '+880 1811-222333',
+        summary: 'Sales officer for six years in Dhaka.',
+        skills: ['Selling', 'Excel'],
+        experienceYears: '6',
+        education: 'BBA',
+      };
     // A site's chat (RFC 0034 §2.6): what the pages say is answered, anything else goes to a person.
     if ('schema' in request && request.system.includes('in its live chat'))
       return (request.user.split(NL).findLast((l) => l.startsWith('Visitor:')) ?? '').includes(

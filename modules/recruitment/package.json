@@ -53,7 +53,9 @@
     "@kosh/contacts": "workspace:*",
     "@kosh/hr": "workspace:*",
     "@kosh/ui": "workspace:*",
-    "@kosh/reporting": "workspace:*"
+    "@kosh/reporting": "workspace:*",
+    "@kosh/assistant": "workspace:*",
+    "@kosh/storage": "workspace:*"
   },
   "devDependencies": {
     "@kosh/settings": "workspace:*",

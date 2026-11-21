@@ -2573,6 +2573,9 @@ importers:
 
   modules/recruitment:
     dependencies:
+      '@kosh/assistant':
+        specifier: workspace:*
+        version: link:../../packages/assistant
       '@kosh/contacts':
         specifier: workspace:*
         version: link:../contacts
@@ -2591,6 +2594,9 @@ importers:
       '@kosh/server':
         specifier: workspace:*
         version: link:../../packages/server
+      '@kosh/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@kosh/ui':
         specifier: workspace:*
         version: link:../../packages/ui
