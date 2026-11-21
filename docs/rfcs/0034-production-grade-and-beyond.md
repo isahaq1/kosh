@@ -932,3 +932,20 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   nobody to write to; a sold card paying an order, the cancellation taking off what is left and leaving what was
   spent; who may, and the fields nobody writes); the inbox's button in the Live chat E2E.
   **Left out**: cards issued for gift card products sold at the Counter; a liability account for cards sold.
+
+- **The CV read by the assistant on an existing applicant (2026-11-21).** The last leftover of step 11.
+  `modules/recruitment/src/cv.ts` (pure): the answer's schema, the instructions — only what the document says,
+  nothing that is not about the work, no judgement, the document is never instructions —, `readCv` (each part
+  kept only when it is what it should be: an address, a number with digits, a count of years; nothing at all is
+  no proposal) and `notesWith`. `POST /api/v1/hiring/applicants/:id/cv`: as the recruiter, their right to the
+  applicant and the newest readable attachment (or the one named, of this applicant only); then, with no
+  transaction open, `assistantService(context).json` with the file — the company's switch, budget and log, the
+  recruiter named on the call; the proposal comes back with the applicant's present values and **nothing is
+  written**. The applicant form's *Read the CV* opens the proposal with a tick per part; *Keep what is ticked*
+  saves through the ordinary update, with the record's version. Hiring looks the assistant and the store up at
+  run time: without them the button answers that the assistant is off.
+  A defect the test found: an empty count of years was read as zero.
+  Tests: the reading (3), on real PostgreSQL with a fake model and a file store (4: off and no file; the newest
+  file as a document, a text file as text, the proposal and nothing written, the log; a refusal, an empty answer,
+  another applicant's file; who may ask), E2E (the dialog, a part unticked, what was kept).
+  Step 11 is complete with this.

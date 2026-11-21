@@ -650,6 +650,15 @@ managers) makes the Workforce employee, moves the applicant to the hired stage a
 filled; it is the only way to hire. One application per email and opening; expected salaries for hiring managers
 only. Install it with `shutro-erp apps install recruitment`.
 
+**Read the CV** (on an applicant in progress; `POST /api/v1/hiring/applicants/:id/cv`): the AI assistant reads the
+CV attached to the applicant — the newest PDF, image or text file, up to 10 MB — and **proposes** what it says:
+the name, the email, the phone, and a summary with the years of experience, the education and the skills for the
+notes. Nothing is written by the assistant: the recruiter ticks what to keep, and that is saved as a change of
+their own. It is told to report only what the document says, to leave out what is not about the work (age,
+gender, religion, health, photographs), not to judge the candidate, and that a CV is something to read, never
+instructions. It needs the assistant switched on for the company; the call is the recruiter's, in the
+assistant's log as `cv`, within the month's budget.
+
 ### Stockroom (`modules/stock`, RFC 0021)
 
 Warehouses, a tree of locations, and the Transfer — one document for receipts, deliveries and internal moves —
