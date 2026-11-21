@@ -26,6 +26,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Download, History, RotateCcw, Upload } from 'lucide-react';
 import { type ReactElement, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { NUMBERING, type NumberingApp, NumberingCard } from './Numbering.js';
 
 type Value = string | number | boolean | null;
 interface Setting {
@@ -605,12 +606,27 @@ export function AppSettingsPage({ api }: PageProps): ReactElement {
     queryKey: ['settings', 'app-settings'],
     queryFn: () => api.call<{ administrator: boolean; apps: AppEntry[] }>('GET', BASE),
   });
-  const apps = list.data?.apps ?? [];
+  // Numbering (RFC 0020 §3.3), an Administrator's: the sequences each app declares, per company.
+  const numbering = useQuery({
+    queryKey: ['settings', 'numbering', companyId],
+    queryFn: () => api.call<{ apps: NumberingApp[] }>('GET', NUMBERING).then((r) => r.apps),
+    enabled: list.data?.administrator === true,
+  });
+  const withSettings = list.data?.apps ?? [];
+  // An app with documents to number is listed too, when it has no settings of its own.
+  const apps: AppEntry[] = [
+    ...withSettings,
+    ...(numbering.data ?? [])
+      .filter((n) => !withSettings.some((a) => a.app === n.app))
+      .map((n) => ({ app: n.app, label: n.label, icon: n.icon, sections: [] })),
+  ];
   const [app, choose] = useChosenApp(apps);
+  const hasSettings = withSettings.some((a) => a.app === app);
+  const numbered = (numbering.data ?? []).find((n) => n.app === app);
   const settings = useQuery({
     queryKey: ['settings', 'app-settings', app, companyId],
     queryFn: () => api.call<AppSettings>('GET', `${BASE}/${app}`),
-    enabled: app !== undefined,
+    enabled: app !== undefined && hasSettings,
   });
   if (list.error !== null) return <Alert tone="danger">{message(list.error)}</Alert>;
   return (
@@ -658,7 +674,7 @@ export function AppSettingsPage({ api }: PageProps): ReactElement {
             </ul>
           </nav>
           <div className="grid gap-4">
-            {settings.error !== null ? (
+            {!hasSettings ? null : settings.error !== null ? (
               <Alert tone="danger">{message(settings.error)}</Alert>
             ) : settings.data === undefined ? (
               <p className="text-sm text-muted-foreground">…</p>
@@ -667,6 +683,7 @@ export function AppSettingsPage({ api }: PageProps): ReactElement {
                 <SectionCard key={s.key} api={api} app={settings.data.app} section={s} />
               ))
             )}
+            {numbered === undefined ? null : <NumberingCard api={api} entry={numbered} />}
           </div>
         </div>
       )}

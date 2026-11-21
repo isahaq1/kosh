@@ -1,6 +1,23 @@
 /** Messages of the Settings app (namespace `settings`). */
 export const messages: Readonly<Record<string, object>> = {
   en: {
+    numbering: {
+      title: 'Numbering',
+      intro:
+        'The numbers this app gives its documents, for this company. A change counts from the next document on.',
+      prefix: 'Before the number',
+      suffix: 'After the number',
+      padding: 'Digits',
+      reset: 'The counter restarts',
+      resets: { never: 'Never', yearly: 'Every year', monthly: 'Every month', daily: 'Every day' },
+      next: 'Next number',
+      preview: 'The next document',
+      hint: '{year}, {yy}, {month} and {day} are replaced by the document’s date. The next number only moves forward: a number is never given twice.',
+      save: 'Save',
+      back: 'Back to the app’s own',
+      changed: 'Changed',
+      gapless: 'No gaps',
+    },
     appSettings: {
       title: 'App settings',
       intro:
@@ -639,6 +656,22 @@ export const messages: Readonly<Record<string, object>> = {
     version: 'Version {{version}}',
   },
   bn: {
+    numbering: {
+      title: 'নম্বরিং',
+      intro: 'এই প্রতিষ্ঠানের জন্য অ্যাপটি তার ডকুমেন্টে যে নম্বর দেয়। পরিবর্তন পরের ডকুমেন্ট থেকে কার্যকর হয়।',
+      prefix: 'নম্বরের আগে',
+      suffix: 'নম্বরের পরে',
+      padding: 'অঙ্কের সংখ্যা',
+      reset: 'কাউন্টার নতুন করে শুরু হয়',
+      resets: { never: 'কখনো নয়', yearly: 'প্রতি বছর', monthly: 'প্রতি মাসে', daily: 'প্রতিদিন' },
+      next: 'পরের নম্বর',
+      preview: 'পরের ডকুমেন্ট',
+      hint: '{year}, {yy}, {month} ও {day}-এর জায়গায় ডকুমেন্টের তারিখ বসে। পরের নম্বর শুধু সামনে যায়: একটি নম্বর দুবার দেওয়া হয় না।',
+      save: 'সংরক্ষণ করুন',
+      back: 'অ্যাপের নিজস্ব ফরম্যাটে ফিরুন',
+      changed: 'পরিবর্তিত',
+      gapless: 'ফাঁক ছাড়া',
+    },
     appSettings: {
       title: 'অ্যাপ সেটিংস',
       intro:

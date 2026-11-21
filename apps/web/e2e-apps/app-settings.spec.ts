@@ -97,3 +97,43 @@ test('the apps’ own settings: changed, kept, marked, reset; found by the Setti
   await apps.getByRole('button', { name: 'Accounting' }).click();
   await expect(page.getByRole('region', { name: 'Fiscal year and lock dates' })).toBeVisible();
 });
+
+test('Numbering: an Administrator changes how an app’s documents are numbered, with the next one previewed', async ({
+  page,
+}) => {
+  await page.goto('/login');
+  await page.getByLabel('Login').fill('admin');
+  await page.getByLabel('Password').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByLabel('Authentication code').fill(totp('JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP'));
+  await page.getByRole('button', { name: 'Verify' }).click();
+  await expect(page.getByRole('heading', { name: 'Apps' })).toBeVisible();
+
+  await page.goto('/settings/a/settings.action_app_settings');
+  // An app with documents to number is listed even when it has no settings of its own.
+  await page
+    .getByRole('navigation', { name: 'Apps' })
+    .getByRole('button', { name: 'Live chat' })
+    .click();
+  const card = page.getByRole('region', { name: 'Numbering' });
+  await expect(card.getByRole('heading', { name: 'Conversation' })).toBeVisible();
+  const next = card.getByRole('status');
+  const year = new Date().getFullYear();
+  await expect(next).toHaveText(new RegExp(`^CHAT/${year}/\\d{5}$`));
+  // Six digits, and a word before: the next conversation's number is shown as it is typed.
+  await card.getByLabel('Digits').fill('6');
+  await card.getByLabel('Before the number').fill('TALK/{year}/');
+  await expect(next).toHaveText(new RegExp(`^TALK/${year}/\\d{6}$`));
+  // What is not a placeholder is said before anything is saved.
+  await card.getByLabel('Before the number').fill('TALK/{week}/');
+  await expect(card.getByRole('alert')).toContainText('unknown placeholder');
+  await expect(card.getByRole('button', { name: 'Save' })).toBeDisabled();
+  await card.getByLabel('Before the number').fill('TALK/{year}/');
+  await card.getByRole('button', { name: 'Save' }).click();
+  await expect(card.getByText('Changed', { exact: true })).toBeVisible();
+  await expect(next).toHaveText(new RegExp(`^TALK/${year}/\\d{6}$`));
+  // Back to the app's own, so the other specs find the numbers they expect.
+  await card.getByRole('button', { name: 'Back to the app’s own' }).click();
+  await expect(card.getByText('Changed', { exact: true })).toHaveCount(0);
+  await expect(next).toHaveText(new RegExp(`^CHAT/${year}/\\d{5}$`));
+});

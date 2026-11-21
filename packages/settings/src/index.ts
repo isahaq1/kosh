@@ -14,6 +14,7 @@ import { orm } from '@kosh/server/orm';
 import { registerAppSettingsRoutes } from './app-settings.js';
 import { registerCompanyRoutes } from './company.js';
 import { registerDataHealthRoutes } from './data-health.js';
+import { registerNumberingRoutes } from './numbering.js';
 import { type PeopleOptions, registerPeopleRoutes } from './people.js';
 import { registerAppRoutes } from './routes.js';
 import { registerScimAdminRoutes } from './scim.js';
@@ -22,6 +23,7 @@ import { registerSsoAdminRoutes } from './sso.js';
 
 export { registerAppSettingsRoutes } from './app-settings.js';
 export { type CompanyDetail, type CompanySettings, registerCompanyRoutes } from './company.js';
+export { registerNumberingRoutes } from './numbering.js';
 export {
   type Assignment,
   INVITATION_DAYS,
@@ -220,6 +222,7 @@ export function settingsModule(options: Partial<PeopleOptions> = {}): KoshModule
         baseUrl: options.baseUrl ?? process.env['KOSH_BASE_URL'] ?? 'http://localhost:5173',
       });
       registerAppSettingsRoutes(context);
+      registerNumberingRoutes(context);
       registerPeopleRoutes(context, {
         baseUrl: options.baseUrl ?? process.env['KOSH_BASE_URL'] ?? 'http://localhost:5173',
         mailer: 'mailer' in options ? options.mailer : mailerFromEnv(),
