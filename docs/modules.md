@@ -96,6 +96,22 @@ anything is written, each change audited like one made by hand (`POST /api/v1/se
 `GET …/export`, `POST …/import`). A setting that a model must obey (a required tax ID, timesheet steps) is enforced
 by a constraint reading the company's field, so the API and imports obey it too (see Contacts and Projects).
 
+
+**Numbering** (*Settings › App settings › an app › Numbering*, Administrators): every sequence the app declares,
+named after the document it numbers, for the current company — what comes **before and after the number**
+(`{year}`, `{yy}`, `{month}` and `{day}` are the document's date), the **digits**, when **the counter
+restarts** (never, every year, month or day) and the **next number**, with the next document's number shown
+as it is typed. A change counts from the next document on; *Back to the app's own* removes it. The next number
+only moves forward — one already issued is refused in words —, a format that is none is said before it can be
+saved, and each change is in the audit log (`settings.numbering`). An app with documents to number is listed
+on the page even when it has no settings of its own. It is Shutro's `env.sequenceAdmin` (0.3.7).
+
+```http
+GET  /api/v1/settings/numbering                 the apps with their sequences
+POST /api/v1/settings/numbering/<code>/preview  { "format": { "prefix", "suffix", "padding", "reset" }, "next"? }
+PUT  /api/v1/settings/numbering/<code>          the same; "format": null goes back to the app's own
+```
+
 ## Installing, disabling, upgrading and uninstalling apps (RFC 0008)
 
 `src/modules.ts` lists the **catalogue**: the modules this installation can install. The database records which of

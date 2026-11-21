@@ -198,3 +198,16 @@ defineModule({
   and in the history as imported. Contacts' and Projects' constraints and the onchange. E2E: the history dialog, the
   export downloaded and re-imported with a change, previewed and applied.
 
+- **Step 3 — Numbering (2026-11-21).** Shutro request #31 is answered in Shutro 0.3.7: `env.sequenceAdmin`
+  (`describe`, `preview`, `setFormat`, `setNext`) — a company's format on top of the code's, kept in
+  `shutro_sequence_format` and read at allocation in the business transaction; the next number set forward only;
+  every change audited. `packages/settings/src/numbering.ts`: `GET /api/v1/settings/numbering` (the apps with
+  their sequences, each named after the model whose field it numbers, read from Shutro's registry),
+  `POST …/:code/preview` and `PUT …/:code`, for Administrators; the change is also in Settings' audit log in
+  words. `Numbering.tsx`: a card per app on the App settings page — the format's parts, when it restarts, the
+  next number, the server's preview while typing, *Back to the app's own*; apps that only have sequences are
+  listed on the page too. Tests: Shutro (6, on PostgreSQL), the API on PostgreSQL with a test app (4), E2E.
+  **Decided**: numbering is an Administrator's, not an app manager's — a wrong format or counter touches every
+  document of the company. **Left out**: numbering copied between companies and in the settings export; a list of
+  the periods' counters. RFC 0020 is complete with this step. **To do by the owner**: publish Shutro 0.3.7 to npm
+  before the next `shutro-erp` release (the manifests ask for `^0.3.7`).
