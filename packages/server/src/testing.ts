@@ -126,7 +126,8 @@ export async function testInstallation(options: {
       databaseUrl: database.getConnectionUri(),
       catalogue,
       migrationsDir: dir,
-      logger: false,
+      // Set KOSH_TEST_LOG=1 to read the server's log while a test runs (a 500 says why there).
+      logger: process.env['KOSH_TEST_LOG'] === '1',
       listen: false,
       auth: { secureCookies: false, cacheMs: 0, loginLimit: 0 },
       rateLimit: { max: 0, timeWindow: '1 minute' },
