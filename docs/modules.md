@@ -1056,6 +1056,26 @@ GET /api/v1/counter/customers?shop=1&q=01711000111   { "customer": { "partner", 
 GET /api/v1/counter/catalogue?shop=1&partner=42      the catalogue at that customer's prices
 ```
 
+**Paid through a provider** (with online payments installed too, `@kosh/pos_payment`): a shop's payment method
+may be given a **payment provider** (*Counter › Shops*, on the method; its journal is then the provider's). At
+the till such a method is not typed in: the cashier presses **Ask to pay**, the till shows a **QR code**, the
+customer scans it and pays on the provider's page, and the till waits. The sale counts that money only once the
+provider **confirmed** it — by its callback, or asked directly when the callback is late —, for the amount that
+was asked, in the cashier's own session, and for **one sale**: the same payment never pays two. A part may be
+paid this way and the rest in cash. The closed session's entry books it in the provider's journal, like every
+payment of the Counter; Accounting registers no payment of its own for it.
+
+```http
+POST /api/v1/counter/payments                { "session", "method", "amount" } → { "reference", "url", "qr" }
+GET  /api/v1/counter/payments/<reference>?session=   { "state": "pending" | "done" | "failed" | "cancelled", … }
+POST /api/v1/counter/orders                  payments: [{ "method", "amount", "reference" }]
+```
+
+**Limits**: the customer pays from their own phone (a QR code) — a provider pushing the request to a phone
+number, or a card terminal on the counter, is not built; a refund at the Counter gives cash back, not the
+provider's money; tested with the test provider — bKash, SSLCommerz, Razorpay and Stripe go through the same
+adapters as the portal's, to verify at a real till.
+
 Another app may know customers another way: it overrides `findCustomer` of `pos.shop` (Loyalty at the Counter
 adds the loyalty card's number, and says what the card holds in `note`).
 

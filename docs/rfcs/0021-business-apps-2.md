@@ -1019,3 +1019,32 @@ receipts as documents (RFC 0005), notifications for receipts by SMS or email (RF
   switched off, the plain receipt.
 - **Next**: payment providers at the counter — bKash and cards paid from the customer's phone by a QR, the sale
   completed when the provider confirms.
+
+## Implementation notes (2026-11-21): Counter step 4 part 2 — payment providers at the till
+
+- **The flow** is a QR code, not a push: the till asks the method's provider for a payment
+  (`POST /api/v1/counter/payments`), shows the provider's page as a QR code drawn by the server (`qrSvg`, as a
+  data URL — nothing of the address is run by the till), and follows it (`GET …/payments/:reference`, every two
+  seconds). Every provider of RFC 0017 has a page to pay on, so every adapter works unchanged; a push to a phone
+  number is provider-specific and left out.
+- **The Counter stays generic**: four hooks that do nothing by themselves — `providerMethods`, `requestPayment`
+  and `paymentState` on `pos.shop`, `settlePayments` on `pos.order` (called as the system before a sale is paid:
+  the payments that need proof are checked, and the proof is taken for this sale).
+- **`@kosh/pos_payment`** (Counter ↔ payments): `provider` on `pos.payment.method` (the method's journal must be
+  the provider's — a constraint —, since the session's entry books by method); `posSession`, `posMethod` and
+  `posOrder` on `payment.transaction`, the server's to write. A sale's payment by such a method must carry the
+  reference of a transaction that is **done**, of **this session** and **this provider**, for **this amount**,
+  and **not another sale's**; it is then this sale's. A pending one is asked of the provider at that moment
+  (`askProvider` → `settle`), so a late callback does not hold a paid customer at the till; the till's polling
+  asks only after four seconds.
+- **In the payment module**: `bookedElsewhere()` on `payment.transaction` (none by itself) — a transaction another
+  app books is settled as paid with **no** `account.payment`, because the session's entry books it; `askProvider`
+  and `paymentUrls` exported. The customer is sent back to `/api/v1/public/counter/paid`, a page that says to go
+  back to the counter and nothing of the payment.
+- Tests: on real PostgreSQL with the test provider (5: which methods, the journal constraint, the page; asked →
+  typed without paying refused → before confirmation refused → paid → sold → not twice; a part and the rest in
+  cash, never more than was paid, a reference that is none; declined, another cashier's session, who may ask,
+  amounts, the server's fields; the closed session's entry: 700 in the provider's journal and 300 in cash, no
+  payment of Accounting's), E2E (the code on the register, the customer paying, the sale).
+- **Left out**: push to a phone number, card terminals, refunds through the provider, the payment's reference on
+  the receipt. Counter step 4 is complete with this part.
