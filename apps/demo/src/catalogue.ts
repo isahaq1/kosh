@@ -38,6 +38,7 @@ import { payrollAccount } from '@kosh/payroll_account';
 import { permissions } from '@kosh/permissions';
 import { pos } from '@kosh/pos';
 import { posLoyalty } from '@kosh/pos_loyalty';
+import { posPayment } from '@kosh/pos_payment';
 import { posStock } from '@kosh/pos_stock';
 import { product } from '@kosh/product';
 import { production } from '@kosh/production';
@@ -193,6 +194,7 @@ export function demoCatalogue(): KoshModule[] {
     websiteSaleLoyalty,
     posStock,
     posLoyalty,
+    posPayment,
     expenseAccount,
     payrollAccount,
     hrAccrual,
