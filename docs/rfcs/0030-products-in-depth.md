@@ -139,3 +139,15 @@ and units per vendor, product configurator rules beyond exclusions, Shop attribu
   tile and picks the variant from a dialog. Not done: variant stock by template in the Stockroom reports (the
   product list and search group by template already); a matrix view on the template.
 
+- **Step 5 part 3 — variant stock by family (2026-11-21).** The last piece of §3.4. `modules/stock/src/families.ts`:
+  `familiesOf` (the template of each product), `foldStock` and `foldLedger` (pure: the rows of a template's
+  variants become one — per location in the stock report — with every figure added; `product.family` and
+  `product.variants` say what the row stands for; products of no template are untouched) and `stockMatrix`
+  (the product app's `templateGrid` with each variant's stock in the scope, and the total). `by=family` on
+  `GET /api/v1/stockroom/ledger` (summary) and `/stock`; `GET /api/v1/stockroom/stock/matrix`. The files (XLSX,
+  PDF) take the folded rows as they are. On the screen: the *By family* box, the family's name as a button, the
+  matrix in a dialog (available, with on hand under it). Tests: the fold (2), on real PostgreSQL (a template of
+  three variants with an excluded combination, received and partly reserved: three rows product by product, one
+  by family; the ledger folded; movements not; the matrix cell by cell with its empty one and total; another
+  warehouse; unknown template, no role), E2E. **Left out**: a matrix view on the template's own form; the
+  valuation in the matrix. RFC 0030 is complete with this part.

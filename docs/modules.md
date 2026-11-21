@@ -634,6 +634,14 @@ valuation see each figure's value (from the valuation layers; a transfer without
 reserved, available, and what confirmed transfers will bring in or take out. Both download as XLSX or PDF (the export
 right; audited).
 
+**By family** (`&by=family`, the *By family* box on the screen): the ledger's summary and the stock report fold
+the variants of a product template into one row — the family, saying how many of its variants it stands for —,
+every quantity and value added; a product that is nobody's variant stays a row of its own, and movements are
+never folded. The files follow the screen. A family's name opens its **stock matrix**
+(`GET /api/v1/stockroom/stock/matrix?template=<id>&warehouses=`): the template's grid — the last attribute across,
+the others down, as on the order forms — with each variant's on hand, reserved, available, incoming and outgoing
+in its cell, nothing where the combination does not exist, and the family's total.
+
 ### Hiring (`modules/recruitment`, RFC 0021)
 
 Openings for Workforce positions with a headcount, applicants on a board of stages, and scorecards each interviewer
