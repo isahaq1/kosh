@@ -6,6 +6,8 @@ export const bn: Readonly<Record<string, string>> = {
     'গ্রাহক তাঁর প্রথম নিশ্চিত অর্ডারে কার্ড পান; বন্ধ থাকলে: শুধু কার্ড দেওয়া গ্রাহকরা পয়েন্ট পান।',
   'A customer’s tier comes from the points they earned in this many months.':
     'গ্রাহকের স্তর নির্ধারিত হয় এত মাসে অর্জিত পয়েন্ট থেকে।',
+  'A gift card is valid for one month to ten years, or without an end.':
+    'গিফট কার্ড এক মাস থেকে দশ বছর পর্যন্ত বৈধ, অথবা শেষ ছাড়া।',
   'A gift card pays for whoever has its code; a wallet only for its customer.':
     'গিফট কার্ড যাঁর কাছে কোড আছে তাঁর জন্য পরিশোধ করে; ওয়ালেট শুধু এর গ্রাহকের জন্য।',
   'A ledger line moves at least one point.': 'খতিয়ানের একটি লাইনে অন্তত এক পয়েন্ট থাকতে হবে।',
@@ -81,6 +83,8 @@ export const bn: Readonly<Record<string, string>> = {
     'লেখা ও পূর্বরূপ দেখার সময় খসড়া; অর্ডারে পয়েন্ট দেওয়ার সময় চলমান; এরপর শেষ — কার্ডে পয়েন্ট থেকে যায়।',
   'Draft while it is written and previewed; running while orders may take it; ended after.':
     'লেখা ও পূর্বরূপ দেখার সময় খসড়া; অর্ডারে নেওয়া যায় এমন সময় চলমান; এরপর শেষ।',
+  'Each unit sold on a confirmed order makes a gift card, loaded with what the unit was sold for before taxes. Promotions do not apply to it.':
+    'নিশ্চিত অর্ডারে বিক্রি হওয়া প্রতিটি ইউনিট একটি গিফট কার্ড তৈরি করে, কর বাদে ইউনিটটি যে দামে বিক্রি হয়েছে তা লোড করা থাকে। এতে প্রোমোশন প্রযোজ্য নয়।',
   Earned: 'অর্জিত',
   'Earned lately': 'সম্প্রতি অর্জিত',
   'Earned this month': 'এই মাসে অর্জিত',
@@ -109,9 +113,14 @@ export const bn: Readonly<Record<string, string>> = {
   'Get free (units)': 'বিনামূল্যে পান (ইউনিট)',
   'Gift card': 'গিফট কার্ড',
   'Gift card or wallet': 'গিফট কার্ড বা ওয়ালেট',
+  'Gift card valid (months)': 'গিফট কার্ডের মেয়াদ (মাস)',
   'Gift cards': 'গিফট কার্ড',
+  'Gift cards emailed': 'গিফট কার্ড ইমেইল করা হয়েছে',
+  'Gift cards sold': 'বিক্রি হওয়া গিফট কার্ড',
   'Given back': 'ফেরত দেওয়া হয়েছে',
   Gives: 'যা দেয়',
+  'How long a card sold as this product pays, from the day it is sold. Empty: no end.':
+    'এই পণ্য হিসেবে বিক্রি হওয়া কার্ড বিক্রির দিন থেকে কত দিন পরিশোধ করে। ফাঁকা: শেষ নেই।',
   ID: 'আইডি',
   'In the company’s currency: what the previews count the points at, and what a point is worth when it is spent.':
     'কোম্পানির মুদ্রায়: পূর্বরূপে পয়েন্টের যে মূল্য ধরা হয়, এবং খরচের সময় এক পয়েন্টের মূল্য।',
@@ -211,6 +220,9 @@ export const bn: Readonly<Record<string, string>> = {
   'Share of sales %': 'বিক্রয়ের অংশ %',
   'So many points for every full amount of this, before taxes, discounts taken off.':
     'কর বাদে, ছাড় বাদ দিয়ে, এই পরিমাণের প্রতিটি পূর্ণ অংশের জন্য এত পয়েন্ট।',
+  'Sold as a gift card': 'গিফট কার্ড হিসেবে বিক্রি হয়',
+  'Sold on': 'যে অর্ডারে বিক্রি',
+  'Sold on (line)': 'যে অর্ডারে বিক্রি (লাইন)',
   'Spending points': 'পয়েন্ট খরচ',
   Spent: 'খরচ হয়েছে',
   'Spent from (points)': 'যত পয়েন্ট থেকে খরচ',
@@ -225,6 +237,8 @@ export const bn: Readonly<Record<string, string>> = {
   'The card does not have that many points.': 'কার্ডে এত পয়েন্ট নেই।',
   'The goods of the order must be worth this, before taxes.':
     'অর্ডারের পণ্যের মূল্য কর বাদে অন্তত এত হতে হবে।',
+  'The order this gift card was sold on, when it was sold as a product.':
+    'পণ্য হিসেবে বিক্রি হলে এই গিফট কার্ড যে অর্ডারে বিক্রি হয়েছে।',
   'The points at the value of a point: what the program would have cost if every point were spent.':
     'পয়েন্টের মূল্যে হিসাব: সব পয়েন্ট খরচ হলে প্রোগ্রামের যত খরচ হতো।',
   'The share of an order — taxes included — that points may pay.':
@@ -264,6 +278,8 @@ export const bn: Readonly<Record<string, string>> = {
     'ওই সময়ের নিশ্চিত অর্ডারে নিয়মগুলো যত পয়েন্ট দিত — তারিখ না দিলে এর আগের মাস —, এবং পয়েন্টের মূল্যে তার দাম। স্তর বাদ থাকে: প্রোগ্রাম শুরুর আগে কারও স্তর থাকে না।',
   'What was loaded and given back, less what orders took.':
     'যা লোড ও ফেরত দেওয়া হয়েছে, অর্ডারে নেওয়া টাকা বাদে।',
+  'When the codes of the gift cards sold on this order were emailed to its customer.':
+    'এই অর্ডারে বিক্রি হওয়া গিফট কার্ডের কোড কখন গ্রাহককে ইমেইল করা হয়েছে।',
   Why: 'কারণ',
   'With a balance': 'ব্যালেন্সসহ',
   'With a product or a category, the rule counts their lines only; empty: the whole order.':

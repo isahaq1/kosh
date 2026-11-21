@@ -8,6 +8,7 @@
  *   the server)
  */
 import { contacts } from '@kosh/contacts';
+import { layout, type Mailer, mailerFromEnv } from '@kosh/mail';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
 import { product } from '@kosh/product';
@@ -21,6 +22,8 @@ import { loyaltyDemo } from './demo.js';
 import {
   ageCards,
   earnOrder,
+  giftCardsToSend,
+  issueGiftCards,
   LoyaltyCard,
   LoyaltyEntry,
   LoyaltyProgram,
@@ -32,6 +35,7 @@ import {
   loyaltyShutro,
   releaseOrder,
   reverseOrder,
+  voidGiftCards,
 } from './module.js';
 
 export {
@@ -60,7 +64,10 @@ export {
   type EarningSale,
   earnOrder,
   earnSale,
+  giftCardsToSend,
   holdCredits,
+  type IssuedCard,
+  issueGiftCards,
   LineLoyalty,
   LoyaltyCard,
   LoyaltyEntry,
@@ -72,6 +79,7 @@ export {
   LoyaltyVoucherEntry,
   loyaltyShutro,
   OrderLoyalty,
+  ProductGiftCard,
   previewProgram,
   previewPromotionOf,
   promoteOrder,
@@ -82,6 +90,7 @@ export {
   reverseOrder,
   type SaleReturn,
   takeBackSale,
+  voidGiftCards,
   type WorkedCredits,
   workOutCredits,
 } from './module.js';
@@ -99,7 +108,53 @@ export {
 } from './promotions.js';
 
 /** The workers that give and take back points as orders are confirmed and cancelled; tests `drain()` them. */
-export function loyaltyWorkers(context: Pick<ModuleContext, 'shutro'>): Worker[] {
+const CARD_TEXTS = {
+  en: {
+    subject: (order: string) => `Your gift cards (${order})`,
+    hello: (name: string, order: string) =>
+      `${name}, here are the gift cards of your order ${order}. Whoever has a code can pay with it.`,
+    card: (code: string, amount: string, until: string | null) =>
+      `${code} — ${amount}${until === null ? '' : `, valid until ${until}`}`,
+  },
+  bn: {
+    subject: (order: string) => `আপনার গিফট কার্ড (${order})`,
+    hello: (name: string, order: string) =>
+      `${name}, আপনার অর্ডার ${order}-এর গিফট কার্ডগুলো এখানে। যাঁর কাছে কোড আছে তিনিই এটি দিয়ে পরিশোধ করতে পারেন।`,
+    card: (code: string, amount: string, until: string | null) =>
+      `${code} — ${amount}${until === null ? '' : `, ${until} পর্যন্ত বৈধ`}`,
+  },
+} as const;
+
+export function loyaltyWorkers(
+  context: Pick<ModuleContext, 'shutro'>,
+  options: { readonly mailer?: Mailer | undefined } = {},
+): Worker[] {
+  /** A confirmed order's gift cards: made once, and emailed once to its customer when emails can be sent. */
+  const giftCards = async (env: Env, order: number): Promise<void> => {
+    const cards = await issueGiftCards(env, order);
+    const mailer = options.mailer;
+    if (cards.length === 0 || mailer === undefined) return;
+    const mail = await giftCardsToSend(env, order);
+    if (mail === null) return;
+    const t = CARD_TEXTS[mail.lang];
+    const message = {
+      to: mail.to,
+      subject: t.subject(mail.order),
+      ...layout({
+        title: t.subject(mail.order),
+        paragraphs: [
+          t.hello(mail.name, mail.order),
+          ...mail.cards.map((c) =>
+            t.card(c.code, `${(c.amount / 100).toFixed(2)} ${mail.currency}`, c.validUntil),
+          ),
+        ],
+        lang: mail.lang,
+      }),
+    };
+    env.afterCommit(async () => {
+      await mailer.send(message).catch(() => undefined);
+    });
+  };
   const idOf = (payload: unknown): number | null => {
     const id = Number((payload as { id?: unknown } | null)?.id);
     return Number.isInteger(id) ? id : null;
@@ -110,7 +165,9 @@ export function loyaltyWorkers(context: Pick<ModuleContext, 'shutro'>): Worker[]
       'sale.order.confirmed',
       async (event, env) => {
         const id = idOf(event.payload);
-        if (id !== null) await earnOrder(env as unknown as Env, id);
+        if (id === null) return;
+        await earnOrder(env as unknown as Env, id);
+        await giftCards(env as unknown as Env, id);
       },
       { pollMs: 5000 },
     ),
@@ -122,13 +179,19 @@ export function loyaltyWorkers(context: Pick<ModuleContext, 'shutro'>): Worker[]
         if (id === null) return;
         await reverseOrder(env as unknown as Env, id);
         await releaseOrder(env as unknown as Env, id);
+        // The gift cards it sold pay nothing more.
+        await voidGiftCards(env as unknown as Env, id);
       },
       { pollMs: 5000 },
     ),
   ];
 }
 
-function registerLoyaltyRoutes(context: ModuleContext, workers: boolean): void {
+function registerLoyaltyRoutes(
+  context: ModuleContext,
+  workers: boolean,
+  mailer: Mailer | undefined,
+): void {
   const { app } = context;
   app.post('/api/v1/loyalty/age', async (request) =>
     request.env(
@@ -153,7 +216,7 @@ function registerLoyaltyRoutes(context: ModuleContext, workers: boolean): void {
     ),
   );
   if (!workers) return;
-  const running = loyaltyWorkers(context);
+  const running = loyaltyWorkers(context, { mailer });
   for (const w of running) w.start();
   // Once a day, each company: old points expire once, so a second server finds nothing left.
   const round = async () => {
@@ -186,10 +249,13 @@ function registerLoyaltyRoutes(context: ModuleContext, workers: boolean): void {
 export interface LoyaltyOptions {
   /** Start the workers and the daily round (default: unless `KOSH_SCHEDULES=off`). */
   readonly workers?: boolean | undefined;
+  /** Sends the codes of gift cards sold (default: from the environment; none: they are read on the order). */
+  readonly mailer?: Mailer | undefined;
 }
 
 /** Loyalty with explicit options (tests: workers drained by hand). */
 export function loyaltyModule(options: LoyaltyOptions = {}): ReturnType<typeof defineModule> {
+  const mailer = 'mailer' in options ? options.mailer : mailerFromEnv();
   return defineModule({
     shutro: loyaltyShutro,
     kosh: '^0.1.0',
@@ -211,7 +277,11 @@ export function loyaltyModule(options: LoyaltyOptions = {}): ReturnType<typeof d
       manager: { label: 'Manager (programs, adjustments)', groups: ['loyalty.manager'] },
     },
     routes: (context: ModuleContext) =>
-      registerLoyaltyRoutes(context, options.workers ?? process.env['KOSH_SCHEDULES'] !== 'off'),
+      registerLoyaltyRoutes(
+        context,
+        options.workers ?? process.env['KOSH_SCHEDULES'] !== 'off',
+        mailer,
+      ),
     events: [
       {
         topic: 'loyalty.program.launched',
@@ -723,8 +793,32 @@ export function loyaltyModule(options: LoyaltyOptions = {}): ReturnType<typeof d
     },
     viewExtensions: [
       {
+        view: 'product.product.form',
+        operations: [
+          {
+            append: 'sell',
+            nodes: [
+              field({ field: 'giftCard', id: 'loyalty_gift_card' }),
+              field({ field: 'giftCardMonths', id: 'loyalty_gift_card_months' }),
+            ],
+          },
+        ],
+      },
+      {
         view: 'sale.order.form',
         operations: [
+          {
+            append: 'related',
+            nodes: [
+              stat({
+                id: 'loyalty_gift_cards',
+                label: 'Gift cards sold',
+                model: 'loyalty.voucher',
+                where: { soldOn: { $record: 'id' } },
+                action: 'loyalty.action_vouchers',
+              }),
+            ],
+          },
           {
             append: 'dates',
             nodes: [

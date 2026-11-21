@@ -91,12 +91,22 @@ export const ShopLoyalty = extendModel('pos.shop', {
       const already = before.lines.reduce((sum, l) => sum + l.amount, 0);
       const typed = (asked['points'] ?? '').trim();
       const points = typed === '' ? 0 : /^\d{1,9}$/.test(typed) ? Number(typed) : -1;
+      // A gift card is worth what it is sold for: promotions do not apply to it.
+      const cards = new Set(
+        sale.lines.length === 0
+          ? []
+          : (
+              await su.model('product.product').search({
+                where: { id: { in: sale.lines.map((l) => l.product) }, giftCard: true } as never,
+              })
+            ).ids.map(Number),
+      );
       const worked = await workOutCredits(su as never, {
         company: sale.company,
         partner: sale.partner,
         date: sale.date,
         total: Math.max(0, sale.total - already),
-        goods: sale.lines,
+        goods: sale.lines.filter((l) => !cards.has(l.product)),
         promoCode: asked['promoCode'],
         points,
         voucherCode: asked['giftCard'],

@@ -569,6 +569,13 @@ export const LoyaltyVoucher = defineModel('loyalty.voucher', {
       help: 'After this day it pays nothing; empty: no end.',
     }),
     note: f.char({ label: 'Note' }),
+    soldOn: f.many2one('sale.order', {
+      ondelete: 'set null',
+      label: 'Sold on',
+      groups: { write: [...SYSTEM] },
+      help: 'The order this gift card was sold on, when it was sold as a product.',
+    }),
+    soldLine: f.integer({ label: 'Sold on (line)', groups: { write: [...SYSTEM] } }),
     entries: f.one2many('loyalty.voucher.entry', 'voucher'),
     balance: f.decimal({
       scale: 2,
@@ -640,6 +647,11 @@ export const LoyaltyVoucherEntry = defineModel('loyalty.voucher.entry', {
 /** The points an order earned and spent, and the wallet or gift card it took from. */
 export const OrderLoyalty = extendModel('sale.order', {
   fields: {
+    giftCardsSentAt: f.datetime({
+      label: 'Gift cards emailed',
+      groups: { write: [...SYSTEM] },
+      help: 'When the codes of the gift cards sold on this order were emailed to its customer.',
+    }),
     loyaltyPoints: f.integer({
       label: 'Points earned',
       groups: { write: [...SYSTEM] },
@@ -717,6 +729,27 @@ export const LineLoyalty = extendModel('sale.order.line', {
 });
 
 /** The service products the credit lines of a company are charged as, made the first time. */
+/** A product sold as a gift card: each unit sold makes a card loaded with what it was sold for. */
+export const ProductGiftCard = extendModel('product.product', {
+  fields: {
+    giftCard: f.boolean({
+      default: false,
+      label: 'Sold as a gift card',
+      help: 'Each unit sold on a confirmed order makes a gift card, loaded with what the unit was sold for before taxes. Promotions do not apply to it.',
+    }),
+    giftCardMonths: f.integer({
+      label: 'Gift card valid (months)',
+      help: 'How long a card sold as this product pays, from the day it is sold. Empty: no end.',
+    }),
+  },
+  sqlConstraints: {
+    giftCardMonths: {
+      check: orm.sql`gift_card_months IS NULL OR gift_card_months BETWEEN 1 AND 120`,
+      message: 'A gift card is valid for one month to ten years, or without an end.',
+    },
+  },
+});
+
 export const CompanyLoyalty = extendModel('res.company', {
   fields: {
     loyaltyPointsProduct: f.many2one('product.product', {
@@ -1224,7 +1257,11 @@ async function promoOrdersOf(su: Env, ids: readonly number[]): Promise<Map<numbe
       code: (o.promoCode ?? '').trim().toUpperCase(),
       lines: [...o.lines]
         // The goods: not what Loyalty added, nor an app's fees and coupons (products not sold by hand).
-        .filter((l) => l.loyaltyKind === null && l.product.saleOk !== false)
+        // …nor gift cards: a card is worth what it was sold for.
+        .filter(
+          (l) =>
+            l.loyaltyKind === null && l.product.saleOk !== false && l.product.giftCard !== true,
+        )
         .map((l) => ({
           product: l.product.id as number,
           category: (l.product.category?.id as number | undefined) ?? null,
@@ -1918,6 +1955,151 @@ export async function holdCredits(
   }
 }
 
+// ---- gift cards sold as a product
+
+/** A gift card made for an order, as its buyer is told. */
+export interface IssuedCard {
+  readonly code: string;
+  /** In hundredths. */
+  readonly amount: number;
+  readonly validUntil: string | null;
+}
+
+/**
+ * A confirmed order's gift cards (RFC 0034 §2.6): every line of a product *sold as a gift card* makes one card
+ * per unit, loaded with what a unit was sold for before taxes, valid for the product's months — **once**: a
+ * second call makes only what is missing. Returns the cards the order now has.
+ */
+export async function issueGiftCards(env: Env, order: number): Promise<IssuedCard[]> {
+  return env.asSuperuser({ reason: 'gift cards sold on an order' }, async (su) => {
+    const [o] = await su
+      .model('sale.order')
+      .browse([order as never])
+      .load({ company: true, partner: true, lines: { product: true } });
+    if (o === undefined || (o.state !== 'sale' && o.state !== 'done')) return [];
+    const today = iso(su.today());
+    for (const l of o.lines) {
+      if (l.product.giftCard !== true) continue;
+      const units = Math.floor(Number(l.quantity));
+      const amount = units <= 0 ? 0 : Math.floor(cents(l.subtotal) / units);
+      if (units <= 0 || amount <= 0) continue;
+      const have = await su.model('loyalty.voucher').search({
+        where: { soldOn: order as never, soldLine: l.id as number } as never,
+      });
+      const months = l.product.giftCardMonths ?? 0;
+      for (let made = have.length; made < units; made += 1)
+        await su.model('loyalty.voucher').create([
+          {
+            company: o.company.id,
+            kind: 'gift_card',
+            partner: o.partner.id,
+            soldOn: order,
+            soldLine: l.id,
+            dateExpiry: months > 0 ? monthsBefore(today, -months) : null,
+            note: `Sold on ${o.name}`,
+            entries: {
+              create: [
+                {
+                  company: o.company.id,
+                  date: today,
+                  kind: 'load',
+                  amount: money(amount),
+                  resModel: 'sale.order',
+                  resId: order,
+                  note: o.name,
+                },
+              ],
+            },
+          } as never,
+        ]);
+    }
+    await su.flush();
+    const cards = await su
+      .model('loyalty.voucher')
+      .search({ where: { soldOn: order as never } as never, order: ['id asc'] });
+    return [...cards].map((v) => ({
+      code: v.code,
+      amount: cents(v.balance),
+      validUntil: v.dateExpiry === null ? null : iso(v.dateExpiry),
+    }));
+  });
+}
+
+/**
+ * The email of an order's gift cards, **once**: who to write to, in which language, and the cards — and the order
+ * is marked as told. `null` when there is nothing to send, nobody to send to, or it was sent already.
+ */
+export async function giftCardsToSend(
+  env: Env,
+  order: number,
+): Promise<{
+  to: string;
+  name: string;
+  lang: 'en' | 'bn';
+  order: string;
+  currency: string;
+  cards: IssuedCard[];
+} | null> {
+  return env.asSuperuser({ reason: 'gift cards emailed' }, async (su) => {
+    const orders = su.model('sale.order').browse([order as never]);
+    const [o] = await orders.load({ partner: true, currency: true });
+    if (o === undefined || o.giftCardsSentAt !== null) return null;
+    const email = (o.partner.email ?? '').trim();
+    const cards = await su
+      .model('loyalty.voucher')
+      .search({ where: { soldOn: order as never } as never, order: ['id asc'] });
+    if (email === '' || cards.length === 0) return null;
+    await orders.write({ giftCardsSentAt: new Date() } as never);
+    await su.flush();
+    return {
+      to: email,
+      name: o.partner.name,
+      lang: (o.partner.lang ?? '').startsWith('bn') ? 'bn' : 'en',
+      order: o.name,
+      currency: o.currency.name,
+      cards: [...cards].map((v) => ({
+        code: v.code,
+        amount: cents(v.balance),
+        validUntil: v.dateExpiry === null ? null : iso(v.dateExpiry),
+      })),
+    };
+  });
+}
+
+/**
+ * A cancelled order's gift cards pay nothing more: what each still holds is taken off, once. What was already
+ * spent with them stays spent. Returns what was taken off, in hundredths.
+ */
+export async function voidGiftCards(env: Env, order: number): Promise<number> {
+  return env.asSuperuser({ reason: 'gift cards of a cancelled order' }, async (su) => {
+    const all = su.withFlags({ checkCompany: false }) as Env;
+    const cards = await all
+      .model('loyalty.voucher')
+      .search({ where: { soldOn: order as never } as never })
+      .then((rows) => rows.load({ company: true }));
+    let taken = 0;
+    for (const v of cards) {
+      const left = cents(v.balance);
+      if (left <= 0) continue;
+      await all.model('loyalty.voucher.entry').create([
+        {
+          voucher: v.id,
+          company: v.company.id,
+          date: iso(all.today()),
+          kind: 'spend',
+          amount: money(-left),
+          resModel: 'sale.order',
+          resId: order,
+          note: 'The order it was sold on was cancelled.',
+        } as never,
+      ]);
+      taken += left;
+    }
+    await all.flush();
+    return taken;
+  });
+}
+
 /** A cancelled order gives back the points and the credit it held, once; its lines stay as they were. */
 export async function releaseOrder(env: Env, order: number): Promise<void> {
   await env.asSuperuser({ reason: 'points and credit given back' }, async (su) => {
@@ -2002,5 +2184,5 @@ export const loyaltyShutro = defineModule({
     LoyaltyVoucherEntry,
     LoyaltyPromotion,
   ],
-  extensions: [OrderLoyalty, LineLoyalty, CompanyLoyalty],
+  extensions: [OrderLoyalty, LineLoyalty, CompanyLoyalty, ProductGiftCard],
 });
