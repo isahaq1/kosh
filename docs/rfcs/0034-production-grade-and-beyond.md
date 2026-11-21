@@ -949,3 +949,32 @@ PostgreSQL, an E2E for the flow, permission tests, English and Bangla, light and
   file as a document, a text file as text, the proposal and nothing written, the log; a refusal, an empty answer,
   another applicant's file; who may ask), E2E (the dialog, a part unticked, what was kept).
   Step 11 is complete with this.
+
+- **Step 6 part 4 — two-way Google and Microsoft calendar sync (2026-11-21).** `@kosh/calendar_sync`, an add-on
+  of Agenda with a role of its own. Design, as built:
+  - *The rules are a pure function* (`engine.ts`): the person's events here, their events there, and the links —
+    what was the same at the last sync (the provider's tag, and a stamp of the fields carried) — give the
+    operations. New and changed go across; a conflict is the other calendar's; a deletion crosses unless the
+    other side changed since. Fields are compared normalised (spaces, empty text, fractions of a second), so a
+    provider that rewrites what it stores does not cause a ping-pong.
+  - *A window, not a sync token*: a month back to a year ahead, listed whole at each sync; a linked event the
+    listing does not show is asked for by id before it is taken as deleted, and a linked event here that left the
+    window is left alone. Simpler than each provider's incremental protocol, and bounded.
+  - *No transaction is open while a provider is called*; each event carried is remembered at once in a
+    transaction of its own, so a sync cut short leaves at most one event to do again, never a duplicate.
+  - *Privacy*: only events the person organizes go out; what comes in is private here; a connected calendar is
+    read by its person only (a record rule), the links and the consent under way are not models of the API.
+  - *Tokens* sealed with AES-256-GCM under `KOSH_SECRETS_KEY` (no key, no connecting); the consent's `state` is
+    kept as its hash with the sealed PKCE verifier, works once, for fifteen minutes, and says whose it is — the
+    callback trusts nothing in its address. The test provider's consent page redirects only to this server's
+    own callback.
+  - *Adapters*: Google Calendar v3 (`singleEvents`, `access_type=offline`), Microsoft Graph v1.0 (`calendarView`,
+    UTC, the body as text; only Graph's own next link is followed), and a fake that keeps calendars in memory.
+  Tests: the rules, the stamp, the tokens at rest and both adapters against stubbed HTTP (8); on real PostgreSQL
+  with the test calendar (6: the consent and its forgeries, both directions with privacy, idempotence, changes
+  and the conflict, deletions and cancel / restore, a refreshed token, sealed and unserved tokens, another
+  person's calendar, disconnecting); E2E (connect through the provider's page, sync, disconnect).
+  **To verify with the company's registrations**: Google and Microsoft against real accounts.
+  **Left out**: attendees and their answers, rooms, reminders, a repeating series as a series, several calendars
+  per account, push notifications from the providers (the sync polls every five minutes). Step 6 is complete with
+  this part.

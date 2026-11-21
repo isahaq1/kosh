@@ -658,6 +658,50 @@ never folded. The files follow the screen. A family's name opens its **stock mat
 the others down, as on the order forms — with each variant's on hand, reserved, available, incoming and outgoing
 in its cell, nothing where the combination does not exist, and the family's total.
 
+### Calendar sync (`modules/calendar_sync`, RFC 0034)
+
+A person's Agenda kept in step with their **Google Calendar** or **Microsoft 365** calendar, both ways
+(*Agenda › My other calendars*; the **Calendar sync** role, of its own — a company decides who may send meetings to
+another calendar).
+
+- **Connecting** is the person's own consent at the provider (OAuth 2.0, the authorization code flow with PKCE);
+  the answer works once, for a quarter of an hour, for the person who asked. The first sync runs at once.
+- **What travels**: the person's **own** events (they are the organizer) that take place, from a month ago to a
+  year ahead — the title, the times, all-day, the place and the description as its words. What comes from the
+  other calendar becomes a **private** event here: others see only that the person is busy. Attendees, rooms and
+  reminders are not carried; each occurrence of a repeating event is an event of its own.
+- **The rules**: new on one side goes to the other; changed on one side goes to the other; changed on both, the
+  other calendar's version wins (unless they agree); deleted — or cancelled here — on one side is deleted on the
+  other, unless the other side changed meanwhile, in which case it is kept and made again. A sync run twice does
+  nothing the second time, and one cut short never makes an event twice.
+- **Every five minutes** by itself, and *Sync now*. A calendar that fails says why on its row and is tried again.
+- **Tokens** are sealed (AES-256-GCM) under the server's `KOSH_SECRETS_KEY` and never served; a connected calendar
+  is its person's alone — nobody else, managers included, sees it. *Disconnect* leaves the events where they are,
+  on both sides.
+
+Set up, by an administrator, in the environment:
+
+```
+KOSH_SECRETS_KEY=<32 characters or more, kept in the secret manager>
+KOSH_API_URL=https://erp.example.com        # the redirect address is <this>/api/v1/agenda/sync/callback
+KOSH_CALSYNC_GOOGLE_CLIENT_ID=…  KOSH_CALSYNC_GOOGLE_CLIENT_SECRET=…
+KOSH_CALSYNC_MICROSOFT_CLIENT_ID=…  KOSH_CALSYNC_MICROSOFT_CLIENT_SECRET=…  KOSH_CALSYNC_MICROSOFT_TENANT=common
+```
+
+Register the redirect address with each provider; Google needs the `calendar.events` scope, Microsoft
+`Calendars.ReadWrite` and `offline_access`.
+
+```http
+GET    /api/v1/agenda/sync            { "ready", "providers", "accounts" }
+POST   /api/v1/agenda/sync/connect    { "provider": "google" } → { "url" }
+POST   /api/v1/agenda/sync/<id>/run   → { "pushed", "pulled", "deletedHere", "deletedThere" }
+DELETE /api/v1/agenda/sync/<id>
+```
+
+**To verify**: the Google and Microsoft adapters are written to the providers' published APIs and tested against
+recorded shapes and a test calendar; they have not run against a real account yet. Try them first with one person
+and a calendar that does not matter.
+
 ### Hiring (`modules/recruitment`, RFC 0021)
 
 Openings for Workforce positions with a headcount, applicants on a board of stages, and scorecards each interviewer
