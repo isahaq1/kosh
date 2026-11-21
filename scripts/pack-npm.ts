@@ -110,6 +110,21 @@ const PACKAGES = [
   'payment',
   'l10n_bd',
   'l10n_in',
+  'worktime',
+  'subscription',
+  'project_billing',
+  'hr_accrual',
+  'survey',
+  'website_hiring',
+  'loyalty',
+  'website_sale_loyalty',
+  'pos_loyalty',
+  'pos_payment',
+  'livechat',
+  'livechat_helpdesk',
+  'livechat_crm',
+  'livechat_assistant',
+  'calendar_sync',
   'ui',
   'reporting',
   'cli',
@@ -165,7 +180,7 @@ function publicName(pkg: string, sub: string): string {
   return `${NAME}/${pkg}${sub}`;
 }
 
-const version = process.argv[2] ?? '0.3.8';
+const version = process.argv[2] ?? '0.3.9';
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });
 
