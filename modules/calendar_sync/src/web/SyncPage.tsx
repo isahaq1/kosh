@@ -29,7 +29,7 @@ const BASE = '/api/v1/agenda/sync';
 const message = (e: unknown): string => (e instanceof ApiError ? e.message : String(e));
 
 export function SyncPage({ api }: PageProps): ReactElement {
-  const { t } = useTranslation('calendarSync');
+  const { t } = useTranslation('calendar_sync');
   const { format } = useKosh();
   const queryClient = useQueryClient();
   const sync = useQuery({

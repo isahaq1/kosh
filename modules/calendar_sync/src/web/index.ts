@@ -12,8 +12,9 @@ export { SyncPage } from './SyncPage.js';
 /** Registers the page (and the messages in `i18n`, when given). */
 export function registerCalendarSyncWeb(registry: Registry, i18n?: i18n): Registry {
   registry.registerPage('agenda.Sync', SyncPage);
-  if (i18n !== undefined) addMessages(i18n, 'calendarSync', messages);
+  if (i18n !== undefined) addMessages(i18n, 'calendar_sync', messages);
   return registry;
 }
 
-export { messages as calendarSyncMessages };
+// Named after the app, as the starter's main.tsx imports it (`<app>Messages`, under the namespace `<app>`).
+export { messages as calendar_syncMessages };
