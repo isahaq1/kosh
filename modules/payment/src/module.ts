@@ -102,6 +102,11 @@ export const PaymentTransaction = defineModel('payment.transaction', {
      * whose transactions pay something else first makes the invoice there (`website_sale`: the order confirmed and
      * invoiced) by overriding it.
      */
+    /**
+     * The transactions (of these) whose money another app books itself, so that being paid registers no payment
+     * here: none; the Counter says so for payments taken at the till, booked by the session's entry.
+     */
+    bookedElsewhere: method('payment.transaction', async (): Promise<number[]> => []),
     payable: method('payment.transaction', async function (): Promise<Map<number, number[]>> {
       const out = new Map<number, number[]>();
       for (const t of await this.load({})) out.set(t.id, t.move === null ? [] : [t.move.id]);

@@ -55,6 +55,17 @@ export async function settle(env: Env, result: PaymentResult): Promise<Settled |
     await found.write({ state: 'failed', providerReference: result.providerReference, error });
     return { ...same, state: 'failed', changed: true, payment: null };
   }
+  // Another app books this money itself (the Counter: in its session's entry): paid, with no payment of its own.
+  if ((await found.bookedElsewhere()).includes(tx.id)) {
+    await found.write({
+      state: 'done',
+      providerReference: result.providerReference,
+      error: null,
+      doneAt: new Date(),
+    });
+    await env.flush();
+    return { ...same, state: 'done', changed: true, payment: null };
+  }
   const moves = (await found.payable()).get(tx.id) ?? [];
   if (moves.length === 0) {
     await found.write({

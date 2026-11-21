@@ -29,7 +29,13 @@ import type { FastifyInstance } from 'fastify';
 import type { Env } from './.kosh/bindings.js';
 import { bkashFromEnvironment } from './bkash.js';
 import { PaymentProvider, PaymentTransaction, paymentShutro } from './module.js';
-import { ADAPTERS, FAKE_SIGNATURE, fakeAdapter, type PaymentAdapter } from './providers.js';
+import {
+  ADAPTERS,
+  FAKE_SIGNATURE,
+  fakeAdapter,
+  type PaymentAdapter,
+  type PaymentResult,
+} from './providers.js';
 import { razorpayFromEnvironment } from './razorpay.js';
 import { settle } from './settle.js';
 import { sslcommerzFromEnvironment } from './sslcommerz.js';
@@ -98,6 +104,26 @@ let current: {
   readonly adapters: ReadonlyMap<string, PaymentAdapter>;
   readonly urls: { readonly portal: string; readonly api: string };
 } | null = null;
+
+/** The public addresses of the running server, for apps that show a provider's page (a QR at the Counter). */
+export function paymentUrls(): { readonly portal: string; readonly api: string } | null {
+  return current?.urls ?? null;
+}
+
+/**
+ * The provider's own word on a payment that is still pending (its callback has not come): what `settle` takes.
+ * `null` when the provider does not know it, cannot be asked, or is not installed.
+ */
+export async function askProvider(tx: {
+  readonly code: string;
+  readonly mode: 'test' | 'live';
+  readonly reference: string;
+  readonly providerReference: string | null;
+}): Promise<PaymentResult | null> {
+  const adapter = current?.adapters.get(tx.code);
+  if (adapter === undefined) return null;
+  return adapter.status(tx.reference, tx.mode, tx.providerReference).catch(() => null);
+}
 
 const adapterOf = (code: string): PaymentAdapter => {
   const adapter = current?.adapters.get(code);
