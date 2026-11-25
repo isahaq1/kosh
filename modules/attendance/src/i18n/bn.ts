@@ -77,6 +77,7 @@ export const bn: Readonly<Record<string, string>> = {
     'পাঞ্চ, রোস্টার, সাপ্তাহিক ছুটি, সরকারি ছুটি ও অনুমোদিত ছুটি থেকে।',
   'Grace (minutes)': 'ছাড়ের সময় (মিনিট)',
   Holiday: 'ছুটির দিন',
+  'Home office': 'হোম অফিস',
   Hours: 'ঘণ্টা',
   'How the machine talks to the server.': 'মেশিন সার্ভারের সাথে যেভাবে কথা বলে।',
   ID: 'আইডি',

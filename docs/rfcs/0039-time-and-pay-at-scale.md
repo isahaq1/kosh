@@ -117,6 +117,50 @@ container on the development machine (2026-11-25):
   run records loan repayments person by person.
 - Shutro request #42 (a savepoint rolled back, then a write) was met and avoided here.
 
+## Implementation notes (2026-11-25): step 2 — home office
+
+- **Workforce** (`hr.remote`, *Workforce › Home office*): a numbered request (`HO/2026/0001`) for a day or a
+  range with its reason and its working days by the person's calendar; submitted by the person, **approved,
+  refused or cancelled by their leave approver, their manager or HR — never by themselves** (the same rule as
+  tours: `undecidable`, and the permission `hr.remote_decide`); refused or cancelled only with a reason; no overlap
+  with another request, an approved tour or approved leave. A print template, an import template and the events
+  `hr.remote.submitted` / `approved` / `cancelled`.
+- **Attendance**: the day status **Home office** (`remote`). A working day inside an approved request is Home
+  office with a check-in or without one — what the punches show (hours, lateness, overtime) is kept —; a weekend,
+  a holiday and leave stay what they are; a forgotten check-out is still *Check-out missing*. On such a day the
+  phone's check-in is **not held to the site's geofence**.
+- **Payroll**: `REMOTE_DAYS`, and the day counts in `PRESENT_DAYS` like a day on tour, so an allowance or a
+  deduction for days at home is a rule.
+- Tests: the day's rule as a pure function; on PostgreSQL the request (not decided by its owner, overlap refused,
+  not read by a colleague), its days, cancelling, the check-in far from the office refused then accepted on a
+  home-office day; the pay rule reading it; E2E (asked by an employee, approved by HR).
+- **Decided here, to confirm** (§7 question 1): a home-office day **without a check-in counts as present**. A
+  company that wants proof of work asks for the check-in through its own rule (`REMOTE_DAYS` against punches) —
+  or says so, and a setting is added.
+- **Left out**: a weekly pattern on the employee (works from home every Thursday) — each stretch is a request
+  for now; a limit of days a month.
+
+## Implementation notes (2026-11-25): step 3, part 1 — contractual, temporary and daily people; the shifts in the rules
+
+Asked: "employee can be contactual, temporary and other".
+
+- **Employment types** (*Workforce › Configuration › Employment types*, a list a company adds to): shipped with
+  Permanent, Contractual, Casual (daily), Intern and now **Temporary, Part-time, Seasonal, Outsourced**, each with
+  a code. A contract names its type.
+- **How the wage is counted**, on the contract: *Paid* **per month**, **per day worked** or **per hour worked**;
+  the wage is then a month's, a day's or an hour's.
+- **In the rules**: `PAID_BY_DAY`, `PAID_BY_HOUR` (1 or 0), and `TYPE_<CODE>` — 1 for the contract's employment
+  type, 0 for any other — so one structure pays `WAGE * PRESENT_DAYS` to a daily person, or a rule holds for
+  temporary people only (`condition: 'TYPE_TEMP'`). A structure per kind of employment works as before.
+- **From the shifts**, approved days only, summed by PostgreSQL with the rest: `WORKED_HOURS`, `EXPECTED_HOURS`,
+  `LATE_MINUTES`, `EARLY_MINUTES`, `NIGHT_SHIFTS` (days worked on a shift that ends the next day),
+  `OFF_DAYS_WORKED` (days worked when nothing was expected: a weekend or a holiday).
+- Test: a temporary person on a three-month contract paid 800 a day — three approved days, one late, one on the
+  night shift, one on a Friday — through a large run: the days' pay, the night allowance, the type, the hours.
+- **Still to do in step 3**: half days; paid and unpaid leave apart (`PAID_LEAVE_DAYS`, `UNPAID_LEAVE_DAYS`,
+  `LEAVE_<CODE>`); days by shift (`SHIFT_<CODE>` — shifts have no code yet); the variables listed where a rule
+  is written.
+
 ## 7. Open questions
 
 1. Home office without a check-in: present or absent by default?

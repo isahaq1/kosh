@@ -133,7 +133,21 @@ export function registerAttendanceRoutes({ app }: ModuleContext): void {
           let site: number | null = null;
           let inside: boolean | null = null;
           let distance: number | null = null;
-          if (sites.length > 0) {
+          // On approved home office today (RFC 0039 §3) the person is not asked to be at a site.
+          const today = su.today();
+          const atHome =
+            (
+              await su.model('hr.remote').search({
+                where: {
+                  employee: e.id,
+                  state: 'approved',
+                  dateFrom: { lte: today },
+                  dateTo: { gte: today },
+                },
+                limit: 1,
+              })
+            ).length > 0;
+          if (sites.length > 0 && !atHome) {
             const fenced = sites.some((s) => s.geofence);
             if (lat === null || lon === null) {
               if (fenced)

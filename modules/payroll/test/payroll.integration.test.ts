@@ -150,6 +150,13 @@ beforeAll(async () => {
           category: 'info',
           formula: 'YTD_BASIC',
         },
+        {
+          sequence: 91,
+          code: 'HOME_SEEN',
+          name: 'Days of home office',
+          category: 'info',
+          formula: 'REMOTE_DAYS + PRESENT_DAYS / 100',
+        },
       ],
     },
   });
@@ -229,6 +236,8 @@ test('October: attendance, a loan and a bonus into explained payslips; approved 
   await day('2026-10-05', { status: 'absent' }, true);
   await day('2026-10-06', { status: 'present', overtimeHours: '2', overtimeApproved: '2' }, true);
   await day('2026-10-07', { status: 'present' }, false);
+  // An approved day of home office (RFC 0039 §3): present, and counted on its own.
+  await day('2026-10-08', { status: 'remote' }, true);
   const loan = await call('POST', '/api/v1/models/payroll.loan', 'otto', {
     employee: employees['rahim'],
     amount: '6000',
@@ -275,6 +284,8 @@ test('October: attendance, a loan and a bonus into explained payslips; approved 
   expect(Number(lines['ABSENCE'].amount)).toBe(900);
   expect(Number(lines['LOAN'].amount)).toBe(2000);
   expect(lines['BONUS']).toBeUndefined(); // its condition is not met
+  // One day of home office, and two days present with it (the approved day at work, and the one at home).
+  expect(Number(lines['HOME_SEEN'].amount)).toBe(1.02);
   expect(Number(rahim.gross)).toBe(45519.23);
   expect(Number(rahim.deductions)).toBe(2900);
   expect(Number(rahim.net)).toBe(42619.23);
@@ -455,6 +466,113 @@ test('a large run is computed by the job, a batch at a time: it shows how far it
       .status,
   ).toBeGreaterThanOrEqual(400);
   delete process.env['KOSH_PAYROLL_BATCH'];
+});
+
+test('a temporary person paid by the day: the pay basis, the employment type and the shifts in the rules', async () => {
+  const first = async (model: string, where: unknown) =>
+    (
+      await call(
+        'GET',
+        `/api/v1/models/${model}?filter=${encodeURIComponent(JSON.stringify(where))}&limit=1`,
+        'pia',
+      )
+    ).json.items[0] as Json;
+  // Shipped employment types: temporary people among them.
+  const temporary = await first('hr.contract.type', { code: 'TEMP' });
+  expect(temporary?.name).toBe('Temporary');
+  const night = await first('attendance.shift', { name: 'Night' });
+  const daily = await call('POST', '/api/v1/models/payroll.structure', 'pia', {
+    name: 'Daily wage',
+    rules: {
+      create: [
+        // By the day: the wage for each day worked; a monthly person on this structure would get nothing here.
+        {
+          sequence: 1,
+          code: 'BASIC',
+          name: 'Days worked',
+          category: 'basic',
+          formula: 'WAGE * PRESENT_DAYS',
+          condition: 'PAID_BY_DAY',
+        },
+        {
+          sequence: 2,
+          code: 'NIGHT',
+          name: 'Night allowance',
+          category: 'allowance',
+          formula: 'NIGHT_SHIFTS * 100',
+        },
+        { sequence: 3, code: 'T_TEMP', name: 'Temporary', category: 'info', formula: 'TYPE_TEMP' },
+        { sequence: 4, code: 'T_PERM', name: 'Permanent', category: 'info', formula: 'TYPE_PERM' },
+        { sequence: 5, code: 'HOURS', name: 'Hours', category: 'info', formula: 'WORKED_HOURS' },
+        { sequence: 6, code: 'LATE', name: 'Late', category: 'info', formula: 'LATE_MINUTES' },
+        {
+          sequence: 7,
+          code: 'OFF',
+          name: 'Off days',
+          category: 'info',
+          formula: 'OFF_DAYS_WORKED',
+        },
+        {
+          sequence: 8,
+          code: 'BY_HOUR',
+          name: 'By hour',
+          category: 'info',
+          formula: 'PAID_BY_HOUR',
+        },
+      ],
+    },
+  });
+  expect(daily.status, JSON.stringify(daily.json)).toBe(201);
+  const karim = (
+    await call('POST', '/api/v1/models/hr.employee', 'pia', {
+      name: 'Karim',
+      hireDate: '2027-03-01',
+    })
+  ).json.id as number;
+  employees['karim'] = karim;
+  const contract = await call('POST', '/api/v1/models/hr.contract', 'pia', {
+    name: 'Karim, three months',
+    employee: karim,
+    employmentType: temporary.id,
+    kind: 'fixed',
+    payBasis: 'day',
+    dateStart: '2027-03-01',
+    dateEnd: '2027-05-31',
+    wage: '800',
+    structure: daily.json.id,
+  });
+  expect(contract.status, JSON.stringify(contract.json)).toBe(201);
+  expect(
+    (await call('POST', `/api/v1/models/hr.contract/${contract.json.id}/transitions/start`, 'pia'))
+      .status,
+  ).toBe(200);
+  // Three approved days: one late by a quarter of an hour, one on the night shift, one on a Friday (a day off).
+  const D = '/api/v1/models/attendance.day';
+  for (const values of [
+    { date: '2027-03-01', workedHours: '8', expectedHours: '8', lateMinutes: 15 },
+    { date: '2027-03-02', workedHours: '7.5', expectedHours: '7.5', shift: night.id },
+    { date: '2027-03-05', workedHours: '5', expectedHours: '0' },
+  ]) {
+    const made = await call('POST', D, 'pia', { employee: karim, status: 'present', ...values });
+    expect(made.status, JSON.stringify(made.json)).toBe(201);
+    expect((await call('POST', `${D}/${made.json.id}/transitions/approve`, 'pia')).status).toBe(
+      200,
+    );
+  }
+  const march = await call('POST', R, 'otto', { dateFrom: '2027-03-01', dateTo: '2027-03-31' });
+  expect((await run(march.json.id, 'compute', 'otto')).status).toBe(200);
+  await payrollWorker({ shutro: host.server.shutro }).drain();
+  const slip = await slipOf(march.json.id, 'karim');
+  const lines = await linesOf(slip.id);
+  expect(Number(lines['BASIC'].amount)).toBe(2400); // 800 a day, three days
+  expect(Number(lines['NIGHT'].amount)).toBe(100);
+  expect(Number(lines['T_TEMP'].amount)).toBe(1);
+  expect(Number(lines['T_PERM'].amount)).toBe(0);
+  expect(Number(lines['HOURS'].amount)).toBe(20.5);
+  expect(Number(lines['LATE'].amount)).toBe(15);
+  expect(Number(lines['OFF'].amount)).toBe(1);
+  expect(Number(lines['BY_HOUR'].amount)).toBe(0);
+  expect(Number(slip.gross)).toBe(2500);
 });
 
 test('the demo data loads', async () => {

@@ -5,6 +5,12 @@
  * - `WAGE` (the contract's monthly wage), `PERIOD_DAYS`, `CONTRACT_DAYS` (the contract's days in the period: joiners
  *   and leavers paid in proportion), `SERVICE_MONTHS` (since joining), `MONTH`, `FY_MONTH` and `MONTHS_LEFT` (in the
  *   fiscal year that starts in the month of App settings › Payroll, July by default);
+ * - `PAID_BY_DAY` and `PAID_BY_HOUR` (1 or 0: how the contract's wage is counted — else by the month) and
+ *   `TYPE_<CODE>` (1 for the contract's employment type: `TYPE_PERM`, `TYPE_CONT`, `TYPE_TEMP`, `TYPE_CASU`…;
+ *   any other type reads as 0);
+ * - from the shifts, approved days only: `WORKED_HOURS`, `EXPECTED_HOURS`, `LATE_MINUTES`, `EARLY_MINUTES`,
+ *   `NIGHT_SHIFTS` (days worked on a shift that ends the next day), `OFF_DAYS_WORKED` (days worked on a weekend
+ *   or a holiday);
  * - from Attendance's **approved** days: `PRESENT_DAYS` (days on tour and at home included), `TOUR_DAYS`, `REMOTE_DAYS` (home office), `ABSENT_DAYS`, `LEAVE_DAYS`, `HOLIDAYS`, `LATE_DAYS`,
  *   `OVERTIME_HOURS` (approved), `OVERTIME_RATE` — a payslip warns when days of the period wait for approval;
  * - `GROSS` and `DEDUCTIONS` (the totals of the rules before), `E_<CODE>` (the person's own values: a provident fund membership, a declared investment), `FESTIVAL` (the run
@@ -206,7 +212,7 @@ export async function computeBatch(env: Env, id: number, limit: number = BATCH):
             or: [{ dateEnd: { isNull: true } }, { dateEnd: { gte: from } }],
           },
         })
-      ).load({ employee: true, structure: true })),
+      ).load({ employee: true, structure: true, employmentType: true })),
     ];
     const previous = new Map<number, Decimal>();
     if (run.correctionOf !== null)
@@ -244,6 +250,12 @@ export async function computeBatch(env: Env, id: number, limit: number = BATCH):
           late: number;
           overtime: string;
           rate: string | null;
+          worked_hours: string;
+          expected_hours: string;
+          late_minutes: number;
+          early_minutes: number;
+          night_shifts: number;
+          off_days_worked: number;
         }>`
         SELECT d.employee_id,
                count(*)::int AS days,
@@ -257,8 +269,19 @@ export async function computeBatch(env: Env, id: number, limit: number = BATCH):
                count(*) FILTER (WHERE d.state = 'approved' AND d.late_minutes > 0)::int AS late,
                coalesce(sum(d.overtime_approved) FILTER (WHERE d.state = 'approved'), 0)::text AS overtime,
                (array_agg(d.overtime_rate ORDER BY d.date DESC, d.id DESC)
-                  FILTER (WHERE d.state = 'approved' AND d.overtime_approved > 0))[1]::text AS rate
+                  FILTER (WHERE d.state = 'approved' AND d.overtime_approved > 0))[1]::text AS rate,
+               coalesce(sum(d.worked_hours) FILTER (WHERE d.state = 'approved'), 0)::text AS worked_hours,
+               coalesce(sum(d.expected_hours) FILTER (WHERE d.state = 'approved'), 0)::text AS expected_hours,
+               coalesce(sum(d.late_minutes) FILTER (WHERE d.state = 'approved'), 0)::int AS late_minutes,
+               coalesce(sum(d.early_minutes) FILTER (WHERE d.state = 'approved'), 0)::int AS early_minutes,
+               -- A night shift ends on the next day: its end is not after its start.
+               count(*) FILTER (WHERE d.state = 'approved' AND d.worked_hours > 0
+                                  AND s.id IS NOT NULL AND s."end" <= s."start")::int AS night_shifts,
+               -- Worked on a day nothing was expected of them: a weekend or a holiday.
+               count(*) FILTER (WHERE d.state = 'approved' AND d.worked_hours > 0
+                                  AND d.expected_hours = 0)::int AS off_days_worked
           FROM attendance_day d
+          LEFT JOIN attendance_shift s ON s.id = d.shift_id
          WHERE d.employee_id = ANY(${people}::bigint[]) AND d.date BETWEEN ${from}::date AND ${to}::date
          GROUP BY d.employee_id`
       ).map((row) => [Number(row.employee_id), row]),
@@ -328,6 +351,14 @@ export async function computeBatch(env: Env, id: number, limit: number = BATCH):
       const set = (k: string, v: Decimal | number) =>
         variables.set(k, typeof v === 'number' ? orm.toDecimal(v) : v);
       set('WAGE', contract.wage ?? ZERO);
+      // How the wage is counted, and the kind of employment (RFC 0039 §4): a casual or temporary person paid
+      // by the day or the hour, and rules that hold for one employment type only (`TYPE_CASU`, `TYPE_TEMP`…).
+      set('PAID_BY_DAY', contract.payBasis === 'day' ? 1 : 0);
+      set('PAID_BY_HOUR', contract.payBasis === 'hour' ? 1 : 0);
+      const typeCode = (contract.employmentType?.code ?? '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, '_');
+      if (typeCode !== '') set(`TYPE_${typeCode}`, 1);
       set('PERIOD_DAYS', days(from, to));
       const cFrom = later(from, isoDate(contract.dateStart));
       const cTo = contract.dateEnd === null ? to : earlier(to, isoDate(contract.dateEnd));
@@ -360,6 +391,14 @@ export async function computeBatch(env: Env, id: number, limit: number = BATCH):
       set('OVERTIME_HOURS', orm.toDecimal(seen?.overtime ?? '0'));
       // The rate of the latest approved day with overtime; double time when there is none.
       set('OVERTIME_RATE', orm.toDecimal(seen?.rate ?? '2'));
+      // What shift-based pay reads (RFC 0039 §4): the hours, the minutes late and left early, night shifts
+      // worked, and days worked on a weekend or a holiday.
+      set('WORKED_HOURS', orm.toDecimal(seen?.worked_hours ?? '0'));
+      set('EXPECTED_HOURS', orm.toDecimal(seen?.expected_hours ?? '0'));
+      set('LATE_MINUTES', seen?.late_minutes ?? 0);
+      set('EARLY_MINUTES', seen?.early_minutes ?? 0);
+      set('NIGHT_SHIFTS', seen?.night_shifts ?? 0);
+      set('OFF_DAYS_WORKED', seen?.off_days_worked ?? 0);
       const waiting = (seen?.days ?? 0) - (seen?.approved ?? 0);
       if (waiting > 0)
         warnings.push(
@@ -409,6 +448,8 @@ export async function computeBatch(env: Env, id: number, limit: number = BATCH):
           name.startsWith('INPUT_') ||
           name.startsWith('YTD_') ||
           name.startsWith('E_') ||
+          // An employment type the person does not have.
+          name.startsWith('TYPE_') ||
           structureRules.some((r) => r.code === name),
       };
       const lines: Record<string, unknown>[] = [];

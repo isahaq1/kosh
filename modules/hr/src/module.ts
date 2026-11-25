@@ -276,7 +276,22 @@ export const HrContract = defineModel('hr.contract', {
     ),
     dateStart: f.date({ required: true, label: 'Starts' }),
     dateEnd: f.date({ label: 'Ends' }),
-    wage: f.decimal({ scale: 2, label: 'Monthly wage', groups: HR }),
+    /** How the wage is counted (RFC 0039 §4): permanent staff by the month, casual and temporary people by the day or the hour. */
+    payBasis: f.selection(
+      { month: 'Per month', day: 'Per day worked', hour: 'Per hour worked' },
+      {
+        required: true,
+        default: 'month',
+        label: 'Paid',
+        help: 'Whether the wage is for a month, for each day worked or for each hour worked. Payroll reads it as PAID_BY_DAY and PAID_BY_HOUR.',
+      },
+    ),
+    wage: f.decimal({
+      scale: 2,
+      label: 'Wage',
+      help: 'For a month, a day or an hour, as *Paid* says.',
+      groups: HR,
+    }),
     state: f.state({
       help: 'A contract runs once started, until it is ended or cancelled.',
       states: { draft: 'Draft', running: 'Running', ended: 'Ended', cancelled: 'Cancelled' },
@@ -630,14 +645,172 @@ export const HrTour = defineModel('hr.tour', {
   },
 });
 
+const REMOTE_DECIDES =
+  'Your own home-office request is decided by someone else; others’ by an HR manager or their leave approver.';
+
+/**
+ * Home office (RFC 0039 §3): a person works from home for a day or some days — why — approved by their leave
+ * approver, their manager or HR, never by themselves. Attendance reads approved requests: the day is *Home
+ * office* — present, wherever the person checks in from, and without a check-in too — and Payroll counts it
+ * (`REMOTE_DAYS`).
+ */
+export const HrRemote = defineModel('hr.remote', {
+  label: 'Home office',
+  recName: 'name',
+  order: ['dateFrom desc', 'id desc'],
+  companyScoped: { required: true },
+  access: { 'hr.user': ALL, 'hr.manager': ALL },
+  rules: {
+    seeOwn: { groups: ['hr.user'], perms: ['read'], domain: { 'employee.user': me } },
+    draftOwn: {
+      groups: ['hr.user'],
+      perms: ['write', 'create', 'unlink'],
+      domain: { 'employee.user': me, state: 'draft' },
+    },
+    team: { groups: ['hr.user'], perms: ['read'], domain: { 'employee.manager.user': me } },
+    approver: {
+      groups: ['hr.user'],
+      perms: ['read', 'write'],
+      domain: {
+        or: [{ 'employee.leaveApprover': me }, { 'employee.manager.user': me }],
+        state: { in: ['submitted', 'approved', 'refused', 'cancelled'] },
+      },
+    },
+    all: { groups: ['hr.manager'], perms: [...ALL], domain: {} },
+  },
+  fields: {
+    name: f.char({ required: true, sequence: 'hr.remote', label: 'Reference' }),
+    employee: f.many2one('hr.employee', { required: true, ondelete: 'cascade' }),
+    dateFrom: f.date({ required: true, label: 'From' }),
+    dateTo: f.date({ required: true, label: 'To' }),
+    days: f.integer({
+      store: true,
+      label: 'Working days',
+      help: 'The working days of the person’s calendar inside the request: what Attendance counts as home office.',
+      ...compute('hr.remote', 'days', ['employee', 'dateFrom', 'dateTo'], async (requests) => {
+        for (const r of requests)
+          r.days =
+            r.dateFrom === null || r.dateTo === null || r.employee === null
+              ? 0
+              : await leaveDays(
+                  requests.env,
+                  r.employee.id as number,
+                  iso(r.dateFrom),
+                  iso(r.dateTo),
+                );
+      }),
+    }),
+    reason: f.text({ required: true, label: 'Why' }),
+    decisionNote: f.char({
+      label: 'Note of the decision',
+      help: 'Why it was refused or cancelled (needed), or a word with the approval.',
+    }),
+    state: f.state({
+      help: 'A request waits once submitted; someone other than the person approves or refuses it.',
+      states: {
+        draft: 'Draft',
+        submitted: 'Waiting',
+        approved: 'Approved',
+        refused: 'Refused',
+        cancelled: 'Cancelled',
+      },
+      initial: 'draft',
+      transitions: {
+        submit: emitting('hr.remote.submitted', { from: ['draft'], to: 'submitted' }),
+        approve: emitting('hr.remote.approved', {
+          from: ['submitted'],
+          to: 'approved',
+          guard: records('hr.remote', (requests) =>
+            undecidable(requests, 'hr.remote', 'hr.remote_decide'),
+          ),
+          message: REMOTE_DECIDES,
+        }),
+        refuse: {
+          from: ['submitted'],
+          to: 'refused',
+          guard: records('hr.remote', (requests) =>
+            undecidable(requests, 'hr.remote', 'hr.remote_decide'),
+          ),
+          message: REMOTE_DECIDES,
+        },
+        // Called off after approval: by who could have approved it.
+        cancel: emitting('hr.remote.cancelled', {
+          from: ['approved'],
+          to: 'cancelled',
+          guard: records('hr.remote', (requests) =>
+            undecidable(requests, 'hr.remote', 'hr.remote_decide'),
+          ),
+          message: REMOTE_DECIDES,
+        }),
+        redraft: { from: ['submitted', 'refused'], to: 'draft' },
+      },
+    }),
+  },
+  sqlConstraints: {
+    ordered: {
+      check: orm.sql`date_to >= date_from`,
+      message: 'A home-office request ends on or after it starts.',
+    },
+  },
+  constraints: {
+    said: {
+      ...check('hr.remote', ['state', 'decisionNote'], async (requests) =>
+        [...requests]
+          .filter(
+            (r) =>
+              (r.state === 'refused' || r.state === 'cancelled') &&
+              (r.decisionNote ?? '').trim() === '',
+          )
+          .map((r) => r.id),
+      ),
+      message: 'Say why in the note of the decision first.',
+    },
+    noOverlap: {
+      ...check('hr.remote', ['employee', 'dateFrom', 'dateTo', 'state'], async (requests) =>
+        requests.env.asSuperuser(
+          { reason: 'overlapping home office, tours and leave' },
+          async (su) => {
+            const failing: number[] = [];
+            for (const r of requests) {
+              if (r.state === 'refused' || r.state === 'cancelled') continue;
+              const during = { dateFrom: { lte: r.dateTo }, dateTo: { gte: r.dateFrom } };
+              const other = await su.model('hr.remote').search({
+                where: {
+                  employee: r.employee.id,
+                  id: { ne: r.id },
+                  state: { in: ['draft', 'submitted', 'approved'] },
+                  ...during,
+                },
+                limit: 1,
+              });
+              const tour = await su.model('hr.tour').search({
+                where: { employee: r.employee.id, state: 'approved', ...during },
+                limit: 1,
+              });
+              const leave = await su.model('hr.leave').search({
+                where: { employee: r.employee.id, state: 'approved', ...during },
+                limit: 1,
+              });
+              if (other.length > 0 || tour.length > 0 || leave.length > 0) failing.push(r.id);
+            }
+            return failing;
+          },
+        ),
+      ),
+      message:
+        'This person already has home office, a tour or approved leave on some of these days.',
+    },
+  },
+});
+
 /**
  * The requests among `records` the acting user may not decide: their own, and — unless they hold the permission —
  * those of people whose leave approver they are not.
  */
 async function undecidable(
   records: unknown,
-  model: 'hr.leave' | 'hr.tour' = 'hr.leave',
-  permission: 'hr.leave_decide' | 'hr.tour_decide' = 'hr.leave_decide',
+  model: 'hr.leave' | 'hr.tour' | 'hr.remote' = 'hr.leave',
+  permission: 'hr.leave_decide' | 'hr.tour_decide' | 'hr.remote_decide' = 'hr.leave_decide',
 ): Promise<number[]> {
   const { env, ids } = records as { env: Env; ids: readonly number[] };
   const decides = env.su || env.access.has(permission);
@@ -658,9 +831,10 @@ async function undecidable(
         .read(['id', 'user', 'leaveApprover', 'manager'])
         .map((e) => [e['id'], e]),
     );
-    // A tour without a leave approver is decided by the person's manager (leave has its own route for that).
+    // A tour or a home-office request without a leave approver is decided by the person's manager (leave has
+    // its own route for that).
     const managers = new Map(
-      model !== 'hr.tour'
+      model === 'hr.leave'
         ? []
         : (
             await su
@@ -679,7 +853,7 @@ async function undecidable(
       .filter((l) => {
         const person = people.get(l['employee']);
         const decider =
-          model === 'hr.tour'
+          model !== 'hr.leave'
             ? (person?.['leaveApprover'] ?? managers.get(person?.['manager'] as never) ?? null)
             : person?.['leaveApprover'];
         return person?.['user'] === env.uid || (!decides && decider !== env.uid);
@@ -733,6 +907,11 @@ export const hrShutro = defineModule({
       label: 'Approve, refuse and cancel tours',
       groups: ['hr.manager'],
     }),
+    orm.definePermission({
+      code: 'hr.remote_decide',
+      label: 'Approve, refuse and cancel home office',
+      groups: ['hr.manager'],
+    }),
   ],
   models: [
     HrDepartment,
@@ -744,9 +923,11 @@ export const hrShutro = defineModule({
     HrLeaveType,
     HrLeave,
     HrTour,
+    HrRemote,
   ],
   sequences: [
     orm.defineSequence({ code: 'hr.tour', prefix: 'TOUR/{year}/', padding: 4, reset: 'yearly' }),
+    orm.defineSequence({ code: 'hr.remote', prefix: 'HO/{year}/', padding: 4, reset: 'yearly' }),
   ],
   data: [
     record(
@@ -790,6 +971,30 @@ export const hrShutro = defineModule({
       'hr.contract.type',
       'type_intern',
       { name: 'Intern', code: 'INTN', sequence: 4 },
+      { noupdate: true },
+    ),
+    record(
+      'hr.contract.type',
+      'type_temporary',
+      { name: 'Temporary', code: 'TEMP', sequence: 5 },
+      { noupdate: true },
+    ),
+    record(
+      'hr.contract.type',
+      'type_part_time',
+      { name: 'Part-time', code: 'PART', sequence: 6 },
+      { noupdate: true },
+    ),
+    record(
+      'hr.contract.type',
+      'type_seasonal',
+      { name: 'Seasonal', code: 'SEAS', sequence: 7 },
+      { noupdate: true },
+    ),
+    record(
+      'hr.contract.type',
+      'type_outsourced',
+      { name: 'Outsourced', code: 'OUTS', sequence: 8 },
       { noupdate: true },
     ),
   ],

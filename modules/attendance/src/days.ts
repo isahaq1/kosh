@@ -97,6 +97,11 @@ export interface DayInput {
   readonly leave: boolean;
   /** On an approved official tour (RFC 0037 §3.2): a working day without a punch is *On tour*, not absent. */
   readonly tour?: boolean;
+  /**
+   * On approved home office (RFC 0039 §3): a working day is *Home office* — present — with a check-in from
+   * anywhere or without one; what the punches show (the hours, lateness, overtime) is kept.
+   */
+  readonly remote?: boolean;
   readonly punches: readonly { readonly checkIn: Date; readonly checkOut: Date | null }[];
 }
 
@@ -106,6 +111,7 @@ export interface DayResult {
     | 'absent'
     | 'leave'
     | 'tour'
+    | 'remote'
     | 'holiday'
     | 'weekend'
     | 'incomplete'
@@ -138,7 +144,9 @@ export function computeDay(input: DayInput): DayResult {
               ? 'off'
               : input.tour === true
                 ? 'tour'
-                : 'absent',
+                : input.remote === true
+                  ? 'remote'
+                  : 'absent',
       firstIn: null,
       lastOut: null,
       workedMinutes: 0,
@@ -183,7 +191,8 @@ export function computeDay(input: DayInput): DayResult {
     overtime = floorTo(worked, shift.overtimeStep);
   }
   return {
-    status: open ? 'incomplete' : 'present',
+    // A working day at home stays *Home office* with its punches; a check-out forgotten is still to be fixed.
+    status: open ? 'incomplete' : workday && input.remote === true ? 'remote' : 'present',
     firstIn,
     lastOut,
     workedMinutes: Math.round(worked),
@@ -260,6 +269,18 @@ export async function recomputeDays(
         })
       ).load(['dateFrom', 'dateTo'])),
     ].map((t) => [isoDate(t.dateFrom), isoDate(t.dateTo)] as const);
+    const remotes = [
+      ...(await (
+        await env.model('hr.remote').search({
+          where: {
+            employee: e.id,
+            state: 'approved',
+            dateFrom: { lte: to },
+            dateTo: { gte: from },
+          },
+        })
+      ).load(['dateFrom', 'dateTo'])),
+    ].map((r) => [isoDate(r.dateFrom), isoDate(r.dateTo)] as const);
     const punches = [
       ...(await (
         await env.model('attendance.record').search({
@@ -298,6 +319,7 @@ export async function recomputeDays(
         holiday: hoursOn(schedule, date).length === 0 && (schedule.week[dow] ?? []).length > 0,
         leave: leaves.some(([a, b]) => a <= date && b >= date),
         tour: tours.some(([a, b]) => a <= date && b >= date),
+        remote: remotes.some(([a, b]) => a <= date && b >= date),
         punches: mine,
       });
       // Nothing to say about a weekend, a holiday or a day without a shift nobody worked.

@@ -3,9 +3,12 @@ export const bn: Readonly<Record<string, string>> = {
   'A contract ends after it starts.': 'চুক্তি শুরুর পরে শেষ হয়।',
   'A contract runs once started, until it is ended or cancelled.':
     'শুরু করার পর চুক্তিটি চলমান থাকে, যতক্ষণ না তা শেষ বা বাতিল করা হয়।',
+  'A home-office request ends on or after it starts.': 'হোম অফিসের অনুরোধ শুরুর দিনে বা তার পরে শেষ হয়।',
   'A leave ends on or after it starts.': 'ছুটি শুরুর দিন বা তার পরে শেষ হয়।',
   'A request waits once submitted, and someone other than the requester approves or refuses it.':
     'জমা দেওয়ার পর অনুরোধটি অপেক্ষায় থাকে, এবং অনুরোধকারী ছাড়া অন্য কেউ তা অনুমোদন বা নামঞ্জুর করেন।',
+  'A request waits once submitted; someone other than the person approves or refuses it.':
+    'জমা দেওয়ার পর অনুরোধ অপেক্ষায় থাকে; ব্যক্তি নিজে নন, অন্য কেউ এটি অনুমোদন বা প্রত্যাখ্যান করেন।',
   'A request waits once submitted; someone other than the traveller approves or refuses it.':
     'জমা দেওয়ার পর অনুরোধ অপেক্ষায় থাকে; ভ্রমণকারী ছাড়া অন্য কেউ অনুমোদন বা প্রত্যাখ্যান করেন।',
   'A short code used in reports and payroll files.': 'রিপোর্ট ও বেতনের ফাইলে ব্যবহৃত সংক্ষিপ্ত কোড।',
@@ -27,7 +30,9 @@ export const bn: Readonly<Record<string, string>> = {
   Birthday: 'জন্মদিন',
   'By department': 'বিভাগ অনুযায়ী',
   Cancel: 'বাতিল করুন',
+  'Cancel the home office': 'হোম অফিস বাতিল করুন',
   'Cancel the tour': 'ট্যুর বাতিল করুন',
+  'Cancel this approved home office?': 'এই অনুমোদিত হোম অফিস বাতিল করবেন?',
   'Cancel this approved tour?': 'এই অনুমোদিত ট্যুর বাতিল করবেন?',
   'Cancel this contract?': 'এই চুক্তি বাতিল করবেন?',
   Cancelled: 'বাতিল',
@@ -65,9 +70,17 @@ export const bn: Readonly<Record<string, string>> = {
   Ends: 'শেষ',
   'Expense approver': 'খরচ অনুমোদনকারী',
   'Fixed term': 'নির্দিষ্ট মেয়াদি',
+  'For a month, a day or an hour, as *Paid* says.':
+    'এক মাস, এক দিন বা এক ঘণ্টার জন্য — *পরিশোধ* যেমন বলে।',
   From: 'থেকে',
   Head: 'প্রধান',
   'Home address': 'বাসার ঠিকানা',
+  'Home office': 'হোম অফিস',
+  'Home office {{name}}': 'হোম অফিস {{name}}',
+  'Home office approval': 'হোম অফিসের অনুমোদন',
+  'Home office approved': 'হোম অফিস অনুমোদিত',
+  'Home office cancelled': 'হোম অফিস বাতিল',
+  'Home office requested': 'হোম অফিসের অনুরোধ',
   'How the person travels: it decides what the allowance covers.':
     'ব্যক্তি যেভাবে যাতায়াত করেন: ভাতা কী কী ঢাকবে তা এর ওপর নির্ভর করে।',
   'HR manager': 'মানবসম্পদ ব্যবস্থাপক',
@@ -87,7 +100,6 @@ export const bn: Readonly<Record<string, string>> = {
   'Leave waiting approval': 'অনুমোদনের অপেক্ষায় ছুটি',
   Manager: 'ব্যবস্থাপক',
   Mine: 'আমার',
-  'Monthly wage': 'মাসিক মজুরি',
   'My team': 'আমার দল',
   Name: 'নাম',
   'National ID': 'জাতীয় পরিচয়পত্র',
@@ -98,10 +110,14 @@ export const bn: Readonly<Record<string, string>> = {
   Overview: 'সারসংক্ষেপ',
   'Own vehicle': 'নিজের গাড়ি',
   'Page {{page}} of {{pages}}': 'পৃষ্ঠা {{page}} / {{pages}}',
+  Paid: 'পরিশোধ',
   'Part of': 'অন্তর্ভুক্ত',
   People: 'জনবল',
   'People who approve for this department when an approval level asks for the department’s approvers.':
     'অনুমোদনের কোনো ধাপ বিভাগের অনুমোদনকারী চাইলে যাঁরা এই বিভাগের পক্ষে অনুমোদন দেন।',
+  'Per day worked': 'প্রতি কর্মদিবসে',
+  'Per hour worked': 'প্রতি কর্মঘণ্টায়',
+  'Per month': 'প্রতি মাসে',
   Permanent: 'স্থায়ী',
   Position: 'পদ',
   Positions: 'পদসমূহ',
@@ -140,10 +156,14 @@ export const bn: Readonly<Record<string, string>> = {
     'ব্যক্তি যে প্রপার্টি বা ইউনিটে কাজ করেন (মিল, খামার, ডিপো)।',
   'The working days do not match the dates (or none falls on a working day).':
     'কর্মদিবস তারিখের সাথে মেলে না (অথবা কোনো দিনই কর্মদিবস নয়)।',
+  'The working days of the person’s calendar inside the request: what Attendance counts as home office.':
+    'অনুরোধের ভেতরে ব্যক্তির ক্যালেন্ডারের কর্মদিবস: হাজিরায় যেগুলো হোম অফিস হিসেবে গণ্য হয়।',
   'The working days of the person’s calendar inside the tour: what Attendance counts as on tour.':
     'ট্যুরের ভেতরে ব্যক্তির ক্যালেন্ডারের কর্মদিবস: হাজিরায় যা ট্যুরে হিসেবে গোনা হয়।',
   'This person already has a tour or approved leave on some of these days.':
     'এই দিনগুলোর কয়েকটিতে এই ব্যক্তির আগে থেকেই ট্যুর বা অনুমোদিত ছুটি আছে।',
+  'This person already has home office, a tour or approved leave on some of these days.':
+    'এই দিনগুলোর কয়েকটিতে এই ব্যক্তির আগে থেকেই হোম অফিস, ট্যুর বা অনুমোদিত ছুটি আছে।',
   'This person already has leave on some of these days.':
     'এই ব্যক্তির এর মধ্যে কিছু দিনে আগেই ছুটি আছে।',
   'This user is already another employee.': 'এই ব্যবহারকারী ইতিমধ্যে অন্য একজন কর্মী।',
@@ -163,11 +183,15 @@ export const bn: Readonly<Record<string, string>> = {
   'Updated At': 'হালনাগাদের সময়',
   'Updated By': 'হালনাগাদ করেছেন',
   User: 'ব্যবহারকারী',
+  Wage: 'মজুরি',
   Waiting: 'অপেক্ষমাণ',
   Water: 'নৌপথ',
   'Where to': 'কোথায়',
+  'Whether the wage is for a month, for each day worked or for each hour worked. Payroll reads it as PAID_BY_DAY and PAID_BY_HOUR.':
+    'মজুরি এক মাসের, প্রতিটি কর্মদিবসের নাকি প্রতিটি কর্মঘণ্টার জন্য। পেরোল এটি PAID_BY_DAY ও PAID_BY_HOUR হিসেবে পড়ে।',
   'Who approves this person’s expenses and leave first.':
     'এই ব্যক্তির খরচ ও ছুটি প্রথমে কে অনুমোদন করেন।',
+  Why: 'কেন',
   'Why it was refused or cancelled (needed), or a word with the approval.':
     'কেন প্রত্যাখ্যান বা বাতিল হয়েছে (আবশ্যক), অথবা অনুমোদনের সাথে একটি কথা।',
   'Work email': 'অফিসের ইমেইল',
@@ -176,6 +200,8 @@ export const bn: Readonly<Record<string, string>> = {
   Workforce: 'ওয়ার্কফোর্স',
   'Working calendar': 'কর্ম-ক্যালেন্ডার',
   'Working days': 'কর্মদিবস',
+  'Your own home-office request is decided by someone else; others’ by an HR manager or their leave approver.':
+    'আপনার নিজের হোম অফিসের অনুরোধ অন্য কেউ সিদ্ধান্ত দেন; অন্যদেরটি এইচআর ম্যানেজার বা তাদের ছুটি অনুমোদনকারী।',
   'Your own leave is decided by someone else; others’ by an HR manager or their leave approver.':
     'আপনার নিজের ছুটির সিদ্ধান্ত অন্য কেউ নেন; অন্যদেরটা এইচআর ব্যবস্থাপক বা তাঁদের ছুটি অনুমোদনকারী।',
   'Your own tour is decided by someone else; others’ by an HR manager or their leave approver.':

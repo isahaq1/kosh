@@ -380,6 +380,90 @@ test('an approved official tour: its working days are On tour, not absent; cance
   expect((await statuses())['11-10']).toBe('absent');
 });
 
+test('home office: asked by the person, decided by someone else; its days are Home office, and a check-in from anywhere', async () => {
+  const REMOTE = '/api/v1/models/hr.remote';
+  // Sunday 15 to Tuesday 17 November 2026: three working days.
+  const asked = await call('POST', REMOTE, 'sumi', {
+    employee: employees['sumi'],
+    dateFrom: '2026-11-15',
+    dateTo: '2026-11-17',
+    reason: 'The plumber comes',
+  });
+  expect(asked.status, JSON.stringify(asked.json)).toBe(201);
+  expect(asked.json.days ?? 3).toBe(3);
+  const step = (name: string, as: string) =>
+    call('POST', `${REMOTE}/${asked.json.id}/transitions/${name}`, as);
+  expect((await step('submit', 'sumi')).status).toBe(200);
+  // Never her own to decide; HR approves.
+  const own = await step('approve', 'sumi');
+  expect(own.status).toBeGreaterThanOrEqual(400);
+  expect((await step('approve', 'hana')).status).toBe(200);
+  // No second request, nor a tour, over the same days.
+  const again = await call('POST', REMOTE, 'sumi', {
+    employee: employees['sumi'],
+    dateFrom: '2026-11-17',
+    dateTo: '2026-11-18',
+    reason: 'Again',
+  });
+  expect(again.status).toBe(422);
+  expect(JSON.stringify(again.json)).toContain('already has home office');
+  // Somebody else's request is not hers to read.
+  expect((await call('GET', `${REMOTE}/${asked.json.id}`, 'rahim')).status).toBeGreaterThanOrEqual(
+    403,
+  );
+  const statuses = async () => {
+    const computed = await call('POST', '/api/v1/attendance/days/compute', 'hana', {
+      from: '2026-11-15',
+      to: '2026-11-18',
+      employees: [employees['sumi']],
+    });
+    expect(computed.status, JSON.stringify(computed.json)).toBe(200);
+    const days = (
+      await call(
+        'GET',
+        `${D}?filter=${encodeURIComponent(JSON.stringify({ employee: employees['sumi'], date: { gte: '2026-11-15', lte: '2026-11-18' } }))}&fields=date,status&order=date%20asc`,
+        'hana',
+      )
+    ).json.items as Json[];
+    return Object.fromEntries(days.map((d) => [String(d.date).slice(5, 10), d.status]));
+  };
+  // Without a check-in the days are Home office — present, not absent —; the day after is absent.
+  expect(await statuses()).toEqual({
+    '11-15': 'remote',
+    '11-16': 'remote',
+    '11-17': 'remote',
+    '11-18': 'absent',
+  });
+  // Called off, with the reason: absent again.
+  expect((await step('cancel', 'hana')).status).toBeGreaterThanOrEqual(400); // no reason yet
+  await call('PATCH', `${REMOTE}/${asked.json.id}`, 'hana', { decisionNote: 'Needed on site' });
+  expect((await step('cancel', 'hana')).status).toBe(200);
+  expect((await statuses())['11-16']).toBe('absent');
+
+  // Today, approved to work from home: the phone checks in far from the office, where it is otherwise refused.
+  const today = new Date().toISOString().slice(0, 10);
+  const far = { latitude: 23.95, longitude: 90.6 };
+  expect((await call('POST', '/api/v1/attendance/punch', 'sumi', far)).status).toBe(422);
+  const now = await call('POST', REMOTE, 'sumi', {
+    employee: employees['sumi'],
+    dateFrom: today,
+    dateTo: today,
+    reason: 'A delivery',
+  });
+  expect(now.status, JSON.stringify(now.json)).toBe(201);
+  for (const [name, as] of [
+    ['submit', 'sumi'],
+    ['approve', 'hana'],
+  ] as const)
+    expect(
+      (await call('POST', `${REMOTE}/${now.json.id}/transitions/${name}`, as)).status,
+      name,
+    ).toBe(200);
+  const home = await call('POST', '/api/v1/attendance/punch', 'sumi', far);
+  expect(home.status, JSON.stringify(home.json)).toBe(200);
+  expect(home.json.action).toBe('in');
+});
+
 test('the demo data loads', async () => {
   const auth = host.server.auth;
   if (auth === undefined) throw new Error('base is installed');

@@ -117,6 +117,44 @@ test('an employee asks for an official tour; it is refused only with a reason, t
   await expect(page.getByRole('button', { name: /^State: Approved/ })).toBeVisible();
 });
 
+test('an employee asks to work from home; someone else approves it (RFC 0039)', async ({
+  page,
+  browser,
+}) => {
+  // Five weeks from now, Sunday to Monday: clear of the leave and the tour above.
+  const [sunday] = nextWeek();
+  const from = new Date(Date.parse(sunday) + 28 * 86_400_000).toISOString().slice(0, 10);
+  const to = new Date(Date.parse(from) + 86_400_000).toISOString().slice(0, 10);
+
+  const context = await browser.newContext();
+  const rahim = await context.newPage();
+  await signIn(rahim, 'rahim');
+  await rahim.goto('/workforce/a/workforce.action_remote/new');
+  await pick(rahim, 'Employee', 'Rahim Uddin');
+  const start = rahim.getByRole('textbox', { name: 'From', exact: true });
+  await start.fill(from);
+  await start.blur();
+  const end = rahim.getByRole('textbox', { name: 'To', exact: true });
+  await end.fill(to);
+  await end.blur();
+  await rahim.getByRole('textbox', { name: 'Why' }).fill('The plumber comes');
+  await rahim.getByRole('button', { name: 'Save' }).click();
+  await expect(rahim).toHaveURL(/workforce\.action_remote\/\d+$/);
+  await expect(rahim.getByRole('heading', { name: /^HO\/\d{4}\/\d{4}$/ })).toBeVisible();
+  await rahim.getByRole('button', { name: 'Submit' }).click();
+  await expect(rahim.getByRole('button', { name: /^State: Waiting/ })).toBeVisible();
+  // Not his to approve: the server refuses, and it still waits.
+  await rahim.getByRole('button', { name: 'Approve' }).click();
+  await expect(rahim.getByRole('button', { name: /^State: Waiting/ })).toBeVisible();
+  const request = rahim.url().replace(/^https?:\/\/[^/]+/, '');
+  await context.close();
+
+  await signIn(page, 'dina'); // HR manager
+  await page.goto(request);
+  await page.getByRole('button', { name: 'Approve' }).click();
+  await expect(page.getByRole('button', { name: /^State: Approved/ })).toBeVisible();
+});
+
 test('the Workforce overview (RFC 0022 step 2)', async ({ page }) => {
   await signIn(page, 'dina');
   await page.goto('/workforce/a/hr.action_overview');

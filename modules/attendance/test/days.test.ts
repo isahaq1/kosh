@@ -84,6 +84,19 @@ describe('a day shift', () => {
     expect(day([], { tour: true, holiday: true }).status).toBe('holiday');
     expect(day([], { tour: true, leave: true }).status).toBe('leave');
     expect(day([['09:00', '18:00']], { tour: true }).status).toBe('present');
+    // On approved home office: a working day is Home office with or without a check-in — and what the punches
+    // show is kept; a weekend, a holiday or leave stay what they are; a check-out forgotten is still to fix.
+    expect(day([], { remote: true }).status).toBe('remote');
+    const atHome = day([['09:30', '18:00']], { remote: true });
+    expect(atHome.status).toBe('remote');
+    expect(atHome.workedMinutes).toBeGreaterThan(0);
+    expect(atHome.lateMinutes).toBeGreaterThan(0);
+    expect(day([], { remote: true, weekend: true }).status).toBe('weekend');
+    expect(day([], { remote: true, holiday: true }).status).toBe('holiday');
+    expect(day([], { remote: true, leave: true }).status).toBe('leave');
+    expect(day([['09:00', null]], { remote: true }).status).toBe('incomplete');
+    // A tour comes first when both are said (they cannot overlap, by Workforce's rule).
+    expect(day([], { remote: true, tour: true }).status).toBe('tour');
     expect(day([], { holiday: true }).status).toBe('holiday');
     expect(day([], { weekend: true }).status).toBe('weekend');
     expect(day([], { shift: null }).status).toBe('off');

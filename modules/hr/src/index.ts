@@ -26,6 +26,7 @@ import {
   HrJob,
   HrLeave,
   HrLeaveType,
+  HrRemote,
   HrTour,
   hrShutro,
 } from './module.js';
@@ -39,6 +40,7 @@ export {
   HrJob,
   HrLeave,
   HrLeaveType,
+  HrRemote,
   HrTour,
   hrShutro,
   leaveDays,
@@ -233,13 +235,53 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
         ],
       },
     },
+    {
+      key: 'home_office',
+      name: 'Home office approval',
+      model: 'hr.remote',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Home office {{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'who',
+            items: [
+              { label: 'Employee', bind: 'employee.name' },
+              { label: 'From', bind: 'dateFrom' },
+              { label: 'To', bind: 'dateTo' },
+              { label: 'Working days', bind: 'days' },
+              { label: 'Status', bind: 'state' },
+            ],
+          },
+          { kind: 'text', id: 'reason', text: '{{reason}}' },
+          { kind: 'text', id: 'note', text: '{{decisionNote}}' },
+        ],
+      },
+    },
   ],
   events: [
+    { topic: 'hr.remote.submitted', model: 'hr.remote', label: 'Home office requested' },
+    { topic: 'hr.remote.approved', model: 'hr.remote', label: 'Home office approved' },
+    { topic: 'hr.remote.cancelled', model: 'hr.remote', label: 'Home office cancelled' },
     { topic: 'hr.tour.submitted', model: 'hr.tour', label: 'Tour requested' },
     { topic: 'hr.tour.approved', model: 'hr.tour', label: 'Tour approved' },
     { topic: 'hr.tour.cancelled', model: 'hr.tour', label: 'Tour cancelled' },
   ],
   importTemplates: [
+    {
+      key: 'hr_remote',
+      model: 'hr.remote',
+      label: 'Home office',
+      columns: [
+        { header: 'Employee', field: 'employee' },
+        { header: 'From', field: 'dateFrom' },
+        { header: 'To', field: 'dateTo' },
+        { header: 'Why', field: 'reason' },
+      ],
+    },
     {
       key: 'hr_tour',
       model: 'hr.tour',
@@ -437,6 +479,10 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
       label: 'Tours',
       views: ['list', 'calendar', 'form'],
     }),
+    'workforce.action_remote': action(HrRemote, {
+      label: 'Home office',
+      views: ['list', 'calendar', 'form'],
+    }),
     'workforce.action_contracts': action(HrContract, {
       label: 'Contracts',
       views: ['list', 'form'],
@@ -480,6 +526,13 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
       parent: 'workforce.root',
       label: 'Tours',
       action: 'workforce.action_tours',
+      sequence: 2,
+    },
+    {
+      id: 'workforce.remote',
+      parent: 'workforce.root',
+      label: 'Home office',
+      action: 'workforce.action_remote',
       sequence: 2,
     },
     {
@@ -649,7 +702,7 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
       },
       sheet: [
         k.group('main', ['name', 'employee', 'employmentType', 'kind', 'state']),
-        k.group('terms', ['dateStart', 'dateEnd', 'wage']),
+        k.group('terms', ['dateStart', 'dateEnd', 'payBasis', 'wage']),
       ],
       chatter: true,
     })),
@@ -742,6 +795,56 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
       ],
       chatter: true,
     })),
+    'hr.remote.list': list(HrRemote, {
+      columns: [
+        'name',
+        'employee',
+        'dateFrom',
+        'dateTo',
+        'days',
+        'reason',
+        { field: 'state', widget: 'badge' },
+      ],
+      defaultOrder: ['dateFrom desc'],
+      decorations: {
+        success: { state: 'approved' },
+        warning: { state: 'submitted' },
+        danger: { state: 'refused' },
+        neutral: { state: 'cancelled' },
+      },
+    }),
+    'hr.remote.calendar': calendar(HrRemote, {
+      dateStart: 'dateFrom',
+      dateStop: 'dateTo',
+      title: 'employee',
+      color: 'state',
+      mode: 'month',
+    }),
+    'hr.remote.form': form(HrRemote, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('submit', { primary: true, label: 'Submit' }),
+          k.button('approve', { primary: true, label: 'Approve' }),
+          k.button('refuse', { label: 'Refuse' }),
+          k.button('cancel', {
+            label: 'Cancel the home office',
+            confirm: 'Cancel this approved home office?',
+          }),
+          k.button('redraft', { label: 'Back to draft' }),
+        ],
+      },
+      sheet: [
+        k.group('main', ['name', 'employee', 'state']),
+        k.group('when', ['dateFrom', 'dateTo', 'days']),
+        k.group('why', ['reason'], { columns: 1 }),
+        k.group('decision', ['decisionNote'], {
+          columns: 1,
+          description: 'Needed to refuse or cancel: write it, then press the button.',
+        }),
+      ],
+      chatter: true,
+    })),
     'hr.leave.calendar': calendar(HrLeave, {
       dateStart: 'dateFrom',
       dateStop: 'dateTo',
@@ -799,6 +902,16 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
         team: { label: 'My team', domain: { 'employee.manager.user': { $env: 'uid' } } },
       },
       groupBy: ['employee', 'state', 'travelBy', 'dateFrom:month'],
+    }),
+    'hr.remote': search(HrRemote, {
+      fields: ['name', 'employee.name', 'reason'],
+      filters: {
+        waiting: { label: 'Waiting', domain: { state: 'submitted' }, group: 'state' },
+        approved: { label: 'Approved', domain: { state: 'approved' }, group: 'state' },
+        mine: { label: 'Mine', domain: { 'employee.user': { $env: 'uid' } } },
+        team: { label: 'My team', domain: { 'employee.manager.user': { $env: 'uid' } } },
+      },
+      groupBy: ['employee', 'state', 'dateFrom:month'],
     }),
     'hr.contract': search(HrContract, {
       fields: ['name', 'employee.name'],

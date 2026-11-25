@@ -977,6 +977,24 @@ Accounting (`payroll_account`) an approved run is booked as one entry and paid f
   condition: 'OVERTIME_HOURS > 0' }
 ```
 
+**Contractual, temporary and daily people** (RFC 0039). A contract names its **employment type** — Permanent,
+Contractual, Casual (daily), Intern, Temporary, Part-time, Seasonal, Outsourced, or one the company adds — and how
+its wage is counted: **per month, per day worked or per hour worked**. Rules read both, and what the shifts show:
+
+```ts
+// One structure for people paid by the day; a night allowance; something for temporary people only
+{ code: 'BASIC', category: 'basic', formula: 'WAGE * PRESENT_DAYS', condition: 'PAID_BY_DAY' }
+{ code: 'HOURLY', category: 'basic', formula: 'WAGE * WORKED_HOURS', condition: 'PAID_BY_HOUR' }
+{ code: 'NIGHT', category: 'allowance', formula: 'NIGHT_SHIFTS * 100' }
+{ code: 'LATE', category: 'deduction', formula: 'BASIC / 208 / 60 * LATE_MINUTES', condition: 'LATE_MINUTES > 30' }
+{ code: 'OFFDAY', category: 'allowance', formula: 'WAGE * OFF_DAYS_WORKED', condition: 'PAID_BY_DAY' }
+{ code: 'NO_PF', category: 'info', formula: '0', condition: 'TYPE_TEMP + TYPE_CASU' }
+```
+
+`TYPE_<CODE>` is 1 for the contract's type and 0 for any other. From approved attendance days: `WORKED_HOURS`,
+`EXPECTED_HOURS`, `LATE_MINUTES`, `EARLY_MINUTES`, `NIGHT_SHIFTS`, `OFF_DAYS_WORKED` (worked on a weekend or a
+holiday), `REMOTE_DAYS`, besides the days present, absent, on leave and on tour.
+
 **Large runs** (RFC 0039). A run of up to 200 people is computed when *Compute payslips* is pressed. A larger one
 is computed **in the background, 500 people at a time**: the button answers at once, the run shows *People
 computed* of *People to compute*, each batch is kept as it is done (a restart goes on where it stopped), and the
@@ -1323,6 +1341,28 @@ heard; set *Only from addresses* to the site's public address where it has one; 
 supports it, or a VPN from the site. A machine can only add punches of people who exist; it reads nothing.
 
 Tested with a simulated machine; **try your own model on a test server first** — firmware versions differ.
+
+## Home office
+
+A person who works from home for a day or some days asks in *Workforce › Home office*: the dates and why. The
+request is numbered (`HO/2026/0001`) and shows its working days by the person's working calendar (RFC 0039).
+
+- **Who decides**: the person's leave approver; when they have none, their manager; or an HR manager. Never the
+  person themselves. *Refuse* and *Cancel the home office* need the *note of the decision*.
+- **No overlap** with another home-office request, an approved tour or approved leave.
+- **Attendance**: a working day inside an approved request is **Home office** — present — whether the person
+  checks in or not; a check-in keeps its hours, lateness and overtime, and on such a day the phone is not held to
+  the site's geofence. Weekends, holidays and leave stay what they are.
+- **Payroll**: `REMOTE_DAYS` counts them, and they are part of `PRESENT_DAYS`:
+
+  ```ts
+  { code: 'HOME_ALLOWANCE', category: 'allowance', formula: 'REMOTE_DAYS * 150', condition: 'REMOTE_DAYS > 0' }
+  ```
+
+```http
+POST /api/v1/models/hr.remote                       { "employee", "dateFrom", "dateTo", "reason" }
+POST /api/v1/models/hr.remote/<id>/transitions/submit | approve | refuse | cancel | redraft
+```
 
 ## Official tours
 

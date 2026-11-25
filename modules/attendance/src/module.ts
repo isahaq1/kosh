@@ -354,6 +354,7 @@ const DAY_STATUS = {
   absent: 'Absent',
   leave: 'On leave',
   tour: 'On tour',
+  remote: 'Home office',
   holiday: 'Holiday',
   weekend: 'Weekend',
   incomplete: 'Check-out missing',

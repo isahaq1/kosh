@@ -5,7 +5,7 @@
 import { hrAccrualShutro } from '@kosh/hr_accrual';
 import { l10nBdShutro } from '@kosh/l10n_bd';
 import { payrollShutro } from '@kosh/payroll';
-import { orm } from '@kosh/server/orm';
+import { type Module, type ModuleBase, orm } from '@kosh/server/orm';
 import { defineModule, type Env } from './.kosh/bindings.js';
 import { LEAVE_ENCASH_RULE, LEAVE_PLANS, PARAMETERS, SLABS, STRUCTURES } from './data.js';
 
@@ -134,10 +134,14 @@ export async function installLeavePlans(env: Env): Promise<number> {
   return added;
 }
 
-export const l10nBdPayrollShutro = defineModule({
+// Named so the module's type stays short enough to emit (TS7056) with every model its dependencies carry.
+const DEPENDS: readonly ModuleBase[] = [l10nBdShutro, payrollShutro, hrAccrualShutro];
+const MODELS = [] as const;
+
+export const l10nBdPayrollShutro: Module<typeof MODELS, readonly ModuleBase[]> = defineModule({
   name: 'l10n_bd_payroll',
   version: '0.1.0',
-  depends: [l10nBdShutro, payrollShutro, hrAccrualShutro],
+  depends: DEPENDS,
   groups: [
     orm.defineGroup({
       code: 'l10n_bd_payroll.user',
@@ -145,5 +149,5 @@ export const l10nBdPayrollShutro = defineModule({
       implies: ['payroll.user'],
     }),
   ],
-  models: [],
+  models: MODELS,
 });
