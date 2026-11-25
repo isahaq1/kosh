@@ -1,50 +1,49 @@
 /**
- * How much of each model the audit trail records (Shutro tracks the fields a model names, and state fields):
+ * How much of each model the activity log records, from the registry the server builds (Shutro tracks every
+ * stored field that is set; `packages/server/src/audit-scope.ts` says what is left out):
  * `node --experimental-transform-types --no-warnings --import ./scripts/source-loader.mjs --conditions=@kosh/source scripts/tracking-report.ts`
- * Prints the models with no tracked field at all — nothing of them is logged, not even a creation or a deletion —
- * and, for the others, how many of their stored fields are tracked.
+ * Prints the models that record nothing — each should be a queue, a log, a sign-in internal or private —, and how
+ * many of the stored fields of the others are tracked.
  */
-import { demoCatalogue } from '../apps/demo/src/catalogue.ts';
 
-const catalogue = demoCatalogue();
+import { demoCatalogue } from '../apps/demo/src/catalogue.ts';
+import { buildKoshRegistry } from '../packages/server/src/index.ts';
 
 interface FieldLike {
   readonly kind: string;
-  readonly tracking?: boolean;
   readonly store?: boolean;
-  readonly compute?: unknown;
+  readonly computed?: boolean;
 }
 interface ModelLike {
   readonly name: string;
-  readonly tracking?: readonly string[];
-  readonly fields: Readonly<Record<string, FieldLike>>;
+  readonly tracking: readonly string[];
+  readonly fields: Readonly<Record<string, FieldLike & { readonly tracking?: boolean }>>;
 }
 const SYSTEM = new Set(['id', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy']);
-const seen = new Map<string, { module: string; tracked: number; own: number }>();
-for (const module of catalogue) {
-  const shutro = (module as { shutro?: { name: string; models?: readonly ModelLike[] } }).shutro;
-  for (const model of shutro?.models ?? []) {
-    let tracked = 0;
-    let own = 0;
-    for (const [key, field] of Object.entries(model.fields)) {
-      if (SYSTEM.has(key) || field.kind === 'one2many' || field.kind === 'many2many') continue;
-      if (field.compute !== undefined && field.store !== true) continue;
-      own += 1;
-      if (field.tracking === true || (model.tracking ?? []).includes(key) || field.kind === 'state')
-        tracked += 1;
-    }
-    seen.set(model.name, { module: shutro?.name ?? '?', tracked, own });
+const { registry } = buildKoshRegistry(demoCatalogue(), { security: { enforce: false } });
+const models = [
+  ...(registry as unknown as { models: ReadonlyMap<string, { model: ModelLike; module: string }> })
+    .models,
+];
+let fields = 0;
+let trackedFields = 0;
+const none = new Map<string, string[]>();
+for (const [name, { model, module }] of models) {
+  let tracked = 0;
+  for (const [key, field] of Object.entries(model.fields)) {
+    if (SYSTEM.has(key) || field.kind === 'one2many' || field.kind === 'many2many') continue;
+    if (field.store === false || field.computed === true) continue;
+    fields += 1;
+    if (field.tracking === true || model.tracking.includes(key)) tracked += 1;
   }
+  trackedFields += tracked;
+  if (tracked === 0) none.set(module, [...(none.get(module) ?? []), name]);
 }
-const none = [...seen].filter(([, m]) => m.tracked === 0);
-const some = [...seen].filter(([, m]) => m.tracked > 0);
-const fields = [...seen.values()].reduce((n, m) => n + m.own, 0);
-const trackedFields = [...seen.values()].reduce((n, m) => n + m.tracked, 0);
+const silent = [...none.values()].reduce((n, names) => n + names.length, 0);
 process.stdout.write(
-  `models ${seen.size}: ${none.length} with nothing tracked, ${some.length} with something\n` +
-    `stored fields ${fields}: ${trackedFields} tracked (${Math.round((trackedFields / fields) * 100)} %)\n`,
+  `models ${models.length}: ${models.length - silent} log their activity, ${silent} left out\n` +
+    `fields a person or a rule sets ${fields}: ${trackedFields} tracked (${Math.round((trackedFields / fields) * 100)} %)\n` +
+    'left out:\n',
 );
-const byModule = new Map<string, string[]>();
-for (const [name, m] of none) byModule.set(m.module, [...(byModule.get(m.module) ?? []), name]);
-for (const [module, names] of [...byModule].sort())
+for (const [module, names] of [...none].sort())
   process.stdout.write(`  ${module}: ${names.join(', ')}\n`);

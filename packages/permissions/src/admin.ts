@@ -516,6 +516,128 @@ export function registerAdminApi(context: ModuleContext): void {
   const hidden = new Set(loaded.modules.flatMap((m) => m.privateModels ?? []));
   const privateModel = (name: string) => hidden.has(name);
 
+  // ------------------------------------------------------------------------------------- record activity
+
+  // `GET /api/v1/admin/activity`: what was created, changed and deleted, on every business record — also the
+  // records that are gone, which have no page left to show their history on. Filters: `model`, `record`, `actor`
+  // (a user id), `action` (`create` / `write` / `unlink`), `from` / `to` (ISO dates, `to` inclusive of its day),
+  // `before` (an id: the next page), `limit` (1–500, default 100). Read from Shutro's audit trail, which cannot
+  // be edited; for Administrators and those who may view the audit log, and the read is itself audited.
+  app.get('/api/v1/admin/activity', async (request) => {
+    const q = (request.query ?? {}) as Record<string, unknown>;
+    const text = (key: string) =>
+      typeof q[key] === 'string' && q[key] !== '' ? (q[key] as string) : null;
+    const whole = (key: string) => {
+      const v = text(key);
+      if (v === null) return null;
+      const n = Number(v);
+      if (!Number.isSafeInteger(n) || n <= 0) throw bad(`${key} is a positive integer.`);
+      return n;
+    };
+    const day = (key: string) => {
+      const v = text(key);
+      if (v === null) return null;
+      const d = new Date(v);
+      if (Number.isNaN(d.getTime())) throw bad(`${key} is an ISO date.`);
+      return d;
+    };
+    const limit = whole('limit') ?? 100;
+    if (limit > 500) throw bad('limit must be 1–500.');
+    const action = text('action');
+    if (action !== null && !['create', 'write', 'unlink'].includes(action))
+      throw bad('action is create, write or unlink.');
+    const model = text('model');
+    const record = whole('record');
+    const actor = whole('actor');
+    const before = whole('before');
+    const from = day('from');
+    const until = day('to');
+    const to = until === null ? null : new Date(until.getTime() + 86_400_000);
+    return request.env(
+      async (env) => {
+        requireAdministrator(env, 'permissions.view_audit');
+        return env.asSuperuser({ reason: 'read record activity' }, async (su) => {
+          const rows = await (
+            su as unknown as {
+              sql<T>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]>;
+            }
+          ).sql<{
+            id: string | number;
+            at: Date;
+            uid: string | number;
+            action: string;
+            model: string;
+            record_id: string | number;
+            field: string | null;
+            old: unknown;
+            new: unknown;
+          }>`SELECT id, at, uid, action, model, record_id, field, old, new
+                FROM shutro_audit
+               WHERE action IN ('create', 'write', 'unlink')
+                 AND (${model}::text IS NULL OR model = ${model}::text)
+                 AND (${record}::bigint IS NULL OR record_id = ${record}::bigint)
+                 AND (${actor}::bigint IS NULL OR uid = ${actor}::bigint)
+                 AND (${action}::text IS NULL OR action = ${action}::text)
+                 AND (${from}::timestamptz IS NULL OR at >= ${from}::timestamptz)
+                 AND (${to}::timestamptz IS NULL OR at < ${to}::timestamptz)
+                 AND (${before}::bigint IS NULL OR id < ${before}::bigint)
+               ORDER BY id DESC LIMIT ${limit}`;
+          const uids = [...new Set(rows.map((r) => Number(r.uid)).filter((u) => u > 0))];
+          const names = new Map(
+            uids.length === 0
+              ? []
+              : (
+                  await (
+                    await ref(su.withFlags({ activeTest: false }), 'res.users').search({
+                      where: { id: { in: uids } },
+                    })
+                  ).load(['name'])
+                )
+                  .read(['id', 'name'])
+                  .map((u) => [Number(u['id']), String(u['name'])]),
+          );
+          const described = (name: string) =>
+            reg.has(name)
+              ? (reg.get(name).model as unknown as {
+                  label?: string;
+                  fields: Record<string, { label?: string } | undefined>;
+                })
+              : undefined;
+          return {
+            activity: rows.map((r) => {
+              const of = described(r.model);
+              const snapshot = (r.action === 'unlink' ? r.old : r.new) as Record<
+                string,
+                unknown
+              > | null;
+              return {
+                id: Number(r.id),
+                at: r.at,
+                actor: Number(r.uid),
+                // The system's own work (jobs, installation) has no person.
+                actorName: names.get(Number(r.uid)) ?? null,
+                action: r.action,
+                model: r.model,
+                modelLabel: of?.label ?? r.model,
+                record: Number(r.record_id),
+                // What the record was called, when its name is in the snapshot of a creation or a deletion.
+                recordName:
+                  r.field === null && typeof snapshot?.['name'] === 'string'
+                    ? snapshot['name']
+                    : null,
+                field: r.field,
+                fieldLabel: r.field === null ? null : (of?.fields[r.field]?.label ?? r.field),
+                old: r.old,
+                new: r.new,
+              };
+            }),
+          };
+        });
+      },
+      { write: true },
+    );
+  });
+
   // ------------------------------------------------------------------------------------------- audit log
 
   // Filters (RFC 0019 §3.5): `kind` (`auth.` for a family), `actor` (a user id), `model` and `record` (the target),

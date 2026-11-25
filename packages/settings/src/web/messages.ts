@@ -511,6 +511,20 @@ export const messages: Readonly<Record<string, object>> = {
       system: 'System',
       none: 'No events match.',
       more: 'Show more',
+      views: 'What to show',
+      events: 'Sign-ins and settings',
+      records: 'Records',
+    },
+    activity: {
+      title: 'Record activity',
+      intro:
+        'What was created, changed and deleted on every record — the field, the old value and the new one. Records that are gone keep their history here.',
+      action: 'What was done',
+      any: 'Anything',
+      actions: { create: 'Created', write: 'Changed', unlink: 'Deleted' },
+      model: 'Kind of record',
+      record: 'Record',
+      none: 'Nothing matches.',
     },
     companies: {
       title: 'Companies',
@@ -1140,6 +1154,20 @@ export const messages: Readonly<Record<string, object>> = {
       system: 'সিস্টেম',
       none: 'মিলে এমন কোনো ঘটনা নেই।',
       more: 'আরও দেখুন',
+      views: 'কী দেখাবে',
+      events: 'সাইন-ইন ও সেটিংস',
+      records: 'রেকর্ড',
+    },
+    activity: {
+      title: 'রেকর্ডের কার্যকলাপ',
+      intro:
+        'প্রতিটি রেকর্ডে কী তৈরি, পরিবর্তন ও মুছে ফেলা হয়েছে — ফিল্ড, আগের মান ও নতুন মান। মুছে ফেলা রেকর্ডের ইতিহাসও এখানে থাকে।',
+      action: 'কী করা হয়েছে',
+      any: 'যেকোনো',
+      actions: { create: 'তৈরি', write: 'পরিবর্তিত', unlink: 'মুছে ফেলা' },
+      model: 'রেকর্ডের ধরন',
+      record: 'রেকর্ড',
+      none: 'কিছুই মেলেনি।',
     },
     companies: {
       title: 'প্রতিষ্ঠানসমূহ',

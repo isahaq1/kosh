@@ -18,6 +18,7 @@ import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query';
 import { Download } from 'lucide-react';
 import { type ReactElement, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { RecordActivity } from './RecordActivity.js';
 
 interface AuditEvent {
   readonly id: number;
@@ -59,6 +60,8 @@ export function AuditPage({ api }: PageProps): ReactElement {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [words, setWords] = useState('');
+  // Sign-ins and settings (the events), or what happened to records (the audit trail).
+  const [view, setView] = useState<'events' | 'records'>('events');
   const people = useQuery({
     queryKey: ['settings', 'people', 'all'],
     queryFn: () =>
@@ -98,15 +101,32 @@ export function AuditPage({ api }: PageProps): ReactElement {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">{t('audit.title')}</h1>
-          <p className="text-sm text-muted-foreground">{t('audit.intro')}</p>
+          <p className="text-sm text-muted-foreground">
+            {view === 'events' ? t('audit.intro') : t('activity.intro')}
+          </p>
         </div>
-        <Button busy={exported.isPending} onClick={() => exported.mutate()}>
-          <Download className="size-4" aria-hidden />
-          {t('audit.export')}
-        </Button>
+        {view === 'events' ? (
+          <Button busy={exported.isPending} onClick={() => exported.mutate()}>
+            <Download className="size-4" aria-hidden />
+            {t('audit.export')}
+          </Button>
+        ) : null}
       </header>
+      <fieldset className="flex flex-wrap gap-2">
+        <legend className="sr-only">{t('audit.views')}</legend>
+        {(['events', 'records'] as const).map((v) => (
+          <Button
+            key={v}
+            variant={view === v ? 'primary' : 'secondary'}
+            aria-pressed={view === v}
+            onClick={() => setView(v)}
+          >
+            {t(`audit.${v}`)}
+          </Button>
+        ))}
+      </fieldset>
       <div className="grid gap-3 rounded-lg border bg-surface p-4 sm:grid-cols-2 lg:grid-cols-5">
-        <div className="grid gap-1.5">
+        <div className={view === 'events' ? 'grid gap-1.5' : 'hidden'}>
           <Label htmlFor={`${id}-kind`}>{t('audit.kind')}</Label>
           <Select
             id={`${id}-kind`}
@@ -145,7 +165,7 @@ export function AuditPage({ api }: PageProps): ReactElement {
           <Label htmlFor={`${id}-to`}>{t('audit.to')}</Label>
           <Input id={`${id}-to`} type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
-        <div className="grid gap-1.5">
+        <div className={view === 'events' ? 'grid gap-1.5' : 'hidden'}>
           <Label htmlFor={`${id}-q`}>{t('audit.words')}</Label>
           <Input
             id={`${id}-q`}
@@ -155,9 +175,14 @@ export function AuditPage({ api }: PageProps): ReactElement {
           />
         </div>
       </div>
-      {events.error === null ? null : <Alert tone="danger">{message(events.error)}</Alert>}
+      {view === 'records' ? <RecordActivity api={api} actor={actor} from={from} to={to} /> : null}
+      {view === 'records' || events.error === null ? null : (
+        <Alert tone="danger">{message(events.error)}</Alert>
+      )}
       {exported.error === null ? null : <Alert tone="danger">{message(exported.error)}</Alert>}
-      <div className="overflow-x-auto rounded-lg border bg-surface">
+      <div
+        className={view === 'events' ? 'overflow-x-auto rounded-lg border bg-surface' : 'hidden'}
+      >
         <table className="w-full text-sm">
           <caption className="sr-only">{t('audit.title')}</caption>
           <thead className="border-b bg-muted/40 text-start text-xs text-muted-foreground">
@@ -212,7 +237,7 @@ export function AuditPage({ api }: PageProps): ReactElement {
           </tbody>
         </table>
       </div>
-      {events.hasNextPage ? (
+      {view === 'events' && events.hasNextPage ? (
         <div className="flex justify-center">
           <Button busy={events.isFetchingNextPage} onClick={() => void events.fetchNextPage()}>
             {t('audit.more')}

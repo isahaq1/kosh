@@ -4,6 +4,7 @@
  * and every Shutro module in the registry has a Kosh manifest (so none escapes declaring access levels).
  */
 import { type KoshModule, type LoadedModules, loadModules } from '@kosh/modules-sdk';
+import { leftOutOfTrail } from './audit-scope.js';
 import { ServerConfigError } from './errors.js';
 import { orm, type Registry, type RegistryOptions } from './orm.js';
 
@@ -67,7 +68,12 @@ export function buildKoshRegistry(
       ...changeEventsModule(loaded.modules),
     ] as never,
     ...(options.security === undefined ? {} : { security: options.security }),
-  }) as unknown as Registry;
+    // Every business record logs its creation, its changes and its deletion (see audit-scope.ts).
+    tracking: {
+      default: 'all',
+      except: leftOutOfTrail,
+    },
+  } as never) as unknown as Registry;
   for (const name of registry.loadOrder)
     if (!loaded.byName.has(name) && name !== CHANGE_EVENTS_MODULE)
       throw new ServerConfigError(

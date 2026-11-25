@@ -434,4 +434,79 @@ describe('reports and audit', () => {
     expect((await get('kind=data.export&limit=1'))[0]?.['summary']).toMatch(/audit event/);
     expect((await t.call({ url: '/api/v1/admin/audit', as: 'maria' })).status).toBe(403);
   });
+
+  test('record activity: created, changed with old and new, deleted — also for a record that is gone', async () => {
+    type Activity = {
+      id: number;
+      action: string;
+      model: string;
+      record: number;
+      recordName: string | null;
+      field: string | null;
+      old: unknown;
+      new: unknown;
+      actor: number;
+      actorName: string | null;
+    };
+    const get = async (query: string) => {
+      const res = await t.call({ url: `/api/v1/admin/activity?${query}`, as: 'admin' });
+      expect(res.status, res.body).toBe(200);
+      return (res.json() as { activity: Activity[] }).activity;
+    };
+    const made = await t.call({
+      method: 'POST',
+      url: PO,
+      as: 'admin',
+      body: { name: 'PO-LOG', amountTotal: '10' },
+    });
+    expect(made.status, made.body).toBe(201);
+    const id = made.json().id as number;
+    // A field the model names nowhere as tracked: logged all the same.
+    expect(
+      (
+        await t.call({
+          method: 'PATCH',
+          url: `${PO}/${id}`,
+          as: 'admin',
+          body: { name: 'PO-LOG-2' },
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (await t.call({ method: 'DELETE', url: `${PO}/${id}`, as: 'admin' })).status,
+    ).toBeLessThan(300);
+    // The record is gone; what happened to it is not.
+    const rows = await get(`model=purchase.order&record=${id}`);
+    expect(rows.map((r) => r.action)).toEqual(['unlink', 'write', 'create']);
+    expect(rows[1]).toMatchObject({ field: 'name', old: 'PO-LOG', new: 'PO-LOG-2' });
+    expect(rows[0]?.recordName).toBe('PO-LOG-2');
+    expect(rows[2]?.recordName).toBe('PO-LOG');
+    expect(rows.every((r) => r.actor === t.users['admin'] && r.actorName === 'Administrator')).toBe(
+      true,
+    );
+    // Filters, and pages by `before`.
+    expect(
+      (await get(`model=purchase.order&record=${id}&action=unlink`)).map((r) => r.action),
+    ).toEqual(['unlink']);
+    expect(
+      (await get(`model=purchase.order&record=${id}&before=${rows[0]?.id}&limit=1`)).map(
+        (r) => r.action,
+      ),
+    ).toEqual(['write']);
+    expect(await get(`model=purchase.order&record=${id}&to=2000-01-01`)).toEqual([]);
+    expect((await get(`actor=${t.users['admin']}&limit=3`)).length).toBe(3);
+    // Only what happened to records: no sign-in internals, no elevation rows.
+    expect(
+      (await get('limit=500')).every((r) => ['create', 'write', 'unlink'].includes(r.action)),
+    ).toBe(true);
+    expect((await get('limit=500')).some((r) => r.model.startsWith('auth.'))).toBe(false);
+    for (const bad of ['action=read', 'record=x', 'from=yesterday', 'limit=5000'])
+      expect(
+        (await t.call({ url: `/api/v1/admin/activity?${bad}`, as: 'admin' })).status,
+        bad,
+      ).toBe(400);
+    // Not for those who may not see the audit log.
+    for (const login of ['maria', 'bob'])
+      expect((await t.call({ url: '/api/v1/admin/activity', as: login })).status).toBe(403);
+  });
 });

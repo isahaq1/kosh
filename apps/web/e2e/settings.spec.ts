@@ -251,6 +251,18 @@ test('Security: two-factor for everyone — set up before anything else; session
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export CSV' }).click();
   expect((await download).suggestedFilename()).toBe('audit-log.csv');
+
+  // Records: what was created, changed and deleted on every record, with the old value and the new one.
+  await page.getByRole('button', { name: 'Records', exact: true }).click();
+  await expect(
+    page.getByText(/What was created, changed and deleted on every record/),
+  ).toBeVisible();
+  const activity = page.getByRole('table', { name: 'Record activity' });
+  await expect(activity.getByText('Created').first()).toBeVisible();
+  await page.getByRole('combobox', { name: 'What was done' }).click();
+  await page.getByRole('option', { name: 'Changed' }).click();
+  await expect(activity.getByText('→').first()).toBeVisible();
+  await expect(activity.getByText('Created')).toHaveCount(0);
 });
 
 test('a profile photo and a company logo: chosen, made small, shown in the corner and the sidebar', async ({

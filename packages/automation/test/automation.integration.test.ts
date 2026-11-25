@@ -319,7 +319,8 @@ test('updated: watched tracked fields, from / to values, a condition; an untrack
     condition: { amount: { gte: '5000' } },
     actions: [{ kind: 'set', values: { priority: 'high' } }],
   });
-  // `notes` is not tracked: the rule reads Shutro's change events (RFC 0011 step 4), "becomes" checked on the record.
+  // `notes` is named by nothing on the model: it is logged all the same (every field that is set is, since
+  // 2026-11-25), so the rule reads it like any other change, "becomes" checked on the record.
   const untracked = await rule({
     name: 'Notes',
     trigger: 'updated',
@@ -349,6 +350,8 @@ test('updated: watched tracked fields, from / to values, a condition; an untrack
   expect((await runsOf(r.id)).map((x: Json) => [x.state, x.reason])).toEqual([
     ['skipped', 'trigger'],
     ['skipped', 'condition'],
+    // The "Notes" rule's write of the close date: logged like every change now, and not a field this rule watches.
+    ['skipped', 'fields'],
   ]);
   expect((await read(id, 'priority')).priority).toBe('low'); // condition false
   await ok('PATCH', `/api/v1/models/crm.deal/${id}`, 'rahim', { amount: '9000' });
@@ -358,6 +361,7 @@ test('updated: watched tracked fields, from / to values, a condition; an untrack
   // Once for the notes; its own write is the loop guard's; the amount-only change, and the "Big deals" rule's
   // write of the priority, do not touch a watched field.
   expect((await runsOf(untracked.id)).map((x: Json) => [x.state, x.reason])).toEqual([
+    ['skipped', 'trigger'], // the deal's creation, read from the log like the other rule's
     ['done', null],
     ['skipped', 'loop'],
     ['skipped', 'fields'],
@@ -488,7 +492,17 @@ test('a dry run renders the actions without running them; permissions: users rea
   const polled = await ok('POST', '/api/v1/automation/poll', 'admin');
   expect(polled).toMatchObject({ changes: 0, runs: 0 }); // earlier events may still be counted, none fires a rule
   const info = await ok('GET', '/api/v1/automation/models/crm.deal', 'admin');
-  expect(info.tracked.sort()).toEqual(['amount', 'partner', 'state']);
+  // Every field that is set, not only the ones the model names.
+  expect(info.tracked.sort()).toEqual([
+    'amount',
+    'closeDate',
+    'name',
+    'notes',
+    'partner',
+    'priority',
+    'state',
+    'user',
+  ]);
   expect(info.transitions).toContain('win');
 });
 
@@ -584,8 +598,11 @@ test('webhook: a signed JSON POST through a job, to an allowed host only; a fail
     });
     const id = await deal('rahim', { name: 'Deal W', amount: '42' });
     await poll();
-    expect((await runsOf(blocked.id))[0]).toMatchObject({ state: 'failed' });
-    expect((await runsOf(blocked.id))[0].error).toContain('allow-list');
+    // (Changes the earlier tests left behind reach the rule first, and are skipped: they are no creations.)
+    const refused = (await runsOf(blocked.id)).filter((x: Json) => x.targetId === id);
+    expect(refused).toHaveLength(1);
+    expect(refused[0]).toMatchObject({ state: 'failed' });
+    expect(refused[0].error).toContain('allow-list');
     const worker = webhookWorker(engine);
     status = 500; // the first delivery fails
     await worker.drain();

@@ -45,9 +45,24 @@ Upload document); administrators add or archive types.
   today's are marked. Their creator or assignee completes one (with feedback, logged in the timeline as
   "Call done: …") or cancels it. `GET /api/v1/activities/mine` lists the caller's open activities on records they
   can still read.
-- **Change log**: the record's creation and every change of a tracked field (state fields by default, plus the
-  model's `tracking` list), grouped per transaction, with selection labels and display names. It is the audit trail
-  read as the user (`records.trail()`), so it cannot be edited, and fields the user may not read are left out.
+- **Change log**: the record's creation, **every change of every field that is set** — the field, the old value
+  and the new one, who and when — and its deletion, grouped per transaction, with selection labels and display
+  names. It is the audit trail read as the user (`records.trail()`), so it cannot be edited, and fields the user may
+  not read are left out. Every business record logs this way — masters, documents and their lines — without the
+  model saying anything (since 2026-11-25; before, only fields a model named were logged, and 230 of 334 models
+  logged nothing). Left out on purpose, in `packages/server/src/audit-scope.ts`: sign-in internals, queues,
+  deliveries and logs, the chatter's own messages, and secret, binary, JSON and rich-text values. Computed values
+  follow from what was set and are logged only where a model asks (`tracking: true`, as an order's total).
+  `pnpm tracking:report` lists what logs and what does not.
+- **A record that is gone** has no page to show its history on: *Settings › Audit log › Records* lists what was
+  created, changed and deleted on every record, newest first, filtered by what was done, the kind of record, the
+  person and the period — for Administrators and holders of "View the audit log".
+
+  ```http
+  GET /api/v1/admin/activity?model=sale.order&record=42&action=unlink&actor=7&from=2026-11-01&to=2026-11-30&before=<id>&limit=100
+  → { "activity": [{ "id", "at", "actor", "actorName", "action": "create" | "write" | "unlink",
+                     "model", "modelLabel", "record", "recordName", "field", "fieldLabel", "old", "new" }] }
+  ```
 - The timeline merges messages and changes, newest first, grouped by day, and pages through long histories.
 
 ## Routes

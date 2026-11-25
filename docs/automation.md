@@ -18,10 +18,10 @@ module), and every evaluation is a row of the run log.
 | `date` | a date field of the record (plus `dateOffsetDays`, negative for before) is reached | `dateField`, `dateOffsetDays`; once per record and date value, a moved date fires again; records whose date passed more than 7 days before the rule existed are left alone |
 | `schedule` | a cron slot (UTC: `0 2 * * *`, `*/15 * * * *`, `@daily`) is due | `cron`; runs on the records the condition matches (500 per slot), once per slot |
 
-The audit trail logs field changes of **tracked** fields only (`tracking` on the model or the field): an `updated`
-rule watching another field is skipped with the reason `untracked` on every change (`GET
-/api/v1/automation/models/:model` lists the tracked fields and the transitions). Shutro request #26 asks for
-change events on every field.
+The audit trail logs every field that is set on every business record (since 2026-11-25; docs/messaging.md says
+what is left out: computed values, secrets, bulky values, queues and logs). An `updated` rule watching a field that
+is not logged is skipped with the reason `untracked` on every change (`GET /api/v1/automation/models/:model` lists
+the tracked fields and the transitions); rules on any field also work through Shutro's change events (step 4).
 
 Every trigger takes a **condition**: a Shutro domain the record must match after the change (the search layer's
 syntax, the one approval policies use), e.g. `{ amountTotal: { gte: '50000' }, partner: { isCompany: true } }`.
