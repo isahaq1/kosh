@@ -977,6 +977,14 @@ Accounting (`payroll_account`) an approved run is booked as one entry and paid f
   condition: 'OVERTIME_HOURS > 0' }
 ```
 
+**Large runs** (RFC 0039). A run of up to 200 people is computed when *Compute payslips* is pressed. A larger one
+is computed **in the background, 500 people at a time**: the button answers at once, the run shows *People
+computed* of *People to compute*, each batch is kept as it is done (a restart goes on where it stopped), and the
+run is approved once everybody is computed. A formula that fails stops it and says which person and which rule;
+fix the rule and press *Compute* again. Measured (`pnpm bench payroll`, a month of attendance a person): 30 000
+people in about 20 seconds, 0.7 ms a person whatever the size — before this, 7 500 people took 291 seconds and
+30 000 did not finish in half an hour. The *Payslips* tile on the run opens its payslips as a paged list.
+
 ### Bangladesh payroll (`modules/l10n_bd_payroll`, RFC 0024)
 
 Proposed with the Bangladesh localization and Payroll: the *standard* and *garments (RMG)* structures with overtime at

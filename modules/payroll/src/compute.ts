@@ -5,7 +5,7 @@
  * - `WAGE` (the contract's monthly wage), `PERIOD_DAYS`, `CONTRACT_DAYS` (the contract's days in the period: joiners
  *   and leavers paid in proportion), `SERVICE_MONTHS` (since joining), `MONTH`, `FY_MONTH` and `MONTHS_LEFT` (in the
  *   fiscal year that starts in the month of App settings › Payroll, July by default);
- * - from Attendance's **approved** days: `PRESENT_DAYS` (days on tour included), `TOUR_DAYS`, `ABSENT_DAYS`, `LEAVE_DAYS`, `HOLIDAYS`, `LATE_DAYS`,
+ * - from Attendance's **approved** days: `PRESENT_DAYS` (days on tour and at home included), `TOUR_DAYS`, `REMOTE_DAYS` (home office), `ABSENT_DAYS`, `LEAVE_DAYS`, `HOLIDAYS`, `LATE_DAYS`,
  *   `OVERTIME_HOURS` (approved), `OVERTIME_RATE` — a payslip warns when days of the period wait for approval;
  * - `GROSS` and `DEDUCTIONS` (the totals of the rules before), `E_<CODE>` (the person's own values: a provident fund membership, a declared investment), `FESTIVAL` (the run
  *   pays a festival bonus), `INPUT_<CODE>` (the month's one-off inputs), `LOAN` (instalments of running loans, never more than remains),
@@ -48,25 +48,158 @@ export function fiscalYearStart(date: string, startMonth: number): string {
   return `${year}-${String(startMonth).padStart(2, '0')}-01`;
 }
 
-/** Computes the payslips of runs (replacing those it had); the run must be a draft or computed. */
+/** The job that computes a large run, a batch per job: each batch commits, the next one is enqueued. */
+export const COMPUTE_JOB = 'payroll.compute';
+
+/** A run's figures — how many payslips, their gross and net — as sums the database makes. */
+export async function refreshTotals(env: Env, id: number): Promise<void> {
+  await env.flush();
+  const [sums] = await env.sql<{ n: string | number; gross: string; net: string }>`
+    SELECT count(*) AS n, coalesce(sum(gross), 0)::text AS gross, coalesce(sum(net), 0)::text AS net
+      FROM payroll_slip WHERE run_id = ${id}`;
+  await env
+    .model('payroll.run')
+    .browse([id] as never)
+    .write({
+      slipCount: Number(sums?.n ?? 0),
+      gross: sums?.gross ?? '0',
+      net: sums?.net ?? '0',
+    } as never);
+  await env.flush();
+}
+
+/**
+ * One step of a large run's computation, as the job does it: the next batch, the run's figures, and whether
+ * there is more. A formula that fails is written on the run with the person and the rule — the batches done
+ * stay — and stops the computation until *Compute* is pressed again.
+ */
+export async function computeStep(
+  env: Env,
+  id: number,
+  round?: number,
+): Promise<'more' | 'done' | 'stopped'> {
+  const [run] = await (
+    await env.model('payroll.run').search({ where: { id: id as never }, limit: 1 })
+  ).load(['state', 'computeError', 'computeRound']);
+  // Redrafted, cancelled, deleted or computed again since: nothing more to do.
+  if (run === undefined || run.state !== 'computed') return 'stopped';
+  if (round !== undefined && (run.computeRound ?? 0) !== round) return 'stopped';
+  if ((run.computeError ?? '') !== '') return 'stopped';
+  let left: number;
+  try {
+    // (`KOSH_PAYROLL_BATCH`: a smaller batch, for tests and for servers with little memory.)
+    const size = Number(process.env['KOSH_PAYROLL_BATCH']) || BATCH;
+    // No savepoint is needed to undo a failed batch: its formulas are all evaluated before its first payslip
+    // is written, so a formula that fails has written nothing.
+    left = await computeBatch(env, id, size);
+  } catch (error) {
+    // Only what a person can fix stops the run with its reason; anything else is the job's to retry.
+    if (!(error instanceof orm.ValidationError)) throw error;
+    await env
+      .model('payroll.run')
+      .browse([id] as never)
+      .write({ computeError: error.message.slice(0, 2000) } as never);
+    await refreshTotals(env, id);
+    return 'stopped';
+  }
+  await refreshTotals(env, id);
+  return left > 0 ? 'more' : 'done';
+}
+
+/** How many people a batch computes: one transaction's worth when a run is computed in the background. */
+export const BATCH = 500;
+/** A run of up to this many people is computed at once, in the request; a larger one by the job, in batches. */
+export const INLINE_LIMIT = 200;
+
+/** The people a run pays from `after` on (by id): those of the corrected run, else everybody with a running contract on a structure in the period. */
+async function peopleOf(
+  env: Env,
+  run: {
+    id: number;
+    company: { id: number };
+    correctionOf: { id: number } | null;
+    dateFrom: unknown;
+    dateTo: unknown;
+  },
+  after: number,
+  limit: number | null,
+): Promise<number[]> {
+  const from = isoDate(run.dateFrom);
+  const to = isoDate(run.dateTo);
+  const corrected = run.correctionOf?.id ?? null;
+  const rows = await env.sql<{ employee_id: string | number }>`
+    SELECT DISTINCT c.employee_id
+      FROM hr_contract c
+     WHERE c.company_id = ${run.company.id} AND c.state = 'running' AND c.structure_id IS NOT NULL
+       AND c.date_start <= ${to}::date AND (c.date_end IS NULL OR c.date_end >= ${from}::date)
+       AND c.employee_id > ${after}
+       AND (${corrected}::bigint IS NULL
+            OR c.employee_id IN (SELECT s.employee_id FROM payroll_slip s WHERE s.run_id = ${corrected}::bigint))
+     ORDER BY c.employee_id
+     LIMIT ${limit ?? 2_000_000_000}`;
+  return rows.map((r) => Number(r.employee_id));
+}
+
+/**
+ * Starts a run's computation: the payslips it had are removed, and the run knows how many people it pays
+ * (`toCompute`) and that none is computed yet. Returns that number.
+ */
+export async function startRun(env: Env, id: number): Promise<number> {
+  const [run] = await env
+    .model('payroll.run')
+    .browse([id] as never)
+    .load({ company: true, correctionOf: true });
+  if (run === undefined) return 0;
+  // The slips the run had are replaced (their lines go with them, by the database).
+  await env.flush();
+  await env.sql`DELETE FROM payroll_slip WHERE run_id = ${id}`;
+  const total = (await peopleOf(env, run as never, 0, null)).length;
+  await env
+    .model('payroll.run')
+    .browse([id] as never)
+    .write({
+      toCompute: total,
+      computedCount: 0,
+      computeCursor: 0,
+      computeError: null,
+      computeRound: ((run as unknown as { computeRound: number | null }).computeRound ?? 0) + 1,
+    } as never);
+  await env.flush();
+  return total;
+}
+
+/** Computes the payslips of runs at once (replacing those they had); the run must be a draft or computed. */
 export async function computeRuns(env: Env, ids: readonly number[]): Promise<void> {
+  for (const id of ids) {
+    await startRun(env, id);
+    while ((await computeBatch(env, id)) > 0);
+  }
+}
+
+/**
+ * Computes the payslips of the next people of a run (`limit` of them, after the run's cursor) and moves the
+ * cursor on. Everything the batch reads is read in sets — a query per kind of thing, not per person. Returns how
+ * many people are left.
+ */
+export async function computeBatch(env: Env, id: number, limit: number = BATCH): Promise<number> {
   const startMonth = await fiscalStartOf(env);
   for (const run of await env
     .model('payroll.run')
-    .browse(ids as never)
+    .browse([id] as never)
     .load({ company: true, correctionOf: true })) {
     const from = isoDate(run.dateFrom);
     const to = isoDate(run.dateTo);
-    // The slips the run had are replaced.
-    const old = await env.model('payroll.slip').search({ where: { run: run.id } });
-    if (old.length > 0) await old.unlink();
+    const cursor = (run as unknown as { computeCursor: number | null }).computeCursor ?? 0;
+    const people = await peopleOf(env, run as never, cursor, limit);
+    if (people.length === 0) return 0;
+    const inBatch = { in: people } as never;
 
-    // Who: the people of the corrected run, else every running contract with a structure in the period.
-    let contracts = [
+    const contracts = [
       ...(await (
         await env.model('hr.contract').search({
           where: {
             company: run.company.id,
+            employee: inBatch,
             state: 'running',
             structure: { isNull: false },
             dateStart: { lte: to },
@@ -76,13 +209,76 @@ export async function computeRuns(env: Env, ids: readonly number[]): Promise<voi
       ).load({ employee: true, structure: true })),
     ];
     const previous = new Map<number, Decimal>();
-    if (run.correctionOf !== null) {
+    if (run.correctionOf !== null)
       for (const s of await (
-        await env.model('payroll.slip').search({ where: { run: run.correctionOf.id } })
+        await env
+          .model('payroll.slip')
+          .search({ where: { run: run.correctionOf.id, employee: inBatch } })
       ).load({ employee: true }))
         previous.set(s.employee.id, s.net);
-      contracts = contracts.filter((c) => previous.has(c.employee.id));
-    }
+
+    // The batch's own data, each kind read once and grouped by person.
+    const grouped = <T extends { employee: { id: number } }>(rows: Iterable<T>) => {
+      const by = new Map<number, T[]>();
+      for (const row of rows) by.set(row.employee.id, [...(by.get(row.employee.id) ?? []), row]);
+      return by;
+    };
+    const valuesOf = grouped(
+      await (
+        await env.model('payroll.employee.value').search({ where: { employee: inBatch } })
+      ).load({ employee: true }),
+    );
+    // Attendance summed by the database: one row a person, not a month of days each turned into a record.
+    const attendanceOf = new Map(
+      (
+        await env.sql<{
+          employee_id: string | number;
+          days: number;
+          approved: number;
+          present: number;
+          tour: number;
+          remote: number;
+          absent: number;
+          on_leave: number;
+          holiday: number;
+          late: number;
+          overtime: string;
+          rate: string | null;
+        }>`
+        SELECT d.employee_id,
+               count(*)::int AS days,
+               count(*) FILTER (WHERE d.state = 'approved')::int AS approved,
+               count(*) FILTER (WHERE d.state = 'approved' AND d.status = 'present')::int AS present,
+               count(*) FILTER (WHERE d.state = 'approved' AND d.status = 'tour')::int AS tour,
+               count(*) FILTER (WHERE d.state = 'approved' AND d.status = 'remote')::int AS remote,
+               count(*) FILTER (WHERE d.state = 'approved' AND d.status = 'absent')::int AS absent,
+               count(*) FILTER (WHERE d.state = 'approved' AND d.status = 'leave')::int AS on_leave,
+               count(*) FILTER (WHERE d.state = 'approved' AND d.status = 'holiday')::int AS holiday,
+               count(*) FILTER (WHERE d.state = 'approved' AND d.late_minutes > 0)::int AS late,
+               coalesce(sum(d.overtime_approved) FILTER (WHERE d.state = 'approved'), 0)::text AS overtime,
+               (array_agg(d.overtime_rate ORDER BY d.date DESC, d.id DESC)
+                  FILTER (WHERE d.state = 'approved' AND d.overtime_approved > 0))[1]::text AS rate
+          FROM attendance_day d
+         WHERE d.employee_id = ANY(${people}::bigint[]) AND d.date BETWEEN ${from}::date AND ${to}::date
+         GROUP BY d.employee_id`
+      ).map((row) => [Number(row.employee_id), row]),
+    );
+    const inputsOf = grouped(
+      await (
+        await env
+          .model('payroll.input')
+          .search({ where: { employee: inBatch, date: { gte: from, lte: to } } })
+      ).load({ employee: true }),
+    );
+    const loansOf = grouped(
+      await (
+        await env
+          .model('payroll.loan')
+          .search({ where: { employee: inBatch, state: 'running', dateStart: { lte: to } } })
+      ).load({ employee: true }),
+    );
+    const rulesOf = new Map<number, RuleRow[]>();
+    const slipsToMake: Record<string, unknown>[] = [];
 
     // What is in force at the period's end: parameters and slab tables.
     const parameters = new Map<string, Decimal>();
@@ -109,6 +305,7 @@ export async function computeRuns(env: Env, ids: readonly number[]): Promise<voi
     const fyStart = fiscalYearStart(to, startMonth);
     const month = Number(to.slice(5, 7));
     const fyMonth = ((month - startMonth + 12) % 12) + 1;
+    const paidBefore = await yearToDate(env, people, fyStart, from);
     // One payslip a person: by the most recent of their running contracts, the others named in a warning.
     const byPerson = new Map<number, (typeof contracts)[number][]>();
     for (const c of contracts)
@@ -144,82 +341,67 @@ export async function computeRuns(env: Env, ids: readonly number[]): Promise<voi
       set('MONTHS_LEFT', 12 - fyMonth + 1);
       set('FESTIVAL', run.festival ? 1 : 0);
       // The person's own values in force at the period's end (the latest start wins).
-      for (const v of [
-        ...(await (
-          await env.model('payroll.employee.value').search({ where: { employee: e.id } })
-        ).load(['code', 'value', 'dateFrom', 'dateTo'])),
-      ]
+      for (const v of [...(valuesOf.get(e.id) ?? [])]
         .filter((v) => inForce(v, to))
         .sort((a, b) => isoDate(a.dateFrom ?? '').localeCompare(isoDate(b.dateFrom ?? ''))))
         set(`E_${v.code}`, v.value);
 
       // Attendance: approved days only.
-      const attendance = [
-        ...(await (
-          await env.model('attendance.day').search({
-            where: { employee: e.id, date: { gte: from, lte: to } },
-          })
-        ).load(['status', 'state', 'lateMinutes', 'overtimeApproved', 'overtimeRate'])),
-      ];
-      const approved = attendance.filter((d) => d.state === 'approved');
-      const count = (status: string) => approved.filter((d) => d.status === status).length;
+      const seen = attendanceOf.get(e.id);
       // A day on an approved official tour is a day worked (RFC 0037 §3.2); `TOUR_DAYS` says how many.
-      set('PRESENT_DAYS', count('present') + count('tour'));
-      set('TOUR_DAYS', count('tour'));
-      set('ABSENT_DAYS', count('absent'));
-      set('LEAVE_DAYS', count('leave'));
-      set('HOLIDAYS', count('holiday'));
-      set('LATE_DAYS', approved.filter((d) => d.lateMinutes > 0).length);
-      const overtime = approved.reduce((s, d) => s.plus(d.overtimeApproved), ZERO);
-      set('OVERTIME_HOURS', overtime);
-      set(
-        'OVERTIME_RATE',
-        approved.find((d) => d.overtimeApproved.gt(0))?.overtimeRate ?? orm.toDecimal(2),
-      );
-      const waiting = attendance.length - approved.length;
+      // So is a day of approved home office (RFC 0039 §3); `REMOTE_DAYS` says how many.
+      set('PRESENT_DAYS', (seen?.present ?? 0) + (seen?.tour ?? 0) + (seen?.remote ?? 0));
+      set('TOUR_DAYS', seen?.tour ?? 0);
+      set('REMOTE_DAYS', seen?.remote ?? 0);
+      set('ABSENT_DAYS', seen?.absent ?? 0);
+      set('LEAVE_DAYS', seen?.on_leave ?? 0);
+      set('HOLIDAYS', seen?.holiday ?? 0);
+      set('LATE_DAYS', seen?.late ?? 0);
+      set('OVERTIME_HOURS', orm.toDecimal(seen?.overtime ?? '0'));
+      // The rate of the latest approved day with overtime; double time when there is none.
+      set('OVERTIME_RATE', orm.toDecimal(seen?.rate ?? '2'));
+      const waiting = (seen?.days ?? 0) - (seen?.approved ?? 0);
       if (waiting > 0)
         warnings.push(
           `${waiting} attendance day(s) of the period are not approved and are left out.`,
         );
 
       // Inputs of the period, running loans, and what was paid this fiscal year.
-      for (const i of await (
-        await env
-          .model('payroll.input')
-          .search({ where: { employee: e.id, date: { gte: from, lte: to } } })
-      ).load(['code', 'amount']))
+      for (const i of inputsOf.get(e.id) ?? [])
         set(`INPUT_${i.code}`, (variables.get(`INPUT_${i.code}`) ?? ZERO).plus(i.amount));
       let loan = ZERO;
-      for (const l of await (
-        await env.model('payroll.loan').search({
-          where: { employee: e.id, state: 'running', dateStart: { lte: to } },
-        })
-      ).load(['installment', 'remaining']))
+      for (const l of loansOf.get(e.id) ?? [])
         loan = loan.plus(
           l.installment.lt(l.remaining ?? ZERO) ? l.installment : (l.remaining ?? ZERO),
         );
       set('LOAN', loan);
-      for (const [code, amount] of await yearToDate(env, e.id, fyStart, from))
-        set(`YTD_${code}`, amount);
+      for (const [code, amount] of paidBefore.get(e.id) ?? []) set(`YTD_${code}`, amount);
 
-      // The rules, in order.
-      const rules = [
-        ...(await (
-          await env.model('payroll.rule').search({ where: { structure: structure.id } })
-        ).load([
-          'sequence',
-          'code',
-          'name',
-          'category',
-          'formula',
-          'condition',
-          'appearsOnSlip',
-          'dateFrom',
-          'dateTo',
-        ])),
-      ]
-        .filter((r) => inForce(r, to))
-        .sort((a, b) => a.sequence - b.sequence || a.id - b.id);
+      // The rules, in order: read once per structure.
+      let rules = rulesOf.get(structure.id);
+      if (rules === undefined) {
+        rules = (
+          [
+            ...(await (
+              await env.model('payroll.rule').search({ where: { structure: structure.id } })
+            ).load([
+              'sequence',
+              'code',
+              'name',
+              'category',
+              'formula',
+              'condition',
+              'appearsOnSlip',
+              'dateFrom',
+              'dateTo',
+            ])),
+          ] as unknown as RuleRow[]
+        )
+          .filter((r) => inForce(r, to))
+          .sort((a, b) => a.sequence - b.sequence || a.id - b.id);
+        rulesOf.set(structure.id, rules);
+      }
+      const structureRules = rules;
       const scope: Scope = {
         variables,
         slabs,
@@ -227,7 +409,7 @@ export async function computeRuns(env: Env, ids: readonly number[]): Promise<voi
           name.startsWith('INPUT_') ||
           name.startsWith('YTD_') ||
           name.startsWith('E_') ||
-          rules.some((r) => r.code === name),
+          structureRules.some((r) => r.code === name),
       };
       const lines: Record<string, unknown>[] = [];
       const totals = { gross: ZERO, deductions: ZERO, contributions: ZERO };
@@ -278,59 +460,87 @@ export async function computeRuns(env: Env, ids: readonly number[]): Promise<voi
         });
       }
       const net = totals.gross.minus(totals.deductions);
-      await env.model('payroll.slip').create([
-        {
-          name: `${run.name} ${e.name}`,
-          run: run.id,
-          company: run.company.id,
-          employee: e.id,
-          contract: contract.id,
-          structure: structure.id,
-          dateFrom: from,
-          dateTo: to,
-          gross: totals.gross.toString(),
-          deductions: totals.deductions.toString(),
-          contributions: totals.contributions.toString(),
-          net: net.toString(),
-          previousNet: previous.has(e.id) ? (previous.get(e.id) as Decimal).toString() : null,
-          warnings: warnings.length === 0 ? null : warnings.join('\n'),
-          lines: { create: lines },
-        } as never,
-      ]);
+      slipsToMake.push({
+        name: `${run.name} ${e.name}`,
+        run: run.id,
+        company: run.company.id,
+        employee: e.id,
+        contract: contract.id,
+        structure: structure.id,
+        dateFrom: from,
+        dateTo: to,
+        gross: totals.gross.toString(),
+        deductions: totals.deductions.toString(),
+        contributions: totals.contributions.toString(),
+        net: net.toString(),
+        previousNet: previous.has(e.id) ? (previous.get(e.id) as Decimal).toString() : null,
+        warnings: warnings.length === 0 ? null : warnings.join('\n'),
+        lines: { create: lines },
+      });
     }
+    // The batch's payslips in one go, the cursor past its last person, and how far the run is.
+    if (slipsToMake.length > 0) await env.model('payroll.slip').create(slipsToMake as never);
+    const computed = (run as unknown as { computedCount: number | null }).computedCount ?? 0;
+    await env
+      .model('payroll.run')
+      .browse([id] as never)
+      .write({
+        computeCursor: people[people.length - 1],
+        computedCount: computed + people.length,
+      } as never);
+    await env.flush();
+    return (await peopleOf(env, run as never, people[people.length - 1] as number, 1)).length;
   }
+  return 0;
+}
+
+/** A structure's rule, as the engine reads it. */
+interface RuleRow {
+  readonly id: number;
+  readonly sequence: number;
+  readonly code: string;
+  readonly name: string;
+  readonly category: string;
+  readonly formula: string;
+  readonly condition: string | null;
+  readonly appearsOnSlip: boolean;
+  readonly dateFrom: unknown;
+  readonly dateTo: unknown;
 }
 
 /**
- * What the person was paid this fiscal year before `before`, by rule code: per period, the latest approved or paid
- * payslip (a correction replaces the payslip it corrects).
+ * What each of these people was paid this fiscal year before `before`, by rule code: per period, the latest
+ * approved or paid payslip (a correction replaces the payslip it corrects). One query for all of them.
  */
 async function yearToDate(
   env: Env,
-  employee: number,
+  employees: readonly number[],
   fyStart: string,
   before: string,
-): Promise<Map<string, Decimal>> {
+): Promise<Map<number, Map<string, Decimal>>> {
   const slips = [
     ...(await (
       await env.model('payroll.slip').search({
         where: {
-          employee: employee as never,
+          employee: { in: employees } as never,
           dateFrom: { gte: fyStart, lt: before },
           'run.state': { in: ['approved', 'paid'] },
         },
       })
-    ).load({ lines: true })),
+    ).load({ lines: true, employee: true })),
   ];
   const latest = new Map<string, (typeof slips)[number]>();
   for (const s of slips) {
-    const key = isoDate(s.dateFrom);
+    const key = `${s.employee.id}:${isoDate(s.dateFrom)}`;
     const kept = latest.get(key);
     if (kept === undefined || s.id > kept.id) latest.set(key, s);
   }
-  const out = new Map<string, Decimal>();
-  for (const s of latest.values())
-    for (const l of s.lines) out.set(l.code, (out.get(l.code) ?? ZERO).plus(l.amount));
+  const out = new Map<number, Map<string, Decimal>>();
+  for (const s of latest.values()) {
+    const mine = out.get(s.employee.id) ?? new Map<string, Decimal>();
+    for (const l of s.lines) mine.set(l.code, (mine.get(l.code) ?? ZERO).plus(l.amount));
+    out.set(s.employee.id, mine);
+  }
   return out;
 }
 

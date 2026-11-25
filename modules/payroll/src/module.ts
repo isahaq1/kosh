@@ -21,11 +21,20 @@ import {
   method,
   records,
 } from './.kosh/bindings.js';
-import { computeRuns, recordRepayments } from './compute.js';
+import {
+  COMPUTE_JOB,
+  computeBatch,
+  INLINE_LIMIT,
+  recordRepayments,
+  refreshTotals,
+  startRun,
+} from './compute.js';
 import { FormulaError, parse } from './formula.js';
 
 const READ = ['read'] as const;
 const ALL = ['read', 'write', 'create', 'unlink'] as const;
+// Only the server writes these (a run's figures and how far its computation is).
+const SYSTEM = ['base.admin'] as const;
 const OFFICERS = ['payroll.officer'];
 const me = { $env: 'uid' } as const;
 const ZERO: Decimal = orm.toDecimal(0);
@@ -352,29 +361,47 @@ export const PayrollRun = defineModel('payroll.run', {
       help: 'Read in formulas as FESTIVAL (1 or 0): the run that pays a festival bonus (Eid, Puja…).',
     }),
     slips: f.one2many('payroll.slip', 'run', { label: 'Payslips' }),
+    // The figures of a run are sums the database makes once per batch of payslips (`refreshTotals`): a run of
+    // 30 000 people does not read every payslip again each time one is added (RFC 0039 §2).
     slipCount: f.integer({
+      default: 0,
       label: 'Payslips',
-      ...compute('payroll.run', 'slipCount', ['slips'], (runs) => {
-        for (const r of runs) r.slipCount = r.slips.length;
-      }),
+      groups: { write: [...SYSTEM] },
     }),
     gross: f.decimal({
       scale: 2,
+      default: '0',
       label: 'Gross',
       help: 'The payslips’ basic and allowances.',
-      ...compute('payroll.run', 'gross', ['slips.gross'], (runs) => {
-        for (const r of runs) r.gross = [...r.slips].reduce((s, x) => s.plus(x.gross), ZERO);
-      }),
-      store: true,
+      groups: { write: [...SYSTEM] },
     }),
     net: f.decimal({
       scale: 2,
+      default: '0',
       label: 'Net',
       help: 'What the payslips pay out.',
-      ...compute('payroll.run', 'net', ['slips.net'], (runs) => {
-        for (const r of runs) r.net = [...r.slips].reduce((s, x) => s.plus(x.net), ZERO);
-      }),
-      store: true,
+      groups: { write: [...SYSTEM] },
+    }),
+    toCompute: f.integer({
+      default: 0,
+      label: 'People to compute',
+      help: 'How many people the run pays; a large run is computed in the background, a batch at a time.',
+      groups: { write: [...SYSTEM] },
+    }),
+    computedCount: f.integer({
+      default: 0,
+      label: 'People computed',
+      help: 'How far the computation is. The run is approved once everybody is computed.',
+      groups: { write: [...SYSTEM] },
+    }),
+    /** The last person computed: the next batch starts after them. */
+    computeCursor: f.integer({ default: 0, groups: { write: [...SYSTEM] } }),
+    /** Counts the computations of the run: a batch left over from an earlier one does nothing. */
+    computeRound: f.integer({ default: 0, groups: { write: [...SYSTEM] } }),
+    computeError: f.text({
+      label: 'What stopped the computation',
+      help: 'The person and the rule a formula failed on. Fix it, then compute again.',
+      groups: { write: [...SYSTEM] },
     }),
     state: f.state({
       states: RUN_STATES,
@@ -384,14 +411,51 @@ export const PayrollRun = defineModel('payroll.run', {
         compute: {
           from: ['draft', 'computed'],
           to: 'computed',
+          // Not while the job is still at it: it would be computed twice at once.
+          guard: records('payroll.run', async (runs) =>
+            [...(await runs.load(['state', 'toCompute', 'computedCount', 'computeError']))]
+              .filter(
+                (r) =>
+                  r.state === 'computed' &&
+                  (r.computedCount ?? 0) < (r.toCompute ?? 0) &&
+                  (r.computeError ?? '') === '',
+              )
+              .map((r) => r.id),
+          ),
+          message:
+            'The payslips are being computed: wait until everybody is computed, or set the run back to draft.',
           // The payslips, from the contracts, attendance, inputs and loans (read as the system: wages are HR's).
+          // A small run at once; a large one by the job, a batch at a time (RFC 0039 §2): the run shows how
+          // far it is, and is approved once everybody is computed.
           after: records('payroll.run', async (runs) => {
             const env = runs.env as unknown as Env;
             await env.flush();
+            const later: number[] = [];
             await env.asSuperuser({ reason: 'compute payroll' }, async (su) => {
-              await computeRuns(su, runs.ids as readonly number[]);
+              for (const id of runs.ids as readonly number[]) {
+                const total = await startRun(su, id);
+                if (total > INLINE_LIMIT) {
+                  await refreshTotals(su, id);
+                  later.push(id);
+                  continue;
+                }
+                while ((await computeBatch(su, id)) > 0);
+                await refreshTotals(su, id);
+              }
               await su.flush();
             });
+            for (const id of later) {
+              const [run] = await env
+                .model('payroll.run')
+                .browse([id] as never)
+                .load(['computeRound']);
+              const round = run?.computeRound ?? 0;
+              await env.enqueue(
+                COMPUTE_JOB,
+                { run: id, round },
+                { key: `${COMPUTE_JOB}:${id}:${round}:0` },
+              );
+            }
           }),
         },
         redraft: { from: ['computed'], to: 'draft' },
@@ -400,11 +464,17 @@ export const PayrollRun = defineModel('payroll.run', {
           to: 'approved',
           requires: 'payroll.approve',
           guard: records('payroll.run', async (runs) =>
-            [...(await runs.load({ slips: true }))]
-              .filter((r) => r.slips.length === 0)
+            [...(await runs.load(['slipCount', 'toCompute', 'computedCount', 'computeError']))]
+              .filter(
+                (r) =>
+                  (r.slipCount ?? 0) === 0 ||
+                  (r.computedCount ?? 0) < (r.toCompute ?? 0) ||
+                  (r.computeError ?? '') !== '',
+              )
               .map((r) => r.id),
           ),
-          message: 'Compute the payslips before approving the run.',
+          message:
+            'Compute the payslips before approving the run — and wait until everybody is computed.',
           after: records('payroll.run', async (runs) => {
             const env = runs.env as unknown as Env;
             await env.asSuperuser({ reason: 'loan repayments' }, async (su) => {

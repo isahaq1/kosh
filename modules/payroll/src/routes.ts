@@ -8,12 +8,56 @@
  */
 import { audit, HttpProblem, type ModuleContext } from '@kosh/server';
 import type { Env } from './.kosh/bindings.js';
-import { isoDate, PAYMENT_FORMATS, paymentRows } from './compute.js';
+import { COMPUTE_JOB, computeStep, isoDate, PAYMENT_FORMATS, paymentRows } from './compute.js';
 import { FormulaError, parse, variablesOf } from './formula.js';
 
 const officer = (env: Env) => env.administrator || env.groups.has('payroll.officer');
 
-export function registerPayrollRoutes({ app }: ModuleContext): void {
+/** What `shutro.work` gives back: a worker tests drain and the server starts. */
+interface Worker {
+  drain(): Promise<number>;
+  start(): void;
+  stop(): Promise<void>;
+}
+
+/**
+ * The worker of large runs (RFC 0039 §2): each job computes one batch of a run in its own transaction and
+ * enqueues the next, so every batch commits — the run shows how far it is, a restart goes on where it stopped,
+ * and other requests are served meanwhile. Tests `drain()` it; the server starts it.
+ */
+export function payrollWorker(context: Pick<ModuleContext, 'shutro'>): Worker {
+  return context.shutro.work(
+    {
+      [COMPUTE_JOB]: async (payload, raw) => {
+        const { run, round } = payload as { run: number; round?: number };
+        const env = raw as unknown as Env;
+        // Read as the system: wages are HR's, and the officer who pressed Compute may not read them all.
+        const outcome = await env.asSuperuser({ reason: 'compute payroll' }, (su) =>
+          computeStep(su as unknown as Env, run, round),
+        );
+        if (outcome !== 'more') return;
+        const [now] = await env.sql<{ n: string | number }>`
+          SELECT computed_count AS n FROM payroll_run WHERE id = ${run}`;
+        await env.enqueue(
+          COMPUTE_JOB,
+          { run, round },
+          { key: `${COMPUTE_JOB}:${run}:${round ?? 0}:${Number(now?.n ?? 0)}` },
+        );
+      },
+    },
+    { pollMs: 1000 },
+  ) as unknown as Worker;
+}
+
+export function registerPayrollRoutes(context: ModuleContext): void {
+  const { app } = context;
+  // Background work is off in the CLI and in the tests that drive the worker themselves.
+  if (process.env['KOSH_SCHEDULES'] !== 'off') {
+    const running = payrollWorker(context);
+    running.start();
+    app.addHook('onClose', () => running.stop());
+  }
+
   app.post('/api/v1/payroll/formula', async (request) => {
     const formula = (request.body as Record<string, unknown> | null)?.['formula'];
     if (typeof formula !== 'string')

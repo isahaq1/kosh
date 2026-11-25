@@ -24,7 +24,7 @@ import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { settings } from '@kosh/settings';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { STANDARD_RULES } from '../src/demo.js';
-import { payroll } from '../src/index.js';
+import { payroll, payrollWorker } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
 const catalogue = [base, settings, payroll];
@@ -337,6 +337,124 @@ test('payment files per method; a correction pays the difference; November reads
   expect((await run(november.json.id, 'compute', 'otto')).status).toBe(200);
   const lines = await linesOf((await slipOf(november.json.id, 'rahim')).id);
   expect(Number(lines['YTD_BASIC_SEEN'].amount)).toBe(27000);
+});
+
+test('a large run is computed by the job, a batch at a time: it shows how far it is, waits to be approved, and a failing formula stops it by name', async () => {
+  process.env['KOSH_PAYROLL_BATCH'] = '100';
+  // 230 more people on the structure: more than a request computes at once.
+  type Model = {
+    create(rows: readonly unknown[]): Promise<{ ids: number[] }>;
+    browse(ids: readonly number[]): { start(): Promise<void> };
+  };
+  await host.server.shutro.bootstrap({ reason: 'test: people', company }, async (env) => {
+    const model = (name: string) => env.model(name as never) as unknown as Model;
+    const made = (
+      await model('hr.employee').create(
+        Array.from({ length: 230 }, (_, i) => ({
+          name: `Person ${i + 1}`,
+          hireDate: '2025-01-01',
+        })),
+      )
+    ).ids;
+    const contracts = (
+      await model('hr.contract').create(
+        made.map((employee, i) => ({
+          name: `Employment ${i + 1}`,
+          employee,
+          dateStart: '2025-01-01',
+          wage: String(20_000 + i * 100),
+          structure,
+        })),
+      )
+    ).ids;
+    await model('hr.contract').browse(contracts).start();
+  });
+  const figures = async (id: number) =>
+    (
+      await call(
+        'GET',
+        `${R}/${id}?fields=state,toCompute,computedCount,slipCount,gross,net,computeError`,
+        'otto',
+      )
+    ).json;
+  const january = await call('POST', R, 'otto', { dateFrom: '2027-01-01', dateTo: '2027-01-31' });
+  const id = january.json.id as number;
+  // Pressed: answered at once, nothing computed yet.
+  expect((await run(id, 'compute', 'otto')).status).toBe(200);
+  const started = await figures(id);
+  expect(started.toCompute).toBeGreaterThanOrEqual(230);
+  expect(started).toMatchObject({ state: 'computed', computedCount: 0, slipCount: 0 });
+  // Not approved, and not computed a second time, while the job is at it.
+  const early = await run(id, 'approve', 'pia');
+  expect(early.status).toBe(409);
+  expect(JSON.stringify(early.json)).toContain('wait until everybody is computed');
+  expect(JSON.stringify((await run(id, 'compute', 'otto')).json)).toContain('being computed');
+
+  const worker = payrollWorker({ shutro: host.server.shutro });
+  // One batch, committed: the run says how far it is.
+  expect(await worker.drain()).toBe(Math.ceil(started.toCompute / 100));
+  const done = await figures(id);
+  expect(done).toMatchObject({
+    computedCount: started.toCompute,
+    slipCount: started.toCompute,
+    computeError: null,
+  });
+  // One payslip a person, and the run's figures are the payslips' sums.
+  const [sums] = await driver.query<{ n: string; people: string; gross: string; net: string }>({
+    text: `SELECT count(*)::text AS n, count(DISTINCT employee_id)::text AS people,
+                  sum(gross)::text AS gross, sum(net)::text AS net FROM payroll_slip WHERE run_id = $1`,
+    params: [id],
+  });
+  expect(Number(sums?.n)).toBe(started.toCompute);
+  expect(Number(sums?.people)).toBe(started.toCompute);
+  expect(Number(done.gross)).toBe(Number(sums?.gross));
+  expect(Number(done.net)).toBe(Number(sums?.net));
+  // Person 1 is paid like anybody: 20 000 a month on the standard structure.
+  const [first] = (
+    await call(
+      'GET',
+      `${SLIPS}?filter=${encodeURIComponent(JSON.stringify({ run: id, 'employee.name': 'Person 1' }))}&fields=gross`,
+      'pia',
+    )
+  ).json.items as Json[];
+  expect(Number(first.gross)).toBe(20000);
+  expect((await run(id, 'approve', 'pia')).status).toBe(200);
+
+  // A formula that fails on somebody: the batches before stay, the run names the person and the rule, and is
+  // not approved; fixed, it is computed again from the start.
+  const broken = await call('POST', '/api/v1/models/payroll.rule', 'pia', {
+    structure,
+    sequence: 95,
+    code: 'SHARE',
+    name: 'A share of nothing',
+    category: 'info',
+    formula: 'WAGE / (MONTH - MONTH)',
+  });
+  expect(broken.status, JSON.stringify(broken.json)).toBe(201);
+  const february = await call('POST', R, 'otto', { dateFrom: '2027-02-01', dateTo: '2027-02-28' });
+  expect((await run(february.json.id, 'compute', 'otto')).status).toBe(200);
+  await worker.drain();
+  const stopped = await figures(february.json.id);
+  expect(String(stopped.computeError), JSON.stringify(stopped)).toMatch(/rule SHARE/);
+  expect(stopped.computedCount).toBe(0);
+  expect((await run(february.json.id, 'approve', 'pia')).status).toBe(409);
+  expect(
+    (
+      await call('PATCH', `/api/v1/models/payroll.rule/${broken.json.id}`, 'pia', {
+        formula: 'WAGE / 2',
+      })
+    ).status,
+  ).toBe(200);
+  expect((await run(february.json.id, 'compute', 'otto')).status).toBe(200);
+  await worker.drain();
+  const fixed = await figures(february.json.id);
+  expect(fixed).toMatchObject({ computeError: null, computedCount: fixed.toCompute });
+  // What the server keeps is not typed in.
+  expect(
+    (await call('PATCH', `${R}/${february.json.id}`, 'pia', { computedCount: 0, gross: '1' }))
+      .status,
+  ).toBeGreaterThanOrEqual(400);
+  delete process.env['KOSH_PAYROLL_BATCH'];
 });
 
 test('the demo data loads', async () => {

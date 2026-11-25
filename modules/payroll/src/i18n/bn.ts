@@ -11,6 +11,8 @@ export const bn: Readonly<Record<string, string>> = {
     'ঋণ ও তার কিস্তি ধনাত্মক হবে, কিস্তি ঋণের চেয়ে বেশি হবে না।',
   'A rule ends on or after it starts.': 'নিয়ম শুরুর দিন বা তার পরে শেষ হয়।',
   'A run ends on or after it starts.': 'রান শুরুর দিন বা তার পরে শেষ হয়।',
+  'A run of more than 200 people is computed in the background, 500 at a time: it can be approved once everybody is computed.':
+    '২০০ জনের বেশি লোকের রান পটভূমিতে হিসাব হয়, একবারে ৫০০ জন করে: সবার হিসাব শেষ হলে এটি অনুমোদন করা যায়।',
   'Account number': 'হিসাব নম্বর',
   Active: 'সক্রিয়',
   Allowance: 'ভাতা',
@@ -42,8 +44,12 @@ export const bn: Readonly<Record<string, string>> = {
   Company: 'প্রতিষ্ঠান',
   'Company contribution': 'প্রতিষ্ঠানের অংশ',
   'Company contributions': 'প্রতিষ্ঠানের অংশসমূহ',
+  Computation: 'হিসাব',
+  'Compute Cursor': 'হিসাবের অবস্থান',
   'Compute payslips': 'বেতন স্লিপ হিসাব করুন',
-  'Compute the payslips before approving the run.': 'রান অনুমোদনের আগে বেতন স্লিপ হিসাব করুন।',
+  'Compute Round': 'হিসাবের দফা',
+  'Compute the payslips before approving the run — and wait until everybody is computed.':
+    'রান অনুমোদনের আগে পেস্লিপ হিসাব করুন — এবং সবার হিসাব শেষ হওয়া পর্যন্ত অপেক্ষা করুন।',
   'Compute the payslips, read their warnings, then approve: an approved run is locked.':
     'বেতন স্লিপ হিসাব করুন, সতর্কবার্তা পড়ুন, তারপর অনুমোদন করুন: অনুমোদিত রান লক হয়ে যায়।',
   Computed: 'হিসাবকৃত',
@@ -80,6 +86,10 @@ export const bn: Readonly<Record<string, string>> = {
   Gross: 'মোট বেতন',
   'Gross by person': 'ব্যক্তি অনুযায়ী মোট বেতন',
   'Gross less deductions: what is paid out.': 'মোট বেতন থেকে কর্তন বাদে: যা পরিশোধ করা হয়।',
+  'How far the computation is. The run is approved once everybody is computed.':
+    'হিসাব কতদূর এগিয়েছে। সবার হিসাব শেষ হলে রান অনুমোদন করা হয়।',
+  'How many people the run pays; a large run is computed in the background, a batch at a time.':
+    'রানে কতজনকে বেতন দেওয়া হয়; বড় রান পটভূমিতে, দফায় দফায় হিসাব হয়।',
   ID: 'আইডি',
   'In capitals; later rules read this rule’s amount by it (BASIC, HOUSE_RENT…).':
     'বড় হাতের অক্ষরে; পরের নিয়মগুলো এটি দিয়ে এই নিয়মের অঙ্ক পড়ে (BASIC, HOUSE_RENT…)।',
@@ -137,6 +147,8 @@ export const bn: Readonly<Record<string, string>> = {
   Payslips: 'বেতন স্লিপসমূহ',
   'Payslips this month': 'এ মাসের বেতন স্লিপ',
   People: 'জনবল',
+  'People computed': 'যাদের হিসাব হয়েছে',
+  'People to compute': 'যাদের হিসাব করতে হবে',
   'Per month': 'মাসিক',
   'Per-person payroll value': 'ব্যক্তিভিত্তিক বেতন মান',
   'Per-person values': 'ব্যক্তিভিত্তিক মান',
@@ -198,7 +210,11 @@ export const bn: Readonly<Record<string, string>> = {
     'ঋণ থেকে পরিশোধিত অংশ বাদে; কিছু বাকি না থাকলে ঋণ শেষ হয়।',
   'The month it is paid in.': 'যে মাসে পরিশোধ করা হয়।',
   'The net, less what the corrected payslip paid.': 'নিট, সংশোধিত বেতন স্লিপে যা পরিশোধ হয়েছে তা বাদে।',
+  'The payslips are being computed: wait until everybody is computed, or set the run back to draft.':
+    'পেস্লিপ হিসাব হচ্ছে: সবার হিসাব শেষ হওয়া পর্যন্ত অপেক্ষা করুন, অথবা রানটি খসড়ায় ফিরিয়ে নিন।',
   'The payslips’ basic and allowances.': 'বেতন স্লিপের মূল বেতন ও ভাতা।',
+  'The person and the rule a formula failed on. Fix it, then compute again.':
+    'যে ব্যক্তি ও যে নিয়মে সূত্র ব্যর্থ হয়েছে। ঠিক করে আবার হিসাব করুন।',
   'The rules this contract is paid by; without one, the person is left out of payroll runs.':
     'যে নিয়মে এই চুক্তির বেতন দেওয়া হয়; না থাকলে ব্যক্তি বেতন রান থেকে বাদ পড়েন।',
   Title: 'শিরোনাম',
@@ -218,12 +234,14 @@ export const bn: Readonly<Record<string, string>> = {
   Wallet: 'ওয়ালেট',
   'Wallet number': 'ওয়ালেট নম্বর',
   Warnings: 'সতর্কবার্তা',
+  'What stopped the computation': 'হিসাব যে কারণে থেমেছে',
   'What the payslips pay out.': 'বেতন স্লিপে যা পরিশোধ হয়।',
   'What to check before approving: days not yet approved, a missing contract…':
     'অনুমোদনের আগে যা যাচাই করবেন: অনুমোদন বাকি থাকা দিন, অনুপস্থিত চুক্তি…',
   'Where the bands come from (the Finance Act, the year).': 'স্তরগুলোর উৎস (অর্থ আইন, বছর)।',
   'Where the value comes from (the law, the circular, the year).': 'মানের উৎস (আইন, প্রজ্ঞাপন, বছর)।',
   'Which payment file the person’s net pay goes into.': 'ব্যক্তির নিট বেতন কোন পেমেন্ট ফাইলে যাবে।',
+  'With a warning': 'সতর্কতাসহ',
   'With warnings': 'সতর্কবার্তাসহ',
   'Year-to-date sums and the months left in the year (for tax spread over the year) count from here.':
     'বছরের শুরু থেকে মোট এবং বছরের বাকি মাস (সারা বছরে কর ভাগ করার জন্য) এখান থেকে গণনা হয়।',

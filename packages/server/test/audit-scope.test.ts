@@ -50,6 +50,7 @@ test('left out whole: sign-in internals, queues, deliveries and logs, the chatte
     'webhook.delivery',
     'delivery.shipment.event',
     'approval.event',
+    'payroll.slip.line',
   ])
     expect(leftOutOfTrail(model), model).toBe(true);
   // Files, scheduled activities, approval requests and settings are business facts, though their models are

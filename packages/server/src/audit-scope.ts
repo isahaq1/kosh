@@ -32,6 +32,9 @@ const MODELS: readonly RegExp[] = [
   /^(delivery\.shipment|approval)\.event$/,
   /^audit\.event$/,
   /^portal\.announcement$/,
+  // Derived in bulk by the server, each with its own explanation: a payslip's lines follow from its rules. The
+  // payslip and its run log; a run of 30 000 people does not write half a million rows of log besides.
+  /^payroll\.slip\.line$/,
   // Named by what they are — not `.event`, `.run` or `.state`: Agenda's events, payroll runs and a country's
   // states are business records.
   /\.(log|cursor|presence)$/,

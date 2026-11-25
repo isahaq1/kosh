@@ -29,16 +29,24 @@ import {
 import { registerPayrollRoutes } from './routes.js';
 
 export {
+  BATCH,
+  COMPUTE_JOB,
+  computeBatch,
   computeRuns,
+  computeStep,
   fiscalStartOf,
   fiscalYearStart,
+  INLINE_LIMIT,
   isoDate,
   PAYMENT_FORMATS,
   type PaymentFormat,
   type PaymentRow,
   paymentRows,
   recordRepayments,
+  refreshTotals,
+  startRun,
 } from './compute.js';
+export { STANDARD_RULES } from './demo.js';
 export {
   evaluate,
   explain,
@@ -67,6 +75,7 @@ export {
   PayrollStructure,
   payrollShutro,
 } from './module.js';
+export { payrollWorker } from './routes.js';
 
 const MONTHS = {
   '1': 'January',
@@ -565,6 +574,28 @@ export const payroll: ReturnType<typeof defineModule> = defineModule({
           'warnings',
         ]),
         k.group('totals', ['slipCount', 'gross', 'net'], { label: 'Totals' }),
+        // A large run is computed in the background: how far it is, and what stopped it if a formula failed.
+        k.group('progress', ['toCompute', 'computedCount', 'computeError'], {
+          label: 'Computation',
+          description:
+            'A run of more than 200 people is computed in the background, 500 at a time: it can be approved once everybody is computed.',
+        }),
+        k.stats('related', [
+          stat({
+            id: 'run_payslips',
+            label: 'Payslips',
+            model: 'payroll.slip',
+            where: { run: { $record: 'id' } },
+            action: 'payroll.action_slips',
+          }),
+          stat({
+            id: 'run_warnings',
+            label: 'With a warning',
+            model: 'payroll.slip',
+            where: { run: { $record: 'id' }, warnings: { ne: null } },
+            action: 'payroll.action_slips',
+          }),
+        ]),
       ],
       chatter: true,
     })),
