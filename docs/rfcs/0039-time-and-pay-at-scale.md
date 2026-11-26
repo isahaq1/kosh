@@ -122,6 +122,19 @@ Asked: "payroll should be calculate accuratly with a shortime".
   up perfectly. For that: the explanation on every line, the comparison with the previous run (*With a warning*,
   the difference column), and a company's own test of its structure on known people before the first live run.
 
+### Implementation notes (2026-11-26): the books of a large run
+
+- `payroll_account` read every line of every payslip of a run — with its rule and its payslip — to add them
+  up: 300 000 records for 30 000 people. The entry has a line per kind of pay and account, not per person: the
+  sums are now PostgreSQL's (`GROUP BY` category, name and the rule's account), a correction's less the corrected
+  run's; the payment is the sum of the payslips' net.
+- One difference from before, in a corner: a correction used to pair each person's lines with the corrected
+  run's by rule code; it now subtracts the corrected run's sums by category, name and account. The totals are
+  the same; a rule renamed between the two runs gives two lines instead of one.
+- **Measured at 30 000, Accounting installed**: approved, proved and booked in 0.5 s (an entry of 4 lines,
+  balanced, its payable not less than the payslips' net); paid from the bank in 0.2 s. The whole cycle on that
+  run: computed in 39 s (22 s on a quieter machine), proved 0.36 s, bank file 0.28 s.
+
 ### Implementation notes (2026-11-26): Attendance's days in sets, and every night
 
 - **Measured before** (`pnpm bench attendance`): 2 000 people, one day 24.7 s, a week 41.6 s — eight queries a

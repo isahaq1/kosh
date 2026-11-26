@@ -121,36 +121,38 @@ async function amountsOf(env: Env, runId: Id<'payroll.run'>) {
     .browse([runId])
     .load({ company: true, correctionOf: true });
   if (run === undefined) return null;
-  const linesOf = async (where: Record<string, unknown>) => [
-    ...(await (
-      await env.model('payroll.slip.line').search({ where: where as never })
-    ).load({ rule: true, slip: true })),
-  ];
-  const current = await linesOf({ 'slip.run': run.id });
-  const before =
-    run.correctionOf === null ? [] : await linesOf({ 'slip.run': run.correctionOf.id });
-  const key = (l: (typeof current)[number]) => `${l.slip.employee.id}:${l.code}`;
+  // Summed by the database (RFC 0039 §5b): an entry has a line per kind of pay and account, not per person —
+  // the lines of thirty thousand payslips are not read one by one to add them up. A correction books the
+  // difference: its sums less the corrected run's.
+  await env.flush();
+  const sumsOf = (id: number) =>
+    env.sql<{ category: string; name: string; account: string | number | null; amount: string }>`
+      SELECT l.category, l.name, r.account_id AS account, sum(l.amount)::text AS amount
+        FROM payroll_slip_line l
+        JOIN payroll_slip s ON s.id = l.slip_id
+        LEFT JOIN payroll_rule r ON r.id = l.rule_id
+       WHERE s.run_id = ${id}
+       GROUP BY l.category, l.name, r.account_id`;
   const out = new Map<
     string,
     { category: string; name: string; account: number | null; amount: Decimal }
   >();
-  for (const l of current)
-    out.set(key(l), {
-      category: l.category,
-      name: l.name,
-      account: l.rule?.account?.id ?? null,
-      amount: (out.get(key(l))?.amount ?? ZERO).plus(l.amount),
-    });
-  for (const l of before) {
-    const slot = out.get(key(l)) ?? {
-      category: l.category,
-      name: l.name,
-      account: l.rule?.account?.id ?? null,
-      amount: ZERO,
-    };
-    slot.amount = slot.amount.minus(l.amount);
-    out.set(key(l), slot);
-  }
+  const add = (rows: Awaited<ReturnType<typeof sumsOf>>, sign: 1 | -1): void => {
+    for (const row of rows) {
+      const account = row.account === null ? null : Number(row.account);
+      const key = `${row.category}|${row.name}|${account ?? ''}`;
+      const slot = out.get(key) ?? {
+        category: row.category,
+        name: row.name,
+        account,
+        amount: ZERO,
+      };
+      slot.amount = sign === 1 ? slot.amount.plus(row.amount) : slot.amount.minus(row.amount);
+      out.set(key, slot);
+    }
+  };
+  add(await sumsOf(run.id as number), 1);
+  if (run.correctionOf !== null) add(await sumsOf(run.correctionOf.id as number), -1);
   return { run, amounts: [...out.values()] };
 }
 
@@ -248,10 +250,7 @@ export const RunBooks = extendModel('payroll.run', {
       const runs = this as Records<'payroll.run'>;
       const env = runs.env as unknown as Env;
       await env.asSuperuser({ reason: 'pay payroll' }, async (su) => {
-        for (const run of await su
-          .model('payroll.run')
-          .browse(runs.ids)
-          .load({ company: true, slips: true })) {
+        for (const run of await su.model('payroll.run').browse(runs.ids).load({ company: true })) {
           const accounts = await payrollAccountsOf(su, run.company.id);
           if (accounts === null) throw noChart();
           if (run.paymentJournal === null)
@@ -270,10 +269,12 @@ export const RunBooks = extendModel('payroll.run', {
               'Pay from a bank or cash journal with its account.',
               'Choose a bank or cash journal.',
             );
-          const total = [...run.slips].reduce(
-            (s, x) => s.plus(run.kind === 'correction' ? (x.difference ?? ZERO) : x.net),
-            ZERO,
-          );
+          // What leaves the bank: the payslips' net — a correction's differences — summed by the database.
+          const [paid] = await su.sql<{ total: string }>`
+            SELECT coalesce(sum(CASE WHEN ${run.kind === 'correction'} THEN coalesce(difference, 0)
+                                     ELSE net END), 0)::text AS total
+              FROM payroll_slip WHERE run_id = ${run.id}`;
+          const total = orm.toDecimal(paid?.total ?? '0');
           const entry = await post(su, run.company.id, run.paymentJournal.id, `${run.name} paid`, [
             { account: accounts.payable, debit: total, credit: ZERO, name: `${run.name} net pay` },
             { account: money, debit: ZERO, credit: total, name: `${run.name} net pay` },

@@ -10,7 +10,9 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { accounting } from '@kosh/accounting';
 import { payroll, payrollWorker, STANDARD_RULES } from '@kosh/payroll';
+import { payrollAccount } from '@kosh/payroll_account';
 import {
   type AppHost,
   applyApps,
@@ -30,7 +32,9 @@ const EMPLOYEES = Number(process.env['KOSH_BENCH_EMPLOYEES'] ?? 2_000);
 const DAYS = Number(process.env['KOSH_BENCH_DAYS'] ?? 26);
 const FIRST = Math.max(1, Math.floor(EMPLOYEES / 4));
 const PASSWORD = 'correct horse battery';
-const catalogue = [base, settings, payroll];
+// With Accounting: an approved run is booked as one entry, and paid from the bank (`payroll_account`).
+const catalogue = [base, settings, accounting, payroll, payrollAccount];
+let bank = 0;
 
 let container: StartedPostgreSqlContainer;
 let driver: Driver;
@@ -165,6 +169,39 @@ async function computeRun(title: string, from: string, to: string): Promise<numb
   );
   expect(approved.status, JSON.stringify(approved.json).slice(0, 400)).toBe(200);
   results[`${title}: approved in ms`] = Math.round(performance.now() - approving);
+  // Booked: one balanced entry whose payable is what the payslips pay; then paid from the bank.
+  const booked = await call(
+    'GET',
+    `/api/v1/models/payroll.run/${created.json.id}?fields=entry,net`,
+  );
+  const entryId = booked.json.entry?.id ?? booked.json.entry;
+  expect(entryId, 'the run has its journal entry').toBeTruthy();
+  const [entry] = await driver.query<{ debit: string; credit: string; lines: string }>({
+    text: `SELECT sum(debit)::text AS debit, sum(credit)::text AS credit, count(*)::text AS lines
+             FROM account_move_line WHERE move_id = $1`,
+    params: [entryId],
+  });
+  expect(Number(entry?.debit)).toBe(Number(entry?.credit));
+  expect(Number(entry?.debit)).toBeGreaterThanOrEqual(Number(booked.json.net));
+  results[`${title}: entry lines`] = Number(entry?.lines);
+  const paying = performance.now();
+  expect(
+    (
+      await host.server.app.inject({
+        method: 'PATCH',
+        url: `/api/v1/models/payroll.run/${created.json.id}`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: { paymentJournal: bank },
+      })
+    ).statusCode,
+  ).toBe(200);
+  const paidOut = await call(
+    'POST',
+    `/api/v1/models/payroll.run/${created.json.id}/transitions/pay`,
+  );
+  expect(paidOut.status, JSON.stringify(paidOut.json).slice(0, 400)).toBe(200);
+  results[`${title}: paid in ms`] = Math.round(performance.now() - paying);
+  expect(Number(results[`${title}: paid in ms`])).toBeLessThan(5_000);
   const filing = performance.now();
   const file = await host.server.app.inject({
     method: 'GET',
@@ -194,7 +231,12 @@ beforeAll(async () => {
   const dir = mkdtempSync(join(tmpdir(), 'kosh-bench-payroll-'));
   await recordInstalledApps(driver, [], [], 'bench');
   await applyApps(
-    await prepareApps({ driver, catalogue, change: { install: ['settings', 'payroll'] }, dir }),
+    await prepareApps({
+      driver,
+      catalogue,
+      change: { install: ['settings', 'accounting', 'payroll'] },
+      dir,
+    }),
     { driver, dir, actor: 'bench' },
   );
   host = await createAppHost({
@@ -219,7 +261,7 @@ beforeAll(async () => {
     password: PASSWORD,
     company,
     companies: [company],
-    groups: ['payroll.manager', 'hr.manager', 'attendance.manager'],
+    groups: ['payroll.manager', 'hr.manager', 'attendance.manager', 'account.manager'],
   });
   const login = await host.server.app.inject({
     method: 'POST',
@@ -227,6 +269,12 @@ beforeAll(async () => {
     payload: { login: 'pia', password: PASSWORD },
   });
   token = (login.json() as { token: string }).token;
+  const chart = await call('POST', '/api/v1/accounting/charts/install', { template: 'generic' });
+  expect(chart.status, JSON.stringify(chart.json).slice(0, 300)).toBe(200);
+  const journals = (await call('GET', '/api/v1/models/account.journal?fields=id,type')).json
+    .items as { id: number; type: string }[];
+  bank = journals.find((j) => j.type === 'bank')?.id ?? 0;
+  expect(bank).toBeGreaterThan(0);
   const made = await call('POST', '/api/v1/models/payroll.structure', {
     name: 'Standard',
     rules: { create: STANDARD_RULES.map((r) => ({ ...r })) },
