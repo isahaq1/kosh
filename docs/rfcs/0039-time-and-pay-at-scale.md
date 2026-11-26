@@ -363,6 +363,32 @@ Asked: "employee can be contactual, temporary and other".
   date but is ended by hand once the day has come; undoing an approved settlement; a browser test of the form;
   the settlement run's entry was not asserted in `payroll_account`'s tests (it is the same code as any run's).
 
+## Implementation notes — the leave accrual at 30 000 people (2026-11-26)
+
+- **Measured first** (`pnpm bench accrual`, 2 000 people, one plan giving a day and a half a month): 25 ms a
+  person when there was nothing to write, 83 ms on a first run — at 30 000 people twelve minutes per plan every
+  six hours, and forty for a first run. Each person cost some thirty queries: their ledger, their leave, their
+  balance record, and the working calendar for every month to the year's end.
+- **Now in batches of 500** (`ACCRUAL_BATCH`, `loadBatch`): a batch's balance records (made when missing, in one
+  go), its ledger, its leave of the type and — for a formula that reads the days worked — its approved
+  attendance by month are read in a query each; the same arithmetic then runs on what was read; the batch's new
+  ledger lines are written in one go, and **a balance record is written only when what it says changes**. The
+  working calendar is asked only by a formula that reads `WORKED_DAYS` or `WORKING_DAYS`.
+- One person's projection, a payout, a settlement and the leave check still read the database directly (the same
+  functions without the batch).
+
+| 30 000 people | seconds | per person |
+| --- | --- | --- |
+| A first run: ten months for everybody (300 000 ledger lines) | 211 | 7.0 ms |
+| A run with nothing to write | 3.5 | 0.12 ms |
+| The run after a month has ended (30 000 lines) | 18.6 | 0.62 ms |
+
+  At 2 000 people before and after: 167 s → 17 s, 49 s → 0.3 s, 53 s → 1.1 s. The seventeen tests of the
+  accrual give the same ledgers and balances as before.
+- **Not measured**: a plan whose formula reads the days worked (it still asks each person's calendar for each
+  month to come); several plans (the run is once per plan); people with years of ledger behind them. The run
+  is still one transaction per company.
+
 ## Step 3 is done but for
 
 Days by shift (`SHIFT_<CODE>` — shifts have no code yet), and the list of variables shown where a rule is

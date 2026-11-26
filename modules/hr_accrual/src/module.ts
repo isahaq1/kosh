@@ -439,8 +439,46 @@ async function planOf(su: Env, type: number, company: number): Promise<PlanRow |
   return p === undefined ? null : planRow(p);
 }
 
+/** A person's balance record as the run holds it: what is stored, and what the run found since. */
+interface BalanceRow {
+  readonly id: number;
+  accruedThrough: string | null;
+  carried: number;
+  /** What the record says now, to write it only when it changes. */
+  stored: string;
+  /** The months were stepped in this run: the record is written whatever the figures. */
+  moved: boolean;
+}
+
+/**
+ * What a batch of people needs, read in sets (RFC 0039 §6): their ledger, their leave of the type, their days
+ * worked by month and their balance records. With it the run asks the database nothing per person, and writes
+ * the batch's new lines in one go; without it — one person's projection, a payout — each figure is a query.
+ */
+interface Loaded {
+  readonly entries: Map<number, { date: string; kind: string; days: number }[]>;
+  readonly leaves: Map<number, { date: string; days: number; state: string }[]>;
+  /** `employee|YYYY-MM` → approved days present or on tour. */
+  readonly worked: Map<string, number>;
+  readonly balances: Map<number, BalanceRow>;
+  /** Whether the plan's formula reads the working days at all (the calendar is not asked otherwise). */
+  readonly readsDays: boolean;
+  readonly newEntries: Record<string, unknown>[];
+}
+
 /** The ledger of a person in a plan, in hundredths, up to a day (included). */
-async function ledgerTo(su: Env, employee: number, plan: number, to: string): Promise<number> {
+async function ledgerTo(
+  su: Env,
+  employee: number,
+  plan: number,
+  to: string,
+  ctx?: Loaded,
+): Promise<number> {
+  if (ctx !== undefined)
+    return (ctx.entries.get(employee) ?? []).reduce(
+      (sum, e) => sum + (e.date <= to ? e.days : 0),
+      0,
+    );
   const rows = await su.model('hr.accrual.entry').search({
     where: { employee: employee as never, plan: plan as never, date: { lte: to } } as never,
   });
@@ -454,8 +492,14 @@ async function ledgerBetween(
   plan: number,
   from: string,
   to: string,
+  ctx?: Loaded,
 ): Promise<number> {
   if (to < from) return 0;
+  if (ctx !== undefined)
+    return (ctx.entries.get(employee) ?? []).reduce(
+      (sum, e) => sum + (e.date >= from && e.date <= to ? e.days : 0),
+      0,
+    );
   const rows = await su.model('hr.accrual.entry').search({
     where: {
       employee: employee as never,
@@ -474,8 +518,14 @@ async function takenBetween(
   from: string,
   to: string,
   states: readonly string[],
+  ctx?: Loaded,
 ): Promise<number> {
   if (to < from) return 0;
+  if (ctx !== undefined)
+    return (ctx.leaves.get(employee) ?? []).reduce(
+      (sum, l) => sum + (l.date >= from && l.date <= to && states.includes(l.state) ? l.days : 0),
+      0,
+    );
   const rows = await (
     await su.model('hr.leave').search({
       where: {
@@ -507,13 +557,20 @@ async function monthInput(
   month: string,
   balance: number,
   options: { readonly expected: boolean; readonly states: readonly string[]; readonly to?: string },
+  ctx?: Loaded,
 ): Promise<MonthInput> {
   const first = `${month}-01`;
   const last = monthEnd(month);
   const serviceMonths = serviceMonthsAt(employee.joined, month);
-  const working = await leaveDays(su as never, employee.id, first, last);
+  // The person's calendar is asked only by a formula that reads the days (most plans give so much a month).
+  const working =
+    ctx !== undefined && !ctx.readsDays
+      ? 0
+      : await leaveDays(su as never, employee.id, first, last);
   let worked = working;
-  if (!options.expected) {
+  if (!options.expected && ctx !== undefined)
+    worked = ctx.worked.get(`${employee.id}|${month}`) ?? 0;
+  else if (!options.expected) {
     const attendance = await su.model('attendance.day').search({
       where: {
         employee: employee.id as never,
@@ -554,6 +611,7 @@ async function monthInput(
       first,
       options.to ?? last,
       options.states,
+      ctx,
     ),
     serviceMonths,
   };
@@ -572,7 +630,10 @@ async function balanceRecord(
   su: Env,
   plan: PlanRow,
   employee: number,
+  ctx?: Loaded,
 ): Promise<{ id: number; accruedThrough: string | null; carried: number }> {
+  const held = ctx?.balances.get(employee);
+  if (held !== undefined) return held;
   const [found] = await su.model('hr.accrual.balance').search({
     where: { employee: employee as never, plan: plan.id as never } as never,
     limit: 1,
@@ -598,8 +659,9 @@ async function accruePerson(
   plan: PlanRow,
   employee: { readonly id: number; readonly joined: string },
   today: string,
+  ctx?: Loaded,
 ): Promise<number> {
-  const record = await balanceRecord(su, plan, employee.id);
+  const record = await balanceRecord(su, plan, employee.id, ctx);
   const lastComplete = previousMonth(today.slice(0, 7));
   const joinedMonth = employee.joined.slice(0, 7);
   const begin = [
@@ -612,36 +674,60 @@ async function accruePerson(
   const before = iso(new Date(Date.parse(`${begin}-01T00:00:00Z`) - 86_400_000));
   let state: AccrualState = {
     balance:
-      (await ledgerTo(su, employee.id, plan.id, before)) -
-      (await takenBetween(su, employee.id, plan.type, '0001-01-01', before, APPROVED)),
+      (await ledgerTo(su, employee.id, plan.id, before, ctx)) -
+      (await takenBetween(su, employee.id, plan.type, '0001-01-01', before, APPROVED, ctx)),
     carried: record.carried,
   };
   const movements: Movement[] = [];
   for (const month of months) {
     // Adjustments given in the month count before its accrual (an opening balance meets the cap).
-    const given = await ledgerBetween(su, employee.id, plan.id, `${month}-01`, monthEnd(month));
+    const given = await ledgerBetween(
+      su,
+      employee.id,
+      plan.id,
+      `${month}-01`,
+      monthEnd(month),
+      ctx,
+    );
     state = { ...state, balance: state.balance + given };
-    const input = await monthInput(su, plan, employee, month, state.balance, {
-      expected: false,
-      states: APPROVED,
-    });
+    const input = await monthInput(
+      su,
+      plan,
+      employee,
+      month,
+      state.balance,
+      { expected: false, states: APPROVED },
+      ctx,
+    );
     const stepped = stepMonth(state, plan.rules, input);
     state = stepped.state;
     movements.push(...stepped.movements);
   }
-  if (movements.length > 0)
-    await su.model('hr.accrual.entry').create(
-      movements.map((m) => ({
-        employee: employee.id,
-        plan: plan.id,
-        company: plan.company,
-        date: m.date,
-        kind: m.kind,
-        days: days(m.days),
-        period: m.period,
-        note: m.note === '' ? null : m.note,
-      })) as never,
-    );
+  const rows = movements.map((m) => ({
+    employee: employee.id,
+    plan: plan.id,
+    company: plan.company,
+    date: m.date,
+    kind: m.kind,
+    days: days(m.days),
+    period: m.period,
+    note: m.note === '' ? null : m.note,
+  }));
+  if (ctx !== undefined) {
+    // In a batch: the lines are written with the batch's, the balance record with its figures (`refreshPerson`).
+    ctx.newEntries.push(...rows);
+    const mine = ctx.entries.get(employee.id) ?? [];
+    for (const m of movements) mine.push({ date: m.date, kind: m.kind, days: m.days });
+    ctx.entries.set(employee.id, mine);
+    const held = ctx.balances.get(employee.id);
+    if (held !== undefined) {
+      held.accruedThrough = lastComplete;
+      held.carried = state.carried;
+      held.moved = true;
+    }
+    return movements.length;
+  }
+  if (rows.length > 0) await su.model('hr.accrual.entry').create(rows as never);
   await su
     .model('hr.accrual.balance')
     .browse([record.id as never])
@@ -678,8 +764,9 @@ async function projectPerson(
   employee: { readonly id: number; readonly joined: string },
   date: string,
   today: string,
+  ctx?: Loaded,
 ): Promise<Projection> {
-  const record = await balanceRecord(su, plan, employee.id);
+  const record = await balanceRecord(su, plan, employee.id, ctx);
   const begin = [
     plan.start,
     employee.joined.slice(0, 7),
@@ -689,8 +776,8 @@ async function projectPerson(
   const at = date < before ? date : before;
   let state: AccrualState = {
     balance:
-      (await ledgerTo(su, employee.id, plan.id, at)) -
-      (await takenBetween(su, employee.id, plan.type, '0001-01-01', at, ASKED)),
+      (await ledgerTo(su, employee.id, plan.id, at, ctx)) -
+      (await takenBetween(su, employee.id, plan.type, '0001-01-01', at, ASKED, ctx)),
     carried: record.carried,
   };
   const steps: ProjectionStep[] = [];
@@ -705,13 +792,18 @@ async function projectPerson(
       plan.id,
       `${month}-01`,
       whole ? monthEnd(month) : date,
+      ctx,
     );
     state = { ...state, balance: state.balance + given };
-    const input = await monthInput(su, plan, employee, month, state.balance, {
-      expected: month >= currentMonth,
-      states: ASKED,
-      ...(whole ? {} : { to: date }),
-    });
+    const input = await monthInput(
+      su,
+      plan,
+      employee,
+      month,
+      state.balance,
+      { expected: month >= currentMonth, states: ASKED, ...(whole ? {} : { to: date }) },
+      ctx,
+    );
     const stepped = stepMonth(
       state,
       whole ? plan.rules : { ...plan.rules, carryExpiryMonth: null },
@@ -745,22 +837,47 @@ async function refreshPerson(
   plan: PlanRow,
   employee: { readonly id: number; readonly joined: string },
   today: string,
+  ctx?: Loaded,
 ): Promise<void> {
-  const record = await balanceRecord(su, plan, employee.id);
+  const record = await balanceRecord(su, plan, employee.id, ctx);
   const year = today.slice(0, 4);
-  const ledger = await ledgerTo(su, employee.id, plan.id, today);
-  const started = await takenBetween(su, employee.id, plan.type, '0001-01-01', today, APPROVED);
-  const asked = await takenBetween(su, employee.id, plan.type, '0001-01-01', '9999-12-31', ASKED);
-  const accruedYear = [
-    ...(await su.model('hr.accrual.entry').search({
-      where: {
-        employee: employee.id as never,
-        plan: plan.id as never,
-        kind: 'accrual',
-        date: { gte: `${year}-01-01`, lte: today },
-      } as never,
-    })),
-  ].reduce((sum, e) => sum + cents(e.days), 0);
+  const ledger = await ledgerTo(su, employee.id, plan.id, today, ctx);
+  const started = await takenBetween(
+    su,
+    employee.id,
+    plan.type,
+    '0001-01-01',
+    today,
+    APPROVED,
+    ctx,
+  );
+  const asked = await takenBetween(
+    su,
+    employee.id,
+    plan.type,
+    '0001-01-01',
+    '9999-12-31',
+    ASKED,
+    ctx,
+  );
+  const accruedYear =
+    ctx !== undefined
+      ? (ctx.entries.get(employee.id) ?? []).reduce(
+          (sum, e) =>
+            sum +
+            (e.kind === 'accrual' && e.date >= `${year}-01-01` && e.date <= today ? e.days : 0),
+          0,
+        )
+      : [
+          ...(await su.model('hr.accrual.entry').search({
+            where: {
+              employee: employee.id as never,
+              plan: plan.id as never,
+              kind: 'accrual',
+              date: { gte: `${year}-01-01`, lte: today },
+            } as never,
+          })),
+        ].reduce((sum, e) => sum + cents(e.days), 0);
   const takenYear = await takenBetween(
     su,
     employee.id,
@@ -768,20 +885,142 @@ async function refreshPerson(
     `${year}-01-01`,
     `${year}-12-31`,
     APPROVED,
+    ctx,
   );
-  const end = await projectPerson(su, plan, employee, `${year}-12-31`, today);
+  const end = await projectPerson(su, plan, employee, `${year}-12-31`, today, ctx);
+  const figures = {
+    balance: days(ledger - started),
+    available: days(ledger - asked),
+    accruedYear: days(accruedYear),
+    takenYear: days(takenYear),
+    yearEnd: end.balance,
+    expiring: end.expiring === null ? null : end.expiring.days,
+    expiresOn: end.expiring === null ? null : end.expiring.on,
+  };
+  const held = ctx?.balances.get(employee.id);
+  if (held === undefined) {
+    await su
+      .model('hr.accrual.balance')
+      .browse([record.id as never])
+      .write(figures as never);
+    return;
+  }
+  // In a batch: a record that already says this is left alone — most runs find nothing new for most people.
+  const now = JSON.stringify(figures);
+  if (!held.moved && held.stored === now) return;
   await su
     .model('hr.accrual.balance')
-    .browse([record.id as never])
+    .browse([held.id as never])
     .write({
-      balance: days(ledger - started),
-      available: days(ledger - asked),
-      accruedYear: days(accruedYear),
-      takenYear: days(takenYear),
-      yearEnd: end.balance,
-      expiring: end.expiring === null ? null : end.expiring.days,
-      expiresOn: end.expiring === null ? null : end.expiring.on,
+      ...figures,
+      ...(held.moved ? { accruedThrough: held.accruedThrough, carried: days(held.carried) } : {}),
     } as never);
+  held.stored = now;
+  held.moved = false;
+}
+
+/** How many people the run reads and writes together. */
+export const ACCRUAL_BATCH = 500;
+
+/**
+ * What a batch of people needs from the database, in a query per kind of thing (RFC 0039 §6): their balance
+ * records (made when missing, in one go), their ledger in the plan, their leave of the type, and — for a formula
+ * that reads the days worked — their approved attendance by month.
+ */
+async function loadBatch(su: Env, plan: PlanRow, people: readonly number[]): Promise<Loaded> {
+  await su.flush();
+  const text = (v: unknown): string | null =>
+    v === null || v === undefined ? null : days(cents(v as never));
+  const balances = new Map<number, BalanceRow>();
+  const readBalances = async (): Promise<void> => {
+    for (const b of await (
+      await su.model('hr.accrual.balance').search({
+        where: { plan: plan.id as never, employee: { in: people } as never } as never,
+      })
+    ).load(['employee']))
+      balances.set(b.employee.id as number, {
+        id: b.id as number,
+        accruedThrough: b.accruedThrough,
+        carried: cents(b.carried),
+        stored: JSON.stringify({
+          balance: text(b.balance),
+          available: text(b.available),
+          accruedYear: text(b.accruedYear),
+          takenYear: text(b.takenYear),
+          yearEnd: text(b.yearEnd),
+          expiring: text(b.expiring),
+          expiresOn: b.expiresOn === null ? null : iso(b.expiresOn),
+        }),
+        moved: false,
+      });
+  };
+  await readBalances();
+  const missing = people.filter((id) => !balances.has(id));
+  if (missing.length > 0) {
+    await su.model('hr.accrual.balance').create(
+      missing.map((employee) => ({
+        employee,
+        plan: plan.id,
+        type: plan.type,
+        company: plan.company,
+      })) as never,
+    );
+    await su.flush();
+    await readBalances();
+  }
+  const push = <T>(by: Map<number, T[]>, employee: number, value: T): void => {
+    const list = by.get(employee);
+    if (list === undefined) by.set(employee, [value]);
+    else list.push(value);
+  };
+  const entries: Loaded['entries'] = new Map();
+  for (const e of await su.sql<{
+    employee: string | number;
+    date: string;
+    kind: string;
+    days: string;
+  }>`
+    SELECT employee_id AS employee, to_char(date, 'YYYY-MM-DD') AS date, kind, days::text AS days
+      FROM hr_accrual_entry
+     WHERE plan_id = ${plan.id} AND employee_id = ANY(${people}::bigint[])
+     ORDER BY date, id`)
+    push(entries, Number(e.employee), { date: e.date, kind: e.kind, days: cents(e.days) });
+  const leaves: Loaded['leaves'] = new Map();
+  for (const l of await su.sql<{
+    employee: string | number;
+    date: string;
+    days: string | null;
+    half: string | null;
+    state: string;
+  }>`
+    SELECT employee_id AS employee, to_char(date_from, 'YYYY-MM-DD') AS date, days::text AS days,
+           half, state
+      FROM hr_leave
+     WHERE type_id = ${plan.type} AND employee_id = ANY(${people}::bigint[])
+       AND state IN ('submitted', 'approved')`)
+    push(leaves, Number(l.employee), {
+      date: l.date,
+      // Half a day of leave takes half a day (RFC 0039 §4).
+      days: l.half === null ? Math.round(Number(l.days ?? 0) * 100) : 50,
+      state: l.state,
+    });
+  let readsDays = true;
+  try {
+    const names = variablesOf(parse(plan.formula));
+    readsDays = names.includes('WORKED_DAYS') || names.includes('WORKING_DAYS');
+  } catch {
+    // A formula that does not parse accrues nothing; the plan's own check says so when it is saved.
+  }
+  const worked = new Map<string, number>();
+  if (readsDays)
+    for (const w of await su.sql<{ employee: string | number; month: string; n: number }>`
+      SELECT employee_id AS employee, to_char(date, 'YYYY-MM') AS month, count(*)::int AS n
+        FROM attendance_day
+       WHERE employee_id = ANY(${people}::bigint[]) AND state = 'approved'
+         AND status IN ('present', 'tour') AND date >= ${`${plan.start}-01`}::date
+       GROUP BY employee_id, to_char(date, 'YYYY-MM')`)
+      worked.set(`${Number(w.employee)}|${w.month}`, w.n);
+  return { entries, leaves, worked, balances, readsDays, newEntries: [] };
 }
 
 // ---- compensatory days
@@ -930,14 +1169,31 @@ export async function accrueLeave(env: Env, today: string = iso(env.today())): P
       // Compensatory days first (RFC 0039 §6): the balances refreshed below see them.
       lines += await creditDaysOff(su, plan);
       lines += await expireCompensatory(su, plan, today);
-      const employees = await su
-        .model('hr.employee')
-        .search({ where: { company: plan.company as never, active: true } as never });
-      for (const e of employees) {
-        const person = personOf(e);
-        if (person === null || person.joined > today) continue;
-        lines += await accruePerson(su, plan, person, today);
-        await refreshPerson(su, plan, person, today);
+      // Everybody who has joined, a batch at a time: what a batch needs is read in sets, its new ledger
+      // lines are written in one go, and a balance record is written only when it changes.
+      await su.flush();
+      const people = (
+        await su.sql<{ id: string | number; joined: string }>`
+          SELECT id, to_char(hire_date, 'YYYY-MM-DD') AS joined
+            FROM hr_employee
+           WHERE company_id = ${plan.company} AND active AND hire_date IS NOT NULL
+             AND hire_date <= ${today}::date
+           ORDER BY id`
+      ).map((e) => ({ id: Number(e.id), joined: e.joined }));
+      for (let i = 0; i < people.length; i += ACCRUAL_BATCH) {
+        const batch = people.slice(i, i + ACCRUAL_BATCH);
+        const ctx = await loadBatch(
+          su,
+          plan,
+          batch.map((e) => e.id),
+        );
+        for (const person of batch) {
+          lines += await accruePerson(su, plan, person, today, ctx);
+          await refreshPerson(su, plan, person, today, ctx);
+        }
+        if (ctx.newEntries.length > 0)
+          await su.model('hr.accrual.entry').create(ctx.newEntries as never);
+        await su.flush();
       }
     }
     await su.flush();
