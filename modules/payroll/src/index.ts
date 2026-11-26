@@ -28,6 +28,7 @@ import {
   payrollShutro,
 } from './module.js';
 import { registerPayrollRoutes } from './routes.js';
+import { VARIABLES_HELP } from './variables.js';
 
 export {
   BATCH,
@@ -88,6 +89,15 @@ export {
   type SettlementLineInput,
   settle,
 } from './settlement.js';
+export {
+  FORMULA_FUNCTIONS,
+  PAYROLL_VARIABLES,
+  type PayrollVariable,
+  VARIABLE_FAMILIES,
+  VARIABLES_HELP,
+  type VariableGroup,
+  variablesNow,
+} from './variables.js';
 
 const MONTHS = {
   '1': 'January',
@@ -855,8 +865,8 @@ export const payroll: ReturnType<typeof defineModule> = defineModule({
         k.group('main', ['structure', 'sequence', 'code', 'name', 'category', 'appearsOnSlip']),
         k.group('calculation', ['formula', 'condition'], {
           label: 'Formula',
-          description:
-            'Variables: WAGE, PERIOD_DAYS, CONTRACT_DAYS, SERVICE_MONTHS, MONTH, FY_MONTH, MONTHS_LEFT, FESTIVAL, E_…, PRESENT_DAYS (days on tour included), TOUR_DAYS, ABSENT_DAYS, LEAVE_DAYS, HOLIDAYS, LATE_DAYS, OVERTIME_HOURS, OVERTIME_RATE, LOAN, INPUT_…, YTD_…, P_…, and the codes of earlier rules. Functions: min, max, abs, round, floor, ceil, if, slab.',
+          // The one list (`variables.ts`), held to what the engine sets by a test.
+          description: VARIABLES_HELP,
         }),
         k.group('validity', ['dateFrom', 'dateTo', 'note'], { label: 'In force' }),
       ],

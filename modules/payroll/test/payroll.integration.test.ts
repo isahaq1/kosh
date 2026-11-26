@@ -745,6 +745,22 @@ test('a temporary person paid by the day: the pay basis, the employment type and
   expect(Number(lines['LEAVES'].amount)).toBe(1161.5);
   // One day worked on the night shift; the other days name no shift.
   expect(Number(lines['SHIFTS'].amount)).toBe(10);
+
+  // What a rule may read, with the codes that exist here: for officers only.
+  const names = await call('GET', `/api/v1/payroll/variables?structure=${daily.json.id}`, 'otto');
+  expect(names.status, JSON.stringify(names.json)).toBe(200);
+  const family = (name: string) =>
+    (names.json.families as Json[]).find((f) => f.name === name).names as string[];
+  expect(family('SHIFT_<CODE>')).toEqual(expect.arrayContaining(['SHIFT_GEN', 'SHIFT_NIGHT']));
+  expect(family('LEAVE_<CODE>')).toEqual(expect.arrayContaining(['LEAVE_CL', 'LEAVE_LWP']));
+  expect(family('TYPE_<CODE>')).toContain('TYPE_TEMP');
+  expect(family('INPUT_<CODE>')).toContain('INPUT_BONUS');
+  expect(family('<RULE CODE>')).toEqual(expect.arrayContaining(['BASIC', 'NIGHT']));
+  expect(family('YTD_<CODE>')).toContain('YTD_BASIC');
+  expect(
+    (names.json.groups as Json[]).flatMap((g) => (g.variables as Json[]).map((x) => x.name)),
+  ).toEqual(expect.arrayContaining(['WAGE', 'NIGHT_SHIFTS', 'PAID_LEAVE_DAYS']));
+  expect((await call('GET', '/api/v1/payroll/variables', 'rahim')).status).toBe(403);
 });
 
 test('the demo data loads', async () => {

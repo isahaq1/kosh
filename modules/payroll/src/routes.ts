@@ -2,6 +2,7 @@
  * Payroll's routes (RFC 0024 §2.3):
  *
  * - `POST /api/v1/payroll/formula`                   `{ formula }`: whether it parses, and the variables it reads
+ * - `GET  /api/v1/payroll/variables?structure=`      officers: every name a rule may read, with the codes that exist
  * - `POST /api/v1/payroll/runs/:id/correction`       managers: a correction run of an approved run (computed)
  * - `GET  /api/v1/payroll/runs/:id/check`            officers: the proof of a run — `{ ok, checks }`
  * - `GET  /api/v1/payroll/payment-formats`           the payment file formats
@@ -18,6 +19,7 @@ import {
   paymentRows,
 } from './compute.js';
 import { FormulaError, parse, variablesOf } from './formula.js';
+import { variablesNow } from './variables.js';
 
 const officer = (env: Env) => env.administrator || env.groups.has('payroll.officer');
 
@@ -85,6 +87,30 @@ export function registerPayrollRoutes(context: ModuleContext): void {
         throw error;
       }
     });
+  });
+
+  app.get('/api/v1/payroll/variables', async (request) => {
+    const raw = (request.query as Record<string, string | undefined>)['structure'];
+    const structure = raw === undefined || raw === '' ? null : Number(raw);
+    if (structure !== null && !(Number.isSafeInteger(structure) && structure > 0))
+      throw new HttpProblem(400, 'bad-request', 'Which structure', 'structure is a number.');
+    return request.env(
+      async (env) => {
+        if (!officer(env as unknown as Env))
+          throw new HttpProblem(
+            403,
+            'access',
+            'Payroll officers',
+            'This needs the Payroll officer role.',
+          );
+        // Codes only, read as the system: an officer reads the structures, and no figure of anybody is here.
+        return (env as unknown as Env).asSuperuser({ reason: 'payroll variables' }, (su) =>
+          variablesNow(su as unknown as Env, structure),
+        );
+      },
+      // Acting as the system is recorded: the request writes.
+      { write: true },
+    );
   });
 
   app.post('/api/v1/payroll/runs/:id/correction', async (request, reply) => {

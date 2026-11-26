@@ -1018,6 +1018,11 @@ days worked on it; a shift not worked reads as 0:
 { code: 'SHIFT_ALLOWANCE', category: 'allowance', formula: 'SHIFT_NIGHT * 150 + SHIFT_B * 60' }
 ```
 
+**Everything a rule may read** is listed under the formula on the rule's form, and
+`GET /api/v1/payroll/variables?structure=<id>` (Payroll officers) returns it with what each name means and the
+codes that exist in your data: `SHIFT_NIGHT`, `LEAVE_CL`, `TYPE_TEMP`, `P_…`, `E_…`, `INPUT_…`, the slab tables
+and the structure's own rule codes.
+
 **Large runs** (RFC 0039). A run of up to 200 people is computed when *Compute payslips* is pressed. A larger one
 is computed **in the background, 500 people at a time**: the button answers at once, the run shows *People
 computed* of *People to compute*, each batch is kept as it is done (a restart goes on where it stopped), and the

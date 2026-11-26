@@ -391,7 +391,15 @@ Asked: "employee can be contactual, temporary and other".
 
 ## Step 3 is done but for
 
-The list of variables shown where a rule is written.
+Nothing: both leftovers below are done.
+
+**The list of variables** is done (2026-11-26): one list (`variables.ts`) of every name the engine sets, by what
+it is about, and of the families named by the company's data. The rule form shows it (it had fallen behind: it
+named 17 of the 31); `GET /api/v1/payroll/variables?structure=` gives it to Payroll officers with the codes that
+exist — the shifts', the leave and employment types', the parameters, the values and inputs in use, the slab
+tables, a structure's rule codes. A test reads `compute.ts` and fails when a name is set there and not listed,
+or listed and not set. **Not built**: a picker in the form that inserts a name into the formula (the list is
+text under the field), and Bangla for each variable's description (the API's descriptions are English).
 
 **Days by shift** are done (2026-11-26): a shift has a **code** (`NIGHT`, `A`, `B2` — capitals, unique; the
 shipped shifts are `GEN` and `NIGHT` on new installations, an existing one types them in), and a rule reads

@@ -248,6 +248,8 @@ export const bn: Readonly<Record<string, string>> = {
   Structure: 'কাঠামো',
   Termination: 'চাকরিচ্যুতি',
   'The band ends at this amount; empty: the rest.': 'স্তরটি এই অঙ্কে শেষ হয়; খালি: অবশিষ্ট সব।',
+  'The contract: WAGE, PAID_BY_DAY, PAID_BY_HOUR, SERVICE_MONTHS. The period: PERIOD_DAYS, CONTRACT_DAYS, MONTH, FY_MONTH, MONTHS_LEFT, FESTIVAL. Approved attendance: PRESENT_DAYS, TOUR_DAYS, REMOTE_DAYS, ABSENT_DAYS, HOLIDAYS, LATE_DAYS, OVERTIME_HOURS, OVERTIME_RATE. Shifts: WORKED_HOURS, EXPECTED_HOURS, LATE_MINUTES, EARLY_MINUTES, NIGHT_SHIFTS, OFF_DAYS_WORKED. Leave: LEAVE_DAYS, PAID_LEAVE_DAYS, UNPAID_LEAVE_DAYS, HALF_DAYS. Loans and totals: LOAN, GROSS, DEDUCTIONS. By code: SHIFT_<CODE>, LEAVE_<CODE>, TYPE_<CODE>, P_<CODE>, E_<CODE>, INPUT_<CODE>, YTD_<CODE>, <RULE CODE>. Functions: min, max, abs, round, floor, ceil, if, slab.':
+    'চুক্তি: WAGE, PAID_BY_DAY, PAID_BY_HOUR, SERVICE_MONTHS। সময়কাল: PERIOD_DAYS, CONTRACT_DAYS, MONTH, FY_MONTH, MONTHS_LEFT, FESTIVAL। অনুমোদিত হাজিরা: PRESENT_DAYS, TOUR_DAYS, REMOTE_DAYS, ABSENT_DAYS, HOLIDAYS, LATE_DAYS, OVERTIME_HOURS, OVERTIME_RATE। শিফট: WORKED_HOURS, EXPECTED_HOURS, LATE_MINUTES, EARLY_MINUTES, NIGHT_SHIFTS, OFF_DAYS_WORKED। ছুটি: LEAVE_DAYS, PAID_LEAVE_DAYS, UNPAID_LEAVE_DAYS, HALF_DAYS। ঋণ ও মোট: LOAN, GROSS, DEDUCTIONS। কোড অনুযায়ী: SHIFT_<CODE>, LEAVE_<CODE>, TYPE_<CODE>, P_<CODE>, E_<CODE>, INPUT_<CODE>, YTD_<CODE>, <RULE CODE>। ফাংশন: min, max, abs, round, floor, ceil, if, slab।',
   'The day after the person’s last approved payslip: the settlement pays from here to the last day.':
     'ব্যক্তির সর্বশেষ অনুমোদিত পে-স্লিপের পরের দিন: নিষ্পত্তি এখান থেকে শেষ দিন পর্যন্ত পরিশোধ করে।',
   'The days not given are paid to the person when the company ends the contract, and taken from them when they resign.':
@@ -297,8 +299,6 @@ export const bn: Readonly<Record<string, string>> = {
   'Valid from': 'কার্যকর শুরু',
   'Valid to': 'কার্যকর পর্যন্ত',
   Value: 'মান',
-  'Variables: WAGE, PERIOD_DAYS, CONTRACT_DAYS, SERVICE_MONTHS, MONTH, FY_MONTH, MONTHS_LEFT, FESTIVAL, E_…, PRESENT_DAYS (days on tour included), TOUR_DAYS, ABSENT_DAYS, LEAVE_DAYS, HOLIDAYS, LATE_DAYS, OVERTIME_HOURS, OVERTIME_RATE, LOAN, INPUT_…, YTD_…, P_…, and the codes of earlier rules. Functions: min, max, abs, round, floor, ceil, if, slab.':
-    'চলক: WAGE, PERIOD_DAYS, CONTRACT_DAYS, SERVICE_MONTHS, MONTH, FY_MONTH, MONTHS_LEFT, FESTIVAL, E_…, PRESENT_DAYS (ট্যুরের দিনসহ), TOUR_DAYS, ABSENT_DAYS, LEAVE_DAYS, HOLIDAYS, LATE_DAYS, OVERTIME_HOURS, OVERTIME_RATE, LOAN, INPUT_…, YTD_…, P_… এবং আগের নিয়মগুলোর কোড। ফাংশন: min, max, abs, round, floor, ceil, if, slab।',
   Wallet: 'ওয়ালেট',
   'Wallet number': 'ওয়ালেট নম্বর',
   Warnings: 'সতর্কবার্তা',
