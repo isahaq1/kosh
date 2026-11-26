@@ -83,6 +83,23 @@ holiday; shift swaps; compensatory leave; the final settlement of somebody who l
 - **Attendance's days** computed in sets, like the payroll batch: 30 000 people a day.
 - **Accounting's entries** for a large run (`payroll_account`) summed by the database.
 
+### Implementation notes (2026-11-26): indexes on parent links
+
+- **Found**: 159 links on 149 models — a many2one that is required and deleted with its target, the way a
+  line belongs to its document — had no index: sales and purchase order lines, journal lines, statement lines,
+  budget lines, contracts and leave by employee, and so on (`pnpm index:report` lists them).
+- **As built**: the server indexes them itself. `buildKoshRegistry` adds a Shutro module, `kosh_parent_indexes`,
+  whose extensions set `index: true` on every such field that does not already lead an index or a unique
+  constraint (`parentLinksWithoutIndex`). A module need not remember; a new line model is covered the day it is
+  written. A model that wants another index still declares it.
+- Tests: on a fresh installation of every app, the database has the index on order lines, journal lines,
+  payslip lines, contracts and leave; `pnpm index:report` fails if one is left without.
+- **For an existing installation** the indexes come with its next migration (`shutro-erp migrate`): creating
+  them on large tables takes time and is best done in a quiet hour. This path was not rehearsed here on a
+  database with data.
+- **Not covered**: links that are not a line's parent but are searched by all the same (an order's customer, a
+  move's product); those stay each model's to declare, and want measuring on real volumes.
+
 ## 6. Measurements
 
 `pnpm bench payroll` with `KOSH_BENCH_EMPLOYEES=30000`, 26 attendance days a person and month, PostgreSQL 18 in a

@@ -250,6 +250,31 @@ test('projects, tasks and the timesheets of their authors; the service products 
   ]);
 });
 
+// RFC 0039 §5b: a line's link to its parent is indexed by the server, whatever its module declared. (Approving a
+// payroll run of thirty thousand people took 172 seconds for want of one such index.)
+test('every line is indexed by its parent, in the database', async () => {
+  const leading = async (table: string) =>
+    (
+      await host.server.driver.query<{ col: string }>({
+        text: `SELECT a.attname AS col
+                 FROM pg_index i
+                 JOIN pg_class t ON t.oid = i.indrelid
+                 JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = i.indkey[0]
+                WHERE t.relname = $1`,
+        params: [table],
+      })
+    ).map((r) => r.col);
+  for (const [table, column] of [
+    ['sale_order_line', 'order_id'],
+    ['purchase_order_line', 'order_id'],
+    ['account_move_line', 'move_id'],
+    ['payroll_slip_line', 'slip_id'],
+    ['hr_contract', 'employee_id'],
+    ['hr_leave', 'employee_id'],
+  ] as const)
+    expect(await leading(table), `${table}.${column}`).toContain(column);
+});
+
 // Every app at once, with its demo data: the screens a person opens first must answer. Found by a smoke of an
 // installation of the published package (2026-11-21): the Counter's session crashed its next-step guidance, a
 // guard reading a field nothing had loaded.

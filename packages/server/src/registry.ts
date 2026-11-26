@@ -50,6 +50,81 @@ function changeEventsModule(modules: readonly KoshModule[]): unknown[] {
   ];
 }
 
+/** The Shutro module Kosh adds to index the links of lines to their parents (no models, no Kosh manifest). */
+export const PARENT_INDEXES_MODULE = 'kosh_parent_indexes';
+
+interface DeclaredModel {
+  readonly name: string;
+  readonly fields: Readonly<
+    Record<
+      string,
+      {
+        readonly kind: string;
+        readonly required?: boolean;
+        readonly ondelete?: string;
+        readonly index?: unknown;
+      }
+    >
+  >;
+  readonly indexes?: readonly { readonly fields: readonly string[] }[];
+  readonly sqlConstraints?: readonly {
+    readonly kind: string;
+    readonly fields: readonly string[];
+  }[];
+}
+
+/**
+ * The links of lines to their parents that have no index (RFC 0039 §5b): a many2one that is required and
+ * deleted with its target is how a line finds its document — read on every form, joined in every report,
+ * followed by every cascade — and Shutro indexes only what a model declares. Not those that already lead an
+ * index or a unique constraint. By model.
+ */
+export function parentLinksWithoutIndex(
+  modules: readonly KoshModule[],
+): ReadonlyMap<string, readonly string[]> {
+  const out = new Map<string, string[]>();
+  for (const m of modules)
+    for (const model of (m.shutro as { models?: readonly DeclaredModel[] }).models ?? []) {
+      const led = new Set<string>();
+      for (const index of model.indexes ?? [])
+        if (index.fields[0] !== undefined) led.add(index.fields[0]);
+      for (const c of model.sqlConstraints ?? [])
+        if (c.kind === 'unique' && c.fields[0] !== undefined) led.add(c.fields[0]);
+      const keys = Object.entries(model.fields)
+        .filter(
+          ([key, field]) =>
+            field.kind === 'many2one' &&
+            field.required === true &&
+            field.ondelete === 'cascade' &&
+            (field.index === undefined || field.index === false) &&
+            !led.has(key),
+        )
+        .map(([key]) => key);
+      if (keys.length > 0) out.set(model.name, keys);
+    }
+  return out;
+}
+
+/** Extensions that index those links; empty when every one has its index. */
+function parentIndexesModule(modules: readonly KoshModule[]): unknown[] {
+  const missing = parentLinksWithoutIndex(modules);
+  if (missing.size === 0) return [];
+  return [
+    orm.defineModule({
+      name: PARENT_INDEXES_MODULE,
+      depends: modules.map((m) => m.shutro as never),
+      models: [],
+      extensions: [...missing]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, keys]) =>
+          orm.extendModel(name, {
+            fieldOverrides: Object.fromEntries(keys.map((key) => [key, { index: true }])),
+          }),
+        ),
+    }),
+  ];
+}
+
 /** Loads `modules` (and their dependencies) and builds the Shutro registry. @throws {ServerConfigError} */
 export function buildKoshRegistry(
   modules: readonly KoshModule[],
@@ -66,6 +141,7 @@ export function buildKoshRegistry(
     modules: [
       ...loaded.modules.map((m) => m.shutro as never),
       ...changeEventsModule(loaded.modules),
+      ...parentIndexesModule(loaded.modules),
     ] as never,
     ...(options.security === undefined ? {} : { security: options.security }),
     // Every business record logs its creation, its changes and its deletion (see audit-scope.ts).
@@ -75,7 +151,7 @@ export function buildKoshRegistry(
     },
   } as never) as unknown as Registry;
   for (const name of registry.loadOrder)
-    if (!loaded.byName.has(name) && name !== CHANGE_EVENTS_MODULE)
+    if (!loaded.byName.has(name) && name !== CHANGE_EVENTS_MODULE && name !== PARENT_INDEXES_MODULE)
       throw new ServerConfigError(
         `The Shutro module '${name}' has no Shutro ERP manifest.`,
         'Wrap it with defineModule() from @kosh/modules-sdk (its access levels are required) and depend on it.',

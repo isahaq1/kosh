@@ -136,7 +136,13 @@ export {
   undoMerge,
 } from './merge.js';
 export { migrate, orm, pg } from './orm.js';
-export { buildKoshRegistry, KOSH_VERSION, type KoshRegistry } from './registry.js';
+export {
+  buildKoshRegistry,
+  KOSH_VERSION,
+  type KoshRegistry,
+  PARENT_INDEXES_MODULE,
+  parentLinksWithoutIndex,
+} from './registry.js';
 export {
   type AppsContext,
   createServer,
