@@ -78,6 +78,102 @@ export async function refreshTotals(env: Env, id: number): Promise<void> {
   await env.flush();
 }
 
+/** One thing a run must satisfy, and whether it does. */
+export interface RunCheck {
+  readonly check: 'people' | 'one_each' | 'payslips_add_up' | 'totals';
+  readonly ok: boolean;
+  /** In words, with the figures: what was expected and what was found. */
+  readonly detail: string;
+}
+
+/**
+ * The proof of a run (RFC 0039 §2): what must hold before anybody approves it, worked out by the database over
+ * every payslip — not a sample.
+ *
+ * - **people**: everybody the run pays has been computed, and nobody else has a payslip;
+ * - **one_each**: one payslip a person;
+ * - **payslips_add_up**: on every payslip the gross is the sum of its basic and allowance lines, the deductions
+ *   and the company's contributions the sums of theirs, and the net the gross less the deductions — to the
+ *   poisha;
+ * - **totals**: the run's number of payslips, gross and net are the payslips'.
+ *
+ * A second for thirty thousand people; run on approval, which a run that does not add up refuses.
+ */
+export async function checkRun(env: Env, id: number): Promise<RunCheck[]> {
+  await env.flush();
+  const [run] = await env
+    .model('payroll.run')
+    .browse([id] as never)
+    .load({ company: true, correctionOf: true });
+  if (run === undefined) return [];
+  const expected = await peopleOf(env, run as never, 0, null);
+  const [counts] = await env.sql<{ slips: number; people: number; gross: string; net: string }>`
+    SELECT count(*)::int AS slips, count(DISTINCT employee_id)::int AS people,
+           coalesce(sum(gross), 0)::text AS gross, coalesce(sum(net), 0)::text AS net
+      FROM payroll_slip WHERE run_id = ${id}`;
+  const [strangers] = await env.sql<{ n: number }>`
+    SELECT count(*)::int AS n FROM payroll_slip
+     WHERE run_id = ${id} AND NOT (employee_id = ANY(${expected}::bigint[]))`;
+  const wrong = await env.sql<{ name: string }>`
+    SELECT s.name
+      FROM payroll_slip s
+      LEFT JOIN (
+             SELECT l.slip_id,
+                    coalesce(sum(l.amount) FILTER (WHERE l.category IN ('basic', 'allowance')), 0) AS gross,
+                    coalesce(sum(l.amount) FILTER (WHERE l.category = 'deduction'), 0) AS deductions,
+                    coalesce(sum(l.amount) FILTER (WHERE l.category = 'contribution'), 0) AS contributions
+               FROM payroll_slip_line l
+               JOIN payroll_slip own ON own.id = l.slip_id
+              WHERE own.run_id = ${id}
+              GROUP BY l.slip_id
+           ) lines ON lines.slip_id = s.id
+     WHERE s.run_id = ${id}
+       AND (s.gross <> coalesce(lines.gross, 0)
+            OR s.deductions <> coalesce(lines.deductions, 0)
+            OR s.contributions <> coalesce(lines.contributions, 0)
+            OR s.net <> s.gross - s.deductions)
+     ORDER BY s.id
+     LIMIT 5`;
+  const slips = counts?.slips ?? 0;
+  const people = counts?.people ?? 0;
+  const same = (a: unknown, b: unknown) => orm.toDecimal(String(a ?? 0)).eq(String(b ?? 0));
+  const figures = run as unknown as {
+    slipCount: number | null;
+    gross: unknown;
+    net: unknown;
+  };
+  return [
+    {
+      check: 'people',
+      ok: people === expected.length && (strangers?.n ?? 0) === 0,
+      detail: `${expected.length} people to pay, ${people} with a payslip${
+        (strangers?.n ?? 0) > 0 ? `, ${strangers?.n} payslip(s) of people the run does not pay` : ''
+      }.`,
+    },
+    {
+      check: 'one_each',
+      ok: slips === people,
+      detail: `${slips} payslips for ${people} people.`,
+    },
+    {
+      check: 'payslips_add_up',
+      ok: wrong.length === 0,
+      detail:
+        wrong.length === 0
+          ? 'Every payslip is the sum of its lines.'
+          : `Payslips that are not the sum of their lines: ${wrong.map((w) => w.name).join(', ')}${wrong.length === 5 ? '…' : ''}.`,
+    },
+    {
+      check: 'totals',
+      ok:
+        (figures.slipCount ?? 0) === slips &&
+        same(figures.gross, counts?.gross) &&
+        same(figures.net, counts?.net),
+      detail: `The run says ${figures.slipCount ?? 0} payslips, gross ${String(figures.gross ?? 0)}, net ${String(figures.net ?? 0)}; its payslips are ${slips}, gross ${counts?.gross ?? '0'}, net ${counts?.net ?? '0'}.`,
+    },
+  ];
+}
+
 /**
  * One step of a large run's computation, as the job does it: the next batch, the run's figures, and whether
  * there is more. A formula that fails is written on the run with the person and the rule — the batches done

@@ -1020,6 +1020,19 @@ fix the rule and press *Compute* again. Measured (`pnpm bench payroll`, a month 
 people in about 20 seconds, 0.7 ms a person whatever the size — before this, 7 500 people took 291 seconds and
 30 000 did not finish in half an hour. The *Payslips* tile on the run opens its payslips as a paged list.
 
+**The proof of a run.** Before a run is approved the server proves it, over every payslip: everybody the run pays
+has exactly one payslip, every payslip is the sum of its lines to the poisha, and the run's figures are its
+payslips'. A run that does not add up is not approved — it says which payslips and is computed again. The same
+proof at any time (a quarter of a second for 30 000 people):
+
+```http
+GET /api/v1/payroll/runs/<id>/check
+→ { "ok": true, "checks": [ { "check": "people" | "one_each" | "payslips_add_up" | "totals", "ok", "detail" } ] }
+```
+
+It proves the arithmetic, not the rules: a wrong formula gives payslips that add up. Read the explanation on each
+line, and try a structure on people whose pay you know before the first live run.
+
 ### Bangladesh payroll (`modules/l10n_bd_payroll`, RFC 0024)
 
 Proposed with the Bangladesh localization and Payroll: the *standard* and *garments (RMG)* structures with overtime at

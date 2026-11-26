@@ -23,6 +23,7 @@ import {
 } from './.kosh/bindings.js';
 import {
   COMPUTE_JOB,
+  checkRun,
   computeBatch,
   INLINE_LIMIT,
   recordRepayments,
@@ -475,6 +476,24 @@ export const PayrollRun = defineModel('payroll.run', {
           ),
           message:
             'Compute the payslips before approving the run — and wait until everybody is computed.',
+          // The proof (RFC 0039 §2): a run is approved only if it adds up — everybody it pays has one payslip,
+          // every payslip is the sum of its lines, the run's figures are its payslips'. Worked out by the
+          // database over every payslip; a run that fails is computed again, not approved.
+          before: records('payroll.run', async (runs): Promise<void> => {
+            const env = runs.env as unknown as Env;
+            await env.asSuperuser({ reason: 'payroll run proof' }, async (su) => {
+              for (const id of runs.ids as readonly number[]) {
+                const failed = (await checkRun(su, id)).filter((c) => !c.ok);
+                if (failed.length > 0)
+                  throw new orm.ValidationError(
+                    'payroll.run',
+                    ['slips'],
+                    `The run does not add up. ${failed.map((c) => c.detail).join(' ')}`,
+                    'Compute the payslips again, then approve.',
+                  );
+              }
+            });
+          }),
           after: records('payroll.run', async (runs) => {
             const env = runs.env as unknown as Env;
             await env.asSuperuser({ reason: 'loan repayments' }, async (su) => {

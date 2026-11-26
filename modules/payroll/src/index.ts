@@ -31,6 +31,7 @@ import { registerPayrollRoutes } from './routes.js';
 export {
   BATCH,
   COMPUTE_JOB,
+  checkRun,
   computeBatch,
   computeRuns,
   computeStep,
@@ -42,6 +43,7 @@ export {
   type PaymentFormat,
   type PaymentRow,
   paymentRows,
+  type RunCheck,
   recordRepayments,
   refreshTotals,
   startRun,

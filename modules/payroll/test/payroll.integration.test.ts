@@ -468,6 +468,84 @@ test('a large run is computed by the job, a batch at a time: it shows how far it
   delete process.env['KOSH_PAYROLL_BATCH'];
 });
 
+test('accuracy: the same payslips whatever the batch size, and a run that does not add up is not approved', async () => {
+  const worker = payrollWorker({ shutro: host.server.shutro });
+  // Every line of every payslip of a run — who, which rule, how much and why — as one fingerprint.
+  const fingerprint = async (id: number) => {
+    const [row] = await driver.query<{ fp: string; lines: string }>({
+      text: `SELECT md5(string_agg(s.employee_id || ':' || l.code || ':' || l.amount || ':' || coalesce(l.explanation, ''),
+                                   '|' ORDER BY s.employee_id, l.sequence, l.code)) AS fp,
+                    count(*)::text AS lines
+               FROM payroll_slip s JOIN payroll_slip_line l ON l.slip_id = s.id
+              WHERE s.run_id = $1`,
+      params: [id],
+    });
+    return { fp: row?.fp, lines: Number(row?.lines) };
+  };
+  const computed = async (batch: string) => {
+    process.env['KOSH_PAYROLL_BATCH'] = batch;
+    const run = await call('POST', R, 'otto', { dateFrom: '2027-06-01', dateTo: '2027-06-30' });
+    expect(run.status, JSON.stringify(run.json)).toBe(201);
+    expect((await call('POST', `${R}/${run.json.id}/transitions/compute`, 'otto')).status).toBe(
+      200,
+    );
+    while ((await worker.drain()) > 0);
+    return run.json.id as number;
+  };
+  // The same month computed three times: a hundred people a batch, thirty-seven, three.
+  const hundred = await computed('100');
+  const odd = await computed('37');
+  const three = await computed('3');
+  delete process.env['KOSH_PAYROLL_BATCH'];
+  const first = await fingerprint(hundred);
+  expect(first.lines).toBeGreaterThan(1000);
+  expect(await fingerprint(odd)).toEqual(first);
+  expect(await fingerprint(three)).toEqual(first);
+
+  // The proof: everybody paid once, every payslip the sum of its lines, the run's figures its payslips'.
+  const check = async (id: number, as = 'otto') => call('GET', `${RUNS}/${id}/check`, as);
+  const proven = await check(hundred);
+  expect(proven.status, JSON.stringify(proven.json)).toBe(200);
+  expect(proven.json.ok).toBe(true);
+  expect((proven.json.checks as Json[]).map((c) => [c.check, c.ok])).toEqual([
+    ['people', true],
+    ['one_each', true],
+    ['payslips_add_up', true],
+    ['totals', true],
+  ]);
+  expect((await check(hundred, 'rahim')).status).toBe(403);
+
+  // A payslip changed behind the engine's back — a taka more than its lines say: found, named, and the run
+  // is not approved.
+  const [victim] = await driver.query<{ id: number; name: string }>({
+    text: 'SELECT id, name FROM payroll_slip WHERE run_id = $1 ORDER BY id LIMIT 1',
+    params: [hundred],
+  });
+  await driver.query({
+    text: 'UPDATE payroll_slip SET net = net + 1 WHERE id = $1',
+    params: [victim?.id],
+  });
+  const broken = await check(hundred);
+  expect(broken.json.ok).toBe(false);
+  const failed = (broken.json.checks as Json[]).filter((c) => !c.ok);
+  expect(failed.map((c) => c.check)).toEqual(['payslips_add_up', 'totals']);
+  expect(failed[0].detail).toContain(String(victim?.name));
+  const refused = await run(hundred, 'approve', 'pia');
+  expect(refused.status).toBeGreaterThanOrEqual(400);
+  expect(JSON.stringify(refused.json)).toContain('does not add up');
+  // A payslip missing: somebody the run pays has none.
+  await driver.query({ text: 'DELETE FROM payroll_slip WHERE id = $1', params: [victim?.id] });
+  const short = (await check(hundred)).json.checks as Json[];
+  expect(short.find((c) => c.check === 'people')).toMatchObject({ ok: false });
+  expect((await run(hundred, 'approve', 'pia')).status).toBeGreaterThanOrEqual(400);
+  // Computed again, it adds up and is approved.
+  expect((await run(hundred, 'compute', 'otto')).status).toBe(200);
+  while ((await worker.drain()) > 0);
+  expect((await check(hundred)).json.ok).toBe(true);
+  expect(await fingerprint(hundred)).toEqual(first);
+  expect((await run(hundred, 'approve', 'pia')).status).toBe(200);
+});
+
 test('a temporary person paid by the day: the pay basis, the employment type and the shifts in the rules', async () => {
   const first = async (model: string, where: unknown) =>
     (

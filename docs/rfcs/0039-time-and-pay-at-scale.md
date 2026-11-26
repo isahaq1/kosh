@@ -100,6 +100,28 @@ holiday; shift swaps; compensatory leave; the final settlement of somebody who l
 - **Not covered**: links that are not a line's parent but are searched by all the same (an order's customer, a
   move's product); those stay each model's to declare, and want measuring on real volumes.
 
+### Implementation notes (2026-11-26): accuracy — the proof of a run
+
+Asked: "payroll should be calculate accuratly with a shortime".
+
+- **What accuracy rests on.** Amounts are exact decimals from the formula to the database (`Decimal`, never a JS
+  number); each line is rounded once, to two places, and keeps the formula with its values; a payslip's gross,
+  deductions and net are sums of its lines. Counts of days and halves of days are whole numbers and halves, exact.
+- **The same result whatever the batch.** A month computed in batches of 100, of 37 and of 3 gives the same
+  payslips line for line — who, which rule, how much, and the explanation — compared as one fingerprint.
+- **The proof** (`checkRun`, `GET /api/v1/payroll/runs/:id/check`), worked out by PostgreSQL over **every**
+  payslip of the run: everybody the run pays has a payslip and nobody else; one each; every payslip is the sum
+  of its lines (gross, deductions, the company's contributions, and net = gross − deductions); the run's count,
+  gross and net are its payslips'. Each check says what was expected and what was found, naming payslips.
+- **Approval asks for it.** A run that does not add up is not approved: it says why and is computed again. A
+  payslip changed by a taka behind the engine's back, or a payslip missing, stops it (tested).
+- **Measured at 30 000**: the proof 0.25 s; approval, which includes it, 0.28 s. The benchmark also checks,
+  from the contracts and independently of the engine, that every one of the 30 000 gross amounts is the wage it
+  should be — and fails if one is not.
+- **What the proof does not say**: that the *rules* are right. A wrong formula computes wrong payslips that add
+  up perfectly. For that: the explanation on every line, the comparison with the previous run (*With a warning*,
+  the difference column), and a company's own test of its structure on known people before the first live run.
+
 ### Implementation notes (2026-11-26): Attendance's days in sets, and every night
 
 - **Measured before** (`pnpm bench attendance`): 2 000 people, one day 24.7 s, a week 41.6 s — eight queries a

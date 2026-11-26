@@ -3,12 +3,20 @@
  *
  * - `POST /api/v1/payroll/formula`                   `{ formula }`: whether it parses, and the variables it reads
  * - `POST /api/v1/payroll/runs/:id/correction`       managers: a correction run of an approved run (computed)
+ * - `GET  /api/v1/payroll/runs/:id/check`            officers: the proof of a run — `{ ok, checks }`
  * - `GET  /api/v1/payroll/payment-formats`           the payment file formats
  * - `GET  /api/v1/payroll/runs/:id/payment-file?format=`  officers: an approved run's file (bank, bkash, nagad…)
  */
 import { audit, HttpProblem, type ModuleContext } from '@kosh/server';
 import type { Env } from './.kosh/bindings.js';
-import { COMPUTE_JOB, computeStep, isoDate, PAYMENT_FORMATS, paymentRows } from './compute.js';
+import {
+  COMPUTE_JOB,
+  checkRun,
+  computeStep,
+  isoDate,
+  PAYMENT_FORMATS,
+  paymentRows,
+} from './compute.js';
 import { FormulaError, parse, variablesOf } from './formula.js';
 
 const officer = (env: Env) => env.administrator || env.groups.has('payroll.officer');
@@ -129,6 +137,37 @@ export function registerPayrollRoutes(context: ModuleContext): void {
           return created.ids[0] as number;
         });
         return reply.code(201).send({ id: made });
+      },
+      { write: true },
+    );
+  });
+
+  // `GET /api/v1/payroll/runs/:id/check`: the proof of a run — whether everybody it pays has one payslip,
+  // every payslip is the sum of its lines, and the run's figures are its payslips'. Officers; the same proof
+  // approval asks for.
+  app.get('/api/v1/payroll/runs/:id/check', async (request) => {
+    const id = Number((request.params as { id?: string }).id);
+    if (!Number.isSafeInteger(id) || id <= 0)
+      throw new HttpProblem(400, 'invalid-input', 'Which run', 'A run by its id.');
+    return request.env(
+      async (raw) => {
+        const env = raw as unknown as Env;
+        if (!officer(env))
+          throw new HttpProblem(
+            403,
+            'access',
+            'Payroll officers',
+            'This needs the Payroll officer role.',
+          );
+        return env.asSuperuser({ reason: 'payroll run proof' }, async (su) => {
+          const [run] = await su
+            .model('payroll.run')
+            .search({ where: { id: id as never }, limit: 1 });
+          if (run === undefined)
+            throw new HttpProblem(404, 'missing-record', 'Not found', `There is no run ${id}.`);
+          const checks = await checkRun(su, id);
+          return { ok: checks.every((c) => c.ok), checks };
+        });
       },
       { write: true },
     );

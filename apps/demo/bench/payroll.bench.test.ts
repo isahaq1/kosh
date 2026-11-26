@@ -139,6 +139,24 @@ async function computeRun(title: string, from: string, to: string): Promise<numb
   results[`${title}: payslips`] = run.json.slipCount;
   results[`${title}: seconds`] = Math.round(ms / 100) / 10;
   results[`${title}: ms per person`] = Math.round((ms / run.json.slipCount) * 10) / 10;
+  // The proof, over every payslip (RFC 0039 §2): everybody paid once, each payslip the sum of its lines, the
+  // run's figures its payslips' — and each person paid what their wage makes on the standard structure.
+  const proving = performance.now();
+  const proof = await call('GET', `/api/v1/payroll/runs/${created.json.id}/check`);
+  expect(proof.status, JSON.stringify(proof.json).slice(0, 400)).toBe(200);
+  expect(proof.json.checks.filter((c: Json) => !c.ok)).toEqual([]);
+  results[`${title}: proved in ms`] = Math.round(performance.now() - proving);
+  expect(Number(results[`${title}: proved in ms`])).toBeLessThan(10_000);
+  // Independently of the engine: the gross is the contract's wage (basic 60 %, house rent 24 %, other 16 %),
+  // for every one of them, worked out by the database from the contracts.
+  const [off] = await driver.query<{ n: string }>({
+    text: `SELECT count(*)::text AS n
+             FROM payroll_slip s JOIN hr_contract c ON c.id = s.contract_id
+            WHERE s.run_id = $1 AND s.gross <> c.wage`,
+    params: [created.json.id],
+  });
+  results[`${title}: payslips whose gross is not the wage`] = Number(off?.n);
+  expect(Number(off?.n)).toBe(0);
   // What follows the computation: the approval (loan repayments recorded) and the bank's file.
   const approving = performance.now();
   const approved = await call(
