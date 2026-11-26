@@ -20,6 +20,7 @@ import {
   PayrollParameter,
   PayrollRule,
   PayrollRun,
+  PayrollSettlement,
   PayrollSlab,
   PayrollSlip,
   PayrollSlipLine,
@@ -70,6 +71,8 @@ export {
   PayrollParameter,
   PayrollRule,
   PayrollRun,
+  PayrollSettlement,
+  PayrollSettlementLine,
   PayrollSlab,
   PayrollSlabBand,
   PayrollSlip,
@@ -78,6 +81,13 @@ export {
   payrollShutro,
 } from './module.js';
 export { payrollWorker } from './routes.js';
+export {
+  computeSettlement,
+  fullMonths,
+  SETTLEMENT_VARIABLES,
+  type SettlementLineInput,
+  settle,
+} from './settlement.js';
 
 const MONTHS = {
   '1': 'January',
@@ -149,6 +159,11 @@ export const payroll: ReturnType<typeof defineModule> = defineModule({
   events: [
     { topic: 'payroll.run.approved', model: 'payroll.run', label: 'Payroll run approved' },
     { topic: 'payroll.loan.started', model: 'payroll.loan', label: 'Salary loan started' },
+    {
+      topic: 'payroll.settlement.approved',
+      model: 'payroll.settlement',
+      label: 'Final settlement approved',
+    },
   ],
   documents: [
     {
@@ -229,6 +244,56 @@ export const payroll: ReturnType<typeof defineModule> = defineModule({
             kind: 'text',
             id: 'sign',
             text: 'Prepared by: ______________   Approved by: ______________',
+          },
+        ],
+      },
+    },
+    {
+      key: 'final_settlement',
+      name: 'Final settlement',
+      model: 'payroll.settlement',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Final settlement {{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'who',
+            items: [
+              { label: 'Employee', bind: 'employee.name' },
+              { label: 'Last day', bind: 'lastDay' },
+              { label: 'Why', bind: 'reason' },
+              { label: 'Unpaid from', bind: 'unpaidFrom' },
+              { label: 'Notice owed (days)', bind: 'noticeDays' },
+              { label: 'Notice given (days)', bind: 'noticeServed' },
+            ],
+          },
+          {
+            kind: 'table',
+            id: 'lines',
+            bind: 'lines',
+            columns: [
+              { label: 'What', bind: 'name' },
+              { label: 'Kind', bind: 'category' },
+              { label: 'Amount', bind: 'amount' },
+              { label: 'How it came about', bind: 'explanation' },
+            ],
+          },
+          {
+            kind: 'fields',
+            id: 'totals',
+            items: [
+              { label: 'Owed to the person', bind: 'gross' },
+              { label: 'Owed by the person', bind: 'deductions' },
+              { label: 'To pay', bind: 'net' },
+            ],
+          },
+          {
+            kind: 'text',
+            id: 'sign',
+            text: 'Received in full and final settlement: ______________   Approved by: ______________',
           },
         ],
       },
@@ -357,6 +422,12 @@ export const payroll: ReturnType<typeof defineModule> = defineModule({
         reason:
           'Runs are computed from contracts, attendance and inputs, which import; a run is never typed in.',
       },
+      {
+        rule: 'I1',
+        model: 'payroll.settlement',
+        reason:
+          'A settlement is worked out by the server for one person who leaves, and approved; there is nothing to import.',
+      },
     ],
   },
   overview: {
@@ -431,6 +502,10 @@ export const payroll: ReturnType<typeof defineModule> = defineModule({
       views: ['list', 'form'],
     }),
     'payroll.action_loans': action(PayrollLoan, { label: 'Loans', views: ['list', 'form'] }),
+    'payroll.action_settlements': action(PayrollSettlement, {
+      label: 'Final settlements',
+      views: ['list', 'form'],
+    }),
     'payroll.action_structures': action(PayrollStructure, {
       label: 'Salary structures',
       views: ['list', 'form'],
@@ -472,6 +547,13 @@ export const payroll: ReturnType<typeof defineModule> = defineModule({
       label: 'Loans',
       action: 'payroll.action_loans',
       sequence: 4,
+    },
+    {
+      id: 'payroll.settlements',
+      parent: 'payroll.root',
+      label: 'Final settlements',
+      action: 'payroll.action_settlements',
+      sequence: 4.5,
     },
     {
       id: 'payroll.values',
@@ -672,11 +754,78 @@ export const payroll: ReturnType<typeof defineModule> = defineModule({
       ],
       chatter: true,
     })),
+    'payroll.settlement.list': list(PayrollSettlement, {
+      columns: [
+        'name',
+        'employee',
+        'lastDay',
+        'reason',
+        { field: 'gross', sum: true },
+        { field: 'deductions', sum: true },
+        { field: 'net', sum: true },
+        { field: 'state', widget: 'badge' },
+      ],
+      defaultOrder: ['lastDay desc'],
+      decorations: {
+        success: { state: 'approved' },
+        warning: { warnings: { ne: null }, state: { in: ['draft', 'computed'] } },
+        neutral: { state: 'cancelled' },
+      },
+    }),
+    'payroll.settlement.form': form(PayrollSettlement, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('compute', { primary: true, label: 'Compute' }),
+          k.button('approve', {
+            primary: true,
+            label: 'Approve',
+            confirm:
+              'Approve the settlement? Its payroll run is made and booked, the loans are repaid and the contract ends on the last day.',
+          }),
+          k.button('redraft', { label: 'Back to draft' }),
+          k.button('cancel', { label: 'Cancel' }),
+        ],
+      },
+      readonlyWhen: { state: { in: ['approved', 'cancelled'] } },
+      sheet: [
+        k.group('main', ['name', 'employee', 'lastDay', 'reason'], {
+          description:
+            'Compute works out what the person is owed and owes up to the last day; add lines by hand for anything else, then compute again.',
+        }),
+        k.group('notice', ['noticeDays', 'noticeServed'], {
+          label: 'Notice',
+          description:
+            'The days not given are paid to the person when the company ends the contract, and taken from them when they resign.',
+        }),
+        k.lines('lines', [
+          { field: 'name', id: 'line_name' },
+          'category',
+          'amount',
+          'quantity',
+          'explanation',
+          'manual',
+        ]),
+        k.group('totals', ['unpaidFrom', 'gross', 'deductions', 'net'], { label: 'Totals' }),
+        k.group('check', ['warnings'], { label: 'To check' }),
+        k.group('after', ['contract', 'run', 'note'], {
+          label: 'Once approved',
+          description: 'The settlement is paid from its payroll run, like any run.',
+        }),
+      ],
+      chatter: true,
+    })),
     'payroll.structure.list': list(PayrollStructure, { columns: ['name'] }),
     'payroll.structure.form': form(PayrollStructure, (k) => ({
       header: { buttons: [] },
       sheet: [
         k.group('main', ['name', 'note']),
+        k.group('settlement', ['settleSalary', 'settleGratuity', 'settleNotice'], {
+          label: 'Final settlement',
+          columns: 1,
+          description:
+            'What a person who leaves is valued by, in the payroll language. The formulas may read WAGE, UNPAID_DAYS, WORKED_DAYS, WORKED_HOURS, SERVICE_MONTHS, SERVICE_YEARS, NOTICE_DAYS, NOTICE_SERVED, NOTICE_SHORT, PAID_BY_DAY and PAID_BY_HOUR.',
+        }),
         k.lines('rules', [
           'sequence',
           'code',
@@ -796,6 +945,14 @@ export const payroll: ReturnType<typeof defineModule> = defineModule({
     'payroll.input': search(PayrollInput, {
       fields: ['employee.name', 'code', 'note'],
       groupBy: ['code', 'employee', 'date:month'],
+    }),
+    'payroll.settlement': search(PayrollSettlement, {
+      fields: ['name', 'employee.name'],
+      filters: {
+        to_approve: { label: 'To approve', domain: { state: 'computed' }, group: 'state' },
+        approved: { label: 'Approved', domain: { state: 'approved' }, group: 'state' },
+      },
+      groupBy: ['reason', 'state', 'lastDay:month'],
     }),
     'payroll.loan': search(PayrollLoan, {
       fields: ['name', 'employee.name'],

@@ -333,6 +333,36 @@ Asked: "employee can be contactual, temporary and other".
 - **Not measured at 30 000 people**: the monthly accrual itself (`accruePerson`, `refreshPerson`) still goes
   person by person with several queries each. The compensatory parts are set-based.
 
+## Implementation notes — the final settlement (2026-11-26)
+
+- **`payroll.settlement`** (`FS/{year}/…`) with its lines, in Payroll: the person, the last day, why, the notice
+  owed and given. *Compute* (`settlement.ts`) writes the server's lines — `SALARY` of the days since the last
+  approved regular payslip, `GRATUITY`, `NOTICE_PAY` or `NOTICE_SHORT`, `LOAN_SETTLE`, what other apps add —
+  each with its explanation; lines added by hand are kept. Three formulas on the salary structure value them
+  (`settleSalary`, `settleGratuity`, `settleNotice`), checked when saved.
+- **Paid as a payroll run of its own** (kind *settlement*, one payslip made of the settlement's lines) rather
+  than by a second way of paying: the run's proof, its entry in the books (`payroll_account`), *Mark as paid* and
+  the bank's file are the ones every run has. `peopleOf` knows a settlement run pays its one person.
+- **Approval**: a Payroll manager, never their own. The settlement is computed again first and refused when the
+  net differs from what was shown — a loan instalment or a payslip approved in between. Then, once: the run is
+  made, computed, proved and approved; the loans repaid in full and finished; the contract's end set to the last
+  day and the contract ended when that day has come; `settledOut` for other apps.
+- **Not paid twice**: a regular run leaves out anybody with an approved settlement whose first unpaid day is in
+  or before its period.
+- **Leave** (`hr_accrual`, through `extraLines` / `settledOut`): every day left on the last day of each plan
+  that pays days out — the days that otherwise stay included — at the plan's value of a day; approved, the days
+  leave the ledger as *Paid out*.
+- One settlement a person (cancelled ones apart). People read their own once approved.
+- Tests: a resignation with ten days of notice short, two years of service and a loan (15 000 + 30 000 − 10 000
+  − 6 000), a line by hand kept, an officer refused, stale figures refused, the run of the kind with its proof,
+  the loan repaid, the contract ended, June's run without the person, who reads what, a second settlement
+  refused; a termination pays the notice; nobody approves their own; the leave left paid and taken from the ledger.
+- **Left out**: income tax on the settlement (a line by hand); provident fund balances paid out; pending
+  one-off inputs of the last month (they are not read: add them by hand); days already paid after the last day
+  are warned about, not taken back by themselves; a contract whose last day is still to come is given its end
+  date but is ended by hand once the day has come; undoing an approved settlement; a browser test of the form;
+  the settlement run's entry was not asserted in `payroll_account`'s tests (it is the same code as any run's).
+
 ## Step 3 is done but for
 
 Days by shift (`SHIFT_<CODE>` — shifts have no code yet), and the list of variables shown where a rule is

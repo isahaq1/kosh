@@ -10,7 +10,14 @@
  */
 import { attendanceShutro } from '@kosh/attendance';
 import { hrShutro, leaveDays } from '@kosh/hr';
-import { evaluate, FormulaError, parse, payrollShutro, variablesOf } from '@kosh/payroll';
+import {
+  evaluate,
+  FormulaError,
+  parse,
+  payrollShutro,
+  type SettlementLineInput,
+  variablesOf,
+} from '@kosh/payroll';
 import { emitting } from '@kosh/server';
 import { type Decimal, orm } from '@kosh/server/orm';
 import {
@@ -1260,6 +1267,131 @@ export const LeaveByAccrual = extendModel('hr.leave', {
   },
 });
 
+const LEAVE_LINE = /^LEAVE_(\d+)$/;
+
+/**
+ * The leave left when a person leaves (RFC 0039 §6): a final settlement pays the whole balance on the last day of
+ * every plan whose days may be paid out — nothing stays, there is no later —, valued by the plan's formula; once
+ * the settlement is approved the days leave the ledger.
+ */
+export const SettlementLeave = extendModel('payroll.settlement', {
+  overrides: {
+    extraLines: async function (
+      this: unknown,
+      next: () => Promise<SettlementLineInput[]>,
+    ): Promise<SettlementLineInput[]> {
+      const settlements = this as Records<'payroll.settlement'>;
+      const env = settlements.env as unknown as Env;
+      const lines = [...(await next())];
+      await env.asSuperuser({ reason: 'the leave left in a final settlement' }, async (su) => {
+        const today = iso(su.today());
+        for (const s of await su
+          .model('payroll.settlement')
+          .browse(settlements.ids as never)
+          .load({ employee: ['company', 'hireDate'] })) {
+          const person = personOf(s.employee);
+          if (person === null) continue;
+          const lastDay = iso(s.lastDay);
+          const [contract] = await su.model('hr.contract').search({
+            where: {
+              employee: person.id as never,
+              state: 'running',
+              dateStart: { lte: lastDay },
+            } as never,
+            order: ['dateStart desc', 'id desc'],
+            limit: 1,
+          });
+          if (contract === undefined || contract.wage === null) continue;
+          const plans = await su
+            .model('hr.accrual.plan')
+            .search({
+              where: {
+                company: s.employee.company.id as never,
+                active: true,
+                encashable: true,
+              } as never,
+              order: ['id asc'],
+            })
+            .then((found) => found.load(['type', 'company']));
+          for (const p of plans) {
+            const on = await projectPerson(su, planRow(p), person, lastDay, today);
+            const left = cents(on.balance);
+            if (left <= 0) continue;
+            let value: Decimal;
+            try {
+              value = evaluate(parse(p.encashFormula), {
+                variables: new Map<string, Decimal>(
+                  Object.entries({
+                    WAGE: contract.wage,
+                    DAYS: days(left),
+                    BALANCE: days(left),
+                    SERVICE_YEARS: Math.floor(
+                      serviceMonthsAt(person.joined, lastDay.slice(0, 7)) / 12,
+                    ),
+                  }).map(([name, v]) => [name, orm.toDecimal(v)]),
+                ),
+                slabs: new Map(),
+              }).toDecimalPlaces(2);
+            } catch (error) {
+              if (error instanceof FormulaError) continue;
+              throw error;
+            }
+            const amount = value.times(days(left)).toDecimalPlaces(2);
+            if (amount.lte(0)) continue;
+            lines.push({
+              code: `LEAVE_${p.id}`,
+              name: `Leave not taken: ${p.name}`,
+              category: 'allowance',
+              amount: amount.toFixed(2),
+              explanation: `${days(left)} day(s) left on ${lastDay} × ${value.toFixed(2)} a day (${p.encashFormula}) = ${amount.toFixed(2)}`,
+              quantity: days(left),
+            });
+          }
+        }
+      });
+      return lines;
+    },
+    settledOut: async function (this: unknown, next: () => Promise<void>): Promise<void> {
+      await next();
+      const settlements = this as Records<'payroll.settlement'>;
+      const env = settlements.env as unknown as Env;
+      await env.asSuperuser({ reason: 'leave paid out by a final settlement' }, async (su) => {
+        const today = iso(su.today());
+        for (const s of await su
+          .model('payroll.settlement')
+          .browse(settlements.ids as never)
+          .load({ employee: ['company', 'hireDate'], lines: true })) {
+          const person = personOf(s.employee);
+          for (const line of s.lines) {
+            const plan = Number(LEAVE_LINE.exec(line.code)?.[1]);
+            const paid = cents(line.quantity);
+            if (!Number.isInteger(plan) || paid <= 0) continue;
+            const [p] = await su
+              .model('hr.accrual.plan')
+              .search({ where: { id: plan as never } as never, limit: 1 })
+              .then((found) => found.load(['type', 'company']));
+            if (p === undefined) continue;
+            await su.model('hr.accrual.entry').create([
+              {
+                employee: s.employee.id,
+                plan,
+                company: p.company.id,
+                date: iso(s.lastDay),
+                kind: 'encashment',
+                days: days(-paid),
+                period: iso(s.lastDay).slice(0, 7),
+                note: `Paid out: final settlement ${s.name}`,
+              } as never,
+            ]);
+            await su.flush();
+            if (person !== null) await refreshPerson(su, planRow(p), person, today);
+          }
+        }
+      });
+    },
+  },
+});
+
 export const hrAccrualShutro = defineModule({
   name: 'hr_accrual',
   version: '0.1.0',
@@ -1287,5 +1419,5 @@ export const hrAccrualShutro = defineModule({
     }),
   ],
   models: [AccrualPlan, AccrualEntry, AccrualBalance, LeaveEncashment],
-  extensions: [LeaveByAccrual],
+  extensions: [LeaveByAccrual, SettlementLeave],
 });

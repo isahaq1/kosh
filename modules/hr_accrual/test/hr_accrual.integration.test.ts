@@ -505,3 +505,39 @@ test('compensatory days: an approved day off worked earns a day, once; the oldes
   await runOn('2027-11-12');
   expect(await ledger('rafi', 'compPlan')).toEqual(lost);
 });
+
+test('a final settlement pays the leave left on the last day, and the days leave the ledger', async () => {
+  const S = '/api/v1/models/payroll.settlement';
+  const id = await make('payroll.settlement', 'pia', {
+    employee: ids['rafi'],
+    lastDay: '2027-12-15',
+    reason: 'retirement',
+  });
+  const balance = async () => Number((await projection('pia', 'rafi', '2027-12-15')).json.balance);
+  const left = await balance();
+  expect(left).toBeGreaterThan(0);
+  const computed = await call('POST', `${S}/${id}/transitions/compute`, 'pia');
+  expect(computed.status, JSON.stringify(computed.json)).toBe(200);
+  const lines = (
+    await call(
+      'GET',
+      `/api/v1/models/payroll.settlement.line?filter=${encodeURIComponent(JSON.stringify({ settlement: id }))}&fields=code,amount,quantity,category,explanation`,
+      'pia',
+    )
+  ).json.items as Json[];
+  const leave = lines.find((l) => l.code === `LEAVE_${ids['plan']}`);
+  // Every day left, the two that otherwise stay included, at the plan's 45 000 / 30 a day.
+  expect(Number(leave.quantity)).toBe(left);
+  expect(Number(leave.amount)).toBe(left * 1500);
+  expect(leave.category).toBe('allowance');
+  expect(leave.explanation).toContain('WAGE / 30');
+  // Computed again: one line, not two.
+  await call('POST', `${S}/${id}/transitions/compute`, 'pia');
+  const before = await ledger('rafi', 'plan');
+  const approved = await call('POST', `${S}/${id}/transitions/approve`, 'pia');
+  expect(approved.status, JSON.stringify(approved.json)).toBe(200);
+  const after = await ledger('rafi', 'plan');
+  expect(after).toHaveLength(before.length + 1);
+  expect(after).toContain(`encashment 2027-12-15 ${(-left).toFixed(2)}`);
+  expect(await balance()).toBe(0);
+});

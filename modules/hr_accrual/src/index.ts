@@ -56,6 +56,7 @@ export {
   type ProjectionStep,
   payOut,
   projectLeave,
+  SettlementLeave,
 } from './module.js';
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;

@@ -233,12 +233,24 @@ async function peopleOf(
   const from = isoDate(run.dateFrom);
   const to = isoDate(run.dateTo);
   const corrected = run.correctionOf?.id ?? null;
+  // A settlement's run pays its one person (RFC 0039 §6).
+  if ((run as { kind?: string }).kind === 'settlement')
+    return (
+      await env.sql<{ employee_id: string | number }>`
+        SELECT f.employee_id FROM payroll_settlement f
+         WHERE f.run_id = ${run.id} AND f.employee_id > ${after}
+         ORDER BY f.employee_id LIMIT ${limit ?? 2_000_000_000}`
+    ).map((r) => Number(r.employee_id));
   const rows = await env.sql<{ employee_id: string | number }>`
     SELECT DISTINCT c.employee_id
       FROM hr_contract c
      WHERE c.company_id = ${run.company.id} AND c.state = 'running' AND c.structure_id IS NOT NULL
        AND c.date_start <= ${to}::date AND (c.date_end IS NULL OR c.date_end >= ${from}::date)
        AND c.employee_id > ${after}
+       -- Somebody whose final settlement is approved is paid by it from its first unpaid day on, not twice.
+       AND NOT EXISTS (SELECT 1 FROM payroll_settlement f
+                        WHERE f.employee_id = c.employee_id AND f.state = 'approved'
+                          AND f.unpaid_from <= ${to}::date)
        AND (${corrected}::bigint IS NULL
             OR c.employee_id IN (SELECT s.employee_id FROM payroll_slip s WHERE s.run_id = ${corrected}::bigint))
      ORDER BY c.employee_id
@@ -746,7 +758,8 @@ export async function recordRepayments(env: Env, runIds: readonly number[]): Pro
     .model('payroll.run')
     .browse(runIds as never)
     .load(['kind', 'dateTo'])) {
-    if (run.kind === 'correction') continue;
+    // A settlement repays its person's loans in full itself.
+    if (run.kind === 'correction' || run.kind === 'settlement') continue;
     // Only the payslips that took a loan instalment, found by the database: a run of thirty thousand people
     // is not read payslip by payslip for the few who repay a loan (RFC 0039 §2).
     await env.flush();

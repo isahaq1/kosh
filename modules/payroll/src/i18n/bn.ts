@@ -3,23 +3,31 @@ export const bn: Readonly<Record<string, string>> = {
   'A code is written in capitals, digits and _.': 'কোড বড় হাতের অক্ষর, অঙ্ক ও _ দিয়ে লিখুন।',
   'A correction names the run it corrects; a regular run none.':
     'সংশোধনীতে যে রান সংশোধন করা হচ্ছে তার নাম থাকে; নিয়মিত রানে থাকে না।',
-  'A correction pays the difference to an approved run of the same period, which stays as it was.':
-    'সংশোধনী একই মেয়াদের অনুমোদিত রানের সাথে পার্থক্যটুকু পরিশোধ করে; সেই রান অপরিবর্তিত থাকে।',
+  'A correction pays the difference to an approved run of the same period, which stays as it was. A final settlement’s run is made by its settlement and pays the person who leaves.':
+    'সংশোধনী একই সময়ের অনুমোদিত রানের সঙ্গে পার্থক্যটুকু পরিশোধ করে, আগের রানটি যেমন ছিল তেমনই থাকে। চূড়ান্ত নিষ্পত্তির রান তার নিষ্পত্তি থেকেই তৈরি হয় এবং বিদায়ী ব্যক্তিকে পরিশোধ করে।',
   'A correction: the net of the person’s payslip in the corrected run.':
     'সংশোধনী: সংশোধিত রানে ব্যক্তির বেতন স্লিপের নিট।',
+  'A final settlement is approved by a Payroll manager, never one’s own — and once it is computed.':
+    'চূড়ান্ত নিষ্পত্তি অনুমোদন করেন একজন পে-রোল ব্যবস্থাপক, কখনো নিজেরটি নয় — এবং হিসাব হওয়ার পরেই।',
   'A loan and its instalment are positive, the instalment no more than the loan.':
     'ঋণ ও তার কিস্তি ধনাত্মক হবে, কিস্তি ঋণের চেয়ে বেশি হবে না।',
   'A rule ends on or after it starts.': 'নিয়ম শুরুর দিন বা তার পরে শেষ হয়।',
   'A run ends on or after it starts.': 'রান শুরুর দিন বা তার পরে শেষ হয়।',
   'A run of more than 200 people is computed in the background, 500 at a time: it can be approved once everybody is computed.':
     '২০০ জনের বেশি লোকের রান পটভূমিতে হিসাব হয়, একবারে ৫০০ জন করে: সবার হিসাব শেষ হলে এটি অনুমোদন করা যায়।',
+  'A settlement formula is not in the payroll language.': 'নিষ্পত্তির একটি সূত্র পে-রোলের ভাষায় নেই।',
   'Account number': 'হিসাব নম্বর',
   Active: 'সক্রিয়',
+  'Added by hand': 'হাতে যোগ করা',
   Allowance: 'ভাতা',
   Amount: 'অঙ্ক',
+  'An amount is not negative: what is taken from the person is a line owed by them.':
+    'পরিমাণ ঋণাত্মক হয় না: ব্যক্তির কাছ থেকে যা নেওয়া হয় তা তাঁর দেনার লাইন।',
   'Applies when': 'যখন প্রযোজ্য',
   Approve: 'অনুমোদন করুন',
   'Approve and lock this run?': 'এই রান অনুমোদন করে লক করবেন?',
+  'Approve the settlement? Its payroll run is made and booked, the loans are repaid and the contract ends on the last day.':
+    'নিষ্পত্তি অনুমোদন করবেন? এর পে-রোল রান তৈরি ও হিসাবভুক্ত হবে, ঋণ পরিশোধ হবে এবং চুক্তি শেষ দিনে শেষ হবে।',
   Approved: 'অনুমোদিত',
   'Back to draft': 'খসড়ায় ফেরত নিন',
   'Band rate (%)': 'স্তরের হার (%)',
@@ -45,6 +53,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Company contribution': 'প্রতিষ্ঠানের অংশ',
   'Company contributions': 'প্রতিষ্ঠানের অংশসমূহ',
   Computation: 'হিসাব',
+  Compute: 'হিসাব করুন',
   'Compute Cursor': 'হিসাবের অবস্থান',
   'Compute payslips': 'বেতন স্লিপ হিসাব করুন',
   'Compute Round': 'হিসাবের দফা',
@@ -52,7 +61,11 @@ export const bn: Readonly<Record<string, string>> = {
     'রান অনুমোদনের আগে পেস্লিপ হিসাব করুন — এবং সবার হিসাব শেষ হওয়া পর্যন্ত অপেক্ষা করুন।',
   'Compute the payslips, read their warnings, then approve: an approved run is locked.':
     'বেতন স্লিপ হিসাব করুন, সতর্কবার্তা পড়ুন, তারপর অনুমোদন করুন: অনুমোদিত রান লক হয়ে যায়।',
+  'Compute works out what the person is owed and owes up to the last day; add lines by hand for anything else, then compute again.':
+    'হিসাব করলে শেষ দিন পর্যন্ত ব্যক্তির পাওনা ও দেনা বের হয়; অন্য কিছুর জন্য হাতে লাইন যোগ করুন, তারপর আবার হিসাব করুন।',
   Computed: 'হিসাবকৃত',
+  'Computed by the server, checked, approved — which makes its payroll run, repays the loans and ends the contract.':
+    'সার্ভার হিসাব করে, যাচাই হয়, অনুমোদিত হয় — এতে এর পে-রোল রান তৈরি হয়, ঋণ পরিশোধ হয় এবং চুক্তি শেষ হয়।',
   'Computed, checked, approved (then locked), paid.': 'হিসাবকৃত, যাচাইকৃত, অনুমোদিত (তারপর লক), পরিশোধিত।',
   Configuration: 'কনফিগারেশন',
   Contract: 'চুক্তি',
@@ -63,6 +76,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Created At': 'তৈরির সময়',
   'Created By': 'তৈরি করেছেন',
   Date: 'তারিখ',
+  'Days of notice are not negative.': 'নোটিশের দিন ঋণাত্মক হয় না।',
+  Death: 'মৃত্যু',
   'Deducted each month': 'মাসিক কর্তন',
   Deduction: 'কর্তন',
   Deductions: 'কর্তনসমূহ',
@@ -74,13 +89,21 @@ export const bn: Readonly<Record<string, string>> = {
     'কর্মী: ______________   প্রতিষ্ঠানের পক্ষে: ______________',
   'Empty: always; otherwise a formula that is not zero (SERVICE_MONTHS >= 12).':
     'খালি: সবসময়; অন্যথায় এমন সূত্র যার মান শূন্য নয় (SERVICE_MONTHS >= 12)।',
+  'End of the contract': 'চুক্তির মেয়াদ শেষ',
   Explanation: 'ব্যাখ্যা',
   'Festival bonus run': 'উৎসব ভাতার রান',
+  'Final settlement': 'চূড়ান্ত নিষ্পত্তি',
+  'Final settlement {{name}}': 'চূড়ান্ত নিষ্পত্তি {{name}}',
+  'Final settlement approved': 'চূড়ান্ত নিষ্পত্তি অনুমোদিত',
+  'Final settlements': 'চূড়ান্ত নিষ্পত্তি',
   'First deduction in': 'প্রথম কর্তনের মাস',
   'Fiscal year': 'অর্থবছর',
+  For: 'যার জন্য',
   'For information': 'তথ্যের জন্য',
   Formula: 'সূত্র',
   From: 'থেকে',
+  'From the day after the last approved payslip to the last day. It may read WAGE, UNPAID_DAYS, WORKED_DAYS, WORKED_HOURS, PAID_BY_DAY and PAID_BY_HOUR.':
+    'সর্বশেষ অনুমোদিত পে-স্লিপের পরের দিন থেকে শেষ দিন পর্যন্ত। এটি WAGE, UNPAID_DAYS, WORKED_DAYS, WORKED_HOURS, PAID_BY_DAY ও PAID_BY_HOUR পড়তে পারে।',
   'From the rule: whether the amount adds to the gross, comes off it, or is paid by the company on top.':
     'নিয়ম অনুযায়ী: অঙ্কটি মোট বেতনে যোগ হয়, তা থেকে বাদ যায়, নাকি প্রতিষ্ঠান অতিরিক্ত পরিশোধ করে।',
   Gross: 'মোট বেতন',
@@ -88,6 +111,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Gross less deductions: what is paid out.': 'মোট বেতন থেকে কর্তন বাদে: যা পরিশোধ করা হয়।',
   'How far the computation is. The run is approved once everybody is computed.':
     'হিসাব কতদূর এগিয়েছে। সবার হিসাব শেষ হলে রান অনুমোদন করা হয়।',
+  'How it came about': 'কীভাবে হিসাব হলো',
   'How many people the run pays; a large run is computed in the background, a batch at a time.':
     'রানে কতজনকে বেতন দেওয়া হয়; বড় রান পটভূমিতে, দফায় দফায় হিসাব হয়।',
   ID: 'আইডি',
@@ -99,11 +123,16 @@ export const bn: Readonly<Record<string, string>> = {
   Inputs: 'ইনপুটসমূহ',
   Item: 'আইটেম',
   Kind: 'ধরন',
+  'Last day': 'শেষ দিন',
   Lines: 'লাইন',
+  'Lines added by hand are kept when the settlement is computed again; the server’s are replaced.':
+    'নিষ্পত্তি আবার হিসাব করলে হাতে যোগ করা লাইন থাকে; সার্ভারের লাইনগুলো বদলে যায়।',
   Loan: 'ঋণ',
   'Loan repayment': 'ঋণ পরিশোধ',
   Loans: 'ঋণসমূহ',
   'Loans outstanding': 'বকেয়া ঋণ',
+  'Made by the approval: it books the settlement and pays it, like any run.':
+    'অনুমোদনে তৈরি হয়: অন্য যেকোনো রানের মতো এটি নিষ্পত্তি হিসাবভুক্ত করে ও পরিশোধ করে।',
   'Mark as paid': 'পরিশোধিত হিসেবে চিহ্নিত করুন',
   Mine: 'আমার',
   'Mobile wallet': 'মোবাইল ওয়ালেট',
@@ -116,10 +145,17 @@ export const bn: Readonly<Record<string, string>> = {
   'Net pay by month': 'মাস অনুযায়ী নিট বেতন',
   'Net pay this month': 'এ মাসের নিট বেতন',
   Note: 'নোট',
+  Notice: 'নোটিশ',
+  'Notice given (days)': 'প্রদত্ত নোটিশ (দিন)',
+  'Notice owed (days)': 'প্রাপ্য নোটিশ (দিন)',
   'October 2026 salaries, the Eid bonus…': 'অক্টোবর ২০২৬-এর বেতন, ঈদের ভাতা…',
   'On the payslip': 'বেতন স্লিপে',
+  'Once approved': 'অনুমোদনের পর',
   'One payslip per person in a run.': 'একটি রানে প্রতি ব্যক্তির একটি বেতন স্লিপ।',
   Overview: 'সারসংক্ষেপ',
+  'Owed by the person': 'ব্যক্তির দেনা',
+  'Owed to the person': 'ব্যক্তির পাওনা',
+  'Owed to the person less owed by them.': 'ব্যক্তির পাওনা থেকে তাঁর দেনা বাদ।',
   'Page {{page}} of {{pages}}': 'পৃষ্ঠা {{page}} / {{pages}}',
   Paid: 'পরিশোধিত',
   'Paid by': 'পরিশোধের মাধ্যম',
@@ -165,12 +201,17 @@ export const bn: Readonly<Record<string, string>> = {
     'সূত্রে INPUT_ ও কোড হিসেবে পড়া হয় (INPUT_BONUS)।',
   'Read in formulas as P_ and the code (P_TAX_FREE).': 'সূত্রে P_ ও কোড হিসেবে পড়া হয় (P_TAX_FREE)।',
   "Read in formulas as slab('CODE', amount).": "সূত্রে slab('CODE', amount) হিসেবে পড়া হয়।",
+  'Received in full and final settlement: ______________   Approved by: ______________':
+    'পূর্ণ ও চূড়ান্ত নিষ্পত্তি হিসেবে বুঝে পেলাম: ______________   অনুমোদনকারী: ______________',
+  Redundancy: 'পদ বিলুপ্তি',
   Reference: 'রেফারেন্স',
   Regular: 'নিয়মিত',
   Remaining: 'বাকি',
   Repaid: 'পরিশোধিত',
   Repayment: 'পরিশোধ',
   Repayments: 'পরিশোধসমূহ',
+  Resignation: 'পদত্যাগ',
+  Retirement: 'অবসর',
   Rocket: 'রকেট',
   'Routing number': 'রাউটিং নম্বর',
   Rule: 'নিয়ম',
@@ -178,6 +219,7 @@ export const bn: Readonly<Record<string, string>> = {
   Run: 'রান',
   Runs: 'রানসমূহ',
   'Runs to approve': 'অনুমোদনযোগ্য রান',
+  Salary: 'বেতন',
   'Salary loan': 'বেতন ঋণ',
   'Salary loan {{name}}': 'বেতন ঋণ {{name}}',
   'Salary loan agreement': 'বেতন ঋণ চুক্তি',
@@ -190,6 +232,11 @@ export const bn: Readonly<Record<string, string>> = {
   'Salary structures, monthly runs with explained payslips, loans and payment files':
     'বেতন কাঠামো, ব্যাখ্যাসহ বেতন স্লিপে মাসিক রান, ঋণ ও পেমেন্ট ফাইল',
   Sequence: 'ক্রম',
+  Settlement: 'নিষ্পত্তি',
+  'Settlement line': 'নিষ্পত্তির লাইন',
+  'Settlement: a day of notice is worth': 'নিষ্পত্তি: নোটিশের এক দিনের মূল্য',
+  'Settlement: gratuity': 'নিষ্পত্তি: গ্র্যাচুইটি',
+  'Settlement: salary of the unpaid days': 'নিষ্পত্তি: অপরিশোধিত দিনের বেতন',
   Slab: 'স্ল্যাব',
   'Slab band': 'স্ল্যাবের স্তর',
   'Slab table': 'স্ল্যাব সারণি',
@@ -199,17 +246,31 @@ export const bn: Readonly<Record<string, string>> = {
   'Start deductions': 'কর্তন শুরু করুন',
   State: 'অবস্থা',
   Structure: 'কাঠামো',
+  Termination: 'চাকরিচ্যুতি',
   'The band ends at this amount; empty: the rest.': 'স্তরটি এই অঙ্কে শেষ হয়; খালি: অবশিষ্ট সব।',
+  'The day after the person’s last approved payslip: the settlement pays from here to the last day.':
+    'ব্যক্তির সর্বশেষ অনুমোদিত পে-স্লিপের পরের দিন: নিষ্পত্তি এখান থেকে শেষ দিন পর্যন্ত পরিশোধ করে।',
+  'The days not given are paid to the person when the company ends the contract, and taken from them when they resign.':
+    'না দেওয়া দিনগুলো কোম্পানি চুক্তি শেষ করলে ব্যক্তিকে পরিশোধ করা হয়, আর তিনি পদত্যাগ করলে তাঁর কাছ থেকে নেওয়া হয়।',
+  'The days of notice actually worked, or given by the company.':
+    'নোটিশের যত দিন প্রকৃতপক্ষে কাজ করা হয়েছে, বা কোম্পানি দিয়েছে।',
   'The employee agrees that the instalment is deducted from each month’s pay until the loan is repaid.':
     'ঋণ পরিশোধ না হওয়া পর্যন্ত প্রতি মাসের বেতন থেকে কিস্তি কর্তনে কর্মী সম্মত।',
   'The fiscal year starts in': 'অর্থবছর শুরু হয়',
   'The formula or the condition is not in the payroll language.': 'সূত্র বা শর্তটি বেতন সূত্রের ভাষায় নয়।',
   'The formula with its values: how the amount came about.': 'মানসহ সূত্র: অঙ্কটি কীভাবে এল।',
   'The instalments taken by approved payroll runs.': 'অনুমোদিত বেতন রানে কর্তনকৃত কিস্তি।',
+  'The last day the person works: they are paid up to it, and the contract ends on it.':
+    'ব্যক্তির কাজের শেষ দিন: এ পর্যন্ত তাঁকে পরিশোধ করা হয় এবং এদিনই চুক্তি শেষ হয়।',
+  'The lines that pay: salary of the unpaid days, gratuity, notice, leave, what was added by hand.':
+    'যে লাইনগুলো পরিশোধ করে: অপরিশোধিত দিনের বেতন, গ্র্যাচুইটি, নোটিশ, ছুটি, হাতে যোগ করা অঙ্ক।',
+  'The lines that take: notice not served, loans, what was added by hand.':
+    'যে লাইনগুলো কেটে নেয়: না দেওয়া নোটিশ, ঋণ, হাতে যোগ করা অঙ্ক।',
   'The loan less what was repaid; the loan ends when nothing remains.':
     'ঋণ থেকে পরিশোধিত অংশ বাদে; কিছু বাকি না থাকলে ঋণ শেষ হয়।',
   'The month it is paid in.': 'যে মাসে পরিশোধ করা হয়।',
   'The net, less what the corrected payslip paid.': 'নিট, সংশোধিত বেতন স্লিপে যা পরিশোধ হয়েছে তা বাদে।',
+  'The notice the contract asks for.': 'চুক্তি অনুযায়ী প্রয়োজনীয় নোটিশ।',
   'The payslips are being computed: wait until everybody is computed, or set the run back to draft.':
     'পেস্লিপ হিসাব হচ্ছে: সবার হিসাব শেষ হওয়া পর্যন্ত অপেক্ষা করুন, অথবা রানটি খসড়ায় ফিরিয়ে নিন।',
   'The payslips’ basic and allowances.': 'বেতন স্লিপের মূল বেতন ও ভাতা।',
@@ -217,12 +278,19 @@ export const bn: Readonly<Record<string, string>> = {
     'যে ব্যক্তি ও যে নিয়মে সূত্র ব্যর্থ হয়েছে। ঠিক করে আবার হিসাব করুন।',
   'The rules this contract is paid by; without one, the person is left out of payroll runs.':
     'যে নিয়মে এই চুক্তির বেতন দেওয়া হয়; না থাকলে ব্যক্তি বেতন রান থেকে বাদ পড়েন।',
+  'The settlement is paid from its payroll run, like any run.':
+    'অন্য যেকোনো রানের মতো নিষ্পত্তি তার পে-রোল রান থেকে পরিশোধ হয়।',
+  'This person already has a final settlement.': 'এই ব্যক্তির চূড়ান্ত নিষ্পত্তি আগে থেকেই আছে।',
+  'Times the notice days not given: paid to the person when the company ends the contract, taken from them when they resign.':
+    'না দেওয়া নোটিশের দিন দিয়ে গুণ হয়: কোম্পানি চুক্তি শেষ করলে ব্যক্তিকে পরিশোধ, তিনি পদত্যাগ করলে তাঁর কাছ থেকে নেওয়া হয়।',
   Title: 'শিরোনাম',
   To: 'পর্যন্ত',
   'To approve': 'অনুমোদন বাকি',
   'To check': 'যাচাই বাকি',
+  'To pay': 'পরিশোধযোগ্য',
   'To pay now': 'এখন পরিশোধযোগ্য',
   Totals: 'মোট',
+  'Unpaid from': 'যে দিন থেকে অপরিশোধিত',
   'Up to': 'পর্যন্ত',
   'Updated At': 'হালনাগাদের সময়',
   'Updated By': 'হালনাগাদ করেছেন',
@@ -234,13 +302,27 @@ export const bn: Readonly<Record<string, string>> = {
   Wallet: 'ওয়ালেট',
   'Wallet number': 'ওয়ালেট নম্বর',
   Warnings: 'সতর্কবার্তা',
+  What: 'বিষয়',
+  'What a person who leaves is valued by, in the payroll language. The formulas may read WAGE, UNPAID_DAYS, WORKED_DAYS, WORKED_HOURS, SERVICE_MONTHS, SERVICE_YEARS, NOTICE_DAYS, NOTICE_SERVED, NOTICE_SHORT, PAID_BY_DAY and PAID_BY_HOUR.':
+    'বিদায়ী ব্যক্তির পাওনা যা দিয়ে হিসাব হয়, পে-রোলের ভাষায়। সূত্রগুলো WAGE, UNPAID_DAYS, WORKED_DAYS, WORKED_HOURS, SERVICE_MONTHS, SERVICE_YEARS, NOTICE_DAYS, NOTICE_SERVED, NOTICE_SHORT, PAID_BY_DAY ও PAID_BY_HOUR পড়তে পারে।',
   'What stopped the computation': 'হিসাব যে কারণে থেমেছে',
+  'What the amount is for, in its own unit: days of salary, of notice, of leave paid out.':
+    'পরিমাণটি কিসের জন্য, নিজস্ব এককে: বেতনের দিন, নোটিশের দিন, পরিশোধিত ছুটির দিন।',
   'What the payslips pay out.': 'বেতন স্লিপে যা পরিশোধ হয়।',
+  'What the person is owed for their service: if(SERVICE_YEARS >= 5, WAGE * SERVICE_YEARS, 0). It may read WAGE, SERVICE_MONTHS and SERVICE_YEARS. 0: none.':
+    'চাকরিকালের জন্য ব্যক্তির পাওনা: if(SERVICE_YEARS >= 5, WAGE * SERVICE_YEARS, 0)। এটি WAGE, SERVICE_MONTHS ও SERVICE_YEARS পড়তে পারে। 0: কিছুই নয়।',
+  'What to check before approving: attendance not approved yet, days already paid after the last day…':
+    'অনুমোদনের আগে যা যাচাই করবেন: এখনো অনুমোদিত হয়নি এমন হাজিরা, শেষ দিনের পরের দিনের জন্য আগেই পরিশোধ…',
   'What to check before approving: days not yet approved, a missing contract…':
     'অনুমোদনের আগে যা যাচাই করবেন: অনুমোদন বাকি থাকা দিন, অনুপস্থিত চুক্তি…',
   'Where the bands come from (the Finance Act, the year).': 'স্তরগুলোর উৎস (অর্থ আইন, বছর)।',
   'Where the value comes from (the law, the circular, the year).': 'মানের উৎস (আইন, প্রজ্ঞাপন, বছর)।',
+  'Whether the amount is paid to the person or taken from what they are paid.':
+    'পরিমাণটি ব্যক্তিকে পরিশোধ করা হয়, নাকি তাঁর পাওনা থেকে কেটে নেওয়া হয়।',
   'Which payment file the person’s net pay goes into.': 'ব্যক্তির নিট বেতন কোন পেমেন্ট ফাইলে যাবে।',
+  'Who owes the notice not given: the person who resigns; the company that terminates or makes redundant. Otherwise nobody.':
+    'না দেওয়া নোটিশের দায় কার: যিনি পদত্যাগ করেন তাঁর; যে কোম্পানি চাকরিচ্যুত করে বা পদ বিলুপ্ত করে তার। অন্যথায় কারও নয়।',
+  Why: 'কারণ',
   'With a warning': 'সতর্কতাসহ',
   'With warnings': 'সতর্কবার্তাসহ',
   'Year-to-date sums and the months left in the year (for tax spread over the year) count from here.':

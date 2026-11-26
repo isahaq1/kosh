@@ -1593,6 +1593,45 @@ import { unbilledOf, postRecognition } from '@kosh/project_billing';
 await unbilledOf(env, projectId, '2027-02-28'); // { hours, time, milestones }
 ```
 
+## Final settlement
+
+When a person leaves, *Payroll › Final settlements* works out what they are owed and owe, and pays it (RFC 0039).
+
+1. **Make it**: the person, their **last day**, why (resignation, termination, redundancy, retirement, end of the
+   contract, death), the notice owed and the notice given.
+2. **Compute**: the server writes the lines, each with how it came about:
+   - *Salary* of the days not paid yet — from the day after the person's last approved payslip to the last day;
+   - *Gratuity*, by the salary structure's formula (`0` unless you set it);
+   - the notice not given: *Pay in lieu of notice* when the company ends the contract, *Notice not served* —
+     taken from the person — when they resign;
+   - *Leave not taken*: every day left on the last day of each accrual plan whose days may be paid out, at the
+     plan's value of a day (with Leave accruals installed);
+   - *Loans, what remains*, in full.
+
+   Add lines by hand for anything else (a bonus, equipment not returned, income tax); computing again keeps them.
+3. **Approve** (Payroll managers; never one's own). The figures are computed once more first: if a loan
+   instalment or a payslip changed them since, the approval is refused and you compute again. Approved, the
+   settlement makes **a payroll run of its own** — one payslip with the settlement's lines, proved and booked like
+   any run —, repays the loans, takes the leave paid out from its ledger and **ends the contract** on the last day.
+4. **Pay** the run like any other (bank or wallet file, *Mark as paid*). The month's regular run no longer pays
+   the person.
+
+The formulas are on the salary structure (*Final settlement*), in the payroll language:
+
+| Field | Default | Reads |
+| --- | --- | --- |
+| Salary of the unpaid days | `if(PAID_BY_DAY, WAGE * WORKED_DAYS, if(PAID_BY_HOUR, WAGE * WORKED_HOURS, WAGE * UNPAID_DAYS / 30))` | `WAGE`, `UNPAID_DAYS`, `WORKED_DAYS`, `WORKED_HOURS` |
+| Gratuity | `0` | `WAGE`, `SERVICE_MONTHS`, `SERVICE_YEARS` — e.g. `if(SERVICE_YEARS >= 5, WAGE * SERVICE_YEARS, 0)` |
+| A day of notice is worth | `WAGE / 30` | times `NOTICE_SHORT` |
+
+```http
+POST /api/v1/models/payroll.settlement   { "employee", "lastDay", "reason", "noticeDays", "noticeServed" }
+POST /api/v1/models/payroll.settlement/<id>/transitions/compute | approve | redraft | cancel
+```
+
+Another app adds lines by overriding `extraLines` of `payroll.settlement`, and follows the approval with
+`settledOut` — as Leave accruals does. **Income tax on a settlement is not computed**: add it as a line by hand.
+
 ## Leave accruals
 
 `@kosh/hr_accrual` (RFC 0034 §2.5) is proposed whenever Workforce and Payroll are installed. Without it, a leave

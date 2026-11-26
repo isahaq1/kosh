@@ -9,6 +9,7 @@
  */
 import { attendanceShutro } from '@kosh/attendance';
 import { hrShutro } from '@kosh/hr';
+import { emitting } from '@kosh/server';
 import { type Decimal, orm } from '@kosh/server/orm';
 import {
   check,
@@ -31,6 +32,12 @@ import {
   startRun,
 } from './compute.js';
 import { FormulaError, parse } from './formula.js';
+import {
+  computeSettlement,
+  fillSettlementRun,
+  type SettlementLineInput,
+  settle,
+} from './settlement.js';
 
 const READ = ['read'] as const;
 const ALL = ['read', 'write', 'create', 'unlink'] as const;
@@ -80,6 +87,49 @@ export const PayrollStructure = defineModel('payroll.structure', {
     name: f.char({ required: true, translate: true }),
     rules: f.one2many('payroll.rule', 'structure'),
     note: f.text(),
+    // What a final settlement is valued by (RFC 0039 §6), in the payroll language.
+    settleSalary: f.char({
+      size: 500,
+      required: true,
+      default:
+        'if(PAID_BY_DAY, WAGE * WORKED_DAYS, if(PAID_BY_HOUR, WAGE * WORKED_HOURS, WAGE * UNPAID_DAYS / 30))',
+      label: 'Settlement: salary of the unpaid days',
+      help: 'From the day after the last approved payslip to the last day. It may read WAGE, UNPAID_DAYS, WORKED_DAYS, WORKED_HOURS, PAID_BY_DAY and PAID_BY_HOUR.',
+    }),
+    settleGratuity: f.char({
+      size: 500,
+      required: true,
+      default: '0',
+      label: 'Settlement: gratuity',
+      help: 'What the person is owed for their service: if(SERVICE_YEARS >= 5, WAGE * SERVICE_YEARS, 0). It may read WAGE, SERVICE_MONTHS and SERVICE_YEARS. 0: none.',
+    }),
+    settleNotice: f.char({
+      size: 500,
+      required: true,
+      default: 'WAGE / 30',
+      label: 'Settlement: a day of notice is worth',
+      help: 'Times the notice days not given: paid to the person when the company ends the contract, taken from them when they resign.',
+    }),
+  },
+  constraints: {
+    settlementFormulas: {
+      ...check(
+        'payroll.structure',
+        ['settleSalary', 'settleGratuity', 'settleNotice'],
+        (structures) =>
+          [...structures]
+            .filter(
+              (s) =>
+                badFormulas([
+                  { id: 1, formula: s.settleSalary },
+                  { id: 2, formula: s.settleGratuity },
+                  { id: 3, formula: s.settleNotice },
+                ]).length > 0,
+            )
+            .map((s) => s.id),
+      ),
+      message: 'A settlement formula is not in the payroll language.',
+    },
   },
 });
 
@@ -345,11 +395,11 @@ export const PayrollRun = defineModel('payroll.run', {
     name: f.char({ required: true, sequence: 'payroll.run', label: 'Reference' }),
     title: f.char({ label: 'Title', help: 'October 2026 salaries, the Eid bonus…' }),
     kind: f.selection(
-      { regular: 'Regular', correction: 'Correction' },
+      { regular: 'Regular', correction: 'Correction', settlement: 'Final settlement' },
       {
         required: true,
         default: 'regular',
-        help: 'A correction pays the difference to an approved run of the same period, which stays as it was.',
+        help: 'A correction pays the difference to an approved run of the same period, which stays as it was. A final settlement’s run is made by its settlement and pays the person who leaves.',
       },
     ),
     correctionOf: f.many2one('payroll.run', { ondelete: 'restrict', label: 'Corrects' }),
@@ -433,7 +483,20 @@ export const PayrollRun = defineModel('payroll.run', {
             await env.flush();
             const later: number[] = [];
             await env.asSuperuser({ reason: 'compute payroll' }, async (su) => {
+              const kinds = new Map(
+                [
+                  ...(await su
+                    .model('payroll.run')
+                    .browse(runs.ids as never)
+                    .load(['kind'])),
+                ].map((r) => [r.id as number, r.kind]),
+              );
               for (const id of runs.ids as readonly number[]) {
+                // A settlement's run is its settlement's lines, not the structure's rules.
+                if (kinds.get(id) === 'settlement') {
+                  await fillSettlementRun(su, id);
+                  continue;
+                }
                 const total = await startRun(su, id);
                 if (total > INLINE_LIMIT) {
                   await refreshTotals(su, id);
@@ -647,6 +710,305 @@ export const PayrollSlipLine = defineModel('payroll.slip.line', {
   },
 });
 
+const SETTLEMENT_DECIDES =
+  'A final settlement is approved by a Payroll manager, never one’s own — and once it is computed.';
+
+/** The settlements among `records` of the acting user's own employee. */
+async function ownSettlements(records: unknown): Promise<number[]> {
+  const { env, ids } = records as { env: Env; ids: readonly number[] };
+  if (env.su) return [];
+  return env.asSuperuser({ reason: 'whose settlement' }, async (su) =>
+    [
+      ...(await su
+        .model('payroll.settlement')
+        .browse([...ids] as never)
+        .load({ employee: { user: true } })),
+    ]
+      .filter((s) => s.employee.user?.id === env.uid)
+      .map((s) => s.id as number),
+  );
+}
+
+/**
+ * The final settlement of a person who leaves (RFC 0039 §6): the last day, why, the notice owed and given; the
+ * server works out what they are owed and owe (`settlement.ts`), lines may be added by hand, a Payroll manager
+ * approves — never their own —, and the approval makes the settlement's payroll run, repays the loans and ends
+ * the contract.
+ */
+export const PayrollSettlement = defineModel('payroll.settlement', {
+  label: 'Final settlement',
+  recName: 'name',
+  order: ['lastDay desc', 'id desc'],
+  companyScoped: { required: true },
+  tracking: ['state', 'lastDay', 'reason', 'noticeDays', 'noticeServed', 'net'],
+  access: {
+    'payroll.user': READ,
+    'payroll.officer': [...ALL, 'export'],
+    'payroll.manager': [...ALL, 'export'],
+  },
+  rules: {
+    own: {
+      groups: ['payroll.user'],
+      perms: ['read'],
+      domain: { 'employee.user': me, state: 'approved' },
+    },
+    officers: { groups: ['payroll.officer'], perms: [...ALL], domain: {} },
+  },
+  fields: {
+    name: f.char({ required: true, sequence: 'payroll.settlement', label: 'Reference' }),
+    employee: f.many2one('hr.employee', { required: true, ondelete: 'restrict', index: true }),
+    lastDay: f.date({
+      required: true,
+      label: 'Last day',
+      help: 'The last day the person works: they are paid up to it, and the contract ends on it.',
+    }),
+    reason: f.selection(
+      {
+        resignation: 'Resignation',
+        termination: 'Termination',
+        redundancy: 'Redundancy',
+        retirement: 'Retirement',
+        contract_end: 'End of the contract',
+        death: 'Death',
+      },
+      {
+        required: true,
+        default: 'resignation',
+        label: 'Why',
+        help: 'Who owes the notice not given: the person who resigns; the company that terminates or makes redundant. Otherwise nobody.',
+      },
+    ),
+    noticeDays: f.integer({
+      required: true,
+      default: 0,
+      label: 'Notice owed (days)',
+      help: 'The notice the contract asks for.',
+    }),
+    noticeServed: f.integer({
+      required: true,
+      default: 0,
+      label: 'Notice given (days)',
+      help: 'The days of notice actually worked, or given by the company.',
+    }),
+    contract: f.many2one('hr.contract', {
+      ondelete: 'set null',
+      label: 'Contract',
+      groups: { write: [...SYSTEM] },
+    }),
+    unpaidFrom: f.date({
+      label: 'Unpaid from',
+      help: 'The day after the person’s last approved payslip: the settlement pays from here to the last day.',
+      groups: { write: [...SYSTEM] },
+    }),
+    lines: f.one2many('payroll.settlement.line', 'settlement'),
+    gross: f.decimal({
+      scale: 2,
+      required: true,
+      default: '0',
+      label: 'Owed to the person',
+      help: 'The lines that pay: salary of the unpaid days, gratuity, notice, leave, what was added by hand.',
+      groups: { write: [...SYSTEM] },
+    }),
+    deductions: f.decimal({
+      scale: 2,
+      required: true,
+      default: '0',
+      label: 'Owed by the person',
+      help: 'The lines that take: notice not served, loans, what was added by hand.',
+      groups: { write: [...SYSTEM] },
+    }),
+    net: f.decimal({
+      scale: 2,
+      required: true,
+      default: '0',
+      label: 'To pay',
+      help: 'Owed to the person less owed by them.',
+      groups: { write: [...SYSTEM] },
+    }),
+    warnings: f.text({
+      help: 'What to check before approving: attendance not approved yet, days already paid after the last day…',
+      groups: { write: [...SYSTEM] },
+    }),
+    run: f.many2one('payroll.run', {
+      ondelete: 'restrict',
+      index: true,
+      label: 'Payroll run',
+      help: 'Made by the approval: it books the settlement and pays it, like any run.',
+      groups: { write: [...SYSTEM] },
+    }),
+    note: f.text(),
+    state: f.state({
+      states: {
+        draft: 'Draft',
+        computed: 'Computed',
+        approved: 'Approved',
+        cancelled: 'Cancelled',
+      },
+      initial: 'draft',
+      help: 'Computed by the server, checked, approved — which makes its payroll run, repays the loans and ends the contract.',
+      transitions: {
+        compute: {
+          from: ['draft', 'computed'],
+          to: 'computed',
+          after: records('payroll.settlement', async (settlements) => {
+            const env = settlements.env as unknown as Env;
+            await env.flush();
+            await env.asSuperuser({ reason: 'compute a final settlement' }, async (su) => {
+              for (const id of settlements.ids as readonly number[])
+                await computeSettlement(su, id);
+            });
+          }),
+        },
+        redraft: { from: ['computed'], to: 'draft' },
+        approve: emitting('payroll.settlement.approved', {
+          from: ['computed'],
+          to: 'approved',
+          requires: 'payroll.approve',
+          guard: records('payroll.settlement', (settlements) => ownSettlements(settlements)),
+          message: SETTLEMENT_DECIDES,
+          // What is approved is what is true now: a loan repaid or a payslip approved since the computation
+          // changes the figures, and the settlement is computed again first.
+          before: records('payroll.settlement', async (settlements): Promise<void> => {
+            const env = settlements.env as unknown as Env;
+            await env.flush();
+            await env.asSuperuser({ reason: 'a final settlement checked' }, async (su) => {
+              for (const id of settlements.ids as readonly number[]) {
+                const model = su.model('payroll.settlement');
+                // Kept as text: a record reads what is true now, also after the computation below.
+                const [seen] = await model.browse([id] as never).load(['net']);
+                const was = seen?.net.toString() ?? '';
+                await computeSettlement(su, id);
+                const [again] = await model.browse([id] as never).load(['net']);
+                const now = again?.net.toString() ?? '';
+                if (was === '' || !orm.toDecimal(was).eq(now))
+                  throw new orm.ValidationError(
+                    'payroll.settlement',
+                    ['net'],
+                    `The figures changed since the settlement was computed: ${was} then, ${now} now.`,
+                    'Compute it again, check it, then approve.',
+                  );
+              }
+            });
+          }),
+          after: records('payroll.settlement', async (settlements) => {
+            const env = settlements.env as unknown as Env;
+            await env.flush();
+            await env.asSuperuser({ reason: 'a final settlement approved' }, async (su) => {
+              for (const id of settlements.ids as readonly number[]) await settle(su, id);
+            });
+          }),
+        }),
+        cancel: { from: ['draft', 'computed'], to: 'cancelled' },
+      },
+    }),
+  },
+  methods: {
+    /** The lines other apps add when a settlement is computed (leave accruals: the days left, paid out). */
+    extraLines: method('payroll.settlement', async function (this: unknown): Promise<
+      SettlementLineInput[]
+    > {
+      return [];
+    }),
+    /** After the approval: nothing here; other apps follow (the leave paid out leaves its ledger). */
+    settledOut: method('payroll.settlement', async () => undefined),
+  },
+  sqlConstraints: {
+    notice: {
+      check: orm.sql`notice_days >= 0 AND notice_served >= 0`,
+      message: 'Days of notice are not negative.',
+    },
+  },
+  constraints: {
+    // A person leaves once: one settlement that is not cancelled.
+    one: {
+      ...check('payroll.settlement', ['employee', 'state'], async (settlements) =>
+        settlements.env.asSuperuser({ reason: 'one settlement a person' }, async (su) => {
+          const failing: number[] = [];
+          for (const s of settlements) {
+            if (s.state === 'cancelled') continue;
+            const other = await su.model('payroll.settlement').search({
+              where: {
+                employee: s.employee.id,
+                id: { ne: s.id },
+                state: { in: ['draft', 'computed', 'approved'] },
+              },
+              limit: 1,
+            });
+            if (other.length > 0) failing.push(s.id);
+          }
+          return failing;
+        }),
+      ),
+      message: 'This person already has a final settlement.',
+    },
+  },
+});
+
+export const PayrollSettlementLine = defineModel('payroll.settlement.line', {
+  label: 'Settlement line',
+  order: ['sequence asc', 'id asc'],
+  access: {
+    'payroll.user': READ,
+    'payroll.officer': [...ALL, 'export'],
+    'payroll.manager': [...ALL, 'export'],
+  },
+  rules: {
+    own: {
+      groups: ['payroll.user'],
+      perms: ['read'],
+      domain: { 'settlement.employee.user': me, 'settlement.state': 'approved' },
+    },
+    // Lines are added and changed until the settlement is approved.
+    officers: {
+      groups: ['payroll.officer'],
+      perms: ['write', 'create', 'unlink'],
+      domain: { 'settlement.state': { in: ['draft', 'computed'] } },
+    },
+    officersRead: { groups: ['payroll.officer'], perms: ['read'], domain: {} },
+  },
+  fields: {
+    settlement: f.many2one('payroll.settlement', {
+      required: true,
+      ondelete: 'cascade',
+      index: true,
+    }),
+    sequence: f.integer({ required: true, default: 50 }),
+    code: f.char({ size: 40, required: true, default: 'OTHER' }),
+    name: f.char({ required: true }),
+    category: f.selection(
+      { basic: 'Salary', allowance: 'Owed to the person', deduction: 'Owed by the person' },
+      {
+        required: true,
+        default: 'allowance',
+        help: 'Whether the amount is paid to the person or taken from what they are paid.',
+      },
+    ),
+    amount: f.decimal({ scale: 2, required: true, default: '0' }),
+    quantity: f.decimal({
+      scale: 2,
+      label: 'For',
+      help: 'What the amount is for, in its own unit: days of salary, of notice, of leave paid out.',
+    }),
+    explanation: f.char({
+      size: 1000,
+      help: 'The formula with its values: how the amount came about.',
+    }),
+    manual: f.boolean({
+      default: true,
+      label: 'Added by hand',
+      help: 'Lines added by hand are kept when the settlement is computed again; the server’s are replaced.',
+      groups: { write: [...SYSTEM] },
+    }),
+  },
+  sqlConstraints: {
+    code: { check: orm.sql`code ${CODE}`, message: 'A code is written in capitals, digits and _.' },
+    positive: {
+      check: orm.sql`amount >= 0`,
+      message: 'An amount is not negative: what is taken from the person is a line owed by them.',
+    },
+  },
+});
+
 /** The structure a contract is paid by. */
 export const ContractStructure = extendModel('hr.contract', {
   fields: {
@@ -709,6 +1071,12 @@ export const payrollShutro = defineModule({
   sequences: [
     orm.defineSequence({ code: 'payroll.run', prefix: 'PAY/{year}/', padding: 4, reset: 'yearly' }),
     orm.defineSequence({
+      code: 'payroll.settlement',
+      prefix: 'FS/{year}/',
+      padding: 4,
+      reset: 'yearly',
+    }),
+    orm.defineSequence({
       code: 'payroll.loan',
       prefix: 'LOAN/{year}/',
       padding: 4,
@@ -728,6 +1096,8 @@ export const payrollShutro = defineModule({
     PayrollRun,
     PayrollSlip,
     PayrollSlipLine,
+    PayrollSettlement,
+    PayrollSettlementLine,
   ],
   extensions: [ContractStructure, EmployeePay],
 });
