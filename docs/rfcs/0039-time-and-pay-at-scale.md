@@ -172,8 +172,29 @@ Asked: "employee can be contactual, temporary and other".
 - **For installations made before this**: the shipped types are data a company may have changed, so they are
   not rewritten — tick *Paid* off on *Unpaid leave* and give the types their codes (Workforce › Configuration ›
   Leave types).
-- **Half days are not built.** A leave's days are a whole number that the balance, the accrual ledger and
-  Attendance's day all read; half a day reaches each of them and is a step of its own.
+- Half days: the next part.
+
+## Implementation notes (2026-11-26): step 3, part 3 — half days
+
+- **Workforce**: a leave may be for **half a day** — one date, *the morning* or *the afternoon* (`half`). Its
+  working days stay 1; **`daysTaken`** is what it takes from the balance: the working days, or 0.5. The balance by
+  days a year and the accrual ledger (`hr_accrual`) both take half a day for it.
+- **Attendance**: a day keeps **the share of it on approved leave** (`leaveFraction`: 0, 0.5 or 1). On half a
+  day of leave half the shift's work is expected, and arriving after the morning off or leaving before the
+  afternoon off is neither late nor early. Not coming at all leaves the day *absent* for the half that was owed,
+  and half on leave. A whole day of leave that was worked is a day worked.
+- **Payroll** counts in halves: 0.5 in `PRESENT_DAYS` (or `ABSENT_DAYS`) and 0.5 in `LEAVE_DAYS`,
+  `PAID_LEAVE_DAYS` / `UNPAID_LEAVE_DAYS` and `LEAVE_<CODE>`; `HALF_DAYS` says how many such days. A day typed
+  in as *On leave* by hand still counts whole.
+- Tests: the day's rule as a pure function (expected, lateness, the day not come to, a weekend); a half day of
+  casual leave of a person paid by the day — half a day's pay, a day and a half of paid leave.
+- **Not tested directly**: the accrual ledger taking 0.5 (its code path is the one line changed; the other
+  accrual tests pass). **Left out**: half days of home office and of tours; a quarter day; hours of leave.
+
+## Step 3 is done but for
+
+Days by shift (`SHIFT_<CODE>` — shifts have no code yet), and the list of variables shown where a rule is
+written.
 
 ## 7. Open questions
 

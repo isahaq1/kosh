@@ -95,6 +95,23 @@ describe('a day shift', () => {
     expect(day([], { remote: true, holiday: true }).status).toBe('holiday');
     expect(day([], { remote: true, leave: true }).status).toBe('leave');
     expect(day([['09:00', null]], { remote: true }).status).toBe('incomplete');
+    // Half a day of approved leave: half the shift is expected; arriving after the morning off is not late and
+    // leaving before the afternoon off is not early; the day is half on leave whether they come or not —
+    // absent for the half they owed when they do not.
+    const full = day([['09:00', '18:00']]);
+    const morningOff = day([['13:30', '18:00']], { leaveHalf: true });
+    expect(morningOff.status).toBe('present');
+    expect(morningOff.leaveFraction).toBe(0.5);
+    expect(morningOff.expectedMinutes).toBe(Math.round(full.expectedMinutes / 2));
+    expect(morningOff.lateMinutes).toBe(0);
+    expect(day([['09:00', '13:00']], { leaveHalf: true }).earlyMinutes).toBe(0);
+    const stayedAway = day([], { leaveHalf: true });
+    expect([stayedAway.status, stayedAway.leaveFraction]).toEqual(['absent', 0.5]);
+    // A whole day of leave is 1; a day worked through a leave is a day worked; a weekend has no half.
+    expect(day([], { leave: true }).leaveFraction).toBe(1);
+    expect(day([['09:00', '18:00']], { leave: true }).leaveFraction).toBe(0);
+    expect(day([], { leaveHalf: true, weekend: true }).leaveFraction).toBe(0);
+    expect(full.leaveFraction).toBe(0);
     // A tour comes first when both are said (they cannot overlap, by Workforce's rule).
     expect(day([], { remote: true, tour: true }).status).toBe('tour');
     expect(day([], { holiday: true }).status).toBe('holiday');

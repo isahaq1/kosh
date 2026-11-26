@@ -736,7 +736,7 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
         'type',
         'dateFrom',
         'dateTo',
-        'days',
+        'daysTaken',
         { field: 'state', widget: 'badge' },
       ],
       defaultOrder: ['dateFrom desc'],
@@ -864,7 +864,9 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
       },
       sheet: [
         k.group('main', ['employee', 'type', 'state']),
-        k.group('when', ['dateFrom', 'dateTo', 'days']),
+        k.group('when', ['dateFrom', 'dateTo', 'days', 'half', 'daysTaken'], {
+          description: 'For half a day, give one date and say which half.',
+        }),
         k.group('why', ['reason'], { columns: 1 }),
       ],
       chatter: true,

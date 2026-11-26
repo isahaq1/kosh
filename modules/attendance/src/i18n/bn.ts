@@ -76,6 +76,8 @@ export const bn: Readonly<Record<string, string>> = {
   'From the punches, the roster, the weekend, public holidays and approved leave.':
     'পাঞ্চ, রোস্টার, সাপ্তাহিক ছুটি, সরকারি ছুটি ও অনুমোদিত ছুটি থেকে।',
   'Grace (minutes)': 'ছাড়ের সময় (মিনিট)',
+  'Half a day of approved leave is 0.5: the other half is worked, or absent. Payroll counts the day in halves.':
+    'অনুমোদিত অর্ধদিবস ছুটি ০.৫: বাকি অর্ধেক কাজ করা হয়, নয়তো অনুপস্থিত। পেরোল দিনটি অর্ধেক অর্ধেক করে গোনে।',
   Holiday: 'ছুটির দিন',
   'Home office': 'হোম অফিস',
   Hours: 'ঘণ্টা',
@@ -110,6 +112,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Off only for a phone check-in outside the radius of a site without a geofence.':
     'জিওফেন্স ছাড়া সাইটের ব্যাসার্ধের বাইরে থেকে ফোনে চেক-ইন করলেই কেবল বন্ধ থাকে।',
   'On leave': 'ছুটিতে',
+  'On leave (share of the day)': 'ছুটিতে (দিনের অংশ)',
   'On site': 'সাইটে',
   'On the machine, set this server’s address and port (Comm › Cloud Server Setting). Its punches arrive by themselves once it is Active.':
     'মেশিনে এই সার্ভারের ঠিকানা ও পোর্ট বসান (Comm › Cloud Server Setting)। সক্রিয় হলে এর পাঞ্চ নিজে থেকেই আসে।',

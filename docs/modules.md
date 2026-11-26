@@ -995,6 +995,10 @@ its wage is counted: **per month, per day worked or per hour worked**. Rules rea
 Leave is told apart: a **leave type** says whether it is paid and has a code, and the rules read
 `PAID_LEAVE_DAYS`, `UNPAID_LEAVE_DAYS` and `LEAVE_<CODE>` (`LEAVE_CL`, `LEAVE_SL`, `LEAVE_EL`, `LEAVE_LWP`).
 
+**Half days.** A leave may be for half a day — one date, its morning or its afternoon. It takes half a day from
+the balance; in Attendance half the shift is expected that day and the person is neither late nor early for the
+half they are off; Payroll counts the day in halves (0.5 present, 0.5 on leave) and `HALF_DAYS` says how many.
+
 `TYPE_<CODE>` is 1 for the contract's type and 0 for any other. From approved attendance days: `WORKED_HOURS`,
 `EXPECTED_HOURS`, `LATE_MINUTES`, `EARLY_MINUTES`, `NIGHT_SHIFTS`, `OFF_DAYS_WORKED` (worked on a weekend or a
 holiday), `REMOTE_DAYS`, besides the days present, absent, on leave and on tour.

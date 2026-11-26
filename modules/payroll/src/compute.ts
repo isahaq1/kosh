@@ -8,6 +8,8 @@
  * - `PAID_BY_DAY` and `PAID_BY_HOUR` (1 or 0: how the contract's wage is counted — else by the month) and
  *   `TYPE_<CODE>` (1 for the contract's employment type: `TYPE_PERM`, `TYPE_CONT`, `TYPE_TEMP`, `TYPE_CASU`…;
  *   any other type reads as 0);
+ * - half a day of leave counts in halves — 0.5 in `PRESENT_DAYS` (or `ABSENT_DAYS`) and 0.5 in the leave
+ *   figures — and `HALF_DAYS` says how many such days;
  * - leave told apart: `PAID_LEAVE_DAYS`, `UNPAID_LEAVE_DAYS` (the leave type says which) and `LEAVE_<CODE>` (the
  *   approved days of one type: `LEAVE_CL`, `LEAVE_SL`, `LEAVE_EL`, `LEAVE_LWP`; a type not taken reads as 0);
  * - from the shifts, approved days only: `WORKED_HOURS`, `EXPECTED_HOURS`, `LATE_MINUTES`, `EARLY_MINUTES`,
@@ -243,11 +245,12 @@ export async function computeBatch(env: Env, id: number, limit: number = BATCH):
           employee_id: string | number;
           days: number;
           approved: number;
-          present: number;
+          present: string;
+          half_days: number;
           tour: number;
           remote: number;
-          absent: number;
-          on_leave: number;
+          absent: string;
+          on_leave: string;
           holiday: number;
           late: number;
           overtime: string;
@@ -262,11 +265,17 @@ export async function computeBatch(env: Env, id: number, limit: number = BATCH):
         SELECT d.employee_id,
                count(*)::int AS days,
                count(*) FILTER (WHERE d.state = 'approved')::int AS approved,
-               count(*) FILTER (WHERE d.state = 'approved' AND d.status = 'present')::int AS present,
+               -- Half a day of leave is half a day present (or absent) and half a day on leave (RFC 0039 §4).
+               coalesce(sum(1 - d.leave_fraction)
+                 FILTER (WHERE d.state = 'approved' AND d.status = 'present'), 0)::text AS present,
+               count(*) FILTER (WHERE d.state = 'approved' AND d.status <> 'leave'
+                                  AND d.leave_fraction = 0.5)::int AS half_days,
                count(*) FILTER (WHERE d.state = 'approved' AND d.status = 'tour')::int AS tour,
                count(*) FILTER (WHERE d.state = 'approved' AND d.status = 'remote')::int AS remote,
-               count(*) FILTER (WHERE d.state = 'approved' AND d.status = 'absent')::int AS absent,
-               count(*) FILTER (WHERE d.state = 'approved' AND d.status = 'leave')::int AS on_leave,
+               coalesce(sum(1 - d.leave_fraction)
+                 FILTER (WHERE d.state = 'approved' AND d.status = 'absent'), 0)::text AS absent,
+               coalesce(sum(CASE WHEN d.status = 'leave' THEN 1 ELSE d.leave_fraction END)
+                 FILTER (WHERE d.state = 'approved'), 0)::text AS on_leave,
                count(*) FILTER (WHERE d.state = 'approved' AND d.status = 'holiday')::int AS holiday,
                count(*) FILTER (WHERE d.state = 'approved' AND d.late_minutes > 0)::int AS late,
                coalesce(sum(d.overtime_approved) FILTER (WHERE d.state = 'approved'), 0)::text AS overtime,
@@ -298,9 +307,10 @@ export async function computeBatch(env: Env, id: number, limit: number = BATCH):
       employee_id: string | number;
       code: string | null;
       paid: boolean | null;
-      n: number;
+      n: string;
     }>`
-      SELECT d.employee_id, t.code, t.paid, count(*)::int AS n
+      SELECT d.employee_id, t.code, t.paid,
+             sum(CASE WHEN d.status = 'leave' THEN 1 ELSE d.leave_fraction END)::text AS n
         FROM attendance_day d
         JOIN LATERAL (
                SELECT l.type_id FROM hr_leave l
@@ -310,14 +320,16 @@ export async function computeBatch(env: Env, id: number, limit: number = BATCH):
              ) taken ON true
         JOIN hr_leave_type t ON t.id = taken.type_id
        WHERE d.employee_id = ANY(${people}::bigint[]) AND d.date BETWEEN ${from}::date AND ${to}::date
-         AND d.state = 'approved' AND d.status = 'leave'
+         AND d.state = 'approved' AND (d.status = 'leave' OR d.leave_fraction > 0)
        GROUP BY d.employee_id, t.code, t.paid`) {
       const who = Number(row.employee_id);
       const mine = leaveOf.get(who) ?? { paid: 0, unpaid: 0, byCode: new Map<string, number>() };
-      if (row.paid === false) mine.unpaid += row.n;
-      else mine.paid += row.n;
+      // Whole days and halves: exact in a JS number.
+      const n = Number(row.n);
+      if (row.paid === false) mine.unpaid += n;
+      else mine.paid += n;
       const code = (row.code ?? '').toUpperCase().replace(/[^A-Z0-9]+/g, '_');
-      if (code !== '') mine.byCode.set(code, (mine.byCode.get(code) ?? 0) + row.n);
+      if (code !== '') mine.byCode.set(code, (mine.byCode.get(code) ?? 0) + n);
       leaveOf.set(who, mine);
     }
     const inputsOf = grouped(
@@ -415,17 +427,23 @@ export async function computeBatch(env: Env, id: number, limit: number = BATCH):
       const seen = attendanceOf.get(e.id);
       // A day on an approved official tour is a day worked (RFC 0037 §3.2); `TOUR_DAYS` says how many.
       // So is a day of approved home office (RFC 0039 §3); `REMOTE_DAYS` says how many.
-      set('PRESENT_DAYS', (seen?.present ?? 0) + (seen?.tour ?? 0) + (seen?.remote ?? 0));
+      // Half a day of leave makes halves: 0.5 present (or absent) and 0.5 on leave; `HALF_DAYS` counts them.
+      const onLeave = Number(seen?.on_leave ?? 0);
+      set(
+        'PRESENT_DAYS',
+        orm.toDecimal(seen?.present ?? '0').plus((seen?.tour ?? 0) + (seen?.remote ?? 0)),
+      );
       set('TOUR_DAYS', seen?.tour ?? 0);
       set('REMOTE_DAYS', seen?.remote ?? 0);
-      set('ABSENT_DAYS', seen?.absent ?? 0);
-      set('LEAVE_DAYS', seen?.on_leave ?? 0);
+      set('ABSENT_DAYS', orm.toDecimal(seen?.absent ?? '0'));
+      set('LEAVE_DAYS', orm.toDecimal(seen?.on_leave ?? '0'));
+      set('HALF_DAYS', seen?.half_days ?? 0);
       // Paid and unpaid apart, and by type. A day on leave no approved request covers (typed in by hand) is
       // taken as paid: only a leave type that says *not paid* makes a day unpaid.
       const taken = leaveOf.get(e.id);
-      set('UNPAID_LEAVE_DAYS', taken?.unpaid ?? 0);
-      set('PAID_LEAVE_DAYS', (seen?.on_leave ?? 0) - (taken?.unpaid ?? 0));
-      for (const [code, n] of taken?.byCode ?? []) set(`LEAVE_${code}`, n);
+      set('UNPAID_LEAVE_DAYS', orm.toDecimal(String(taken?.unpaid ?? 0)));
+      set('PAID_LEAVE_DAYS', orm.toDecimal(String(onLeave - (taken?.unpaid ?? 0))));
+      for (const [code, n] of taken?.byCode ?? []) set(`LEAVE_${code}`, orm.toDecimal(String(n)));
       set('HOLIDAYS', seen?.holiday ?? 0);
       set('LATE_DAYS', seen?.late ?? 0);
       set('OVERTIME_HOURS', orm.toDecimal(seen?.overtime ?? '0'));

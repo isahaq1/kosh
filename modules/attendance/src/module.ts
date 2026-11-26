@@ -383,6 +383,14 @@ export const AttendanceDay = defineModel('attendance.day', {
       default: 'present',
       help: 'From the punches, the roster, the weekend, public holidays and approved leave.',
     }),
+    /** The share of the day on approved leave (RFC 0039 §4): 1 for a day on leave, 0.5 for half a day. */
+    leaveFraction: f.decimal({
+      scale: 1,
+      required: true,
+      default: '0',
+      label: 'On leave (share of the day)',
+      help: 'Half a day of approved leave is 0.5: the other half is worked, or absent. Payroll counts the day in halves.',
+    }),
     firstIn: f.datetime({ label: 'First in' }),
     lastOut: f.datetime({ label: 'Last out' }),
     workedHours: f.decimal({ scale: 2, required: true, default: '0', label: 'Worked (hours)' }),

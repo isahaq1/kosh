@@ -51,6 +51,7 @@ export const bn: Readonly<Record<string, string>> = {
   Country: 'দেশ',
   'Created At': 'তৈরির সময়',
   'Created By': 'তৈরি করেছেন',
+  'Days of leave': 'ছুটির দিন',
   'Days per year': 'বছরে দিন',
   'Decides this person’s leave beside HR managers.':
     'এইচআর ব্যবস্থাপকদের পাশাপাশি এই ব্যক্তির ছুটির সিদ্ধান্ত নেন।',
@@ -74,7 +75,13 @@ export const bn: Readonly<Record<string, string>> = {
   'Fixed term': 'নির্দিষ্ট মেয়াদি',
   'For a month, a day or an hour, as *Paid* says.':
     'এক মাস, এক দিন বা এক ঘণ্টার জন্য — *পরিশোধ* যেমন বলে।',
+  'For half a day, give one date and say which half.':
+    'অর্ধদিবসের জন্য একটি তারিখ দিন এবং কোন অর্ধেক তা বলুন।',
+  'For leave of half a day: which half. The leave is then for one date and takes half a day from the balance.':
+    'অর্ধদিবস ছুটির জন্য: কোন অর্ধেক। তখন ছুটি একটি তারিখের জন্য হয় এবং ব্যালেন্স থেকে অর্ধেক দিন কাটে।',
   From: 'থেকে',
+  'Half a day': 'অর্ধদিবস',
+  'Half a day of leave is for one date.': 'অর্ধদিবস ছুটি একটি তারিখের জন্য।',
   Head: 'প্রধান',
   'Home address': 'বাসার ঠিকানা',
   'Home office': 'হোম অফিস',
@@ -145,6 +152,7 @@ export const bn: Readonly<Record<string, string>> = {
   Submit: 'জমা দিন',
   Tags: 'ট্যাগ',
   Team: 'দল',
+  'The afternoon': 'বিকেল',
   'The country whose labour law the type follows, as its two-letter code (BD, IN); empty: any.':
     'যে দেশের শ্রম আইন এই ধরন অনুসরণ করে, দুই অক্ষরের কোডে (BD, IN); খালি: যেকোনো।',
   'The days and hours this person works; empty: the company’s calendar. Leave counts its working days.':
@@ -153,6 +161,7 @@ export const bn: Readonly<Record<string, string>> = {
     'ব্যক্তির ইউনিটের প্রধান (কারখানা, ডিপো, খামার), লাইন ম্যানেজারের পাশাপাশি; অনুমোদনে তাঁকে চাওয়া হতে পারে।',
   'The kind of employment the contract is for: permanent, a fixed term, probation or an internship.':
     'চুক্তিটি কোন ধরনের চাকরির জন্য: স্থায়ী, নির্দিষ্ট মেয়াদি, শিক্ষানবিশ বা ইন্টার্নশিপ।',
+  'The morning': 'সকাল',
   'The places visited, in order.': 'যেসব জায়গায় যাওয়া হবে, ক্রমানুসারে।',
   'The property or unit the person works for (a mill, a farm, a depot).':
     'ব্যক্তি যে প্রপার্টি বা ইউনিটে কাজ করেন (মিল, খামার, ডিপো)।',
@@ -188,6 +197,8 @@ export const bn: Readonly<Record<string, string>> = {
   Wage: 'মজুরি',
   Waiting: 'অপেক্ষমাণ',
   Water: 'নৌপথ',
+  'What the leave takes from the balance: its working days, or half a day.':
+    'ছুটি ব্যালেন্স থেকে যা কাটে: এর কর্মদিবস, অথবা অর্ধেক দিন।',
   'Where to': 'কোথায়',
   'Whether the person is paid on these days. Payroll counts paid and unpaid leave apart (PAID_LEAVE_DAYS, UNPAID_LEAVE_DAYS), so unpaid leave is deducted by a rule.':
     'এই দিনগুলোতে ব্যক্তি বেতন পান কি না। পেরোল বেতনসহ ও বিনা বেতনের ছুটি আলাদা গোনে (PAID_LEAVE_DAYS, UNPAID_LEAVE_DAYS), তাই বিনা বেতনের ছুটি একটি নিয়ম দিয়ে কাটা যায়।',

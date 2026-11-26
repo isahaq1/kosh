@@ -95,6 +95,11 @@ export interface DayInput {
   readonly weekend: boolean;
   readonly holiday: boolean;
   readonly leave: boolean;
+  /**
+   * Half a day of approved leave (RFC 0039 §4): half the shift is expected, and when the person comes and goes
+   * that day is not held against the shift's hours (no lateness, no leaving early).
+   */
+  readonly leaveHalf?: boolean;
   /** On an approved official tour (RFC 0037 §3.2): a working day without a punch is *On tour*, not absent. */
   readonly tour?: boolean;
   /**
@@ -123,6 +128,8 @@ export interface DayResult {
   readonly lateMinutes: number;
   readonly earlyMinutes: number;
   readonly overtimeMinutes: number;
+  /** The share of the day on approved leave: 1 on leave, 0.5 for half a day on a working day, else 0. */
+  readonly leaveFraction: 0 | 0.5 | 1;
 }
 
 /** The day: what the punches, the shift and the calendar say. */
@@ -130,10 +137,14 @@ export function computeDay(input: DayInput): DayResult {
   const { shift, punches } = input;
   const workday = shift !== null && !input.weekend && !input.holiday && !input.leave;
   const span = shift === null ? 0 : shiftMinutes(shift);
-  const expected = workday && shift !== null ? Math.max(0, span - shift.breakMinutes) : 0;
+  const half = workday && input.leaveHalf === true;
+  const whole = workday && shift !== null ? Math.max(0, span - shift.breakMinutes) : 0;
+  // Half a day of leave: half the shift's work is expected.
+  const expected = half ? Math.round(whole / 2) : whole;
   const sorted = [...punches].sort((a, b) => a.checkIn.getTime() - b.checkIn.getTime());
   if (sorted.length === 0)
     return {
+      leaveFraction: input.leave ? 1 : half ? 0.5 : 0,
       status: input.leave
         ? 'leave'
         : input.holiday
@@ -182,8 +193,10 @@ export function computeDay(input: DayInput): DayResult {
   if (workday && shift !== null) {
     const start = minutesOf(shift.start);
     const end = start + span;
-    if (firstIn !== null) late = Math.max(0, sinceMidnight(firstIn) - (start + shift.graceMinutes));
-    if (lastOut !== null && !open) early = Math.max(0, end - sinceMidnight(lastOut));
+    // On half a day of leave the person comes late or goes early by right: neither is counted.
+    if (firstIn !== null && !half)
+      late = Math.max(0, sinceMidnight(firstIn) - (start + shift.graceMinutes));
+    if (lastOut !== null && !open && !half) early = Math.max(0, end - sinceMidnight(lastOut));
     const extra = worked - expected;
     if (extra > shift.overtimeAfter) overtime = floorTo(extra, shift.overtimeStep);
   } else if (shift !== null && (input.weekend || input.holiday)) {
@@ -193,6 +206,8 @@ export function computeDay(input: DayInput): DayResult {
   return {
     // A working day at home stays *Home office* with its punches; a check-out forgotten is still to be fixed.
     status: open ? 'incomplete' : workday && input.remote === true ? 'remote' : 'present',
+    // Worked on a day of full leave: the day is worked, not leave.
+    leaveFraction: half ? 0.5 : 0,
     firstIn,
     lastOut,
     workedMinutes: Math.round(worked),
@@ -255,8 +270,8 @@ export async function recomputeDays(
             dateTo: { gte: from },
           },
         })
-      ).load(['dateFrom', 'dateTo'])),
-    ].map((l) => [isoDate(l.dateFrom), isoDate(l.dateTo)] as const);
+      ).load(['dateFrom', 'dateTo', 'half'])),
+    ].map((l) => [isoDate(l.dateFrom), isoDate(l.dateTo), l.half !== null] as const);
     const tours = [
       ...(await (
         await env.model('hr.tour').search({
@@ -317,7 +332,8 @@ export async function recomputeDays(
         // the person's own day off — is a holiday. A day with hours of its own (a worked Saturday) is neither.
         weekend: !schedule.extra.has(date) && (schedule.week[dow] ?? []).length === 0,
         holiday: hoursOn(schedule, date).length === 0 && (schedule.week[dow] ?? []).length > 0,
-        leave: leaves.some(([a, b]) => a <= date && b >= date),
+        leave: leaves.some(([a, b, half]) => !half && a <= date && b >= date),
+        leaveHalf: leaves.some(([a, b, half]) => half && a <= date && b >= date),
         tour: tours.some(([a, b]) => a <= date && b >= date),
         remote: remotes.some(([a, b]) => a <= date && b >= date),
         punches: mine,
@@ -335,6 +351,7 @@ export async function recomputeDays(
         company: e.company.id,
         shift: shift?.id ?? null,
         status: result.status,
+        leaveFraction: String(result.leaveFraction),
         firstIn: result.firstIn,
         lastOut: result.lastOut,
         workedHours: hours(result.workedMinutes),

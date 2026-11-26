@@ -365,6 +365,24 @@ export const HrLeave = defineModel('hr.leave', {
     dateTo: f.date({ required: true, label: 'To' }),
     /** Working days, by the company's week; checked by the server. */
     days: f.integer({ required: true, default: 0, label: 'Working days' }),
+    /** Half a day of leave (RFC 0039 §4): one date, its morning or its afternoon. */
+    half: f.selection(
+      { am: 'The morning', pm: 'The afternoon' },
+      {
+        label: 'Half a day',
+        help: 'For leave of half a day: which half. The leave is then for one date and takes half a day from the balance.',
+      },
+    ),
+    daysTaken: f.decimal({
+      scale: 1,
+      store: true,
+      label: 'Days of leave',
+      help: 'What the leave takes from the balance: its working days, or half a day.',
+      ...compute('hr.leave', 'daysTaken', ['days', 'half'], (leaves) => {
+        for (const l of leaves)
+          l.daysTaken = l.half === null ? orm.toDecimal(l.days ?? 0) : orm.toDecimal('0.5');
+      }),
+    }),
     reason: f.text(),
     state: f.state({
       help: 'A request waits once submitted, and someone other than the requester approves or refuses it.',
@@ -395,6 +413,10 @@ export const HrLeave = defineModel('hr.leave', {
     ordered: {
       check: orm.sql`date_to >= date_from`,
       message: 'A leave ends on or after it starts.',
+    },
+    halfOfOneDay: {
+      check: orm.sql`half IS NULL OR date_to = date_from`,
+      message: 'Half a day of leave is for one date.',
     },
   },
   constraints: {
@@ -440,7 +462,7 @@ export const HrLeave = defineModel('hr.leave', {
     },
     // The days left of its type: what is waiting and approved, this one included (see `overBalance`).
     balance: {
-      ...check('hr.leave', ['employee', 'type', 'days', 'dateFrom', 'state'], (leaves) =>
+      ...check('hr.leave', ['employee', 'type', 'days', 'half', 'dateFrom', 'state'], (leaves) =>
         (leaves as unknown as { overBalance(): Promise<number[]> }).overBalance(),
       ),
       message: 'Not enough days left of this leave type.',
@@ -474,10 +496,11 @@ export const HrLeave = defineModel('hr.leave', {
                   dateFrom: { gte: `${year}-01-01`, lte: `${year}-12-31` },
                 },
               })
-            ).load(['days'])
+            ).load(['days', 'half'])
           )
-            .read(['days'])
-            .reduce((sum, r) => sum + Number(r['days'] ?? 0), 0);
+            .read(['days', 'half'])
+            // Half a day takes half a day.
+            .reduce((sum, r) => sum + (r['half'] == null ? Number(r['days'] ?? 0) : 0.5), 0);
           if (taken > Number(allowed)) failing.push(l.id);
         }
         return failing;

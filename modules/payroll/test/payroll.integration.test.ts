@@ -595,22 +595,68 @@ test('a temporary person paid by the day: the pay basis, the employment type and
       200,
     );
   }
+  // Half a day of casual leave on the 10th, the afternoon worked.
+  const casual = await first('hr.leave.type', { code: 'CL' });
+  const halfDay = await call('POST', '/api/v1/models/hr.leave', 'pia', {
+    employee: karim,
+    type: casual.id,
+    dateFrom: '2027-03-10',
+    dateTo: '2027-03-10',
+    days: 1,
+    half: 'am',
+  });
+  expect(halfDay.status, JSON.stringify(halfDay.json)).toBe(201);
+  expect(Number(halfDay.json.daysTaken)).toBe(0.5);
+  // Half a day is for one date.
+  expect(
+    (
+      await call('POST', '/api/v1/models/hr.leave', 'pia', {
+        employee: karim,
+        type: casual.id,
+        dateFrom: '2027-03-15',
+        dateTo: '2027-03-16',
+        days: 2,
+        half: 'pm',
+      })
+    ).status,
+  ).toBeGreaterThanOrEqual(400);
+  for (const step of ['submit', 'approve'])
+    expect(
+      (await call('POST', `/api/v1/models/hr.leave/${halfDay.json.id}/transitions/${step}`, 'pia'))
+        .status,
+      step,
+    ).toBe(200);
+  const worked = await call('POST', D, 'pia', {
+    employee: karim,
+    status: 'present',
+    date: '2027-03-10',
+    workedHours: '4',
+    expectedHours: '4',
+    leaveFraction: '0.5',
+  });
+  expect(worked.status, JSON.stringify(worked.json)).toBe(201);
+  expect((await call('POST', `${D}/${worked.json.id}/transitions/approve`, 'pia')).status).toBe(
+    200,
+  );
   const march = await call('POST', R, 'otto', { dateFrom: '2027-03-01', dateTo: '2027-03-31' });
   expect((await run(march.json.id, 'compute', 'otto')).status).toBe(200);
   await payrollWorker({ shutro: host.server.shutro }).drain();
   const slip = await slipOf(march.json.id, 'karim');
   const lines = await linesOf(slip.id);
-  expect(Number(lines['BASIC'].amount)).toBe(2400); // 800 a day, three days
+  // 800 a day: three days worked whole, and the half of the day with half a day's leave.
+  expect(Number(lines['BASIC'].amount)).toBe(2800);
+  expect(lines['BASIC'].explanation).toContain('3.5');
   expect(Number(lines['NIGHT'].amount)).toBe(100);
   expect(Number(lines['T_TEMP'].amount)).toBe(1);
   expect(Number(lines['T_PERM'].amount)).toBe(0);
-  expect(Number(lines['HOURS'].amount)).toBe(20.5);
+  expect(Number(lines['HOURS'].amount)).toBe(24.5);
   expect(Number(lines['LATE'].amount)).toBe(15);
   expect(Number(lines['OFF'].amount)).toBe(1);
   expect(Number(lines['BY_HOUR'].amount)).toBe(0);
-  expect(Number(slip.gross)).toBe(2500);
-  // One unpaid day (1000), one paid day (100), one of the LWP type (10), one casual (1), no sick leave.
-  expect(Number(lines['LEAVES'].amount)).toBe(1111);
+  expect(Number(slip.gross)).toBe(2900);
+  // One unpaid day (1000), a paid day and a half (150), one of the LWP type (10), a casual day and a half
+  // (1.5), no sick leave.
+  expect(Number(lines['LEAVES'].amount)).toBe(1161.5);
 });
 
 test('the demo data loads', async () => {

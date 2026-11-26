@@ -411,15 +411,21 @@ async function takenBetween(
   states: readonly string[],
 ): Promise<number> {
   if (to < from) return 0;
-  const rows = await su.model('hr.leave').search({
-    where: {
-      employee: employee as never,
-      type: type as never,
-      state: { in: states },
-      dateFrom: { gte: from, lte: to },
-    } as never,
-  });
-  return [...rows].reduce((sum, l) => sum + Math.round(Number(l.days ?? 0) * 100), 0);
+  const rows = await (
+    await su.model('hr.leave').search({
+      where: {
+        employee: employee as never,
+        type: type as never,
+        state: { in: states },
+        dateFrom: { gte: from, lte: to },
+      } as never,
+    })
+  ).load(['days', 'half']);
+  // Half a day of leave takes half a day (RFC 0039 §4).
+  return [...rows].reduce(
+    (sum, l) => sum + (l.half === null ? Math.round(Number(l.days ?? 0) * 100) : 50),
+    0,
+  );
 }
 
 const APPROVED = ['approved'] as const;
