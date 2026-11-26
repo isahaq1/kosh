@@ -3,6 +3,8 @@ export const bn: Readonly<Record<string, string>> = {
   '{{company.name}} — Attendance register': '{{company.name}} — হাজিরা রেজিস্টার',
   'A check-out comes after its check-in.': 'চেক-আউট তার চেক-ইনের পরে হয়।',
   'A roster ends on or after it starts.': 'রোস্টার শুরুর দিন বা তার পরে শেষ হয়।',
+  'A shift’s code is written in capitals, digits and _.':
+    'শিফটের কোড বড় হাতের অক্ষর, অঙ্ক ও _ দিয়ে লেখা হয়।',
   'A site has both coordinates or neither, and a positive radius.':
     'সাইটে দুটি স্থানাঙ্কই থাকবে অথবা কোনোটিই নয়, এবং ব্যাসার্ধ ধনাত্মক হবে।',
   'A swap is approved by an Attendance manager who is neither of the two people.':
@@ -15,6 +17,7 @@ export const bn: Readonly<Record<string, string>> = {
   Accept: 'গ্রহণ করুন',
   Active: 'সক্রিয়',
   'An IANA name such as Asia/Dhaka or Asia/Kolkata.': 'IANA নাম, যেমন Asia/Dhaka বা Asia/Kolkata।',
+  'Another shift has this code.': 'অন্য একটি শিফটে এই কোড আছে।',
   Approve: 'অনুমোদন করুন',
   Approved: 'অনুমোদিত',
   'Approved days are locked and read by Payroll; recomputing leaves them as they are.':
@@ -56,6 +59,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Checked by: ______________________   Date: __________':
     'যাচাইকারী: ______________________   তারিখ: __________',
   'Checked in now': 'এখন চেক-ইন অবস্থায়',
+  Code: 'কোড',
   Company: 'প্রতিষ্ঠান',
   Configuration: 'কনফিগারেশন',
   Counted: 'গোনা হয়েছে',
@@ -100,6 +104,8 @@ export const bn: Readonly<Record<string, string>> = {
   'How the machine talks to the server.': 'মেশিন সার্ভারের সাথে যেভাবে কথা বলে।',
   ID: 'আইডি',
   In: 'প্রবেশ',
+  'In capitals (NIGHT, A, B2): Payroll counts the approved days worked on the shift as SHIFT_ and the code.':
+    'বড় হাতের অক্ষরে (NIGHT, A, B2): পে-রোল এই শিফটে কাজ করা অনুমোদিত দিনগুলো SHIFT_ ও কোড দিয়ে গণনা করে।',
   Kiosk: 'কিয়স্ক',
   'Kiosk (a device at the gate)': 'কিয়স্ক (গেটের যন্ত্র)',
   'Kiosk PIN (hashed)': 'কিয়স্ক পিন (হ্যাশকৃত)',

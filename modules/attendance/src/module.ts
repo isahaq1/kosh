@@ -44,6 +44,11 @@ export const AttendanceShift = defineModel('attendance.shift', {
   access: { 'attendance.user': READ, 'attendance.manager': [...ALL, 'export', 'import'] },
   fields: {
     name: f.char({ required: true, translate: true }),
+    code: f.char({
+      size: 16,
+      label: 'Code',
+      help: 'In capitals (NIGHT, A, B2): Payroll counts the approved days worked on the shift as SHIFT_ and the code.',
+    }),
     start: f.char({ size: 5, required: true, default: '09:00', label: 'Starts (HH:MM)' }),
     end: f.char({
       size: 5,
@@ -88,6 +93,11 @@ export const AttendanceShift = defineModel('attendance.shift', {
       check: orm.sql`break_minutes >= 0 AND grace_minutes >= 0 AND overtime_after >= 0 AND overtime_step > 0`,
       message: 'Minutes are not negative; the overtime step is at least one minute.',
     },
+    code: {
+      check: orm.sql`code IS NULL OR code ~ '^[A-Z][A-Z0-9_]*$'`,
+      message: 'A shift’s code is written in capitals, digits and _.',
+    },
+    oneCode: { unique: ['code'], message: 'Another shift has this code.' },
   },
 });
 
@@ -801,13 +811,13 @@ export const attendanceShutro = defineModule({
     record(
       'attendance.shift',
       'shift_general',
-      { name: 'General', start: '09:00', end: '18:00', breakMinutes: 60 },
+      { name: 'General', code: 'GEN', start: '09:00', end: '18:00', breakMinutes: 60 },
       { noupdate: true },
     ),
     record(
       'attendance.shift',
       'shift_night',
-      { name: 'Night', start: '22:00', end: '06:00', breakMinutes: 30 },
+      { name: 'Night', code: 'NIGHT', start: '22:00', end: '06:00', breakMinutes: 30 },
       { noupdate: true },
     ),
   ],

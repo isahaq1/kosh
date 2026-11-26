@@ -391,8 +391,12 @@ Asked: "employee can be contactual, temporary and other".
 
 ## Step 3 is done but for
 
-Days by shift (`SHIFT_<CODE>` — shifts have no code yet), and the list of variables shown where a rule is
-written.
+The list of variables shown where a rule is written.
+
+**Days by shift** are done (2026-11-26): a shift has a **code** (`NIGHT`, `A`, `B2` — capitals, unique; the
+shipped shifts are `GEN` and `NIGHT` on new installations, an existing one types them in), and a rule reads
+`SHIFT_<CODE>`: the approved days with hours worked on that shift, counted by PostgreSQL per batch; a shift not
+worked, or a code no shift has, reads as 0. A swapped day counts on the shift actually worked.
 
 ## 7. Open questions
 

@@ -1010,7 +1010,13 @@ half they are off; Payroll counts the day in halves (0.5 present, 0.5 on leave) 
 
 `TYPE_<CODE>` is 1 for the contract's type and 0 for any other. From approved attendance days: `WORKED_HOURS`,
 `EXPECTED_HOURS`, `LATE_MINUTES`, `EARLY_MINUTES`, `NIGHT_SHIFTS`, `OFF_DAYS_WORKED` (worked on a weekend or a
-holiday), `REMOTE_DAYS`, besides the days present, absent, on leave and on tour.
+holiday), `REMOTE_DAYS`, besides the days present, absent, on leave and on tour. **By shift**: give a shift a
+*code* (Attendance › Configuration › Shifts: `NIGHT`, `A`, `B2`) and a rule reads `SHIFT_<CODE>` — the approved
+days worked on it; a shift not worked reads as 0:
+
+```ts
+{ code: 'SHIFT_ALLOWANCE', category: 'allowance', formula: 'SHIFT_NIGHT * 150 + SHIFT_B * 60' }
+```
 
 **Large runs** (RFC 0039). A run of up to 200 people is computed when *Compute payslips* is pressed. A larger one
 is computed **in the background, 500 people at a time**: the button answers at once, the run shows *People

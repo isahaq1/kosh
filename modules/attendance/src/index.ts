@@ -271,6 +271,7 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
       label: 'Shifts',
       columns: [
         { header: 'Name', field: 'name' },
+        { header: 'Code', field: 'code' },
         { header: 'Starts', field: 'start' },
         { header: 'Ends', field: 'end' },
         { header: 'Break (minutes)', field: 'breakMinutes' },
@@ -636,6 +637,7 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
     'attendance.shift.list': list(AttendanceShift, {
       columns: [
         'name',
+        'code',
         'start',
         'end',
         'breakMinutes',
@@ -647,7 +649,7 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
     'attendance.shift.form': form(AttendanceShift, (k) => ({
       header: { buttons: [] },
       sheet: [
-        k.group('main', ['name', 'start', 'end', 'breakMinutes', 'graceMinutes']),
+        k.group('main', ['name', 'code', 'start', 'end', 'breakMinutes', 'graceMinutes']),
         k.group('overtime', ['overtimeAfter', 'overtimeStep', 'overtimeRate'], {
           label: 'Overtime',
         }),

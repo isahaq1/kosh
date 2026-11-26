@@ -14,7 +14,8 @@
  *   approved days of one type: `LEAVE_CL`, `LEAVE_SL`, `LEAVE_EL`, `LEAVE_LWP`; a type not taken reads as 0);
  * - from the shifts, approved days only: `WORKED_HOURS`, `EXPECTED_HOURS`, `LATE_MINUTES`, `EARLY_MINUTES`,
  *   `NIGHT_SHIFTS` (days worked on a shift that ends the next day), `OFF_DAYS_WORKED` (days worked on a weekend
- *   or a holiday);
+ *   or a holiday), `SHIFT_<CODE>` (days worked on the shift with that code: `SHIFT_NIGHT`, `SHIFT_B`; a shift
+ *   not worked reads as 0);
  * - from Attendance's **approved** days: `PRESENT_DAYS` (days on tour and at home included), `TOUR_DAYS`, `REMOTE_DAYS` (home office), `ABSENT_DAYS`, `LEAVE_DAYS`, `HOLIDAYS`, `LATE_DAYS`,
  *   `OVERTIME_HOURS` (approved), `OVERTIME_RATE` — a payslip warns when days of the period wait for approval;
  * - `GROSS` and `DEDUCTIONS` (the totals of the rules before), `E_<CODE>` (the person's own values: a provident fund membership, a declared investment), `FESTIVAL` (the run
@@ -440,6 +441,20 @@ export async function computeBatch(env: Env, id: number, limit: number = BATCH):
       if (code !== '') mine.byCode.set(code, (mine.byCode.get(code) ?? 0) + n);
       leaveOf.set(who, mine);
     }
+    // Days worked by shift (RFC 0039 §4): the approved days with hours on a shift that has a code.
+    const shiftsOf = new Map<number, Map<string, number>>();
+    for (const row of await env.sql<{ employee_id: string | number; code: string; n: number }>`
+      SELECT d.employee_id, s.code, count(*)::int AS n
+        FROM attendance_day d
+        JOIN attendance_shift s ON s.id = d.shift_id
+       WHERE d.employee_id = ANY(${people}::bigint[]) AND d.date BETWEEN ${from}::date AND ${to}::date
+         AND d.state = 'approved' AND d.worked_hours > 0 AND s.code IS NOT NULL
+       GROUP BY d.employee_id, s.code`) {
+      const who = Number(row.employee_id);
+      const mine = shiftsOf.get(who) ?? new Map<string, number>();
+      mine.set(row.code, row.n);
+      shiftsOf.set(who, mine);
+    }
     const inputsOf = grouped(
       await (
         await env
@@ -564,6 +579,7 @@ export async function computeBatch(env: Env, id: number, limit: number = BATCH):
       set('LATE_MINUTES', seen?.late_minutes ?? 0);
       set('EARLY_MINUTES', seen?.early_minutes ?? 0);
       set('NIGHT_SHIFTS', seen?.night_shifts ?? 0);
+      for (const [code, n] of shiftsOf.get(e.id) ?? []) set(`SHIFT_${code}`, n);
       set('OFF_DAYS_WORKED', seen?.off_days_worked ?? 0);
       const waiting = (seen?.days ?? 0) - (seen?.approved ?? 0);
       if (waiting > 0)
@@ -617,6 +633,8 @@ export async function computeBatch(env: Env, id: number, limit: number = BATCH):
           // An employment type the person does not have; a leave type they took no day of.
           name.startsWith('TYPE_') ||
           name.startsWith('LEAVE_') ||
+          // A shift the person did not work.
+          name.startsWith('SHIFT_') ||
           structureRules.some((r) => r.code === name),
       };
       const lines: Record<string, unknown>[] = [];

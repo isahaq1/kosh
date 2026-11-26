@@ -606,6 +606,14 @@ test('a temporary person paid by the day: the pay basis, the employment type and
           formula:
             'UNPAID_LEAVE_DAYS * 1000 + PAID_LEAVE_DAYS * 100 + LEAVE_LWP * 10 + LEAVE_CL + LEAVE_SL * 5',
         },
+        // Days worked by shift, by the shift's code (a shift not worked, or that does not exist, is 0).
+        {
+          sequence: 10,
+          code: 'SHIFTS',
+          name: 'By shift',
+          category: 'info',
+          formula: 'SHIFT_NIGHT * 10 + SHIFT_GEN + SHIFT_EVENING',
+        },
       ],
     },
   });
@@ -735,6 +743,8 @@ test('a temporary person paid by the day: the pay basis, the employment type and
   // One unpaid day (1000), a paid day and a half (150), one of the LWP type (10), a casual day and a half
   // (1.5), no sick leave.
   expect(Number(lines['LEAVES'].amount)).toBe(1161.5);
+  // One day worked on the night shift; the other days name no shift.
+  expect(Number(lines['SHIFTS'].amount)).toBe(10);
 });
 
 test('the demo data loads', async () => {
