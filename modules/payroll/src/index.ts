@@ -564,22 +564,8 @@ export const payroll: ReturnType<typeof defineModule> = defineModule({
               'Compute the payslips, read their warnings, then approve: an approved run is locked.',
           },
         ),
-        k.lines('slips', [
-          'employee',
-          { field: 'gross', id: 'slip_gross' },
-          'deductions',
-          'contributions',
-          { field: 'net', id: 'slip_net' },
-          'difference',
-          'warnings',
-        ]),
-        k.group('totals', ['slipCount', 'gross', 'net'], { label: 'Totals' }),
-        // A large run is computed in the background: how far it is, and what stopped it if a formula failed.
-        k.group('progress', ['toCompute', 'computedCount', 'computeError'], {
-          label: 'Computation',
-          description:
-            'A run of more than 200 people is computed in the background, 500 at a time: it can be approved once everybody is computed.',
-        }),
+        // The payslips are not listed in the form (RFC 0039 §2): a run may have thirty thousand. The tiles open
+        // them as a list that pages, searches and filters — all of them, or those with a warning.
         k.stats('related', [
           stat({
             id: 'run_payslips',
@@ -596,11 +582,28 @@ export const payroll: ReturnType<typeof defineModule> = defineModule({
             action: 'payroll.action_slips',
           }),
         ]),
+        k.group('totals', ['slipCount', 'gross', 'net'], { label: 'Totals' }),
+        // A large run is computed in the background: how far it is, and what stopped it if a formula failed.
+        k.group('progress', ['toCompute', 'computedCount', 'computeError'], {
+          label: 'Computation',
+          description:
+            'A run of more than 200 people is computed in the background, 500 at a time: it can be approved once everybody is computed.',
+        }),
       ],
       chatter: true,
     })),
     'payroll.slip.list': list(PayrollSlip, {
-      columns: ['name', 'employee', 'dateFrom', 'gross', 'deductions', 'net', 'run'],
+      columns: [
+        'name',
+        'employee',
+        'dateFrom',
+        { field: 'gross', sum: true },
+        { field: 'deductions', sum: true },
+        { field: 'net', sum: true },
+        'difference',
+        'warnings',
+        'run',
+      ],
       defaultOrder: ['dateFrom desc'],
       decorations: { warning: { warnings: { ne: null } } },
     }),

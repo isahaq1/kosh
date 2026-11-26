@@ -33,9 +33,15 @@ test('a run computed with explained payslips, approved, and read by the employee
   await expect(page).toHaveURL(/payroll\.action_runs\/\d+$/);
   await page.getByRole('button', { name: 'Compute payslips' }).click();
   await expect(page.getByRole('button', { name: /^State: Computed/ })).toBeVisible();
-  const slips = page.getByRole('table', { name: 'slips' });
-  await expect(slips).toContainText('Nadia Islam');
-  await expect(slips).toContainText(/45,?000/); // 30 000 basic + 15 000 house rent
+  // The payslips are not listed in the form (a run may have thirty thousand): the tile opens them as a list.
+  const run = page.url();
+  const related = page.getByRole('region', { name: 'related' });
+  await related.getByRole('button', { name: /^Payslips \d+$/ }).click();
+  await expect(page).toHaveURL(/payroll\.action_slips\?.*q=/);
+  const nadiaSlip = page.getByRole('row', { name: /Nadia Islam/ });
+  await expect(nadiaSlip).toHaveCount(1);
+  await expect(nadiaSlip).toContainText(/45,?000/); // 30 000 basic + 15 000 house rent
+  await page.goto(run);
 
   await page.getByRole('button', { name: 'Approve' }).click();
   const confirm = page.getByRole('dialog', { name: 'Approve' });

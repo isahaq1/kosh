@@ -111,10 +111,13 @@ container on the development machine (2026-11-25):
   one payslip a person, the figures equal to the payslips' sums, a failing formula named and fixed, the server's
   fields refused; the benchmark holds two budgets (the time a person does not double with the size; 30 000
   people under ten minutes).
-- **Left for step 1b**: the run's form still lists its payslips as lines — fine for hundreds, too many for
-  thousands (the *Payslips* tile opens the paged list instead; the lines should go for large runs); the payment
-  files are built in memory; `payroll_account`'s entry for a very large run is not measured; approving a large
-  run records loan repayments person by person.
+- **The run's form** (done 2026-11-26): it no longer lists its payslips — a form asked for every payslip's id
+  and then loaded them by listing the ids in one request, which cannot work for thousands. The run shows its
+  figures and two tiles, *Payslips* and *With a warning*, that open the payslips as a list that pages, searches,
+  filters and totals (gross, deductions, net).
+- **Left for step 1b**: the payment files are built in memory; `payroll_account`'s entry for a very large run is
+  not measured; approving a large run records loan repayments person by person (each loads every payslip of the
+  run at once); the run's print template lists every payslip.
 - Shutro request #42 (a savepoint rolled back, then a write) was met and avoided here.
 
 ## Implementation notes (2026-11-25): step 2 — home office
