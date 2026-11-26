@@ -989,7 +989,11 @@ its wage is counted: **per month, per day worked or per hour worked**. Rules rea
 { code: 'LATE', category: 'deduction', formula: 'BASIC / 208 / 60 * LATE_MINUTES', condition: 'LATE_MINUTES > 30' }
 { code: 'OFFDAY', category: 'allowance', formula: 'WAGE * OFF_DAYS_WORKED', condition: 'PAID_BY_DAY' }
 { code: 'NO_PF', category: 'info', formula: '0', condition: 'TYPE_TEMP + TYPE_CASU' }
+{ code: 'LWP', category: 'deduction', formula: 'WAGE / PERIOD_DAYS * UNPAID_LEAVE_DAYS', condition: 'UNPAID_LEAVE_DAYS > 0' }
 ```
+
+Leave is told apart: a **leave type** says whether it is paid and has a code, and the rules read
+`PAID_LEAVE_DAYS`, `UNPAID_LEAVE_DAYS` and `LEAVE_<CODE>` (`LEAVE_CL`, `LEAVE_SL`, `LEAVE_EL`, `LEAVE_LWP`).
 
 `TYPE_<CODE>` is 1 for the contract's type and 0 for any other. From approved attendance days: `WORKED_HOURS`,
 `EXPECTED_HOURS`, `LATE_MINUTES`, `EARLY_MINUTES`, `NIGHT_SHIFTS`, `OFF_DAYS_WORKED` (worked on a weekend or a

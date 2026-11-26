@@ -11,6 +11,8 @@ export const bn: Readonly<Record<string, string>> = {
     'জমা দেওয়ার পর অনুরোধ অপেক্ষায় থাকে; ব্যক্তি নিজে নন, অন্য কেউ এটি অনুমোদন বা প্রত্যাখ্যান করেন।',
   'A request waits once submitted; someone other than the traveller approves or refuses it.':
     'জমা দেওয়ার পর অনুরোধ অপেক্ষায় থাকে; ভ্রমণকারী ছাড়া অন্য কেউ অনুমোদন বা প্রত্যাখ্যান করেন।',
+  'A short code (CL, SL, EL, LWP): Payroll reads the days of this type as LEAVE_ and the code.':
+    'একটি সংক্ষিপ্ত কোড (CL, SL, EL, LWP): পেরোল এই ধরনের দিনগুলো LEAVE_ ও কোড দিয়ে পড়ে।',
   'A short code used in reports and payroll files.': 'রিপোর্ট ও বেতনের ফাইলে ব্যবহৃত সংক্ষিপ্ত কোড।',
   'A tour ends on or after it starts.': 'ট্যুর শুরুর দিন বা তার পরে শেষ হয়।',
   Active: 'সক্রিয়',
@@ -187,6 +189,8 @@ export const bn: Readonly<Record<string, string>> = {
   Waiting: 'অপেক্ষমাণ',
   Water: 'নৌপথ',
   'Where to': 'কোথায়',
+  'Whether the person is paid on these days. Payroll counts paid and unpaid leave apart (PAID_LEAVE_DAYS, UNPAID_LEAVE_DAYS), so unpaid leave is deducted by a rule.':
+    'এই দিনগুলোতে ব্যক্তি বেতন পান কি না। পেরোল বেতনসহ ও বিনা বেতনের ছুটি আলাদা গোনে (PAID_LEAVE_DAYS, UNPAID_LEAVE_DAYS), তাই বিনা বেতনের ছুটি একটি নিয়ম দিয়ে কাটা যায়।',
   'Whether the wage is for a month, for each day worked or for each hour worked. Payroll reads it as PAID_BY_DAY and PAID_BY_HOUR.':
     'মজুরি এক মাসের, প্রতিটি কর্মদিবসের নাকি প্রতিটি কর্মঘণ্টার জন্য। পেরোল এটি PAID_BY_DAY ও PAID_BY_HOUR হিসেবে পড়ে।',
   'Who approves this person’s expenses and leave first.':

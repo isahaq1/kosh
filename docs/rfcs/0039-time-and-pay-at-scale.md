@@ -157,9 +157,23 @@ Asked: "employee can be contactual, temporary and other".
   `OFF_DAYS_WORKED` (days worked when nothing was expected: a weekend or a holiday).
 - Test: a temporary person on a three-month contract paid 800 a day — three approved days, one late, one on the
   night shift, one on a Friday — through a large run: the days' pay, the night allowance, the type, the hours.
-- **Still to do in step 3**: half days; paid and unpaid leave apart (`PAID_LEAVE_DAYS`, `UNPAID_LEAVE_DAYS`,
-  `LEAVE_<CODE>`); days by shift (`SHIFT_<CODE>` — shifts have no code yet); the variables listed where a rule
-  is written.
+- **Still to do in step 3**: half days; days by shift (`SHIFT_<CODE>` — shifts have no code yet); the variables
+  listed where a rule is written.
+
+## Implementation notes (2026-11-26): step 3, part 2 — paid and unpaid leave apart
+
+- A **leave type** says whether it is **paid** (it is, unless said otherwise) and has a **code**; shipped: Casual
+  `CL`, Sick `SL`, Earned `EL`, Unpaid `LWP` (not paid).
+- **In the rules**: `UNPAID_LEAVE_DAYS`, `PAID_LEAVE_DAYS` and `LEAVE_<CODE>` — the approved attendance days on
+  leave, each belonging to the approved request that covers it. `LEAVE_DAYS` stays their total. A day on leave no
+  approved request covers (typed in by hand) counts as paid. Read with the batch: one more query, grouped by
+  PostgreSQL.
+- Test: a day of unpaid leave and a day of casual leave of the temporary person, told apart by a rule.
+- **For installations made before this**: the shipped types are data a company may have changed, so they are
+  not rewritten — tick *Paid* off on *Unpaid leave* and give the types their codes (Workforce › Configuration ›
+  Leave types).
+- **Half days are not built.** A leave's days are a whole number that the balance, the accrual ledger and
+  Attendance's day all read; half a day reaches each of them and is a step of its own.
 
 ## 7. Open questions
 

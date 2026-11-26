@@ -723,12 +723,12 @@ export const hr: ReturnType<typeof defineModule> = defineModule({
       sheet: [k.group('main', ['name', 'color'])],
     })),
     'hr.leave.type.list': list(HrLeaveType, {
-      columns: ['name', 'daysPerYear'],
-      inlineEdit: ['name', 'daysPerYear'],
+      columns: ['name', 'code', 'daysPerYear', 'paid'],
+      inlineEdit: ['name', 'code', 'daysPerYear', 'paid'],
     }),
     'hr.leave.type.form': form(HrLeaveType, (k) => ({
       header: { buttons: [] },
-      sheet: [k.group('main', ['name', 'daysPerYear'])],
+      sheet: [k.group('main', ['name', 'code', 'daysPerYear', 'paid'])],
     })),
     'hr.leave.list': list(HrLeave, {
       columns: [

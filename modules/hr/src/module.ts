@@ -321,6 +321,16 @@ export const HrLeaveType = defineModel('hr.leave.type', {
     name: f.char({ required: true, translate: true }),
     /** Days per calendar year for each person; empty: no balance (unpaid leave). */
     daysPerYear: f.integer({ label: 'Days per year' }),
+    /** Read by Payroll as `LEAVE_<CODE>`: the approved days of this type in the period. */
+    code: f.char({
+      size: 20,
+      help: 'A short code (CL, SL, EL, LWP): Payroll reads the days of this type as LEAVE_ and the code.',
+    }),
+    paid: f.boolean({
+      default: true,
+      label: 'Paid',
+      help: 'Whether the person is paid on these days. Payroll counts paid and unpaid leave apart (PAID_LEAVE_DAYS, UNPAID_LEAVE_DAYS), so unpaid leave is deducted by a rule.',
+    }),
   },
 });
 
@@ -933,22 +943,27 @@ export const hrShutro = defineModule({
     record(
       'hr.leave.type',
       'leave_casual',
-      { name: 'Casual leave', daysPerYear: 10 },
+      { name: 'Casual leave', daysPerYear: 10, code: 'CL' },
       { noupdate: true },
     ),
     record(
       'hr.leave.type',
       'leave_sick',
-      { name: 'Sick leave', daysPerYear: 14 },
+      { name: 'Sick leave', daysPerYear: 14, code: 'SL' },
       { noupdate: true },
     ),
     record(
       'hr.leave.type',
       'leave_annual',
-      { name: 'Earned leave', daysPerYear: 20 },
+      { name: 'Earned leave', daysPerYear: 20, code: 'EL' },
       { noupdate: true },
     ),
-    record('hr.leave.type', 'leave_unpaid', { name: 'Unpaid leave' }, { noupdate: true }),
+    record(
+      'hr.leave.type',
+      'leave_unpaid',
+      { name: 'Unpaid leave', code: 'LWP', paid: false },
+      { noupdate: true },
+    ),
     record(
       'hr.contract.type',
       'type_permanent',

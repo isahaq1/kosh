@@ -8,6 +8,8 @@
  * - `PAID_BY_DAY` and `PAID_BY_HOUR` (1 or 0: how the contract's wage is counted — else by the month) and
  *   `TYPE_<CODE>` (1 for the contract's employment type: `TYPE_PERM`, `TYPE_CONT`, `TYPE_TEMP`, `TYPE_CASU`…;
  *   any other type reads as 0);
+ * - leave told apart: `PAID_LEAVE_DAYS`, `UNPAID_LEAVE_DAYS` (the leave type says which) and `LEAVE_<CODE>` (the
+ *   approved days of one type: `LEAVE_CL`, `LEAVE_SL`, `LEAVE_EL`, `LEAVE_LWP`; a type not taken reads as 0);
  * - from the shifts, approved days only: `WORKED_HOURS`, `EXPECTED_HOURS`, `LATE_MINUTES`, `EARLY_MINUTES`,
  *   `NIGHT_SHIFTS` (days worked on a shift that ends the next day), `OFF_DAYS_WORKED` (days worked on a weekend
  *   or a holiday);
@@ -286,6 +288,38 @@ export async function computeBatch(env: Env, id: number, limit: number = BATCH):
          GROUP BY d.employee_id`
       ).map((row) => [Number(row.employee_id), row]),
     );
+    // Leave by its type (RFC 0039 §4): an approved day on leave belongs to the approved request that covers it,
+    // whose type says whether it is paid and carries the code the rules read (`LEAVE_CL`…).
+    const leaveOf = new Map<
+      number,
+      { paid: number; unpaid: number; byCode: Map<string, number> }
+    >();
+    for (const row of await env.sql<{
+      employee_id: string | number;
+      code: string | null;
+      paid: boolean | null;
+      n: number;
+    }>`
+      SELECT d.employee_id, t.code, t.paid, count(*)::int AS n
+        FROM attendance_day d
+        JOIN LATERAL (
+               SELECT l.type_id FROM hr_leave l
+                WHERE l.employee_id = d.employee_id AND l.state = 'approved'
+                  AND l.date_from <= d.date AND l.date_to >= d.date
+                ORDER BY l.id LIMIT 1
+             ) taken ON true
+        JOIN hr_leave_type t ON t.id = taken.type_id
+       WHERE d.employee_id = ANY(${people}::bigint[]) AND d.date BETWEEN ${from}::date AND ${to}::date
+         AND d.state = 'approved' AND d.status = 'leave'
+       GROUP BY d.employee_id, t.code, t.paid`) {
+      const who = Number(row.employee_id);
+      const mine = leaveOf.get(who) ?? { paid: 0, unpaid: 0, byCode: new Map<string, number>() };
+      if (row.paid === false) mine.unpaid += row.n;
+      else mine.paid += row.n;
+      const code = (row.code ?? '').toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+      if (code !== '') mine.byCode.set(code, (mine.byCode.get(code) ?? 0) + row.n);
+      leaveOf.set(who, mine);
+    }
     const inputsOf = grouped(
       await (
         await env
@@ -386,6 +420,12 @@ export async function computeBatch(env: Env, id: number, limit: number = BATCH):
       set('REMOTE_DAYS', seen?.remote ?? 0);
       set('ABSENT_DAYS', seen?.absent ?? 0);
       set('LEAVE_DAYS', seen?.on_leave ?? 0);
+      // Paid and unpaid apart, and by type. A day on leave no approved request covers (typed in by hand) is
+      // taken as paid: only a leave type that says *not paid* makes a day unpaid.
+      const taken = leaveOf.get(e.id);
+      set('UNPAID_LEAVE_DAYS', taken?.unpaid ?? 0);
+      set('PAID_LEAVE_DAYS', (seen?.on_leave ?? 0) - (taken?.unpaid ?? 0));
+      for (const [code, n] of taken?.byCode ?? []) set(`LEAVE_${code}`, n);
       set('HOLIDAYS', seen?.holiday ?? 0);
       set('LATE_DAYS', seen?.late ?? 0);
       set('OVERTIME_HOURS', orm.toDecimal(seen?.overtime ?? '0'));
@@ -448,8 +488,9 @@ export async function computeBatch(env: Env, id: number, limit: number = BATCH):
           name.startsWith('INPUT_') ||
           name.startsWith('YTD_') ||
           name.startsWith('E_') ||
-          // An employment type the person does not have.
+          // An employment type the person does not have; a leave type they took no day of.
           name.startsWith('TYPE_') ||
+          name.startsWith('LEAVE_') ||
           structureRules.some((r) => r.code === name),
       };
       const lines: Record<string, unknown>[] = [];

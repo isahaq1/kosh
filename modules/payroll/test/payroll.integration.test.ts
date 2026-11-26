@@ -519,6 +519,15 @@ test('a temporary person paid by the day: the pay basis, the employment type and
           category: 'info',
           formula: 'PAID_BY_HOUR',
         },
+        // Leave told apart: unpaid days, paid days, and each type by its code (a type not taken is 0).
+        {
+          sequence: 9,
+          code: 'LEAVES',
+          name: 'Leave',
+          category: 'info',
+          formula:
+            'UNPAID_LEAVE_DAYS * 1000 + PAID_LEAVE_DAYS * 100 + LEAVE_LWP * 10 + LEAVE_CL + LEAVE_SL * 5',
+        },
       ],
     },
   });
@@ -559,6 +568,33 @@ test('a temporary person paid by the day: the pay basis, the employment type and
       200,
     );
   }
+  // A day of unpaid leave and a day of casual leave, approved by HR, and their days in Attendance.
+  for (const [code, date] of [
+    ['LWP', '2027-03-08'],
+    ['CL', '2027-03-09'],
+  ] as const) {
+    const type = await first('hr.leave.type', { code });
+    expect(type?.paid).toBe(code !== 'LWP');
+    const leave = await call('POST', '/api/v1/models/hr.leave', 'pia', {
+      employee: karim,
+      type: type.id,
+      dateFrom: date,
+      dateTo: date,
+      days: 1,
+    });
+    expect(leave.status, JSON.stringify(leave.json)).toBe(201);
+    for (const step of ['submit', 'approve'])
+      expect(
+        (await call('POST', `/api/v1/models/hr.leave/${leave.json.id}/transitions/${step}`, 'pia'))
+          .status,
+        `${code} ${step}`,
+      ).toBe(200);
+    const made = await call('POST', D, 'pia', { employee: karim, status: 'leave', date });
+    expect(made.status, JSON.stringify(made.json)).toBe(201);
+    expect((await call('POST', `${D}/${made.json.id}/transitions/approve`, 'pia')).status).toBe(
+      200,
+    );
+  }
   const march = await call('POST', R, 'otto', { dateFrom: '2027-03-01', dateTo: '2027-03-31' });
   expect((await run(march.json.id, 'compute', 'otto')).status).toBe(200);
   await payrollWorker({ shutro: host.server.shutro }).drain();
@@ -573,6 +609,8 @@ test('a temporary person paid by the day: the pay basis, the employment type and
   expect(Number(lines['OFF'].amount)).toBe(1);
   expect(Number(lines['BY_HOUR'].amount)).toBe(0);
   expect(Number(slip.gross)).toBe(2500);
+  // One unpaid day (1000), one paid day (100), one of the LWP type (10), one casual (1), no sick leave.
+  expect(Number(lines['LEAVES'].amount)).toBe(1111);
 });
 
 test('the demo data loads', async () => {
