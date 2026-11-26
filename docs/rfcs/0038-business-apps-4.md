@@ -90,13 +90,20 @@ Statistical process control charts, sampling plans by AQL, measuring devices ove
   refuses the validation while one holds it — the stock moved by the validation is rolled back with it — and
   makes the checks a backorder or an older transfer lacks. Receipts, deliveries, internal moves and production
   transfers are checked; adjustments and dropships are not. `stock.picking.form` gained its tiles group.
+- **`@kosh/quality_production`** (same day): Production gained two hooks an order calls — `planned` once it is
+  confirmed, `producing` before anything is consumed — and the bridge makes the order's checks at the first and
+  refuses at the second. Writing it showed a defect in `quality_stock` as first committed: it checked transfers
+  of the kind *production* too, and an order makes its output transfer and validates it in one step, so a control
+  point *On: Production* would have made a check and refused the transfer in the same transaction — the order
+  could never have been produced. `quality_stock` now leaves production transfers alone; the test installs both
+  bridges and produces an order under a production control point.
 - Tests: the points that apply (operation, product, category, vendor), once; the measure's verdict both ways;
   the photo; release and redo by a manager with a reason and by nobody else; one in two; alerts closed with their
   cause; the bridge with a warehouse user who has no Quality rights — refused, passed, failed, released; two
   browser tests (a point and an alert on screen, the overview).
 - **Left out of step 1**: the checklist is its instructions' lines and a verdict — the lines are not ticked one by
   one; lots are a text on the check (the bridge passes none: a check is per product of a transfer, not per lot);
-  `quality_production`; a photo taken from the phone's camera in the form (the picture field uploads a file);
+  checks at each work order of a production order (they are the order's, before it is produced); a photo taken from the phone's camera in the form (the picture field uploads a file);
   failure *rates* (the overview counts failed checks by vendor and product, it does not divide by the checks
   made); notifications to the Quality team when a check is made.
 

@@ -194,6 +194,9 @@ importers:
       '@kosh/quality':
         specifier: workspace:*
         version: link:../../modules/quality
+      '@kosh/quality_production':
+        specifier: workspace:*
+        version: link:../../modules/quality_production
       '@kosh/quality_stock':
         specifier: workspace:*
         version: link:../../modules/quality_stock
@@ -602,6 +605,9 @@ importers:
       '@kosh/quality':
         specifier: workspace:*
         version: link:../../modules/quality
+      '@kosh/quality_production':
+        specifier: workspace:*
+        version: link:../../modules/quality_production
       '@kosh/quality_stock':
         specifier: workspace:*
         version: link:../../modules/quality_stock
@@ -2685,6 +2691,46 @@ importers:
         specifier: ^12.2.1
         version: 12.2.1
 
+  modules/quality_production:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/production':
+        specifier: workspace:*
+        version: link:../production
+      '@kosh/quality':
+        specifier: workspace:*
+        version: link:../quality
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/stock':
+        specifier: workspace:*
+        version: link:../stock
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/quality_stock':
+        specifier: workspace:*
+        version: link:../quality_stock
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   modules/quality_stock:
     dependencies:
       '@kosh/contacts':
@@ -3881,6 +3927,9 @@ importers:
       '@kosh/quality':
         specifier: workspace:*
         version: link:../../modules/quality
+      '@kosh/quality_production':
+        specifier: workspace:*
+        version: link:../../modules/quality_production
       '@kosh/quality_stock':
         specifier: workspace:*
         version: link:../../modules/quality_stock

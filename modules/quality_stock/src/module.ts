@@ -10,12 +10,15 @@ import { orm } from '@kosh/server/orm';
 import { stockShutro } from '@kosh/stock';
 import { defineModule, type Env, extendModel, type Records } from './.kosh/bindings.js';
 
-/** The operation of Quality a transfer's kind is; adjustments and dropships are not checked. */
+/**
+ * The operation of Quality a transfer's kind is. Adjustments and dropships are not checked — and neither are
+ * the transfers of a production order: an order makes its output transfer and validates it in one step, so a
+ * check made there could never be done; what is made is checked on the order itself (`quality_production`).
+ */
 const OPERATION: Readonly<Record<string, Operation | undefined>> = {
   receipt: 'receipt',
   delivery: 'delivery',
   internal: 'internal',
-  production: 'production',
 };
 
 /** Makes the checks these transfers still lack (once per point, transfer and product); as the system. */

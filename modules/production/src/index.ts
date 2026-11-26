@@ -912,6 +912,8 @@ export const production: ReturnType<typeof defineModule> = defineModule({
         ],
       },
       sheet: [
+        // What other apps know of the order (Quality: its checks).
+        k.stats('related', []),
         k.group('main', ['product', 'quantity', 'bom', 'date', 'warehouse']),
         k.group('cost', ['materialCost', 'operationCost', 'totalCost', 'unitCost', 'status'], {
           label: 'Cost',

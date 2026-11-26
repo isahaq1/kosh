@@ -27,6 +27,7 @@ import {
   type Env,
   extendModel,
   f,
+  method,
   onchange,
   type Records,
   records,
@@ -1222,6 +1223,8 @@ export const ProductionOrder = defineModel('production.order', {
                 .browse([o.id])
                 .write({ consumption: made.ids[0] ?? null });
             }
+            await env.flush();
+            await env.model('production.order').browse(orders.ids).planned();
           }),
         }),
         /** "Check availability": reserve the components that came in since. */
@@ -1261,6 +1264,8 @@ export const ProductionOrder = defineModel('production.order', {
           message: 'Components are short: check availability, or wait for them to come in.',
           before: records('production.order', async (orders): Promise<void> => {
             const env = orders.env as unknown as Env;
+            // Whatever must hold before the product is made (Quality: its checks) refuses here.
+            await env.model('production.order').browse(orders.ids).producing();
             // What is left of the work is done with the order.
             const open = await env.model('production.workorder').search({
               where: { production: { in: [...orders.ids] }, state: { in: ['ready', 'progress'] } },
@@ -1390,6 +1395,18 @@ export const ProductionOrder = defineModel('production.order', {
         redraft: { from: ['cancel'], to: 'draft' },
       },
     }),
+  },
+  methods: {
+    /**
+     * Runs once these orders are confirmed — their components listed and reserved, their work scheduled. Nothing
+     * here; a bridge overrides it (`quality_production`: the order's checks).
+     */
+    planned: method('production.order', async (): Promise<void> => undefined),
+    /**
+     * Runs before these orders are produced, before anything is consumed: a bridge that must hold an order
+     * throws here (`quality_production`: a check to do or failed). Nothing here.
+     */
+    producing: method('production.order', async (): Promise<void> => undefined),
   },
   onchange: {
     // The bill valid on the order's date, and the company's first warehouse.

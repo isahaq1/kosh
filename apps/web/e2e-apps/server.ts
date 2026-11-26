@@ -71,6 +71,7 @@ import { purchaseAccount } from '@kosh/purchase_account';
 import { purchaseStock } from '@kosh/purchase_stock';
 import { purchaseStockAccount } from '@kosh/purchase_stock_account';
 import { quality } from '@kosh/quality';
+import { qualityProduction } from '@kosh/quality_production';
 import { qualityStock } from '@kosh/quality_stock';
 import { realtime } from '@kosh/realtime';
 import { recruitment } from '@kosh/recruitment';
@@ -228,6 +229,7 @@ const CATALOGUE = [
   productionAccount,
   maintenanceStock,
   qualityStock,
+  qualityProduction,
   tradeFinanceAccount,
   tradeFinancePurchase,
   tradeFinanceSale,

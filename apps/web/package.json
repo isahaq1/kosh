@@ -93,6 +93,7 @@
     "@kosh/trade_finance_purchase": "workspace:*",
     "@kosh/trade_finance_sale": "workspace:*",
     "@kosh/maintenance_stock": "workspace:*",
+    "@kosh/quality_production": "workspace:*",
     "@kosh/quality_stock": "workspace:*",
     "@kosh/production_account": "workspace:*",
     "@kosh/sale_stock": "workspace:*",

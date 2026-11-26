@@ -61,6 +61,7 @@ export type AppName =
   | 'production_account'
   | 'maintenance_stock'
   | 'quality_stock'
+  | 'quality_production'
   | 'trade_finance_account'
   | 'trade_finance_purchase'
   | 'trade_finance_sale'
@@ -430,6 +431,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'qualityStock',
     bridge: ['quality', 'stock'],
+  },
+  quality_production: {
+    label: 'Bridge: quality checks on production orders (Quality ↔ Production)',
+    icon: '🔗',
+    server: 'qualityProduction',
+    bridge: ['quality', 'production'],
   },
   trade_finance_account: {
     label:

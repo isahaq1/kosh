@@ -88,6 +88,7 @@ const PACKAGES = [
   'production_account',
   'maintenance_stock',
   'quality_stock',
+  'quality_production',
   'trade_finance_account',
   'trade_finance_purchase',
   'trade_finance_sale',

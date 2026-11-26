@@ -1625,6 +1625,11 @@ With Stockroom (`@kosh/quality_stock`, proposed when both are installed): a tran
 **confirmed**, and **validating it is refused** while one is to do or failed and not released — by the server,
 whoever asks. The transfer shows its checks and how many hold it.
 
+With Production (`@kosh/quality_production`): a production order gets the checks of the product it makes when it
+is **confirmed** (control points *On: Production*), and **producing it is refused** while one is to do or failed —
+nothing is consumed and nothing enters stock. The order shows its checks. The order's own transfers of components
+and of what was made are not checked a second time.
+
 ```http
 POST /api/v1/models/quality.point   { "name", "kind": "measure", "operation": "receipt", "product", "low", "high", "unit" }
 POST /api/v1/models/quality.check/<id>/transitions/pass | fail | release | redo
