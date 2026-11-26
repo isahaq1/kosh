@@ -26,6 +26,10 @@ import {
 import {
   type AccrualRules,
   type AccrualState,
+  type CompLot,
+  type CompUse,
+  dayAfter,
+  expireLots,
   type MonthInput,
   type Movement,
   monthEnd,
@@ -100,6 +104,9 @@ export const AccrualPlan = defineModel('hr.accrual.plan', {
     'probationMonths',
     'encashable',
     'encashFormula',
+    'compDays',
+    'compMinHours',
+    'compExpiryDays',
   ],
   access: { 'hr.user': READ, 'hr.manager': [...ALL, 'export', 'import'] },
   fields: {
@@ -144,6 +151,22 @@ export const AccrualPlan = defineModel('hr.accrual.plan', {
       help: 'Carried days not used by the end of this month of the new year are lost (3: on 31 March); empty: never.',
     }),
     note: f.text({ label: 'Note', help: 'Where the rule comes from, and what to check.' }),
+    compDays: f.decimal({
+      scale: 2,
+      label: 'Days for a day off worked',
+      help: 'What a person earns for an approved attendance day worked on a weekend or a holiday (1: a day for a day); empty: nothing.',
+    }),
+    compMinHours: f.decimal({
+      scale: 2,
+      required: true,
+      default: '0',
+      label: 'Hours worked at least',
+      help: 'A day off worked for fewer hours earns nothing.',
+    }),
+    compExpiryDays: f.integer({
+      label: 'Earned days are lost after (days)',
+      help: 'A day earned this way and not taken within so many days is lost, the oldest used first; empty: never.',
+    }),
     encashable: f.boolean({
       default: false,
       label: 'Days may be paid out',
@@ -177,6 +200,12 @@ export const AccrualPlan = defineModel('hr.accrual.plan', {
         AND (carry_expiry_month IS NULL OR carry_expiry_month BETWEEN 1 AND 12)`,
       message:
         'Probation, the cap and the carry-over are not negative, and the expiry month is 1 to 12.',
+    },
+    compSane: {
+      check: orm.sql`(comp_days IS NULL OR comp_days >= 0) AND comp_min_hours >= 0
+        AND (comp_expiry_days IS NULL OR comp_expiry_days > 0)`,
+      message:
+        'The days for a day off worked and the hours are not negative; days are lost after at least one day.',
     },
   },
   constraints: {
@@ -240,6 +269,8 @@ const ENTRY_KINDS = {
   expiry: 'Carried days expired',
   adjustment: 'Adjustment',
   encashment: 'Paid out',
+  compensatory: 'Earned on a day off',
+  comp_expiry: 'Earned days lost',
 } as const;
 
 /** The ledger: every day earned, lost, given or paid out. Never changed: a mistake is another line. */
@@ -275,11 +306,24 @@ export const AccrualEntry = defineModel('hr.accrual.entry', {
     }),
     period: f.char({ size: 7, label: 'Period', groups: { write: [...SYSTEM] } }),
     note: f.char({ label: 'Why' }),
+    /** The attendance day a compensatory day was earned on — and of the line that loses it. */
+    source: f.many2one('attendance.day', {
+      ondelete: 'set null',
+      index: true,
+      label: 'Attendance day',
+      help: 'The day off that was worked: it earns once, and what is left of it is lost once.',
+      groups: { write: [...SYSTEM] },
+    }),
   },
   sqlConstraints: {
     notZero: {
       check: orm.sql`days <> 0`,
       message: 'A ledger line moves at least a hundredth of a day.',
+    },
+    // An attendance day earns once and loses what is left of it once, whatever runs twice.
+    oncePerDay: {
+      unique: ['source', 'kind'],
+      message: 'This attendance day already has this line in the ledger.',
     },
   },
 });
@@ -336,6 +380,12 @@ interface PlanRow {
   readonly start: string;
   readonly formula: string;
   readonly rules: AccrualRules;
+  /** Compensatory days: hundredths earned for a day off worked (0: none), the hours needed, the days they last. */
+  readonly comp: {
+    readonly days: number;
+    readonly minHours: string;
+    readonly expiryDays: number | null;
+  };
 }
 
 const planRow = (p: {
@@ -348,7 +398,15 @@ const planRow = (p: {
   cap: Decimal | null;
   carryOver: Decimal | null;
   carryExpiryMonth: number | null;
+  compDays: Decimal | null;
+  compMinHours: Decimal | null;
+  compExpiryDays: number | null;
 }): PlanRow => ({
+  comp: {
+    days: cents(p.compDays),
+    minHours: (p.compMinHours ?? orm.toDecimal(0)).toString(),
+    expiryDays: p.compExpiryDays,
+  },
   id: p.id as number,
   type: p.type.id as number,
   company: p.company.id as number,
@@ -719,6 +777,135 @@ async function refreshPerson(
     } as never);
 }
 
+// ---- compensatory days
+
+/** How many attendance days are credited in one go. */
+const COMP_BATCH = 2000;
+
+/**
+ * Compensatory days (RFC 0039 §6): every **approved** attendance day worked on a day nothing was expected — a
+ * weekend, a holiday — for at least the plan's hours earns the plan's days, dated that day, **once** (the ledger
+ * line names the attendance day). Found by the database in one query per batch, whatever the head count. Returns
+ * the lines written.
+ */
+async function creditDaysOff(su: Env, plan: PlanRow): Promise<number> {
+  if (plan.comp.days <= 0) return 0;
+  let lines = 0;
+  for (;;) {
+    await su.flush();
+    const found = await su.sql<{ id: string | number; employee: string | number; date: string }>`
+      SELECT d.id, d.employee_id AS employee, to_char(d.date, 'YYYY-MM-DD') AS date
+        FROM attendance_day d
+       WHERE d.company_id = ${plan.company}
+         AND d.state = 'approved' AND d.worked_hours > 0 AND d.expected_hours = 0
+         AND d.worked_hours >= ${plan.comp.minHours}::numeric
+         AND d.date >= ${`${plan.start}-01`}::date
+         AND NOT EXISTS (SELECT 1 FROM hr_accrual_entry e
+                          WHERE e.source_id = d.id AND e.kind = 'compensatory')
+       ORDER BY d.id
+       LIMIT ${COMP_BATCH}`;
+    if (found.length === 0) return lines;
+    await su.model('hr.accrual.entry').create(
+      found.map((d) => ({
+        employee: Number(d.employee),
+        plan: plan.id,
+        company: plan.company,
+        date: d.date,
+        kind: 'compensatory',
+        days: days(plan.comp.days),
+        period: d.date.slice(0, 7),
+        source: Number(d.id),
+        note: 'A day off worked',
+      })) as never,
+    );
+    lines += found.length;
+    if (found.length < COMP_BATCH) {
+      await su.flush();
+      return lines;
+    }
+  }
+}
+
+/** For how long after its last day a credit is still looked at: the run comes by every six hours. */
+const COMP_LOOK_BACK = 60;
+
+/**
+ * What compensatory days are lost by `today` (RFC 0039 §6): only the people with a credit whose last day has just
+ * passed are looked at; for them the credits, the leave taken of the type and what was paid out or taken back
+ * are read in sets, and `expireLots` — the oldest used first — says what each credit has left. Each loss is
+ * written once (the line names the attendance day). Returns the lines written.
+ */
+async function expireCompensatory(su: Env, plan: PlanRow, today: string): Promise<number> {
+  const lasts = plan.comp.expiryDays;
+  if (lasts === null) return 0;
+  await su.flush();
+  const due = await su.sql<{ employee: string | number }>`
+    SELECT DISTINCT e.employee_id AS employee
+      FROM hr_accrual_entry e
+     WHERE e.plan_id = ${plan.id} AND e.kind = 'compensatory' AND e.source_id IS NOT NULL
+       AND e.date < ${dayAfter(today, -lasts)}::date
+       AND e.date >= ${dayAfter(today, -lasts - COMP_LOOK_BACK)}::date
+       AND NOT EXISTS (SELECT 1 FROM hr_accrual_entry x
+                        WHERE x.source_id = e.source_id AND x.kind = 'comp_expiry')`;
+  const people = due.map((d) => Number(d.employee));
+  if (people.length === 0) return 0;
+  const lots = new Map<number, CompLot[]>();
+  const uses = new Map<number, CompUse[]>();
+  const written = new Set<number>();
+  const push = <T>(by: Map<number, T[]>, employee: number, value: T): void => {
+    const list = by.get(employee);
+    if (list === undefined) by.set(employee, [value]);
+    else list.push(value);
+  };
+  for (const e of await (
+    await su.model('hr.accrual.entry').search({
+      where: { plan: plan.id as never, employee: { in: people } as never } as never,
+    })
+  ).load(['employee', 'source'])) {
+    const employee = e.employee.id as number;
+    const amount = cents(e.days);
+    if (e.kind === 'compensatory' && e.source !== null)
+      push(lots, employee, { key: e.source.id as number, date: iso(e.date), days: amount });
+    else if (e.kind === 'comp_expiry' && e.source !== null) written.add(e.source.id as number);
+    // Paid out or taken back: used, like leave.
+    else if (amount < 0 && e.kind !== 'comp_expiry')
+      push(uses, employee, { date: iso(e.date), days: -amount });
+  }
+  for (const l of await (
+    await su.model('hr.leave').search({
+      where: {
+        employee: { in: people } as never,
+        type: plan.type as never,
+        state: 'approved',
+      } as never,
+    })
+  ).load(['employee', 'dateFrom', 'days', 'half']))
+    push(uses, l.employee.id as number, {
+      date: iso(l.dateFrom),
+      days: l.half === null ? Math.round(Number(l.days ?? 0) * 100) : 50,
+    });
+  const lost: Record<string, unknown>[] = [];
+  for (const employee of people)
+    for (const gone of expireLots(lots.get(employee) ?? [], uses.get(employee) ?? [], lasts, today))
+      if (!written.has(gone.key))
+        lost.push({
+          employee,
+          plan: plan.id,
+          company: plan.company,
+          date: gone.on,
+          kind: 'comp_expiry',
+          days: days(-gone.days),
+          period: gone.on.slice(0, 7),
+          source: gone.key,
+          note: `Not taken within ${lasts} days`,
+        });
+  if (lost.length > 0) {
+    await su.model('hr.accrual.entry').create(lost as never);
+    await su.flush();
+  }
+  return lost.length;
+}
+
 /**
  * The monthly run (RFC 0034 §2.5), for the company of `env`: every active plan, every active employee with a
  * joining date — the months that are over go to the ledger, once, and each balance is brought up to date. Safe to
@@ -733,6 +920,9 @@ export async function accrueLeave(env: Env, today: string = iso(env.today())): P
     let lines = 0;
     for (const p of plans) {
       const plan = planRow(p);
+      // Compensatory days first (RFC 0039 §6): the balances refreshed below see them.
+      lines += await creditDaysOff(su, plan);
+      lines += await expireCompensatory(su, plan, today);
       const employees = await su
         .model('hr.employee')
         .search({ where: { company: plan.company as never, active: true } as never });

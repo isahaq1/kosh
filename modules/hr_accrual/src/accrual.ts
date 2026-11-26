@@ -163,3 +163,55 @@ export function stepMonths(
   }
   return { state: current, movements };
 }
+
+// ---- compensatory days (RFC 0039 §6): earned one by one, used the oldest first, lost when they get too old.
+
+/** A compensatory credit: what was earned for one day worked on a day off, in hundredths. */
+export interface CompLot {
+  /** What tells the credit apart (the attendance day): its expiry is written once. */
+  readonly key: number;
+  /** The day it was earned (`YYYY-MM-DD`). */
+  readonly date: string;
+  readonly days: number;
+}
+
+/** Days used on a date: leave that starts then, days paid out or taken back — in hundredths. */
+export interface CompUse {
+  readonly date: string;
+  readonly days: number;
+}
+
+/** A date some days after another (`YYYY-MM-DD`). */
+export function dayAfter(date: string, days: number): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * What is lost of compensatory credits by `today`: a credit can be used on the day it is earned and for
+ * `expiryDays` days after; each use takes from the oldest credit that can still be used that day; what a credit
+ * has left once its last day has passed is lost the day after. Uses that find no credit take nothing here (they
+ * were covered by something else). The same input always gives the same answer, so each loss is written once.
+ */
+export function expireLots(
+  lots: readonly CompLot[],
+  uses: readonly CompUse[],
+  expiryDays: number,
+  today: string,
+): { key: number; on: string; days: number }[] {
+  const open = [...lots]
+    .sort((a, b) => (a.date === b.date ? a.key - b.key : a.date < b.date ? -1 : 1))
+    .map((lot) => ({ ...lot, last: dayAfter(lot.date, expiryDays), left: lot.days }));
+  for (const use of [...uses].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))) {
+    let need = use.days;
+    for (const lot of open) {
+      if (need <= 0) break;
+      if (lot.left <= 0 || lot.date > use.date || lot.last < use.date) continue;
+      const taken = Math.min(lot.left, need);
+      lot.left -= taken;
+      need -= taken;
+    }
+  }
+  return open
+    .filter((lot) => lot.left > 0 && lot.last < today)
+    .map((lot) => ({ key: lot.key, on: dayAfter(lot.last, 1), days: lot.left }));
+}

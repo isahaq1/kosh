@@ -5,6 +5,7 @@
 import { expect, test } from 'vitest';
 import {
   type AccrualRules,
+  expireLots,
   type MonthInput,
   monthEnd,
   monthsBetween,
@@ -134,4 +135,29 @@ test('a formula that gives less than nothing accrues nothing', () => {
   expect(stepMonth({ balance: 100, carried: 0 }, OPEN, month('2027-05', -50)).state.balance).toBe(
     100,
   );
+});
+
+test('compensatory days: the oldest credit is used first; what is left after its last day is lost the day after', () => {
+  const lots = [
+    { key: 1, date: '2027-10-01', days: 100 },
+    { key: 2, date: '2027-10-08', days: 100 },
+  ];
+  // Nothing used: each is lost the day after its thirtieth day, once that day has come.
+  expect(expireLots(lots, [], 30, '2027-10-31')).toEqual([]);
+  expect(expireLots(lots, [], 30, '2027-11-01')).toEqual([{ key: 1, on: '2027-11-01', days: 100 }]);
+  expect(expireLots(lots, [], 30, '2027-12-01')).toEqual([
+    { key: 1, on: '2027-11-01', days: 100 },
+    { key: 2, on: '2027-11-08', days: 100 },
+  ]);
+  // A day and a half taken on the 12th: the first credit whole, half the second.
+  expect(expireLots(lots, [{ date: '2027-10-12', days: 150 }], 30, '2027-12-01')).toEqual([
+    { key: 2, on: '2027-11-08', days: 50 },
+  ]);
+  // Leave after a credit's last day cannot use it; nor leave before it was earned.
+  expect(expireLots(lots, [{ date: '2027-11-03', days: 100 }], 30, '2027-12-01')).toEqual([
+    { key: 1, on: '2027-11-01', days: 100 },
+  ]);
+  expect(expireLots(lots, [{ date: '2027-10-05', days: 200 }], 30, '2027-12-01')).toEqual([
+    { key: 2, on: '2027-11-08', days: 100 },
+  ]);
 });

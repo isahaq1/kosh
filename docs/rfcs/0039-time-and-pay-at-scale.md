@@ -306,6 +306,33 @@ Asked: "employee can be contactual, temporary and other".
   to the colleague (the events `attendance.swap.submitted / accepted / approved / cancelled` are there for a
   rule of the Automation app), a browser test of the form.
 
+## Implementation notes — compensatory leave (2026-11-26)
+
+- In **`hr_accrual`**, on the accrual plan: **days for a day off worked** (`compDays`), **hours worked at
+  least** (`compMinHours`) and **earned days are lost after** so many days (`compExpiryDays`). Meant for a leave
+  type of its own (*Compensatory leave*, days a month `0`).
+- **Earned**: every *approved* attendance day with hours worked and none expected — a weekend, a holiday — for at
+  least the hours asked earns the days, dated that day, **once**: the ledger line (`compensatory`) names the
+  attendance day, and (attendance day, kind) is unique. Found by PostgreSQL in batches of 2 000 days, not person
+  by person.
+- **Used the oldest first, then lost**: a credit can be taken on the day it is earned and for the days it lasts.
+  Approved leave of the type, payouts and days taken back use the oldest credit still usable that day
+  (`expireLots`, a pure function); what a credit has left after its last day is lost the day after
+  (`comp_expiry`, once per attendance day). Only people with a credit that has just run out are looked at.
+- Leave of the type is checked against the balance like any plan's; the balance record and the projection read
+  the same ledger.
+- The run is the existing one (every six hours, `POST /api/v1/leave-accruals/run`): a day approved now earns at
+  the next run, not at once.
+- Tests: the arithmetic (nothing used, a day and a half used, leave too late or too early for a credit); a
+  person's October — two days off worked, one too short, an ordinary day, one not approved —, earned once, a
+  day taken, too many refused, the second credit lost on its day and once.
+- **Left out**: a credit taken back when an approved day is reopened and changed (the ledger is never changed:
+  HR adds an adjustment); a projection that already shows credits about to be lost (leave asked for after a
+  credit's last day passes until the run writes the loss); half a credit for half a day's hours; overtime paid
+  *or* compensated by the person's choice.
+- **Not measured at 30 000 people**: the monthly accrual itself (`accruePerson`, `refreshPerson`) still goes
+  person by person with several queries each. The compensatory parts are set-based.
+
 ## Step 3 is done but for
 
 Days by shift (`SHIFT_<CODE>` — shifts have no code yet), and the list of variables shown where a rule is

@@ -319,6 +319,11 @@ export const hrAccrual: ReturnType<typeof defineModule> = defineModule({
           description:
             'The cap stops the accrual; the carry-over is checked on 1 January; carried days are used first and expire at the end of the month given.',
         }),
+        k.group('comp', ['compDays', 'compMinHours', 'compExpiryDays'], {
+          label: 'Compensatory days',
+          description:
+            'For a leave type of its own (days a month: 0): an approved attendance day worked on a weekend or a holiday earns these days, once. They are used the oldest first and, when they last only so many days, what is left is lost.',
+        }),
         k.group('payout', ['encashable', 'encashKeep', 'encashFormula', 'encashCode'], {
           label: 'Paying days out',
           description:
@@ -372,7 +377,7 @@ export const hrAccrual: ReturnType<typeof defineModule> = defineModule({
     'hr.accrual.entry.form': form(AccrualEntry, (k) => ({
       header: { buttons: [] },
       sheet: [
-        k.group('main', ['employee', 'plan', 'date', 'days', 'note', 'kind', 'period'], {
+        k.group('main', ['employee', 'plan', 'date', 'days', 'note', 'kind', 'period', 'source'], {
           description:
             'A line added here is an adjustment: an opening balance, days given, a correction. Lines are not changed afterwards — correct one with another.',
         }),
@@ -416,9 +421,18 @@ export const hrAccrual: ReturnType<typeof defineModule> = defineModule({
       fields: ['employee.name', 'note'],
       filters: {
         accrued: { label: 'Accrued', domain: { kind: 'accrual' }, group: 'kind' },
-        lost: { label: 'Lost', domain: { kind: { in: ['lapse', 'expiry'] } }, group: 'kind' },
+        lost: {
+          label: 'Lost',
+          domain: { kind: { in: ['lapse', 'expiry', 'comp_expiry'] } },
+          group: 'kind',
+        },
         adjustments: { label: 'Adjustments', domain: { kind: 'adjustment' }, group: 'kind' },
         paid: { label: 'Paid out', domain: { kind: 'encashment' }, group: 'kind' },
+        compensatory: {
+          label: 'Earned on a day off',
+          domain: { kind: { in: ['compensatory', 'comp_expiry'] } },
+          group: 'kind',
+        },
       },
       groupBy: ['employee', 'plan', 'kind', 'date:month'],
     }),

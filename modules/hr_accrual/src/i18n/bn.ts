@@ -1,6 +1,10 @@
 /** Bangla for the module's labels, keyed by their English text (RFC 0023 §3.1; `pnpm i18n:extract`). */
 export const bn: Readonly<Record<string, string>> = {
+  'A day earned this way and not taken within so many days is lost, the oldest used first; empty: never.':
+    'এভাবে অর্জিত দিন এত দিনের মধ্যে না নিলে বাতিল হয়, সবচেয়ে পুরোনোটি আগে ব্যবহৃত হয়; খালি: কখনো নয়।',
   'A day is worth': 'এক দিনের মূল্য',
+  'A day off worked for fewer hours earns nothing.':
+    'ছুটির দিনে এর চেয়ে কম ঘণ্টা কাজ করলে কিছুই অর্জিত হয় না।',
   'A ledger line moves at least a hundredth of a day.':
     'খতিয়ানের একটি লাইনে অন্তত এক দিনের শতভাগের এক ভাগ থাকতে হবে।',
   'A line added here is an adjustment: an opening balance, days given, a correction. Lines are not changed afterwards — correct one with another.':
@@ -31,6 +35,7 @@ export const bn: Readonly<Record<string, string>> = {
   Approved: 'অনুমোদিত',
   'Approved: the days have left the balance and the amount waits for the month’s payroll.':
     'অনুমোদিত: দিনগুলো ব্যালেন্স থেকে বাদ গেছে এবং টাকা ওই মাসের পে-রোলের অপেক্ষায় আছে।',
+  'Attendance day': 'হাজিরার দিন',
   Available: 'ব্যবহারযোগ্য',
   'Back to draft': 'খসড়ায় ফেরত',
   Balance: 'ব্যালেন্স',
@@ -46,12 +51,14 @@ export const bn: Readonly<Record<string, string>> = {
   'Carried into a new year (days)': 'নতুন বছরে স্থানান্তর (দিন)',
   'Carried, still to use': 'স্থানান্তরিত, এখনো অব্যবহৃত',
   Company: 'কোম্পানি',
+  'Compensatory days': 'ক্ষতিপূরণমূলক ছুটির দিন',
   'Created At': 'তৈরির সময়',
   'Created By': 'তৈরি করেছেন',
   Date: 'তারিখ',
   Days: 'দিন',
   'Days a month': 'মাসে যত দিন',
   'Days expiring': 'মেয়াদ শেষ হতে চলা দিন',
+  'Days for a day off worked': 'ছুটির দিনে কাজের জন্য প্রাপ্য দিন',
   'Days may be paid out': 'দিন নগদায়ন করা যায়',
   'Days not taken, paid instead: approved by an HR manager against the balance on that day, paid with the month’s payroll.':
     'না নেওয়া দিনের বদলে টাকা: ওই দিনের ব্যালেন্স দেখে এইচআর ম্যানেজার অনুমোদন করেন, মাসের পে-রোলের সাথে পরিশোধ হয়।',
@@ -61,11 +68,17 @@ export const bn: Readonly<Record<string, string>> = {
   Draft: 'খসড়া',
   'Each month that is over, every employee with a joining date earns what the formula gives, at the month’s end. Balances from before the plan are given in the Leave ledger as adjustments.':
     'প্রতিটি শেষ হওয়া মাসে, যোগদানের তারিখ আছে এমন প্রত্যেক কর্মী মাসের শেষে সূত্র অনুযায়ী দিন অর্জন করেন। পরিকল্পনার আগের ব্যালেন্স ছুটির খতিয়ানে সমন্বয় হিসেবে দেওয়া হয়।',
+  'Earned days are lost after (days)': 'অর্জিত দিন বাতিল হয় (দিন পরে)',
+  'Earned days lost': 'অর্জিত দিন বাতিল',
+  'Earned on a day off': 'ছুটির দিনে কাজ করে অর্জিত',
   'Earned, given and lost so far, less the approved leave that has started.':
     'এ পর্যন্ত অর্জিত, দেওয়া ও হারানো দিন, শুরু হওয়া অনুমোদিত ছুটি বাদে।',
   Employee: 'কর্মী',
   'Expire on': 'মেয়াদ শেষের তারিখ',
   Expiring: 'মেয়াদ শেষ হচ্ছে',
+  'For a leave type of its own (days a month: 0): an approved attendance day worked on a weekend or a holiday earns these days, once. They are used the oldest first and, when they last only so many days, what is left is lost.':
+    'নিজস্ব একটি ছুটির ধরনের জন্য (মাসে দিন: ০): সাপ্তাহিক ছুটি বা সরকারি ছুটির দিনে কাজ করা অনুমোদিত হাজিরার দিন একবারই এই দিনগুলো অর্জন করে। সবচেয়ে পুরোনোটি আগে ব্যবহৃত হয় এবং মেয়াদ নির্দিষ্ট দিনের হলে যা বাকি থাকে তা বাতিল হয়।',
+  'Hours worked at least': 'কমপক্ষে যত ঘণ্টা কাজ',
   ID: 'আইডি',
   'In Payroll’s formula language, for each month: 10 / 12 — WORKED_DAYS / 18 — if(SERVICE_YEARS >= 5, 2, 1.5). It may read SERVICE_MONTHS, SERVICE_YEARS, WORKED_DAYS, WORKING_DAYS, MONTH and BALANCE.':
     'পে-রোলের সূত্র ভাষায়, প্রতি মাসের জন্য: 10 / 12 — WORKED_DAYS / 18 — if(SERVICE_YEARS >= 5, 2, 1.5)। এটি SERVICE_MONTHS, SERVICE_YEARS, WORKED_DAYS, WORKING_DAYS, MONTH ও BALANCE পড়তে পারে।',
@@ -128,6 +141,10 @@ export const bn: Readonly<Record<string, string>> = {
     'ব্যালেন্স এখানে পৌঁছালে অর্জন থামে; খালি: কোনো সীমা নেই।',
   'The cap stops the accrual; the carry-over is checked on 1 January; carried days are used first and expire at the end of the month given.':
     'সর্বোচ্চ সীমায় অর্জন থামে; স্থানান্তর ১ জানুয়ারি যাচাই হয়; স্থানান্তরিত দিন আগে ব্যবহৃত হয় এবং নির্ধারিত মাসের শেষে বাতিল হয়।',
+  'The day off that was worked: it earns once, and what is left of it is lost once.':
+    'যে ছুটির দিনে কাজ করা হয়েছে: এটি একবারই অর্জন করে, এবং এর যা বাকি থাকে তা একবারই বাতিল হয়।',
+  'The days for a day off worked and the hours are not negative; days are lost after at least one day.':
+    'ছুটির দিনে কাজের প্রাপ্য দিন ও ঘণ্টা ঋণাত্মক নয়; দিন বাতিল হয় কমপক্ষে এক দিন পরে।',
   'The days leave the balance on this day, and the amount is in this month’s payroll.':
     'এই দিনে দিনগুলো ব্যালেন্স থেকে বাদ যায়, এবং টাকা এই মাসের পে-রোলে থাকে।',
   'The first month that accrues; earlier balances are given as adjustments.':
@@ -136,6 +153,8 @@ export const bn: Readonly<Record<string, string>> = {
     'সূত্রটি পড়া যাচ্ছে না: সংখ্যা, + - * /, min, max, round, if(…), এবং SERVICE_MONTHS, SERVICE_YEARS, WORKED_DAYS, WORKING_DAYS, MONTH, BALANCE ব্যবহার করুন।',
   'The value of a day does not read (it may use WAGE, DAYS, BALANCE and SERVICE_YEARS), or the payroll input is not a code in capitals.':
     'এক দিনের মূল্য পড়া যাচ্ছে না (এটি WAGE, DAYS, BALANCE ও SERVICE_YEARS ব্যবহার করতে পারে), অথবা পে-রোল ইনপুট বড় হাতের অক্ষরের কোড নয়।',
+  'This attendance day already has this line in the ledger.':
+    'এই হাজিরার দিনের জন্য খতিয়ানে এই লাইন আগে থেকেই আছে।',
   'This leave type already has an active accrual plan.':
     'এই ছুটির ধরনের ইতিমধ্যে একটি সক্রিয় অর্জন পরিকল্পনা আছে।',
   'This year': 'এই বছর',
@@ -143,6 +162,8 @@ export const bn: Readonly<Record<string, string>> = {
   'To use or lose': 'ব্যবহার করুন, নইলে বাতিল',
   'Updated At': 'হালনাগাদের সময়',
   'Updated By': 'হালনাগাদ করেছেন',
+  'What a person earns for an approved attendance day worked on a weekend or a holiday (1: a day for a day); empty: nothing.':
+    'সাপ্তাহিক ছুটি বা সরকারি ছুটির দিনে কাজ করা অনুমোদিত হাজিরার দিনের জন্য একজন যা অর্জন করেন (১: এক দিনের বদলে এক দিন); খালি: কিছুই নয়।',
   'What is above it on 1 January is lost; empty: everything is carried, 0: nothing.':
     '১ জানুয়ারিতে এর বেশি যা থাকে তা বাতিল; খালি: সব স্থানান্তরিত হয়, ০: কিছুই নয়।',
   'Where the rule comes from, and what to check.': 'নিয়মটি কোথা থেকে এসেছে, এবং কী যাচাই করতে হবে।',

@@ -446,3 +446,62 @@ test('days are paid out through Payroll: approved by HR against the balance, val
   // The balance follows.
   expect((await projection('pia', 'rafi', '2027-09-10')).json.balance).toBe('4.50');
 });
+
+test('compensatory days: an approved day off worked earns a day, once; the oldest is used first and what is left is lost', async () => {
+  ids['comp'] = await make('hr.leave.type', 'pia', { name: 'Compensatory leave' });
+  ids['compPlan'] = await make('hr.accrual.plan', 'pia', {
+    name: 'A day for a day off worked',
+    type: ids['comp'],
+    dateStart: '2027-10-01',
+    formula: '0',
+    compDays: '1',
+    compMinHours: '4',
+    compExpiryDays: 30,
+  });
+  // Rafi's October: two days off worked in full, one for two hours only, an ordinary day, and one not approved.
+  await system(async (env: Json) => {
+    const day = (date: string, workedHours: string, expectedHours: string) => ({
+      employee: ids['rafi'],
+      company: erp.company,
+      date,
+      status: 'present',
+      workedHours,
+      expectedHours,
+    });
+    const made = await env
+      .model('attendance.day')
+      .create([
+        day('2027-10-01', '8', '0'),
+        day('2027-10-02', '2', '0'),
+        day('2027-10-04', '8', '8'),
+        day('2027-10-08', '8', '0'),
+      ]);
+    await env.model('attendance.day').create([day('2027-10-09', '8', '0')]);
+    await env.asSuperuser({ reason: 'test' }, (su: Json) =>
+      su.model('attendance.day').browse(made.ids).approve(),
+    );
+  });
+  const earned = ['compensatory 2027-10-01 1.00', 'compensatory 2027-10-08 1.00'];
+  await runOn('2027-10-10');
+  expect(await ledger('rafi', 'compPlan')).toEqual(earned);
+  // Once, however often the run comes by.
+  await runOn('2027-10-10');
+  expect(await ledger('rafi', 'compPlan')).toEqual(earned);
+
+  // More than was earned is refused; a day within it is taken, and approved by HR.
+  expect((await ask('rafi', 'comp', '2027-10-18', '2027-10-20', 3)).status).toBeGreaterThanOrEqual(
+    400,
+  );
+  const taken = await ask('rafi', 'comp', '2027-10-12', '2027-10-12', 1);
+  expect(taken.status).toBe(200);
+  expect((await call('POST', `${L}/${taken.id}/transitions/approve`, 'pia')).status).toBe(200);
+
+  // 1 October lasted until the 31st and was taken on the 12th; 8 October lasts until 7 November.
+  await runOn('2027-11-05');
+  expect(await ledger('rafi', 'compPlan')).toEqual(earned);
+  const lost = [...earned, 'comp_expiry 2027-11-08 -1.00'];
+  await runOn('2027-11-10');
+  expect(await ledger('rafi', 'compPlan')).toEqual(lost);
+  await runOn('2027-11-12');
+  expect(await ledger('rafi', 'compPlan')).toEqual(lost);
+});

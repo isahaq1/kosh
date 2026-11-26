@@ -1641,6 +1641,25 @@ await accrueLeave(env); // the company's months that are over, once
 await projectLeave(env, employeeId, leaveTypeId, '2027-12-31'); // { balance: '2.50', steps, expiring }
 ```
 
+### Compensatory days
+
+A day off that was worked earns leave (*Compensatory days* on the plan; RFC 0039). Make a leave type of its own —
+*Compensatory leave* — and a plan for it with *Days a month* `0`:
+
+```http
+POST /api/v1/models/hr.accrual.plan
+{ "name": "A day for a day off worked", "type": <leave type>, "formula": "0",
+  "compDays": "1", "compMinHours": "4", "compExpiryDays": 30 }
+```
+
+- **Earned**: an *approved* attendance day worked on a weekend or a holiday (hours worked, none expected) for at
+  least the hours asked earns the days, once — the ledger line *Earned on a day off* names the attendance day.
+- **Lost**: with *Earned days are lost after*, a day can be taken on the day it was earned and that many days
+  after. Leave uses the oldest day first; what is left of a day after its last day is lost (*Earned days lost*).
+- The run writes both, with the accruals (every six hours, or `POST /api/v1/leave-accruals/run`). Leave of the
+  type is checked against the balance like any other plan's.
+- A day reopened after it earned keeps what it earned: correct it with an adjustment.
+
 ### Paying days out
 
 A plan may let people be **paid for days they did not take** (*Paying days out* on the plan):
