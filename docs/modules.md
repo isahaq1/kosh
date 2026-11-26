@@ -1394,6 +1394,27 @@ POST /api/v1/models/hr.remote                       { "employee", "dateFrom", "d
 POST /api/v1/models/hr.remote/<id>/transitions/submit | approve | refuse | cancel | redraft
 ```
 
+## Shift swaps
+
+Two people exchange their shifts on one date in *Attendance › Shift swaps* (RFC 0039). The request is numbered
+(`SWAP/2026/0001`).
+
+- **Three people agree**: the person asks (*Ask the colleague*), the colleague accepts or declines, and an
+  Attendance manager **who is neither of the two** approves. For people without an account, an Attendance manager
+  other than the person asking answers for the colleague. Declining, refusing and cancelling need the *note of
+  the decision*.
+- **The two planned shifts are written on the swap** when it is asked — the roster's, else the usual shift. Two
+  people on the same shift, or one without a shift, have nothing to swap.
+- **Rosters stay as planned.** An approved swap is read over them when the day is computed: each works the
+  other's shift, with its hours, grace and overtime. Cancelled, the planned shifts are back at the next
+  computation. Approved attendance days are never changed.
+- One swap a day per person. People see the swaps they are part of; managers all of them.
+
+```http
+POST /api/v1/models/attendance.swap                  { "employee", "withEmployee", "date", "reason" }
+POST /api/v1/models/attendance.swap/<id>/transitions/submit | accept | decline | approve | refuse | cancel | redraft
+```
+
 ## Official tours
 
 A person sent away on the company's business asks for a **tour** in *Workforce › Tours*: the dates, where to, the

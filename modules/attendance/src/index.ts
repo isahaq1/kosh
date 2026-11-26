@@ -20,6 +20,7 @@ import {
   AttendanceRoster,
   AttendanceShift,
   AttendanceSite,
+  AttendanceSwap,
   attendanceShutro,
 } from './module.js';
 import { registerAttendanceRoutes } from './routes.js';
@@ -56,6 +57,7 @@ export {
   AttendanceRoster,
   AttendanceShift,
   AttendanceSite,
+  AttendanceSwap,
   attendanceShutro,
   EmployeeAttendance,
 } from './module.js';
@@ -120,8 +122,43 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
   },
   events: [
     { topic: 'attendance.day.approved', model: 'attendance.day', label: 'Attendance day approved' },
+    { topic: 'attendance.swap.submitted', model: 'attendance.swap', label: 'Shift swap asked' },
+    {
+      topic: 'attendance.swap.accepted',
+      model: 'attendance.swap',
+      label: 'Shift swap accepted by the colleague',
+    },
+    { topic: 'attendance.swap.approved', model: 'attendance.swap', label: 'Shift swap approved' },
+    { topic: 'attendance.swap.cancelled', model: 'attendance.swap', label: 'Shift swap cancelled' },
   ],
   documents: [
+    {
+      key: 'shift_swap',
+      name: 'Shift swap',
+      model: 'attendance.swap',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: 'Shift swap {{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'who',
+            items: [
+              { label: 'Date', bind: 'date' },
+              { label: 'Asked by', bind: 'employee.name' },
+              { label: 'Their planned shift', bind: 'shift.name' },
+              { label: 'Swaps with', bind: 'withEmployee.name' },
+              { label: 'The colleague’s planned shift', bind: 'withShift.name' },
+              { label: 'Status', bind: 'state' },
+            ],
+          },
+          { kind: 'text', id: 'reason', text: '{{reason}}' },
+          { kind: 'text', id: 'note', text: '{{decisionNote}}' },
+        ],
+      },
+    },
     {
       key: 'attendance_badge',
       name: 'Attendance badge',
@@ -203,6 +240,17 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
         { header: 'Shift', field: 'shift' },
         { header: 'From', field: 'dateFrom' },
         { header: 'To', field: 'dateTo' },
+      ],
+    },
+    {
+      key: 'swaps',
+      model: 'attendance.swap',
+      label: 'Shift swaps',
+      columns: [
+        { header: 'Asked by', field: 'employee' },
+        { header: 'Swaps with', field: 'withEmployee' },
+        { header: 'Date', field: 'date' },
+        { header: 'Why', field: 'reason' },
       ],
     },
     {
@@ -332,6 +380,10 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
       label: 'Rosters',
       views: ['list', 'calendar', 'form'],
     }),
+    'attendance.action_swaps': action(AttendanceSwap, {
+      label: 'Shift swaps',
+      views: ['list', 'calendar', 'form'],
+    }),
     'attendance.action_shifts': action(AttendanceShift, {
       label: 'Shifts',
       views: ['list', 'form'],
@@ -374,6 +426,13 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
       parent: 'attendance.root',
       label: 'Rosters',
       action: 'attendance.action_rosters',
+      sequence: 4,
+    },
+    {
+      id: 'attendance.swaps',
+      parent: 'attendance.root',
+      label: 'Shift swaps',
+      action: 'attendance.action_swaps',
       sequence: 4,
     },
     {
@@ -519,6 +578,61 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
       header: { buttons: [] },
       sheet: [k.group('main', ['employee', 'shift', 'dateFrom', 'dateTo', 'note'])],
     })),
+    'attendance.swap.list': list(AttendanceSwap, {
+      columns: [
+        'name',
+        'date',
+        'employee',
+        'shift',
+        'withEmployee',
+        'withShift',
+        { field: 'state', widget: 'badge' },
+      ],
+      defaultOrder: ['date desc'],
+      decorations: {
+        success: { state: 'approved' },
+        warning: { state: { in: ['submitted', 'accepted'] } },
+        danger: { state: { in: ['declined', 'refused'] } },
+        neutral: { state: 'cancelled' },
+      },
+    }),
+    'attendance.swap.calendar': calendar(AttendanceSwap, {
+      dateStart: 'date',
+      title: 'employee',
+      color: 'state',
+      mode: 'month',
+    }),
+    'attendance.swap.form': form(AttendanceSwap, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('submit', { primary: true, label: 'Ask the colleague' }),
+          k.button('accept', { primary: true, label: 'Accept' }),
+          k.button('decline', { label: 'Decline' }),
+          k.button('approve', { primary: true, label: 'Approve' }),
+          k.button('refuse', { label: 'Refuse' }),
+          k.button('cancel', {
+            label: 'Cancel the swap',
+            confirm: 'Cancel this approved swap? Both go back to their planned shifts.',
+          }),
+          k.button('redraft', { label: 'Back to draft' }),
+        ],
+      },
+      sheet: [
+        k.group('main', ['name', 'date', 'state']),
+        k.group('who', ['employee', 'shift', 'withEmployee', 'withShift'], {
+          label: 'Who swaps',
+          description:
+            'The two shifts are written down when the swap is asked. Approved, each works the other’s shift that day.',
+        }),
+        k.group('why', ['reason'], { columns: 1 }),
+        k.group('decision', ['decisionNote'], {
+          columns: 1,
+          description: 'Needed to decline, refuse or cancel: write it, then press the button.',
+        }),
+      ],
+      chatter: true,
+    })),
     'attendance.shift.list': list(AttendanceShift, {
       columns: [
         'name',
@@ -654,6 +768,26 @@ export const attendance: ReturnType<typeof defineModule> = defineModule({
     'attendance.roster': search(AttendanceRoster, {
       fields: ['employee.name', 'shift.name'],
       groupBy: ['shift', 'employee'],
+    }),
+    'attendance.swap': search(AttendanceSwap, {
+      fields: ['name', 'employee.name', 'withEmployee.name'],
+      filters: {
+        mine: {
+          label: 'Mine',
+          domain: {
+            or: [{ 'employee.user': { $env: 'uid' } }, { 'withEmployee.user': { $env: 'uid' } }],
+          },
+          group: 'who',
+        },
+        for_me: {
+          label: 'Waiting for my answer',
+          domain: { 'withEmployee.user': { $env: 'uid' }, state: 'submitted' },
+          group: 'state',
+        },
+        to_approve: { label: 'To approve', domain: { state: 'accepted' }, group: 'state' },
+        approved: { label: 'Approved', domain: { state: 'approved' }, group: 'state' },
+      },
+      groupBy: ['state', 'employee', 'date:month'],
     }),
     'attendance.shift': search(AttendanceShift, { fields: ['name'] }),
     'attendance.site': search(AttendanceSite, { fields: ['name'] }),

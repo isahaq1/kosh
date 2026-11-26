@@ -9,6 +9,7 @@
  * group and identifies people by badge or PIN; it reads nothing else.
  */
 import { hrShutro } from '@kosh/hr';
+import { emitting } from '@kosh/server';
 import { orm } from '@kosh/server/orm';
 import {
   check,
@@ -138,6 +139,267 @@ export const AttendanceRoster = defineModel('attendance.roster', {
     },
   },
 });
+
+const SWAP_DECIDES =
+  'A swap is approved by an Attendance manager who is neither of the two people.';
+const SWAP_ANSWERS =
+  'The colleague answers a swap — or an Attendance manager, other than the person who asks, for them.';
+const SWAP_LIVE = ['draft', 'submitted', 'accepted', 'approved'] as const;
+
+/**
+ * Shift swaps (RFC 0039 §6): two people exchange their shifts on one date. The person asks, the colleague
+ * agrees, an Attendance manager who is neither of them approves. The rosters stay as planned: an approved swap is
+ * read over them when the day is computed — each works the other's shift, with its hours, grace and overtime —
+ * and a cancelled one gives the planned shifts back. The two shifts are written down when it is asked.
+ */
+export const AttendanceSwap = defineModel('attendance.swap', {
+  label: 'Shift swap',
+  recName: 'name',
+  order: ['date desc', 'id desc'],
+  companyScoped: { required: true },
+  access: { 'attendance.user': ALL, 'attendance.manager': [...ALL, 'export', 'import'] },
+  rules: {
+    see: {
+      groups: ['attendance.user'],
+      perms: ['read'],
+      domain: { or: [{ 'employee.user': me }, { 'withEmployee.user': me }] },
+    },
+    draftOwn: {
+      groups: ['attendance.user'],
+      perms: ['write', 'create', 'unlink'],
+      domain: { 'employee.user': me, state: 'draft' },
+    },
+    // The colleague answers: the request is theirs to move while it waits for them.
+    answer: {
+      groups: ['attendance.user'],
+      perms: ['write'],
+      domain: { 'withEmployee.user': me, state: { in: ['submitted', 'accepted', 'declined'] } },
+    },
+    all: { groups: ['attendance.manager'], perms: [...ALL], domain: {} },
+  },
+  fields: {
+    name: f.char({ required: true, sequence: 'attendance.swap', label: 'Reference' }),
+    employee: f.many2one('hr.employee', {
+      required: true,
+      ondelete: 'cascade',
+      index: true,
+      label: 'Asked by',
+    }),
+    withEmployee: f.many2one('hr.employee', {
+      required: true,
+      ondelete: 'cascade',
+      index: true,
+      label: 'Swaps with',
+    }),
+    date: f.date({ required: true }),
+    shift: f.many2one('attendance.shift', {
+      ondelete: 'restrict',
+      label: 'Their planned shift',
+      help: 'The shift of the person who asks on that date, written down when the swap is asked: the colleague works it.',
+      groups: { write: SYSTEM },
+    }),
+    withShift: f.many2one('attendance.shift', {
+      ondelete: 'restrict',
+      label: 'The colleague’s planned shift',
+      help: 'The colleague’s shift on that date, written down when the swap is asked: the person who asks works it.',
+      groups: { write: SYSTEM },
+    }),
+    reason: f.text({ required: true, label: 'Why' }),
+    decisionNote: f.char({
+      label: 'Note of the decision',
+      help: 'Why it was declined, refused or cancelled (needed), or a word with the approval.',
+    }),
+    state: f.state({
+      help: 'A swap waits for the colleague, then for an Attendance manager; approved, each works the other’s shift.',
+      states: {
+        draft: 'Draft',
+        submitted: 'Waiting for the colleague',
+        accepted: 'Waiting for approval',
+        approved: 'Approved',
+        declined: 'Declined',
+        refused: 'Refused',
+        cancelled: 'Cancelled',
+      },
+      initial: 'draft',
+      transitions: {
+        submit: emitting('attendance.swap.submitted', {
+          from: ['draft'],
+          to: 'submitted',
+          // The two shifts as planned today: a swap of the same shift, or with somebody without one, is none.
+          before: records('attendance.swap', async (swaps): Promise<void> => {
+            const env = swaps.env as unknown as Env;
+            await env.asSuperuser({ reason: 'the shifts of a swap' }, async (su) => {
+              for (const s of await su
+                .model('attendance.swap')
+                .browse(swaps.ids as never)
+                .load(['employee', 'withEmployee', 'date'])) {
+                const mine = await plannedShift(su, s.employee.id as number, s.date);
+                const theirs = await plannedShift(su, s.withEmployee.id as number, s.date);
+                if (mine === null || theirs === null || mine === theirs)
+                  throw new orm.ValidationError(
+                    'attendance.swap',
+                    ['withEmployee', 'date'],
+                    mine === null || theirs === null
+                      ? 'One of the two has no shift on that date.'
+                      : 'Both are on the same shift that date: there is nothing to swap.',
+                    'Choose a colleague on another shift, or another date.',
+                  );
+                await su
+                  .model('attendance.swap')
+                  .browse([s.id])
+                  .write({ shift: mine, withShift: theirs } as never);
+              }
+            });
+          }),
+        }),
+        accept: emitting('attendance.swap.accepted', {
+          from: ['submitted'],
+          to: 'accepted',
+          guard: records('attendance.swap', (swaps) => notAnswerable(swaps)),
+          message: SWAP_ANSWERS,
+        }),
+        decline: {
+          from: ['submitted'],
+          to: 'declined',
+          guard: records('attendance.swap', (swaps) => notAnswerable(swaps)),
+          message: SWAP_ANSWERS,
+        },
+        approve: emitting('attendance.swap.approved', {
+          from: ['accepted'],
+          to: 'approved',
+          requires: 'attendance.approve',
+          guard: records('attendance.swap', (swaps) => partyTo(swaps)),
+          message: SWAP_DECIDES,
+        }),
+        refuse: {
+          from: ['accepted'],
+          to: 'refused',
+          requires: 'attendance.approve',
+          guard: records('attendance.swap', (swaps) => partyTo(swaps)),
+          message: SWAP_DECIDES,
+        },
+        // Called off after approval: the planned shifts are back.
+        cancel: emitting('attendance.swap.cancelled', {
+          from: ['approved'],
+          to: 'cancelled',
+          requires: 'attendance.approve',
+          guard: records('attendance.swap', (swaps) => partyTo(swaps)),
+          message: SWAP_DECIDES,
+        }),
+        redraft: { from: ['submitted', 'declined', 'refused'], to: 'draft' },
+      },
+    }),
+  },
+  sqlConstraints: {
+    two: {
+      check: orm.sql`employee_id <> with_employee_id`,
+      message: 'A swap is between two people.',
+    },
+  },
+  constraints: {
+    said: {
+      ...check('attendance.swap', ['state', 'decisionNote'], async (swaps) =>
+        [...swaps]
+          .filter(
+            (s) =>
+              (s.state === 'declined' || s.state === 'refused' || s.state === 'cancelled') &&
+              (s.decisionNote ?? '').trim() === '',
+          )
+          .map((s) => s.id),
+      ),
+      message: 'Say why in the note of the decision first.',
+    },
+    // One swap a day per person, whichever side they are on.
+    oneADay: {
+      ...check('attendance.swap', ['employee', 'withEmployee', 'date', 'state'], async (swaps) =>
+        swaps.env.asSuperuser({ reason: 'swaps of the same day' }, async (su) => {
+          const failing: number[] = [];
+          for (const s of swaps) {
+            if (!(SWAP_LIVE as readonly string[]).includes(s.state)) continue;
+            const both = [s.employee.id, s.withEmployee.id];
+            const clash = await su.model('attendance.swap').search({
+              where: {
+                id: { ne: s.id },
+                date: s.date,
+                state: { in: [...SWAP_LIVE] },
+                or: [{ employee: { in: both } }, { withEmployee: { in: both } }],
+              } as never,
+              limit: 1,
+            });
+            if (clash.length > 0) failing.push(s.id);
+          }
+          return failing;
+        }),
+      ),
+      message: 'One of the two already has a swap on that date.',
+    },
+  },
+});
+
+/** The shift a person is planned on that date: their roster's, else their usual one. */
+async function plannedShift(su: Env, employee: number, date: unknown): Promise<number | null> {
+  const [roster] = await (
+    await su.model('attendance.roster').search({
+      where: { employee, dateFrom: { lte: date }, dateTo: { gte: date } } as never,
+      limit: 1,
+    })
+  ).load(['shift']);
+  if (roster !== undefined) return roster.shift.id as number;
+  const [person] = await su
+    .model('hr.employee')
+    .browse([employee] as never)
+    .load(['attendanceShift']);
+  return (person?.attendanceShift?.id as number | undefined) ?? null;
+}
+
+/** The users of both people of each swap among `records`. */
+async function partiesOf(
+  records: unknown,
+): Promise<{ env: Env; swaps: { id: number; asks: unknown; colleague: unknown }[] }> {
+  const { env, ids } = records as { env: Env; ids: readonly number[] };
+  const swaps = await env.asSuperuser({ reason: 'the two people of a swap' }, async (su) => {
+    const rows = (
+      await su
+        .model('attendance.swap')
+        .browse([...ids] as never)
+        .load(['employee', 'withEmployee'])
+    ).read(['id', 'employee', 'withEmployee']);
+    const users = new Map(
+      (
+        await su
+          .model('hr.employee')
+          .browse(rows.flatMap((r) => [r['employee'], r['withEmployee']]) as never)
+          .load(['user'])
+      )
+        .read(['id', 'user'])
+        .map((e) => [e['id'], e['user']]),
+    );
+    return rows.map((r) => ({
+      id: r['id'] as number,
+      asks: users.get(r['employee']) ?? null,
+      colleague: users.get(r['withEmployee']) ?? null,
+    }));
+  });
+  return { env, swaps };
+}
+
+/** The swaps the acting user is one of the two people of: never theirs to decide. */
+async function partyTo(records: unknown): Promise<number[]> {
+  const { env, swaps } = await partiesOf(records);
+  return swaps.filter((s) => s.asks === env.uid || s.colleague === env.uid).map((s) => s.id);
+}
+
+/**
+ * The swaps the acting user may not answer: the colleague does — or, for people without an account, a holder of
+ * the approval permission who is not the person asking.
+ */
+async function notAnswerable(records: unknown): Promise<number[]> {
+  const { env, swaps } = await partiesOf(records);
+  const manages = env.su || env.access.has('attendance.approve');
+  return swaps
+    .filter((s) => s.colleague !== env.uid && !(manages && s.asks !== env.uid))
+    .map((s) => s.id);
+}
 
 export const AttendanceSite = defineModel('attendance.site', {
   label: 'Site',
@@ -519,6 +781,7 @@ export const attendanceShutro = defineModule({
   models: [
     AttendanceShift,
     AttendanceRoster,
+    AttendanceSwap,
     AttendanceSite,
     AttendanceRecord,
     AttendanceDay,
@@ -526,6 +789,14 @@ export const attendanceShutro = defineModule({
     AttendanceDevicePunch,
   ],
   extensions: [EmployeeAttendance],
+  sequences: [
+    orm.defineSequence({
+      code: 'attendance.swap',
+      prefix: 'SWAP/{year}/',
+      padding: 4,
+      reset: 'yearly',
+    }),
+  ],
   data: [
     record(
       'attendance.shift',

@@ -282,6 +282,22 @@ async function recomputeChunk(
       await env.model('attendance.roster').search({ where: { employee: inChunk, ...during } })
     ).load({ shift: true, employee: true }),
   );
+  // Approved swaps (RFC 0039 §6), read over the rosters: on its date each of the two works the other's shift.
+  type Shift = NonNullable<(typeof people)[number]['attendanceShift']>;
+  const swapped = new Map<string, Shift>();
+  for (const s of await (
+    await env.model('attendance.swap').search({
+      where: {
+        state: 'approved',
+        date: { gte: from, lte: to },
+        or: [{ employee: inChunk }, { withEmployee: inChunk }],
+      } as never,
+    })
+  ).load({ employee: true, withEmployee: true, shift: true, withShift: true })) {
+    const date = isoDate(s.date);
+    if (s.withShift !== null) swapped.set(`${s.employee.id}|${date}`, s.withShift as Shift);
+    if (s.shift !== null) swapped.set(`${s.withEmployee.id}|${date}`, s.shift as Shift);
+  }
   const approved = { employee: inChunk, state: 'approved' as const, ...during };
   const leavesOf = byEmployee(
     await (await env.model('hr.leave').search({ where: approved })).load([
@@ -379,7 +395,7 @@ async function recomputeChunk(
       const roster = [...rosters].find(
         (r) => isoDate(r.dateFrom) <= date && isoDate(r.dateTo) >= date,
       );
-      const shift = roster?.shift ?? e.attendanceShift ?? null;
+      const shift = swapped.get(`${e.id}|${date}`) ?? roster?.shift ?? e.attendanceShift ?? null;
       const mine = punches.filter((p) => localDate(p.checkIn, tz) === date);
       const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
       const result = computeDay({

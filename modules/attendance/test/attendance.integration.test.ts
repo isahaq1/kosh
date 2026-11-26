@@ -464,6 +464,115 @@ test('home office: asked by the person, decided by someone else; its days are Ho
   expect(home.json.action).toBe('in');
 });
 
+test('shift swaps: asked, accepted by the colleague, approved by a manager who is neither; each then works the other’s shift', async () => {
+  const SWAP = '/api/v1/models/attendance.swap';
+  const shifts = (await call('GET', '/api/v1/models/attendance.shift?fields=name', 'hana')).json
+    .items as Json[];
+  const general = shifts.find((s) => s.name === 'General').id as number;
+  const night = shifts.find((s) => s.name === 'Night').id as number;
+  // Tuesday 1 December 2026: Sumi is rostered on the night shift, Rahim on his usual General.
+  expect(
+    (
+      await call('POST', '/api/v1/models/attendance.roster', 'hana', {
+        employee: employees['sumi'],
+        shift: night,
+        dateFrom: '2026-12-01',
+        dateTo: '2026-12-01',
+      })
+    ).status,
+  ).toBe(201);
+  const asked = await call('POST', SWAP, 'rahim', {
+    employee: employees['rahim'],
+    withEmployee: employees['sumi'],
+    date: '2026-12-01',
+    reason: 'A family dinner',
+  });
+  expect(asked.status, JSON.stringify(asked.json)).toBe(201);
+  const step = (name: string, as: string, id: number = asked.json.id) =>
+    call('POST', `${SWAP}/${id}/transitions/${name}`, as);
+  const idOf = (v: Json) => (typeof v === 'object' && v !== null ? v.id : v);
+  // Nobody swaps with themselves.
+  expect(
+    (
+      await call('POST', SWAP, 'rahim', {
+        employee: employees['rahim'],
+        withEmployee: employees['rahim'],
+        date: '2026-12-03',
+        reason: 'Alone',
+      })
+    ).status,
+  ).toBeGreaterThanOrEqual(400);
+  // Asked: the two planned shifts are written down by the server.
+  expect((await step('submit', 'rahim')).status).toBe(200);
+  const written = (await call('GET', `${SWAP}/${asked.json.id}`, 'rahim')).json;
+  expect(idOf(written.shift)).toBe(general);
+  expect(idOf(written.withShift)).toBe(night);
+  // The colleague answers, not the one who asks; nobody but a manager who is neither of them approves.
+  expect((await step('accept', 'rahim')).status).toBeGreaterThanOrEqual(400);
+  expect((await step('approve', 'hana')).status).toBeGreaterThanOrEqual(400); // not accepted yet
+  const accepted = await step('accept', 'sumi');
+  expect(accepted.status, JSON.stringify(accepted.json)).toBe(200);
+  expect((await step('approve', 'sumi')).status).toBeGreaterThanOrEqual(400);
+  expect((await step('approve', 'rahim')).status).toBeGreaterThanOrEqual(400);
+  // A swap is read by its two people and by managers only.
+  expect((await call('GET', `${SWAP}/${asked.json.id}`, 'gate')).status).toBeGreaterThanOrEqual(
+    403,
+  );
+  const approved = await step('approve', 'hana');
+  expect(approved.status, JSON.stringify(approved.json)).toBe(200);
+  // One swap a day per person.
+  const again = await call('POST', SWAP, 'sumi', {
+    employee: employees['sumi'],
+    withEmployee: employees['rahim'],
+    date: '2026-12-01',
+    reason: 'Again',
+  });
+  expect(again.status).toBe(422);
+  expect(JSON.stringify(again.json)).toContain('already has a swap');
+
+  const shiftsWorked = async () => {
+    const computed = await call('POST', '/api/v1/attendance/days/compute', 'hana', {
+      from: '2026-12-01',
+      to: '2026-12-01',
+      employees: [employees['rahim'], employees['sumi']],
+    });
+    expect(computed.status, JSON.stringify(computed.json)).toBe(200);
+    const days = (
+      await call(
+        'GET',
+        `${D}?filter=${encodeURIComponent(JSON.stringify({ date: '2026-12-01', employee: { in: [employees['rahim'], employees['sumi']] } }))}&fields=employee,shift`,
+        'hana',
+      )
+    ).json.items as Json[];
+    return Object.fromEntries(days.map((d) => [idOf(d.employee), idOf(d.shift)]));
+  };
+  // The rosters stay as planned; the day is computed on the other's shift.
+  expect(await shiftsWorked()).toEqual({
+    [employees['rahim'] as number]: night,
+    [employees['sumi'] as number]: general,
+  });
+  // Called off, with the reason: the planned shifts are back.
+  expect((await step('cancel', 'hana')).status).toBeGreaterThanOrEqual(400); // no reason yet
+  await call('PATCH', `${SWAP}/${asked.json.id}`, 'hana', { decisionNote: 'The line is short' });
+  expect((await step('cancel', 'hana')).status).toBe(200);
+  expect(await shiftsWorked()).toEqual({
+    [employees['rahim'] as number]: general,
+    [employees['sumi'] as number]: night,
+  });
+
+  // Both on the same shift: there is nothing to swap.
+  const same = await call('POST', SWAP, 'rahim', {
+    employee: employees['rahim'],
+    withEmployee: employees['sumi'],
+    date: '2026-12-02',
+    reason: 'No difference',
+  });
+  expect(same.status, JSON.stringify(same.json)).toBe(201);
+  const nothing = await step('submit', 'rahim', same.json.id);
+  expect(nothing.status).toBe(422);
+  expect(JSON.stringify(nothing.json)).toContain('nothing to swap');
+});
+
 test('many people: a long request is computed in the background, and every night computes yesterday for everybody — once', async () => {
   // Sixty people on the general shift who never punch.
   type Model = {

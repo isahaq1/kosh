@@ -284,6 +284,28 @@ Asked: "employee can be contactual, temporary and other".
 - **Not tested directly**: the accrual ledger taking 0.5 (its code path is the one line changed; the other
   accrual tests pass). **Left out**: half days of home office and of tours; a quarter day; hours of leave.
 
+## Implementation notes — shift swaps (2026-11-26)
+
+- **`attendance.swap`** (`SWAP/{year}/…`): two people exchange their shifts on **one date**. The person asks
+  (*Ask the colleague*), the colleague **accepts** or declines, an **Attendance manager who is neither of the
+  two** approves, refuses or — after approval — cancels. Declining, refusing and cancelling need the note of the
+  decision. For people without an account an Attendance manager other than the person asking answers for the
+  colleague.
+- **The rosters are not rewritten.** The two planned shifts — the roster's, else the usual one — are written on
+  the swap by the server when it is asked (same shift, or no shift: refused, there is nothing to swap). An
+  approved swap is read **over** the rosters when the day is computed: each works the other's shift, with its
+  hours, grace, overtime threshold and rate; `attendance.day.shift` says so, and Payroll's shift variables follow.
+  A cancelled swap gives the planned shifts back at the next computation. Rewriting rosters was set aside: a
+  range roster would be cut in three and could not be put back by a cancellation.
+- One live swap a day per person, whichever side; people read the swaps they are one of the two of.
+- Like home office and tours, days already computed change at the next computation (every night, or *compute*),
+  and **approved days stay as they are**.
+- Tests: the whole route with the refusals (own answer, own approval, a third person's read, a second swap that
+  day, the same shift), the day's shift for both before and after cancelling.
+- **Left out**: swapping a working day for a day off, swaps over several dates in one request, a notification
+  to the colleague (the events `attendance.swap.submitted / accepted / approved / cancelled` are there for a
+  rule of the Automation app), a browser test of the form.
+
 ## Step 3 is done but for
 
 Days by shift (`SHIFT_<CODE>` — shifts have no code yet), and the list of variables shown where a rule is

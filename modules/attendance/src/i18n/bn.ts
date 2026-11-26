@@ -5,8 +5,14 @@ export const bn: Readonly<Record<string, string>> = {
   'A roster ends on or after it starts.': 'রোস্টার শুরুর দিন বা তার পরে শেষ হয়।',
   'A site has both coordinates or neither, and a positive radius.':
     'সাইটে দুটি স্থানাঙ্কই থাকবে অথবা কোনোটিই নয়, এবং ব্যাসার্ধ ধনাত্মক হবে।',
+  'A swap is approved by an Attendance manager who is neither of the two people.':
+    'অদলবদল অনুমোদন করেন এমন একজন হাজিরা ব্যবস্থাপক, যিনি দুজনের কেউ নন।',
+  'A swap is between two people.': 'অদলবদল দুজন ব্যক্তির মধ্যে হয়।',
+  'A swap waits for the colleague, then for an Attendance manager; approved, each works the other’s shift.':
+    'অদলবদল প্রথমে সহকর্মীর, তারপর হাজিরা ব্যবস্থাপকের অপেক্ষায় থাকে; অনুমোদিত হলে প্রত্যেকে অন্যজনের শিফটে কাজ করেন।',
   'Absences this month': 'এ মাসের অনুপস্থিতি',
   Absent: 'অনুপস্থিত',
+  Accept: 'গ্রহণ করুন',
   Active: 'সক্রিয়',
   'An IANA name such as Asia/Dhaka or Asia/Kolkata.': 'IANA নাম, যেমন Asia/Dhaka বা Asia/Kolkata।',
   Approve: 'অনুমোদন করুন',
@@ -19,6 +25,8 @@ export const bn: Readonly<Record<string, string>> = {
     'শুরুর পর এই কয় মিনিটের মধ্যে এলে দেরি ধরা হয় না।',
   'As the machine shows it (Menu › System info). It is how the machine says who it is.':
     'মেশিনে যেমন দেখায় (Menu › System info)। এটি দিয়েই মেশিন নিজের পরিচয় দেয়।',
+  'Ask the colleague': 'সহকর্মীকে জিজ্ঞাসা করুন',
+  'Asked by': 'যিনি চেয়েছেন',
   Attendance: 'হাজিরা',
   'Attendance badge': 'হাজিরার ব্যাজ',
   'Attendance day': 'হাজিরার দিন',
@@ -28,11 +36,16 @@ export const bn: Readonly<Record<string, string>> = {
   'Attendance manager (everyone, approvals, imports)': 'হাজিরা ব্যবস্থাপক (সবাই, অনুমোদন, ইমপোর্ট)',
   'Attendance register': 'হাজিরা রেজিস্টার',
   'Attendance: own': 'হাজিরা: নিজের',
+  'Back to draft': 'খসড়ায় ফেরত',
   Badge: 'ব্যাজ',
   'Beyond the shift past its threshold, in its steps; all hours worked on weekends and holidays.':
     'সীমা পেরিয়ে শিফটের বাইরে কাজ, ধাপে ধাপে; সাপ্তাহিক ও অন্যান্য ছুটির দিনে কাজের সব ঘণ্টা।',
   'Break (minutes)': 'বিরতি (মিনিট)',
   'By hand': 'হাতে',
+  'Cancel the swap': 'অদলবদল বাতিল করুন',
+  'Cancel this approved swap? Both go back to their planned shifts.':
+    'এই অনুমোদিত অদলবদল বাতিল করবেন? দুজনেই তাঁদের নির্ধারিত শিফটে ফিরে যাবেন।',
+  Cancelled: 'বাতিল',
   'Check in': 'চেক-ইন করুন',
   'Check-in': 'চেক-ইন',
   'Check-ins': 'চেক-ইনসমূহ',
@@ -53,6 +66,8 @@ export const bn: Readonly<Record<string, string>> = {
   Days: 'দিন',
   'Days by status': 'অবস্থা অনুযায়ী দিন',
   'Days to review': 'পর্যালোচনার দিন',
+  Decline: 'অসম্মতি জানান',
+  Declined: 'অসম্মত',
   Department: 'বিভাগ',
   Device: 'ডিভাইস',
   'Device file': 'যন্ত্রের ফাইল',
@@ -62,6 +77,7 @@ export const bn: Readonly<Record<string, string>> = {
   Devices: 'ডিভাইস',
   'Display Name': 'প্রদর্শিত নাম',
   'Distance (metres)': 'দূরত্ব (মিটার)',
+  Draft: 'খসড়া',
   'Earlier than the start: the shift ends the next day (a night shift).':
     'শুরুর চেয়ে আগে: শিফট পরের দিন শেষ হয় (রাতের শিফট)।',
   Employee: 'কর্মী',
@@ -105,8 +121,11 @@ export const bn: Readonly<Record<string, string>> = {
   'Minutes are not negative; the overtime step is at least one minute.':
     'মিনিট ঋণাত্মক হয় না; অতিরিক্ত সময়ের ধাপ অন্তত এক মিনিট।',
   Name: 'নাম',
+  'Needed to decline, refuse or cancel: write it, then press the button.':
+    'অসম্মতি, প্রত্যাখ্যান বা বাতিলের জন্য প্রয়োজন: এটি লিখুন, তারপর বোতাম চাপুন।',
   'No shift': 'শিফট নেই',
   Note: 'নোট',
+  'Note of the decision': 'সিদ্ধান্তের নোট',
   'Number on the device': 'ডিভাইসে নম্বর',
   Off: 'বন্ধ',
   'Off only for a phone check-in outside the radius of a site without a geofence.':
@@ -118,6 +137,8 @@ export const bn: Readonly<Record<string, string>> = {
     'মেশিনে এই সার্ভারের ঠিকানা ও পোর্ট বসান (Comm › Cloud Server Setting)। সক্রিয় হলে এর পাঞ্চ নিজে থেকেই আসে।',
   'On tour': 'ট্যুরে',
   'One attendance day per person and date.': 'প্রতি ব্যক্তি ও তারিখে একটি হাজিরার দিন।',
+  'One of the two already has a swap on that date.':
+    'দুজনের একজনের ওই তারিখে আগে থেকেই একটি অদলবদল আছে।',
   'Only an active device’s punches are taken. A machine that knocks unregistered waits for approval.':
     'শুধু সক্রিয় ডিভাইসের পাঞ্চ নেওয়া হয়। নিবন্ধন ছাড়া যে মেশিন যোগাযোগ করে সেটি অনুমোদনের অপেক্ষায় থাকে।',
   'Only from addresses': 'শুধু এই ঠিকানাগুলো থেকে',
@@ -148,17 +169,28 @@ export const bn: Readonly<Record<string, string>> = {
   Radius: 'ব্যাসার্ধ',
   'Radius (metres)': 'ব্যাসার্ধ (মিটার)',
   Received: 'পাওয়া গেছে',
+  Reference: 'রেফারেন্স',
+  Refuse: 'প্রত্যাখ্যান করুন',
   'Refuse phone check-ins outside the radius (the location is kept only as inside or outside and the distance).':
     'ব্যাসার্ধের বাইরে থেকে ফোনে চেক-ইন নামঞ্জুর করুন (অবস্থান শুধু ভেতরে বা বাইরে এবং দূরত্ব হিসেবে রাখা হয়)।',
+  Refused: 'প্রত্যাখ্যাত',
   Reopen: 'আবার খুলুন',
   Roster: 'রোস্টার',
   Rosters: 'রোস্টারসমূহ',
   Safety: 'নিরাপত্তা',
+  'Say why in the note of the decision first.': 'আগে সিদ্ধান্তের নোটে কারণ লিখুন।',
   'Scan at the kiosk': 'কিয়স্কে স্ক্যান করুন',
   'Second tap': 'দ্বিতীয়বার চাপ',
   'Sent up to': 'যতদূর পাঠানো হয়েছে',
   'Serial number': 'সিরিয়াল নম্বর',
   Shift: 'শিফট',
+  'Shift swap': 'শিফট অদলবদল',
+  'Shift swap {{name}}': 'শিফট অদলবদল {{name}}',
+  'Shift swap accepted by the colleague': 'সহকর্মী শিফট অদলবদল গ্রহণ করেছেন',
+  'Shift swap approved': 'শিফট অদলবদল অনুমোদিত',
+  'Shift swap asked': 'শিফট অদলবদল চাওয়া হয়েছে',
+  'Shift swap cancelled': 'শিফট অদলবদল বাতিল',
+  'Shift swaps': 'শিফট অদলবদল',
   Shifts: 'শিফটসমূহ',
   'Shifts, check-in by phone, kiosk or device, overtime':
     'শিফট, ফোন, কিয়স্ক বা যন্ত্রে চেক-ইন, অতিরিক্ত সময়',
@@ -170,15 +202,26 @@ export const bn: Readonly<Record<string, string>> = {
   'Starts (HH:MM)': 'শুরু (HH:MM)',
   State: 'অবস্থা',
   Status: 'অবস্থা',
+  'Swaps with': 'যাঁর সঙ্গে অদলবদল',
   'The code on the person’s badge (QR or barcode), scanned at the kiosk.':
     'ব্যক্তির ব্যাজের কোড (QR বা বারকোড), কিয়স্কে স্ক্যান করা হয়।',
+  'The colleague answers a swap — or an Attendance manager, other than the person who asks, for them.':
+    'অদলবদলের উত্তর দেন সহকর্মী — অথবা তাঁর হয়ে একজন হাজিরা ব্যবস্থাপক, যিনি আবেদনকারী নন।',
+  'The colleague’s planned shift': 'সহকর্মীর নির্ধারিত শিফট',
+  'The colleague’s shift on that date, written down when the swap is asked: the person who asks works it.':
+    'ওই তারিখে সহকর্মীর শিফট, অদলবদল চাওয়ার সময় লিখে রাখা হয়: আবেদনকারী এই শিফটে কাজ করেন।',
   'The machine’s protocol has no password: its serial number is all it says. Limit it to the site’s address where you can.':
     'মেশিনের প্রোটোকলে কোনো পাসওয়ার্ড নেই: সিরিয়াল নম্বরই এর একমাত্র পরিচয়। সম্ভব হলে সাইটের ঠিকানায় সীমাবদ্ধ রাখুন।',
   'The network addresses the machine may send from, separated by commas (the site’s public address). Empty: any.':
     'যেসব নেটওয়ার্ক ঠিকানা থেকে মেশিন পাঠাতে পারে, কমা দিয়ে আলাদা (সাইটের পাবলিক ঠিকানা)। খালি: যেকোনো।',
   'The person’s number on the attendance device (ZKTeco user ID).':
     'হাজিরা যন্ত্রে ব্যক্তির নম্বর (ZKTeco ব্যবহারকারী আইডি)।',
+  'The shift of the person who asks on that date, written down when the swap is asked: the colleague works it.':
+    'ওই তারিখে আবেদনকারীর শিফট, অদলবদল চাওয়ার সময় লিখে রাখা হয়: সহকর্মী এই শিফটে কাজ করেন।',
   'The shift on days without a roster.': 'রোস্টারবিহীন দিনের শিফট।',
+  'The two shifts are written down when the swap is asked. Approved, each works the other’s shift that day.':
+    'অদলবদল চাওয়ার সময় দুটি শিফট লিখে রাখা হয়। অনুমোদিত হলে ওই দিন প্রত্যেকে অন্যজনের শিফটে কাজ করেন।',
+  'Their planned shift': 'তাঁর নির্ধারিত শিফট',
   'This overlaps another check-in of the same person.':
     'এটি একই ব্যক্তির অন্য একটি চেক-ইনের সাথে মিলে যায়।',
   'This person is already checked in.': 'এই ব্যক্তি ইতিমধ্যে চেক-ইন করেছেন।',
@@ -193,6 +236,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Times the hourly basic (Bangladesh Labour Act: twice), for Payroll.':
     'ঘণ্টাপ্রতি মূল বেতনের গুণিতক (বাংলাদেশ শ্রম আইন: দ্বিগুণ), বেতন প্রক্রিয়ার জন্য।',
   To: 'পর্যন্ত',
+  'To approve': 'অনুমোদনের জন্য',
   'To review': 'পর্যালোচনা বাকি',
   'Unknown person': 'অজানা ব্যক্তি',
   Unpaired: 'জোড়াহীন',
@@ -200,6 +244,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Updated By': 'হালনাগাদ করেছেন',
   'Usual shift': 'সাধারণ শিফট',
   'Waiting for approval': 'অনুমোদনের অপেক্ষায়',
+  'Waiting for my answer': 'আমার উত্তরের অপেক্ষায়',
+  'Waiting for the colleague': 'সহকর্মীর অপেক্ষায়',
   Weekend: 'সাপ্তাহিক ছুটি',
   'What became of the punch: counted as a check-in or a check-out, or why it was not.':
     'পাঞ্চটির কী হয়েছে: চেক-ইন বা চেক-আউট হিসেবে গোনা হয়েছে, নাকি কেন হয়নি।',
@@ -210,6 +256,10 @@ export const bn: Readonly<Record<string, string>> = {
     'যেখানে লোকজন কাজ করেন: এখানে দিন শুরু হয় মধ্যরাতে, শিফট এখানকার সময়ে পড়া হয়।',
   'Where the punch came from; a punch by hand is recorded with who made it.':
     'পাঞ্চ কোথা থেকে এসেছে; হাতে দেওয়া পাঞ্চ কে দিয়েছেন তা সহ রেকর্ড হয়।',
+  'Who swaps': 'কারা অদলবদল করছেন',
+  Why: 'কারণ',
+  'Why it was declined, refused or cancelled (needed), or a word with the approval.':
+    'কেন অসম্মতি, প্রত্যাখ্যান বা বাতিল হয়েছে (আবশ্যক), অথবা অনুমোদনের সঙ্গে একটি কথা।',
   'With overtime': 'অতিরিক্ত সময়সহ',
   'Work beyond the shift counts as overtime once it passes these minutes.':
     'শিফটের বাইরের কাজ এই কয় মিনিট পেরোলে অতিরিক্ত সময় হিসেবে গণ্য হয়।',
