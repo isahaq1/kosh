@@ -139,6 +139,27 @@ async function computeRun(title: string, from: string, to: string): Promise<numb
   results[`${title}: payslips`] = run.json.slipCount;
   results[`${title}: seconds`] = Math.round(ms / 100) / 10;
   results[`${title}: ms per person`] = Math.round((ms / run.json.slipCount) * 10) / 10;
+  // What follows the computation: the approval (loan repayments recorded) and the bank's file.
+  const approving = performance.now();
+  const approved = await call(
+    'POST',
+    `/api/v1/models/payroll.run/${created.json.id}/transitions/approve`,
+  );
+  expect(approved.status, JSON.stringify(approved.json).slice(0, 400)).toBe(200);
+  results[`${title}: approved in ms`] = Math.round(performance.now() - approving);
+  const filing = performance.now();
+  const file = await host.server.app.inject({
+    method: 'GET',
+    url: `/api/v1/payroll/runs/${created.json.id}/payment-file?format=bank`,
+    headers: { authorization: `Bearer ${token}` },
+  });
+  expect(file.statusCode, file.body.slice(0, 300)).toBe(200);
+  results[`${title}: bank file in ms`] = Math.round(performance.now() - filing);
+  results[`${title}: bank file rows`] = file.body.split('\r\n').length - 1;
+  // Budgets (RFC 0039 §2): approving and the bank's file each under five seconds, whatever the size. (Without
+  // an index on a payslip line's payslip, approving thirty thousand people took 172 seconds.)
+  expect(Number(results[`${title}: approved in ms`])).toBeLessThan(5_000);
+  expect(Number(results[`${title}: bank file in ms`])).toBeLessThan(5_000);
   return ms / run.json.slipCount;
 }
 

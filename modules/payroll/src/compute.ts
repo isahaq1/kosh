@@ -649,19 +649,30 @@ export async function recordRepayments(env: Env, runIds: readonly number[]): Pro
   for (const run of await env
     .model('payroll.run')
     .browse(runIds as never)
-    .load({ slips: true })) {
+    .load(['kind', 'dateTo'])) {
     if (run.kind === 'correction') continue;
-    for (const slip of run.slips) {
-      const taken = [
-        ...(await (
-          await env.model('payroll.slip.line').search({ where: { slip: slip.id, code: 'LOAN' } })
-        ).load(['amount'])),
-      ].reduce((s, l) => s.plus(l.amount), ZERO);
-      let left = taken;
+    // Only the payslips that took a loan instalment, found by the database: a run of thirty thousand people
+    // is not read payslip by payslip for the few who repay a loan (RFC 0039 §2).
+    await env.flush();
+    const repaying = await env.sql<{
+      slip_id: string | number;
+      employee_id: string | number;
+      taken: string;
+    }>`
+      SELECT s.id AS slip_id, s.employee_id, sum(l.amount)::text AS taken
+        FROM payroll_slip s
+        JOIN payroll_slip_line l ON l.slip_id = s.id AND l.code = 'LOAN'
+       WHERE s.run_id = ${run.id}
+       GROUP BY s.id, s.employee_id
+      HAVING sum(l.amount) > 0
+       ORDER BY s.id`;
+    for (const row of repaying) {
+      const slip = { id: Number(row.slip_id), employee: { id: Number(row.employee_id) } };
+      let left = orm.toDecimal(row.taken);
       for (const loan of await (
         await env.model('payroll.loan').search({
           where: {
-            employee: slip.employee.id,
+            employee: slip.employee.id as never,
             state: 'running',
             dateStart: { lte: isoDate(run.dateTo) },
           },
@@ -773,21 +784,41 @@ export async function paymentRows(env: Env, runId: number): Promise<PaymentRow[]
   const [run] = await env
     .model('payroll.run')
     .browse([runId as never])
-    .load({ slips: { employee: true } });
+    .load(['name']);
   if (run === undefined) return [];
-  return [...run.slips]
-    .map((s) => ({ slip: s, amount: run.kind === 'correction' ? (s.difference ?? ZERO) : s.net }))
-    .filter((x) => x.amount.gt(0))
-    .map(({ slip, amount }) => ({
-      employee: slip.employee.name,
-      method: slip.employee.payMethod ?? 'bank',
-      bank: slip.employee.bankName,
-      branch: slip.employee.bankBranch,
-      account: slip.employee.bankAccount,
-      routing: slip.employee.routingNumber,
-      wallet: slip.employee.walletProvider,
-      walletNumber: slip.employee.walletNumber,
-      amount,
-      reference: `${run.name}`,
-    }));
+  // One query for the whole run — the columns the files need, not thirty thousand payslips and as many
+  // people turned into records (RFC 0039 §2). Called as the system by the route, which checks who asks.
+  await env.flush();
+  const rows = await env.sql<{
+    name: string;
+    pay_method: string | null;
+    bank_name: string | null;
+    bank_branch: string | null;
+    bank_account: string | null;
+    routing_number: string | null;
+    wallet_provider: string | null;
+    wallet_number: string | null;
+    amount: string;
+  }>`
+    SELECT e.name, e.pay_method, e.bank_name, e.bank_branch, e.bank_account, e.routing_number,
+           e.wallet_provider, e.wallet_number,
+           (CASE WHEN r.kind = 'correction' THEN coalesce(s.difference, 0) ELSE s.net END)::text AS amount
+      FROM payroll_slip s
+      JOIN payroll_run r ON r.id = s.run_id
+      JOIN hr_employee e ON e.id = s.employee_id
+     WHERE s.run_id = ${runId}
+       AND (CASE WHEN r.kind = 'correction' THEN coalesce(s.difference, 0) ELSE s.net END) > 0
+     ORDER BY s.id DESC`;
+  return rows.map((row) => ({
+    employee: row.name,
+    method: row.pay_method ?? 'bank',
+    bank: row.bank_name,
+    branch: row.bank_branch,
+    account: row.bank_account,
+    routing: row.routing_number,
+    wallet: row.wallet_provider,
+    walletNumber: row.wallet_number,
+    amount: orm.toDecimal(row.amount),
+    reference: `${run.name}`,
+  }));
 }

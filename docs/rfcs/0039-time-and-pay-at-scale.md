@@ -76,6 +76,13 @@ holiday; shift swaps; compensatory leave; the final settlement of somebody who l
 - **Final settlement**: for a contract that ends — the days of the last month, leave paid out, the notice,
   gratuity by a formula, loans recovered — as a run of one person with a statement.
 
+## 5b. Step 5 — the rest at this size
+
+- **Indexes on parent links**: every line model's link to its parent checked (a script over the registry: a
+  required many2one with `ondelete: 'cascade'` and no index), and indexed where the table grows with the business.
+- **Attendance's days** computed in sets, like the payroll batch: 30 000 people a day.
+- **Accounting's entries** for a large run (`payroll_account`) summed by the database.
+
 ## 6. Measurements
 
 `pnpm bench payroll` with `KOSH_BENCH_EMPLOYEES=30000`, 26 attendance days a person and month, PostgreSQL 18 in a
@@ -115,9 +122,19 @@ container on the development machine (2026-11-25):
   and then loaded them by listing the ids in one request, which cannot work for thousands. The run shows its
   figures and two tiles, *Payslips* and *With a warning*, that open the payslips as a list that pages, searches,
   filters and totals (gross, deductions, net).
-- **Left for step 1b**: the payment files are built in memory; `payroll_account`'s entry for a very large run is
-  not measured; approving a large run records loan repayments person by person (each loads every payslip of the
-  run at once); the run's print template lists every payslip.
+- **Approving and paying, measured at 30 000** (2026-11-26): approving took **172 s** — against 55 ms for 7 500.
+  The cause was not the code's shape but a **missing index**: a payslip line's link to its payslip had none, so
+  finding the loan instalments made PostgreSQL scan every line for every payslip. With `index: true` on
+  `payroll.slip.line.slip` (and on a payslip's `employee`, for the year so far): **74 ms**. Loan repayments are
+  now found by one query for the payslips that took an instalment, not by reading every payslip; the payment
+  file's rows are one query — the columns the file needs — instead of every payslip and every person turned into
+  records: **0.2 s** for 30 000 rows. The benchmark holds both under five seconds.
+- **A lesson beyond Payroll**: Shutro indexes a model's `company` and what is declared unique, **not its other
+  many2one columns**. A line's link to its parent (`required`, `ondelete: 'cascade'`) is read and cascaded
+  through constantly and needs `index: true`. The other apps' line models have not been checked — the next thing
+  to do at this size (see step 5).
+- **Left**: `payroll_account`'s entries for a very large run are not measured (they sum every payslip in
+  memory); the run's print template lists every payslip; Attendance's daily computation is per person.
 - Shutro request #42 (a savepoint rolled back, then a write) was met and avoided here.
 
 ## Implementation notes (2026-11-25): step 2 — home office

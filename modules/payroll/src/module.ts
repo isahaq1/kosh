@@ -544,7 +544,8 @@ export const PayrollSlip = defineModel('payroll.slip', {
   fields: {
     name: f.char({ required: true, label: 'Reference' }),
     run: f.many2one('payroll.run', { required: true, ondelete: 'cascade' }),
-    employee: f.many2one('hr.employee', { required: true, ondelete: 'restrict' }),
+    // Indexed: a person's payslips of the year so far, and their own payslips on their page.
+    employee: f.many2one('hr.employee', { required: true, ondelete: 'restrict', index: true }),
     contract: f.many2one('hr.contract', { ondelete: 'set null' }),
     structure: f.many2one('payroll.structure', { ondelete: 'set null' }),
     dateFrom: f.date({ required: true, label: 'From' }),
@@ -605,7 +606,10 @@ export const PayrollSlipLine = defineModel('payroll.slip.line', {
     officers: { groups: ['payroll.officer'], perms: [...ALL], domain: {} },
   },
   fields: {
-    slip: f.many2one('payroll.slip', { required: true, ondelete: 'cascade' }),
+    // Indexed: a payslip's lines are found by their payslip — reading them, the year so far, the loan
+    // instalments on approval, and deleting a run's payslips. Without it a run of thirty thousand people made
+    // PostgreSQL scan every line for every payslip (approval: 172 s instead of under a second).
+    slip: f.many2one('payroll.slip', { required: true, ondelete: 'cascade', index: true }),
     rule: f.many2one('payroll.rule', { ondelete: 'set null' }),
     sequence: f.integer({ required: true, default: 10 }),
     code: f.char({ size: 40, required: true }),
