@@ -100,6 +100,27 @@ holiday; shift swaps; compensatory leave; the final settlement of somebody who l
 - **Not covered**: links that are not a line's parent but are searched by all the same (an order's customer, a
   move's product); those stay each model's to declare, and want measuring on real volumes.
 
+### Implementation notes (2026-11-26): Attendance's days in sets, and every night
+
+- **Measured before** (`pnpm bench attendance`): 2 000 people, one day 24.7 s, a week 41.6 s — eight queries a
+  person and a write a day, in the request. Thirty thousand people would be over six minutes for one day.
+- **Nothing computed a day by itself.** A person's day was computed when they punched, or when somebody called
+  the API: someone who never came was never marked absent unless asked for.
+- **As built**: `recomputeDays` works in chunks of 500 people — rosters, approved leave, tours and home office,
+  punches and the days already there each read in one query and grouped by person; one working schedule per
+  calendar and company, shared, and a schedule of their own only for the people with an exception in the
+  period; a chunk's new days written in one go.
+- **In the background**: more than 5 000 person-days in one request go to the job `attendance.days`, a job per
+  500 people, and the answer says how many (`{ written, queued, people }`). **Every night**, for every company,
+  yesterday's days of everybody are enqueued — once per company and date, whatever the number of servers and of
+  ticks (the night's first job is looked for: a job's key stops a second one only while the first waits).
+- **Measured after**, 30 000 people: one day **13.6 s** (the request answers in 0.5 s), a week — 150 000 days —
+  **42.5 s**; 2 000 people, one day 1.3 s. The benchmark holds a day for everybody under a minute.
+- Tests: a three-month request for sixty people computed by the jobs, a short one in the request, a
+  non-manager refused; the night computing a Monday nobody punched on, once, and the next night again.
+- **Left**: no screen asks for a recomputation (the API and the night do); days already there are still
+  written one by one when recomputed.
+
 ## 6. Measurements
 
 `pnpm bench payroll` with `KOSH_BENCH_EMPLOYEES=30000`, 26 attendance days a person and month, PostgreSQL 18 in a

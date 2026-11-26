@@ -241,80 +241,138 @@ export async function recomputeDays(
   to: string,
 ): Promise<number> {
   if (employees.length === 0 || to < from) return 0;
+  // In chunks (RFC 0039 §5b): what a chunk needs is read in sets — a query per kind of thing, not per person —
+  // and its new days are written in one go. Thirty thousand people a day is sixty chunks, not 240 000 queries.
+  let written = 0;
+  for (let i = 0; i < employees.length; i += DAYS_CHUNK)
+    written += await recomputeChunk(env, employees.slice(i, i + DAYS_CHUNK), from, to);
+  return written;
+}
+
+/** How many people's days are computed together. */
+export const DAYS_CHUNK = 500;
+
+async function recomputeChunk(
+  env: Env,
+  employees: readonly number[],
+  from: string,
+  to: string,
+): Promise<number> {
   const tz = await timeZoneOf(env);
   let written = 0;
-  for (const e of await env
-    .model('hr.employee')
-    .browse(employees as never)
-    .load({ attendanceShift: true, company: true, calendar: true, user: true })) {
-    const rosters = await (
-      await env.model('attendance.roster').search({
-        where: { employee: e.id, dateFrom: { lte: to }, dateTo: { gte: from } },
+  const people = [
+    ...(await env
+      .model('hr.employee')
+      .browse(employees as never)
+      .load({ attendanceShift: true, company: true, calendar: true, user: true })),
+  ];
+  const inChunk = { in: employees } as never;
+  const during = { dateFrom: { lte: to }, dateTo: { gte: from } };
+  const byEmployee = <T extends { employee: { id: number } }>(rows: Iterable<T>) => {
+    const by = new Map<number, T[]>();
+    for (const row of rows) {
+      const list = by.get(row.employee.id);
+      if (list === undefined) by.set(row.employee.id, [row]);
+      else list.push(row);
+    }
+    return by;
+  };
+  const rostersOf = byEmployee(
+    await (
+      await env.model('attendance.roster').search({ where: { employee: inChunk, ...during } })
+    ).load({ shift: true, employee: true }),
+  );
+  const approved = { employee: inChunk, state: 'approved' as const, ...during };
+  const leavesOf = byEmployee(
+    await (await env.model('hr.leave').search({ where: approved })).load([
+      'employee',
+      'dateFrom',
+      'dateTo',
+      'half',
+    ]),
+  );
+  const toursOf = byEmployee(
+    await (await env.model('hr.tour').search({ where: approved })).load([
+      'employee',
+      'dateFrom',
+      'dateTo',
+    ]),
+  );
+  const remotesOf = byEmployee(
+    await (await env.model('hr.remote').search({ where: approved })).load([
+      'employee',
+      'dateFrom',
+      'dateTo',
+    ]),
+  );
+  const punchesOf = byEmployee(
+    await (
+      await env.model('attendance.record').search({
+        where: {
+          employee: inChunk,
+          checkIn: { gte: instantOf(from, 0, tz), lt: instantOf(addDays(to, 1), 0, tz) },
+        },
       })
-    ).load({ shift: true });
+    ).load(['employee', 'checkIn', 'checkOut']),
+  );
+  const daysOf = byEmployee(
+    await (
+      await env
+        .model('attendance.day')
+        .search({ where: { employee: inChunk, date: { gte: from, lte: to } } })
+    ).load(['employee', 'date', 'state']),
+  );
+  // Working calendars: one schedule per calendar and company, shared by everybody on it; a schedule of their
+  // own only for the people who have exceptions in the period (a day off, hours of their own).
+  const users = people.map((e) => e.user?.id as number | undefined).filter((u) => u !== undefined);
+  const withExceptions = new Set(
+    users.length === 0
+      ? []
+      : (
+          await (
+            await env.asSuperuser({ reason: 'working time' }, (su) =>
+              su.model('work.exception').search({
+                where: {
+                  user: { in: users } as never,
+                  dateFrom: { lte: to },
+                  dateTo: { gte: from },
+                },
+              }),
+            )
+          ).load(['user'])
+        ).map((x) => x.user.id as number),
+  );
+  const shared = new Map<string, Awaited<ReturnType<typeof scheduleOf>>>();
+  const scheduleFor = async (e: (typeof people)[number]) => {
+    const calendar = (e.calendar?.id as number | undefined) ?? null;
+    const company = e.company.id as number;
+    const user = (e.user?.id as number | undefined) ?? null;
+    if (user !== null && withExceptions.has(user))
+      return scheduleOf(env as never, { from, to, calendar, user, company });
+    const key = `${calendar ?? 'company'}|${company}`;
+    let schedule = shared.get(key);
+    if (schedule === undefined) {
+      schedule = await scheduleOf(env as never, { from, to, calendar, user: null, company });
+      shared.set(key, schedule);
+    }
+    return schedule;
+  };
+  const toCreate: Record<string, unknown>[] = [];
+  for (const e of people) {
+    const rosters = rostersOf.get(e.id) ?? [];
     // The person's working calendar (the company's when they have none), its holidays and their exceptions.
-    const schedule = await scheduleOf(env as never, {
-      from,
-      to,
-      calendar: (e.calendar?.id as number | undefined) ?? null,
-      user: (e.user?.id as number | undefined) ?? null,
-      company: e.company.id as number,
-    });
-    const leaves = [
-      ...(await (
-        await env.model('hr.leave').search({
-          where: {
-            employee: e.id,
-            state: 'approved',
-            dateFrom: { lte: to },
-            dateTo: { gte: from },
-          },
-        })
-      ).load(['dateFrom', 'dateTo', 'half'])),
-    ].map((l) => [isoDate(l.dateFrom), isoDate(l.dateTo), l.half !== null] as const);
-    const tours = [
-      ...(await (
-        await env.model('hr.tour').search({
-          where: {
-            employee: e.id,
-            state: 'approved',
-            dateFrom: { lte: to },
-            dateTo: { gte: from },
-          },
-        })
-      ).load(['dateFrom', 'dateTo'])),
-    ].map((t) => [isoDate(t.dateFrom), isoDate(t.dateTo)] as const);
-    const remotes = [
-      ...(await (
-        await env.model('hr.remote').search({
-          where: {
-            employee: e.id,
-            state: 'approved',
-            dateFrom: { lte: to },
-            dateTo: { gte: from },
-          },
-        })
-      ).load(['dateFrom', 'dateTo'])),
-    ].map((r) => [isoDate(r.dateFrom), isoDate(r.dateTo)] as const);
-    const punches = [
-      ...(await (
-        await env.model('attendance.record').search({
-          where: {
-            employee: e.id,
-            checkIn: { gte: instantOf(from, 0, tz), lt: instantOf(addDays(to, 1), 0, tz) },
-          },
-        })
-      ).load(['checkIn', 'checkOut'])),
-    ];
-    const existing = new Map(
-      [
-        ...(await (
-          await env.model('attendance.day').search({
-            where: { employee: e.id, date: { gte: from, lte: to } },
-          })
-        ).load(['date', 'state'])),
-      ].map((d) => [isoDate(d.date), d] as const),
+    const schedule = await scheduleFor(e);
+    const leaves = (leavesOf.get(e.id) ?? []).map(
+      (l) => [isoDate(l.dateFrom), isoDate(l.dateTo), l.half !== null] as const,
     );
+    const tours = (toursOf.get(e.id) ?? []).map(
+      (t) => [isoDate(t.dateFrom), isoDate(t.dateTo)] as const,
+    );
+    const remotes = (remotesOf.get(e.id) ?? []).map(
+      (r) => [isoDate(r.dateFrom), isoDate(r.dateTo)] as const,
+    );
+    const punches = punchesOf.get(e.id) ?? [];
+    const existing = new Map((daysOf.get(e.id) ?? []).map((d) => [isoDate(d.date), d] as const));
     for (let date = from; date <= to; date = addDays(date, 1)) {
       const old = existing.get(date);
       if (old?.state === 'approved') continue;
@@ -362,7 +420,7 @@ export async function recomputeDays(
         overtimeApproved: hours(result.overtimeMinutes),
         overtimeRate: (shift?.overtimeRate ?? orm.toDecimal(2)).toString(),
       };
-      if (old === undefined) await env.model('attendance.day').create([values as never]);
+      if (old === undefined) toCreate.push(values);
       else
         await env
           .model('attendance.day')
@@ -371,6 +429,8 @@ export async function recomputeDays(
       written += 1;
     }
   }
+  // The chunk's new days in one go.
+  if (toCreate.length > 0) await env.model('attendance.day').create(toCreate as never);
   return written;
 }
 

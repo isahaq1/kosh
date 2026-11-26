@@ -22,7 +22,7 @@ import { type Driver, orm, pg } from '@kosh/server/orm';
 import { type TestDatabase, testDatabase } from '@kosh/server/testing';
 import { settings } from '@kosh/settings';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { attendance } from '../src/index.js';
+import { attendance, attendanceWorker, enqueueYesterday } from '../src/index.js';
 
 const PASSWORD = 'correct horse battery';
 const catalogue = [base, settings, attendance];
@@ -462,6 +462,81 @@ test('home office: asked by the person, decided by someone else; its days are Ho
   const home = await call('POST', '/api/v1/attendance/punch', 'sumi', far);
   expect(home.status, JSON.stringify(home.json)).toBe(200);
   expect(home.json.action).toBe('in');
+});
+
+test('many people: a long request is computed in the background, and every night computes yesterday for everybody — once', async () => {
+  // Sixty people on the general shift who never punch.
+  type Model = {
+    create(rows: readonly unknown[]): Promise<{ ids: number[] }>;
+    search(q: unknown): Promise<{ ids: number[] }>;
+  };
+  const made = await host.server.shutro.bootstrap(
+    { reason: 'test: people', company },
+    async (env) => {
+      const model = (name: string) => env.model(name as never) as unknown as Model;
+      const [shift] = (await model('attendance.shift').search({ where: { name: 'General' } })).ids;
+      return (
+        await model('hr.employee').create(
+          Array.from({ length: 60 }, (_, i) => ({ name: `Crew ${i + 1}`, attendanceShift: shift })),
+        )
+      ).ids;
+    },
+  );
+  const daysOf = async (employee: number, from: string, to: string) =>
+    (
+      await driver.query<{ status: string; n: string }>({
+        text: `SELECT status, count(*)::text AS n FROM attendance_day
+                WHERE employee_id = $1 AND date BETWEEN $2 AND $3 GROUP BY status`,
+        params: [employee, from, to],
+      })
+    ).map((r) => `${r.status} ${r.n}`);
+  const crew = made[0] as number;
+
+  // Three months for everybody: more than a request computes at once — answered at once, done by the jobs.
+  const asked = await call('POST', '/api/v1/attendance/days/compute', 'hana', {
+    from: '2027-01-01',
+    to: '2027-03-31',
+  });
+  expect(asked.status, JSON.stringify(asked.json)).toBe(200);
+  expect(asked.json).toMatchObject({ written: 0 });
+  expect(asked.json.people).toBeGreaterThanOrEqual(60);
+  expect(asked.json.queued).toBeGreaterThanOrEqual(1);
+  expect(await daysOf(crew, '2027-01-01', '2027-03-31')).toEqual([]);
+  const worker = attendanceWorker({ shutro: host.server.shutro });
+  expect(await worker.drain()).toBe(asked.json.queued);
+  // Absent on every working day of the three months (the weekends have nothing to say).
+  const [absent] = await daysOf(crew, '2027-01-01', '2027-03-31');
+  expect(absent).toMatch(/^absent 6\d$/);
+  // A short request is still computed in the request.
+  const short = await call('POST', '/api/v1/attendance/days/compute', 'hana', {
+    from: '2027-04-04',
+    to: '2027-04-04',
+    employees: [crew],
+  });
+  expect(short.json).toMatchObject({ written: 1, queued: 0, people: 1 });
+  // Not for those who do not manage Attendance.
+  expect(
+    (
+      await call('POST', '/api/v1/attendance/days/compute', 'rahim', {
+        from: '2027-01-01',
+        to: '2027-03-31',
+      })
+    ).status,
+  ).toBe(403);
+
+  // The night after Monday 3 May 2027: everybody's Monday, without anybody asking.
+  const tuesday = new Date('2027-05-04T10:00:00Z');
+  expect(await enqueueYesterday({ shutro: host.server.shutro }, tuesday)).toBeGreaterThanOrEqual(1);
+  expect(await worker.drain()).toBeGreaterThanOrEqual(1);
+  expect(await daysOf(crew, '2027-05-03', '2027-05-03')).toEqual(['absent 1']);
+  // The next tick of the same night, or another server's: nothing more to do.
+  expect(await enqueueYesterday({ shutro: host.server.shutro }, tuesday)).toBe(0);
+  expect(await worker.drain()).toBe(0);
+  // The night after is another night.
+  expect(
+    await enqueueYesterday({ shutro: host.server.shutro }, new Date('2027-05-05T10:00:00Z')),
+  ).toBeGreaterThanOrEqual(1);
+  await worker.drain();
 });
 
 test('the demo data loads', async () => {

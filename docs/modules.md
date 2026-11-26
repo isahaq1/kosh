@@ -962,6 +962,15 @@ early, absent, on leave, overtime past the shift's threshold in its steps and al
 approved by an Attendance manager before Payroll reads it. Days follow the time zone in App settings › Attendance.
 Install it with `shutro-erp apps install attendance`.
 
+**Every night** the server computes yesterday's day of everybody, in the background: a person who did not come is
+absent without anybody asking. A manager recomputes a period through the API — a few thousand person-days at
+once, more in the background (RFC 0039; 30 000 people: a day in 14 seconds, a week in 43):
+
+```http
+POST /api/v1/attendance/days/compute   { "from": "2026-11-01", "to": "2026-11-30", "employees"?: [ids] }
+                                       → { "written", "queued", "people" }   queued: jobs of 500 people each
+```
+
 ### Payroll (`modules/payroll`, RFC 0024)
 
 A country-neutral engine: salary structures of rules written in a small, safe formula language (`WAGE * 0.6`,

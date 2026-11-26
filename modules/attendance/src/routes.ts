@@ -9,7 +9,10 @@
  *                                                  the person at the kiosks for 15 minutes
  * - `POST /api/v1/attendance/employees/:id/pin`    managers: `{ pin }` (4 to 8 digits), stored hashed
  * - `POST /api/v1/attendance/import`               managers: `{ format: 'zkteco' | 'csv', content }`
- * - `POST /api/v1/attendance/days/compute`         managers: `{ from, to, employees? }`
+ * - `POST /api/v1/attendance/days/compute`         managers: `{ from, to, employees? }` → `{ written, queued, people }`:
+ *                                                  up to 5 000 person-days at once, more in the background
+ *
+ * Every night the days of yesterday are computed for everybody, in the background (`enqueueYesterday`).
  * - `GET  /api/v1/attendance/formats`              the device file formats
  */
 import { audit, HttpProblem, hashPassword, type ModuleContext, verifyPassword } from '@kosh/server';
@@ -40,7 +43,119 @@ const asProblem = (error: unknown): never => {
   throw error;
 };
 
-export function registerAttendanceRoutes({ app }: ModuleContext): void {
+/** The job that computes the days of one chunk of people (RFC 0039 §5b). */
+export const DAYS_JOB = 'attendance.days';
+/** Up to this many person-days are computed in the request; more go to the job, a chunk of people a job. */
+export const INLINE_PERSON_DAYS = 5_000;
+/** People a job. */
+const JOB_PEOPLE = 500;
+
+/** What `shutro.work` gives back: a worker tests drain and the server starts. */
+interface Worker {
+  drain(): Promise<number>;
+  start(): void;
+  stop(): Promise<void>;
+}
+
+/** The worker of the days computed in the background; tests `drain()` it, the server starts it. */
+export function attendanceWorker(context: Pick<ModuleContext, 'shutro'>): Worker {
+  return context.shutro.work(
+    {
+      [DAYS_JOB]: async (payload, raw) => {
+        const { from, to, employees } = payload as {
+          from: string;
+          to: string;
+          employees: number[];
+        };
+        await (raw as unknown as Env).asSuperuser({ reason: 'attendance days' }, async (su) => {
+          await recomputeDays(su as unknown as Env, employees, from, to);
+          await (su as unknown as Env).flush();
+        });
+      },
+    },
+    { pollMs: 1000 },
+  ) as unknown as Worker;
+}
+
+/** Enqueues the days of `employees` from `from` to `to`, a job per chunk of people; returns the number of jobs. */
+export async function enqueueDays(
+  env: Env,
+  employees: readonly number[],
+  from: string,
+  to: string,
+  /** What makes the jobs' keys: the same batch is enqueued once. */
+  batch: string,
+): Promise<number> {
+  let jobs = 0;
+  for (let i = 0; i < employees.length; i += JOB_PEOPLE) {
+    await env.enqueue(
+      DAYS_JOB,
+      { from, to, employees: employees.slice(i, i + JOB_PEOPLE) },
+      { key: `${DAYS_JOB}:${batch}:${i / JOB_PEOPLE}` },
+    );
+    jobs += 1;
+  }
+  return jobs;
+}
+
+/**
+ * Every night, for every company: yesterday's days of everybody — so a person who did not come is absent
+ * without anybody asking (a day is otherwise computed only when its person punches). Enqueued once per company
+ * and date, whatever the number of servers and of ticks.
+ */
+export async function enqueueYesterday(
+  context: Pick<ModuleContext, 'shutro'>,
+  /** The moment "today" is read from (tests). */
+  now: Date = new Date(),
+): Promise<number> {
+  const companies = await context.shutro.bootstrap(
+    { reason: 'attendance days of yesterday' },
+    async (env) => (await (env as unknown as Env).model('res.company').search({})).ids.map(Number),
+  );
+  let jobs = 0;
+  for (const company of companies)
+    jobs += await context.shutro.bootstrap(
+      { reason: 'attendance days of yesterday', company },
+      async (raw) => {
+        const env = raw as unknown as Env;
+        const tz = await timeZoneOf(env);
+        const today = localDate(now, tz);
+        const yesterday = new Date(`${today}T00:00:00Z`);
+        yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+        const date = yesterday.toISOString().slice(0, 10);
+        // Once per company and date: a job's key stops a second one only while the first waits, so the
+        // night's first job — waiting, running or done — is looked for.
+        const batch = `nightly:${company}:${date}`;
+        const [done] = await env.sql<{ id: string | number }>`
+          SELECT id FROM shutro_job WHERE key = ${`${DAYS_JOB}:${batch}:0`} LIMIT 1`;
+        if (done !== undefined) return 0;
+        const people = (
+          await env.model('hr.employee').search({ where: { company: company as never } })
+        ).ids.map(Number);
+        return enqueueDays(env, people, date, date, batch);
+      },
+    );
+  return jobs;
+}
+
+export function registerAttendanceRoutes(context: ModuleContext): void {
+  const { app } = context;
+  // Background work is off in the CLI and in the tests that drive the worker themselves.
+  if (process.env['KOSH_SCHEDULES'] !== 'off') {
+    const running = attendanceWorker(context);
+    running.start();
+    const nightly = () =>
+      void enqueueYesterday(context).catch((error) =>
+        app.log.error({ err: error }, 'attendance days of yesterday'),
+      );
+    // Hourly: the first tick after midnight enqueues the day; the others find it enqueued already.
+    const timer = setInterval(nightly, 3_600_000);
+    timer.unref();
+    app.addHook('onClose', async () => {
+      clearInterval(timer);
+      await running.stop();
+    });
+  }
   const managers = (env: Env) => {
     if (!isManager(env))
       throw new HttpProblem(
@@ -395,9 +510,22 @@ export function registerAttendanceRoutes({ app }: ModuleContext): void {
             : (
                 await su.model('hr.employee').search({ where: { company: env.companyId as never } })
               ).ids.map(Number);
+          // A day for a few thousand people is computed here; more — a month for a large company — in the
+          // background, a job per 500 people, and the answer says how many jobs were made.
+          const days = Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000) + 1;
+          if (ids.length * days > INLINE_PERSON_DAYS) {
+            const queued = await enqueueDays(
+              env,
+              ids,
+              from,
+              to,
+              `asked:${env.uid}:${from}:${to}:${Date.now()}`,
+            );
+            return { written: 0, queued, people: ids.length };
+          }
           const written = await recomputeDays(su, ids, from, to);
           await su.flush();
-          return { written };
+          return { written, queued: 0, people: ids.length };
         });
       },
       { write: true },

@@ -27,6 +27,7 @@ import { registerAttendanceRoutes } from './routes.js';
 export {
   addDays,
   computeDay,
+  DAYS_CHUNK,
   type DayInput,
   type DayResult,
   DEVICE_FORMATS,
@@ -58,6 +59,13 @@ export {
   attendanceShutro,
   EmployeeAttendance,
 } from './module.js';
+export {
+  attendanceWorker,
+  DAYS_JOB,
+  enqueueDays,
+  enqueueYesterday,
+  INLINE_PERSON_DAYS,
+} from './routes.js';
 
 export const attendance: ReturnType<typeof defineModule> = defineModule({
   shutro: attendanceShutro,
