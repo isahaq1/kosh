@@ -191,6 +191,12 @@ importers:
       '@kosh/purchase_stock_account':
         specifier: workspace:*
         version: link:../../modules/purchase_stock_account
+      '@kosh/quality':
+        specifier: workspace:*
+        version: link:../../modules/quality
+      '@kosh/quality_stock':
+        specifier: workspace:*
+        version: link:../../modules/quality_stock
       '@kosh/realtime':
         specifier: workspace:*
         version: link:../../packages/realtime
@@ -593,6 +599,12 @@ importers:
       '@kosh/purchase_stock_account':
         specifier: workspace:*
         version: link:../../modules/purchase_stock_account
+      '@kosh/quality':
+        specifier: workspace:*
+        version: link:../../modules/quality
+      '@kosh/quality_stock':
+        specifier: workspace:*
+        version: link:../../modules/quality_stock
       '@kosh/realtime':
         specifier: workspace:*
         version: link:../../packages/realtime
@@ -2642,6 +2654,71 @@ importers:
         specifier: ^12.2.1
         version: 12.2.1
 
+  modules/quality:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/quality_stock:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/quality':
+        specifier: workspace:*
+        version: link:../quality
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/stock':
+        specifier: workspace:*
+        version: link:../stock
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   modules/recruitment:
     dependencies:
       '@kosh/assistant':
@@ -3801,6 +3878,12 @@ importers:
       '@kosh/purchase_stock_account':
         specifier: workspace:*
         version: link:../../modules/purchase_stock_account
+      '@kosh/quality':
+        specifier: workspace:*
+        version: link:../../modules/quality
+      '@kosh/quality_stock':
+        specifier: workspace:*
+        version: link:../../modules/quality_stock
       '@kosh/realtime':
         specifier: workspace:*
         version: link:../realtime

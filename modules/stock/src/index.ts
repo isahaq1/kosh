@@ -1099,6 +1099,8 @@ export const stock: ReturnType<typeof defineModule> = defineModule({
         ],
       },
       sheet: [
+        // What other apps know of the transfer (Quality: its checks).
+        k.stats('related', []),
         k.group('main', ['kind', 'partner', 'warehouse', 'source', 'destination']),
         k.group('when', [
           'scheduledDate',

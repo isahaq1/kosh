@@ -70,6 +70,8 @@ import { purchase } from '@kosh/purchase';
 import { purchaseAccount } from '@kosh/purchase_account';
 import { purchaseStock } from '@kosh/purchase_stock';
 import { purchaseStockAccount } from '@kosh/purchase_stock_account';
+import { quality } from '@kosh/quality';
+import { qualityStock } from '@kosh/quality_stock';
 import { realtime } from '@kosh/realtime';
 import { recruitment } from '@kosh/recruitment';
 import { installTemplates, reporting } from '@kosh/reporting';
@@ -206,6 +208,7 @@ const CATALOGUE = [
   stock,
   production,
   maintenance,
+  quality,
   tradeFinance,
   event,
   website,
@@ -224,6 +227,7 @@ const CATALOGUE = [
   purchaseStockAccount,
   productionAccount,
   maintenanceStock,
+  qualityStock,
   tradeFinanceAccount,
   tradeFinancePurchase,
   tradeFinanceSale,
@@ -295,6 +299,7 @@ await applyApps(
         'stock',
         'production',
         'maintenance',
+        'quality',
         'trade_finance',
         'event',
         'website',
@@ -384,6 +389,7 @@ for (const [login, name, groups] of [
       'production.manager',
       'production_account.user',
       'maintenance.manager',
+      'quality.manager',
       'trade_finance.manager',
       'event.manager',
       'website.manager',
@@ -432,6 +438,7 @@ for (const [login, name, groups] of [
       'stock.user',
       'production.user',
       'maintenance.user',
+      'quality.user',
       'trade_finance.user',
       'event.user',
       'purchase.user',

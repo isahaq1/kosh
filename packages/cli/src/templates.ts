@@ -28,6 +28,7 @@ export type AppName =
   | 'stock'
   | 'production'
   | 'maintenance'
+  | 'quality'
   | 'trade_finance'
   | 'event'
   | 'website'
@@ -59,6 +60,7 @@ export type AppName =
   | 'purchase_stock_account'
   | 'production_account'
   | 'maintenance_stock'
+  | 'quality_stock'
   | 'trade_finance_account'
   | 'trade_finance_purchase'
   | 'trade_finance_sale'
@@ -226,6 +228,11 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
       'Asset Care: equipment, preventive plans by time or meter, maintenance orders, reliability',
     icon: '🛠️',
     server: 'maintenance',
+  },
+  quality: {
+    label: 'Quality: control points, checks that hold what fails, alerts with their root cause',
+    icon: '✅',
+    server: 'quality',
   },
   trade_finance: {
     label:
@@ -417,6 +424,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'maintenanceStock',
     bridge: ['maintenance', 'stock'],
+  },
+  quality_stock: {
+    label: 'Bridge: quality checks on transfers (Quality ↔ Stockroom)',
+    icon: '🔗',
+    server: 'qualityStock',
+    bridge: ['quality', 'stock'],
   },
   trade_finance_account: {
     label:

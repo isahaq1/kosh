@@ -129,6 +129,7 @@ test('every app with demo data loaded it, once', async () => {
     'purchase',
     'purchase_account',
     'purchase_stock',
+    'quality',
     'recruitment',
     'sale_account',
     'sale_project',
@@ -170,7 +171,7 @@ test('every app with demo data loaded it, once', async () => {
     text: 'SELECT count(*)::text AS n FROM kosh_module WHERE demo_at IS NOT NULL',
     params: [],
   });
-  expect(Number(marks[0]?.n)).toBe(38);
+  expect(Number(marks[0]?.n)).toBe(39);
 });
 
 test('the salesperson sees the orders and the invoices made from them; the buyer the approvals', async () => {

@@ -1604,6 +1604,43 @@ import { unbilledOf, postRecognition } from '@kosh/project_billing';
 await unbilledOf(env, projectId, '2027-02-28'); // { hours, time, milestones }
 ```
 
+## Quality
+
+*Quality* (`@kosh/quality`, RFC 0038) checks what comes in, goes out and is made — and **holds what fails**.
+
+- **Control points** (Quality › Configuration, managers): what is checked — *pass or fail*, *a measure within
+  tolerances*, *a checklist*, *a photo* —, on which operation (receipt, delivery, internal move, production, or
+  any), for which product or category, from which vendor, and how often (*One in* 5: one operation in five).
+- **Checks** are made by the server for a document from the points that apply, once per point, document and
+  product. A check is decided once: **a measure decides itself** — write the value; within the tolerances only
+  *Pass* is accepted, outside only *Fail* —, a photo check passes with its photo. Who decided and when is kept.
+- **A failed check raises an alert** with the product, the lot, the vendor and what was measured, and holds its
+  document. A Quality manager may **release** it or have it **done again** — with the reason, kept on the check.
+- **Alerts**: new → investigating → resolved. Resolving is a manager's, and needs the **root cause** and the
+  **corrective action**; the preventive action is written beside them.
+- The overview shows the checks to do, what is failed and holding, and the failed checks **by vendor** and **by
+  product**.
+
+With Stockroom (`@kosh/quality_stock`, proposed when both are installed): a transfer gets its checks when it is
+**confirmed**, and **validating it is refused** while one is to do or failed and not released — by the server,
+whoever asks. The transfer shows its checks and how many hold it.
+
+```http
+POST /api/v1/models/quality.point   { "name", "kind": "measure", "operation": "receipt", "product", "low", "high", "unit" }
+POST /api/v1/models/quality.check/<id>/transitions/pass | fail | release | redo
+POST /api/v1/models/quality.alert/<id>/transitions/investigate | resolve | cancel | reopen
+```
+
+Another app has its documents checked without Quality knowing it:
+
+```ts
+import { blockingChecks, checksFor } from '@kosh/quality';
+
+await checksFor(su, { operation: 'production', company, partner: null,
+  resModel: 'production.order', resId: order.id, resName: order.name, lines: [{ product }] });
+const held = await blockingChecks(su, 'production.order', order.id); // to do, or failed and not released
+```
+
 ## Final settlement
 
 When a person leaves, *Payroll › Final settlements* works out what they are owed and owe, and pays it (RFC 0039).

@@ -100,6 +100,7 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   stockroom: Warehouse,
   production: Factory,
   assetcare: Wrench,
+  quality: ShieldCheck,
   tradefinance: Landmark,
   eventhub: Ticket,
   sites: Globe,

@@ -75,6 +75,31 @@ documents, print and import templates, named events, Bangla labels, an overview,
 
 Statistical process control charts, sampling plans by AQL, measuring devices over IoT, 8D reports.
 
+## Implementation notes — step 1, Quality (2026-11-26)
+
+- **`@kosh/quality`**: `quality.point`, `quality.check` (`QC/{year}/…`), `quality.alert` (`QA/{year}/…`) as §4.1,
+  with `checksFor` and `blockingChecks` for the apps whose documents are checked. Roles `quality.user` and
+  `quality.manager`; the permission `quality.decide` for release, redo and closing alerts.
+- **A measure decides itself** through the guards of *Pass* and *Fail*: the one that disagrees with the value is
+  refused, and so is either without a value. There is no third button: the checker writes the value and presses
+  the one the value allows.
+- **A failed check's alert is made at once** (the RFC said *proposes*): it is a record in state *New*, with the
+  product, the lot, the vendor, the document and what was measured; nobody has to copy them.
+- **One in n** counts the operations a point applied to (`seen`): the first, then every n-th.
+- **`@kosh/quality_stock`**: `routing` (before a draft transfer is confirmed) makes the checks; `validated`
+  refuses the validation while one holds it — the stock moved by the validation is rolled back with it — and
+  makes the checks a backorder or an older transfer lacks. Receipts, deliveries, internal moves and production
+  transfers are checked; adjustments and dropships are not. `stock.picking.form` gained its tiles group.
+- Tests: the points that apply (operation, product, category, vendor), once; the measure's verdict both ways;
+  the photo; release and redo by a manager with a reason and by nobody else; one in two; alerts closed with their
+  cause; the bridge with a warehouse user who has no Quality rights — refused, passed, failed, released; two
+  browser tests (a point and an alert on screen, the overview).
+- **Left out of step 1**: the checklist is its instructions' lines and a verdict — the lines are not ticked one by
+  one; lots are a text on the check (the bridge passes none: a check is per product of a transfer, not per lot);
+  `quality_production`; a photo taken from the phone's camera in the form (the picture field uploads a file);
+  failure *rates* (the overview counts failed checks by vendor and product, it does not divide by the checks
+  made); notifications to the Quality team when a check is made.
+
 ## 5. Open questions
 
 1. The order of §2 — is Quality first right, or does Fleet or Campaigns matter more now?

@@ -52,6 +52,8 @@ import { purchase } from '@kosh/purchase';
 import { purchaseAccount } from '@kosh/purchase_account';
 import { purchaseStock } from '@kosh/purchase_stock';
 import { purchaseStockAccount } from '@kosh/purchase_stock_account';
+import { quality } from '@kosh/quality';
+import { qualityStock } from '@kosh/quality_stock';
 import { realtime } from '@kosh/realtime';
 import { recruitment } from '@kosh/recruitment';
 import { reporting } from '@kosh/reporting';
@@ -104,6 +106,7 @@ export const DEMO_APPS: readonly string[] = [
   'stock',
   'production',
   'maintenance',
+  'quality',
   'trade_finance',
   'event',
   'website',
@@ -152,6 +155,7 @@ export function demoCatalogue(): KoshModule[] {
     stock,
     production,
     maintenance,
+    quality,
     tradeFinance,
     event,
     website,
@@ -180,6 +184,7 @@ export function demoCatalogue(): KoshModule[] {
     purchaseStockAccount,
     productionAccount,
     maintenanceStock,
+    qualityStock,
     tradeFinanceAccount,
     tradeFinancePurchase,
     tradeFinanceSale,
