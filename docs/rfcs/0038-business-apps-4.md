@@ -107,6 +107,61 @@ Statistical process control charts, sampling plans by AQL, measuring devices ove
   failure *rates* (the overview counts failed checks by vendor and product, it does not divide by the checks
   made); notifications to the Quality team when a check is made.
 
+## Step 2 — Fleet (design, 2026-11-27)
+
+### Models (`fleet`)
+
+- `fleet.vehicle` — a master: the plate (unique per company), make, model, year, kind (car, pickup, truck, bus,
+  motorcycle, other), fuel, the driver (a contact), status (*available*, *in the workshop*, *retired*), when it
+  was bought and for how much. Kept by the server from its logs: the **odometer** (the highest reading), the
+  fuel and service costs, the distance covered, **kilometres per litre** and **cost per kilometre**, the next
+  service due.
+- `fleet.document` — a paper that expires: registration, fitness, tax token, insurance, route permit, other;
+  its number, the dates, who issued it, what it cost, how many days before the end to remind. Its status —
+  *valid*, *expiring*, *expired* — is set by the server every day; the day it starts to expire the event
+  `fleet.document.expiring` is emitted, once per paper.
+- `fleet.fuel` — a fill: the date, the odometer, the litres, the amount, whether the tank was filled, the station.
+- `fleet.service` — a service or a repair: the date, the odometer, the kind, the vendor, the amount, and when the
+  next one is due (a date, an odometer reading, or both).
+- `fleet.trip` — a trip: the vehicle, the driver, from, to, why; planned → started (the odometer at the start)
+  → done (the odometer at the end; the distance is theirs).
+
+### Rules
+
+- **A reading never goes back**: a fill, a service or a trip's end below the vehicle's reading on an earlier date
+  is refused.
+- **Kilometres per litre by full tanks**: the distance between two fills that filled the tank, over the litres
+  put in after the first up to and including the second — partial fills in between count. A pure function.
+- **Cost per kilometre**: fuel and service amounts over the distance between the first and the highest reading.
+- One trip at a time per vehicle; a retired vehicle takes no trip.
+- Access: `fleet.user` logs fuel, services and trips; `fleet.manager` keeps vehicles and papers.
+
+### Implementation notes (2026-11-27)
+
+- Built as designed: `fleet.vehicle`, `fleet.document`, `fleet.fuel`, `fleet.service`, `fleet.trip`
+  (`TRIP/{year}/…`); `consumption.ts` is the full-tank arithmetic in whole metres and millilitres.
+- The vehicle's figures are **stored computes over its logs** — as Asset Care's meters are —: a new fill reads
+  the vehicle's fills again. Right for a vehicle's few thousand logs; not the set-based way of Payroll, which a
+  fleet does not need.
+- A paper's status is a stored compute on its dates and on `checkedOn`, the day the server last looked: the
+  round (every six hours, or `POST /api/v1/fleet/papers/refresh`) writes today on the papers it has not looked at
+  today, which brings the status up to date, and announces each paper once per expiry (`remindedFor`).
+- The vehicle's model is the field `series` — `model` is a name Shutro keeps for itself.
+- Tests: the arithmetic (no full tank, two, a partial fill between, after and before); the figures after three
+  fills, a partial one and a service; readings that go back refused both ways; papers by the calendar, announced
+  once and again once brought near, not after a renewal; a trip from the vehicle's reading, one at a time, the
+  end not below the start, none when retired; managers and users each refused what is not theirs; two browser
+  tests.
+- **Left out**: the reminder reaches nobody by itself — it is an event for an Automation rule, not a
+  notification; a trip's end is not checked against later fills (only fills and services are held in order);
+  drivers are contacts, not Workforce's employees, and have no licence with an expiry; fuel by a card or a
+  station's statement; tyres; GPS.
+
+### Later steps
+
+`fleet_account` (fuel and service costs to Accounting by cost centre), the trip of a Stockroom transfer from its
+gate details, drivers' licences from Workforce, tyres, GPS.
+
 ## 5. Open questions
 
 1. The order of §2 — is Quality first right, or does Fleet or Campaigns matter more now?

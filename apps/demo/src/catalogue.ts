@@ -15,6 +15,7 @@ import { event } from '@kosh/event';
 import { eventAccount } from '@kosh/event_account';
 import { expense } from '@kosh/expense';
 import { expenseAccount } from '@kosh/expense_account';
+import { fleet } from '@kosh/fleet';
 import { helpdesk } from '@kosh/helpdesk';
 import { hr } from '@kosh/hr';
 import { hrAccrual } from '@kosh/hr_accrual';
@@ -108,6 +109,7 @@ export const DEMO_APPS: readonly string[] = [
   'production',
   'maintenance',
   'quality',
+  'fleet',
   'trade_finance',
   'event',
   'website',
@@ -157,6 +159,7 @@ export function demoCatalogue(): KoshModule[] {
     production,
     maintenance,
     quality,
+    fleet,
     tradeFinance,
     event,
     website,

@@ -31,6 +31,7 @@ import { event } from '@kosh/event';
 import { eventAccount } from '@kosh/event_account';
 import { expense } from '@kosh/expense';
 import { expenseAccount } from '@kosh/expense_account';
+import { fleet } from '@kosh/fleet';
 import { helpdesk } from '@kosh/helpdesk';
 import { hr } from '@kosh/hr';
 import { hrAccrual } from '@kosh/hr_accrual';
@@ -210,6 +211,7 @@ const CATALOGUE = [
   production,
   maintenance,
   quality,
+  fleet,
   tradeFinance,
   event,
   website,
@@ -302,6 +304,7 @@ await applyApps(
         'production',
         'maintenance',
         'quality',
+        'fleet',
         'trade_finance',
         'event',
         'website',
@@ -392,6 +395,7 @@ for (const [login, name, groups] of [
       'production_account.user',
       'maintenance.manager',
       'quality.manager',
+      'fleet.manager',
       'trade_finance.manager',
       'event.manager',
       'website.manager',
@@ -441,6 +445,7 @@ for (const [login, name, groups] of [
       'production.user',
       'maintenance.user',
       'quality.user',
+      'fleet.user',
       'trade_finance.user',
       'event.user',
       'purchase.user',

@@ -73,6 +73,7 @@
     "@kosh/l10n_in": "workspace:*",
     "@kosh/mail": "workspace:*",
     "@kosh/maintenance": "workspace:*",
+    "@kosh/fleet": "workspace:*",
     "@kosh/quality": "workspace:*",
     "@kosh/maintenance_stock": "workspace:*",
     "@kosh/quality_production": "workspace:*",

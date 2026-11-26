@@ -80,6 +80,9 @@ importers:
       '@kosh/expense_account':
         specifier: workspace:*
         version: link:../../modules/expense_account
+      '@kosh/fleet':
+        specifier: workspace:*
+        version: link:../../modules/fleet
       '@kosh/helpdesk':
         specifier: workspace:*
         version: link:../../modules/helpdesk
@@ -524,6 +527,9 @@ importers:
       '@kosh/event_account':
         specifier: workspace:*
         version: link:../../modules/event_account
+      '@kosh/fleet':
+        specifier: workspace:*
+        version: link:../../modules/fleet
       '@kosh/hr':
         specifier: workspace:*
         version: link:../../modules/hr
@@ -1338,6 +1344,34 @@ importers:
       '@kosh/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/fleet:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
       '@testcontainers/postgresql':
         specifier: ^12.2.1
         version: 12.2.1
@@ -3807,6 +3841,9 @@ importers:
       '@kosh/expense_account':
         specifier: workspace:*
         version: link:../../modules/expense_account
+      '@kosh/fleet':
+        specifier: workspace:*
+        version: link:../../modules/fleet
       '@kosh/helpdesk':
         specifier: workspace:*
         version: link:../../modules/helpdesk

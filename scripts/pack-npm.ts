@@ -65,6 +65,7 @@ const PACKAGES = [
   'production',
   'maintenance',
   'quality',
+  'fleet',
   'trade_finance',
   'event',
   'website',

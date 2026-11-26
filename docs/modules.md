@@ -1646,6 +1646,33 @@ await checksFor(su, { operation: 'production', company, partner: null,
 const held = await blockingChecks(su, 'production.order', order.id); // to do, or failed and not released
 ```
 
+## Fleet
+
+*Fleet* (`@kosh/fleet`, RFC 0038) keeps the company's vehicles, what they cost and the papers that must not lapse.
+
+- **Vehicles** (managers): the plate — one vehicle's —, make, model, type, fuel, the driver, the status
+  (*available*, *in the workshop*, *retired*) and the odometer it came with.
+- **Fuel**: each fill with its odometer reading, litres, amount and whether the tank was filled. **Services**:
+  what was done, where, for how much, and when the next is due — a date, a reading, or both.
+- **The vehicle's figures are the server's**, from those logs: the odometer (the highest reading), the distance
+  covered, the fuel and service costs, **kilometres per litre** and the **cost per kilometre**, the next service.
+  Kilometres per litre are measured *between fills that filled the tank*: the distance from the first such fill
+  to the last, over the fuel put in after the first — a top-up in between counts, one after the last does not yet.
+- **A reading does not go back**: a fill or a service below a reading of an earlier day, or above one of a later
+  day, is refused.
+- **Papers**: registration, fitness, tax token, insurance, route permit. Each is *valid*, *expiring* — from its
+  reminder days before the last day — or *expired*, by the calendar; the list and the overview show the ones to
+  renew. The day a paper starts to expire the event `fleet.document.expiring` is emitted, once: an Automation rule
+  on it emails or texts whoever must renew it. A renewed paper is a new record; archive the old.
+- **Trips**: planned → on the road → done. A trip starts at the vehicle's reading unless one is typed, ends with
+  the reading at the end, and its distance is theirs. One trip at a time per vehicle, none for a retired one.
+
+```http
+POST /api/v1/models/fleet.fuel     { "vehicle", "date", "odometer", "litres", "amount", "fullTank" }
+POST /api/v1/models/fleet.trip/<id>/transitions/start | finish | cancel | replan
+POST /api/v1/fleet/papers/refresh  # managers: statuses up to today, the expiring ones announced (the server does it every six hours)
+```
+
 ## Final settlement
 
 When a person leaves, *Payroll › Final settlements* works out what they are owed and owe, and pays it (RFC 0039).
