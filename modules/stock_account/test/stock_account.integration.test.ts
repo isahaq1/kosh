@@ -399,3 +399,26 @@ test('nobody edits the valuation; stock users do not read it', async () => {
   ).toBe(403);
   expect((await call('GET', '/api/v1/models/stock.valuation.layer', 'rahim')).status).toBe(403);
 });
+
+test('a warehouse user without a role in Accounting validates a receipt that drafts a freight bill', async () => {
+  const trucks = (
+    await call('POST', '/api/v1/models/res.partner', 'maria', { name: 'Meghna Carriers' })
+  ).json.id as number;
+  const made = await call('POST', T, 'rahim', {
+    kind: 'receipt',
+    source: ids['vendors'],
+    destination: ids['stock'],
+    transporter: trucks,
+    freightAmount: '1200',
+    moves: { create: [{ product: ids['Panel'], quantity: '1' }] },
+  });
+  expect(made.status, JSON.stringify(made.json)).toBe(201);
+  expect((await call('POST', `${T}/${made.json.id}/transitions/confirm`, 'rahim')).status).toBe(
+    200,
+  );
+  const validated = await call('POST', `${T}/${made.json.id}/transitions/validate`, 'rahim');
+  expect(validated.status, JSON.stringify(validated.json)).toBe(200);
+  const name = (await call('GET', `${T}/${made.json.id}?fields=name`, 'maria')).json.name;
+  const bills = await find('account.move', { invoiceOrigin: name }, 'kind,state');
+  expect(bills.map((b) => [b.kind, b.state])).toEqual([['in_invoice', 'draft']]);
+});
