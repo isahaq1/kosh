@@ -66,6 +66,7 @@ test('register payment on a posted invoice marks it paid; the aging and the tria
   await page.getByRole('button', { name: 'Register payment' }).click();
   const dialog = page.getByRole('dialog', { name: 'Register a payment' });
   await dialog.getByRole('combobox', { name: 'Journal' }).click();
+  await page.keyboard.type('BNK');
   await page.getByRole('option', { name: /BNK/ }).click();
   await expect(dialog.getByLabel('Amount')).toHaveValue('5750.00'); // 5 × 1,000 + 15 % VAT
   await dialog.getByRole('button', { name: 'Pay' }).click();
@@ -156,6 +157,7 @@ test('the settings page shows the chart and takes a lock date; the reconciliatio
   await page.goto('/accounting/a/accounting.action_reconcile');
   await expect(page.getByRole('heading', { name: 'Reconciliation' })).toBeVisible();
   await page.getByRole('combobox', { name: 'Account' }).click();
+  await page.keyboard.type('1100');
   await page.getByRole('option', { name: /1100/ }).click();
   await page.getByLabel('Partner (name)').fill('Acme');
   const boxes = page.getByRole('checkbox');

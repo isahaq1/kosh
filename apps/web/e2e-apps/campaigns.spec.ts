@@ -23,6 +23,7 @@ test('a list with a subscriber; a campaign written on screen and sent to it', as
 
   await page.goto('/campaigns/a/marketing.action_subscribers/new');
   await page.getByRole('combobox', { name: 'List' }).click();
+  await page.keyboard.type('E2E Customers');
   await page.getByRole('option', { name: 'E2E Customers' }).click();
   await page.getByRole('textbox', { name: 'Email', exact: true }).fill('e2e.reader@example.test');
   await page.getByRole('button', { name: 'Save' }).click();

@@ -24,6 +24,7 @@ test('an item taken in under warranty, diagnosed, repaired and handed back', asy
 
   await page.goto('/repairs/a/repair.action_orders/new');
   await page.getByRole('combobox', { name: 'Customer' }).click();
+  await page.keyboard.type('E2E Repair Customer');
   await page.getByRole('option', { name: 'E2E Repair Customer' }).click();
   await page.getByRole('textbox', { name: 'Item', exact: true }).fill('E2E Walton fridge');
   await page.getByRole('textbox', { name: 'Serial number' }).fill(`E2E-${Date.now()}`);

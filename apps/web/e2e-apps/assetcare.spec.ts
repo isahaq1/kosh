@@ -31,6 +31,7 @@ test('a breakdown reported, the equipment down, repaired, operational again', as
   await signIn(rahim, 'rahim'); // technician
   await rahim.goto('/assetcare/a/assetcare.action_requests/new');
   await rahim.getByRole('combobox', { name: 'Equipment' }).click();
+  await rahim.keyboard.type('E2E Press');
   await rahim.getByRole('option', { name: 'E2E Press' }).click();
   await rahim
     .getByRole('textbox', { name: 'What is wrong / what to do' })

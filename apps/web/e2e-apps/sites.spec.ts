@@ -28,6 +28,7 @@ test('a page made from a block, previewed, published and served by the public AP
   await page.goto('/sites/a/sites.action_pages/new');
   await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Hello from E2E');
   await page.getByRole('combobox', { name: 'Site' }).click();
+  await page.keyboard.type('E2E site');
   await page.getByRole('option', { name: 'E2E site' }).click();
   await page.getByRole('textbox', { name: 'Path', exact: true }).fill('/hello');
   const blocks = page.getByRole('table', { name: 'blocks' });

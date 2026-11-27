@@ -27,6 +27,7 @@ test('a vehicle added on screen; a trip started and finished with its distance',
 
   await page.goto('/fleet/a/fleet.action_trips/new');
   await page.getByRole('combobox', { name: 'Vehicle' }).click();
+  await page.keyboard.type('E2E Hiace');
   await page.getByRole('option', { name: 'E2E Hiace' }).click();
   await page.getByRole('textbox', { name: 'From', exact: true }).fill('Head office');
   await page.getByRole('textbox', { name: 'To', exact: true }).fill('Gazipur depot');

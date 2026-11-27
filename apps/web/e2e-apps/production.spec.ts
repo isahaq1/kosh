@@ -17,6 +17,8 @@ async function signIn(page: Page, login: string): Promise<void> {
 
 async function pick(page: Page, field: string, option: RegExp): Promise<void> {
   await page.getByRole('combobox', { name: field }).click();
+  // The picker lists its first matches: search for the record.
+  await page.keyboard.type(option.source);
   await page.getByRole('option', { name: option }).click();
 }
 
@@ -34,6 +36,7 @@ test('a bill of materials, an order checked for what is short and what it costs,
   const lines = page.getByRole('table', { name: 'lines' });
   await lines.locator('..').getByRole('button', { name: 'Add a line' }).click();
   await lines.locator('tbody tr').last().getByRole('combobox').first().click();
+  await page.keyboard.type('Steel beam');
   await page.getByRole('option', { name: /Steel beam/ }).click();
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page).toHaveURL(/production\.action_boms\/\d+$/);

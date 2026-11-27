@@ -28,6 +28,7 @@ test('a document made on screen, its file uploaded, then a second version', asyn
   await page.goto('/documents/a/documents.action_documents/new');
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Lease agreement');
   await page.getByRole('combobox', { name: 'Folder' }).click();
+  await page.keyboard.type('E2E contracts');
   await page.getByRole('option', { name: 'E2E contracts' }).click();
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page).toHaveURL(/documents\.action_documents\/\d+$/);

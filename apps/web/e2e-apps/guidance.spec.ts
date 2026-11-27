@@ -18,8 +18,10 @@ test('a quotation: what blocks Confirm, then the next step offered and taken', a
   await signIn(page, 'rahim');
   await page.goto('/sales/a/sales.action_quotations/new');
   await page.getByRole('combobox', { name: 'Customer' }).click();
+  await page.keyboard.type('Bengal Steel');
   await page.getByRole('option', { name: /Bengal Steel/ }).click();
   await page.getByRole('combobox', { name: 'Currency' }).click();
+  await page.keyboard.type('BDT');
   await page.getByRole('option', { name: 'BDT' }).click();
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page).toHaveURL(/sales\.action_quotations\/\d+$/);

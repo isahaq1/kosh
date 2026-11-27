@@ -29,6 +29,7 @@ test('a project and a task from their forms; the board shows the task under its 
   await page.getByRole('button', { name: 'New' }).click();
   await page.getByLabel('Name').fill('Bridge works');
   await page.getByRole('combobox', { name: 'Customer' }).click();
+  await page.keyboard.type('Bengal Steel');
   await page.getByRole('option', { name: 'Bengal Steel' }).click();
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page).toHaveURL(/projects\.action_projects\/\d+$/); // saved, not only typed
@@ -38,8 +39,10 @@ test('a project and a task from their forms; the board shows the task under its 
   await page.goto('/projects/a/projects.action_tasks/new');
   await page.getByLabel('Title').fill('Survey the site');
   await page.getByRole('combobox', { name: 'Project' }).click();
+  await page.keyboard.type('Bridge works');
   await page.getByRole('option', { name: 'Bridge works' }).click();
   await page.getByRole('combobox', { name: 'Stage' }).click();
+  await page.keyboard.type('New');
   await page.getByRole('option', { name: 'New' }).click();
   await page.getByLabel('Planned hours').fill('8');
   await page.getByRole('button', { name: 'Save' }).click();
@@ -54,6 +57,7 @@ test('a project and a task from their forms; the board shows the task under its 
 
   await column.getByRole('button', { name: 'Survey the site', exact: true }).click();
   await page.getByRole('combobox', { name: 'Stage' }).click();
+  await page.keyboard.type('Done');
   await page.getByRole('option', { name: 'Done' }).click();
   // Wait for the server's answer: Save is also disabled while the save is still on its way.
   const saved = page.waitForResponse(
@@ -73,6 +77,7 @@ test('the manager logs a timesheet; the hours show on the task and in the list',
   await signIn(page, 'dina');
   await page.goto('/projects/a/projects.action_timesheets/new');
   await page.getByRole('combobox', { name: 'Task' }).click();
+  await page.keyboard.type('Survey the site');
   await page.getByRole('option', { name: 'Survey the site' }).click();
   await page.getByLabel('Hours').fill('2.5');
   await page.getByLabel('Description').fill('Site visit');
@@ -103,6 +108,7 @@ test('a phase and a work package of a project; the project shows its structure a
   await page.goto('/projects/a/projects.action_phases/new');
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Civil works');
   await page.getByRole('combobox', { name: 'Project', exact: true }).click();
+  await page.keyboard.type('Bridge works');
   await page.getByRole('option', { name: 'Bridge works' }).click();
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page).toHaveURL(/projects\.action_phases\/\d+$/);
@@ -110,8 +116,10 @@ test('a phase and a work package of a project; the project shows its structure a
   await page.goto('/projects/a/projects.action_work_packages/new');
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Piers');
   await page.getByRole('combobox', { name: 'Project', exact: true }).click();
+  await page.keyboard.type('Bridge works');
   await page.getByRole('option', { name: 'Bridge works' }).click();
   await page.getByRole('combobox', { name: 'Phase', exact: true }).click();
+  await page.keyboard.type('Civil works');
   await page.getByRole('option', { name: 'Civil works' }).click();
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page).toHaveURL(/projects\.action_work_packages\/\d+$/);
@@ -135,6 +143,7 @@ test('a plan written, approved by its sponsor in the Approvals inbox, and starte
   await page.goto('/projects/a/projects.action_plans/new');
   await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Feed mill upgrade');
   await page.getByRole('combobox', { name: 'Sponsor', exact: true }).click();
+  await page.keyboard.type('Dina Rahman');
   await page.getByRole('option', { name: 'Dina Rahman' }).click();
   await page.getByRole('textbox', { name: 'Planned start', exact: true }).fill('2027-03-01');
   await page.getByRole('textbox', { name: 'Planned end', exact: true }).fill('2027-06-30');
@@ -182,6 +191,7 @@ test('a team member added at 120 % in total across projects shows over-allocated
     await page.getByRole('combobox', { name: 'Project', exact: true }).click();
     await page.getByRole('option', { name: project }).click();
     await page.getByRole('combobox', { name: 'Person', exact: true }).click();
+    await page.keyboard.type('Rahim Uddin');
     await page.getByRole('option', { name: 'Rahim Uddin' }).click();
     await page.getByRole('textbox', { name: 'Allocation %', exact: true }).fill(allocation);
     await page.getByRole('button', { name: 'Save' }).click();
@@ -238,6 +248,7 @@ test('control and schedule (RFC 0026 step 5): a risk scored critical; the projec
   await page.goto('/projects/a/projects.action_risks/new');
   await page.getByRole('textbox', { name: 'Risk', exact: true }).fill('Monsoon floods the site');
   await page.getByRole('combobox', { name: 'Project', exact: true }).click();
+  await page.keyboard.type('Bridge works');
   await page.getByRole('option', { name: 'Bridge works' }).click();
   await page.getByRole('textbox', { name: 'Probability', exact: true }).fill('4');
   await page.getByRole('textbox', { name: 'Impact', exact: true }).fill('5');

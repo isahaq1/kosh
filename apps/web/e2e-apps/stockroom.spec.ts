@@ -131,6 +131,7 @@ test('serial numbers: a tracked product received with its serials, listed in Lot
   const moves = page.getByRole('table', { name: 'moves' });
   await moves.locator('..').getByRole('button', { name: 'Add a line' }).click();
   await moves.locator('tbody tr').last().getByRole('combobox').first().click();
+  await page.keyboard.type('E2E Router');
   await page.getByRole('option', { name: /E2E Router/ }).click();
   await moves.locator('tbody tr').last().getByRole('textbox').nth(1).fill('2');
   const serials = page.getByRole('table', { name: 'lotLines' });
@@ -138,6 +139,7 @@ test('serial numbers: a tracked product received with its serials, listed in Lot
     await serials.locator('..').getByRole('button', { name: 'Add a line' }).click();
     const row = serials.locator('tbody tr').last();
     await row.getByRole('combobox').first().click();
+    await page.keyboard.type('E2E Router');
     await page.getByRole('option', { name: /E2E Router/ }).click();
     await row.getByRole('textbox').first().fill(serial);
   }

@@ -34,11 +34,13 @@ test('a deal: the stage’s rule refuses the move until its details are there; l
   await page.getByRole('textbox', { name: 'Deal', exact: true }).fill('Laptops for Meghna Bank');
   await page.getByRole('textbox', { name: 'Company (prospect)' }).fill('Meghna Bank');
   await page.getByRole('combobox', { name: 'Stage' }).click();
+  await page.keyboard.type('New');
   await page.getByRole('option', { name: 'New' }).click();
   expect(await save(page)).toBe(201);
   await expect(page).toHaveURL(/pipeline\.action_deals\/\d+$/);
 
   await page.getByRole('combobox', { name: 'Stage' }).click();
+  await page.keyboard.type('Proposal');
   await page.getByRole('option', { name: 'Proposal' }).click();
   await expect(page.getByRole('textbox', { name: 'Probability (%)' })).toHaveValue('60'); // from the stage
   expect(await save(page)).toBe(422);
@@ -53,6 +55,7 @@ test('a deal: the stage’s rule refuses the move until its details are there; l
   expect(await save(page)).toBe(422);
   await expect(page.getByText('A lost deal says why it was lost.').first()).toBeVisible();
   await page.getByRole('combobox', { name: 'Lost because' }).click();
+  await page.keyboard.type('Chose a competitor');
   await page.getByRole('option', { name: 'Chose a competitor' }).click();
   expect(await save(page)).toBe(200);
 

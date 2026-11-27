@@ -52,6 +52,7 @@ test('an event opened, an attendee registered and confirmed, checked in at the d
   await signIn(rahim, 'rahim'); // Event Hub user
   await rahim.goto('/eventhub/a/eventhub.action_registrations/new');
   await rahim.getByRole('combobox', { name: 'Event' }).click();
+  await rahim.keyboard.type('E2E Supplier day');
   await rahim.getByRole('option', { name: 'E2E Supplier day' }).click();
   await rahim.getByRole('textbox', { name: 'Attendee' }).fill('Nusrat Jahan');
   await rahim.getByRole('button', { name: 'Save' }).click();

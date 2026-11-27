@@ -44,6 +44,7 @@ test('away: Dina says who decides for her while she is on leave', async ({ page 
   await signIn(page, 'dina');
   await page.goto('/approvals/a/approvals.action_away/new');
   await page.getByRole('combobox', { name: 'Decides instead' }).click();
+  await page.keyboard.type('Rahim Uddin');
   await page.getByRole('option', { name: 'Rahim Uddin' }).click();
   await page.getByRole('textbox', { name: 'From', exact: true }).fill('2026-12-20');
   await page.getByRole('textbox', { name: 'Until', exact: true }).fill('2026-12-31');
@@ -59,6 +60,7 @@ test('a request of a category (RFC 0025 step 4): the fields it asks for, submitt
   await signIn(page, 'rahim');
   await page.goto('/approvals/a/approvals.action_asks/new');
   await page.getByRole('combobox', { name: 'Category', exact: true }).click();
+  await page.keyboard.type('Business trip');
   await page.getByRole('option', { name: 'Business trip' }).click();
   await page.getByRole('textbox', { name: 'What for', exact: true }).fill('Visit the Sylhet farm');
   // A business trip asks where and when, and how much.

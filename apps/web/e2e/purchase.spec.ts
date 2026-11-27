@@ -20,6 +20,7 @@ test('a 750 000 order: two approval levels, then approved', async ({ page }) => 
   await page.getByRole('button', { name: 'New' }).click();
   await page.getByLabel('Name').fill('PO-2026-0042');
   await page.getByRole('combobox', { name: 'Vendor' }).click();
+  await page.keyboard.type('Bengal Steel');
   await page.getByRole('option', { name: 'Bengal Steel' }).click();
   await page.getByLabel('Amount Total').fill('750000');
   await page.getByRole('button', { name: 'Save' }).click();
