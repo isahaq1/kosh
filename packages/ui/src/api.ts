@@ -263,6 +263,23 @@ export interface ApiOptions {
   readonly fetch?: typeof fetch;
   /** Where the CSRF token survives reloads (default: `sessionStorage`). */
   readonly storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+  /** The time zone the server counts days in for this person (default: the browser's; `null`: not sent). */
+  readonly timeZone?: string | null;
+}
+
+/**
+ * The browser's time zone (`Asia/Dhaka`), sent with every request as `X-Timezone`: the server's *today* — the
+ * default date of a new record, what is due or late, a leave's days — is then the person's day. Without it the
+ * server counts in the zone of their profile, UTC unless set: between midnight and six in the morning in Dhaka
+ * that is still yesterday.
+ */
+export function browserTimeZone(): string | undefined {
+  try {
+    const zone = new Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return typeof zone === 'string' && zone !== '' ? zone : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 const CSRF_KEY = 'kosh.csrf';
@@ -276,6 +293,7 @@ export function createKoshApi(options: ApiOptions = {}): KoshApi {
   let csrf: string | undefined = storage?.getItem(CSRF_KEY) ?? undefined;
   let company: number | undefined;
   let language: string | undefined;
+  const zone = options.timeZone === null ? undefined : (options.timeZone ?? browserTimeZone());
 
   async function request<T>(
     method: string,
@@ -294,6 +312,7 @@ export function createKoshApi(options: ApiOptions = {}): KoshApi {
     if (csrf !== undefined && method !== 'GET') headers['x-csrf-token'] = csrf;
     if (company !== undefined) headers['x-company'] = String(company);
     if (language !== undefined) headers['accept-language'] = language.replace('_', '-');
+    if (zone !== undefined) headers['x-timezone'] = zone;
     const search = params.size === 0 ? '' : `?${params.toString()}`;
     const response = await reach(doFetch, `${base}${path}${search}`, {
       method,
@@ -464,6 +483,7 @@ export function createKoshApi(options: ApiOptions = {}): KoshApi {
       if (csrf !== undefined) headers['x-csrf-token'] = csrf;
       if (company !== undefined) headers['x-company'] = String(company);
       if (language !== undefined) headers['accept-language'] = language.replace('_', '-');
+      if (zone !== undefined) headers['x-timezone'] = zone;
       const response = await reach(doFetch, `${base}${path}`, {
         method: 'POST',
         headers,
@@ -530,6 +550,7 @@ export function createKoshApi(options: ApiOptions = {}): KoshApi {
       if (csrf !== undefined) headers['x-csrf-token'] = csrf;
       if (company !== undefined) headers['x-company'] = String(company);
       if (language !== undefined) headers['accept-language'] = language.replace('_', '-');
+      if (zone !== undefined) headers['x-timezone'] = zone;
       const response = await reach(doFetch, `${base}${path}`, {
         method: 'POST',
         headers,
@@ -560,6 +581,7 @@ export function createKoshApi(options: ApiOptions = {}): KoshApi {
       if (csrf !== undefined && method !== 'GET') headers['x-csrf-token'] = csrf;
       if (company !== undefined) headers['x-company'] = String(company);
       if (language !== undefined) headers['accept-language'] = language.replace('_', '-');
+      if (zone !== undefined) headers['x-timezone'] = zone;
       const response = await doFetch(`${base}${path}`, {
         method,
         headers,

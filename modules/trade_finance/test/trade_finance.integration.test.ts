@@ -25,6 +25,9 @@ import { settings } from '@kosh/settings';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { tradeFinance } from '../src/index.js';
 
+/** The tests count days where they run: so does the server, told the zone as a browser tells it. */
+const ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 const PASSWORD = 'correct horse battery';
 const catalogue = [base, settings, contacts, messaging, tradeFinance];
 const L = '/api/v1/models/trade.lc';
@@ -60,7 +63,7 @@ async function call(
   const res = await host.server.app.inject({
     method,
     url,
-    headers: { authorization: `Bearer ${token}` },
+    headers: { authorization: `Bearer ${token}`, 'x-timezone': ZONE },
     ...(payload === undefined ? {} : { payload: payload as Record<string, unknown> }),
   });
   return { status: res.statusCode, json: res.body === '' ? null : res.json() };

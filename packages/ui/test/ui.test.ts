@@ -157,6 +157,10 @@ describe('api client', () => {
     expect(decodeURIComponent(list?.url ?? '')).toContain('filter={"name":"x"}');
     expect(list?.init.headers).not.toHaveProperty('x-csrf-token'); // GET
     expect(store.get('kosh.csrf')).toBe('csrf-1'); // survives reloads (sessionStorage)
+    // Every request says where the person is: the server's "today" is theirs (not UTC's).
+    const here = new Intl.DateTimeFormat().resolvedOptions().timeZone;
+    expect(patch?.init.headers).toMatchObject({ 'x-timezone': here });
+    expect(list?.init.headers).toMatchObject({ 'x-timezone': here });
   });
 });
 

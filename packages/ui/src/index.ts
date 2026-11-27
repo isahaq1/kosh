@@ -16,6 +16,7 @@ export {
   ApiError,
   type ApiOptions,
   type AppEntry,
+  browserTimeZone,
   type CurrentUser,
   createKoshApi,
   type KoshApi,

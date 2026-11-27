@@ -29,6 +29,9 @@ import { settings } from '@kosh/settings';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { eventMailers, eventModule } from '../src/index.js';
 
+/** The tests count days where they run: so does the server, told the zone as a browser tells it. */
+const ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 const mailer = createMemoryMailer();
 // The emails are drained by the tests, sent to memory.
 const event = eventModule({ mailer, workers: false });
@@ -67,7 +70,7 @@ async function call(
   const res = await host.server.app.inject({
     method,
     url,
-    headers: { authorization: `Bearer ${token}` },
+    headers: { authorization: `Bearer ${token}`, 'x-timezone': ZONE },
     ...(payload === undefined ? {} : { payload: payload as Record<string, unknown> }),
   });
   return { status: res.statusCode, json: res.body === '' ? null : res.json() };
@@ -219,7 +222,7 @@ test('the ticket and badge: the attendee, the event and the QR the door scans', 
   const html = await host_.inject({
     method: 'POST',
     url: `/api/v1/models/event.registration/documents/${ticket.id}?format=html`,
-    headers: { authorization: `Bearer ${token}` },
+    headers: { authorization: `Bearer ${token}`, 'x-timezone': ZONE },
     payload: { ids: [ids['arif']] },
   });
   expect(html.statusCode, html.body).toBe(200);
