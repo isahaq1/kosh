@@ -51,6 +51,7 @@ import { loyalty } from '@kosh/loyalty';
 import { createMemoryMailer, mailModule } from '@kosh/mail';
 import { maintenance } from '@kosh/maintenance';
 import { maintenanceStock } from '@kosh/maintenance_stock';
+import { marketingModule } from '@kosh/marketing';
 import { installActivityTypes, messaging } from '@kosh/messaging';
 import { notify } from '@kosh/notify';
 import { payroll } from '@kosh/payroll';
@@ -182,6 +183,11 @@ const assistant = createAssistant({
 });
 // Documents sent from forms are queued with a mailer that keeps them (RFC 0029 §3.3).
 const mail = mailModule({ mailer: createMemoryMailer() });
+// Campaigns are sent with a mailer that keeps them too (RFC 0038).
+const marketing = marketingModule({
+  mailer: createMemoryMailer(),
+  baseUrl: 'http://127.0.0.1:3101',
+});
 const CATALOGUE = [
   base,
   settings,
@@ -213,6 +219,7 @@ const CATALOGUE = [
   maintenance,
   quality,
   fleet,
+  marketing,
   tradeFinance,
   event,
   website,
@@ -307,6 +314,7 @@ await applyApps(
         'maintenance',
         'quality',
         'fleet',
+        'marketing',
         'trade_finance',
         'event',
         'website',
@@ -398,6 +406,7 @@ for (const [login, name, groups] of [
       'maintenance.manager',
       'quality.manager',
       'fleet.manager',
+      'marketing.manager',
       'trade_finance.manager',
       'event.manager',
       'website.manager',
@@ -448,6 +457,7 @@ for (const [login, name, groups] of [
       'maintenance.user',
       'quality.user',
       'fleet.user',
+      'marketing.user',
       'trade_finance.user',
       'event.user',
       'purchase.user',

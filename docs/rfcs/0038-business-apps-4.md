@@ -186,6 +186,55 @@ Statistical process control charts, sampling plans by AQL, measuring devices ove
 
 The trip of a Stockroom transfer from its gate details, drivers' licences from Workforce, tyres, GPS.
 
+## Step 3 — Campaigns (design and notes, 2026-11-27)
+
+### Models (`marketing`)
+
+- `marketing.list` and `marketing.subscriber` (address once per list by its key — trimmed, lower case —, name,
+  phone, contact, language, *subscribed* / *unsubscribed* / *bounced*).
+- `marketing.suppression` — the company's never-email list: an address, why (unsubscribed, bounced, complained,
+  by hand).
+- `marketing.campaign` — subject, subject B, preview text, the message (rich text), the lists and the contact
+  tags it goes to, *Send at*; draft → scheduled → sending → sent (or cancelled); its figures.
+- `marketing.delivery` — one per recipient and campaign: waiting, sent, not sent or left out; which subject;
+  opened, clicked, unsubscribed, when. `marketing.link` — the message's links, numbered, with their clicks.
+
+### Rules
+
+- **Addressing is the server's**, when the campaign starts: subscribed addresses of the lists (one set-based
+  read), then the tagged contacts **as the sender** (record rules decide), each address once; the never-email
+  list is left out, each on record as *left out*. Recipients alternate A and B.
+- **Sending** is a job per batch of 200: in one transaction each message gets a secret (its SHA-256 is kept, the
+  secret is only in the message), is composed and marked sent; the batch is handed to the mailer after the
+  commit, and what it refuses is marked *not sent*. At most once: a crash between the commit and the mailer
+  loses that batch's messages rather than sending them twice.
+- **A scheduled campaign** is a job with `runAt`, enqueued by the person who scheduled it: it runs as them.
+- **Tracking** is three public routes keyed by the secret: the pixel (always a picture), the click (a redirect to
+  link *n* of the campaign, 404 otherwise — no open redirect), the unsubscribe page (GET shows, POST does; the
+  one-click post of RFC 8058 is the same route). Counters are incremented in SQL, a person once.
+- Access: `marketing.user` writes campaigns and keeps subscribers; `marketing.manager` keeps lists and the
+  never-email list and holds `marketing.send` (send, schedule, cancel).
+
+### Implementation notes
+
+- `render.ts` is the message without a database: the key of an address, placeholders (values escaped in HTML),
+  the links, the variant, and `compose` — body in a plain frame, links rewritten, pixel, footer, headers.
+- `OutboundMail` gained `headers` (`@kosh/mail`), passed to SMTP.
+- Deliveries and links are not on the campaign as one-to-many fields: *Duplicate* copies a record's lines, and a
+  copy of a campaign must not carry 100 000 messages. They are tiles on the form.
+- Unsubscribing runs in the message's own company (`bootstrap({ company })`): a search without a company finds
+  nothing of a company-scoped model, which the first version of the route did — the page said nothing happened.
+- `marketing.delivery` and `marketing.link` are left out of the activity log (`audit-scope.ts`): they are a log.
+- Tests: the rendering (7 cases); on PostgreSQL — who is written to and who is left out, the alternating
+  subjects, the batch and the refused address, opens and clicks once per person, the redirect only to its own
+  links, the page that asks and the button that does, a one-click post twice, the next campaign honouring it,
+  schedule, cancel while sending, the test send, who may send; two browser tests.
+- **Left out of part 1**: SMS and WhatsApp campaigns (the `Messenger` adapter is there); bounces read from
+  inbound mail (a manager marks them); the orders that followed a click (a bridge with Sales); segments by a
+  saved filter of any model (lists and contact tags for now); sending the winning subject to the rest; a
+  double opt-in sign-up form on Sites; throttling per hour; opens by clients that fetch pictures themselves
+  (Apple Mail's privacy proxy counts as an open); not measured beyond a few thousand recipients yet.
+
 ## 5. Open questions
 
 1. The order of §2 — is Quality first right, or does Fleet or Campaigns matter more now?

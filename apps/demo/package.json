@@ -35,6 +35,7 @@
     "@kosh/maintenance": "workspace:*",
     "@kosh/fleet": "workspace:*",
     "@kosh/fleet_account": "workspace:*",
+    "@kosh/marketing": "workspace:*",
     "@kosh/quality": "workspace:*",
     "@kosh/maintenance_stock": "workspace:*",
     "@kosh/quality_production": "workspace:*",

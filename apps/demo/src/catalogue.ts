@@ -33,6 +33,7 @@ import { loyalty } from '@kosh/loyalty';
 import { mail } from '@kosh/mail';
 import { maintenance } from '@kosh/maintenance';
 import { maintenanceStock } from '@kosh/maintenance_stock';
+import { marketing } from '@kosh/marketing';
 import { messaging } from '@kosh/messaging';
 import type { KoshModule } from '@kosh/modules-sdk';
 import { notify } from '@kosh/notify';
@@ -111,6 +112,7 @@ export const DEMO_APPS: readonly string[] = [
   'maintenance',
   'quality',
   'fleet',
+  'marketing',
   'trade_finance',
   'event',
   'website',
@@ -161,6 +163,7 @@ export function demoCatalogue(): KoshModule[] {
     maintenance,
     quality,
     fleet,
+    marketing,
     tradeFinance,
     event,
     website,

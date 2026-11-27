@@ -45,6 +45,8 @@ export interface OutboundMail {
   readonly replyTo?: string;
   /** Copies (RFC 0029 §3.3). */
   readonly cc?: readonly string[];
+  /** Extra headers (RFC 0038, Campaigns: `List-Unsubscribe`, so a mail client shows its own unsubscribe). */
+  readonly headers?: Readonly<Record<string, string>>;
   /** Files sent with it: a document's PDF. */
   readonly attachments?: readonly {
     readonly filename: string;
@@ -75,6 +77,7 @@ export function createSmtpMailer(options: { readonly url: string; readonly from:
         html: mail.html,
         ...(mail.replyTo === undefined ? {} : { replyTo: mail.replyTo }),
         ...(mail.cc === undefined || mail.cc.length === 0 ? {} : { cc: [...mail.cc] }),
+        ...(mail.headers === undefined ? {} : { headers: { ...mail.headers } }),
         ...(mail.attachments === undefined
           ? {}
           : {

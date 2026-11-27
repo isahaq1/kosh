@@ -66,6 +66,7 @@ const PACKAGES = [
   'maintenance',
   'quality',
   'fleet',
+  'marketing',
   'trade_finance',
   'event',
   'website',

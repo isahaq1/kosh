@@ -30,6 +30,7 @@ export type AppName =
   | 'maintenance'
   | 'quality'
   | 'fleet'
+  | 'marketing'
   | 'trade_finance'
   | 'event'
   | 'website'
@@ -242,6 +243,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
       'Fleet: vehicles, papers that expire, fuel and service with the cost per kilometre, trips',
     icon: '🚚',
     server: 'fleet',
+  },
+  marketing: {
+    label:
+      'Campaigns: mailing lists, emails with two subjects to try, opens, clicks and unsubscribes',
+    icon: '📣',
+    server: 'marketing',
   },
   trade_finance: {
     label:

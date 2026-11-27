@@ -1697,6 +1697,40 @@ cost.
 POST /api/v1/models/fleet.fuel/<id>/transitions/book | unbook      # also fleet.service, fleet.document
 ```
 
+## Campaigns
+
+*Campaigns* (`@kosh/marketing`, RFC 0038) sends an email to many people and shows what they did with it.
+
+- **Mailing lists** (managers) hold **subscribers**: an address — once per list, compared without capitals —, a
+  name, a language, and a status: *subscribed*, *unsubscribed* or *bounced*. Import them from a workbook.
+- **A campaign** has a subject, a preview text and a message in rich text. `{{name}}`, `{{first_name}}` and
+  `{{email}}` are filled per person; `{{first_name|friend}}` says what to write when the name is not known. It
+  goes **to the lists** chosen, and **to the contacts that carry a tag** — the contacts the sender may see.
+- **The server decides who is written to**: each address once, whichever list or tag it comes from; never a
+  subscriber who is not *subscribed*; never an address on the **never-email list**, which holds everyone who
+  unsubscribed, plus the addresses a manager adds (complaints, bounces). The ones left out are on record.
+- **Subject B**: with a second subject, every other recipient gets it; the campaign shows sent, opened % and
+  clicked for A and for B.
+- **Send now** (managers) or **Schedule** with *Send at*: the campaign starts by itself at its time, as the
+  person who scheduled it. Messages go out in the background, 200 at a time; what the mail server refuses is
+  *not sent*, with the reason. **Cancel** while sending stops what has not gone out. A campaign that has started
+  is not rewritten.
+- **Every message carries its way out**: an unsubscribe link in the footer, in the recipient's language, and the
+  `List-Unsubscribe` headers that make a mail client show its own button. The link opens a page that asks;
+  nothing changes until the button is pressed, because mail scanners follow links. Unsubscribing ends the
+  subscription *and* puts the address on the never-email list.
+- **Opens and clicks**: each link of the message goes through the server, which counts and redirects — only to
+  the campaign's own links, never to an address in the request. A person counts once; the *Messages* of a
+  campaign say who opened, clicked and left. Mail clients that hide pictures do not count as opens.
+
+The server needs `SMTP_URL` and `KOSH_BASE_URL` (the address people reach it at); without them *Send now* is
+refused with what to set. Writing campaigns gives read access to contacts.
+
+```http
+POST /api/v1/models/marketing.campaign/<id>/transitions/send | schedule | unschedule | cancel
+POST /api/v1/campaigns/<id>/test   { "to": "me@example.com" }   # the message as written, not counted
+```
+
 ## Final settlement
 
 When a person leaves, *Payroll › Final settlements* works out what they are owed and owe, and pays it (RFC 0039).
