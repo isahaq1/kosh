@@ -1732,8 +1732,17 @@ POST /api/v1/models/fleet.fuel/<id>/transitions/book | unbook      # also fleet.
   being the contact the message went to, or a contact with that address. The order shows its *Campaign*; the
   campaign shows *Orders* and *Ordered*. The credit is the server's: nobody writes it by hand.
 
-The server needs `SMTP_URL` and `KOSH_BASE_URL` (the address people reach it at); without them *Send now* is
-refused with what to set. Writing campaigns gives read access to contacts.
+- **SMS and WhatsApp**: a campaign *Sent by* SMS or WhatsApp has a **text** instead of a subject and a message,
+  and goes to phone numbers — a subscriber's phone, a tagged contact's mobile or phone —, each number once.
+  Numbers are kept as `+8801711000001`; a local one (`01711…`) takes the campaign's *Country code for local
+  numbers*, and without one it is left out. The text ends with a link that takes the number off (*Add the way
+  to unsubscribe*, on by default); the never-email list also holds **phone numbers**, and somebody who said stop
+  by email is not texted either. Opens and clicks are not counted for texts. WhatsApp only delivers
+  business-initiated messages that match a template approved for your sender: that is the provider's rule.
+
+The server needs `SMTP_URL` and `KOSH_BASE_URL` (the address people reach it at) for email, and the text provider
+(`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_SMS_FROM`, `TWILIO_WHATSAPP_FROM`) for texts; without them
+*Send now* is refused with what to set. Writing campaigns gives read access to contacts.
 
 ```http
 POST /api/v1/models/marketing.campaign/<id>/transitions/send | schedule | unschedule | cancel

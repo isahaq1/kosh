@@ -100,3 +100,24 @@ test('a share to one place, or nothing over nothing', () => {
   expect(percent(2, 3)).toBe('66.7');
   expect(percent(0, 0)).toBeNull();
 });
+
+test('a phone number is known in E.164; a local one takes the country code given', async () => {
+  const { phoneKey } = await import('../src/render.js');
+  expect(phoneKey('+880 1711-000001')).toBe('+8801711000001');
+  expect(phoneKey('008801711000001')).toBe('+8801711000001');
+  expect(phoneKey('01711 000001', '+880')).toBe('+8801711000001');
+  // Without a country code a local number is nobody's.
+  expect(phoneKey('01711000001')).toBeNull();
+  for (const bad of ['', 'call me', '+12', null]) expect(phoneKey(bad, '+880')).toBeNull();
+});
+
+test('a text message: the text per person, and the way out when asked', async () => {
+  const { composeText } = await import('../src/render.js');
+  const who = { name: 'Nadia Karim', email: '' };
+  expect(
+    composeText({ text: 'Hi {{first_name}}, 15% off. ', who, unsubscribe: null, language: 'en' }),
+  ).toBe('Hi Nadia, 15% off.');
+  expect(
+    composeText({ text: 'Hi', who, unsubscribe: 'https://erp.test/u/T', language: 'bn' }),
+  ).toBe('Hi\nবন্ধ করুন: https://erp.test/u/T');
+});

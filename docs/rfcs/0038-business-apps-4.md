@@ -257,6 +257,25 @@ The trip of a Stockroom transfer from its gate details, drivers' licences from W
   to the rest; credit for Shop and Counter orders (Sales orders only), and a setting for the 30 days; a credit is
   not taken back when the order is cancelled (the tiles count confirmed orders only).
 
+### Part 3 — SMS and WhatsApp campaigns (2026-11-27)
+
+- A campaign has a **channel** (email, SMS, WhatsApp), a **text**, a country code for local numbers and whether
+  the way out is added. A text campaign is addressed by **phone number** (`phoneKey`: E.164, `00` as a plus, a
+  local number by the country code) — subscribers' phones and tagged contacts' mobile or phone, each number
+  once; unreadable numbers are counted as left out, people without a number are simply not its recipients.
+- The never-email list takes **a phone number or an email address**, one of the two; a text campaign leaves out
+  a number on it, and a person whose email address is on it.
+- Sent through the `Messenger` of `@kosh/notify` (Twilio from the environment, a memory one in tests); a channel
+  the provider is not set up for is refused at *Send now* with what to set. What the provider refuses is *not
+  sent* with its reason.
+- The unsubscribe link of a text is the same page: it shows the number masked and puts the number on the list.
+- Tests: `phoneKey` and `composeText`; a list with local, international, duplicate, unreadable, refused and
+  suppressed numbers and a subscriber without one; the text with its link; unsubscribing by it; WhatsApp without
+  a provider refused.
+- **Left out**: counting clicks in texts (links are not rewritten — a long address costs SMS segments); *STOP*
+  replies (inbound texts); delivery receipts from the provider; WhatsApp templates and their variables; the
+  price of a send before it starts.
+
 ## 5. Open questions
 
 1. The order of §2 — is Quality first right, or does Fleet or Campaigns matter more now?

@@ -13,6 +13,7 @@ import { contacts } from '@kosh/contacts';
 import { BOUNCE_TOPIC, type Mailer, mailerFromEnv } from '@kosh/mail';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
+import { type Messenger, messengerFromEnv } from '@kosh/notify';
 import { reporting } from '@kosh/reporting';
 import { HttpProblem, type ModuleContext } from '@kosh/server';
 import { action, form, list, search } from '@kosh/views';
@@ -74,11 +75,13 @@ export { PAGE_SECURITY, renderUnsubscribe } from './page.js';
 export {
   type Composed,
   compose,
+  composeText,
   emailKey,
   linksOf,
   type MailLanguage,
   percent,
   personalize,
+  phoneKey,
   type Recipient,
   type Tracking,
   variantOf,
@@ -93,6 +96,8 @@ interface Worker {
 
 interface Transport {
   readonly mailer: Mailer | undefined;
+  /** Sends the text messages of SMS and WhatsApp campaigns. */
+  readonly messenger?: Messenger | undefined;
   /** The address people reach the server at: the links of a message start with it. */
   readonly baseUrl: string;
 }
@@ -108,15 +113,14 @@ export function campaignWorker(
   },
   transport: Transport,
 ): Worker {
-  const { mailer } = transport;
+  const { mailer, messenger } = transport;
   const base = transport.baseUrl.replace(/\/+$/, '');
   return context.shutro.work(
     {
       [SEND_JOB]: async (payload, raw) => {
-        if (mailer === undefined || base === '') return;
         const { campaign, round } = payload as { campaign: number; round?: number };
         const env = raw as unknown as Env;
-        const { mails, more } = await env.asSuperuser({ reason: 'campaign batch' }, (su) =>
+        const { mails, texts, more } = await env.asSuperuser({ reason: 'campaign batch' }, (su) =>
           takeBatch(su as unknown as Env, campaign, base),
         );
         const next = (round ?? 0) + 1;
@@ -129,7 +133,29 @@ export function campaignWorker(
         env.afterCommit(async () => {
           const failures: { delivery: number; error: string }[] = [];
           const named: { delivery: number; id: string }[] = [];
-          for (const m of mails)
+          const refused = (delivery: number) => (error: unknown) => {
+            failures.push({
+              delivery,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          };
+          for (const t of texts) {
+            if (messenger === undefined) {
+              refused(t.delivery)(new Error('No text provider is set up.'));
+              continue;
+            }
+            await messenger
+              .send({ channel: t.channel, to: t.to, text: t.text })
+              .then((sent) => {
+                if (sent.id !== null) named.push({ delivery: t.delivery, id: sent.id });
+              })
+              .catch(refused(t.delivery));
+          }
+          for (const m of mails) {
+            if (mailer === undefined) {
+              refused(m.delivery)(new Error('No mail server is set up.'));
+              continue;
+            }
             await mailer
               .send({
                 to: m.to,
@@ -142,12 +168,8 @@ export function campaignWorker(
               .then((sent) => {
                 if (sent.id !== null) named.push({ delivery: m.delivery, id: sent.id });
               })
-              .catch((error: unknown) => {
-                failures.push({
-                  delivery: m.delivery,
-                  error: error instanceof Error ? error.message : String(error),
-                });
-              });
+              .catch(refused(m.delivery));
+          }
           if (failures.length === 0 && named.length === 0) return;
           await context.shutro
             .bootstrap({ reason: 'campaign messages handed over' }, async (su) => {
@@ -317,7 +339,7 @@ function registerCampaignRoutes(context: ModuleContext, transport: Transport): v
       if (c === undefined)
         throw new HttpProblem(404, 'missing-record', 'Not found', `There is no campaign ${id}.`);
       const mail = compose({
-        subject: `[Test] ${c.subject}`,
+        subject: `[Test] ${c.subject ?? ''}`,
         preheader: c.preheader,
         body: c.body ?? '',
         who: { name: '', email: to },
@@ -335,6 +357,8 @@ function registerCampaignRoutes(context: ModuleContext, transport: Transport): v
 export interface MarketingOptions {
   /** Sends the campaigns (default: from the environment; none: campaigns cannot be sent). */
   readonly mailer?: Mailer | undefined;
+  /** Sends SMS and WhatsApp campaigns (default: from the environment, Twilio; none: they cannot be sent). */
+  readonly messenger?: Messenger | undefined;
   /** The server's public address, for the links of a message (default: `KOSH_BASE_URL`). */
   readonly baseUrl?: string | undefined;
   /** Start the worker (default: unless `KOSH_SCHEDULES=off`). */
@@ -385,8 +409,13 @@ export const marketing: ReturnType<typeof defineModule> = defineModule({
     const options = configured;
     const mailer = 'mailer' in options ? options.mailer : mailerFromEnv();
     const baseUrl = options.baseUrl ?? process.env['KOSH_BASE_URL'] ?? '';
-    const transport: Transport = { mailer, baseUrl };
-    setCampaignTransport(mailer !== undefined && baseUrl !== '');
+    const messenger = 'messenger' in options ? options.messenger : messengerFromEnv();
+    const transport: Transport = { mailer, messenger, baseUrl };
+    setCampaignTransport({
+      email: mailer !== undefined && baseUrl !== '',
+      sms: messenger?.channels.includes('sms') === true,
+      whatsapp: messenger?.channels.includes('whatsapp') === true,
+    });
     registerCampaignRoutes(context, transport);
     if (!(options.workers ?? process.env['KOSH_SCHEDULES'] !== 'off')) return;
     const worker = campaignWorker(
@@ -508,6 +537,7 @@ export const marketing: ReturnType<typeof defineModule> = defineModule({
       label: 'Never-email addresses',
       columns: [
         { header: 'Email', field: 'email' },
+        { header: 'Phone', field: 'phone' },
         { header: 'Why', field: 'reason' },
         { header: 'Note', field: 'note' },
       ],
@@ -710,11 +740,17 @@ export const marketing: ReturnType<typeof defineModule> = defineModule({
             action: 'marketing.action_links',
           },
         ]),
-        k.group('main', ['name', 'replyTo']),
+        k.group('main', ['name', 'channel', 'replyTo']),
         k.group('audience', ['lists', 'tags', 'scheduledAt'], {
           label: 'To whom, and when',
           description:
             'Each address is written to once, whichever list or tag it comes from. Addresses that unsubscribed or stand on the never-email list are left out by the server.',
+        }),
+        k.group('texting', ['text', 'countryCode', 'stopLink'], {
+          label: 'Text message (SMS, WhatsApp)',
+          columns: 1,
+          description:
+            'For a campaign sent by SMS or WhatsApp: it goes to phone numbers, and the email fields below are not used.',
         }),
         k.group('message', ['subject', 'subjectB', 'preheader', 'body'], {
           label: 'The message',
@@ -792,12 +828,12 @@ export const marketing: ReturnType<typeof defineModule> = defineModule({
       ],
     })),
     'marketing.suppression.list': list(MarketingSuppression, {
-      columns: ['email', { field: 'reason', widget: 'badge' }, 'note'],
+      columns: ['email', 'phone', { field: 'reason', widget: 'badge' }, 'note'],
     }),
     'marketing.suppression.form': form(MarketingSuppression, (k) => ({
       header: { buttons: [] },
       sheet: [
-        k.group('main', ['email', 'reason', 'note'], {
+        k.group('main', ['email', 'phone', 'reason', 'note'], {
           description:
             'No campaign writes to an address on this list, whichever list or tag it comes from.',
         }),
@@ -807,6 +843,7 @@ export const marketing: ReturnType<typeof defineModule> = defineModule({
       columns: [
         'campaign',
         'email',
+        'phone',
         'name',
         { field: 'state', widget: 'badge' },
         'variant',
@@ -825,7 +862,15 @@ export const marketing: ReturnType<typeof defineModule> = defineModule({
       header: { buttons: [] },
       readonlyWhen: {},
       sheet: [
-        k.group('main', ['campaign', 'email', 'name', 'partner', 'subscriber', 'language']),
+        k.group('main', [
+          'campaign',
+          'email',
+          'phone',
+          'name',
+          'partner',
+          'subscriber',
+          'language',
+        ]),
         k.group('what', ['state', 'variant', 'sentAt', 'error'], { label: 'The message' }),
         k.group('read', ['openedAt', 'opens', 'clickedAt', 'clicks', 'unsubscribedAt'], {
           label: 'What they did',

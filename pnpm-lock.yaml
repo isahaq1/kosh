@@ -1995,6 +1995,9 @@ importers:
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
+      '@kosh/notify':
+        specifier: workspace:*
+        version: link:../../packages/notify
       '@kosh/reporting':
         specifier: workspace:*
         version: link:../../packages/reporting

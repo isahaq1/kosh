@@ -6,6 +6,7 @@
  * next campaign; a campaign scheduled and started at its time; what the mail server refuses; who may send.
  */
 import { createMemoryMailer, type Mailer, type OutboundMail } from '@kosh/mail';
+import { createMemoryMessenger } from '@kosh/notify';
 import { type TestInstallation, testInstallation } from '@kosh/server/testing';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { bounceWorker, campaignWorker, configureCampaigns, marketing } from '../src/index.js';
@@ -22,6 +23,10 @@ const mailer: Mailer = {
     return memory.send(mail);
   },
 };
+/** A text provider set up for SMS only, which refuses one number. */
+const messenger = createMemoryMessenger(['sms'], (m) =>
+  m.to === '+8801911000009' ? '21211 invalid number' : null,
+);
 let erp: TestInstallation;
 let drain: () => Promise<void>;
 const ids: Record<string, number> = {};
@@ -83,7 +88,7 @@ const BODY =
 
 beforeAll(async () => {
   process.env['KOSH_SCHEDULES'] = 'off';
-  configureCampaigns({ mailer, baseUrl: `${BASE}/`, workers: false });
+  configureCampaigns({ mailer, messenger, baseUrl: `${BASE}/`, workers: false });
   erp = await testInstallation({
     modules: [marketing],
     users: {
@@ -93,7 +98,10 @@ beforeAll(async () => {
     },
     company: { name: 'Padma Traders', currency: 'BDT' },
   });
-  const worker = campaignWorker({ shutro: erp.host.server.shutro }, { mailer, baseUrl: BASE });
+  const worker = campaignWorker(
+    { shutro: erp.host.server.shutro },
+    { mailer, messenger, baseUrl: BASE },
+  );
   const bounces = bounceWorker({ shutro: erp.host.server.shutro });
   drain = async () => {
     for (let round = 0; round < 20; round += 1)
@@ -423,4 +431,77 @@ test('a message that comes back is bounced; an address that never takes mail lea
   await announce([idOf('gone@example.com')], true);
   await drain();
   expect(((await call('GET', `${C}/${id}?fields=bounced`, 'mia')).json as Json).bounced).toBe(2);
+});
+
+test('an SMS campaign goes to numbers: local ones by the country code, each once, with its way out', async () => {
+  const list = await make('marketing.list', 'mia', { name: 'SMS customers' });
+  for (const [email, phone] of [
+    ['a@example.com', '01711 000001'],
+    ['b@example.com', '+880 1811-000002'],
+    // The same number written another way: once.
+    ['c@example.com', '008801711000001'],
+    ['d@example.com', '01911000009'],
+    ['e@example.com', 'ask reception'],
+    ['f@example.com', '01611000006'],
+    // No number: not a text campaign's to write to, and not an error.
+    ['g@example.com', null],
+  ] as const)
+    await make('marketing.subscriber', 'uma', { list, email, name: 'Rima Das', phone });
+  // Somebody who said stop, by their number.
+  await make('marketing.suppression', 'mia', { phone: '+880 1611 000006', reason: 'complaint' });
+  // One of the two, and a real one.
+  for (const wrong of [{}, { email: 'x@example.com', phone: '+8801711000001' }, { phone: '12' }])
+    expect((await call('POST', '/api/v1/models/marketing.suppression', 'mia', wrong)).status).toBe(
+      422,
+    );
+  const id = await make('marketing.campaign', 'uma', {
+    name: 'Eid SMS',
+    channel: 'sms',
+    lists: { set: [list] },
+  });
+  // A text campaign has a text.
+  expect((await step(id, 'send', 'mia')).status).toBe(409);
+  expect(
+    (
+      await call('PATCH', `${C}/${id}`, 'uma', {
+        text: 'Eid Mubarak {{first_name}}! 15% off this week.',
+        countryCode: '+880',
+      })
+    ).status,
+  ).toBe(200);
+  const sent = await step(id, 'send', 'mia');
+  expect(sent.status, JSON.stringify(sent.json)).toBe(200);
+  await drain();
+  expect(messenger.sent.map((m) => [m.channel, m.to])).toEqual([
+    ['sms', '+8801711000001'],
+    ['sms', '+8801811000002'],
+  ]);
+  const text = messenger.sent[0]?.text ?? '';
+  expect(text.startsWith('Eid Mubarak Rima! 15% off this week.\nStop: ')).toBe(true);
+  const seen = (await call('GET', `${C}/${id}?fields=state,recipients,skipped,sent,failed`, 'mia'))
+    .json as Json;
+  // Three numbers to write to, one refused by the provider; the unreadable one and the one that said stop left out.
+  expect(seen).toMatchObject({ state: 'sent', recipients: 3, skipped: 2, sent: 2, failed: 1 });
+
+  // The link of the text takes the number off: the page shows it masked, the button does it.
+  const out = /https:\/\/erp\.test(\/api\/v1\/public\/campaigns\/u\/\S+)/.exec(text)?.[1] ?? '';
+  const page = await visit('GET', out);
+  expect(page.body).toContain('+880…01');
+  expect((await visit('POST', out, '')).statusCode).toBe(200);
+  const never = await sql<{ key: string; reason: string }>(
+    `SELECT key, reason FROM marketing_suppression WHERE key = '+8801711000001'`,
+  );
+  expect(never.map((n) => n.reason)).toEqual(['unsubscribed']);
+});
+
+test('a channel the server has no provider for is refused with what to set', async () => {
+  const id = await make('marketing.campaign', 'uma', {
+    name: 'WhatsApp',
+    channel: 'whatsapp',
+    text: 'Hello',
+    lists: { set: [ids['news']] },
+  });
+  const refused = await step(id, 'send', 'mia');
+  expect(refused.status).toBe(422);
+  expect(JSON.stringify(refused.json)).toContain('cannot send WhatsApp messages yet');
 });

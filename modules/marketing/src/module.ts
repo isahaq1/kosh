@@ -24,10 +24,12 @@ import {
 import {
   type Composed,
   compose,
+  composeText,
   emailKey,
   linksOf,
   type MailLanguage,
   percent,
+  phoneKey,
   variantOf,
 } from './render.js';
 
@@ -43,9 +45,16 @@ export const START_JOB = 'marketing.start';
 /** Messages per batch: one transaction, then the next. */
 export const SEND_BATCH = 200;
 
-/** Whether this server can send email at all (a mailer and its public address): set when the app starts. */
-let transportReady = false;
-export const setCampaignTransport = (ready: boolean): void => {
+export const CHANNELS = { email: 'Email', sms: 'SMS', whatsapp: 'WhatsApp' } as const;
+export type Channel = keyof typeof CHANNELS;
+
+/** What this server can send through — a mailer with its public address, a text provider —: set when it starts. */
+let transportReady: Readonly<Record<Channel, boolean>> = {
+  email: false,
+  sms: false,
+  whatsapp: false,
+};
+export const setCampaignTransport = (ready: Readonly<Record<Channel, boolean>>): void => {
   transportReady = ready;
 };
 
@@ -135,12 +144,17 @@ export const MarketingSuppression = defineModel('marketing.suppression', {
   companyScoped: { required: true },
   access: { 'marketing.user': READ, 'marketing.manager': [...ALL, 'export', 'import'] },
   fields: {
-    email: f.char({ required: true, size: 254, label: 'Email' }),
+    email: f.char({ size: 254, label: 'Email' }),
+    phone: f.char({
+      size: 32,
+      label: 'Phone',
+      help: 'With its country code: +8801711000001. No text campaign writes to it.',
+    }),
     key: f.char({
       store: true,
       index: true,
-      ...compute('marketing.suppression', 'key', ['email'], (rows) => {
-        for (const r of rows) r.key = emailKey(r.email) ?? '';
+      ...compute('marketing.suppression', 'key', ['email', 'phone'], (rows) => {
+        for (const r of rows) r.key = emailKey(r.email) ?? phoneKey(r.phone) ?? '';
       }),
     }),
     reason: f.selection(
@@ -167,23 +181,38 @@ export const MarketingSuppression = defineModel('marketing.suppression', {
   },
   constraints: {
     address: {
-      ...check('marketing.suppression', ['email'], (rows) =>
-        [...rows].filter((r) => emailKey(r.email) === null).map((r) => r.id),
+      ...check('marketing.suppression', ['email', 'phone'], (rows) =>
+        [...rows]
+          .filter((r) => {
+            const email = (r.email ?? '').trim();
+            const phone = (r.phone ?? '').trim();
+            // One of the two, and a real one.
+            if ((email === '') === (phone === '')) return true;
+            return email !== '' ? emailKey(email) === null : phoneKey(phone) === null;
+          })
+          .map((r) => r.id),
       ),
-      message: ADDRESS,
+      message:
+        'Write an email address (name@example.com) or a phone number with its country code (+8801711000001): one of the two.',
     },
   },
 });
 
-/** The campaigns among these that cannot go out: no subject, no body, or nobody to write to. */
+/** Whether a campaign has nothing to say: an email its subject and message, a text its text. */
+const wordless = (c: {
+  channel: string;
+  subject: string | null;
+  body: string | null;
+  text: string | null;
+}): boolean =>
+  c.channel === 'email'
+    ? (c.subject ?? '').trim() === '' || (c.body ?? '').trim() === ''
+    : (c.text ?? '').trim() === '';
+
+/** The campaigns among these that cannot go out: nothing to say, or nobody to write to. */
 const notReady = records('marketing.campaign', async (campaigns) =>
   [...(await campaigns.load({ lists: true, tags: true }))]
-    .filter(
-      (c) =>
-        c.subject.trim() === '' ||
-        (c.body ?? '').trim() === '' ||
-        ([...c.lists].length === 0 && [...c.tags].length === 0),
-    )
+    .filter((c) => wordless(c) || ([...c.lists].length === 0 && [...c.tags].length === 0))
     .map((c) => c.id),
 );
 /** The same, with no time to send at. */
@@ -192,14 +221,13 @@ const notSchedulable = records('marketing.campaign', async (campaigns) =>
     .filter(
       (c) =>
         c.scheduledAt === null ||
-        c.subject.trim() === '' ||
-        (c.body ?? '').trim() === '' ||
+        wordless(c) ||
         ([...c.lists].length === 0 && [...c.tags].length === 0),
     )
     .map((c) => c.id),
 );
 const NOT_READY =
-  'Not ready: a campaign needs a subject, a message, and a mailing list or a contact tag to send to.';
+  'Not ready: an email needs a subject and a message, a text message its text, and both a mailing list or a contact tag to send to.';
 
 const counter = (label: string, help?: string) =>
   f.integer({
@@ -221,8 +249,27 @@ export const MarketingCampaign = defineModel('marketing.campaign', {
   },
   fields: {
     name: f.char({ required: true, label: 'Name', help: 'For you: recipients do not see it.' }),
-    subject: f.char({
+    channel: f.selection(CHANNELS, {
       required: true,
+      default: 'email',
+      label: 'Sent by',
+      help: 'Email, or a text message to phone numbers: SMS or WhatsApp, through the text provider of the server.',
+    }),
+    text: f.text({
+      label: 'Text message',
+      help: 'What an SMS or WhatsApp campaign says. {{name}} and {{first_name}} are filled per person. Keep it short: a long SMS is billed as several.',
+    }),
+    countryCode: f.char({
+      size: 5,
+      label: 'Country code for local numbers',
+      help: 'Numbers written without one (01711…) take it in place of their leading zero: +880. Empty: such numbers are left out.',
+    }),
+    stopLink: f.boolean({
+      default: true,
+      label: 'Add the way to unsubscribe',
+      help: 'Ends a text message with a link that takes the number off. Email always has it.',
+    }),
+    subject: f.char({
       label: 'Subject',
       help: 'What recipients read first. {{name}}, {{first_name}} and {{email}} are filled per person; {{first_name|friend}} says what to write when the name is not known.',
     }),
@@ -245,7 +292,7 @@ export const MarketingCampaign = defineModel('marketing.campaign', {
     tags: f.many2many('res.partner.tag', {
       relation: 'marketing_campaign_tag',
       label: 'To contacts tagged',
-      help: 'The contacts you may see that carry one of these tags and have an email address.',
+      help: 'The contacts you may see that carry one of these tags and have an email address — a phone number for a text campaign.',
     }),
     replyTo: f.char({
       label: 'Replies to',
@@ -356,14 +403,20 @@ export const MarketingCampaign = defineModel('marketing.campaign', {
           requires: 'marketing.send',
           guard: notReady,
           message: NOT_READY,
-          before: records('marketing.campaign', async (): Promise<void> => {
-            if (!transportReady)
+          before: records('marketing.campaign', async (campaigns): Promise<void> => {
+            for (const c of await campaigns.load(['channel'])) {
+              if (transportReady[c.channel]) continue;
               throw new orm.ValidationError(
                 'marketing.campaign',
                 ['state'],
-                'This server cannot send email yet.',
-                'Set SMTP_URL and KOSH_BASE_URL (the address people reach the server at), then start it again.',
+                c.channel === 'email'
+                  ? 'This server cannot send email yet.'
+                  : `This server cannot send ${CHANNELS[c.channel]} messages yet.`,
+                c.channel === 'email'
+                  ? 'Set SMTP_URL and KOSH_BASE_URL (the address people reach the server at), then start it again.'
+                  : 'Set the text provider (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and the sender number of the channel), then start it again.',
               );
+            }
           }),
           after: records('marketing.campaign', async (campaigns) => {
             const env = campaigns.env as unknown as Env;
@@ -414,7 +467,7 @@ export const MarketingCampaign = defineModel('marketing.campaign', {
     lockedOnceStarted: {
       ...check(
         'marketing.campaign',
-        ['subject', 'subjectB', 'body', 'preheader', 'lists', 'tags'],
+        ['channel', 'subject', 'subjectB', 'body', 'preheader', 'text', 'lists', 'tags'],
         async (campaigns) =>
           [...(await campaigns.load(['state']))]
             .filter((c) => c.state === 'sending' || c.state === 'sent')
@@ -438,7 +491,8 @@ export const MarketingDelivery = defineModel('marketing.delivery', {
       ondelete: 'cascade',
       index: true,
     }),
-    email: f.char({ required: true, size: 254, index: true, label: 'Email' }),
+    email: f.char({ size: 254, index: true, label: 'Email' }),
+    phone: f.char({ size: 32, index: true, label: 'Phone' }),
     name: f.char({ label: 'Name' }),
     language: f.selection(LANGUAGES, {
       required: true,
@@ -503,7 +557,8 @@ export const MarketingLink = defineModel('marketing.link', {
 });
 
 interface Person {
-  readonly email: string;
+  readonly email: string | null;
+  readonly phone: string | null;
   readonly key: string;
   readonly name: string;
   readonly language: MailLanguage;
@@ -523,6 +578,7 @@ export async function addressCampaign(env: Env, id: number): Promise<void> {
     .load({ lists: true, tags: true, company: true });
   if (c === undefined) return;
   const company = c.company.id;
+  const byText = c.channel !== 'email';
   const people = new Map<string, Person>();
   let invalid = 0;
   const listIds = [...c.lists].map((l) => l.id as number);
@@ -531,17 +587,23 @@ export async function addressCampaign(env: Env, id: number): Promise<void> {
       id: number;
       email: string;
       key: string;
+      phone: string | null;
       name: string | null;
       language: string;
       partner_id: number | null;
-    }>`SELECT id, email, key, name, language, partner_id FROM marketing_subscriber
+    }>`SELECT id, email, key, phone, name, language, partner_id FROM marketing_subscriber
         WHERE list_id = ANY(${listIds}::bigint[]) AND state = 'subscribed' ORDER BY id`;
     for (const r of rows) {
-      if (r.key === '') invalid += 1;
-      else if (!people.has(r.key))
-        people.set(r.key, {
+      // A text campaign knows a person by their number; a subscriber without one is not its to write to.
+      const phone = byText ? phoneKey(r.phone, c.countryCode) : null;
+      const key = byText ? (phone ?? '') : r.key;
+      if (key === '') {
+        if (!byText || (r.phone ?? '').trim() !== '') invalid += 1;
+      } else if (!people.has(key))
+        people.set(key, {
           email: r.email.trim(),
-          key: r.key,
+          phone,
+          key,
           name: r.name ?? '',
           language: r.language === 'bn' ? 'bn' : 'en',
           subscriber: Number(r.id),
@@ -553,18 +615,24 @@ export async function addressCampaign(env: Env, id: number): Promise<void> {
   if (tagIds.length > 0) {
     // As the sender: record rules decide which contacts are theirs to write to.
     const contacts = await env.model('res.partner').search({
-      where: { tags: { any: { id: { in: tagIds } } }, email: { isNull: false } } as never,
+      where: {
+        tags: { any: { id: { in: tagIds } } },
+        ...(byText ? {} : { email: { isNull: false } }),
+      } as never,
       order: ['id asc'],
     });
-    for (const p of await contacts.load(['name', 'email', 'lang'])) {
-      const key = emailKey(p.email);
+    for (const p of await contacts.load(['name', 'email', 'lang', 'mobile', 'phone'])) {
+      const written = byText ? (p.mobile ?? p.phone ?? '') : (p.email ?? '');
+      const phone = byText ? phoneKey(written, c.countryCode) : null;
+      const key = byText ? phone : emailKey(written);
       if (key === null) {
-        if ((p.email ?? '').trim() !== '') invalid += 1;
+        if (written.trim() !== '') invalid += 1;
         continue;
       }
       if (!people.has(key))
         people.set(key, {
-          email: (p.email ?? '').trim(),
+          email: (p.email ?? '').trim() === '' ? null : (p.email ?? '').trim(),
+          phone,
           key,
           name: p.name,
           language: p.lang === 'bn' ? 'bn' : 'en',
@@ -580,17 +648,19 @@ export async function addressCampaign(env: Env, id: number): Promise<void> {
           SELECT key FROM marketing_suppression WHERE company_id = ${company}`
       ).map((r) => r.key),
     );
-    const hasB = (c.subjectB ?? '').trim() !== '';
+    const hasB = !byText && (c.subjectB ?? '').trim() !== '';
     let position = 0;
     let skipped = invalid;
     const rows: Record<string, unknown>[] = [];
     for (const p of people.values()) {
-      const out = never.has(p.key);
+      // Whoever said stop is left out, by the address or by the number.
+      const out = never.has(p.key) || (byText && never.has(emailKey(p.email) ?? ''));
       if (out) skipped += 1;
       rows.push({
         campaign: id,
         company,
         email: p.email,
+        phone: p.phone,
         name: p.name,
         language: p.language,
         subscriber: p.subscriber,
@@ -603,7 +673,7 @@ export async function addressCampaign(env: Env, id: number): Promise<void> {
     }
     for (let i = 0; i < rows.length; i += 1000)
       await su.model('marketing.delivery').create(rows.slice(i, i + 1000) as never);
-    const links = linksOf(c.body ?? '');
+    const links = byText ? [] : linksOf(c.body ?? '');
     if (links.length > 0)
       await su
         .model('marketing.link')
@@ -662,6 +732,14 @@ export interface Outgoing extends Composed {
   readonly replyTo: string | null;
 }
 
+/** A text message ready to hand to the text provider. */
+export interface OutgoingText {
+  readonly delivery: number;
+  readonly channel: 'sms' | 'whatsapp';
+  readonly to: string;
+  readonly text: string;
+}
+
 /** The addresses a recipient's links use, from the secret in them. */
 export const trackingOf = (base: string, token: string) => ({
   click: (n: number) => `${base}/api/v1/public/campaigns/c/${token}/${n}`,
@@ -679,19 +757,20 @@ export async function takeBatch(
   id: number,
   base: string,
   size: number = SEND_BATCH,
-): Promise<{ mails: Outgoing[]; more: boolean }> {
+): Promise<{ mails: Outgoing[]; texts: OutgoingText[]; more: boolean }> {
   const [c] = await su
     .model('marketing.campaign')
     .browse([id] as never)
     .load({ company: true });
-  if (c === undefined || c.state !== 'sending') return { mails: [], more: false };
+  if (c === undefined || c.state !== 'sending') return { mails: [], texts: [], more: false };
   const waiting = await su.sql<{
     id: number;
-    email: string;
+    email: string | null;
+    phone: string | null;
     name: string | null;
     language: string;
     variant: string;
-  }>`SELECT id, email, name, language, variant FROM marketing_delivery
+  }>`SELECT id, email, phone, name, language, variant FROM marketing_delivery
       WHERE campaign_id = ${id} AND state = 'queued' ORDER BY id LIMIT ${size + 1}
       FOR UPDATE SKIP LOCKED`;
   const links = [
@@ -700,25 +779,46 @@ export async function takeBatch(
       .search({ where: { campaign: id } as never, order: ['position asc'] })),
   ].map((l) => l.url);
   const mails: Outgoing[] = [];
+  const texts: OutgoingText[] = [];
   const now = new Date();
   for (const d of waiting.slice(0, size)) {
     const token = randomBytes(24).toString('base64url');
-    const composed = compose({
-      subject:
-        d.variant === 'b' && (c.subjectB ?? '').trim() !== '' ? (c.subjectB ?? '') : c.subject,
-      preheader: c.preheader,
-      body: c.body ?? '',
-      who: { name: d.name ?? '', email: d.email },
-      links,
-      tracking: trackingOf(base, token),
-      language: d.language === 'bn' ? 'bn' : 'en',
-      sender: c.company.name,
-    });
+    const language = d.language === 'bn' ? 'bn' : 'en';
+    const who = { name: d.name ?? '', email: d.email ?? '' };
     await su
       .model('marketing.delivery')
       .browse([Number(d.id)] as never)
       .write({ state: 'sent', sentAt: now, tokenHash: hashToken(token) } as never);
-    mails.push({ ...composed, delivery: Number(d.id), to: d.email, replyTo: c.replyTo });
+    if (c.channel !== 'email') {
+      texts.push({
+        delivery: Number(d.id),
+        channel: c.channel,
+        to: d.phone ?? '',
+        text: composeText({
+          text: c.text ?? '',
+          who,
+          // Without the server's public address there is no link to give.
+          unsubscribe:
+            c.stopLink === true && base !== '' ? trackingOf(base, token).unsubscribe : null,
+          language,
+        }),
+      });
+      continue;
+    }
+    const composed = compose({
+      subject:
+        d.variant === 'b' && (c.subjectB ?? '').trim() !== ''
+          ? (c.subjectB ?? '')
+          : (c.subject ?? ''),
+      preheader: c.preheader,
+      body: c.body ?? '',
+      who,
+      links,
+      tracking: trackingOf(base, token),
+      language,
+      sender: c.company.name,
+    });
+    mails.push({ ...composed, delivery: Number(d.id), to: d.email ?? '', replyTo: c.replyTo });
   }
   await su.flush();
   const more = waiting.length > size;
@@ -733,7 +833,7 @@ export async function takeBatch(
       .browse([id] as never)
       .done();
   }
-  return { mails, more };
+  return { mails, texts, more };
 }
 
 /** Messages the mail server refused: on record, and out of the figures of what was sent. */
@@ -829,14 +929,20 @@ export async function unsubscribeView(
   token: string,
 ): Promise<{ email: string; language: MailLanguage; done: boolean; sender: string } | null> {
   const [row] = await su.sql<Record<string, unknown>>`
-    SELECT d.email, d.language, d.unsubscribed_at, c.name AS sender
+    SELECT d.email, d.phone, d.language, d.unsubscribed_at, c.name AS sender, m.channel
       FROM marketing_delivery d JOIN res_company c ON c.id = d.company_id
+      JOIN marketing_campaign m ON m.id = d.campaign_id
      WHERE d.token_hash = ${hashToken(token)}`;
   if (row === undefined) return null;
-  const email = String(row['email']);
+  const email = String(row['email'] ?? '');
+  const phone = String(row['phone'] ?? '');
   const at = email.indexOf('@');
   return {
-    email: `${email.slice(0, Math.min(2, at))}…${email.slice(at)}`,
+    // Enough to recognise, not enough to learn it from a forwarded link.
+    email:
+      row['channel'] !== 'email' && phone !== ''
+        ? `${phone.slice(0, 4)}…${phone.slice(-2)}`
+        : `${email.slice(0, Math.min(2, at))}…${email.slice(at)}`,
     language: row['language'] === 'bn' ? 'bn' : 'en',
     done: row['unsubscribed_at'] !== null,
     sender: String(row['sender']),
@@ -942,7 +1048,9 @@ export async function unsubscribe(su: Env, token: string): Promise<boolean> {
       .model('marketing.subscriber')
       .browse([d.subscriber.id] as never)
       .write({ state: 'unsubscribed', unsubscribedAt: now } as never);
-  const key = emailKey(d.email);
+  // The address the message went to: a number for a text, an email otherwise.
+  const number = phoneKey(d.phone);
+  const key = number ?? emailKey(d.email);
   if (key !== null) {
     const there = await su.model('marketing.suppression').search({
       where: { company: d.company.id, key } as never,
@@ -952,7 +1060,7 @@ export async function unsubscribe(su: Env, token: string): Promise<boolean> {
       await su.model('marketing.suppression').create([
         {
           company: d.company.id,
-          email: key,
+          ...(number === null ? { email: key } : { phone: key }),
           reason: 'unsubscribed',
           note: `From the campaign ${d.campaign.name}`,
         },

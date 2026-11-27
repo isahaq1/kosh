@@ -9,6 +9,7 @@ export const bn: Readonly<Record<string, string>> = {
   'A second subject to try: every other recipient gets it, and the figures show which was opened more.':
     'পরীক্ষার জন্য দ্বিতীয় বিষয়: প্রতি দ্বিতীয় প্রাপক এটি পান, আর পরিসংখ্যান দেখায় কোনটি বেশি খোলা হয়েছে।',
   Active: 'সক্রিয়',
+  'Add the way to unsubscribe': 'সদস্যতা ছাড়ার উপায় যোগ করুন',
   'Added by hand': 'হাতে যোগ করা',
   'Addresses on the never-email list, and addresses that are not addresses.':
     'কখনো-ইমেইল-নয় তালিকার ঠিকানা, এবং যেগুলো আসলে ঠিকানা নয়।',
@@ -40,6 +41,7 @@ export const bn: Readonly<Record<string, string>> = {
   Contact: 'যোগাযোগ',
   'Counted by the server as the messages go out and are read.':
     'বার্তা পাঠানো ও পড়ার সাথে সাথে সার্ভার গণনা করে।',
+  'Country code for local numbers': 'স্থানীয় নম্বরের জন্য দেশের কোড',
   'Created At': 'তৈরির সময়',
   'Created By': 'তৈরি করেছেন',
   'Display Name': 'প্রদর্শিত নাম',
@@ -47,9 +49,15 @@ export const bn: Readonly<Record<string, string>> = {
   'Each address is written to once, whichever list or tag it comes from. Addresses that unsubscribed or stand on the never-email list are left out by the server.':
     'প্রতিটি ঠিকানায় একবারই লেখা হয়, তা যে তালিকা বা ট্যাগ থেকেই আসুক। যারা সদস্যতা ছেড়েছেন বা কখনো-ইমেইল-নয় তালিকায় আছেন, সার্ভার তাদের বাদ দেয়।',
   Email: 'ইমেইল',
+  'Email, or a text message to phone numbers: SMS or WhatsApp, through the text provider of the server.':
+    'ইমেইল, অথবা ফোন নম্বরে টেক্সট বার্তা: এসএমএস বা হোয়াটসঅ্যাপ, সার্ভারের টেক্সট প্রোভাইডারের মাধ্যমে।',
+  'Ends a text message with a link that takes the number off. Email always has it.':
+    'টেক্সট বার্তার শেষে এমন একটি লিংক দেয় যা নম্বরটি বাদ দেয়। ইমেইলে এটি সবসময় থাকে।',
   English: 'ইংরেজি',
   Figures: 'পরিসংখ্যান',
   'Finished at': 'শেষ হওয়ার সময়',
+  'For a campaign sent by SMS or WhatsApp: it goes to phone numbers, and the email fields below are not used.':
+    'এসএমএস বা হোয়াটসঅ্যাপে পাঠানো ক্যাম্পেইনের জন্য: এটি ফোন নম্বরে যায়, এবং নিচের ইমেইলের ঘরগুলো ব্যবহৃত হয় না।',
   'For you: recipients do not see it.': 'আপনার জন্য: প্রাপকেরা এটি দেখেন না।',
   ID: 'আইডি',
   Key: 'কী',
@@ -83,10 +91,12 @@ export const bn: Readonly<Record<string, string>> = {
   'No campaign writes to an address on this list, whichever list or tag it comes from.':
     'এই তালিকার কোনো ঠিকানায় কোনো ক্যাম্পেইন লেখে না, তা যে তালিকা বা ট্যাগ থেকেই আসুক।',
   'No.': 'ক্রম',
-  'Not ready: a campaign needs a subject, a message, and a mailing list or a contact tag to send to.':
-    'প্রস্তুত নয়: ক্যাম্পেইনের একটি বিষয়, একটি বার্তা, এবং পাঠানোর জন্য একটি মেইলিং তালিকা বা যোগাযোগের ট্যাগ লাগে।',
+  'Not ready: an email needs a subject and a message, a text message its text, and both a mailing list or a contact tag to send to.':
+    'প্রস্তুত নয়: ইমেইলের একটি বিষয় ও একটি বার্তা লাগে, টেক্সট বার্তার তার লেখা, এবং উভয়ের জন্য পাঠানোর একটি মেইলিং তালিকা বা যোগাযোগের ট্যাগ।',
   'Not sent': 'পাঠানো হয়নি',
   Note: 'নোট',
+  'Numbers written without one (01711…) take it in place of their leading zero: +880. Empty: such numbers are left out.':
+    'কোড ছাড়া লেখা নম্বর (01711…) শুরুর শূন্যের জায়গায় এটি পায়: +880। খালি: এমন নম্বর বাদ পড়ে।',
   'Of the recipients who got subject A.': 'যেসব প্রাপক বিষয় A পেয়েছেন তাদের মধ্যে।',
   'Of the recipients who got subject B.': 'যেসব প্রাপক বিষয় B পেয়েছেন তাদের মধ্যে।',
   'Only subscribed addresses are written to. Unsubscribed: they asked out. Bounced: the address does not take mail.':
@@ -114,8 +124,8 @@ export const bn: Readonly<Record<string, string>> = {
   'Recipients who opened it, of those it was sent to. Mail clients that hide pictures are not counted.':
     'যাদের পাঠানো হয়েছে তাদের মধ্যে যারা খুলেছেন। যেসব মেইল ক্লায়েন্ট ছবি লুকায় সেগুলো গণনা হয় না।',
   'Replies to': 'উত্তর যাবে',
-  'Say when to send it (Send at). Not ready: a campaign needs a subject, a message, and a mailing list or a contact tag to send to.':
-    'কখন পাঠাতে হবে বলুন (পাঠানোর সময়)। প্রস্তুত নয়: ক্যাম্পেইনের একটি বিষয়, একটি বার্তা, এবং পাঠানোর জন্য একটি মেইলিং তালিকা বা যোগাযোগের ট্যাগ লাগে।',
+  'Say when to send it (Send at). Not ready: an email needs a subject and a message, a text message its text, and both a mailing list or a contact tag to send to.':
+    'কখন পাঠাতে হবে বলুন (পাঠানোর সময়)। প্রস্তুত নয়: ইমেইলের একটি বিষয় ও একটি বার্তা লাগে, টেক্সট বার্তার তার লেখা, এবং উভয়ের জন্য পাঠানোর একটি মেইলিং তালিকা বা যোগাযোগের ট্যাগ।',
   Schedule: 'সময় নির্ধারণ করুন',
   Scheduled: 'নির্ধারিত',
   'Scheduled: it starts by itself at its time. Sending: the server writes to the recipients, a batch at a time. Sent: every message went out or was refused.':
@@ -125,8 +135,10 @@ export const bn: Readonly<Record<string, string>> = {
   Sending: 'পাঠানো হচ্ছে',
   Sent: 'পাঠানো হয়েছে',
   'Sent at': 'পাঠানোর সময়',
+  'Sent by': 'যেভাবে পাঠানো হয়',
   'Sent with A': 'A দিয়ে পাঠানো',
   'Sent with B': 'B দিয়ে পাঠানো',
+  SMS: 'এসএমএস',
   'Started at': 'শুরুর সময়',
   State: 'অবস্থা',
   Status: 'অবস্থা',
@@ -139,8 +151,10 @@ export const bn: Readonly<Record<string, string>> = {
   'Subscribers by list': 'তালিকা অনুযায়ী সদস্য',
   'Subscribers by status': 'অবস্থা অনুযায়ী সদস্য',
   Subscription: 'সদস্যতা',
-  'The contacts you may see that carry one of these tags and have an email address.':
-    'আপনি যেসব যোগাযোগ দেখতে পারেন, যাদের এই ট্যাগগুলোর একটি এবং একটি ইমেইল ঠিকানা আছে।',
+  'Text message': 'টেক্সট বার্তা',
+  'Text message (SMS, WhatsApp)': 'টেক্সট বার্তা (এসএমএস, হোয়াটসঅ্যাপ)',
+  'The contacts you may see that carry one of these tags and have an email address — a phone number for a text campaign.':
+    'আপনি যেসব যোগাযোগ দেখতে পারেন, যাদের এই ট্যাগগুলোর একটি এবং একটি ইমেইল ঠিকানা আছে — টেক্সট ক্যাম্পেইনের জন্য একটি ফোন নম্বর।',
   'The language of the words the server added to the message.':
     'সার্ভার বার্তায় যে কথাগুলো যোগ করেছে তার ভাষা।',
   'The language of the words the server adds to a message: why it came, and how to unsubscribe.':
@@ -159,16 +173,23 @@ export const bn: Readonly<Record<string, string>> = {
   'Updated By': 'হালনাগাদ করেছেন',
   'User (writes campaigns, keeps subscribers)': 'ব্যবহারকারী (ক্যাম্পেইন লেখেন, সদস্য রাখেন)',
   Waiting: 'অপেক্ষমাণ',
+  'What an SMS or WhatsApp campaign says. {{name}} and {{first_name}} are filled per person. Keep it short: a long SMS is billed as several.':
+    'এসএমএস বা হোয়াটসঅ্যাপ ক্যাম্পেইন যা বলে। {{name}} ও {{first_name}} প্রত্যেক ব্যক্তির জন্য পূরণ হয়। ছোট রাখুন: লম্বা এসএমএসের বিল কয়েকটি হিসেবে হয়।',
   'What it is for': 'এটি কীসের জন্য',
   'What people on this list agreed to receive.': 'এই তালিকার মানুষ কী পেতে সম্মত হয়েছেন।',
   'What recipients read first. {{name}}, {{first_name}} and {{email}} are filled per person; {{first_name|friend}} says what to write when the name is not known.':
     'প্রাপকেরা প্রথমে যা পড়েন। {{name}}, {{first_name}} ও {{email}} প্রত্যেক ব্যক্তির জন্য পূরণ হয়; {{first_name|friend}} বলে দেয় নাম জানা না থাকলে কী লিখতে হবে।',
   'What they did': 'তারা কী করেছেন',
+  WhatsApp: 'হোয়াটসঅ্যাপ',
   'Where a reply goes; empty: the sender’s address.': 'উত্তর কোথায় যাবে; খালি: প্রেরকের ঠিকানা।',
   'Which of the two subjects it got.': 'দুটি বিষয়ের কোনটি এটি পেয়েছে।',
   Why: 'কারণ',
   'Why no campaign writes to this address. Unsubscribed: they asked out from a message.':
     'কেন কোনো ক্যাম্পেইন এই ঠিকানায় লেখে না। সদস্যতা ত্যাগ: তারা একটি বার্তা থেকে বাদ পড়তে চেয়েছেন।',
   'Why not': 'কেন নয়',
+  'With its country code: +8801711000001. No text campaign writes to it.':
+    'দেশের কোডসহ: +8801711000001। কোনো টেক্সট ক্যাম্পেইন এতে লেখে না।',
+  'Write an email address (name@example.com) or a phone number with its country code (+8801711000001): one of the two.':
+    'একটি ইমেইল ঠিকানা (name@example.com) অথবা দেশের কোডসহ একটি ফোন নম্বর (+8801711000001) লিখুন: দুটির একটি।',
   'Write an email address: name@example.com.': 'একটি ইমেইল ঠিকানা লিখুন: name@example.com।',
 };

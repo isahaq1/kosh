@@ -20,6 +20,23 @@ export function emailKey(raw: string | null | undefined): string | null {
   return /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(key) && key.length <= 254 ? key : null;
 }
 
+/**
+ * A phone number as the key it is known by — E.164, `+8801711000001` — or `null` when it is not a number. Spaces,
+ * dashes and brackets are dropped and `00` is a plus; a local number (`01711…`) takes the country code given
+ * (`+880`) in place of its leading zero.
+ */
+export function phoneKey(
+  raw: string | null | undefined,
+  countryCode?: string | null,
+): string | null {
+  let digits = (raw ?? '').replace(/[\s().-]/g, '');
+  if (digits.startsWith('00')) digits = `+${digits.slice(2)}`;
+  const code = (countryCode ?? '').replace(/[\s-]/g, '');
+  if (digits !== '' && !digits.startsWith('+') && /^\+[1-9]\d{0,3}$/.test(code))
+    digits = `${code}${digits.replace(/^0/, '')}`;
+  return /^\+[1-9]\d{7,14}$/.test(digits) ? digits : null;
+}
+
 /** What a placeholder may read of a recipient. */
 export interface Recipient {
   readonly name: string;
@@ -158,6 +175,21 @@ ${footer}
             'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
           },
   };
+}
+
+const STOP = { en: 'Stop', bn: 'বন্ধ করুন' } as const;
+
+/** One recipient's text message (SMS, WhatsApp): the text with its placeholders, and the way out when asked. */
+export function composeText(input: {
+  readonly text: string;
+  readonly who: Recipient;
+  readonly unsubscribe: string | null;
+  readonly language: MailLanguage;
+}): string {
+  const text = personalize(input.text, input.who, false).trim();
+  return input.unsubscribe === null
+    ? text
+    : `${text}\n${STOP[input.language]}: ${input.unsubscribe}`;
 }
 
 /** A share as a percentage to one place (`12.5`), or `null` over nothing. */
