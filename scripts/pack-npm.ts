@@ -107,6 +107,7 @@ const PACKAGES = [
   'website_sale',
   'website_sale_stock',
   'documents',
+  'knowledge',
   'sign',
   'approvals',
   'pos_stock',

@@ -120,6 +120,7 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   payroll: Banknote,
   helpdesk: LifeBuoy,
   documents: FolderOpen,
+  knowledge: BookOpen,
   sign: Signature,
   approvals: BadgeCheck,
   event: Ticket,

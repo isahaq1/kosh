@@ -104,6 +104,9 @@ importers:
       '@kosh/indent_purchase':
         specifier: workspace:*
         version: link:../../modules/indent_purchase
+      '@kosh/knowledge':
+        specifier: workspace:*
+        version: link:../../modules/knowledge
       '@kosh/l10n_bd':
         specifier: workspace:*
         version: link:../../modules/l10n_bd
@@ -442,6 +445,9 @@ importers:
       '@kosh/indent':
         specifier: workspace:*
         version: link:../../modules/indent
+      '@kosh/knowledge':
+        specifier: workspace:*
+        version: link:../../modules/knowledge
       '@kosh/l10n_bd_payroll':
         specifier: workspace:*
         version: link:../../modules/l10n_bd_payroll
@@ -1655,6 +1661,34 @@ importers:
       '@kosh/permissions':
         specifier: workspace:*
         version: link:../../packages/permissions
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/knowledge:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
       '@kosh/settings':
         specifier: workspace:*
         version: link:../../packages/settings
@@ -4234,6 +4268,9 @@ importers:
       '@kosh/integrations':
         specifier: workspace:*
         version: link:../integrations
+      '@kosh/knowledge':
+        specifier: workspace:*
+        version: link:../../modules/knowledge
       '@kosh/l10n_bd':
         specifier: workspace:*
         version: link:../../modules/l10n_bd

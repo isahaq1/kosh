@@ -1831,6 +1831,29 @@ GET  /api/v1/rental/availability?product=<id>&from=<ISO>&to=<ISO>   # { total, f
 POST /api/v1/models/rental.order/<id>/transitions/confirm | pickup | receive | cancel
 ```
 
+## Knowledge
+
+*Knowledge* (`@kosh/knowledge`, RFC 0038) keeps what a company knows: handbooks, procedures, playbooks.
+
+- **Articles** sit in a tree (*Inside*), each with an icon, a title and its content in rich text — the same
+  editor as task and ticket descriptions, rebuilt from an allow-list by the server. *Articles inside* and
+  *Linked records* are tiles on each.
+- **Who reads it**: *Everyone* with Knowledge, *Its members*, or *Only me*. Its **owner** and its **editors**
+  write it — and read it whatever its visibility; members read it. A Knowledge manager reads and writes every
+  article and is the only one who hands an article to someone else.
+- **Never wider than the article it is inside**: inside a members-only article, an article for everyone is
+  refused, and so is narrowing an article while something inside it is wider. A new article inside another starts
+  as wide as it.
+- **Linked from any record**: a link names a record — a contact, a product, an order — and is refused for a record
+  that does not exist or that its maker may not read. A record's articles are those one may read.
+- **Search** finds the title and the text (not the markup), and only what one may read.
+- These are record rules: the same in lists, search, exports and the API.
+
+```http
+GET /api/v1/knowledge/search?q=leave            # { items: [{ id, name, icon, snippet }] }
+GET /api/v1/knowledge/for?model=res.partner&id=7  # the record's articles
+```
+
 ## Final settlement
 
 When a person leaves, *Payroll › Final settlements* works out what they are owed and owe, and pays it (RFC 0039).

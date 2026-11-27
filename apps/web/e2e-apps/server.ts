@@ -40,6 +40,7 @@ import { hrAppraisal } from '@kosh/hr_appraisal';
 import { dataImport } from '@kosh/import';
 import { indent } from '@kosh/indent';
 import { indentPurchase } from '@kosh/indent_purchase';
+import { knowledge } from '@kosh/knowledge';
 import { l10nBd } from '@kosh/l10n_bd';
 import { l10nBdPayroll } from '@kosh/l10n_bd_payroll';
 import { l10nBdPos } from '@kosh/l10n_bd_pos';
@@ -278,6 +279,7 @@ const CATALOGUE = [
   hrAccrual,
   helpdesk,
   documents,
+  knowledge,
   sign,
   approvals,
   accountAsset,
@@ -339,6 +341,7 @@ await applyApps(
         'payroll',
         'helpdesk',
         'documents',
+        'knowledge',
         'sign',
         'approvals',
         'account_asset',
@@ -435,6 +438,7 @@ for (const [login, name, groups] of [
       'payroll.manager',
       'helpdesk.manager',
       'documents.manager',
+      'knowledge.manager',
       'sign.manager',
       'messaging.user',
       'reporting.user',

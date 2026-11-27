@@ -21,6 +21,7 @@
     "@kosh/assistant": "workspace:*",
     "@kosh/attendance": "workspace:*",
     "@kosh/documents": "workspace:*",
+    "@kosh/knowledge": "workspace:*",
     "@kosh/expense": "workspace:*",
     "@kosh/indent": "workspace:*",
     "@kosh/expense_account": "workspace:*",

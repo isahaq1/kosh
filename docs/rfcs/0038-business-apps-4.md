@@ -357,6 +357,28 @@ The trip of a Stockroom transfer from its gate details, drivers' licences from W
   reserved order; the deposit taken and given back as payments; pricing by duration (a week cheaper than seven
   days); rental from the Shop.
 
+## Step 7 — Knowledge (design and notes, 2026-11-27)
+
+- **`knowledge.article`**: title, icon, `parent` with Shutro's `hierarchy` (a path for the tree), order, content
+  (`html`), visibility (everyone, its members, only me), owner, members, editors. **`knowledge.link`**: an
+  article and a record (`resModel`, `resId`, its name then).
+- **Record rules**: read — everyone's, one's own, a member's, an editor's; write and delete — the owner's and the
+  editors'; create — only as the owner; a manager everything. A link is read with its article and written by
+  whoever writes the article. The owner is handed over only with `knowledge.manage`.
+- **Never wider than the parent**, checked both ways: a child wider than its parent, and a parent narrowed below
+  a child.
+- **A link to a record one may read**: the constraint searches the record as the person (`env.model(resModel)`):
+  an unknown model or a record they may not see is refused — otherwise the link would tell them it exists.
+- **Search** runs in PostgreSQL over the title and the content with its tags removed, then keeps what the
+  person's rules allow (`ILIKE` with `%` and `_` escaped); a snippet around the first match.
+- Tests: three visibilities read by four people; members read, editors write, nobody else; a private article's
+  editor reads it; wider than the parent both ways; handing an article over; links to a contact by someone with
+  and without Contacts, to nothing, to an unknown model, from an article only read; a record's articles per
+  person; search in the text, not in the markup, not across rules, a pattern taken as text; two browser tests.
+- **Left out**: the AI assistant reading articles (a bridge with `@kosh/assistant`, as Live chat's); versions of
+  an article's content (the activity log leaves rich text out); a panel of a record's articles on every form;
+  favourites; templates; articles published on the website.
+
 ## 5. Open questions
 
 1. The order of §2 — is Quality first right, or does Fleet or Campaigns matter more now?

@@ -47,6 +47,7 @@ export type AppName =
   | 'account_budget'
   | 'website_sale'
   | 'documents'
+  | 'knowledge'
   | 'sign'
   | 'approvals'
   | 'sale_project'
@@ -348,6 +349,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '📁',
     server: 'documents',
     web: 'registerDocumentsWeb',
+  },
+  knowledge: {
+    label:
+      'Knowledge: articles in a tree, for everyone, their members or their owner; linked from records',
+    icon: '📚',
+    server: 'knowledge',
   },
   sign: {
     label:

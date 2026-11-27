@@ -23,6 +23,7 @@ import { hrAccrual } from '@kosh/hr_accrual';
 import { hrAppraisal } from '@kosh/hr_appraisal';
 import { indent } from '@kosh/indent';
 import { indentPurchase } from '@kosh/indent_purchase';
+import { knowledge } from '@kosh/knowledge';
 import { l10nBd } from '@kosh/l10n_bd';
 import { l10nBdPayroll } from '@kosh/l10n_bd_payroll';
 import { l10nBdPos } from '@kosh/l10n_bd_pos';
@@ -133,6 +134,7 @@ export const DEMO_APPS: readonly string[] = [
   'payroll',
   'helpdesk',
   'documents',
+  'knowledge',
   'sign',
   'approvals',
   'account_asset',
@@ -187,6 +189,7 @@ export function demoCatalogue(): KoshModule[] {
     payroll,
     helpdesk,
     documents,
+    knowledge,
     sign,
     approvals,
     accountAsset,
