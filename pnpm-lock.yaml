@@ -83,6 +83,9 @@ importers:
       '@kosh/fleet':
         specifier: workspace:*
         version: link:../../modules/fleet
+      '@kosh/fleet_account':
+        specifier: workspace:*
+        version: link:../../modules/fleet_account
       '@kosh/helpdesk':
         specifier: workspace:*
         version: link:../../modules/helpdesk
@@ -530,6 +533,9 @@ importers:
       '@kosh/fleet':
         specifier: workspace:*
         version: link:../../modules/fleet
+      '@kosh/fleet_account':
+        specifier: workspace:*
+        version: link:../../modules/fleet_account
       '@kosh/hr':
         specifier: workspace:*
         version: link:../../modules/hr
@@ -1372,6 +1378,49 @@ importers:
       '@kosh/settings':
         specifier: workspace:*
         version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/fleet_account:
+    dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../accounting
+      '@kosh/fleet':
+        specifier: workspace:*
+        version: link:../fleet
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@kosh/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@testcontainers/postgresql':
         specifier: ^12.2.1
         version: 12.2.1
@@ -3844,6 +3893,9 @@ importers:
       '@kosh/fleet':
         specifier: workspace:*
         version: link:../../modules/fleet
+      '@kosh/fleet_account':
+        specifier: workspace:*
+        version: link:../../modules/fleet_account
       '@kosh/helpdesk':
         specifier: workspace:*
         version: link:../../modules/helpdesk

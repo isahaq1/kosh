@@ -1673,6 +1673,30 @@ POST /api/v1/models/fleet.trip/<id>/transitions/start | finish | cancel | replan
 POST /api/v1/fleet/papers/refresh  # managers: statuses up to today, the expiring ones announced (the server does it every six hours)
 ```
 
+### Fleet in the books
+
+With Accounting installed, the bridge `@kosh/fleet_account` comes by itself. Each vehicle has a **cost centre** —
+made with its plate the first time something is booked, or chosen on the vehicle — and a fill, a service and a
+paper each get **Book**:
+
+- **Paid from** a cash or bank journal: one posted entry on the day of the log — *Vehicle fuel* (6410), *Vehicle
+  maintenance* (6420) or *Vehicle licences and insurance* (6430) on the vehicle's cost centre, against the
+  journal's account.
+- **Paid from** left empty: on account. The cost becomes a line on the **draft bill** of the station, the workshop
+  or the issuer — one bill collects a vendor's logs until an accountant checks it against the vendor's statement
+  and posts it. Nothing is on the cost centre before that.
+- A log with no amount, or with neither a journal nor a vendor, is refused.
+
+A booked log **no longer changes** and cannot be deleted. **Take out of the books** reverses the entry — the
+reversal carries the cost centre, which is back where it was — or takes the line off the draft bill and cancels a
+bill left empty; once the bill is posted, credit it in Accounting first. Booking takes the role *Fleet costs in
+the books*; logging fuel does not give it. *Accounting › Reports › By cost centre* then shows what each vehicle
+cost.
+
+```http
+POST /api/v1/models/fleet.fuel/<id>/transitions/book | unbook      # also fleet.service, fleet.document
+```
+
 ## Final settlement
 
 When a person leaves, *Payroll › Final settlements* works out what they are owed and owe, and pays it (RFC 0039).

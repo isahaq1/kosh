@@ -286,6 +286,8 @@ export async function reverseMove(
             ? m.lines.map((l) => ({
                 account: l.account?.id ?? null,
                 partner: l.partner?.id ?? null,
+                // The cost centre goes with the line: what is reversed leaves its cost centre too.
+                analytic: l.analytic?.id ?? null,
                 name: l.name,
                 debit: l.credit.amount,
                 credit: l.debit.amount,
@@ -299,6 +301,7 @@ export async function reverseMove(
                   lineKind: 'product' as const,
                   account: l.account?.id ?? null,
                   partner: l.partner?.id ?? null,
+                  analytic: l.analytic?.id ?? null,
                   name: l.name,
                   product: l.product?.id ?? null,
                   quantity: l.quantity,

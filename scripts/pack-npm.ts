@@ -103,6 +103,7 @@ const PACKAGES = [
   'approvals',
   'pos_stock',
   'expense_account',
+  'fleet_account',
   'payroll_account',
   'l10n_bd_payroll',
   'l10n_bd_pos',

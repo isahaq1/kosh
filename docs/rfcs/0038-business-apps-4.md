@@ -157,10 +157,34 @@ Statistical process control charts, sampling plans by AQL, measuring devices ove
   drivers are contacts, not Workforce's employees, and have no licence with an expiry; fuel by a card or a
   station's statement; tyres; GPS.
 
+### `fleet_account` (2026-11-27)
+
+- **A cost centre per vehicle** (`fleet.vehicle.analytic`), made with the plate the first time something is
+  booked. **Book** on a fill, a service and a paper (`booking`: *not booked* → *booked*, the permission
+  `fleet_account.book` of the role *Fleet costs in the books*):
+  - *Paid from* a cash or bank journal → one posted entry dated the log, the expense (6410 fuel, 6420
+    maintenance, 6430 licences and insurance — found by code, made when the chart lacks them) on the cost centre
+    against the journal's account;
+  - otherwise → a line on the vendor's **draft bill** of fleet costs (`invoiceOrigin` *Fleet*): one bill per
+    station or workshop collects its logs until an accountant posts it — a month's statement is one bill, not
+    thirty.
+- A booked log does not change (vehicle, date, amount, vendor, journal) and is not deleted: its journal line
+  points at it with a restricting foreign key. *Take out of the books* reverses the entry, or removes the line
+  from the draft bill and cancels a bill left empty; a posted bill refuses it until it is credited.
+- **A defect found in Accounting on the way**: `reverseMove` copied a line's account and partner but **not its
+  cost centre**, so a reversed entry — and a credit note made from a bill — left its cost on the cost centre for
+  ever. Reversals now carry the cost centre; the bridge's test proves the centre returns to what it was.
+- Tests: the cash entry with its lines and date; nobody but the role books; locked and not deleted; nothing to
+  book; a journal that holds no money; two fills on one bill and the workshop's own; a paper; out of the books
+  both ways, booked again at the new amount; refused once the bill is posted.
+- **Left out**: taxes on the bill's lines (the accountant adds them); a vehicle's own expense accounts; booking
+  many logs in one request (each is one call); the purchase of the vehicle itself as a fixed asset
+  (`account_asset` from the bill, as for any asset); no screen test of its own — the buttons are view
+  extensions like every bridge's.
+
 ### Later steps
 
-`fleet_account` (fuel and service costs to Accounting by cost centre), the trip of a Stockroom transfer from its
-gate details, drivers' licences from Workforce, tyres, GPS.
+The trip of a Stockroom transfer from its gate details, drivers' licences from Workforce, tyres, GPS.
 
 ## 5. Open questions
 

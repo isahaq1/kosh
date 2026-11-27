@@ -76,6 +76,7 @@ export type AppName =
   | 'website_sale_stock'
   | 'pos_stock'
   | 'expense_account'
+  | 'fleet_account'
   | 'payroll_account'
   | 'l10n_bd_payroll'
   | 'l10n_bd_pos'
@@ -525,6 +526,13 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'expenseAccount',
     bridge: ['expense', 'accounting'],
+  },
+  fleet_account: {
+    label:
+      'Bridge: fuel, services and papers booked on each vehicle’s cost centre (Fleet ↔ Accounting)',
+    icon: '🔗',
+    server: 'fleetAccount',
+    bridge: ['fleet', 'accounting'],
   },
   payroll_account: {
     label:

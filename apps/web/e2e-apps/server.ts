@@ -32,6 +32,7 @@ import { eventAccount } from '@kosh/event_account';
 import { expense } from '@kosh/expense';
 import { expenseAccount } from '@kosh/expense_account';
 import { fleet } from '@kosh/fleet';
+import { fleetAccount } from '@kosh/fleet_account';
 import { helpdesk } from '@kosh/helpdesk';
 import { hr } from '@kosh/hr';
 import { hrAccrual } from '@kosh/hr_accrual';
@@ -252,6 +253,7 @@ const CATALOGUE = [
   expense,
   indent,
   expenseAccount,
+  fleetAccount,
   attendance,
   payroll,
   payrollAccount,
