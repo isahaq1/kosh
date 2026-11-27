@@ -261,8 +261,7 @@ export const repair: ReturnType<typeof defineModule> = defineModule({
       card: {
         title: 'itemName',
         subtitle: 'partner',
-        footer: ['name', 'dueDate', 'technician'],
-        badges: [{ field: 'warranty', widget: 'badge' }],
+        footer: ['name', 'serial', 'dueDate', 'technician'],
       },
     }),
     'repair.order.list': list(RepairOrder, {
