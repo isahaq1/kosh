@@ -15,6 +15,8 @@ import { event } from '@kosh/event';
 import { eventAccount } from '@kosh/event_account';
 import { expense } from '@kosh/expense';
 import { expenseAccount } from '@kosh/expense_account';
+import { fieldService } from '@kosh/field_service';
+import { fieldServiceAccount } from '@kosh/field_service_account';
 import { fleet } from '@kosh/fleet';
 import { fleetAccount } from '@kosh/fleet_account';
 import { helpdesk } from '@kosh/helpdesk';
@@ -124,6 +126,7 @@ export const DEMO_APPS: readonly string[] = [
   'marketing',
   'repair',
   'rental',
+  'field_service',
   'trade_finance',
   'event',
   'website',
@@ -179,6 +182,7 @@ export function demoCatalogue(): KoshModule[] {
     marketing,
     repair,
     rental,
+    fieldService,
     tradeFinance,
     event,
     website,
@@ -225,6 +229,7 @@ export function demoCatalogue(): KoshModule[] {
     repairStock,
     repairAccount,
     rentalAccount,
+    fieldServiceAccount,
     websiteSale,
     websiteSaleStock,
     websiteSaleLoyalty,

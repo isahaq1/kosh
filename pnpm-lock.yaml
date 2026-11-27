@@ -80,6 +80,12 @@ importers:
       '@kosh/expense_account':
         specifier: workspace:*
         version: link:../../modules/expense_account
+      '@kosh/field_service':
+        specifier: workspace:*
+        version: link:../../modules/field_service
+      '@kosh/field_service_account':
+        specifier: workspace:*
+        version: link:../../modules/field_service_account
       '@kosh/fleet':
         specifier: workspace:*
         version: link:../../modules/fleet
@@ -560,6 +566,12 @@ importers:
       '@kosh/event_account':
         specifier: workspace:*
         version: link:../../modules/event_account
+      '@kosh/field_service':
+        specifier: workspace:*
+        version: link:../../modules/field_service
+      '@kosh/field_service_account':
+        specifier: workspace:*
+        version: link:../../modules/field_service_account
       '@kosh/fleet':
         specifier: workspace:*
         version: link:../../modules/fleet
@@ -1404,6 +1416,71 @@ importers:
       '@kosh/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/field_service:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/field_service_account:
+    dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../accounting
+      '@kosh/field_service':
+        specifier: workspace:*
+        version: link:../field_service
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
       '@testcontainers/postgresql':
         specifier: ^12.2.1
         version: 12.2.1
@@ -4238,6 +4315,12 @@ importers:
       '@kosh/expense_account':
         specifier: workspace:*
         version: link:../../modules/expense_account
+      '@kosh/field_service':
+        specifier: workspace:*
+        version: link:../../modules/field_service
+      '@kosh/field_service_account':
+        specifier: workspace:*
+        version: link:../../modules/field_service_account
       '@kosh/fleet':
         specifier: workspace:*
         version: link:../../modules/fleet

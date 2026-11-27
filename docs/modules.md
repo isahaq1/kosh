@@ -1854,6 +1854,31 @@ GET /api/v1/knowledge/search?q=leave            # { items: [{ id, name, icon, sn
 GET /api/v1/knowledge/for?model=res.partner&id=7  # the record's articles
 ```
 
+## Field service
+
+*Field service* (`@kosh/field_service`, RFC 0038) sends technicians to customers.
+
+- **A dispatcher plans** a visit: the customer — its address and its place on the map come from the contact —,
+  the technician, when, for how long, what is wrong, and a **checklist**. Who goes, where and when are the
+  dispatcher's alone to change.
+- **A technician** sees and works only their own visits, on the phone: **Start the visit**, tick the checklist,
+  write what was done, add the **parts** (products) and **labour**.
+- **The customer signs** on the technician's phone while the visit is under way: their name and the drawing, once.
+  Once signed, the parts and labour no longer change. *Customer signs* may be switched off for a visit.
+- **Done** is refused until every checklist item is ticked, the report is written and — when asked — the customer
+  has signed.
+- **The day's route**: the technician's visits of a day in a short order — the first planned, then each time the
+  nearest one left — with the distance of each leg; visits without a place come last.
+- Visits are on a list, a board, a calendar and a **map**; *Field visits* is a tile on the contact; the visit
+  prints as a *Visit report*.
+- **With Accounting** (`@kosh/field_service_account` comes by itself): a charged visit that is done gets a draft
+  customer invoice with its parts and labour. A technician needs no Accounting role.
+
+```http
+GET  /api/v1/field-service/route?date=2026-11-28[&technician=<user>]   # { stops: [{ customer, legKm, … }], totalKm }
+POST /api/v1/field-service/visits/<id>/sign   { "name": "Dr. Karim", "image": "data:image/png;base64,…" }
+```
+
 ## Final settlement
 
 When a person leaves, *Payroll › Final settlements* works out what they are owed and owe, and pays it (RFC 0039).

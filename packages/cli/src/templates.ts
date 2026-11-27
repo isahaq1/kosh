@@ -34,6 +34,7 @@ export type AppName =
   | 'marketing'
   | 'repair'
   | 'rental'
+  | 'field_service'
   | 'trade_finance'
   | 'event'
   | 'website'
@@ -82,6 +83,7 @@ export type AppName =
   | 'repair_stock'
   | 'repair_account'
   | 'rental_account'
+  | 'field_service_account'
   | 'website_sale_stock'
   | 'pos_stock'
   | 'expense_account'
@@ -275,6 +277,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
       'Rental: products rented by the hour or the day, reserved against what is free, late fees, deposits',
     icon: '🔑',
     server: 'rental',
+  },
+  field_service: {
+    label:
+      'Field service: visits on a map and a short route, worksheets on the phone, the customer’s signature',
+    icon: '🧰',
+    server: 'fieldService',
   },
   trade_finance: {
     label:
@@ -571,6 +579,13 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'rentalAccount',
     bridge: ['rental', 'accounting'],
+  },
+  field_service_account: {
+    label:
+      'Bridge: a field visit done is invoiced with its parts and labour (Field service ↔ Accounting)',
+    icon: '🔗',
+    server: 'fieldServiceAccount',
+    bridge: ['field_service', 'accounting'],
   },
   website_sale_stock: {
     label: 'Bridge: stock shown on the shop, carts kept within it (Shop ↔ Stockroom)',

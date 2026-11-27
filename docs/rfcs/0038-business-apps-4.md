@@ -379,6 +379,31 @@ The trip of a Stockroom transfer from its gate details, drivers' licences from W
   an article's content (the activity log leaves rich text out); a panel of a record's articles on every form;
   favourites; templates; articles published on the website.
 
+## Step 8 — Field service (design and notes, 2026-11-27)
+
+- **`field.visit`** (`FS/{year}/…`): the customer, the address and coordinates (from the contact by an onchange,
+  or typed), the technician, the planned start and hours, the problem, the report, **`field.visit.check`**s,
+  **`field.visit.line`**s (parts, labour), charged or not, the signature (asked or not; the drawing, the name,
+  when). States: planned → on site → done; cancelled, planned again.
+- **Rules**: a technician reads and writes the visits that are theirs, and their checklist and lines; a
+  dispatcher everything. The planning fields (technician, start, customer, charged, signature asked) change only
+  with `field_service.dispatch` — a record rule cannot say which fields, a constraint can.
+- **The signature** is taken by a route as the person asking (so only the visit's technician or a dispatcher),
+  only on site, once; it must be a PNG or JPEG data address under 300 000 characters. It is written by the system
+  and left out of the activity log (a secret-shaped field). Signed lines are frozen.
+- **`route.ts`** without a database: the great-circle distance and a nearest-neighbour order from the day's first
+  planned visit. Not the shortest tour — a good one for a day's handful of stops, and explainable.
+- **`field_service_account`**: the invoice at done when charged, flushed as the system, tested as a technician
+  with Field service only.
+- Tests: distances (Dhaka to Chattogram), the order from either start, unplaced visits last; the signature's
+  shape; planning by the dispatcher only; a technician's own visits only; no technician, no start; done refused
+  three ways; signing off site, without a name, as another technician, twice; the lines frozen; no signature
+  asked; the route of a day, another technician's, a dispatcher's view; the invoice and none when not charged;
+  two browser tests.
+- **Left out**: parts taken out of stock (a bridge with Stockroom, as Repairs'); the signing pad on the form (the
+  route takes the drawing; the phone screen is to come); travel time and opening hours in the route; recurring
+  visits from a maintenance contract; the customer told when the technician is on the way.
+
 ## 5. Open questions
 
 1. The order of §2 — is Quality first right, or does Fleet or Campaigns matter more now?
