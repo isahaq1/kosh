@@ -23,6 +23,8 @@ async function transfer(page: Page, action: string, quantity: string): Promise<s
   await moves.locator('..').getByRole('button', { name: 'Add a line' }).click();
   const row = moves.locator('tbody tr').last();
   await row.getByRole('combobox').first().click();
+  // The picker lists the first few matches: search for the product, as a person would.
+  await page.keyboard.type('Steel beam');
   await page.getByRole('option', { name: /Steel beam/ }).click();
   const qty = row.getByRole('textbox').nth(1);
   await qty.fill(quantity);

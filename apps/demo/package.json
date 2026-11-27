@@ -41,6 +41,8 @@
     "@kosh/repair": "workspace:*",
     "@kosh/repair_account": "workspace:*",
     "@kosh/repair_stock": "workspace:*",
+    "@kosh/rental": "workspace:*",
+    "@kosh/rental_account": "workspace:*",
     "@kosh/quality": "workspace:*",
     "@kosh/maintenance_stock": "workspace:*",
     "@kosh/quality_production": "workspace:*",

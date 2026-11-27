@@ -1804,6 +1804,33 @@ POST /api/v1/models/hr.appraisal.cycle/<id>/transitions/launch | close | reopen
 POST /api/v1/models/hr.appraisal/<id>/transitions/begin | submit | complete | reopen | cancel
 ```
 
+## Rental
+
+*Rental* (`@kosh/rental`, RFC 0038) rents products out by the hour or the day.
+
+- **A product for rent** (on its form, *Rental*): *For rent*, rented by the **hour** or the **day**, the rent per
+  unit, a **deposit** for each, a **late fee** per unit, and the **number for rent**.
+- **A rental order**: the customer, *From* and *Until*, the products and how many. The rent is the units of the
+  period — every hour or day begun counts, and there is always one — at the rent per unit. A line may carry its
+  own price; left empty it takes the product's when the order is reserved, and keeps it whatever the product
+  says later.
+- **Reserve** checks that every product is **free for the whole period**: at no moment may more be reserved or
+  out than there are. It is refused naming the product, how many are free and how many were asked. A period that
+  starts when another ends does not overlap it. A reserved order keeps its period, its customer and its
+  products.
+- **Picked up**, then **Returned**: the hours are the server's. **A late return has its fee** — every unit begun
+  after the time, for each one, at the late fee — and **holds its products until they are back**: nobody knows
+  when a late item returns, so it is not offered to anyone else meanwhile.
+- The **deposit** is shown on the order and the agreement; it is held, not charged.
+- **With Accounting** (`@kosh/rental_account` comes by itself): products that are back get a draft customer
+  invoice with the rent per product and the late fee on a line of its own. A clerk needs no Accounting role.
+- The order prints as a *Rental agreement*; *Rentals* is a tile on the product and on the contact.
+
+```http
+GET  /api/v1/rental/availability?product=<id>&from=<ISO>&to=<ISO>   # { total, free }
+POST /api/v1/models/rental.order/<id>/transitions/confirm | pickup | receive | cancel
+```
+
 ## Final settlement
 
 When a person leaves, *Payroll › Final settlements* works out what they are owed and owe, and pays it (RFC 0039).

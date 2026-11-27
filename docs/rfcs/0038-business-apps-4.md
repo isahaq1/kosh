@@ -332,6 +332,31 @@ The trip of a Stockroom transfer from its gate details, drivers' licences from W
   person reads the review as it is written); goals carried from one cycle to the next; calibration across
   teams; a skills matrix and gaps against a position's required skills; appraisal reminders.
 
+## Step 6 — Rental (design and notes, 2026-11-27)
+
+- **Products** gain *for rent*, the unit (hour, day), the rent, the deposit, the late fee and the number for
+  rent. **`rental.order`** (`RN/{year}/…`): customer, period, **`rental.line`**s; quotation → reserved → picked
+  up → returned; cancelled.
+- **`period.ts`**, without a database: `unitsOf` (every unit begun, at least one), `lateUnits`, and `peakBooked`
+  — the most that is out at once over a period, by a sweep of starts and ends, an end before a start at the
+  same instant.
+- **Reserving** freezes each line's unit, price, deposit and late fee from its product, then asks `freeOf` for
+  every product: the number for rent less the peak of what other reserved and picked-up orders hold. One
+  set-based read per product.
+- **A late order has no end** until it is returned: the first version held it "until now", and a test showed
+  the item was then offered for any later period. It counts for every later period now.
+- **Hooks**: `reserved`, `pickedUp`, `returned`, `cancelled`. **`rental_account`** drafts the invoice at
+  `returned`, flushed as the system, tested as a clerk with Rental only.
+- Tests: the arithmetic (units, lateness, the peak, an endless booking); not for rent, a period backwards, an
+  empty order; the rent and the terms frozen at reservation; the period and the lines locked; two asked where one
+  is free, one beside it, a touching period, a cancellation giving back; on time without a fee; late with its
+  fee and holding the product; the availability route and who may ask it; the invoice on time and late; two
+  browser tests.
+- **Left out**: pick-up and return through Stockroom (the number for rent is typed on the product, not read from
+  stock, and no transfer is made); serial numbers of the units rented; partial pick-ups and returns; extending a
+  reserved order; the deposit taken and given back as payments; pricing by duration (a week cheaper than seven
+  days); rental from the Shop.
+
 ## 5. Open questions
 
 1. The order of §2 — is Quality first right, or does Fleet or Campaigns matter more now?

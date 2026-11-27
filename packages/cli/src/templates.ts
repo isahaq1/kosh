@@ -33,6 +33,7 @@ export type AppName =
   | 'fleet'
   | 'marketing'
   | 'repair'
+  | 'rental'
   | 'trade_finance'
   | 'event'
   | 'website'
@@ -79,6 +80,7 @@ export type AppName =
   | 'marketing_sale'
   | 'repair_stock'
   | 'repair_account'
+  | 'rental_account'
   | 'website_sale_stock'
   | 'pos_stock'
   | 'expense_account'
@@ -266,6 +268,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
       'Repairs: customers’ items taken in, diagnosed, quoted, repaired under warranty or charged',
     icon: '🛠️',
     server: 'repair',
+  },
+  rental: {
+    label:
+      'Rental: products rented by the hour or the day, reserved against what is free, late fees, deposits',
+    icon: '🔑',
+    server: 'rental',
   },
   trade_finance: {
     label:
@@ -550,6 +558,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'repairAccount',
     bridge: ['repair', 'accounting'],
+  },
+  rental_account: {
+    label: 'Bridge: a returned rental is invoiced with its rent and late fee (Rental ↔ Accounting)',
+    icon: '🔗',
+    server: 'rentalAccount',
+    bridge: ['rental', 'accounting'],
   },
   website_sale_stock: {
     label: 'Bridge: stock shown on the shop, carts kept within it (Shop ↔ Stockroom)',

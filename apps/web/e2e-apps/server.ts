@@ -80,6 +80,8 @@ import { qualityProduction } from '@kosh/quality_production';
 import { qualityStock } from '@kosh/quality_stock';
 import { realtime } from '@kosh/realtime';
 import { recruitment } from '@kosh/recruitment';
+import { rental } from '@kosh/rental';
+import { rentalAccount } from '@kosh/rental_account';
 import { repair } from '@kosh/repair';
 import { repairAccount } from '@kosh/repair_account';
 import { repairStock } from '@kosh/repair_stock';
@@ -224,6 +226,7 @@ const CATALOGUE = [
   fleet,
   marketing,
   repair,
+  rental,
   tradeFinance,
   event,
   website,
@@ -258,6 +261,7 @@ const CATALOGUE = [
   marketingSale,
   repairStock,
   repairAccount,
+  rentalAccount,
   websiteSale,
   websiteSaleStock,
   websiteSaleLoyalty,
@@ -324,6 +328,7 @@ await applyApps(
         'fleet',
         'marketing',
         'repair',
+        'rental',
         'trade_finance',
         'event',
         'website',
@@ -418,6 +423,7 @@ for (const [login, name, groups] of [
       'fleet.manager',
       'marketing.manager',
       'repair.manager',
+      'rental.manager',
       'trade_finance.manager',
       'event.manager',
       'website.manager',
@@ -471,6 +477,7 @@ for (const [login, name, groups] of [
       'fleet.user',
       'marketing.user',
       'repair.user',
+      'rental.user',
       'trade_finance.user',
       'event.user',
       'purchase.user',
