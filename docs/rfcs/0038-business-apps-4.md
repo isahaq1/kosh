@@ -276,6 +276,35 @@ The trip of a Stockroom transfer from its gate details, drivers' licences from W
   replies (inbound texts); delivery receipts from the provider; WhatsApp templates and their variables; the
   price of a send before it starts.
 
+## Step 4 — Repairs (design and notes, 2026-11-27)
+
+- **`repair.order`** (`RO/{year}/…`): the customer, the item (a name, an optional product, the serial number,
+  what came with it), the fault as said and as found, the technician, the promised day, *under warranty*, and
+  **`repair.line`** — parts (a product) and labour — with the parts, labour, total and *to charge* kept by the
+  server. States: received → diagnosed → quoted → accepted | declined → in repair → repaired → handed back;
+  cancelled.
+- **Rules**: no diagnosis, no step; a quotation lists something; a charged repair starts only once accepted, one
+  under warranty from the diagnosis and is never quoted; declining asks for the reason; one open order per
+  serial number and company; the warranty flag is not changed after the repair ended.
+- **Hooks for bridges**: `started`, `finishing` (before *Repaired*: refusing refuses it), `cancelled`,
+  `returned`.
+- **`repair_stock`**: as Asset Care's parts — one adjustment transfer per order from the main stock to the
+  *Repairs* location, confirmed at the start, validated at the finish, cancelled with the order.
+- **`repair_account`**: the draft invoice at *Hand back*, once.
+- **A defect found on the way, in `event_account`**: a bridge that makes another app's record inside
+  `asSuperuser` left its pending writes to be flushed under the user's own rights — so an event organiser
+  without a role in Accounting **could not confirm a paid place** (403 on `account.move`). It was never seen
+  because the bridge's test ran as an accountant. Both bridges now flush as the system, and each has a test with
+  a user who holds only the first app's role.
+- Tests: the whole flow with each step refused out of turn; a part without a product; declined with its reason;
+  warranty; the serial number twice, and again once the first is out; who may delete; parts short, received,
+  consumed, released, labour only; the invoice with its lines, none under warranty or after a decline; two
+  browser tests.
+- **Left out**: the warranty worked out from the sale (a serial sold with a warranty period); lots and serial
+  numbers of Stockroom on the item and on the parts used; the quotation accepted by the customer in the portal;
+  a diagnosis fee for a declined repair; labour by the hour from timesheets; an invoice per part taken under an
+  extended warranty; loan units.
+
 ## 5. Open questions
 
 1. The order of §2 — is Quality first right, or does Fleet or Campaigns matter more now?

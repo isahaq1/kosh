@@ -689,6 +689,7 @@ async function modulesFor(apps: readonly AppName[]): Promise<KoshModule[]> {
     if (app === 'quality') modules.push((await import('@kosh/quality')).quality);
     if (app === 'fleet') modules.push((await import('@kosh/fleet')).fleet);
     if (app === 'marketing') modules.push((await import('@kosh/marketing')).marketing);
+    if (app === 'repair') modules.push((await import('@kosh/repair')).repair);
     if (app === 'event') modules.push((await import('@kosh/event')).event);
     if (app === 'website') modules.push((await import('@kosh/website')).website);
     if (app === 'pos') modules.push((await import('@kosh/pos')).pos);
@@ -753,6 +754,9 @@ async function modulesFor(apps: readonly AppName[]): Promise<KoshModule[]> {
     if (app === 'sale_crm') modules.push((await import('@kosh/sale_crm')).saleCrm);
     if (app === 'marketing_sale')
       modules.push((await import('@kosh/marketing_sale')).marketingSale);
+    if (app === 'repair_stock') modules.push((await import('@kosh/repair_stock')).repairStock);
+    if (app === 'repair_account')
+      modules.push((await import('@kosh/repair_account')).repairAccount);
     if (app === 'website_sale_stock')
       modules.push((await import('@kosh/website_sale_stock')).websiteSaleStock);
     if (app === 'pos_stock') modules.push((await import('@kosh/pos_stock')).posStock);

@@ -193,3 +193,44 @@ test('a paid place invoiced to its attendee; the same email, the same customer; 
   const guest = await place('A guest', 'Guest');
   expect(guest.invoice).toBeNull();
 });
+
+test('someone who runs the event, without a right on invoices, confirms a paid place all the same', async () => {
+  const auth = host.server.auth;
+  if (auth === undefined) throw new Error('base is installed');
+  await auth.createUser({
+    login: 'eva',
+    name: 'Eva',
+    password: PASSWORD,
+    company,
+    companies: [company],
+    groups: ['event.user'],
+  });
+  const login = await host.server.app.inject({
+    method: 'POST',
+    url: '/api/v1/auth/login',
+    payload: { login: 'eva', password: PASSWORD },
+  });
+  const eva = { authorization: `Bearer ${(login.json() as { token: string }).token}` };
+  const paid = 'Standard';
+  const made = await host.server.app.inject({
+    method: 'POST',
+    url: R,
+    headers: eva,
+    payload: {
+      event: ids['event'],
+      ticket: ids[paid],
+      name: 'Walk-in guest',
+      email: 'walkin@example.test',
+    },
+  });
+  expect(made.statusCode, made.body).toBe(201);
+  const id = (made.json() as { id: number }).id;
+  const confirmed = await host.server.app.inject({
+    method: 'POST',
+    url: `${R}/${id}/transitions/confirm`,
+    headers: eva,
+  });
+  expect(confirmed.statusCode, confirmed.body).toBe(200);
+  // The invoice is there all the same, for Accounting.
+  expect((await call('GET', `${R}/${id}`)).json.invoice).not.toBeNull();
+});

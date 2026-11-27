@@ -61,6 +61,9 @@ import { qualityProduction } from '@kosh/quality_production';
 import { qualityStock } from '@kosh/quality_stock';
 import { realtime } from '@kosh/realtime';
 import { recruitment } from '@kosh/recruitment';
+import { repair } from '@kosh/repair';
+import { repairAccount } from '@kosh/repair_account';
+import { repairStock } from '@kosh/repair_stock';
 import { reporting } from '@kosh/reporting';
 import { saleAccount } from '@kosh/sale_account';
 import { saleCrm } from '@kosh/sale_crm';
@@ -114,6 +117,7 @@ export const DEMO_APPS: readonly string[] = [
   'quality',
   'fleet',
   'marketing',
+  'repair',
   'trade_finance',
   'event',
   'website',
@@ -165,6 +169,7 @@ export function demoCatalogue(): KoshModule[] {
     quality,
     fleet,
     marketing,
+    repair,
     tradeFinance,
     event,
     website,
@@ -207,6 +212,8 @@ export function demoCatalogue(): KoshModule[] {
     websiteHiring,
     saleCrm,
     marketingSale,
+    repairStock,
+    repairAccount,
     websiteSale,
     websiteSaleStock,
     websiteSaleLoyalty,

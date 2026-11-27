@@ -218,6 +218,15 @@ importers:
       '@kosh/recruitment':
         specifier: workspace:*
         version: link:../../modules/recruitment
+      '@kosh/repair':
+        specifier: workspace:*
+        version: link:../../modules/repair
+      '@kosh/repair_account':
+        specifier: workspace:*
+        version: link:../../modules/repair_account
+      '@kosh/repair_stock':
+        specifier: workspace:*
+        version: link:../../modules/repair_stock
       '@kosh/reporting':
         specifier: workspace:*
         version: link:../../packages/reporting
@@ -641,6 +650,15 @@ importers:
       '@kosh/recruitment':
         specifier: workspace:*
         version: link:../../modules/recruitment
+      '@kosh/repair':
+        specifier: workspace:*
+        version: link:../../modules/repair
+      '@kosh/repair_account':
+        specifier: workspace:*
+        version: link:../../modules/repair_account
+      '@kosh/repair_stock':
+        specifier: workspace:*
+        version: link:../../modules/repair_stock
       '@kosh/sale_account':
         specifier: workspace:*
         version: link:../../modules/sale_account
@@ -2983,6 +3001,105 @@ importers:
         specifier: ^17.0.21
         version: 17.0.21(i18next@26.4.7(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
 
+  modules/repair:
+    dependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/repair_account:
+    dependencies:
+      '@kosh/accounting':
+        specifier: workspace:*
+        version: link:../accounting
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/repair':
+        specifier: workspace:*
+        version: link:../repair
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/repair_stock:
+    dependencies:
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
+      '@kosh/repair':
+        specifier: workspace:*
+        version: link:../repair
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/stock':
+        specifier: workspace:*
+        version: link:../stock
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
   modules/sale_account:
     dependencies:
       '@kosh/accounting':
@@ -4114,6 +4231,15 @@ importers:
       '@kosh/recruitment':
         specifier: workspace:*
         version: link:../../modules/recruitment
+      '@kosh/repair':
+        specifier: workspace:*
+        version: link:../../modules/repair
+      '@kosh/repair_account':
+        specifier: workspace:*
+        version: link:../../modules/repair_account
+      '@kosh/repair_stock':
+        specifier: workspace:*
+        version: link:../../modules/repair_stock
       '@kosh/reporting':
         specifier: workspace:*
         version: link:../reporting

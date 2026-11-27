@@ -1749,6 +1749,34 @@ POST /api/v1/models/marketing.campaign/<id>/transitions/send | schedule | unsche
 POST /api/v1/campaigns/<id>/test   { "to": "me@example.com" }   # the message as written, not counted
 ```
 
+## Repairs
+
+*Repairs* (`@kosh/repair`, RFC 0038) follows a customer's item from the counter back to the customer.
+
+1. **Take it in**: the customer, the item and its **serial number**, what came with it, what the customer says
+   is wrong, the day it is promised for. The order has its number (`RO/2026/00001`) and prints as a *Repair
+   ticket* to sign.
+2. **Diagnose**: the technician writes what was found — the step is refused without it.
+3. **Quote**: the **parts** (products, at their sales price unless changed) and the **labour**; the order prints
+   as a *Repair quotation*. The customer **accepts**, or **declines** — with the reason —, and a declined item is
+   handed back as it came.
+4. **Repair**, then **Hand back**.
+
+- **Under warranty** nothing is charged (*To charge* is zero, whatever the lines) and the repair starts from the
+  diagnosis, with no quotation. Whether it is under warranty is decided before the repair ends.
+- **An item is in repair once at a time**: a second open order with the same serial number is refused. The
+  customer's other repairs are a tile on the order, and *Repairs* is a tile on the contact.
+- **With Stockroom** (`@kosh/repair_stock` comes by itself): the parts are reserved when the repair starts, taken
+  out of stock when the item is repaired — refused while some are short, saying which —, and released when the
+  order is cancelled. A technician needs no stock rights for it.
+- **With Accounting** (`@kosh/repair_account`): an item handed back repaired gets a draft customer invoice with
+  its parts — as their products, so that their accounts and taxes are theirs — and its labour. Nothing under
+  warranty, nothing for a declined repair.
+
+```http
+POST /api/v1/models/repair.order/<id>/transitions/diagnose | quote | approve | decline | begin | finish | deliver | cancel
+```
+
 ## Final settlement
 
 When a person leaves, *Payroll › Final settlements* works out what they are owed and owe, and pays it (RFC 0039).

@@ -78,6 +78,8 @@ export const RegistrationInvoice = extendModel('event.registration', {
             .browse([r.id])
             .write({ invoice: made.ids[0] ?? null, partner });
         }
+        // Written as the system, now: nothing of the invoice is left for the organiser's own rights to finish.
+        await su.flush();
       });
     },
   },

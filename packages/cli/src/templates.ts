@@ -31,6 +31,7 @@ export type AppName =
   | 'quality'
   | 'fleet'
   | 'marketing'
+  | 'repair'
   | 'trade_finance'
   | 'event'
   | 'website'
@@ -75,6 +76,8 @@ export type AppName =
   | 'calendar_sync'
   | 'sale_crm'
   | 'marketing_sale'
+  | 'repair_stock'
+  | 'repair_account'
   | 'website_sale_stock'
   | 'pos_stock'
   | 'expense_account'
@@ -250,6 +253,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
       'Campaigns: mailing lists, emails with two subjects to try, opens, clicks and unsubscribes',
     icon: '📣',
     server: 'marketing',
+  },
+  repair: {
+    label:
+      'Repairs: customers’ items taken in, diagnosed, quoted, repaired under warranty or charged',
+    icon: '🛠️',
+    server: 'repair',
   },
   trade_finance: {
     label:
@@ -522,6 +531,18 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'marketingSale',
     bridge: ['sales', 'marketing'],
+  },
+  repair_stock: {
+    label: 'Bridge: the parts of a repair taken from stock (Repairs ↔ Stockroom)',
+    icon: '🔗',
+    server: 'repairStock',
+    bridge: ['repair', 'stock'],
+  },
+  repair_account: {
+    label: 'Bridge: a repair handed back is invoiced (Repairs ↔ Accounting)',
+    icon: '🔗',
+    server: 'repairAccount',
+    bridge: ['repair', 'accounting'],
   },
   website_sale_stock: {
     label: 'Bridge: stock shown on the shop, carts kept within it (Shop ↔ Stockroom)',
