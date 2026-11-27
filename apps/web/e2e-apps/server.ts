@@ -51,7 +51,8 @@ import { loyalty } from '@kosh/loyalty';
 import { createMemoryMailer, mailModule } from '@kosh/mail';
 import { maintenance } from '@kosh/maintenance';
 import { maintenanceStock } from '@kosh/maintenance_stock';
-import { marketingModule } from '@kosh/marketing';
+import { configureCampaigns, marketing } from '@kosh/marketing';
+import { marketingSale } from '@kosh/marketing_sale';
 import { installActivityTypes, messaging } from '@kosh/messaging';
 import { notify } from '@kosh/notify';
 import { payroll } from '@kosh/payroll';
@@ -184,10 +185,7 @@ const assistant = createAssistant({
 // Documents sent from forms are queued with a mailer that keeps them (RFC 0029 §3.3).
 const mail = mailModule({ mailer: createMemoryMailer() });
 // Campaigns are sent with a mailer that keeps them too (RFC 0038).
-const marketing = marketingModule({
-  mailer: createMemoryMailer(),
-  baseUrl: 'http://127.0.0.1:3101',
-});
+configureCampaigns({ mailer: createMemoryMailer(), baseUrl: 'http://127.0.0.1:3101' });
 const CATALOGUE = [
   base,
   settings,
@@ -251,6 +249,7 @@ const CATALOGUE = [
   calendarSync,
   websiteHiring,
   saleCrm,
+  marketingSale,
   websiteSale,
   websiteSaleStock,
   websiteSaleLoyalty,

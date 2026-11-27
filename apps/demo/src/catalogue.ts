@@ -34,6 +34,7 @@ import { mail } from '@kosh/mail';
 import { maintenance } from '@kosh/maintenance';
 import { maintenanceStock } from '@kosh/maintenance_stock';
 import { marketing } from '@kosh/marketing';
+import { marketingSale } from '@kosh/marketing_sale';
 import { messaging } from '@kosh/messaging';
 import type { KoshModule } from '@kosh/modules-sdk';
 import { notify } from '@kosh/notify';
@@ -205,6 +206,7 @@ export function demoCatalogue(): KoshModule[] {
     calendarSync,
     websiteHiring,
     saleCrm,
+    marketingSale,
     websiteSale,
     websiteSaleStock,
     websiteSaleLoyalty,

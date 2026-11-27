@@ -137,6 +137,9 @@ importers:
       '@kosh/marketing':
         specifier: workspace:*
         version: link:../../modules/marketing
+      '@kosh/marketing_sale':
+        specifier: workspace:*
+        version: link:../../modules/marketing_sale
       '@kosh/messaging':
         specifier: workspace:*
         version: link:../../packages/messaging
@@ -584,6 +587,9 @@ importers:
       '@kosh/marketing':
         specifier: workspace:*
         version: link:../../modules/marketing
+      '@kosh/marketing_sale':
+        specifier: workspace:*
+        version: link:../../modules/marketing_sale
       '@kosh/modules-sdk':
         specifier: workspace:*
         version: link:../../packages/modules-sdk
@@ -1999,6 +2005,40 @@ importers:
         specifier: workspace:*
         version: link:../../packages/views
     devDependencies:
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/marketing_sale:
+    dependencies:
+      '@kosh/marketing':
+        specifier: workspace:*
+        version: link:../marketing
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/sales':
+        specifier: workspace:*
+        version: link:../sales
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/mail':
+        specifier: workspace:*
+        version: link:../../packages/mail
+      '@kosh/product':
+        specifier: workspace:*
+        version: link:../product
       '@kosh/settings':
         specifier: workspace:*
         version: link:../../packages/settings
@@ -3993,6 +4033,9 @@ importers:
       '@kosh/marketing':
         specifier: workspace:*
         version: link:../../modules/marketing
+      '@kosh/marketing_sale':
+        specifier: workspace:*
+        version: link:../../modules/marketing_sale
       '@kosh/messaging':
         specifier: workspace:*
         version: link:../messaging

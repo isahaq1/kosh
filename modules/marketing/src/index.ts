@@ -10,7 +10,7 @@
  * - `POST /api/v1/campaigns/:id/test`             `{ to }`: the message as one person would get it, not counted
  */
 import { contacts } from '@kosh/contacts';
-import { type Mailer, mailerFromEnv } from '@kosh/mail';
+import { BOUNCE_TOPIC, type Mailer, mailerFromEnv } from '@kosh/mail';
 import { messaging } from '@kosh/messaging';
 import { defineModule } from '@kosh/modules-sdk';
 import { reporting } from '@kosh/reporting';
@@ -19,6 +19,7 @@ import { action, form, list, search } from '@kosh/views';
 import type { Env } from './.kosh/bindings.js';
 import { marketingDemo } from './demo.js';
 import {
+  bouncedDeliveries,
   companyOfToken,
   MarketingCampaign,
   MarketingDelivery,
@@ -28,10 +29,12 @@ import {
   MarketingSuppression,
   marketingShutro,
   markFailed,
+  recordBounce,
   recordClick,
   recordOpen,
   SEND_JOB,
   START_JOB,
+  saveProviderIds,
   setCampaignTransport,
   takeBatch,
   unsubscribe,
@@ -42,6 +45,7 @@ import { compose, emailKey, linksOf, type MailLanguage } from './render.js';
 
 export {
   addressCampaign,
+  bouncedDeliveries,
   hashToken,
   MarketingCampaign,
   MarketingDelivery,
@@ -52,12 +56,14 @@ export {
   marketingShutro,
   markFailed,
   type Outgoing,
+  recordBounce,
   recordClick,
   recordOpen,
   refreshStats,
   SEND_BATCH,
   SEND_JOB,
   START_JOB,
+  saveProviderIds,
   setCampaignTransport,
   takeBatch,
   trackingOf,
@@ -122,6 +128,7 @@ export function campaignWorker(
           );
         env.afterCommit(async () => {
           const failures: { delivery: number; error: string }[] = [];
+          const named: { delivery: number; id: string }[] = [];
           for (const m of mails)
             await mailer
               .send({
@@ -132,17 +139,21 @@ export function campaignWorker(
                 headers: m.headers,
                 ...(m.replyTo === null || m.replyTo.trim() === '' ? {} : { replyTo: m.replyTo }),
               })
+              .then((sent) => {
+                if (sent.id !== null) named.push({ delivery: m.delivery, id: sent.id });
+              })
               .catch((error: unknown) => {
                 failures.push({
                   delivery: m.delivery,
                   error: error instanceof Error ? error.message : String(error),
                 });
               });
-          if (failures.length === 0) return;
+          if (failures.length === 0 && named.length === 0) return;
           await context.shutro
-            .bootstrap({ reason: 'campaign messages refused' }, (su) =>
-              markFailed(su as unknown as Env, failures),
-            )
+            .bootstrap({ reason: 'campaign messages handed over' }, async (su) => {
+              await saveProviderIds(su as unknown as Env, named);
+              if (failures.length > 0) await markFailed(su as unknown as Env, failures);
+            })
             .catch((error: unknown) => context.log?.('campaign failures not recorded', error));
         });
       },
@@ -163,6 +174,38 @@ export function campaignWorker(
       },
     },
     { pollMs: 1000 },
+  ) as unknown as Worker;
+}
+
+/**
+ * The subscriber of bounces (`mail.bounced`, announced by inbound email): a campaign message that came back is
+ * marked so, in its company; an address that will never take mail leaves the lists for good.
+ */
+export function bounceWorker(context: Pick<ModuleContext, 'shutro'>): Worker {
+  return context.shutro.subscribe(
+    'marketing.bounces',
+    BOUNCE_TOPIC,
+    async (event, env) => {
+      const payload = (event.payload ?? {}) as {
+        messageIds?: unknown;
+        permanent?: unknown;
+        subject?: unknown;
+      };
+      const ids = (Array.isArray(payload.messageIds) ? payload.messageIds : []).map(String);
+      const found = await (env as unknown as Env).asSuperuser({ reason: 'campaign bounce' }, (su) =>
+        bouncedDeliveries(su, ids),
+      );
+      for (const d of found)
+        await context.shutro.bootstrap({ reason: 'campaign bounce', company: d.company }, (su) =>
+          recordBounce(
+            su as unknown as Env,
+            d.id,
+            payload.permanent === true,
+            `Bounced: ${String(payload.subject ?? '')}`,
+          ),
+        );
+    },
+    { pollMs: 5000 },
   ) as unknown as Worker;
 }
 
@@ -305,531 +348,543 @@ const STATES = {
   sent: 'Sent',
 } as const;
 
-/** Campaigns with explicit options (tests: a memory mailer, the worker drained by hand). */
-export function marketingModule(options: MarketingOptions = {}): ReturnType<typeof defineModule> {
-  const mailer = 'mailer' in options ? options.mailer : mailerFromEnv();
-  const baseUrl = options.baseUrl ?? process.env['KOSH_BASE_URL'] ?? '';
-  const transport: Transport = { mailer, baseUrl };
-  return defineModule({
-    shutro: marketingShutro,
-    kosh: '^0.1.0',
-    hooks: { demo: marketingDemo },
-    depends: [contacts, messaging, reporting],
-    app: {
-      code: 'campaigns',
-      label: 'Campaigns',
-      icon: 'campaigns',
-      sequence: 63,
-      category: 'Marketing',
-      summary:
-        'Mailing lists, email campaigns with two subjects to try, opens, clicks and unsubscribes',
-    },
-    // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
-    i18n: { bn: () => import('./i18n/bn.js') },
-    accessLevels: {
-      user: { label: 'User (writes campaigns, keeps subscribers)', groups: ['marketing.user'] },
-      manager: {
-        label: 'Manager (lists, the never-email list, sends campaigns)',
-        groups: ['marketing.manager'],
-        implies: ['user'],
-      },
-    },
-    routes: (context: ModuleContext) => {
-      setCampaignTransport(mailer !== undefined && baseUrl !== '');
-      registerCampaignRoutes(context, transport);
-      if (!(options.workers ?? process.env['KOSH_SCHEDULES'] !== 'off')) return;
-      const worker = campaignWorker(
-        {
-          shutro: context.shutro,
-          log: (message, error) => context.app.log.error({ err: error }, message),
-        },
-        transport,
-      );
-      worker.start();
-      context.app.addHook('onClose', () => worker.stop());
-    },
-    // Exceptions to the module standard (RFC 0023), each with its reason.
-    standard: {
-      waive: [
-        {
-          rule: 'I1',
-          model: 'marketing.campaign',
-          reason:
-            'A campaign is its message — rich text written on screen — and its figures; there is nothing to import.',
-        },
-      ],
-    },
-    events: [
-      {
-        topic: 'marketing.campaign.sending',
-        model: 'marketing.campaign',
-        label: 'Campaign started',
-      },
-      { topic: 'marketing.campaign.sent', model: 'marketing.campaign', label: 'Campaign sent' },
-      {
-        topic: 'marketing.delivery.unsubscribed',
-        model: 'marketing.delivery',
-        label: 'Recipient unsubscribed',
-      },
-    ],
-    documents: [
-      {
-        key: 'marketing_campaign',
-        name: 'Campaign results',
-        model: 'marketing.campaign',
-        layout: {
-          paper: 'A4',
-          header: '{{company.name}}',
-          footer: 'Page {{page}} of {{pages}}',
-          blocks: [
-            { kind: 'heading', id: 'title', text: '{{name}}', level: 1 },
-            {
-              kind: 'fields',
-              id: 'what',
-              items: [
-                { label: 'Subject', bind: 'subject' },
-                { label: 'Subject B', bind: 'subjectB' },
-                { label: 'Started at', bind: 'startedAt' },
-                { label: 'Finished at', bind: 'sentAt' },
-              ],
-            },
-            {
-              kind: 'fields',
-              id: 'figures',
-              items: [
-                { label: 'Recipients', bind: 'recipients' },
-                { label: 'Left out', bind: 'skipped' },
-                { label: 'Sent', bind: 'sent' },
-                { label: 'Not sent', bind: 'failed' },
-                { label: 'Opened', bind: 'opened' },
-                { label: 'Opened %', bind: 'openRate' },
-                { label: 'Clicked', bind: 'clicked' },
-                { label: 'Clicked %', bind: 'clickRate' },
-                { label: 'Unsubscribed', bind: 'unsubscribed' },
-              ],
-            },
-            {
-              kind: 'fields',
-              id: 'subjects',
-              items: [
-                { label: 'Sent with A', bind: 'sentA' },
-                { label: 'Opened % with A', bind: 'openRateA' },
-                { label: 'Sent with B', bind: 'sentB' },
-                { label: 'Opened % with B', bind: 'openRateB' },
-              ],
-            },
-          ],
-        },
-      },
-    ],
-    importTemplates: [
-      {
-        key: 'marketing_lists',
-        model: 'marketing.list',
-        label: 'Mailing lists',
-        columns: [
-          { header: 'Name', field: 'name' },
-          { header: 'What it is for', field: 'description' },
-        ],
-      },
-      {
-        key: 'marketing_subscribers',
-        model: 'marketing.subscriber',
-        label: 'Subscribers',
-        columns: [
-          { header: 'List', field: 'list' },
-          { header: 'Email', field: 'email' },
-          { header: 'Name', field: 'name' },
-          { header: 'Phone', field: 'phone' },
-          { header: 'Language', field: 'language' },
-          { header: 'Status', field: 'state' },
-        ],
-      },
-      {
-        key: 'marketing_never',
-        model: 'marketing.suppression',
-        label: 'Never-email addresses',
-        columns: [
-          { header: 'Email', field: 'email' },
-          { header: 'Why', field: 'reason' },
-          { header: 'Note', field: 'note' },
-        ],
-      },
-    ],
-    overview: {
-      cards: [
-        {
-          id: 'subscribers',
-          title: 'Subscribers',
-          kind: 'kpi',
-          model: 'marketing.subscriber',
-          measure: 'count',
-          filter: { state: 'subscribed' },
-          w: 3,
-        },
-        {
-          id: 'sent',
-          title: 'Messages sent',
-          kind: 'kpi',
-          model: 'marketing.campaign',
-          measure: 'sum:sent',
-          w: 3,
-        },
-        {
-          id: 'opened',
-          title: 'Opened',
-          kind: 'kpi',
-          model: 'marketing.campaign',
-          measure: 'sum:opened',
-          w: 3,
-        },
-        {
-          id: 'unsubscribed',
-          title: 'Unsubscribed',
-          kind: 'kpi',
-          model: 'marketing.subscriber',
-          measure: 'count',
-          filter: { state: 'unsubscribed' },
-          w: 3,
-        },
-        {
-          id: 'by_campaign',
-          title: 'Opened by campaign',
-          kind: 'pivot',
-          model: 'marketing.campaign',
-          measure: 'sum:opened',
-          groupBy: 'name',
-          w: 6,
-        },
-        {
-          id: 'subscribers_by_list',
-          title: 'Subscribers by list',
-          kind: 'chart',
-          model: 'marketing.subscriber',
-          measure: 'count',
-          groupBy: 'list',
-          chart: 'bar',
-          w: 6,
-        },
-        {
-          id: 'subscribers_by_status',
-          title: 'Subscribers by status',
-          kind: 'chart',
-          model: 'marketing.subscriber',
-          measure: 'count',
-          groupBy: 'state',
-          chart: 'pie',
-          w: 6,
-        },
-        {
-          id: 'clicks_by_link',
-          title: 'Clicks by link',
-          kind: 'pivot',
-          model: 'marketing.link',
-          measure: 'sum:clicks',
-          groupBy: 'url',
-          w: 6,
-        },
-      ],
-    },
-    actions: {
-      'marketing.action_campaigns': action(MarketingCampaign, {
-        label: 'Campaigns',
-        views: ['list', 'form'],
-      }),
-      'marketing.action_lists': action(MarketingList, {
-        label: 'Mailing lists',
-        views: ['list', 'form'],
-      }),
-      'marketing.action_subscribers': action(MarketingSubscriber, {
-        label: 'Subscribers',
-        views: ['list', 'form'],
-      }),
-      'marketing.action_deliveries': action(MarketingDelivery, {
-        label: 'Messages',
-        views: ['list', 'form'],
-      }),
-      'marketing.action_links': action(MarketingLink, { label: 'Links', views: ['list', 'form'] }),
-      'marketing.action_never': action(MarketingSuppression, {
-        label: 'Never-email list',
-        views: ['list', 'form'],
-      }),
-    },
-    menus: [
-      { id: 'marketing.root', label: 'Campaigns', app: 'campaigns' },
-      {
-        id: 'marketing.campaigns',
-        parent: 'marketing.root',
-        label: 'Campaigns',
-        action: 'marketing.action_campaigns',
-        sequence: 1,
-      },
-      {
-        id: 'marketing.lists',
-        parent: 'marketing.root',
-        label: 'Mailing lists',
-        action: 'marketing.action_lists',
-        sequence: 2,
-      },
-      {
-        id: 'marketing.subscribers',
-        parent: 'marketing.root',
-        label: 'Subscribers',
-        action: 'marketing.action_subscribers',
-        sequence: 3,
-      },
-      {
-        id: 'marketing.deliveries',
-        parent: 'marketing.root',
-        label: 'Messages',
-        action: 'marketing.action_deliveries',
-        sequence: 4,
-      },
-      {
-        id: 'marketing.never',
-        parent: 'marketing.root',
-        label: 'Never-email list',
-        action: 'marketing.action_never',
-        sequence: 5,
-      },
-    ],
-    views: {
-      'marketing.campaign.list': list(MarketingCampaign, {
-        columns: [
-          'name',
-          'subject',
-          { field: 'state', widget: 'badge' },
-          'scheduledAt',
-          { field: 'sent', sum: true },
-          'openRate',
-          'clickRate',
-          { field: 'unsubscribed', sum: true },
-        ],
-        decorations: {
-          info: { state: { in: ['scheduled', 'sending'] } },
-          success: { state: 'sent' },
-          neutral: { state: 'cancel' },
-        },
-      }),
-      'marketing.campaign.form': form(MarketingCampaign, (k) => ({
-        header: {
-          statusbar: 'state',
-          buttons: [
-            k.button('send', { primary: true, label: 'Send now' }),
-            k.button('schedule', { label: 'Schedule' }),
-            k.button('unschedule', { label: 'Back to draft' }),
-            k.button('cancel', { label: 'Cancel' }),
-          ],
-        },
-        readonlyWhen: { state: { in: ['sending', 'sent', 'cancel'] } },
-        sheet: [
-          k.stats('related', [
-            {
-              id: 'campaign_messages',
-              label: 'Messages',
-              model: MarketingDelivery,
-              where: { campaign: { $record: 'id' } },
-              action: 'marketing.action_deliveries',
-            },
-            {
-              id: 'campaign_opened',
-              label: 'Opened',
-              model: MarketingDelivery,
-              where: { campaign: { $record: 'id' }, openedAt: { isNull: false } },
-              action: 'marketing.action_deliveries',
-            },
-            {
-              id: 'campaign_clicked',
-              label: 'Clicked',
-              model: MarketingDelivery,
-              where: { campaign: { $record: 'id' }, clickedAt: { isNull: false } },
-              action: 'marketing.action_deliveries',
-            },
-            {
-              id: 'campaign_links',
-              label: 'Links',
-              model: MarketingLink,
-              where: { campaign: { $record: 'id' } },
-              action: 'marketing.action_links',
-            },
-          ]),
-          k.group('main', ['name', 'replyTo']),
-          k.group('audience', ['lists', 'tags', 'scheduledAt'], {
-            label: 'To whom, and when',
-            description:
-              'Each address is written to once, whichever list or tag it comes from. Addresses that unsubscribed or stand on the never-email list are left out by the server.',
-          }),
-          k.group('message', ['subject', 'subjectB', 'preheader', 'body'], {
-            label: 'The message',
-            columns: 1,
-            description:
-              '{{name}}, {{first_name}} and {{email}} are filled per person. With a Subject B, every other recipient gets it.',
-          }),
-          k.group(
-            'figures',
-            [
-              'recipients',
-              'skipped',
-              'sent',
-              'failed',
-              'opened',
-              'openRate',
-              'clicked',
-              'clickRate',
-              'unsubscribed',
-              'startedAt',
-              'sentAt',
-            ],
-            {
-              label: 'Figures',
-              description: 'Counted by the server as the messages go out and are read.',
-            },
-          ),
-          k.group(
-            'subjects',
-            ['sentA', 'openRateA', 'clickedA', 'sentB', 'openRateB', 'clickedB'],
-            {
-              label: 'Subject A against B',
-            },
-          ),
-        ],
-        chatter: true,
-      })),
-      'marketing.list.list': list(MarketingList, { columns: ['name', 'description'] }),
-      'marketing.list.form': form(MarketingList, (k) => ({
-        header: { buttons: [] },
-        sheet: [
-          k.stats('related', [
-            {
-              id: 'list_subscribed',
-              label: 'Subscribed',
-              model: MarketingSubscriber,
-              where: { list: { $record: 'id' }, state: 'subscribed' },
-              action: 'marketing.action_subscribers',
-            },
-            {
-              id: 'list_unsubscribed',
-              label: 'Unsubscribed',
-              model: MarketingSubscriber,
-              where: { list: { $record: 'id' }, state: 'unsubscribed' },
-              action: 'marketing.action_subscribers',
-            },
-          ]),
-          k.group('main', ['name', 'description'], { columns: 1 }),
-        ],
-      })),
-      'marketing.subscriber.list': list(MarketingSubscriber, {
-        columns: [
-          'email',
-          'name',
-          'list',
-          { field: 'state', widget: 'badge' },
-          'language',
-          'partner',
-          'unsubscribedAt',
-        ],
-        decorations: { neutral: { state: 'unsubscribed' }, danger: { state: 'bounced' } },
-      }),
-      'marketing.subscriber.form': form(MarketingSubscriber, (k) => ({
-        header: { buttons: [] },
-        sheet: [
-          k.group('main', ['list', 'email', 'name', 'phone', 'partner', 'language']),
-          k.group('status', ['state', 'unsubscribedAt', 'note'], { label: 'Subscription' }),
-        ],
-      })),
-      'marketing.suppression.list': list(MarketingSuppression, {
-        columns: ['email', { field: 'reason', widget: 'badge' }, 'note'],
-      }),
-      'marketing.suppression.form': form(MarketingSuppression, (k) => ({
-        header: { buttons: [] },
-        sheet: [
-          k.group('main', ['email', 'reason', 'note'], {
-            description:
-              'No campaign writes to an address on this list, whichever list or tag it comes from.',
-          }),
-        ],
-      })),
-      'marketing.delivery.list': list(MarketingDelivery, {
-        columns: [
-          'campaign',
-          'email',
-          'name',
-          { field: 'state', widget: 'badge' },
-          'variant',
-          'sentAt',
-          'openedAt',
-          'clickedAt',
-          'unsubscribedAt',
-        ],
-        decorations: { danger: { state: 'failed' }, neutral: { state: 'skipped' } },
-      }),
-      'marketing.delivery.form': form(MarketingDelivery, (k) => ({
-        header: { buttons: [] },
-        readonlyWhen: {},
-        sheet: [
-          k.group('main', ['campaign', 'email', 'name', 'partner', 'subscriber', 'language']),
-          k.group('what', ['state', 'variant', 'sentAt', 'error'], { label: 'The message' }),
-          k.group('read', ['openedAt', 'opens', 'clickedAt', 'clicks', 'unsubscribedAt'], {
-            label: 'What they did',
-          }),
-        ],
-      })),
-      'marketing.link.list': list(MarketingLink, {
-        columns: ['campaign', 'position', 'url', { field: 'clicks', sum: true }],
-      }),
-      'marketing.link.form': form(MarketingLink, (k) => ({
-        header: { buttons: [] },
-        readonlyWhen: {},
-        sheet: [k.group('main', ['campaign', 'position', 'url', 'clicks'])],
-      })),
-    },
-    search: {
-      'marketing.campaign': search(MarketingCampaign, {
-        fields: ['name', 'subject'],
-        filters: Object.fromEntries(
-          Object.entries(STATES).map(([state, label]) => [
-            state,
-            { label, domain: { state }, group: 'state' },
-          ]),
-        ),
-        groupBy: ['state'],
-      }),
-      'marketing.list': search(MarketingList, { fields: ['name'] }),
-      'marketing.subscriber': search(MarketingSubscriber, {
-        fields: ['email', 'name', 'list.name'],
-        filters: {
-          subscribed: { label: 'Subscribed', domain: { state: 'subscribed' }, group: 'state' },
-          unsubscribed: {
-            label: 'Unsubscribed',
-            domain: { state: 'unsubscribed' },
-            group: 'state',
-          },
-          bounced: { label: 'Bounced', domain: { state: 'bounced' }, group: 'state' },
-        },
-        groupBy: ['list', 'state', 'language'],
-      }),
-      'marketing.suppression': search(MarketingSuppression, {
-        fields: ['email', 'note'],
-        groupBy: ['reason'],
-      }),
-      'marketing.delivery': search(MarketingDelivery, {
-        fields: ['email', 'name', 'campaign.name'],
-        filters: {
-          sent: { label: 'Sent', domain: { state: 'sent' }, group: 'state' },
-          failed: { label: 'Not sent', domain: { state: 'failed' }, group: 'state' },
-          skipped: { label: 'Left out', domain: { state: 'skipped' }, group: 'state' },
-          opened: { label: 'Opened', domain: { openedAt: { isNull: false } }, group: 'read' },
-          clicked: { label: 'Clicked', domain: { clickedAt: { isNull: false } }, group: 'read' },
-        },
-        groupBy: ['campaign', 'state', 'variant'],
-      }),
-      'marketing.link': search(MarketingLink, {
-        fields: ['url', 'campaign.name'],
-        groupBy: ['campaign'],
-      }),
-    },
-  });
+let configured: MarketingOptions = {};
+/**
+ * Says how Campaigns sends, before the server starts (tests and the E2E server: a memory mailer, the worker
+ * drained by hand). There is one Campaigns module — its bridges depend on it —, so this is not a factory.
+ */
+export function configureCampaigns(options: MarketingOptions): void {
+  configured = options;
 }
 
-/** Campaigns as the catalogue installs it: the mailer and the public address from the environment. */
-export const marketing: ReturnType<typeof defineModule> = marketingModule();
+export const marketing: ReturnType<typeof defineModule> = defineModule({
+  shutro: marketingShutro,
+  kosh: '^0.1.0',
+  hooks: { demo: marketingDemo },
+  depends: [contacts, messaging, reporting],
+  app: {
+    code: 'campaigns',
+    label: 'Campaigns',
+    icon: 'campaigns',
+    sequence: 63,
+    category: 'Marketing',
+    summary:
+      'Mailing lists, email campaigns with two subjects to try, opens, clicks and unsubscribes',
+  },
+  // Bangla for the labels it serves (RFC 0023 §3.1; `pnpm i18n:extract`).
+  i18n: { bn: () => import('./i18n/bn.js') },
+  accessLevels: {
+    user: { label: 'User (writes campaigns, keeps subscribers)', groups: ['marketing.user'] },
+    manager: {
+      label: 'Manager (lists, the never-email list, sends campaigns)',
+      groups: ['marketing.manager'],
+      implies: ['user'],
+    },
+  },
+  routes: (context: ModuleContext) => {
+    const options = configured;
+    const mailer = 'mailer' in options ? options.mailer : mailerFromEnv();
+    const baseUrl = options.baseUrl ?? process.env['KOSH_BASE_URL'] ?? '';
+    const transport: Transport = { mailer, baseUrl };
+    setCampaignTransport(mailer !== undefined && baseUrl !== '');
+    registerCampaignRoutes(context, transport);
+    if (!(options.workers ?? process.env['KOSH_SCHEDULES'] !== 'off')) return;
+    const worker = campaignWorker(
+      {
+        shutro: context.shutro,
+        log: (message, error) => context.app.log.error({ err: error }, message),
+      },
+      transport,
+    );
+    const bounces = bounceWorker({ shutro: context.shutro });
+    worker.start();
+    bounces.start();
+    context.app.addHook('onClose', async () => {
+      await worker.stop();
+      await bounces.stop();
+    });
+  },
+  // Exceptions to the module standard (RFC 0023), each with its reason.
+  standard: {
+    waive: [
+      {
+        rule: 'I1',
+        model: 'marketing.campaign',
+        reason:
+          'A campaign is its message — rich text written on screen — and its figures; there is nothing to import.',
+      },
+    ],
+  },
+  events: [
+    {
+      topic: 'marketing.campaign.sending',
+      model: 'marketing.campaign',
+      label: 'Campaign started',
+    },
+    { topic: 'marketing.campaign.sent', model: 'marketing.campaign', label: 'Campaign sent' },
+    {
+      topic: 'marketing.delivery.unsubscribed',
+      model: 'marketing.delivery',
+      label: 'Recipient unsubscribed',
+    },
+  ],
+  documents: [
+    {
+      key: 'marketing_campaign',
+      name: 'Campaign results',
+      model: 'marketing.campaign',
+      layout: {
+        paper: 'A4',
+        header: '{{company.name}}',
+        footer: 'Page {{page}} of {{pages}}',
+        blocks: [
+          { kind: 'heading', id: 'title', text: '{{name}}', level: 1 },
+          {
+            kind: 'fields',
+            id: 'what',
+            items: [
+              { label: 'Subject', bind: 'subject' },
+              { label: 'Subject B', bind: 'subjectB' },
+              { label: 'Started at', bind: 'startedAt' },
+              { label: 'Finished at', bind: 'sentAt' },
+            ],
+          },
+          {
+            kind: 'fields',
+            id: 'figures',
+            items: [
+              { label: 'Recipients', bind: 'recipients' },
+              { label: 'Left out', bind: 'skipped' },
+              { label: 'Sent', bind: 'sent' },
+              { label: 'Not sent', bind: 'failed' },
+              { label: 'Opened', bind: 'opened' },
+              { label: 'Opened %', bind: 'openRate' },
+              { label: 'Clicked', bind: 'clicked' },
+              { label: 'Clicked %', bind: 'clickRate' },
+              { label: 'Unsubscribed', bind: 'unsubscribed' },
+              { label: 'Bounced', bind: 'bounced' },
+            ],
+          },
+          {
+            kind: 'fields',
+            id: 'subjects',
+            items: [
+              { label: 'Sent with A', bind: 'sentA' },
+              { label: 'Opened % with A', bind: 'openRateA' },
+              { label: 'Sent with B', bind: 'sentB' },
+              { label: 'Opened % with B', bind: 'openRateB' },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+  importTemplates: [
+    {
+      key: 'marketing_lists',
+      model: 'marketing.list',
+      label: 'Mailing lists',
+      columns: [
+        { header: 'Name', field: 'name' },
+        { header: 'What it is for', field: 'description' },
+      ],
+    },
+    {
+      key: 'marketing_subscribers',
+      model: 'marketing.subscriber',
+      label: 'Subscribers',
+      columns: [
+        { header: 'List', field: 'list' },
+        { header: 'Email', field: 'email' },
+        { header: 'Name', field: 'name' },
+        { header: 'Phone', field: 'phone' },
+        { header: 'Language', field: 'language' },
+        { header: 'Status', field: 'state' },
+      ],
+    },
+    {
+      key: 'marketing_never',
+      model: 'marketing.suppression',
+      label: 'Never-email addresses',
+      columns: [
+        { header: 'Email', field: 'email' },
+        { header: 'Why', field: 'reason' },
+        { header: 'Note', field: 'note' },
+      ],
+    },
+  ],
+  overview: {
+    cards: [
+      {
+        id: 'subscribers',
+        title: 'Subscribers',
+        kind: 'kpi',
+        model: 'marketing.subscriber',
+        measure: 'count',
+        filter: { state: 'subscribed' },
+        w: 3,
+      },
+      {
+        id: 'sent',
+        title: 'Messages sent',
+        kind: 'kpi',
+        model: 'marketing.campaign',
+        measure: 'sum:sent',
+        w: 3,
+      },
+      {
+        id: 'opened',
+        title: 'Opened',
+        kind: 'kpi',
+        model: 'marketing.campaign',
+        measure: 'sum:opened',
+        w: 3,
+      },
+      {
+        id: 'unsubscribed',
+        title: 'Unsubscribed',
+        kind: 'kpi',
+        model: 'marketing.subscriber',
+        measure: 'count',
+        filter: { state: 'unsubscribed' },
+        w: 3,
+      },
+      {
+        id: 'by_campaign',
+        title: 'Opened by campaign',
+        kind: 'pivot',
+        model: 'marketing.campaign',
+        measure: 'sum:opened',
+        groupBy: 'name',
+        w: 6,
+      },
+      {
+        id: 'subscribers_by_list',
+        title: 'Subscribers by list',
+        kind: 'chart',
+        model: 'marketing.subscriber',
+        measure: 'count',
+        groupBy: 'list',
+        chart: 'bar',
+        w: 6,
+      },
+      {
+        id: 'subscribers_by_status',
+        title: 'Subscribers by status',
+        kind: 'chart',
+        model: 'marketing.subscriber',
+        measure: 'count',
+        groupBy: 'state',
+        chart: 'pie',
+        w: 6,
+      },
+      {
+        id: 'clicks_by_link',
+        title: 'Clicks by link',
+        kind: 'pivot',
+        model: 'marketing.link',
+        measure: 'sum:clicks',
+        groupBy: 'url',
+        w: 6,
+      },
+    ],
+  },
+  actions: {
+    'marketing.action_campaigns': action(MarketingCampaign, {
+      label: 'Campaigns',
+      views: ['list', 'form'],
+    }),
+    'marketing.action_lists': action(MarketingList, {
+      label: 'Mailing lists',
+      views: ['list', 'form'],
+    }),
+    'marketing.action_subscribers': action(MarketingSubscriber, {
+      label: 'Subscribers',
+      views: ['list', 'form'],
+    }),
+    'marketing.action_deliveries': action(MarketingDelivery, {
+      label: 'Messages',
+      views: ['list', 'form'],
+    }),
+    'marketing.action_links': action(MarketingLink, { label: 'Links', views: ['list', 'form'] }),
+    'marketing.action_never': action(MarketingSuppression, {
+      label: 'Never-email list',
+      views: ['list', 'form'],
+    }),
+  },
+  menus: [
+    { id: 'marketing.root', label: 'Campaigns', app: 'campaigns' },
+    {
+      id: 'marketing.campaigns',
+      parent: 'marketing.root',
+      label: 'Campaigns',
+      action: 'marketing.action_campaigns',
+      sequence: 1,
+    },
+    {
+      id: 'marketing.lists',
+      parent: 'marketing.root',
+      label: 'Mailing lists',
+      action: 'marketing.action_lists',
+      sequence: 2,
+    },
+    {
+      id: 'marketing.subscribers',
+      parent: 'marketing.root',
+      label: 'Subscribers',
+      action: 'marketing.action_subscribers',
+      sequence: 3,
+    },
+    {
+      id: 'marketing.deliveries',
+      parent: 'marketing.root',
+      label: 'Messages',
+      action: 'marketing.action_deliveries',
+      sequence: 4,
+    },
+    {
+      id: 'marketing.never',
+      parent: 'marketing.root',
+      label: 'Never-email list',
+      action: 'marketing.action_never',
+      sequence: 5,
+    },
+  ],
+  views: {
+    'marketing.campaign.list': list(MarketingCampaign, {
+      columns: [
+        'name',
+        'subject',
+        { field: 'state', widget: 'badge' },
+        'scheduledAt',
+        { field: 'sent', sum: true },
+        'openRate',
+        'clickRate',
+        { field: 'unsubscribed', sum: true },
+      ],
+      decorations: {
+        info: { state: { in: ['scheduled', 'sending'] } },
+        success: { state: 'sent' },
+        neutral: { state: 'cancel' },
+      },
+    }),
+    'marketing.campaign.form': form(MarketingCampaign, (k) => ({
+      header: {
+        statusbar: 'state',
+        buttons: [
+          k.button('send', { primary: true, label: 'Send now' }),
+          k.button('schedule', { label: 'Schedule' }),
+          k.button('unschedule', { label: 'Back to draft' }),
+          k.button('cancel', { label: 'Cancel' }),
+        ],
+      },
+      readonlyWhen: { state: { in: ['sending', 'sent', 'cancel'] } },
+      sheet: [
+        k.stats('related', [
+          {
+            id: 'campaign_messages',
+            label: 'Messages',
+            model: MarketingDelivery,
+            where: { campaign: { $record: 'id' } },
+            action: 'marketing.action_deliveries',
+          },
+          {
+            id: 'campaign_opened',
+            label: 'Opened',
+            model: MarketingDelivery,
+            where: { campaign: { $record: 'id' }, openedAt: { isNull: false } },
+            action: 'marketing.action_deliveries',
+          },
+          {
+            id: 'campaign_clicked',
+            label: 'Clicked',
+            model: MarketingDelivery,
+            where: { campaign: { $record: 'id' }, clickedAt: { isNull: false } },
+            action: 'marketing.action_deliveries',
+          },
+          {
+            id: 'campaign_links',
+            label: 'Links',
+            model: MarketingLink,
+            where: { campaign: { $record: 'id' } },
+            action: 'marketing.action_links',
+          },
+        ]),
+        k.group('main', ['name', 'replyTo']),
+        k.group('audience', ['lists', 'tags', 'scheduledAt'], {
+          label: 'To whom, and when',
+          description:
+            'Each address is written to once, whichever list or tag it comes from. Addresses that unsubscribed or stand on the never-email list are left out by the server.',
+        }),
+        k.group('message', ['subject', 'subjectB', 'preheader', 'body'], {
+          label: 'The message',
+          columns: 1,
+          description:
+            '{{name}}, {{first_name}} and {{email}} are filled per person. With a Subject B, every other recipient gets it.',
+        }),
+        k.group(
+          'figures',
+          [
+            'recipients',
+            'skipped',
+            'sent',
+            'failed',
+            'opened',
+            'openRate',
+            'clicked',
+            'clickRate',
+            'unsubscribed',
+            'bounced',
+            'startedAt',
+            'sentAt',
+          ],
+          {
+            label: 'Figures',
+            description: 'Counted by the server as the messages go out and are read.',
+          },
+        ),
+        k.group('subjects', ['sentA', 'openRateA', 'clickedA', 'sentB', 'openRateB', 'clickedB'], {
+          label: 'Subject A against B',
+        }),
+      ],
+      chatter: true,
+    })),
+    'marketing.list.list': list(MarketingList, { columns: ['name', 'description'] }),
+    'marketing.list.form': form(MarketingList, (k) => ({
+      header: { buttons: [] },
+      sheet: [
+        k.stats('related', [
+          {
+            id: 'list_subscribed',
+            label: 'Subscribed',
+            model: MarketingSubscriber,
+            where: { list: { $record: 'id' }, state: 'subscribed' },
+            action: 'marketing.action_subscribers',
+          },
+          {
+            id: 'list_unsubscribed',
+            label: 'Unsubscribed',
+            model: MarketingSubscriber,
+            where: { list: { $record: 'id' }, state: 'unsubscribed' },
+            action: 'marketing.action_subscribers',
+          },
+        ]),
+        k.group('main', ['name', 'description'], { columns: 1 }),
+      ],
+    })),
+    'marketing.subscriber.list': list(MarketingSubscriber, {
+      columns: [
+        'email',
+        'name',
+        'list',
+        { field: 'state', widget: 'badge' },
+        'language',
+        'partner',
+        'unsubscribedAt',
+      ],
+      decorations: { neutral: { state: 'unsubscribed' }, danger: { state: 'bounced' } },
+    }),
+    'marketing.subscriber.form': form(MarketingSubscriber, (k) => ({
+      header: { buttons: [] },
+      sheet: [
+        k.group('main', ['list', 'email', 'name', 'phone', 'partner', 'language']),
+        k.group('status', ['state', 'unsubscribedAt', 'note'], { label: 'Subscription' }),
+      ],
+    })),
+    'marketing.suppression.list': list(MarketingSuppression, {
+      columns: ['email', { field: 'reason', widget: 'badge' }, 'note'],
+    }),
+    'marketing.suppression.form': form(MarketingSuppression, (k) => ({
+      header: { buttons: [] },
+      sheet: [
+        k.group('main', ['email', 'reason', 'note'], {
+          description:
+            'No campaign writes to an address on this list, whichever list or tag it comes from.',
+        }),
+      ],
+    })),
+    'marketing.delivery.list': list(MarketingDelivery, {
+      columns: [
+        'campaign',
+        'email',
+        'name',
+        { field: 'state', widget: 'badge' },
+        'variant',
+        'sentAt',
+        'openedAt',
+        'clickedAt',
+        'unsubscribedAt',
+      ],
+      decorations: {
+        danger: { state: 'failed' },
+        warning: { state: 'bounced' },
+        neutral: { state: 'skipped' },
+      },
+    }),
+    'marketing.delivery.form': form(MarketingDelivery, (k) => ({
+      header: { buttons: [] },
+      readonlyWhen: {},
+      sheet: [
+        k.group('main', ['campaign', 'email', 'name', 'partner', 'subscriber', 'language']),
+        k.group('what', ['state', 'variant', 'sentAt', 'error'], { label: 'The message' }),
+        k.group('read', ['openedAt', 'opens', 'clickedAt', 'clicks', 'unsubscribedAt'], {
+          label: 'What they did',
+        }),
+      ],
+    })),
+    'marketing.link.list': list(MarketingLink, {
+      columns: ['campaign', 'position', 'url', { field: 'clicks', sum: true }],
+    }),
+    'marketing.link.form': form(MarketingLink, (k) => ({
+      header: { buttons: [] },
+      readonlyWhen: {},
+      sheet: [k.group('main', ['campaign', 'position', 'url', 'clicks'])],
+    })),
+  },
+  search: {
+    'marketing.campaign': search(MarketingCampaign, {
+      fields: ['name', 'subject'],
+      filters: Object.fromEntries(
+        Object.entries(STATES).map(([state, label]) => [
+          state,
+          { label, domain: { state }, group: 'state' },
+        ]),
+      ),
+      groupBy: ['state'],
+    }),
+    'marketing.list': search(MarketingList, { fields: ['name'] }),
+    'marketing.subscriber': search(MarketingSubscriber, {
+      fields: ['email', 'name', 'list.name'],
+      filters: {
+        subscribed: { label: 'Subscribed', domain: { state: 'subscribed' }, group: 'state' },
+        unsubscribed: {
+          label: 'Unsubscribed',
+          domain: { state: 'unsubscribed' },
+          group: 'state',
+        },
+        bounced: { label: 'Bounced', domain: { state: 'bounced' }, group: 'state' },
+      },
+      groupBy: ['list', 'state', 'language'],
+    }),
+    'marketing.suppression': search(MarketingSuppression, {
+      fields: ['email', 'note'],
+      groupBy: ['reason'],
+    }),
+    'marketing.delivery': search(MarketingDelivery, {
+      fields: ['email', 'name', 'campaign.name'],
+      filters: {
+        sent: { label: 'Sent', domain: { state: 'sent' }, group: 'state' },
+        failed: { label: 'Not sent', domain: { state: 'failed' }, group: 'state' },
+        bounced: { label: 'Bounced', domain: { state: 'bounced' }, group: 'state' },
+        skipped: { label: 'Left out', domain: { state: 'skipped' }, group: 'state' },
+        opened: { label: 'Opened', domain: { openedAt: { isNull: false } }, group: 'read' },
+        clicked: { label: 'Clicked', domain: { clickedAt: { isNull: false } }, group: 'read' },
+      },
+      groupBy: ['campaign', 'state', 'variant'],
+    }),
+    'marketing.link': search(MarketingLink, {
+      fields: ['url', 'campaign.name'],
+      groupBy: ['campaign'],
+    }),
+  },
+});

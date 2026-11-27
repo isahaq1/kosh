@@ -97,6 +97,7 @@ const PACKAGES = [
   'event_account',
   'website_crm',
   'sale_crm',
+  'marketing_sale',
   'website_sale',
   'website_sale_stock',
   'documents',

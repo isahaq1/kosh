@@ -74,6 +74,7 @@ export type AppName =
   | 'livechat_assistant'
   | 'calendar_sync'
   | 'sale_crm'
+  | 'marketing_sale'
   | 'website_sale_stock'
   | 'pos_stock'
   | 'expense_account'
@@ -515,6 +516,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🔗',
     server: 'saleCrm',
     bridge: ['sales', 'crm'],
+  },
+  marketing_sale: {
+    label: 'Bridge: orders credited to the campaign the customer clicked (Campaigns ↔ Sales)',
+    icon: '🔗',
+    server: 'marketingSale',
+    bridge: ['sales', 'marketing'],
   },
   website_sale_stock: {
     label: 'Bridge: stock shown on the shop, carts kept within it (Shop ↔ Stockroom)',

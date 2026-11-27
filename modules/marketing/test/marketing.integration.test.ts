@@ -8,7 +8,7 @@
 import { createMemoryMailer, type Mailer, type OutboundMail } from '@kosh/mail';
 import { type TestInstallation, testInstallation } from '@kosh/server/testing';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { campaignWorker, marketingModule } from '../src/index.js';
+import { bounceWorker, campaignWorker, configureCampaigns, marketing } from '../src/index.js';
 
 const BASE = 'https://erp.test';
 const C = '/api/v1/models/marketing.campaign';
@@ -83,8 +83,9 @@ const BODY =
 
 beforeAll(async () => {
   process.env['KOSH_SCHEDULES'] = 'off';
+  configureCampaigns({ mailer, baseUrl: `${BASE}/`, workers: false });
   erp = await testInstallation({
-    modules: [marketingModule({ mailer, baseUrl: `${BASE}/`, workers: false })],
+    modules: [marketing],
     users: {
       mia: ['marketing.manager', 'contacts.manager'],
       uma: ['marketing.user'],
@@ -93,8 +94,10 @@ beforeAll(async () => {
     company: { name: 'Padma Traders', currency: 'BDT' },
   });
   const worker = campaignWorker({ shutro: erp.host.server.shutro }, { mailer, baseUrl: BASE });
+  const bounces = bounceWorker({ shutro: erp.host.server.shutro });
   drain = async () => {
-    for (let round = 0; round < 20; round += 1) if ((await worker.drain()) === 0) break;
+    for (let round = 0; round < 20; round += 1)
+      if ((await worker.drain()) + (await bounces.drain()) === 0) break;
   };
 }, 300_000);
 
@@ -373,4 +376,51 @@ test('a test send is the message as one person gets it, and counts for nothing',
   expect((await call('POST', `/api/v1/campaigns/${id}/test`, 'uma', { to: 'nobody' })).status).toBe(
     400,
   );
+});
+
+test('a message that comes back is bounced; an address that never takes mail leaves the lists', async () => {
+  memory.sent.length = 0;
+  for (const email of ['full@example.com', 'gone@example.com'])
+    await make('marketing.subscriber', 'uma', { list: ids['news'], email });
+  const id = await make('marketing.campaign', 'uma', {
+    name: 'Bounces',
+    subject: 'Hello',
+    body: '<p>Hello.</p>',
+    lists: { set: [ids['news']] },
+  });
+  expect((await step(id, 'send', 'mia')).status).toBe(200);
+  await drain();
+  const named = await sql<{ email: string; provider_id: string }>(
+    `SELECT email, provider_id FROM marketing_delivery WHERE campaign_id = $1 AND state = 'sent'`,
+    [id],
+  );
+  const idOf = (email: string) => named.find((n) => n.email === email)?.provider_id as string;
+  expect(idOf('gone@example.com')).toBeTruthy();
+  // What inbound email announces for a delivery report: the ids of the messages it answers.
+  const announce = (messageIds: string[], permanent: boolean) =>
+    erp.host.server.shutro.bootstrap({ reason: 'test bounce' }, (su) =>
+      su.emit('mail.bounced', { messageIds, permanent, subject: 'Undelivered Mail Returned' }),
+    );
+  await announce([idOf('full@example.com')], false);
+  await announce([idOf('gone@example.com'), '<not-ours@elsewhere>'], true);
+  await drain();
+  const rows = await deliveries(id);
+  expect(rows.find((r) => r.email === 'full@example.com')?.state).toBe('bounced');
+  expect(rows.find((r) => r.email === 'gone@example.com')?.state).toBe('bounced');
+  // Both went out: they count as sent, and as bounced.
+  const seen = (await call('GET', `${C}/${id}?fields=sent,bounced`, 'mia')).json as Json;
+  expect(seen).toMatchObject({ sent: 4, bounced: 2 });
+  // A full mailbox may take the next one; an address that does not exist is never written to again.
+  const subscribers = await sql<{ key: string; state: string }>(
+    `SELECT key, state FROM marketing_subscriber WHERE key IN ('full@example.com', 'gone@example.com') ORDER BY key`,
+  );
+  expect(subscribers.map((s) => s.state)).toEqual(['subscribed', 'bounced']);
+  const never = await sql<{ reason: string }>(
+    `SELECT reason FROM marketing_suppression WHERE key = 'gone@example.com'`,
+  );
+  expect(never.map((n) => n.reason)).toEqual(['bounced']);
+  // The same report again changes nothing.
+  await announce([idOf('gone@example.com')], true);
+  await drain();
+  expect(((await call('GET', `${C}/${id}?fields=bounced`, 'mia')).json as Json).bounced).toBe(2);
 });

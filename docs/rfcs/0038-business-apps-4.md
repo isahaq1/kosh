@@ -235,6 +235,28 @@ The trip of a Stockroom transfer from its gate details, drivers' licences from W
   double opt-in sign-up form on Sites; throttling per hour; opens by clients that fetch pictures themselves
   (Apple Mail's privacy proxy counts as an open); not measured beyond a few thousand recipients yet.
 
+### Part 2 — bounces and the orders that followed (2026-11-27)
+
+- **Bounces.** Inbound email (`@kosh/mail`) now announces every delivery report as the event `mail.bounced`
+  — the ids of the messages it answers, and whether it is permanent (`permanentBounce`: an enhanced status of
+  class 5 or a 55x reply) — before its own handling of notification emails. Campaigns keeps the mail server's id
+  of each message (`providerId`, written after the batch is handed over) and subscribes: the message becomes
+  *bounced*, in its company; a permanent one makes its subscriber *bounced* and puts the address on the
+  never-email list. *Sent* counts bounced messages too — they went out.
+- **`@kosh/marketing_sale`.** `sale.order.campaign`, written by the server only. On `sale.order.confirmed`:
+  the latest click, within 30 days, of a message sent to the order's customer or to its address; once per order.
+  The campaign's *Orders* and *Ordered* are tiles computed for whoever looks (Sales' rules apply), not counters.
+- **One Campaigns module.** `marketingModule(options)` made a second module named `marketing` beside the one the
+  bridge depends on, and the server refused to load both. There is one module now, and
+  `configureCampaigns({ mailer, baseUrl, workers })` says how it sends before the server starts (tests, the E2E
+  server).
+- Tests: a soft and a permanent bounce, a report for somebody else's message, the same report twice; an order
+  credited by contact and by address whatever its capitals, not without a click, not for someone who did not
+  click, the last campaign winning, a click 31 days old, the field refused to a salesperson's PATCH.
+- **Still left**: SMS and WhatsApp campaigns; segments by a saved filter of any model; the winning subject sent
+  to the rest; credit for Shop and Counter orders (Sales orders only), and a setting for the 30 days; a credit is
+  not taken back when the order is cancelled (the tiles count confirmed orders only).
+
 ## 5. Open questions
 
 1. The order of §2 — is Quality first right, or does Fleet or Campaigns matter more now?

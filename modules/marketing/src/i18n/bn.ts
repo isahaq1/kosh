@@ -55,8 +55,8 @@ export const bn: Readonly<Record<string, string>> = {
   Key: 'কী',
   Language: 'ভাষা',
   'Left out': 'বাদ দেওয়া',
-  'Left out: the address is on the never-email list, or the campaign was cancelled. Not sent: the mail server refused it.':
-    'বাদ দেওয়া: ঠিকানাটি কখনো-ইমেইল-নয় তালিকায় আছে, অথবা ক্যাম্পেইন বাতিল হয়েছে। পাঠানো হয়নি: মেইল সার্ভার প্রত্যাখ্যান করেছে।',
+  'Left out: the address is on the never-email list, or the campaign was cancelled. Not sent: the mail server refused it. Bounced: it went out and came back.':
+    'বাদ দেওয়া: ঠিকানাটি কখনো-ইমেইল-নয় তালিকায় আছে, অথবা ক্যাম্পেইন বাতিল হয়েছে। পাঠানো হয়নি: মেইল সার্ভার প্রত্যাখ্যান করেছে। ফেরত এসেছে: এটি গিয়েছিল এবং ফিরে এসেছে।',
   Link: 'লিংক',
   Links: 'লিংক',
   'Links are counted when clicked. The way to unsubscribe is added by the server to every message.':
@@ -73,6 +73,8 @@ export const bn: Readonly<Record<string, string>> = {
   Messages: 'বার্তা',
   'Messages are still waiting to be sent.': 'কিছু বার্তা এখনো পাঠানোর অপেক্ষায় আছে।',
   'Messages sent': 'পাঠানো বার্তা',
+  'Messages that went out and came back: the address did not take them.':
+    'যেসব বার্তা গিয়ে ফিরে এসেছে: ঠিকানাটি সেগুলো নেয়নি।',
   'Messages the mail server refused.': 'যেসব বার্তা মেইল সার্ভার প্রত্যাখ্যান করেছে।',
   Name: 'নাম',
   'Never-email address': 'কখনো-ইমেইল-নয় ঠিকানা',
@@ -102,6 +104,7 @@ export const bn: Readonly<Record<string, string>> = {
   'Page {{page}} of {{pages}}': 'পৃষ্ঠা {{page}} / {{pages}}',
   Phone: 'ফোন',
   'Preview text': 'প্রিভিউ লেখা',
+  'Provider Id': 'প্রোভাইডার আইডি',
   'Recipient unsubscribed': 'প্রাপক সদস্যতা ছেড়েছেন',
   Recipients: 'প্রাপক',
   'Recipients who followed a link, each once.': 'যেসব প্রাপক কোনো লিংকে গেছেন, প্রত্যেকে একবার।',

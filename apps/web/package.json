@@ -88,6 +88,7 @@
     "@kosh/fleet": "workspace:*",
     "@kosh/fleet_account": "workspace:*",
     "@kosh/marketing": "workspace:*",
+    "@kosh/marketing_sale": "workspace:*",
     "@kosh/quality": "workspace:*",
     "@kosh/trade_finance": "workspace:*",
     "@kosh/event": "workspace:*",

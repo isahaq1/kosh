@@ -1,11 +1,13 @@
 /** Inbound email (RFC 0006 part 7). */
 export {
   attachInbound,
+  BOUNCE_TOPIC,
   discardInbound,
   type InboundContext,
   type InboundItem,
   type InboundOutcome,
   listInbound,
+  permanentBounce,
   processInbound,
   receiveMail,
   retryInbound,

@@ -264,6 +264,10 @@ export const MarketingCampaign = defineModel('marketing.campaign', {
     opened: counter('Opened', 'Recipients who opened it, each once.'),
     clicked: counter('Clicked', 'Recipients who followed a link, each once.'),
     unsubscribed: counter('Unsubscribed'),
+    bounced: counter(
+      'Bounced',
+      'Messages that went out and came back: the address did not take them.',
+    ),
     sentA: counter('Sent with A'),
     openedA: counter('Opened with A'),
     clickedA: counter('Clicked with A'),
@@ -449,14 +453,22 @@ export const MarketingDelivery = defineModel('marketing.delivery', {
       { required: true, default: 'a', label: 'Subject', help: 'Which of the two subjects it got.' },
     ),
     state: f.selection(
-      { queued: 'Waiting', sent: 'Sent', failed: 'Not sent', skipped: 'Left out' },
+      {
+        queued: 'Waiting',
+        sent: 'Sent',
+        bounced: 'Bounced',
+        failed: 'Not sent',
+        skipped: 'Left out',
+      },
       {
         required: true,
         default: 'queued',
         label: 'Status',
-        help: 'Left out: the address is on the never-email list, or the campaign was cancelled. Not sent: the mail server refused it.',
+        help: 'Left out: the address is on the never-email list, or the campaign was cancelled. Not sent: the mail server refused it. Bounced: it went out and came back.',
       },
     ),
+    /** The mail server's id of the message: a bounce names it. */
+    providerId: f.char({ index: true }),
     /** The hash of the secret in this recipient's links (the secret itself is only in their message). */
     tokenHash: f.char({ size: 64, index: true }),
     sentAt: f.datetime({ label: 'Sent at' }),
@@ -608,15 +620,16 @@ export async function addressCampaign(env: Env, id: number): Promise<void> {
 export async function refreshStats(su: Env, id: number): Promise<void> {
   const [n] = await su.sql<Record<string, string | number>>`
     SELECT count(*) FILTER (WHERE state IN ('queued', 'sent', 'failed')) AS recipients,
-           count(*) FILTER (WHERE state = 'sent') AS sent,
+           count(*) FILTER (WHERE state IN ('sent', 'bounced')) AS sent,
+           count(*) FILTER (WHERE state = 'bounced') AS bounced,
            count(*) FILTER (WHERE state = 'failed') AS failed,
            count(*) FILTER (WHERE opened_at IS NOT NULL) AS opened,
            count(*) FILTER (WHERE clicked_at IS NOT NULL) AS clicked,
            count(*) FILTER (WHERE unsubscribed_at IS NOT NULL) AS unsubscribed,
-           count(*) FILTER (WHERE state = 'sent' AND variant = 'a') AS sent_a,
+           count(*) FILTER (WHERE state IN ('sent', 'bounced') AND variant = 'a') AS sent_a,
            count(*) FILTER (WHERE opened_at IS NOT NULL AND variant = 'a') AS opened_a,
            count(*) FILTER (WHERE clicked_at IS NOT NULL AND variant = 'a') AS clicked_a,
-           count(*) FILTER (WHERE state = 'sent' AND variant = 'b') AS sent_b,
+           count(*) FILTER (WHERE state IN ('sent', 'bounced') AND variant = 'b') AS sent_b,
            count(*) FILTER (WHERE opened_at IS NOT NULL AND variant = 'b') AS opened_b,
            count(*) FILTER (WHERE clicked_at IS NOT NULL AND variant = 'b') AS clicked_b
       FROM marketing_delivery WHERE campaign_id = ${id}`;
@@ -628,6 +641,7 @@ export async function refreshStats(su: Env, id: number): Promise<void> {
       recipients: of('recipients'),
       sent: of('sent'),
       failed: of('failed'),
+      bounced: of('bounced'),
       opened: of('opened'),
       clicked: of('clicked'),
       unsubscribed: of('unsubscribed'),
@@ -827,6 +841,77 @@ export async function unsubscribeView(
     done: row['unsubscribed_at'] !== null,
     sender: String(row['sender']),
   };
+}
+
+/** What the mail server called each message: a bounce will name it. */
+export async function saveProviderIds(
+  su: Env,
+  sent: readonly { readonly delivery: number; readonly id: string }[],
+): Promise<void> {
+  if (sent.length === 0) return;
+  const ids = sent.map((s) => s.delivery);
+  const names = sent.map((s) => s.id);
+  await su.sql`UPDATE marketing_delivery d SET provider_id = t.name
+      FROM unnest(${ids}::bigint[], ${names}::text[]) AS t(id, name) WHERE d.id = t.id`;
+}
+
+/** The campaign messages a bounce answers, each with its company. */
+export async function bouncedDeliveries(
+  su: Env,
+  messageIds: readonly string[],
+): Promise<{ id: number; company: number }[]> {
+  if (messageIds.length === 0) return [];
+  const rows = await su.sql<{ id: number; company_id: number }>`
+    SELECT id, company_id FROM marketing_delivery
+     WHERE provider_id = ANY(${[...messageIds]}::text[]) AND state = 'sent'`;
+  return rows.map((r) => ({ id: Number(r.id), company: Number(r.company_id) }));
+}
+
+/**
+ * A message came back (in its company): it is *bounced*, out of nobody's figures of what was read. When the
+ * address will never take mail (`permanent`), its subscriber is *bounced* and the address goes on the never-email
+ * list; a full mailbox changes nothing else.
+ */
+export async function recordBounce(
+  su: Env,
+  delivery: number,
+  permanent: boolean,
+  note: string,
+): Promise<void> {
+  const [d] = await su
+    .model('marketing.delivery')
+    .browse([delivery] as never)
+    .load({ subscriber: true, campaign: true, company: true });
+  if (d === undefined || d.state !== 'sent') return;
+  await su
+    .model('marketing.delivery')
+    .browse([delivery] as never)
+    .write({ state: 'bounced', error: note.slice(0, 250) } as never);
+  if (permanent) {
+    if (d.subscriber !== null && d.subscriber.state === 'subscribed')
+      await su
+        .model('marketing.subscriber')
+        .browse([d.subscriber.id] as never)
+        .write({ state: 'bounced' } as never);
+    const key = emailKey(d.email);
+    if (key !== null) {
+      const there = await su.model('marketing.suppression').search({
+        where: { company: d.company.id, key } as never,
+        limit: 1,
+      });
+      if (there.length === 0)
+        await su.model('marketing.suppression').create([
+          {
+            company: d.company.id,
+            email: key,
+            reason: 'bounced',
+            note: `From the campaign ${d.campaign.name}`,
+          },
+        ] as never);
+    }
+  }
+  await su.flush();
+  await refreshStats(su, d.campaign.id as number);
 }
 
 /** The company of the message with this secret: what is done about it is done in that company. */

@@ -470,6 +470,17 @@ async function receiveForAlias(
   };
 }
 
+/** The event of a bounce: `{ messageIds, permanent, subject }` — the ids of the messages it answers. */
+export const BOUNCE_TOPIC = 'mail.bounced';
+
+/**
+ * Whether a delivery report says the address will never take mail (an enhanced status of class 5, or a 55x
+ * reply): a full mailbox or a server that is down (class 4) is not that.
+ */
+export function permanentBounce(text: string): boolean {
+  return /\b5\.\d{1,3}\.\d{1,3}\b/.test(text) || /\b55\d\b/.test(text);
+}
+
 /**
  * A bounce of a message we sent: the delivery is marked bounced, and the user whose action caused the email (the
  * notification's actor) is told through the bell, when the notify models are installed.
@@ -480,7 +491,16 @@ async function recordBounce(context: InboundContext, mail: InboundMail): Promise
       [mail.inReplyTo, ...mail.references].filter((r): r is string => r !== null && r !== ''),
     ),
   ];
-  if (ids.length === 0 || !context.registry.registry.models.has('notify.delivery' as never)) return;
+  if (ids.length === 0) return;
+  // Announced to every app that sends email of its own (Campaigns): the ids of the messages it answers.
+  await context.shutro.bootstrap({ reason: 'inbound email: bounce' }, (su) =>
+    su.emit(BOUNCE_TOPIC, {
+      messageIds: ids,
+      permanent: permanentBounce(`${mail.subject}\n${mail.text}`),
+      subject: mail.subject.slice(0, 200),
+    }),
+  );
+  if (!context.registry.registry.models.has('notify.delivery' as never)) return;
   await context.shutro.bootstrap({ reason: 'inbound email: bounce' }, async (su) => {
     const deliveries = await rows(
       su,

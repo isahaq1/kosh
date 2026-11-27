@@ -1723,6 +1723,15 @@ POST /api/v1/models/fleet.fuel/<id>/transitions/book | unbook      # also fleet.
   the campaign's own links, never to an address in the request. A person counts once; the *Messages* of a
   campaign say who opened, clicked and left. Mail clients that hide pictures do not count as opens.
 
+- **Bounces**: with inbound email set up, a delivery report that answers a campaign message marks it *bounced*
+  — it still counts as sent. When the report says the address will never take mail (a status of class 5, a 55x
+  reply), the subscriber becomes *bounced* and the address goes on the never-email list; a full mailbox changes
+  nothing else.
+- **The orders that followed** (with Sales, the bridge `@kosh/marketing_sale` comes by itself): a confirmed sales
+  order is credited to the campaign whose link its customer followed last, in the 30 days before — the customer
+  being the contact the message went to, or a contact with that address. The order shows its *Campaign*; the
+  campaign shows *Orders* and *Ordered*. The credit is the server's: nobody writes it by hand.
+
 The server needs `SMTP_URL` and `KOSH_BASE_URL` (the address people reach it at); without them *Send now* is
 refused with what to set. Writing campaigns gives read access to contacts.
 

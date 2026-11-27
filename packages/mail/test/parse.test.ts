@@ -160,3 +160,12 @@ test("Postmark's JSON maps to the same shape (attachments from base64, headers f
   });
   expect(new TextDecoder().decode(mail.attachments[0]?.data)).toBe('%PDF');
 });
+
+test('a bounce is permanent when the report says the address will never take mail', async () => {
+  const { permanentBounce } = await import('../src/inbound/index.js');
+  expect(permanentBounce('Status: 5.1.1\nThe email account does not exist')).toBe(true);
+  expect(permanentBounce('550 mailbox unavailable')).toBe(true);
+  // A full mailbox or a server that is down may take the next one.
+  expect(permanentBounce('Status: 4.2.2 mailbox full')).toBe(false);
+  expect(permanentBounce('Delivery delayed')).toBe(false);
+});
