@@ -16,6 +16,8 @@ async function signIn(page: Page, login: string): Promise<void> {
 
 async function pick(page: Page, field: string, option: RegExp): Promise<void> {
   await page.getByRole('combobox', { name: field }).click();
+  // The picker lists its first matches: search for the record.
+  await page.keyboard.type(option.source.replaceAll('\\', ''));
   await page.getByRole('option', { name: option }).click();
 }
 
