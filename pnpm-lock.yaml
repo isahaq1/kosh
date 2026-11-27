@@ -95,6 +95,9 @@ importers:
       '@kosh/hr_accrual':
         specifier: workspace:*
         version: link:../../modules/hr_accrual
+      '@kosh/hr_appraisal':
+        specifier: workspace:*
+        version: link:../../modules/hr_appraisal
       '@kosh/indent':
         specifier: workspace:*
         version: link:../../modules/indent
@@ -557,6 +560,9 @@ importers:
       '@kosh/hr_accrual':
         specifier: workspace:*
         version: link:../../modules/hr_accrual
+      '@kosh/hr_appraisal':
+        specifier: workspace:*
+        version: link:../../modules/hr_appraisal
       '@kosh/indent_purchase':
         specifier: workspace:*
         version: link:../../modules/indent_purchase
@@ -1541,6 +1547,40 @@ importers:
         specifier: workspace:*
         version: link:../../packages/views
     devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
+
+  modules/hr_appraisal:
+    dependencies:
+      '@kosh/hr':
+        specifier: workspace:*
+        version: link:../hr
+      '@kosh/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
+      '@kosh/modules-sdk':
+        specifier: workspace:*
+        version: link:../../packages/modules-sdk
+      '@kosh/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
+      '@kosh/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kosh/views':
+        specifier: workspace:*
+        version: link:../../packages/views
+    devDependencies:
+      '@kosh/contacts':
+        specifier: workspace:*
+        version: link:../contacts
+      '@kosh/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+      '@kosh/worktime':
+        specifier: workspace:*
+        version: link:../worktime
       '@testcontainers/postgresql':
         specifier: ^12.2.1
         version: 12.2.1
@@ -4102,6 +4142,9 @@ importers:
       '@kosh/hr_accrual':
         specifier: workspace:*
         version: link:../../modules/hr_accrual
+      '@kosh/hr_appraisal':
+        specifier: workspace:*
+        version: link:../../modules/hr_appraisal
       '@kosh/import':
         specifier: workspace:*
         version: link:../import

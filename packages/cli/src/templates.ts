@@ -25,6 +25,7 @@ export type AppName =
   | 'crm'
   | 'hr'
   | 'recruitment'
+  | 'hr_appraisal'
   | 'stock'
   | 'production'
   | 'maintenance'
@@ -217,6 +218,12 @@ export const APPS: Readonly<Record<AppName, AppSpec>> = {
     icon: '🤝',
     server: 'recruitment',
     web: 'registerRecruitmentWeb',
+  },
+  hr_appraisal: {
+    label:
+      'Appraisals: review cycles with goals, self and manager reviews kept private, skills with levels',
+    icon: '🏅',
+    server: 'hrAppraisal',
   },
   stock: {
     label:

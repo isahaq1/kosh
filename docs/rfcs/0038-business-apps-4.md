@@ -305,6 +305,33 @@ The trip of a Stockroom transfer from its gate details, drivers' licences from W
   a diagnosis fee for a declined repair; labour by the hour from timesheets; an invoice per part taken under an
   extended warranty; loan units.
 
+## Step 5 — Appraisals and skills (design and notes, 2026-11-27)
+
+- **Skills**: `hr.skill.type` with its `hr.skill.level`s (progress 0–100) and `hr.skill`s; `hr.employee.skill`
+  (a person, a skill, a level of the same kind, once). Rules: one's own read; the line manager's team in full;
+  HR all.
+- **Appraisals**: `hr.appraisal.cycle` (draft → open → closed; `launch` makes the appraisals, set-based, only for
+  people without one in the cycle); `hr.appraisal` (the person, the reviewer, goals, the self review, the
+  reviewer's review, the rating, the weighted score; goals → self review → review → completed);
+  `hr.appraisal.goal` (weight, own score, score).
+- **Privacy is record rules**: the person (`employee.user`), the reviewer (`reviewer.user`), HR. The person writes
+  only while the appraisal waits for the self review.
+- **Who writes what is the server's**: record rules are per row, so the person's write access during the self
+  review would let them set their own rating. Constraints on the reviewer's fields (review, rating, goals,
+  weights, scores) and on the person's (self review, own score) look at who is acting (`env.uid`) against the
+  appraisal's person and reviewer; HR is whoever holds `hr_appraisal.reopen`. The same test guards `begin`,
+  `submit` and `complete`.
+- Two things that cost a fix: selection values cannot be digits (`'1'…'5'` → `below`…`outstanding`); and a
+  record read in a constraint after an `await` into `asSuperuser` is no longer loaded — the values are copied
+  first.
+- Tests: skills of the wrong kind, by the manager, not by the person, unseen by a colleague; the cycle's
+  appraisals and who gets none; privacy four ways; every field written by the wrong side refused; the score
+  (80 × 2 + 50 × 1) / 3 = 70; no rating, no completion; sealed, reopened by HR only; nobody reviews themselves;
+  HR as the reviewer of someone who reviews others; two browser tests.
+- **Left out**: 360° feedback through Surveys; the manager's draft hidden from the person until completion (the
+  person reads the review as it is written); goals carried from one cycle to the next; calibration across
+  teams; a skills matrix and gaps against a position's required skills; appraisal reminders.
+
 ## 5. Open questions
 
 1. The order of §2 — is Quality first right, or does Fleet or Campaigns matter more now?

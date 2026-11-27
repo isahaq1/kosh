@@ -20,6 +20,7 @@ import { fleetAccount } from '@kosh/fleet_account';
 import { helpdesk } from '@kosh/helpdesk';
 import { hr } from '@kosh/hr';
 import { hrAccrual } from '@kosh/hr_accrual';
+import { hrAppraisal } from '@kosh/hr_appraisal';
 import { indent } from '@kosh/indent';
 import { indentPurchase } from '@kosh/indent_purchase';
 import { l10nBd } from '@kosh/l10n_bd';
@@ -111,6 +112,7 @@ export const DEMO_APPS: readonly string[] = [
   'crm',
   'hr',
   'recruitment',
+  'hr_appraisal',
   'stock',
   'production',
   'maintenance',
@@ -163,6 +165,7 @@ export function demoCatalogue(): KoshModule[] {
     crm,
     hr,
     recruitment,
+    hrAppraisal,
     stock,
     production,
     maintenance,

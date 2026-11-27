@@ -36,6 +36,7 @@ import { fleetAccount } from '@kosh/fleet_account';
 import { helpdesk } from '@kosh/helpdesk';
 import { hr } from '@kosh/hr';
 import { hrAccrual } from '@kosh/hr_accrual';
+import { hrAppraisal } from '@kosh/hr_appraisal';
 import { dataImport } from '@kosh/import';
 import { indent } from '@kosh/indent';
 import { indentPurchase } from '@kosh/indent_purchase';
@@ -215,6 +216,7 @@ const CATALOGUE = [
   crm,
   hr,
   recruitment,
+  hrAppraisal,
   stock,
   production,
   maintenance,
@@ -314,6 +316,7 @@ await applyApps(
         'crm',
         'hr',
         'recruitment',
+        'hr_appraisal',
         'stock',
         'production',
         'maintenance',
@@ -403,6 +406,7 @@ for (const [login, name, groups] of [
       'loyalty.manager',
       'crm.manager',
       'hr.manager',
+      'hr_appraisal.manager',
       'hiring.manager',
       'stock.manager',
       'stock_account.user',
@@ -458,6 +462,7 @@ for (const [login, name, groups] of [
       'loyalty.user',
       'crm.user',
       'hr.user',
+      'hr_appraisal.user',
       'hiring.user',
       'stock.user',
       'production.user',

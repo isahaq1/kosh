@@ -61,6 +61,7 @@ const PACKAGES = [
   'crm',
   'hr',
   'recruitment',
+  'hr_appraisal',
   'stock',
   'production',
   'maintenance',

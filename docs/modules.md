@@ -1777,6 +1777,33 @@ POST /api/v1/campaigns/<id>/test   { "to": "me@example.com" }   # the message as
 POST /api/v1/models/repair.order/<id>/transitions/diagnose | quote | approve | decline | begin | finish | deliver | cancel
 ```
 
+## Appraisals and skills
+
+*Appraisals* (`@kosh/hr_appraisal`, RFC 0038) runs review rounds and keeps what each person can do.
+
+- **A cycle** (HR) has a period and a day the reviews are due. **Open the cycle** makes one appraisal for every
+  person who has a manager, reviewed by that manager; a person without one is reviewed by HR. Opening again later
+  only adds the people who have none yet.
+- **An appraisal** goes: *Goals* → *Self review* → *Reviewer's review* → *Completed*.
+  1. The reviewer writes the **goals**, each with a weight, and asks for the self review.
+  2. The person writes their **self review** and their own score per goal, and submits it.
+  3. The reviewer scores each goal, writes the **review**, gives the **rating** — below expectations to
+     outstanding — and completes it. The **score** is the reviewer's scores, weighted, kept by the server.
+- **Each side writes its own words.** The person cannot write the review, the rating, the goals or their scores
+  — not even when they are a manager of others —; the reviewer cannot write or submit the self review; nobody
+  reviews themselves, and nobody completes their own appraisal. These are refused by the server.
+- **Private.** An appraisal and its goals are seen by the person, their reviewer and HR — record rules, so the
+  same in lists, reports, exports and the API. A colleague sees nothing.
+- **A completed appraisal stands**: nothing in it changes until HR reopens it.
+- **Skills**: kinds of skill (*Languages*, *Machines*), each with its own levels (a name and a progress from 0 to
+  100) and its skills. A person's skills are kept by their manager and HR, with a level of the skill's own kind;
+  the person reads theirs. *Skills* and *Appraisals* are tiles on the employee.
+
+```http
+POST /api/v1/models/hr.appraisal.cycle/<id>/transitions/launch | close | reopen
+POST /api/v1/models/hr.appraisal/<id>/transitions/begin | submit | complete | reopen | cancel
+```
+
 ## Final settlement
 
 When a person leaves, *Payroll › Final settlements* works out what they are owed and owe, and pays it (RFC 0039).

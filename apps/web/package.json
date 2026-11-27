@@ -80,6 +80,7 @@
     "@kosh/crm": "workspace:*",
     "@kosh/hr": "workspace:*",
     "@kosh/hr_accrual": "workspace:*",
+    "@kosh/hr_appraisal": "workspace:*",
     "@kosh/loyalty": "workspace:*",
     "@kosh/recruitment": "workspace:*",
     "@kosh/stock": "workspace:*",

@@ -64,6 +64,7 @@
     "@kosh/helpdesk": "workspace:*",
     "@kosh/hr": "workspace:*",
     "@kosh/hr_accrual": "workspace:*",
+    "@kosh/hr_appraisal": "workspace:*",
     "@kosh/loyalty": "workspace:*",
     "@kosh/import": "workspace:*",
     "@kosh/integrations": "workspace:*",
